@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "slabbed",
+  "version": "0.1.0-alpha",
+  "name": "Slabbed",
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.slabbed.Slabbed"
+    ]
+  },
+  "mixins": [
+    "slabbed.mixins.json",
+    "slabbed.client.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": "*",
+    "fabric-api": "*",
+    "minecraft": "1.21.11"
+  }
+}

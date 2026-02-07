@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "com.slabbed.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BlockEntityOffsetMixin",
+    "ItemFrameRenderOffsetMixin",
+    "MinecartRenderOffsetMixin",
+    "SectionBuilderMixin",
+    "TorchModelOffsetMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}
