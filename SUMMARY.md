@@ -30,9 +30,10 @@
 - **Mixin registration:** Added `ItemFrameRenderOffsetMixin` to `slabbed.client.mixins.json`.
 - **Top-slab lanterns:** Hanging lanterns under top slabs now receive +0.5 Y to sit flush against the slab bottom.
 
-## Current Status
+## Current Status (0.1.1-alpha)
 - Build succeeds with JDK `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`.
-- Client runs; latest changes active.
+- Client runs; Sodium visual alignment (FRAPI offsets) active.
+- Redstone power/hanging support beyond visuals not yet PASS-tagged (documented limitation).
 - **Tags:** `slabbed-pre-slice-abc` (post-slice tags pending in-game verification)
 
 ## Verified / Expected Behaviors
