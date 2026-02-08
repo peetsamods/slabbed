@@ -33,7 +33,7 @@
 ## Current Status
 - Build succeeds with JDK `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`.
 - Client runs; latest changes active.
-- **Tags:** `slabbed-pre-slice-abc`, `slabbed-redstone-power-pass`, `slabbed-hanging-pass`, `slabbed-post-hanging-regression-pass`
+- **Tags:** `slabbed-pre-slice-abc` (post-slice tags pending in-game verification)
 
 ## Verified / Expected Behaviors
 - Blocks on bottom slabs render at slab height (-0.5); chain stacks supported.
@@ -50,19 +50,21 @@
 ## Slice Results (2026-02-07)
 
 ### Slice A — Redstone Power Propagation
+- **Status:** PARTIAL — visuals + placement verified; power propagation across slab paths not yet verified in-game.
 - **Strategy:** already-functional (no code change)
-- **Analysis:** `RedstoneController.calculateWirePowerAt` handles same-Y, step-up, and step-down via neighbor checks. Slab positions don't break this.
-- **Tag:** `slabbed-redstone-power-pass`
+- **Analysis:** `RedstoneController.calculateWirePowerAt` handles same-Y, step-up, and step-down via neighbor checks. Slab positions don't break this (needs in-game confirmation).
+// Pending: in-game verification before tagging.
 
 ### Slice B — Ceiling Support (Chains + Hanging Signs)
+- **Status:** ANALYSIS COMPLETE / VERIFICATION PENDING — vanilla logic appears sufficient; requires in-game placement + survival + reload checks.
 - **Strategy:** already-functional (no code change)
 - **Analysis:** `ChainBlock` has no `canPlaceAt` override. `HangingSignBlock.canPlaceAt` checks `isSideSolid(pos.up(), DOWN, CENTER)` — top slab collision shape `[0,0.5,0→1,1,1]` satisfies this natively. `SlabSupportStateMixin.isSideSolid` provides additional coverage.
-- **Tag:** `slabbed-hanging-pass`
+// Pending: in-game verification before tagging.
 
 ### Slice C — Regression Sweep
+- **Status:** BUILD + ANALYSIS ONLY — regression pass gated on in-game verification of Slices A and B.
 - **Strategy:** build gate + code-level analysis (no code changes in A or B means zero regression risk)
 - **Build:** PASS
-- **Tag:** `slabbed-post-hanging-regression-pass`
 
 ## Known / Potential Issues & Future Work
 - **Stairs:** Visual/face-culling quirks may still occur; needs refinement.
