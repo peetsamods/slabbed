@@ -33,6 +33,7 @@
 ## Current Status
 - Build succeeds with JDK `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`.
 - Client runs; latest changes active.
+- **Tags:** `slabbed-pre-slice-abc`, `slabbed-redstone-power-pass`, `slabbed-hanging-pass`, `slabbed-post-hanging-regression-pass`
 
 ## Verified / Expected Behaviors
 - Blocks on bottom slabs render at slab height (-0.5); chain stacks supported.
@@ -42,29 +43,46 @@
 - Item frames on offset blocks should sit correctly.
 - Hanging lanterns under top slabs should sit against slab bottoms (+0.5).
 - Stairs now anchor again (visual quirks possible).
+- **Redstone dust power propagation** on slabs works without additional mixins (vanilla `calculateWirePowerAt` step-up/step-down logic handles slab positions natively).
+- **Chains** place under top slabs (no `canPlaceAt` restriction in `ChainBlock`).
+- **Hanging signs** place under top slabs (top slab collision shape satisfies `isSideSolid(DOWN, CENTER)` natively).
+
+## Slice Results (2026-02-07)
+
+### Slice A — Redstone Power Propagation
+- **Strategy:** already-functional (no code change)
+- **Analysis:** `RedstoneController.calculateWirePowerAt` handles same-Y, step-up, and step-down via neighbor checks. Slab positions don't break this.
+- **Tag:** `slabbed-redstone-power-pass`
+
+### Slice B — Ceiling Support (Chains + Hanging Signs)
+- **Strategy:** already-functional (no code change)
+- **Analysis:** `ChainBlock` has no `canPlaceAt` override. `HangingSignBlock.canPlaceAt` checks `isSideSolid(pos.up(), DOWN, CENTER)` — top slab collision shape `[0,0.5,0→1,1,1]` satisfies this natively. `SlabSupportStateMixin.isSideSolid` provides additional coverage.
+- **Tag:** `slabbed-hanging-pass`
+
+### Slice C — Regression Sweep
+- **Strategy:** build gate + code-level analysis (no code changes in A or B means zero regression risk)
+- **Build:** PASS
+- **Tag:** `slabbed-post-hanging-regression-pass`
 
 ## Known / Potential Issues & Future Work
 - **Stairs:** Visual/face-culling quirks may still occur; needs refinement.
 - **Rail slopes:** Transition from ground-height rail to slab-height rail remains visually awkward (asset/geometry issue).
 - **Slab on offset objects:** Outline-offset makes face targeting tricky; cosmetic/non-breaking.
 - **Placement edge cases:** Gaps under top slabs can still be finicky due to targeting.
-- **Regression sweep:** Recheck all categories after lantern/top-slab changes.
+- **TorchBlockMixin:** Exists but is not registered in `slabbed.mixins.json`. Redundant with shared hooks (`SlabSupportStateMixin` + `SlabSupportBlockMixin`). Can be removed or registered if targeted torch behavior is needed later.
 
 ## Files Touched (recent)
-- `src/main/java/com/slabbed/util/SlabSupport.java` — add `getYOffset`, re-enable stairs, +0.5 for hanging under top slabs.
-- `src/main/java/com/slabbed/mixin/SlabSupportStateMixin.java` — outline offset via `getYOffset`.
-- `src/main/java/com/slabbed/mixin/SlabSupportBlockMixin.java` — top slab DOWN face support already present.
-- `src/main/java/com/slabbed/mixin/client/TorchModelOffsetMixin.java` — model offset via `getYOffset`.
+- `src/main/java/com/slabbed/util/SlabSupport.java` — add `getYOffset`, `isRedstoneSupportTopSurface`, re-enable stairs, +0.5 for hanging under top slabs.
+- `src/main/java/com/slabbed/mixin/SlabSupportStateMixin.java` — outline offset via `getYOffset`, `isSideSolid` for top slab DOWN face.
+- `src/main/java/com/slabbed/mixin/SlabSupportBlockMixin.java` — top slab DOWN face `sideCoversSmallSquare` support.
+- `src/main/java/com/slabbed/mixin/RedstoneWireBlockMixin.java` — redstone dust placement + visual connections on slabs.
 - `src/main/java/com/slabbed/mixin/client/BlockEntityOffsetMixin.java` — block entity render offset via `getYOffset`.
 - `src/main/java/com/slabbed/mixin/client/MinecartRenderOffsetMixin.java` — render-state offset.
-- `src/main/java/com/slabbed/mixin/client/ItemFrameRenderOffsetMixin.java` — new.
-- `src/main/resources/slabbed.client.mixins.json` — register item frame mixin.
+- `src/main/java/com/slabbed/mixin/client/ItemFrameRenderOffsetMixin.java` — item frame offset.
+- `src/main/resources/slabbed.mixins.json` — registered `RedstoneWireBlockMixin`.
 
 ## Next Steps
-- Validate in-game:
-  - Hanging lantern on top slab bottom (should be flush).
-  - Minecart on rail on slab (no floating).
-  - Item frame on offset block (aligned).
-  - Stairs on slabs (note remaining quirks).
+- In-game visual audit for all categories (required before final release tag).
 - Investigate rail slope visuals (deferred).
 - Optional: refine stairs offset/face-culling handling.
+- Optional: clean up unregistered `TorchBlockMixin`.
