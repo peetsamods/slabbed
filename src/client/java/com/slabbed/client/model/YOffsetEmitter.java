@@ -22,6 +22,17 @@ public final class YOffsetEmitter {
     }
 
     private static Object invoke(QuadEmitter delegate, Object proxy, Method method, Object[] args, float dy) throws Throwable {
+        // Intercept emit() to translate vertices right before emission (covers models that don't call pos())
+        if ("emit".equals(method.getName()) && (args == null || args.length == 0)) {
+            for (int i = 0; i < 4; i++) {
+                float x = delegate.x(i);
+                float y = delegate.y(i);
+                float z = delegate.z(i);
+                delegate.pos(i, x, y + dy, z);
+            }
+            return method.invoke(delegate, args);
+        }
+
         // Intercept pos(int, float, float, float)
         if ("pos".equals(method.getName())
                 && args != null

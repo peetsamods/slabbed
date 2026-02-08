@@ -2,9 +2,13 @@ package com.slabbed.util;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.PaneBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.StairsBlock;
+import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.WallBannerBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.block.WallHangingSignBlock;
 import net.minecraft.block.WallSignBlock;
 import net.minecraft.block.WallTorchBlock;
@@ -175,6 +179,24 @@ public final class SlabSupport {
      * </ul>
      */
     public static double getYOffset(BlockView world, BlockPos pos, BlockState state) {
+        // Conservative: solid ground blocks sitting on a bottom slab render at slab height.
+        if (hasBottomSlabBelow(world, pos)) {
+            Block block = state.getBlock();
+
+            if (block instanceof SlabBlock
+                    || block instanceof StairsBlock
+                    || block instanceof FenceBlock
+                    || block instanceof WallBlock
+                    || block instanceof TrapdoorBlock
+                    || block instanceof PaneBlock
+                    || state.isAir()
+                    || !state.getFluidState().isEmpty()) {
+                // excluded partials / non-blocks / fluids — no slab anchoring expansion
+            } else if (state.isSolidBlock(world, pos)) {
+                return -0.5;
+            }
+        }
+
         if (shouldOffset(world, pos, state)) {
             return -0.5;
         }
