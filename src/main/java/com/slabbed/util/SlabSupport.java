@@ -211,6 +211,19 @@ public final class SlabSupport {
     }
 
     /**
+     * Redstone dust support surface — treat slab tops like valid ground for downward stepping.
+     */
+    public static boolean isRedstoneSupportTopSurface(BlockView world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+
+        if (state.isSideSolidFullSquare(world, pos, Direction.UP)) {
+            return true;
+        }
+
+        return isSupportingSlab(state) && (isBottomSlab(state) || isTopSlab(state));
+    }
+
+    /**
      * Walks down from {@code pos} through non-air, non-slab blocks looking
      * for a bottom slab. Returns true as soon as one is found.
      */
