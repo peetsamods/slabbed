@@ -3,6 +3,7 @@
   "package": "com.slabbed.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "SlabCeilingSupportCacheMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleMixin",

@@ -57,6 +57,14 @@ public final class SlabSupport {
         return isSupportingSlab(state) && state.get(SlabBlock.TYPE) == SlabType.TOP;
     }
 
+    /** Pure state check: true if this state is a top or double slab (ceiling support surface). No world access needed. */
+    public static boolean isCeilingSupportSurface(BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock)) return false;
+        if (!state.contains(SlabBlock.TYPE)) return false;
+        SlabType type = state.get(SlabBlock.TYPE);
+        return type == SlabType.TOP || type == SlabType.DOUBLE;
+    }
+
     /** True if the block at {@code posAbove} is a top or double slab that can provide ceiling support. */
     public static boolean isCeilingSupportBottomSurface(WorldView world, BlockPos posAbove) {
         BlockState stateAbove = world.getBlockState(posAbove);

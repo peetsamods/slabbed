@@ -44,15 +44,6 @@ public abstract class SlabSupportStateMixin {
         }
     }
 
-    @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
-    private void slabbed$ceilingSupport(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
-        if (direction == Direction.DOWN
-                && shapeType == SideShapeType.CENTER
-                && SlabSupport.isCeilingSupportBottomSurface(world, pos)) {
-            cir.setReturnValue(true);
-        }
-    }
-
     // ── outline (hit-box) offset ──────────────────────────────────────
 
     @Inject(method = "getOutlineShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/ShapeContext;)Lnet/minecraft/util/shape/VoxelShape;",
