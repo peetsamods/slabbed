@@ -3,6 +3,10 @@ plugins {
     id 'maven-publish'
 }
 
+loom {
+    splitEnvironmentSourceSets()
+}
+
 version = project.mod_version
 group = project.maven_group
 
@@ -26,6 +30,10 @@ dependencies {
 
     // Fabric API. This is technically optional, but you probably want it anyway.
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    // Client-only modules for the client source set when splitEnvironmentSourceSets is enabled.
+    modClientImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    modClientImplementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
+    modClientImplementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
 }
 
 processResources {
