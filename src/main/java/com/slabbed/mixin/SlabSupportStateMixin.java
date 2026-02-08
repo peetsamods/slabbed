@@ -42,7 +42,13 @@ public abstract class SlabSupportStateMixin {
         if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
             cir.setReturnValue(true);
         }
-        if (direction == Direction.DOWN && SlabSupport.isTopSlab(self)) {
+    }
+
+    @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
+    private void slabbed$ceilingSupport(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
+        if (direction == Direction.DOWN
+                && shapeType == SideShapeType.CENTER
+                && SlabSupport.isCeilingSupportBottomSurface(world, pos)) {
             cir.setReturnValue(true);
         }
     }
