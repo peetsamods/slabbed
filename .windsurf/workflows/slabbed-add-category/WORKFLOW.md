@@ -52,6 +52,8 @@ Deliverable for this workflow step:
   - shared hook point, OR
   - targeted per-block mixins
 
+For ceiling-attachment blocks (chains, hanging signs, etc.), also check whether the block queries `isSideSolid(Direction.DOWN)` on the block above. If so, the existing `SlabSupportStateMixin` may already handle placement — verify before writing new mixins. See skill: `slabbed-ceiling-support`.
+
 If targets are unclear: STOP and report.
 
 ---
