@@ -6,9 +6,10 @@ This lets objects behave naturally on slab tops while preserving correct placeme
 
 ## Features
 - Allows placement of supported objects on slab tops
+- For now, only lanterns successfully place underneath top slab.
 - Objects remain supported after block updates and chunk reloads
 - Correct visual alignment with the slab’s actual top surface
-- Conservative scope: only slabs, no stairs/fences/walls/etc.
+- Working on expanding slab compatibility—stairs not currently supported.
 
 ## Slab Semantics
 Slabbed treats the **top face** of the following as valid ground:
