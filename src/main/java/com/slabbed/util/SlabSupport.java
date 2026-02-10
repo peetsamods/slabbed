@@ -57,6 +57,14 @@ public final class SlabSupport {
         return isSupportingSlab(state) && state.get(SlabBlock.TYPE) == SlabType.TOP;
     }
 
+    /**
+     * Single source of truth: returns true iff the state is a TOP slab
+     * and the queried face is DOWN (i.e. the underside of a top slab).
+     */
+    public static boolean isTopSlabUndersideSupport(BlockState state, Direction face) {
+        return face == Direction.DOWN && isTopSlab(state);
+    }
+
     /** True if the block at {@code posAbove} is a top or double slab that can provide ceiling support. */
     public static boolean isCeilingSupportBottomSurface(WorldView world, BlockPos posAbove) {
         BlockState stateAbove = world.getBlockState(posAbove);

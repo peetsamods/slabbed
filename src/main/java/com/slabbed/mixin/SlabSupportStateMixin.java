@@ -46,9 +46,16 @@ public abstract class SlabSupportStateMixin {
 
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$ceilingSupport(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
-        if (direction == Direction.DOWN
-                && shapeType == SideShapeType.CENTER
-                && SlabSupport.isCeilingSupportBottomSurface(world, pos)) {
+        BlockState self = (BlockState) (Object) this;
+        if (SlabSupport.isTopSlabUndersideSupport(self, direction)) {
+            cir.setReturnValue(true);
+        }
+    }
+
+    @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
+    private void slabbed$ceilingSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+        BlockState self = (BlockState) (Object) this;
+        if (SlabSupport.isTopSlabUndersideSupport(self, direction)) {
             cir.setReturnValue(true);
         }
     }
