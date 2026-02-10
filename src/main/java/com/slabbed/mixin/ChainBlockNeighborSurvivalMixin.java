@@ -41,19 +41,41 @@ public abstract class ChainBlockNeighborSurvivalMixin {
     }
 
     @Unique
+    private static final int MAX_CHAIN_WALK = 16;
+
+    @Unique
     private static boolean slabbed$hasAxisSupport(BlockState state, WorldView world, BlockPos pos) {
         Direction.Axis axis = state.get(ChainBlock.AXIS);
         Direction positive = Direction.from(axis, Direction.AxisDirection.POSITIVE);
         Direction negative = Direction.from(axis, Direction.AxisDirection.NEGATIVE);
 
-        BlockPos posPositive = pos.offset(positive);
-        BlockState statePositive = world.getBlockState(posPositive);
-        if (statePositive.isSideSolidFullSquare(world, posPositive, negative)) {
+        // walk positive direction through same-axis chains until we find solid support
+        if (slabbed$walkChainForSupport(world, pos, axis, positive, negative)) {
             return true;
         }
+        // walk negative direction
+        return slabbed$walkChainForSupport(world, pos, axis, negative, positive);
+    }
 
-        BlockPos posNegative = pos.offset(negative);
-        BlockState stateNegative = world.getBlockState(posNegative);
-        return stateNegative.isSideSolidFullSquare(world, posNegative, positive);
+    @Unique
+    private static boolean slabbed$walkChainForSupport(WorldView world, BlockPos pos,
+                                                        Direction.Axis axis, Direction walkDir, Direction faceDir) {
+        BlockPos cursor = pos.offset(walkDir);
+        for (int i = 0; i < MAX_CHAIN_WALK; i++) {
+            BlockState cur = world.getBlockState(cursor);
+            // found solid support
+            if (cur.isSideSolidFullSquare(world, cursor, faceDir)) {
+                return true;
+            }
+            // continue through same-axis chains
+            if (cur.getBlock() instanceof ChainBlock
+                    && cur.contains(ChainBlock.AXIS)
+                    && cur.get(ChainBlock.AXIS) == axis) {
+                cursor = cursor.offset(walkDir);
+                continue;
+            }
+            break;
+        }
+        return false;
     }
 }

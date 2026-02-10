@@ -2,11 +2,16 @@ package com.slabbed.util;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.CaveVinesBodyBlock;
+import net.minecraft.block.CaveVinesHeadBlock;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.block.FenceBlock;
+import net.minecraft.block.HangingRootsBlock;
 import net.minecraft.block.HangingSignBlock;
 import net.minecraft.block.PaneBlock;
+import net.minecraft.block.PointedDripstoneBlock;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.SporeBlossomBlock;
 import net.minecraft.block.StairsBlock;
 import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.WallBannerBlock;
@@ -130,6 +135,37 @@ public final class SlabSupport {
     private static final int MAX_CHAIN_DEPTH = 16;
 
     /**
+     * Returns true if the block state represents a ceiling-attached block —
+     * one that hangs from the block above it by nature.
+     */
+    public static boolean isCeilingAttached(BlockState state) {
+        // HANGING property (lanterns, etc.)
+        if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
+            return true;
+        }
+        // Y-axis chains
+        if (state.getBlock() instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y) {
+            return true;
+        }
+        // Hanging signs
+        if (state.getBlock() instanceof HangingSignBlock) {
+            return true;
+        }
+        // Specific ceiling-only block types
+        Block block = state.getBlock();
+        if (block instanceof SporeBlossomBlock
+                || block instanceof HangingRootsBlock
+                || block instanceof PointedDripstoneBlock
+                || block instanceof CaveVinesHeadBlock
+                || block instanceof CaveVinesBodyBlock) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Master check: should the block at {@code pos} with state {@code state}
      * be visually offset by −0.5 Y?
      *
@@ -152,21 +188,26 @@ public final class SlabSupport {
             return false;
         }
 
+        // ceiling-attached blocks under a top slab (or chain of ceiling blocks
+        // leading to a top slab) get +0.5 UP via getYOffset; don't also give -0.5 DOWN
+        if (isCeilingAttached(state)) {
+            BlockPos cursor = pos.up();
+            for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+                BlockState cur = world.getBlockState(cursor);
+                if (isTopSlab(cur)) {
+                    return false;
+                }
+                if (isCeilingAttached(cur)) {
+                    cursor = cursor.up();
+                    continue;
+                }
+                break;
+            }
+        }
+
         // blocks hanging from above (lanterns, etc.) — don't offset DOWN by slab below
         // (they may get a separate +0.5 UP offset via getYOffset)
         if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
-            return false;
-        }
-        // Y-axis chains under a top slab are ceiling-attached; don't offset down
-        if (state.getBlock() instanceof ChainBlock
-                && state.contains(Properties.AXIS)
-                && state.get(Properties.AXIS) == Direction.Axis.Y
-                && isTopSlab(world.getBlockState(pos.up()))) {
-            return false;
-        }
-        // Hanging signs under a top slab are ceiling-attached; don't offset down
-        if (state.getBlock() instanceof HangingSignBlock
-                && isTopSlab(world.getBlockState(pos.up()))) {
             return false;
         }
 
@@ -242,36 +283,24 @@ public final class SlabSupport {
         if (shouldOffset(world, pos, state)) {
             return -0.5;
         }
-        // hanging blocks under a top slab get pushed UP to sit against the slab bottom
-        if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
-            BlockState above = world.getBlockState(pos.up());
-            if (isTopSlab(above)) {
-                return 0.5;
-            }
-            // cascading: hanging block under a Y-axis chain that is itself under a top slab
-            if (above.getBlock() instanceof ChainBlock
-                    && above.contains(Properties.AXIS)
-                    && above.get(Properties.AXIS) == Direction.Axis.Y
-                    && isTopSlab(world.getBlockState(pos.up(2)))) {
-                return 0.5;
-            }
-        }
-        // Y-axis chains under a top slab: shift up to connect to slab underside
-        if (state.getBlock() instanceof ChainBlock
-                && state.contains(Properties.AXIS)
-                && state.get(Properties.AXIS) == Direction.Axis.Y) {
-            BlockState above = world.getBlockState(pos.up());
-            if (isTopSlab(above)) {
-                return 0.5;
+        // ── ceiling-attached blocks under a top slab: +0.5 UP ──────────
+        if (isCeilingAttached(state)) {
+            // walk up through ceiling-attached blocks and chains to find a top slab
+            BlockPos cursor = pos.up();
+            for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+                BlockState cur = world.getBlockState(cursor);
+                if (isTopSlab(cur)) {
+                    return 0.5;
+                }
+                // continue through ceiling-attached blocks or Y-axis chains
+                if (isCeilingAttached(cur)) {
+                    cursor = cursor.up();
+                    continue;
+                }
+                break;
             }
         }
-        // Hanging signs (no HANGING property) under a top slab
-        if (state.getBlock() instanceof HangingSignBlock) {
-            BlockState above = world.getBlockState(pos.up());
-            if (isTopSlab(above)) {
-                return 0.5;
-            }
-        }
+
         return 0.0;
     }
 
