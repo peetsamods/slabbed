@@ -135,6 +135,9 @@ public final class SlabSupport {
     /** Max blocks to walk down when checking chain offset. */
     private static final int MAX_CHAIN_DEPTH = 16;
 
+    /** Recursion guard: prevents StackOverflow when isSolidBlock triggers getOutlineShape → getYOffset. */
+    private static final ThreadLocal<Boolean> IN_GET_Y_OFFSET = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
     /**
      * Returns true if the block state represents a ceiling-attached block —
      * one that hangs from the block above it by nature.
@@ -195,9 +198,9 @@ public final class SlabSupport {
             return false;
         }
 
-        // any block directly under a top slab gets +0.5 UP via getYOffset;
-        // don't also give it -0.5 DOWN
-        if (isTopSlab(world.getBlockState(pos.up()))) {
+        // ceiling-attached blocks under a top slab get +0.5 UP via getYOffset;
+        // don't also give them -0.5 DOWN
+        if (isCeilingAttached(state) && isTopSlab(world.getBlockState(pos.up()))) {
             return false;
         }
 
@@ -275,6 +278,19 @@ public final class SlabSupport {
      * </ul>
      */
     public static double getYOffset(BlockView world, BlockPos pos, BlockState state) {
+        // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
+        if (IN_GET_Y_OFFSET.get()) {
+            return 0.0;
+        }
+        IN_GET_Y_OFFSET.set(Boolean.TRUE);
+        try {
+            return getYOffsetInner(world, pos, state);
+        } finally {
+            IN_GET_Y_OFFSET.set(Boolean.FALSE);
+        }
+    }
+
+    private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
         // Conservative: solid ground blocks sitting on a bottom slab render at slab height.
         if (hasBottomSlabBelow(world, pos)) {
             Block block = state.getBlock();
@@ -296,29 +312,9 @@ public final class SlabSupport {
         if (shouldOffset(world, pos, state)) {
             return -0.5;
         }
-        // ── blocks under a top slab: +0.5 UP ──────────────────────────
-        // exclude slabs and other partial blocks that shouldn't float up
-        Block blk = state.getBlock();
-        if (blk instanceof SlabBlock
-                || blk instanceof StairsBlock
-                || blk instanceof FenceBlock
-                || blk instanceof WallBlock
-                || blk instanceof PaneBlock
-                || state.isAir()
-                || !state.getFluidState().isEmpty()) {
-            return 0.0;
-        }
-
-        BlockState above = world.getBlockState(pos.up());
-
-        // direct: any block directly under a top slab
-        if (isTopSlab(above)) {
-            return 0.5;
-        }
-
-        // cascading: ceiling-attached block below other ceiling-attached blocks
-        // leading up to a top slab (e.g. 2nd dripstone, 2nd vine segment)
+        // ── ceiling-attached blocks under a top slab: +0.5 UP ──────────
         if (isCeilingAttached(state)) {
+            // walk up through ceiling-attached blocks to find a top slab
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
