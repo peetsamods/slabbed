@@ -207,8 +207,9 @@ public final class SlabSupport {
             return false;
         }
 
-        // ceiling-attached blocks under a top slab get +0.5 UP via getYOffset;
-        // don't also give them -0.5 DOWN
+        // blocks under a top slab that get +0.5 UP via getYOffset should not
+        // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
+        // since shouldOffset is called from paths outside the recursion guard.
         if (isCeilingAttached(state) && isTopSlab(world.getBlockState(pos.up()))) {
             return false;
         }
@@ -321,9 +322,32 @@ public final class SlabSupport {
         if (shouldOffset(world, pos, state)) {
             return -0.5;
         }
-        // ── ceiling-attached blocks under a top slab: +0.5 UP ──────────
+        // ── blocks under a top slab: +0.5 UP ──────────────────────────
+        // Blacklist: these block types should NEVER float up into the slab space.
+        // Everything else (small decorative / ceiling blocks) gets +0.5.
+        // Note: isSolidBlock is safe here because getYOffset has a recursion guard.
+        Block blk = state.getBlock();
+        if (blk instanceof SlabBlock
+                || blk instanceof StairsBlock
+                || blk instanceof FenceBlock
+                || blk instanceof WallBlock
+                || blk instanceof PaneBlock
+                || state.isAir()
+                || !state.getFluidState().isEmpty()
+                || state.isSolidBlock(world, pos)) {
+            return 0.0;
+        }
+
+        BlockState above = world.getBlockState(pos.up());
+
+        // direct: any non-blacklisted block directly under a top slab
+        if (isTopSlab(above)) {
+            return 0.5;
+        }
+
+        // cascading: ceiling-attached block below other ceiling-attached blocks
+        // leading up to a top slab (e.g. 2nd dripstone, 2nd vine segment)
         if (isCeilingAttached(state)) {
-            // walk up through ceiling-attached blocks to find a top slab
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
