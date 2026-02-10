@@ -5,6 +5,7 @@ import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ButtonBlock;
+import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.CaveVinesBodyBlock;
 import net.minecraft.block.CaveVinesHeadBlock;
 import net.minecraft.block.ChainBlock;
@@ -12,9 +13,11 @@ import net.minecraft.block.FenceBlock;
 import net.minecraft.block.HangingRootsBlock;
 import net.minecraft.block.HangingSignBlock;
 import net.minecraft.block.LeverBlock;
+import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PointedDripstoneBlock;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.SnowBlock;
 import net.minecraft.block.SporeBlossomBlock;
 import net.minecraft.block.StairsBlock;
 import net.minecraft.block.TrapdoorBlock;
@@ -38,6 +41,18 @@ import net.minecraft.world.WorldView;
  */
 public final class SlabSupport {
     private SlabSupport() {
+    }
+
+    /**
+     * Returns true if the block is a thin top-layer block (snow layers, carpet,
+     * pale moss carpet) that should never be visually offset by slab logic.
+     * These blocks sit flush on the surface and are not structural.
+     */
+    public static boolean isThinTopLayer(BlockState state) {
+        Block block = state.getBlock();
+        return block instanceof SnowBlock
+                || block instanceof CarpetBlock
+                || block instanceof PaleMossCarpetBlock;
     }
 
     /**
@@ -208,6 +223,11 @@ public final class SlabSupport {
             return false;
         }
 
+        // never offset thin top-layer blocks (snow layers, carpet)
+        if (isThinTopLayer(state)) {
+            return false;
+        }
+
         if (CompatHooks.shouldSkipOffset(state)) {
             return false;
         }
@@ -320,9 +340,10 @@ public final class SlabSupport {
                     || block instanceof WallBlock
                     || block instanceof TrapdoorBlock
                     || block instanceof PaneBlock
+                    || isThinTopLayer(state)
                     || state.isAir()
                     || !state.getFluidState().isEmpty()) {
-                // excluded partials / non-blocks / fluids — no slab anchoring expansion
+                // excluded partials / non-blocks / fluids / thin layers — no slab anchoring expansion
             } else if (state.isSolidBlock(world, pos)) {
                 return -0.5;
             }
@@ -341,6 +362,7 @@ public final class SlabSupport {
                 || blk instanceof FenceBlock
                 || blk instanceof WallBlock
                 || blk instanceof PaneBlock
+                || isThinTopLayer(state)
                 || state.isAir()
                 || !state.getFluidState().isEmpty()
                 || state.isSolidBlock(world, pos)) {
@@ -398,7 +420,7 @@ public final class SlabSupport {
             if (isBottomSlab(cur)) {
                 return true;
             }
-            if (cur.isAir() || cur.getBlock() instanceof SlabBlock) {
+            if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return false;
             }
             cursor = cursor.down();
