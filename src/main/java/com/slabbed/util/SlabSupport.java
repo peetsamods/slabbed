@@ -188,8 +188,14 @@ public final class SlabSupport {
             return false;
         }
 
-        // ceiling-attached blocks under a top slab (or chain of ceiling blocks
-        // leading to a top slab) get +0.5 UP via getYOffset; don't also give -0.5 DOWN
+        // any block directly under a top slab gets +0.5 UP via getYOffset;
+        // don't also give it -0.5 DOWN
+        if (isTopSlab(world.getBlockState(pos.up()))) {
+            return false;
+        }
+
+        // ceiling-attached blocks further down a chain of ceiling blocks
+        // leading to a top slab also get +0.5 UP; exclude from -0.5
         if (isCeilingAttached(state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
@@ -283,16 +289,23 @@ public final class SlabSupport {
         if (shouldOffset(world, pos, state)) {
             return -0.5;
         }
-        // ── ceiling-attached blocks under a top slab: +0.5 UP ──────────
+        // ── blocks under a top slab: +0.5 UP ──────────────────────────
+        BlockState above = world.getBlockState(pos.up());
+
+        // direct: any block directly under a top slab
+        if (isTopSlab(above)) {
+            return 0.5;
+        }
+
+        // cascading: ceiling-attached block below other ceiling-attached blocks
+        // leading up to a top slab (e.g. 2nd dripstone, 2nd vine segment)
         if (isCeilingAttached(state)) {
-            // walk up through ceiling-attached blocks and chains to find a top slab
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
                 if (isTopSlab(cur)) {
                     return 0.5;
                 }
-                // continue through ceiling-attached blocks or Y-axis chains
                 if (isCeilingAttached(cur)) {
                     cursor = cursor.up();
                     continue;

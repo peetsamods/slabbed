@@ -31,13 +31,10 @@ public abstract class HangingSignAttachedMixin {
         BlockPos placementPos = ctx.getBlockPos();
         BlockPos above = placementPos.up();
         BlockState stateAbove = world.getBlockState(above);
-        System.out.println("[slabbed][HangingSignAttached] placementPos=" + placementPos
-                + " above=" + stateAbove + " isTopSlab=" + SlabSupport.isTopSlab(stateAbove)
-                + " currentATTACHED=" + result.get(HangingSignBlock.ATTACHED));
         if (SlabSupport.isTopSlab(stateAbove)) {
-            BlockState patched = result.with(HangingSignBlock.ATTACHED, true);
-            System.out.println("[slabbed][HangingSignAttached] PATCHING ATTACHED=true");
-            cir.setReturnValue(patched);
+            // ATTACHED=false → CEILING type → double-chain model (directly under solid block)
+            // ATTACHED=true  → CEILING_MIDDLE type → loop model (middle of sign chain)
+            cir.setReturnValue(result.with(HangingSignBlock.ATTACHED, false));
         }
     }
 }
