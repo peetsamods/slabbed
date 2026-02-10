@@ -297,6 +297,18 @@ public final class SlabSupport {
             return -0.5;
         }
         // ── blocks under a top slab: +0.5 UP ──────────────────────────
+        // exclude slabs and other partial blocks that shouldn't float up
+        Block blk = state.getBlock();
+        if (blk instanceof SlabBlock
+                || blk instanceof StairsBlock
+                || blk instanceof FenceBlock
+                || blk instanceof WallBlock
+                || blk instanceof PaneBlock
+                || state.isAir()
+                || !state.getFluidState().isEmpty()) {
+            return 0.0;
+        }
+
         BlockState above = world.getBlockState(pos.up());
 
         // direct: any block directly under a top slab
