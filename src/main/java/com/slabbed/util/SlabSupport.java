@@ -1,13 +1,16 @@
 package com.slabbed.util;
 
+import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.ButtonBlock;
 import net.minecraft.block.CaveVinesBodyBlock;
 import net.minecraft.block.CaveVinesHeadBlock;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.HangingRootsBlock;
 import net.minecraft.block.HangingSignBlock;
+import net.minecraft.block.LeverBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PointedDripstoneBlock;
 import net.minecraft.block.SlabBlock;
@@ -163,8 +166,14 @@ public final class SlabSupport {
                 && state.get(Properties.BLOCK_HALF) == BlockHalf.TOP) {
             return true;
         }
-        // Specific ceiling-only block types
+        // Bells, levers, buttons (can all be ceiling-mounted)
         Block block = state.getBlock();
+        if (block instanceof BellBlock
+                || block instanceof LeverBlock
+                || block instanceof ButtonBlock) {
+            return true;
+        }
+        // Specific ceiling-only block types
         if (block instanceof SporeBlossomBlock
                 || block instanceof HangingRootsBlock
                 || block instanceof PointedDripstoneBlock
