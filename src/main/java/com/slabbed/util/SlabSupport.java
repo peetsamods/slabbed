@@ -21,6 +21,7 @@ import net.minecraft.block.WallSignBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.DoubleBlockHalf;
+import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
@@ -151,6 +152,12 @@ public final class SlabSupport {
         }
         // Hanging signs
         if (state.getBlock() instanceof HangingSignBlock) {
+            return true;
+        }
+        // Top-half trapdoors (ceiling-mounted)
+        if (state.getBlock() instanceof TrapdoorBlock
+                && state.contains(Properties.BLOCK_HALF)
+                && state.get(Properties.BLOCK_HALF) == BlockHalf.TOP) {
             return true;
         }
         // Specific ceiling-only block types
