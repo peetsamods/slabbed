@@ -2,7 +2,9 @@ package com.slabbed.util;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.ChainBlock;
 import net.minecraft.block.FenceBlock;
+import net.minecraft.block.HangingSignBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.StairsBlock;
@@ -155,6 +157,18 @@ public final class SlabSupport {
         if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
             return false;
         }
+        // Y-axis chains under a top slab are ceiling-attached; don't offset down
+        if (state.getBlock() instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y
+                && isTopSlab(world.getBlockState(pos.up()))) {
+            return false;
+        }
+        // Hanging signs under a top slab are ceiling-attached; don't offset down
+        if (state.getBlock() instanceof HangingSignBlock
+                && isTopSlab(world.getBlockState(pos.up()))) {
+            return false;
+        }
 
         // ── bed: either half has a slab ───────────────────────────────
         if (state.contains(Properties.BED_PART)) {
@@ -230,6 +244,29 @@ public final class SlabSupport {
         }
         // hanging blocks under a top slab get pushed UP to sit against the slab bottom
         if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
+            BlockState above = world.getBlockState(pos.up());
+            if (isTopSlab(above)) {
+                return 0.5;
+            }
+            // cascading: hanging block under a Y-axis chain that is itself under a top slab
+            if (above.getBlock() instanceof ChainBlock
+                    && above.contains(Properties.AXIS)
+                    && above.get(Properties.AXIS) == Direction.Axis.Y
+                    && isTopSlab(world.getBlockState(pos.up(2)))) {
+                return 0.5;
+            }
+        }
+        // Y-axis chains under a top slab: shift up to connect to slab underside
+        if (state.getBlock() instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y) {
+            BlockState above = world.getBlockState(pos.up());
+            if (isTopSlab(above)) {
+                return 0.5;
+            }
+        }
+        // Hanging signs (no HANGING property) under a top slab
+        if (state.getBlock() instanceof HangingSignBlock) {
             BlockState above = world.getBlockState(pos.up());
             if (isTopSlab(above)) {
                 return 0.5;
