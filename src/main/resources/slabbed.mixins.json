@@ -9,6 +9,7 @@
     "debug.BlockItemPlaceDebugMixin",
     "debug.accessor.ItemUsageContextInvoker",
     "ChainBlockNeighborSurvivalMixin",
+    "HangingSignAttachedMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleMixin",
