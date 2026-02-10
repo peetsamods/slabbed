@@ -24,6 +24,10 @@ Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally
 - Java: **21**
 - Environment: **Server-side** (works in singleplayer and on servers; clients do not need the mod)
 
+### Limitations
+- Carpet and snow layers cannot coexist with slab placement in the same block space; placing a slab will replace them (vanilla behavior). Slabbed prevents ghosting by excluding thin top-layer blocks from visual offsets.
+- Hanging roots follow vanilla survival rules; no special slab support yet.
+
 ### Compatibility / Known incompatibilities
 - **Countered’s Terrain Slabs (`terrainslabs`)**: Slabbed includes a **gated compat veto** that prevents applying **visual Y-offsets** to `terrainslabs:*` blocks to avoid see-through/ghost terrain artifacts.
   - Scope: offsets only (does not change physics/worldgen).
