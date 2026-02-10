@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.compat.CompatHooks;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -207,6 +208,10 @@ public final class SlabSupport {
             return false;
         }
 
+        if (CompatHooks.shouldSkipOffset(state)) {
+            return false;
+        }
+
         // blocks under a top slab that get +0.5 UP via getYOffset should not
         // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
@@ -288,6 +293,10 @@ public final class SlabSupport {
      * </ul>
      */
     public static double getYOffset(BlockView world, BlockPos pos, BlockState state) {
+        if (CompatHooks.shouldSkipOffset(state)) {
+            return 0.0;
+        }
+
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
         if (IN_GET_Y_OFFSET.get()) {
             return 0.0;

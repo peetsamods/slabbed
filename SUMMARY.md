@@ -73,6 +73,8 @@
 - **Slab on offset objects:** Outline-offset makes face targeting tricky; cosmetic/non-breaking.
 - **Placement edge cases:** Gaps under top slabs can still be finicky due to targeting.
 - **TorchBlockMixin:** Exists but is not registered in `slabbed.mixins.json`. Redundant with shared hooks (`SlabSupportStateMixin` + `SlabSupportBlockMixin`). Can be removed or registered if targeted torch behavior is needed later.
+- **Compat:** Terralith blocks are excluded from slab offsets when the Terralith mod is present (subtractive-only, mod-gated).
+- **Compat:** Optional veto for `terrainslabs` (Countered’s Terrain Slabs) skips Slabbed visual offsets on `terrainslabs:*` blocks to mitigate ghost terrain.
 
 ## Files Touched (recent)
 - `src/main/java/com/slabbed/util/SlabSupport.java` — add `getYOffset`, `isRedstoneSupportTopSurface`, re-enable stairs, +0.5 for hanging under top slabs.

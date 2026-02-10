@@ -25,10 +25,9 @@ Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally
 - Environment: **Server-side** (works in singleplayer and on servers; clients do not need the mod)
 
 ### Compatibility / Known incompatibilities
-- **Terrain slab mods** (e.g. *Countered’s Terrain Slabs*) may cause **see-through / “ghost” terrain** artifacts.
-  - Cause: these mods add non-vanilla slab variants of terrain blocks (sand/dirt/gravel) that don’t follow vanilla solidity/terrain assumptions. Slabbed’s strict visual-offset rules intentionally avoid shifting solid terrain; the combination can produce rendering/interaction disagreements.
-  - Status: **not supported** (by design). If you use terrain slab mods, disable them or accept potential terrain artifacts.
-  - Workaround: remove the terrain slab mod (or avoid generating/placing terrain slabs in affected areas).
+- **Countered’s Terrain Slabs (`terrainslabs`)**: Slabbed includes a **gated compat veto** that prevents applying **visual Y-offsets** to `terrainslabs:*` blocks to avoid see-through/ghost terrain artifacts.
+  - Scope: offsets only (does not change physics/worldgen).
+  - If artifacts persist, disable Terrain Slabs or accept terrain visuals may be inconsistent.
 
 ## Installation
 1. Install Fabric Loader for the target Minecraft version
