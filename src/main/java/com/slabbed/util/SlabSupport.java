@@ -183,6 +183,7 @@ public final class SlabSupport {
                 && state.get(Properties.BLOCK_HALF) == BlockHalf.TOP) {
             return true;
         }
+
         // Bells, levers, buttons (can all be ceiling-mounted)
         Block block = state.getBlock();
         if (block instanceof BellBlock
