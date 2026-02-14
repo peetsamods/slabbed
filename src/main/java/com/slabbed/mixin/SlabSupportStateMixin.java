@@ -3,6 +3,7 @@ package com.slabbed.mixin;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
 import net.minecraft.util.math.BlockPos;
@@ -64,6 +65,9 @@ public abstract class SlabSupportStateMixin {
     private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
+        if (self.isOf(Blocks.HANGING_ROOTS)) {
+            return; // do not offset hanging roots; keep vanilla outline
+        }
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
             cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
