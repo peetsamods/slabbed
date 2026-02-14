@@ -1,6 +1,5 @@
 package com.slabbed.mixin;
 
-import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.BlockState;
@@ -10,7 +9,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
-import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -40,21 +38,7 @@ public abstract class SlabSupportStateMixin {
 
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolid(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
-        BlockState self = (BlockState) (Object) this;
-        boolean slabSupport = direction == Direction.UP && SlabSupport.isBottomSlab(self);
-        if (!slabSupport) {
-            return;
-        }
-
-        if (SlabSupport.DEBUG_GHOSTING) {
-            World w = world instanceof World ww ? ww : null;
-            BlockPos belowPos = pos.down();
-            Slabbed.LOGGER.info("[SLABBED][GHOSTING] slab-top support accepted pos={} placing={} belowState={} slabSupport={} worldClass={} client={} neighborsNotified=false after-accept placement", pos, self.getBlock(),
-                    world.getBlockState(belowPos), SlabSupport.isSupportingSlab(world, belowPos),
-                    w != null ? w.getClass().getSimpleName() : world.getClass().getSimpleName(), w != null && w.isClient());
-        }
-
-        cir.setReturnValue(true);
+        return;
     }
 
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
