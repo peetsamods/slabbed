@@ -66,6 +66,9 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
+        if (pos == null || world == null) {
+            return;
+        }
         BlockState self = (BlockState) (Object) this;
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
