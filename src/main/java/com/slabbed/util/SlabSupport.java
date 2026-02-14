@@ -40,6 +40,7 @@ import net.minecraft.world.WorldView;
  * Central helper for slab support semantics.
  */
 public final class SlabSupport {
+    public static final boolean DEBUG_GHOSTING = Boolean.getBoolean("slabbed.debugGhosting");
     private SlabSupport() {
     }
 
