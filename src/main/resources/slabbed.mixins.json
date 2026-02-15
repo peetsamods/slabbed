@@ -10,6 +10,7 @@
     "TorchParticleMixin",
     "RedstoneWireBlockMixin",
     "BlockItemPlaceDenyMixedSeamMixin",
+    "BlockItemPlaceFailLogMixin",
     "debug.FaceCullingDebugMixin"
   ],
   "client": [],

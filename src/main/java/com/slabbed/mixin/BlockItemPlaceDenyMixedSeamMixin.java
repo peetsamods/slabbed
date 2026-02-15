@@ -6,6 +6,7 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
+import java.util.HashMap;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
@@ -18,6 +19,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlaceDenyMixedSeamMixin {
     @Shadow public abstract Block getBlock();
+
+    private static final HashMap<String, Long> slabbed$lastLogMs = new HashMap<>();
+
+    private static boolean slabbed$shouldLog(String key) {
+        long now = System.currentTimeMillis();
+        Long last = slabbed$lastLogMs.get(key);
+        if (last != null && (now - last) < 1000L) {
+            return false;
+        }
+        slabbed$lastLogMs.put(key, now);
+        if (slabbed$lastLogMs.size() > 4096) {
+            slabbed$lastLogMs.clear();
+        }
+        return true;
+    }
 
     @Inject(method = "place", at = @At("HEAD"), cancellable = true)
     private void slabbed$denyMixedSeam(ItemPlacementContext ctx, CallbackInfoReturnable<net.minecraft.util.ActionResult> cir) {
@@ -52,6 +68,17 @@ public abstract class BlockItemPlaceDenyMixedSeamMixin {
         boolean likelyMixed = window1 || window2;
 
         if (!likelyMixed) return;
+
+        if (world.isClient()) {
+            cir.setReturnValue(net.minecraft.util.ActionResult.FAIL);
+            return;
+        }
+
+        String key = placing + "@" + pos.asLong();
+        if (!slabbed$shouldLog(key)) {
+            cir.setReturnValue(net.minecraft.util.ActionResult.FAIL);
+            return;
+        }
 
         System.out.println("[SLABBED][MIXED-SEAM][DENY] placing=" + placing
                 + " side=" + side
