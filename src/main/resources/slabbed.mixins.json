@@ -9,6 +9,7 @@
     "SlabSupportStateMixin",
     "TorchParticleMixin",
     "RedstoneWireBlockMixin",
+    "BlockItemPlaceDenyMixedSeamMixin",
     "debug.FaceCullingDebugMixin"
   ],
   "client": [],
