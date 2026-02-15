@@ -315,6 +315,9 @@ public final class SlabSupport {
      * </ul>
      */
     public static double getYOffset(BlockView world, BlockPos pos, BlockState state) {
+        if (state.getBlock() instanceof SlabBlock) {
+            return 0.0; // keep slabs at vanilla height to avoid culling seams
+        }
         if (CompatHooks.shouldSkipOffset(state)) {
             return 0.0;
         }

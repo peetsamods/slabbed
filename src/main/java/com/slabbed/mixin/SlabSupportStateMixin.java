@@ -5,6 +5,7 @@ import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
+import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -65,8 +66,8 @@ public abstract class SlabSupportStateMixin {
     private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (self.getBlock() instanceof TrapdoorBlock) {
-            return; // do not offset trapdoors; keep vanilla shape
+        if (self.getBlock() instanceof TrapdoorBlock || self.getBlock() instanceof SlabBlock) {
+            return; // do not offset trapdoors or slabs; keep vanilla shape
         }
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
