@@ -1,5 +1,6 @@
 package com.slabbed.mixin.client;
 
+import com.slabbed.client.RenderOffsetAllowlist;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
@@ -43,6 +44,10 @@ public abstract class BlockEntityOffsetMixin {
 
         World world = MinecraftClient.getInstance().world;
         if (world == null) {
+            return;
+        }
+
+        if (!RenderOffsetAllowlist.allows(blockState)) {
             return;
         }
 
