@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.TorchBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.client.render.model.BlockModelPart;
@@ -55,19 +56,14 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
     public void emitQuads(QuadEmitter emitter, BlockRenderView view, BlockPos pos, BlockState state, Random random,
                           Predicate<Direction> cullTest) {
         float dy = (float) SlabSupport.getYOffset(view, pos, state);
-        boolean fullCubeGuarded = false;
-        if (dy != 0.0f && view != null && pos != null) {
-            // Avoid applying slab render offset to full-cube blocks (e.g., crafting table)
-            if (state.isSolidBlock(view, pos)) {
-                dy = 0.0f;
-                fullCubeGuarded = true;
-            }
+        if (dy == 0.0f && state.getBlock() instanceof CarpetBlock && SlabSupport.hasBottomSlabBelow(view, pos)) {
+            dy = -0.5f;
         }
         if (state.getBlock() instanceof TorchBlock || state.getBlock() instanceof WallTorchBlock) {
             Slabbed.LOGGER.info("[Slabbed] emitQuads TORCH dy={} pos={} below={}", dy, pos, view.getBlockState(pos.down()).getBlock());
         }
         if (state.isOf(Blocks.CRAFTING_TABLE)) {
-            Slabbed.LOGGER.info("[Slabbed] emitQuads crafting_table dy={} fullCubeGuarded={}", dy, fullCubeGuarded);
+            Slabbed.LOGGER.info("[Slabbed] emitQuads crafting_table dy={}", dy);
         }
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);

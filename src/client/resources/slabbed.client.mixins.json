@@ -6,7 +6,9 @@
     "BlockEntityOffsetMixin",
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin",
-    "SectionBuilderMixin"
+    "SectionBuilderMixin",
+    "GameRendererMixin",
+    "WorldRendererMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }
