@@ -1,6 +1,5 @@
 package com.slabbed.mixin.client;
 
-import com.slabbed.Slabbed;
 import com.slabbed.client.ClientDy;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.WorldRenderer;
@@ -41,11 +40,6 @@ public abstract class WorldRendererMixin {
         }
         BlockPos pos = blockHit.getBlockPos();
         double dy = ClientDy.dyFor(clientWorld, pos, clientWorld.getBlockState(pos));
-        long now = System.currentTimeMillis();
-        if (dy != 0.0D && now - SLABBED$LAST_OUTLINE_LOG > 1000L) {
-            SLABBED$LAST_OUTLINE_LOG = now;
-            Slabbed.LOGGER.info("[Slabbed] outlineShape pos={} block={} dy={}", pos, clientWorld.getBlockState(pos).getBlock(), dy);
-        }
         return dy != 0.0D ? shape.offset(0.0D, dy, 0.0D) : shape;
     }
 }
