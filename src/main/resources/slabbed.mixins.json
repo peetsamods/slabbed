@@ -5,11 +5,11 @@
   "mixins": [
     "ChainBlockNeighborSurvivalMixin",
     "HangingSignAttachedMixin",
-    "TrapdoorBlockMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleMixin",
-    "RedstoneWireBlockMixin"
+    "RedstoneWireBlockMixin",
+    "debug.FaceCullingDebugMixin"
   ],
   "client": [],
   "injectors": { "defaultRequire": 1 }
