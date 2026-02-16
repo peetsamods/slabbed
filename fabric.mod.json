@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "slabbed",
-  "version": "0.2.0-beta.1-hotfix.1",
+  "version": "0.1.2-alpha",
   "name": "Slabbed",
   "license": "MIT",
   "environment": "*",
