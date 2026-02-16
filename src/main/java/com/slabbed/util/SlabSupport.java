@@ -114,6 +114,9 @@ public final class SlabSupport {
 
     /** True if the block immediately below {@code pos} is a bottom slab providing its top face. */
     public static boolean hasBottomSlabBelow(BlockView world, BlockPos pos) {
+        if (world == null || pos == null) {
+            return false;
+        }
         return isBottomSlab(world.getBlockState(pos.down()));
     }
 
@@ -313,6 +316,9 @@ public final class SlabSupport {
      * </ul>
      */
     public static double getYOffset(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null) {
+            return 0.0;
+        }
         if (CompatHooks.shouldSkipOffset(state)) {
             return 0.0;
         }
