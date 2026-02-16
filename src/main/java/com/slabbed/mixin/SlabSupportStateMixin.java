@@ -60,6 +60,14 @@ public abstract class SlabSupportStateMixin {
         }
     }
 
+    @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
+    private void slabbed$slabTopSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+        BlockState self = (BlockState) (Object) this;
+        if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
+            cir.setReturnValue(true);
+        }
+    }
+
     // ── outline (hit-box) offset ──────────────────────────────────────
 
     @Inject(method = "getOutlineShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/ShapeContext;)Lnet/minecraft/util/shape/VoxelShape;",
