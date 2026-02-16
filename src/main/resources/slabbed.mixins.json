@@ -5,6 +5,7 @@
   "mixins": [
     "ChainBlockNeighborSurvivalMixin",
     "HangingSignAttachedMixin",
+    "CarpetBlockMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleMixin",
