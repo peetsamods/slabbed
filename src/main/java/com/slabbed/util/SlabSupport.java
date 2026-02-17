@@ -336,6 +336,19 @@ public final class SlabSupport {
     }
 
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
+        // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
+        // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
+        if (state.getBlock() instanceof SlabBlock) {
+            BlockPos belowPos = pos.down();
+            BlockState below = world.getBlockState(belowPos);
+            Block belowBlock = below.getBlock();
+            if (!(belowBlock instanceof SlabBlock) && !below.isAir()
+                    && below.getFluidState().isEmpty()
+                    && hasBottomSlabBelow(world, belowPos)) {
+                return -0.5;
+            }
+        }
+
         // Conservative: solid ground blocks sitting on a bottom slab render at slab height.
         if (hasBottomSlabBelow(world, pos)) {
             Block block = state.getBlock();

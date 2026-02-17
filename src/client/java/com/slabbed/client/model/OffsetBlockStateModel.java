@@ -1,6 +1,4 @@
 package com.slabbed.client.model;
-
-import com.slabbed.Slabbed;
 import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
@@ -70,7 +68,6 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
             }
         }
 
-        Slabbed.LOGGER.info("[Slabbed] emitQuads model dy={} block={} pos={} below={}", dy, state.getBlock(), pos, view.getBlockState(pos.down()).getBlock());
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
     }
