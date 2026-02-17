@@ -5,6 +5,11 @@ plugins {
 
 loom {
     splitEnvironmentSourceSets()
+    runs {
+        client {
+            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true"
+        }
+    }
 }
 
 version = project.mod_version

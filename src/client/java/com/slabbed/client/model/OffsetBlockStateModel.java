@@ -1,12 +1,16 @@
 package com.slabbed.client.model;
 
 import com.slabbed.Slabbed;
+import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.block.BlockState;
-import net.minecraft.block.TorchBlock;
-import net.minecraft.block.WallTorchBlock;
+import net.minecraft.block.CarpetBlock;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.PaneBlock;
+import net.minecraft.block.PaleMossCarpetBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.client.render.model.BlockModelPart;
 import net.minecraft.client.render.model.BlockStateModel;
 import net.minecraft.client.texture.Sprite;
@@ -53,13 +57,20 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
     @Override
     public void emitQuads(QuadEmitter emitter, BlockRenderView view, BlockPos pos, BlockState state, Random random,
                           Predicate<Direction> cullTest) {
-        float dy = (float) SlabSupport.getYOffset(view, pos, state);
-        if (state.getBlock() instanceof TorchBlock || state.getBlock() instanceof WallTorchBlock) {
-            Slabbed.LOGGER.info("[Slabbed] emitQuads TORCH dy={} pos={} below={}", dy, pos, view.getBlockState(pos.down()).getBlock());
+        float dy;
+        if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof PaleMossCarpetBlock) {
+            dy = (float) ClientDy.dyFor(view, pos, state);
+        } else {
+            dy = (float) SlabSupport.getYOffset(view, pos, state);
+            if (dy != 0.0f) {
+                // Prevent visual connection offsets for fences/walls/panes
+                if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof PaneBlock) {
+                    dy = 0.0f;
+                }
+            }
         }
-        if (state.isOf(net.minecraft.block.Blocks.CRAFTING_TABLE)) {
-            Slabbed.LOGGER.info("[Slabbed] emitQuads crafting_table dy={}", dy);
-        }
+
+        Slabbed.LOGGER.info("[Slabbed] emitQuads model dy={} block={} pos={} below={}", dy, state.getBlock(), pos, view.getBlockState(pos.down()).getBlock());
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
     }
