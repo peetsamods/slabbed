@@ -2,6 +2,7 @@ package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
@@ -75,6 +76,13 @@ public abstract class SlabSupportStateMixin {
     private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
+
+        // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
+        Block block = self.getBlock();
+        if (block instanceof net.minecraft.block.CarpetBlock || block instanceof net.minecraft.block.PaleMossCarpetBlock) {
+            return;
+        }
+
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
             cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
