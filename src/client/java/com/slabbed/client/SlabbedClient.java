@@ -6,5 +6,6 @@ public final class SlabbedClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         SlabbedModelLoadingPlugin.init();
+        GapFillerOverlay.init();
     }
 }
