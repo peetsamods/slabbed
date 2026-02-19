@@ -8,6 +8,7 @@ import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,17 +25,18 @@ public abstract class BlockItemPlaceTraceMixin {
         if (!(self.getBlock() instanceof SlabBlock)) return;
 
         World world = ctx.getWorld();
-        BlockPos pos = ctx.getBlockPos();
-        Slabbed.LOGGER.info("[SBSB-TRACE][HEAD] side={} block={} clickedPos={} face={} hitY={} stateAtPos={} replaceable={} stateAbove={} replaceableAbove={}",
+        Direction face = ctx.getSide();
+        BlockPos placePos = ctx.getBlockPos();
+        BlockPos hitPos = placePos.offset(face.getOpposite());
+        Slabbed.LOGGER.info("[SBSB-TRACE][HEAD] side={} block={} face={} hitPos={} hitState={} placePos={} placeState={} placeAbove={}",
                 world.isClient() ? "CLIENT" : "SERVER",
                 Registries.BLOCK.getId(self.getBlock()),
-                pos,
                 ctx.getSide(),
-                String.format("%.4f", ctx.getHitPos().y),
-                world.getBlockState(pos),
-                world.getBlockState(pos).isReplaceable(),
-                world.getBlockState(pos.up()),
-                world.getBlockState(pos.up()).isReplaceable());
+                hitPos,
+                world.getBlockState(hitPos),
+                placePos,
+                world.getBlockState(placePos),
+                world.getBlockState(placePos.up()));
     }
 
     @Inject(method = "place", at = @At("RETURN"))
@@ -44,9 +46,12 @@ public abstract class BlockItemPlaceTraceMixin {
         if (!(self.getBlock() instanceof SlabBlock)) return;
 
         World world = ctx.getWorld();
-        Slabbed.LOGGER.info("[SBSB-TRACE][RETURN] side={} block={} result={}",
+        BlockPos placePos = ctx.getBlockPos();
+        Slabbed.LOGGER.info("[SBSB-TRACE][RETURN] side={} block={} placePos={} placeState={} result={}",
                 world.isClient() ? "CLIENT" : "SERVER",
                 Registries.BLOCK.getId(self.getBlock()),
+                placePos,
+                world.getBlockState(placePos),
                 cir.getReturnValue());
     }
 }
