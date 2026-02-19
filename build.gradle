@@ -7,7 +7,7 @@ loom {
     splitEnvironmentSourceSets()
     runs {
         client {
-            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true"
+            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true", "-Dslabbed.debug.sbsb=true"
         }
     }
 }
