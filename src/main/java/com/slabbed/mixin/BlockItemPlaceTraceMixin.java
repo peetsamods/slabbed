@@ -2,6 +2,10 @@ package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabbedDebug;
+import com.slabbed.util.SlabSupport;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
@@ -18,24 +22,37 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlaceTraceMixin {
 
+    private static boolean slabbed$isTracedBlock(Block block) {
+        return block instanceof SlabBlock || block instanceof CarpetBlock || block.getDefaultState().isOpaqueFullCube();
+    }
+
     @Inject(method = "place", at = @At("HEAD"))
     private void slabbed$tracePlaceHead(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
         if (!SlabbedDebug.DEBUG_SBSB) return;
         BlockItem self = (BlockItem) (Object) this;
-        if (!(self.getBlock() instanceof SlabBlock)) return;
+        if (!slabbed$isTracedBlock(self.getBlock())) return;
 
         World world = ctx.getWorld();
         Direction face = ctx.getSide();
         BlockPos placePos = ctx.getBlockPos();
         BlockPos hitPos = placePos.offset(face.getOpposite());
-        Slabbed.LOGGER.info("[SBSB-TRACE][HEAD] side={} block={} face={} hitPos={} hitState={} placePos={} placeState={} placeAbove={}",
+        BlockState hitState = world.getBlockState(hitPos);
+        BlockState placeState = world.getBlockState(placePos);
+
+        double dyHit = SlabSupport.getYOffset(world, hitPos, hitState);
+        double dyPlace = SlabSupport.getYOffset(world, placePos, placeState);
+        if (dyHit == 0.0 && dyPlace == 0.0) return;
+
+        Slabbed.LOGGER.info("[SBSB-TRACE][HEAD] side={} item={} face={} hitPos={} hitState={} dyHit={} placePos={} placeState={} dyPlace={} placeAbove={}",
                 world.isClient() ? "CLIENT" : "SERVER",
-                Registries.BLOCK.getId(self.getBlock()),
-                ctx.getSide(),
+                Registries.ITEM.getId(self),
+                face,
                 hitPos,
-                world.getBlockState(hitPos),
+                hitState,
+                dyHit,
                 placePos,
-                world.getBlockState(placePos),
+                placeState,
+                dyPlace,
                 world.getBlockState(placePos.up()));
     }
 
@@ -43,15 +60,25 @@ public abstract class BlockItemPlaceTraceMixin {
     private void slabbed$tracePlaceReturn(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
         if (!SlabbedDebug.DEBUG_SBSB) return;
         BlockItem self = (BlockItem) (Object) this;
-        if (!(self.getBlock() instanceof SlabBlock)) return;
+        if (!slabbed$isTracedBlock(self.getBlock())) return;
 
         World world = ctx.getWorld();
+        Direction face = ctx.getSide();
         BlockPos placePos = ctx.getBlockPos();
-        Slabbed.LOGGER.info("[SBSB-TRACE][RETURN] side={} block={} placePos={} placeState={} result={}",
+        BlockPos hitPos = placePos.offset(face.getOpposite());
+        BlockState hitState = world.getBlockState(hitPos);
+        BlockState placeState = world.getBlockState(placePos);
+
+        double dyHit = SlabSupport.getYOffset(world, hitPos, hitState);
+        double dyPlace = SlabSupport.getYOffset(world, placePos, placeState);
+        if (dyHit == 0.0 && dyPlace == 0.0) return;
+
+        Slabbed.LOGGER.info("[SBSB-TRACE][RETURN] side={} item={} placePos={} placeState={} dyPlace={} result={}",
                 world.isClient() ? "CLIENT" : "SERVER",
-                Registries.BLOCK.getId(self.getBlock()),
+                Registries.ITEM.getId(self),
                 placePos,
-                world.getBlockState(placePos),
+                placeState,
+                dyPlace,
                 cir.getReturnValue());
     }
 }
