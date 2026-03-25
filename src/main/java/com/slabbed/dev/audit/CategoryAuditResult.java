@@ -4,6 +4,9 @@ public record CategoryAuditResult(
         String categoryId,
         TestLane lane,
         boolean placementPass,
-        boolean survivalPass,
+        boolean neighborUpdatePass,
+        boolean reloadPass,
+        AuditFailureStage failureStage,
+        AuditFailureReason failureReason,
         String notes) {
 }

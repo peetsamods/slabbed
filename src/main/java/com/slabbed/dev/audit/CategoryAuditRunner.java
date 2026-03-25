@@ -21,14 +21,10 @@ import java.util.Map;
  * Support blocks are cleared and replaced per-lane; the area is cleaned up
  * after each evaluation so the test leaves no permanent world state.
  *
- * Two verdicts per lane:
- *   placementPass — canPlaceAt returns true before any block is set
- *   survivalPass  — canPlaceAt returns true after the block is placed
- *                   (mirrors the logic in CarpetBlockMixin.getStateForNeighborUpdate)
- *
- * TODO(next slice): trigger an actual getStateForNeighborUpdate call via
- *   world.updateBlock to capture survival failures caused by scheduled ticks.
- * TODO(next slice): add reload/relog verification lane.
+ * Three verdicts per lane:
+ *   placementPass      — canPlaceAt returns true before any block is set
+ *   neighborUpdatePass — block remains and still satisfies the probe after a controlled neighbor update
+ *   reloadPass         — block persists through a save flush and post-save re-check
  */
 public class CategoryAuditRunner {
 
@@ -53,7 +49,14 @@ public class CategoryAuditRunner {
         CategoryProbe probe = PROBES.get(categoryId);
         if (probe == null) {
             for (TestLane lane : TestLane.values()) {
-                report.add(new CategoryAuditResult(categoryId, lane, false, false,
+                report.add(new CategoryAuditResult(
+                        categoryId,
+                        lane,
+                        false,
+                        false,
+                        false,
+                        AuditFailureStage.PLACEMENT,
+                        AuditFailureReason.EXCEPTION,
                         "Unknown category: " + categoryId));
             }
             return report;
@@ -81,27 +84,79 @@ public class CategoryAuditRunner {
             // place the support block quietly (no neighbor cascade during setup)
             world.setBlockState(supportPos, supportState, Block.NOTIFY_LISTENERS);
 
-            // --- PLACEMENT VERDICT ---
-            BlockState probeState = probe.getProbeState(world, candidatePos);
-            boolean placementPass = probe.canAttemptPlacement(world, candidatePos);
-
-            // --- SURVIVAL VERDICT ---
-            boolean survivalPass = false;
+            boolean placementPass = false;
+            boolean neighborUpdatePass = false;
+            boolean reloadPass = false;
+            AuditFailureStage failureStage = AuditFailureStage.NONE;
+            AuditFailureReason failureReason = AuditFailureReason.NONE;
             String notes = auditCase.expectedSupportKind();
 
-            if (placementPass) {
-                world.setBlockState(candidatePos, probeState, Block.NOTIFY_LISTENERS);
-                survivalPass = probe.survivesAfterPlacement(world, candidatePos, probeState);
+            try {
+                // --- PLACEMENT VERDICT ---
+                BlockState probeState = probe.getProbeState(world, candidatePos);
+                if (probeState == null) {
+                    failureStage = AuditFailureStage.PLACEMENT;
+                    failureReason = AuditFailureReason.STATE_NULL_ON_PLACEMENT;
+                    notes += " [probe state null]";
+                } else {
+                    placementPass = probe.canAttemptPlacement(world, candidatePos);
+                    if (!placementPass) {
+                        failureStage = AuditFailureStage.PLACEMENT;
+                        failureReason = AuditFailureReason.CANNOT_PLACE_AT_FALSE;
+                        notes += " [placement blocked]";
+                    } else {
+                        world.setBlockState(candidatePos, probeState, Block.NOTIFY_ALL);
+                        boolean placed = world.getBlockState(candidatePos).isOf(probeState.getBlock());
+                        if (!placed) {
+                            failureStage = AuditFailureStage.PLACEMENT;
+                            failureReason = AuditFailureReason.STATE_NULL_ON_PLACEMENT;
+                            notes += " [state missing right after placement]";
+                        } else {
+                            // --- NEIGHBOR-UPDATE VERDICT ---
+                            world.setBlockState(supportPos, supportState, Block.NOTIFY_ALL);
+                            world.updateNeighborsAlways(candidatePos, supportState.getBlock(), null);
+                            boolean stillPresent = world.getBlockState(candidatePos).isOf(probeState.getBlock());
+                            boolean stillValid = stillPresent && probe.survivesAfterPlacement(world, candidatePos, probeState);
+                            neighborUpdatePass = stillPresent && stillValid;
+
+                            if (!neighborUpdatePass) {
+                                failureStage = AuditFailureStage.NEIGHBOR_UPDATE;
+                                failureReason = stillPresent
+                                        ? AuditFailureReason.VANILLA_SUPPORT_PATH_STILL_ACTIVE
+                                        : AuditFailureReason.BLOCK_DROPPED_AFTER_NEIGHBOR_UPDATE;
+                                notes += " [failed after neighbor update]";
+                            } else {
+                                // --- RELOAD-PERSISTENCE VERDICT ---
+                                reloadPass = runReloadPersistenceCheck(world, candidatePos, probeState, probe);
+                                if (!reloadPass) {
+                                    failureStage = AuditFailureStage.RELOAD;
+                                    failureReason = AuditFailureReason.BLOCK_MISSING_AFTER_RELOAD;
+                                    notes += " [missing after reload check]";
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                if (failureStage == AuditFailureStage.NONE) {
+                    failureStage = AuditFailureStage.PLACEMENT;
+                }
+                failureReason = AuditFailureReason.EXCEPTION;
+                notes += " [exception: " + e.getClass().getSimpleName() + "]";
+            } finally {
                 world.setBlockState(candidatePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
-            } else {
-                notes += " [placement blocked]";
+                world.setBlockState(supportPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             }
 
-            // restore support slot to air
-            world.setBlockState(supportPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
-
-            report.add(new CategoryAuditResult(categoryId, auditCase.lane(),
-                    placementPass, survivalPass, notes));
+            report.add(new CategoryAuditResult(
+                    categoryId,
+                    auditCase.lane(),
+                    placementPass,
+                    neighborUpdatePass,
+                    reloadPass,
+                    failureStage,
+                    failureReason,
+                    notes));
 
             laneIdx++;
         }
@@ -121,5 +176,15 @@ public class CategoryAuditRunner {
         for (int dy = 0; dy < height; dy++) {
             world.setBlockState(base.up(dy), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
         }
+    }
+
+    private static boolean runReloadPersistenceCheck(ServerWorld world, BlockPos candidatePos, BlockState expected, CategoryProbe probe) {
+        // v2 conservative path: flush world save, then re-fetch state and probe survival conditions.
+        world.getServer().save(false, true, false);
+        BlockState persisted = world.getBlockState(candidatePos);
+        if (!persisted.isOf(expected.getBlock())) {
+            return false;
+        }
+        return probe.survivesAfterPlacement(world, candidatePos, persisted);
     }
 }
