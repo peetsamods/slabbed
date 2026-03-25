@@ -6,6 +6,7 @@
     "ChainBlockNeighborSurvivalMixin",
     "HangingSignAttachedMixin",
     "CarpetBlockMixin",
+    "torch.TorchBlockMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleMixin",

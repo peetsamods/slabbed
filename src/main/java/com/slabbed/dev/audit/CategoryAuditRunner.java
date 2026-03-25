@@ -29,7 +29,8 @@ import java.util.Map;
 public class CategoryAuditRunner {
 
     private static final Map<String, CategoryProbe> PROBES = Map.of(
-            "carpet", new CarpetCategoryProbe()
+            "carpet", new CarpetCategoryProbe(),
+            "torch", new TorchCategoryProbe()
     );
 
     /** X spacing between lanes, in blocks. */
