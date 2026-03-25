@@ -17,6 +17,7 @@ import org.joml.Matrix4f;
 public final class GapFillerOverlay {
     private static final double INSET = 0.06;
     private static final float R = 0.6f, G = 0.6f, B = 0.6f, A = 0.4f;
+    private static final float LINE_WIDTH = 1.0f;
     private static final int RADIUS = 6;
     private static final int MAX_CHECKS = 800;
 
@@ -104,7 +105,7 @@ public final class GapFillerOverlay {
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         if (len == 0) return;
         nx /= len; ny /= len; nz /= len;
-        lines.vertex(mat, x0, y0, z0).color(R, G, B, A).normal(nx, ny, nz);
-        lines.vertex(mat, x1, y1, z1).color(R, G, B, A).normal(nx, ny, nz);
+        lines.vertex(mat, x0, y0, z0).color(R, G, B, A).normal(nx, ny, nz).lineWidth(LINE_WIDTH);
+        lines.vertex(mat, x1, y1, z1).color(R, G, B, A).normal(nx, ny, nz).lineWidth(LINE_WIDTH);
     }
 }
