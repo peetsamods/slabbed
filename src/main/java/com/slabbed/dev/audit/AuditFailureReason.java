@@ -1,0 +1,11 @@
+package com.slabbed.dev.audit;
+
+public enum AuditFailureReason {
+    NONE,
+    CANNOT_PLACE_AT_FALSE,
+    STATE_NULL_ON_PLACEMENT,
+    BLOCK_DROPPED_AFTER_NEIGHBOR_UPDATE,
+    VANILLA_SUPPORT_PATH_STILL_ACTIVE,
+    BLOCK_MISSING_AFTER_RELOAD,
+    EXCEPTION
+}
