@@ -75,10 +75,11 @@ public class SlabbedDevCommands {
         }
 
         source.sendFeedback(() -> Text.literal(String.format(
-                "[slabdev] audit %s: placement_fail=%d survival_fail=%d  report→ %s",
+                "[slabdev] audit %s: placement_fail=%d neighbor_fail=%d reload_fail=%d  report→ %s",
                 category,
                 report.placementFailures(),
-                report.survivalFailures(),
+                report.neighborFailures(),
+                report.reloadFailures(),
                 outputDir)), false);
 
         return 1;

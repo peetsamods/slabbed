@@ -26,26 +26,36 @@ public class CategoryAuditReport {
         return (int) results.stream().filter(r -> !r.placementPass()).count();
     }
 
-    public int survivalFailures() {
-        return (int) results.stream().filter(r -> !r.survivalPass()).count();
+    public int neighborFailures() {
+        return (int) results.stream().filter(r -> !r.neighborUpdatePass()).count();
+    }
+
+    public int reloadFailures() {
+        return (int) results.stream().filter(r -> !r.reloadPass()).count();
     }
 
     public String toText() {
         StringBuilder sb = new StringBuilder();
         sb.append("Category: ").append(categoryId).append("\n");
         sb.append("Audit time: ").append(auditTime).append("\n\n");
-        sb.append(String.format("%-12s | %-9s | %-8s | %s%n", "Lane", "Placement", "Survival", "Notes"));
-        sb.append("-".repeat(60)).append("\n");
+        sb.append(String.format(
+                "%-12s | %-9s | %-8s | %-6s | %-15s | %-32s | %s%n",
+                "Lane", "Placement", "Neighbor", "Reload", "Stage", "Reason", "Notes"));
+        sb.append("-".repeat(126)).append("\n");
         for (CategoryAuditResult r : results) {
-            sb.append(String.format("%-12s | %-9s | %-8s | %s%n",
+            sb.append(String.format("%-12s | %-9s | %-8s | %-6s | %-15s | %-32s | %s%n",
                     r.lane().name(),
                     r.placementPass() ? "PASS" : "FAIL",
-                    r.survivalPass() ? "PASS" : "FAIL",
+                    r.neighborUpdatePass() ? "PASS" : "FAIL",
+                    r.reloadPass() ? "PASS" : "FAIL",
+                    r.failureStage().name(),
+                    r.failureReason().name(),
                     r.notes()));
         }
         sb.append("\nSummary:\n");
         sb.append("placement_failures=").append(placementFailures()).append("\n");
-        sb.append("survival_failures=").append(survivalFailures()).append("\n");
+        sb.append("neighbor_failures=").append(neighborFailures()).append("\n");
+        sb.append("reload_failures=").append(reloadFailures()).append("\n");
         sb.append("visual_audit=NOT_RUN\n");
         return sb.toString();
     }
