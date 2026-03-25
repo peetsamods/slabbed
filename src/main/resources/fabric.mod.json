@@ -14,8 +14,13 @@
     ]
   },
   "mixins": [
-    "slabbed.mixins.json",
-    "slabbed.client.mixins.json"
+    {
+      "config": "slabbed.mixins.json"
+    },
+    {
+      "config": "slabbed.client.mixins.json",
+      "environment": "client"
+    }
   ],
   "depends": {
     "fabricloader": "*",
