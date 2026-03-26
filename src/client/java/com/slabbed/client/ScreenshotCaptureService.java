@@ -81,13 +81,28 @@ public final class ScreenshotCaptureService {
 
     private static boolean copyToClipboard(NativeImage nativeImage) {
         BufferedImage buffered = toBufferedImage(nativeImage);
+        Clipboard clipboard;
         try {
-            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-            clipboard.setContents(new ImageSelection(buffered), null);
-            return true;
-        } catch (IllegalStateException | HeadlessException e) {
+            clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        } catch (HeadlessException e) {
             return false;
         }
+
+        // Windows clipboard can be briefly locked by other apps; retry a few times.
+        for (int attempt = 0; attempt < 5; attempt++) {
+            try {
+                clipboard.setContents(new ImageSelection(buffered), null);
+                return true;
+            } catch (IllegalStateException e) {
+                try {
+                    Thread.sleep(75L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        return false;
     }
 
     private static BufferedImage toBufferedImage(NativeImage nativeImage) {
