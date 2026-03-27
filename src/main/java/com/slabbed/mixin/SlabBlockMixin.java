@@ -41,7 +41,6 @@ public abstract class SlabBlockMixin extends Block
     @Override
     protected ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, BlockHitResult hit)
     {
-        Thread.dumpStack();
         if (player.isSneaking())
         {
             boolean newState = !state.get(Slabbed.IS_SLABBED);
