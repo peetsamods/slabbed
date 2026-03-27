@@ -7,6 +7,8 @@
     "SlabSupportStateMixin",
     "TorchParticleMixin",
     "RedstoneWireBlockMixin",
+    "EntityInvoker",
+    "EntityMixin",
     "SlabBlockMixin"
   ],
   "client": [],
