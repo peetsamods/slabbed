@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.Slabbed;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.FenceBlock;
@@ -44,7 +45,7 @@ public final class SlabSupport {
      * Returns true if the state is a slab with a defined type.
      */
     public static boolean isSupportingSlab(BlockState state) {
-        return state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE);
+        return state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE) && state.get(Slabbed.IS_SLABBED);
     }
 
     /** True if this state is a bottom slab. */

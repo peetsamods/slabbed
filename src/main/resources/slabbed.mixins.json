@@ -6,7 +6,8 @@
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleMixin",
-    "RedstoneWireBlockMixin"
+    "RedstoneWireBlockMixin",
+    "SlabBlockMixin"
   ],
   "client": [],
   "injectors": { "defaultRequire": 1 }
