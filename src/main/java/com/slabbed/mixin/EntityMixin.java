@@ -50,9 +50,6 @@ public abstract class EntityMixin implements EntityInvoker
 
         HitResult returnValue = cir.getReturnValue();
 
-        final double miss = 0.02;
-        final double hit = 0.05;
-
         if (returnValue.getPos().distanceTo(cameraPos) > highResult.getPos().distanceTo(cameraPos))
         {
             cir.setReturnValue(highResult);
