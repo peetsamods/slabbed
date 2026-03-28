@@ -25,11 +25,13 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /**
  * Client-only dev helper that captures a screenshot and copies it to the OS clipboard.
  */
 public final class ScreenshotCaptureService {
+    private static final CaptureProfile DEFAULT_PROFILE = CaptureProfile.COMPARE;
     private static final int CLIPBOARD_RETRY_ATTEMPTS = 10;
     private static final long CLIPBOARD_RETRY_BACKOFF_MS = 150L;
     private static final int MAX_CHAT_FAILURE_LENGTH = 120;
@@ -38,6 +40,9 @@ public final class ScreenshotCaptureService {
     private static final Category KEY_CATEGORY = Category.create(Identifier.of("slabbed", "dev"));
     private static final KeyBinding SCREENSHOT_KEY = KeyBindingHelper.registerKeyBinding(
             new KeyBinding("key.slabbed.screenshot", GLFW.GLFW_KEY_KP_0, KEY_CATEGORY));
+    private static CaptureState captureState = CaptureState.IDLE;
+    private static PendingCapture pendingCapture;
+    private static boolean compareMode;
 
     private ScreenshotCaptureService() {
     }
@@ -45,15 +50,15 @@ public final class ScreenshotCaptureService {
     public static void init() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (SCREENSHOT_KEY.wasPressed()) {
-                capture(client);
+                requestCapture(client);
             }
+            advanceCapturePipeline(client);
         });
     }
 
-    private static void capture(MinecraftClient client) {
-        Framebuffer framebuffer = client.getFramebuffer();
-        if (framebuffer == null) {
-            showMessage(client, Text.literal("[slabdev] No framebuffer available for screenshot"));
+    private static void requestCapture(MinecraftClient client) {
+        if (captureState != CaptureState.IDLE) {
+            showMessage(client, Text.literal("[slabdev] Capture already in progress"));
             return;
         }
 
@@ -66,27 +71,100 @@ public final class ScreenshotCaptureService {
             return;
         }
 
-        String fileName = "slabbed-" + NAME_FORMATTER.format(Instant.now()) + ".png";
-        Path outputPath = screenshotDir.resolve(fileName);
-
-        ScreenshotRecorder.takeScreenshot(framebuffer, 1, image -> {
-            try (image) {
-                image.writeTo(outputPath);
-                ClipboardCopyResult clipboardResult = copyToClipboard(image, outputPath);
-                String shownPath = gameDir.relativize(outputPath).toString();
-                String status;
-                if (clipboardResult.imageCopied()) {
-                    status = " (image copied to clipboard)";
-                } else if (clipboardResult.pathCopied()) {
-                    status = " (image clipboard failed; path copied)";
-                } else {
-                    status = " (clipboard failed: " + trimForChat(clipboardResult.failureDetail()) + ")";
-                }
-                showMessage(client, Text.literal("[slabdev] Screenshot saved → " + shownPath + status));
-            } catch (IOException | RuntimeException e) {
-                showMessage(client, Text.literal("[slabdev] Screenshot failed: " + e.getMessage()));
+        pendingCapture = new PendingCapture(gameDir, screenshotDir, NAME_FORMATTER.format(Instant.now()));
+        switch (DEFAULT_PROFILE) {
+            case CLEAN -> {
+                compareMode = false;
+                captureState = CaptureState.REQUEST_CLEAN_RENDER;
             }
-        });
+            case DEBUG -> {
+                compareMode = false;
+                captureState = CaptureState.REQUEST_DEBUG_RENDER;
+            }
+            case COMPARE -> {
+                compareMode = true;
+                captureState = CaptureState.REQUEST_CLEAN_RENDER;
+            }
+        }
+    }
+
+    private static void advanceCapturePipeline(MinecraftClient client) {
+        switch (captureState) {
+            case IDLE -> {
+            }
+            case REQUEST_CLEAN_RENDER -> {
+                ScreenshotCaptureContext.begin(CaptureProfile.CLEAN);
+                captureState = CaptureState.CAPTURE_CLEAN;
+            }
+            case CAPTURE_CLEAN -> {
+                captureProfile(client, CaptureProfile.CLEAN);
+                ScreenshotCaptureContext.end();
+                if (compareMode) {
+                    captureState = CaptureState.REQUEST_DEBUG_RENDER;
+                } else {
+                    finishCapture();
+                }
+            }
+            case REQUEST_DEBUG_RENDER -> {
+                ScreenshotCaptureContext.begin(CaptureProfile.DEBUG);
+                captureState = CaptureState.CAPTURE_DEBUG;
+            }
+            case CAPTURE_DEBUG -> {
+                captureProfile(client, CaptureProfile.DEBUG);
+                ScreenshotCaptureContext.end();
+                finishCapture();
+            }
+        }
+    }
+
+    private static void captureProfile(MinecraftClient client, CaptureProfile profile) {
+        PendingCapture currentCapture = pendingCapture;
+        if (currentCapture == null) {
+            finishCapture();
+            showMessage(client, Text.literal("[slabdev] Capture state lost; cancelled"));
+            return;
+        }
+
+        Framebuffer framebuffer = client.getFramebuffer();
+        if (framebuffer == null) {
+            showMessage(client, Text.literal("[slabdev] No framebuffer available for screenshot"));
+            return;
+        }
+
+        String profileTag = profile.name().toLowerCase(Locale.ROOT);
+        String fileName = "slabbed-" + currentCapture.timestamp() + "_" + profileTag + ".png";
+        Path outputPath = currentCapture.screenshotDir().resolve(fileName);
+        Path gameDir = currentCapture.gameDir();
+
+        try {
+            ScreenshotRecorder.takeScreenshot(framebuffer, 1, image -> {
+                try (image) {
+                    image.writeTo(outputPath);
+                    ClipboardCopyResult clipboardResult = copyToClipboard(image, outputPath);
+                    String shownPath = gameDir.relativize(outputPath).toString();
+                    String status;
+                    if (clipboardResult.imageCopied()) {
+                        status = " (image copied to clipboard)";
+                    } else if (clipboardResult.pathCopied()) {
+                        status = " (image clipboard failed; path copied)";
+                    } else {
+                        status = " (clipboard failed: " + trimForChat(clipboardResult.failureDetail()) + ")";
+                    }
+                    showMessage(client, Text.literal("[slabdev] Screenshot saved [" + profileTag + "] → " + shownPath + status));
+                } catch (IOException | RuntimeException e) {
+                    showMessage(client, Text.literal("[slabdev] Screenshot failed: " + e.getMessage()));
+                }
+            });
+        } catch (RuntimeException e) {
+            showMessage(client, Text.literal("[slabdev] Screenshot failed: " + e.getMessage()));
+        }
+    }
+
+    private static void finishCapture() {
+        captureState = CaptureState.IDLE;
+        pendingCapture = null;
+        compareMode = false;
+        ScreenshotCaptureContext.end();
     }
 
     private static ClipboardCopyResult copyToClipboard(NativeImage nativeImage, Path outputPath) {
@@ -240,5 +318,16 @@ public final class ScreenshotCaptureService {
             }
             return image;
         }
+    }
+
+    private enum CaptureState {
+        IDLE,
+        REQUEST_CLEAN_RENDER,
+        CAPTURE_CLEAN,
+        REQUEST_DEBUG_RENDER,
+        CAPTURE_DEBUG
+    }
+
+    private record PendingCapture(Path gameDir, Path screenshotDir, String timestamp) {
     }
 }
