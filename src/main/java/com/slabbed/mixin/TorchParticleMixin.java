@@ -8,6 +8,7 @@ import net.minecraft.particle.SimpleParticleType;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,11 +24,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class TorchParticleMixin {
 
     @Shadow
-    private SimpleParticleType particle;
+    @Final
+    protected SimpleParticleType particle;
 
     @Inject(method = "randomDisplayTick", at = @At("HEAD"), cancellable = true)
     private void slabbed$offsetParticles(BlockState state, World world, BlockPos pos, Random random, CallbackInfo ci) {
-        if (!SlabSupport.shouldOffset(world, pos, state)) {
+        if (!SlabSupport.shouldOffsetDown(world, pos, state)) {
             return;
         }
         double x = pos.getX() + 0.5;

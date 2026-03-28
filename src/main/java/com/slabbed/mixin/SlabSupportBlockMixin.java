@@ -16,14 +16,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * in {@code canPlaceAt} via {@link Block#sideCoversSmallSquare}.
  */
 @Mixin(Block.class)
-public abstract class SlabSupportBlockMixin {
-
+public abstract class SlabSupportBlockMixin
+{
     @Inject(method = "sideCoversSmallSquare", at = @At("HEAD"), cancellable = true)
-    private static void slabbed$slabTopSupport(WorldView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(world.getBlockState(pos))) {
+    private static void slabbed$slabTopSupport(WorldView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir)
+    {
+        if (direction == Direction.UP && SlabSupport.isBottomSlab(world.getBlockState(pos)))
+        {
             cir.setReturnValue(true);
         }
-        if (direction == Direction.DOWN && SlabSupport.isTopSlab(world.getBlockState(pos))) {
+        if (direction == Direction.DOWN && SlabSupport.isTopSlab(world.getBlockState(pos)))
+        {
             cir.setReturnValue(true);
         }
     }

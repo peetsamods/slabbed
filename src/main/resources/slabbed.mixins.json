@@ -3,13 +3,14 @@
   "package": "com.slabbed.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "ChainBlockNeighborSurvivalMixin",
     "HangingSignAttachedMixin",
-    "CarpetBlockMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleMixin",
-    "RedstoneWireBlockMixin"
+    "RedstoneWireBlockMixin",
+    "EntityInvoker",
+    "EntityMixin",
+    "SlabBlockMixin"
   ],
   "client": [],
   "injectors": { "defaultRequire": 1 }

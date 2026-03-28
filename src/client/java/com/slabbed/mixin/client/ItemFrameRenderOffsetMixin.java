@@ -38,7 +38,7 @@ public abstract class ItemFrameRenderOffsetMixin {
 
         BlockState attachedState = world.getBlockState(attachedPos);
 
-        if (SlabSupport.shouldOffset(world, attachedPos, attachedState)) {
+        if (SlabSupport.shouldOffsetDown(world, attachedPos, attachedState)) {
             Vec3d current = state.positionOffset;
             if (current != null) {
                 state.positionOffset = current.add(0.0, -0.5, 0.0);
