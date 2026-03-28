@@ -29,6 +29,7 @@ public final class GapFillerOverlay {
 
     private static void onRender(WorldRenderContext context) {
         if (!SlabbedClientFlags.GAP_FILL) return;
+        if (ScreenshotCaptureContext.captureActive() && ScreenshotCaptureContext.currentProfile() == CaptureProfile.CLEAN) return;
 
         MinecraftClient client = MinecraftClient.getInstance();
         World world = client.world;
