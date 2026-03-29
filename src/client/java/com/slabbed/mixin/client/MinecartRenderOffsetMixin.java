@@ -39,7 +39,7 @@ public abstract class MinecartRenderOffsetMixin {
             return;
         }
 
-        if (SlabSupport.shouldOffset(world, pos, blockState)) {
+        if (SlabSupport.shouldOffsetDown(world, pos, blockState)) {
             Vec3d current = state.positionOffset;
             if (current != null) {
                 state.positionOffset = current.add(0.0, -0.5, 0.0);
