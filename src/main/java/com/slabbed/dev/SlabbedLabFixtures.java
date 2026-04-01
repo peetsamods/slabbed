@@ -28,6 +28,41 @@ public final class SlabbedLabFixtures {
      */
     private static final int CHECK_HEIGHT = 2;
 
+    // -------------------------------------------------------------------------
+    // Canonical footprint definition — shared by place and clear.
+    // Both operations must derive from these methods to stay in sync.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns the canonical lane definitions for the basic fixture, in display order.
+     * Lane name → expected {@link BlockState} at that lane's support position.
+     */
+    private static LinkedHashMap<String, BlockState> buildLanes() {
+        LinkedHashMap<String, BlockState> lanes = new LinkedHashMap<>();
+        lanes.put("FULL",        Blocks.STONE.getDefaultState());
+        lanes.put("BOTTOM_SLAB", Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
+        lanes.put("TOP_SLAB",    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP));
+        return lanes;
+    }
+
+    /**
+     * Resolves lane support positions from {@code origin}, in the same order as {@link #buildLanes()}.
+     * Lane index × {@value LANE_STRIDE} blocks in +X.
+     */
+    private static LinkedHashMap<String, BlockPos> buildPositions(BlockPos origin) {
+        LinkedHashMap<String, BlockPos> positions = new LinkedHashMap<>();
+        int idx = 0;
+        for (String name : buildLanes().keySet()) {
+            positions.put(name, origin.add(idx * LANE_STRIDE, 0, 0));
+            idx++;
+        }
+        return positions;
+    }
+
+    // -------------------------------------------------------------------------
+    // Public fixture operations
+    // -------------------------------------------------------------------------
+
     /**
      * Places a compact 3-lane repro pad at {@code origin}.
      *
@@ -44,19 +79,8 @@ public final class SlabbedLabFixtures {
      * @return {@link PlaceResult} indicating success or the reason for abort
      */
     public static PlaceResult placeBasicFixture(ServerWorld world, BlockPos origin) {
-        // Lane definitions in display order.
-        LinkedHashMap<String, BlockState> lanes = new LinkedHashMap<>();
-        lanes.put("FULL",        Blocks.STONE.getDefaultState());
-        lanes.put("BOTTOM_SLAB", Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
-        lanes.put("TOP_SLAB",    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP));
-
-        // Resolve positions: lane index × LANE_STRIDE in +X from origin.
-        LinkedHashMap<String, BlockPos> positions = new LinkedHashMap<>();
-        int idx = 0;
-        for (String name : lanes.keySet()) {
-            positions.put(name, origin.add(idx * LANE_STRIDE, 0, 0));
-            idx++;
-        }
+        LinkedHashMap<String, BlockState> lanes     = buildLanes();
+        LinkedHashMap<String, BlockPos>   positions = buildPositions(origin);
 
         // Safety scan: all positions × (support + CHECK_HEIGHT above) must be air.
         // Full scan before any edit — no partial world state on abort.
@@ -78,6 +102,48 @@ public final class SlabbedLabFixtures {
 
         return PlaceResult.success(origin, positions);
     }
+
+    /**
+     * Removes the basic fixture at {@code origin} using exact-match verification.
+     *
+     * <p>Each support position is checked against its expected {@link BlockState} before
+     * any block is removed. If any position does not match exactly, the operation aborts
+     * with no world edits.
+     *
+     * @return {@link PlaceResult} indicating success (with cleared positions) or the reason for abort
+     */
+    public static PlaceResult clearBasicFixture(ServerWorld world, BlockPos origin) {
+        LinkedHashMap<String, BlockState> lanes     = buildLanes();
+        LinkedHashMap<String, BlockPos>   positions = buildPositions(origin);
+
+        // Exact-match verification: every support position must hold its expected fixture state.
+        // Full scan before any removal — no partial edits on mismatch.
+        for (Map.Entry<String, BlockState> entry : lanes.entrySet()) {
+            BlockPos   pos      = positions.get(entry.getKey());
+            BlockState actual   = world.getBlockState(pos);
+            BlockState expected = entry.getValue();
+
+            if (!actual.equals(expected)) {
+                return PlaceResult.fail(
+                        "unexpected block at " + pos.toShortString()
+                        + " (lane " + entry.getKey() + "): expected "
+                        + expected.getBlock().getTranslationKey()
+                        + ", found " + actual.getBlock().getTranslationKey()
+                        + ". No blocks changed.");
+            }
+        }
+
+        // All positions verified — remove fixture support blocks quietly.
+        for (BlockPos pos : positions.values()) {
+            world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        }
+
+        return PlaceResult.success(origin, positions);
+    }
+
+    // -------------------------------------------------------------------------
+    // Result type
+    // -------------------------------------------------------------------------
 
     public record PlaceResult(
             boolean ok,
