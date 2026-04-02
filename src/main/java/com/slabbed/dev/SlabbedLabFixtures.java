@@ -257,6 +257,68 @@ public final class SlabbedLabFixtures {
         return PlaceResult.success(origin, affected);
     }
 
+    /**
+     * Performs a minimal, reversible neighbor-update pulse adjacent to the candidate
+     * cell of each targeted lane.
+     *
+     * <p>Pulse position: one block <em>south</em> of each candidate cell
+     * ({@code supportPos.up().south()}). South (+Z) is chosen because the fixture
+     * sits at origin.Z, the player stands at origin.Z-3 (north), and south is the
+     * direction away from the player — clear of the fixture footprint and the operator.
+     *
+     * <p>Pulse sequence per lane:
+     * <ol>
+     *   <li>Place {@link Blocks#STONE} at the pulse position with {@link Block#NOTIFY_ALL}
+     *       → triggers {@code getStateForNeighborUpdate} on the candidate cell.
+     *   <li>Remove it immediately with {@link Block#NOTIFY_ALL} → second notification.
+     * </ol>
+     *
+     * <p>The pulse position is verified to be air before any edit. Aborts atomically
+     * if any targeted pulse position is occupied.
+     *
+     * @param laneName case-insensitive lane selector ({@code "full"}, {@code "bottom_slab"},
+     *                 {@code "top_slab"}), or {@code null} for all lanes
+     * @return {@link PlaceResult} with candidate positions on success, or fail reason
+     */
+    public static PlaceResult neighborUpdatePulse(ServerWorld world, BlockPos origin, String laneName) {
+        LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
+        if (targetLanes == null) {
+            return PlaceResult.fail("unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.");
+        }
+
+        LinkedHashMap<String, BlockPos> allPositions = buildPositions(origin);
+
+        // Resolve pulse positions: south of candidate cell for each targeted lane.
+        LinkedHashMap<String, BlockPos> pulsePositions = new LinkedHashMap<>();
+        for (String name : targetLanes.keySet()) {
+            pulsePositions.put(name, allPositions.get(name).up().south());
+        }
+
+        // Safety scan: all pulse positions must be air before any edit.
+        for (Map.Entry<String, BlockPos> entry : pulsePositions.entrySet()) {
+            if (!world.getBlockState(entry.getValue()).isAir()) {
+                return PlaceResult.fail(
+                        "pulse position occupied at " + entry.getValue().toShortString()
+                        + " (lane " + entry.getKey() + "). No edits made.");
+            }
+        }
+
+        // Execute pulse: place then remove stone at each pulse position with NOTIFY_ALL.
+        // Stone is used as it is stable (non-falling), neutral, and already present in the fixture.
+        for (BlockPos pulsePos : pulsePositions.values()) {
+            world.setBlockState(pulsePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            world.setBlockState(pulsePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        }
+
+        // Return candidate positions (supportPos.up()) — the cells that received the updates.
+        LinkedHashMap<String, BlockPos> candidatePositions = new LinkedHashMap<>();
+        for (String name : targetLanes.keySet()) {
+            candidatePositions.put(name, allPositions.get(name).up());
+        }
+
+        return PlaceResult.success(origin, candidatePositions);
+    }
+
     // -------------------------------------------------------------------------
     // Result type
     // -------------------------------------------------------------------------
