@@ -21,8 +21,9 @@ import static net.minecraft.server.command.CommandManager.literal;
  * /slablab fixture basic                — places a 3-lane repro pad
  * /slablab fixture clear                — removes the fixture at the deterministic origin
  * /slablab fixture reset                — clears then rebuilds the fixture
- * /slablab action break-support [lane]  — removes support block(s), triggers neighbor updates
- * /slablab action restore-support [lane]— restores support block(s), triggers neighbor updates
+ * /slablab action break-support [lane]    — removes support block(s), triggers neighbor updates
+ * /slablab action restore-support [lane]  — restores support block(s), triggers neighbor updates
+ * /slablab action neighbor-update [lane]  — place+remove stone pulse south of candidate cell(s)
  *
  * Optional lane selector: full | bottom_slab | top_slab (omit for all lanes)
  */
@@ -70,7 +71,15 @@ public final class SlabbedLab {
                                         .then(literal("bottom_slab")
                                                 .executes(ctx -> actionRestoreSupport(ctx, "bottom_slab")))
                                         .then(literal("top_slab")
-                                                .executes(ctx -> actionRestoreSupport(ctx, "top_slab")))))
+                                                .executes(ctx -> actionRestoreSupport(ctx, "top_slab"))))
+                                .then(literal("neighbor-update")
+                                        .executes(ctx -> actionNeighborUpdate(ctx, null))
+                                        .then(literal("full")
+                                                .executes(ctx -> actionNeighborUpdate(ctx, "full")))
+                                        .then(literal("bottom_slab")
+                                                .executes(ctx -> actionNeighborUpdate(ctx, "bottom_slab")))
+                                        .then(literal("top_slab")
+                                                .executes(ctx -> actionNeighborUpdate(ctx, "top_slab")))))
         );
     }
 
@@ -203,6 +212,28 @@ public final class SlabbedLab {
             msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append(" support restored\n");
         }
         msg.append("  Neighbor updates triggered.");
+
+        String finalMsg = msg.toString();
+        source.sendFeedback(() -> Text.literal(finalMsg), false);
+        return 1;
+    }
+
+    private static int actionNeighborUpdate(CommandContext<ServerCommandSource> ctx, String lane) {
+        ServerCommandSource source = ctx.getSource();
+        ServerWorld world = source.getWorld();
+        BlockPos origin = fixtureOrigin(source);
+
+        SlabbedLabFixtures.PlaceResult result = SlabbedLabFixtures.neighborUpdatePulse(world, origin, lane);
+        if (!result.ok()) {
+            source.sendError(Text.literal("[slablab] " + result.error()));
+            return 0;
+        }
+
+        StringBuilder msg = new StringBuilder("[slablab] neighbor-update (dev-only).\n");
+        for (Map.Entry<String, BlockPos> e : result.positions().entrySet()) {
+            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append(" candidate pulsed\n");
+        }
+        msg.append("  Pulse: stone placed+removed south of each candidate cell (NOTIFY_ALL).");
 
         String finalMsg = msg.toString();
         source.sendFeedback(() -> Text.literal(finalMsg), false);
