@@ -8,7 +8,9 @@ import net.minecraft.block.enums.SlabType;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -319,9 +321,68 @@ public final class SlabbedLabFixtures {
         return PlaceResult.success(origin, candidatePositions);
     }
 
+    /**
+     * Returns the current world state for each targeted lane at {@code origin}.
+     * Read-only; no world edits are made.
+     *
+     * <p>Data captured per lane:
+     * <ul>
+     *   <li>support position, expected state, actual state, match flag
+     *   <li>candidate cell position (supportPos.up()), whether it is air
+     *   <li>pulse position (candidatePos.south()), whether it is air
+     * </ul>
+     *
+     * @param laneName case-insensitive lane selector, or {@code null} for all lanes
+     * @return ordered list of {@link LaneStatus} entries, or {@code null} if {@code laneName}
+     *         is not a known lane
+     */
+    public static List<LaneStatus> queryStatus(ServerWorld world, BlockPos origin, String laneName) {
+        LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
+        if (targetLanes == null) return null;
+
+        LinkedHashMap<String, BlockPos> allPositions = buildPositions(origin);
+
+        List<LaneStatus> result = new ArrayList<>();
+        for (Map.Entry<String, BlockState> entry : targetLanes.entrySet()) {
+            String     name            = entry.getKey();
+            BlockState expectedSupport = entry.getValue();
+            BlockPos   supportPos      = allPositions.get(name);
+            BlockState actualSupport   = world.getBlockState(supportPos);
+            BlockPos   candidatePos    = supportPos.up();
+            boolean    candidateFree   = world.getBlockState(candidatePos).isAir();
+            BlockPos   pulsePos        = candidatePos.south();
+            boolean    pulseFree       = world.getBlockState(pulsePos).isAir();
+
+            result.add(new LaneStatus(name, supportPos, expectedSupport, actualSupport,
+                    candidatePos, candidateFree, pulsePos, pulseFree));
+        }
+
+        return result;
+    }
+
     // -------------------------------------------------------------------------
-    // Result type
+    // Result and status types
     // -------------------------------------------------------------------------
+
+    /**
+     * Immutable snapshot of one lane's world state relative to the basic fixture definition.
+     * Produced by {@link #queryStatus}; never causes world edits.
+     */
+    public record LaneStatus(
+            String     laneName,
+            BlockPos   supportPos,
+            BlockState expectedSupport,
+            BlockState actualSupport,
+            BlockPos   candidatePos,
+            boolean    candidateFree,
+            BlockPos   pulsePos,
+            boolean    pulseFree
+    ) {
+        /** True when the world block at the support position exactly matches the expected fixture state. */
+        public boolean supportMatch() {
+            return actualSupport.equals(expectedSupport);
+        }
+    }
 
     public record PlaceResult(
             boolean ok,
