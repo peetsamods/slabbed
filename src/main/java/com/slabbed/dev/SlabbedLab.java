@@ -17,10 +17,14 @@ import static net.minecraft.server.command.CommandManager.literal;
 /**
  * Dev-only bootstrap for Slabbed Lab.
  *
- * /slablab                — status probe
- * /slablab fixture basic  — places a 3-lane repro pad (dev-only fixture)
- * /slablab fixture clear  — removes the fixture at the deterministic origin
- * /slablab fixture reset  — clears then rebuilds the fixture
+ * /slablab                              — status probe
+ * /slablab fixture basic                — places a 3-lane repro pad
+ * /slablab fixture clear                — removes the fixture at the deterministic origin
+ * /slablab fixture reset                — clears then rebuilds the fixture
+ * /slablab action break-support [lane]  — removes support block(s), triggers neighbor updates
+ * /slablab action restore-support [lane]— restores support block(s), triggers neighbor updates
+ *
+ * Optional lane selector: full | bottom_slab | top_slab (omit for all lanes)
  */
 public final class SlabbedLab {
 
@@ -50,11 +54,28 @@ public final class SlabbedLab {
                                         .executes(SlabbedLab::clearFixture))
                                 .then(literal("reset")
                                         .executes(SlabbedLab::resetFixture)))
+                        .then(literal("action")
+                                .then(literal("break-support")
+                                        .executes(ctx -> actionBreakSupport(ctx, null))
+                                        .then(literal("full")
+                                                .executes(ctx -> actionBreakSupport(ctx, "full")))
+                                        .then(literal("bottom_slab")
+                                                .executes(ctx -> actionBreakSupport(ctx, "bottom_slab")))
+                                        .then(literal("top_slab")
+                                                .executes(ctx -> actionBreakSupport(ctx, "top_slab"))))
+                                .then(literal("restore-support")
+                                        .executes(ctx -> actionRestoreSupport(ctx, null))
+                                        .then(literal("full")
+                                                .executes(ctx -> actionRestoreSupport(ctx, "full")))
+                                        .then(literal("bottom_slab")
+                                                .executes(ctx -> actionRestoreSupport(ctx, "bottom_slab")))
+                                        .then(literal("top_slab")
+                                                .executes(ctx -> actionRestoreSupport(ctx, "top_slab")))))
         );
     }
 
     // -------------------------------------------------------------------------
-    // Shared origin — all fixture commands must use this method.
+    // Shared origin — all fixture and action commands must use this method.
     // Mirrors the audit runner's offset style: 1 below feet, 3 in +Z.
     // -------------------------------------------------------------------------
 
@@ -63,7 +84,7 @@ public final class SlabbedLab {
     }
 
     // -------------------------------------------------------------------------
-    // Command handlers
+    // Fixture command handlers
     // -------------------------------------------------------------------------
 
     private static int placeBasicFixture(CommandContext<ServerCommandSource> ctx) {
@@ -134,6 +155,54 @@ public final class SlabbedLab {
             msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append("\n");
         }
         msg.append("  Candidate space: one block above each support.");
+
+        String finalMsg = msg.toString();
+        source.sendFeedback(() -> Text.literal(finalMsg), false);
+        return 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Action command handlers
+    // -------------------------------------------------------------------------
+
+    private static int actionBreakSupport(CommandContext<ServerCommandSource> ctx, String lane) {
+        ServerCommandSource source = ctx.getSource();
+        ServerWorld world = source.getWorld();
+        BlockPos origin = fixtureOrigin(source);
+
+        SlabbedLabFixtures.PlaceResult result = SlabbedLabFixtures.breakSupport(world, origin, lane);
+        if (!result.ok()) {
+            source.sendError(Text.literal("[slablab] " + result.error()));
+            return 0;
+        }
+
+        StringBuilder msg = new StringBuilder("[slablab] break-support (dev-only).\n");
+        for (Map.Entry<String, BlockPos> e : result.positions().entrySet()) {
+            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append(" support removed\n");
+        }
+        msg.append("  Neighbor updates triggered.");
+
+        String finalMsg = msg.toString();
+        source.sendFeedback(() -> Text.literal(finalMsg), false);
+        return 1;
+    }
+
+    private static int actionRestoreSupport(CommandContext<ServerCommandSource> ctx, String lane) {
+        ServerCommandSource source = ctx.getSource();
+        ServerWorld world = source.getWorld();
+        BlockPos origin = fixtureOrigin(source);
+
+        SlabbedLabFixtures.PlaceResult result = SlabbedLabFixtures.restoreSupport(world, origin, lane);
+        if (!result.ok()) {
+            source.sendError(Text.literal("[slablab] " + result.error()));
+            return 0;
+        }
+
+        StringBuilder msg = new StringBuilder("[slablab] restore-support (dev-only).\n");
+        for (Map.Entry<String, BlockPos> e : result.positions().entrySet()) {
+            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append(" support restored\n");
+        }
+        msg.append("  Neighbor updates triggered.");
 
         String finalMsg = msg.toString();
         source.sendFeedback(() -> Text.literal(finalMsg), false);

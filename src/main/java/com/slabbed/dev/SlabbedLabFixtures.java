@@ -12,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Fixture generation for Slabbed Lab dev commands.
+ * Fixture generation and action methods for Slabbed Lab dev commands.
  * Server-side only; no gameplay logic is modified.
  */
 public final class SlabbedLabFixtures {
@@ -29,13 +29,15 @@ public final class SlabbedLabFixtures {
     private static final int CHECK_HEIGHT = 2;
 
     // -------------------------------------------------------------------------
-    // Canonical footprint definition — shared by place and clear.
-    // Both operations must derive from these methods to stay in sync.
+    // Canonical footprint definition — all fixture and action methods derive
+    // from these helpers. Adding a lane here propagates everywhere automatically.
     // -------------------------------------------------------------------------
 
     /**
      * Returns the canonical lane definitions for the basic fixture, in display order.
      * Lane name → expected {@link BlockState} at that lane's support position.
+     *
+     * <p>Valid lane names: {@code FULL}, {@code BOTTOM_SLAB}, {@code TOP_SLAB}.
      */
     private static LinkedHashMap<String, BlockState> buildLanes() {
         LinkedHashMap<String, BlockState> lanes = new LinkedHashMap<>();
@@ -57,6 +59,25 @@ public final class SlabbedLabFixtures {
             idx++;
         }
         return positions;
+    }
+
+    /**
+     * Resolves the target lane set from a nullable lane selector.
+     *
+     * @param laneName command-provided lane name (case-insensitive), or {@code null} for all lanes
+     * @return the filtered lane map, or {@code null} if {@code laneName} is not a known lane
+     */
+    private static LinkedHashMap<String, BlockState> resolveLanes(String laneName) {
+        LinkedHashMap<String, BlockState> all = buildLanes();
+        if (laneName == null) return all;
+
+        String key = laneName.toUpperCase();
+        BlockState state = all.get(key);
+        if (state == null) return null;
+
+        LinkedHashMap<String, BlockState> single = new LinkedHashMap<>();
+        single.put(key, state);
+        return single;
     }
 
     // -------------------------------------------------------------------------
@@ -139,6 +160,101 @@ public final class SlabbedLabFixtures {
         }
 
         return PlaceResult.success(origin, positions);
+    }
+
+    // -------------------------------------------------------------------------
+    // Public action operations — trigger neighbor updates intentionally.
+    // These reproduce support-loss/restore behavior; NOTIFY_ALL is correct here.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Removes the support block(s) for the targeted lane(s) at {@code origin},
+     * triggering full neighbor notification so blocks above react as they would
+     * to real support loss.
+     *
+     * <p>Before any edit, all targeted positions are verified to hold their expected
+     * fixture support state. Aborts atomically on mismatch.
+     *
+     * @param laneName case-insensitive lane selector ({@code "full"}, {@code "bottom_slab"},
+     *                 {@code "top_slab"}), or {@code null} for all lanes
+     * @return {@link PlaceResult} with affected positions on success, or fail reason
+     */
+    public static PlaceResult breakSupport(ServerWorld world, BlockPos origin, String laneName) {
+        LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
+        if (targetLanes == null) {
+            return PlaceResult.fail("unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.");
+        }
+
+        LinkedHashMap<String, BlockPos> allPositions = buildPositions(origin);
+
+        // Full verification pass before any edits — no partial world state on mismatch.
+        for (Map.Entry<String, BlockState> entry : targetLanes.entrySet()) {
+            BlockPos   pos      = allPositions.get(entry.getKey());
+            BlockState actual   = world.getBlockState(pos);
+            BlockState expected = entry.getValue();
+
+            if (!actual.equals(expected)) {
+                return PlaceResult.fail(
+                        "cannot break " + entry.getKey() + " at " + pos.toShortString()
+                        + ": expected " + expected.getBlock().getTranslationKey()
+                        + ", found " + actual.getBlock().getTranslationKey()
+                        + ". No blocks changed.");
+            }
+        }
+
+        // Remove support blocks with full neighbor notification — reproduces real support loss.
+        LinkedHashMap<String, BlockPos> affected = new LinkedHashMap<>();
+        for (String name : targetLanes.keySet()) {
+            BlockPos pos = allPositions.get(name);
+            world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+            affected.put(name, pos);
+        }
+
+        return PlaceResult.success(origin, affected);
+    }
+
+    /**
+     * Restores the support block(s) for the targeted lane(s) at {@code origin},
+     * triggering full neighbor notification so blocks above react as they would
+     * to real support restoration.
+     *
+     * <p>Before any edit, all targeted positions are verified to be air.
+     * Aborts atomically if any position is occupied by an unexpected block.
+     *
+     * @param laneName case-insensitive lane selector ({@code "full"}, {@code "bottom_slab"},
+     *                 {@code "top_slab"}), or {@code null} for all lanes
+     * @return {@link PlaceResult} with affected positions on success, or fail reason
+     */
+    public static PlaceResult restoreSupport(ServerWorld world, BlockPos origin, String laneName) {
+        LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
+        if (targetLanes == null) {
+            return PlaceResult.fail("unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.");
+        }
+
+        LinkedHashMap<String, BlockPos> allPositions = buildPositions(origin);
+
+        // Full verification pass before any edits: each target position must be air.
+        for (Map.Entry<String, BlockState> entry : targetLanes.entrySet()) {
+            BlockPos   pos    = allPositions.get(entry.getKey());
+            BlockState actual = world.getBlockState(pos);
+
+            if (!actual.isAir()) {
+                return PlaceResult.fail(
+                        "cannot restore " + entry.getKey() + " at " + pos.toShortString()
+                        + ": expected air, found " + actual.getBlock().getTranslationKey()
+                        + ". No blocks changed.");
+            }
+        }
+
+        // Restore support blocks with full neighbor notification.
+        LinkedHashMap<String, BlockPos> affected = new LinkedHashMap<>();
+        for (Map.Entry<String, BlockState> entry : targetLanes.entrySet()) {
+            BlockPos pos = allPositions.get(entry.getKey());
+            world.setBlockState(pos, entry.getValue(), Block.NOTIFY_ALL);
+            affected.put(entry.getKey(), pos);
+        }
+
+        return PlaceResult.success(origin, affected);
     }
 
     // -------------------------------------------------------------------------
