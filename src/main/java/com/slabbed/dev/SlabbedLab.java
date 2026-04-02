@@ -10,6 +10,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 
+import java.util.List;
 import java.util.Map;
 
 import static net.minecraft.server.command.CommandManager.literal;
@@ -24,6 +25,7 @@ import static net.minecraft.server.command.CommandManager.literal;
  * /slablab action break-support [lane]    — removes support block(s), triggers neighbor updates
  * /slablab action restore-support [lane]  — restores support block(s), triggers neighbor updates
  * /slablab action neighbor-update [lane]  — place+remove stone pulse south of candidate cell(s)
+ * /slablab status [lane]                  — read-only report: support/candidate/pulse state per lane
  *
  * Optional lane selector: full | bottom_slab | top_slab (omit for all lanes)
  */
@@ -55,6 +57,14 @@ public final class SlabbedLab {
                                         .executes(SlabbedLab::clearFixture))
                                 .then(literal("reset")
                                         .executes(SlabbedLab::resetFixture)))
+                        .then(literal("status")
+                                .executes(ctx -> statusFixture(ctx, null))
+                                .then(literal("full")
+                                        .executes(ctx -> statusFixture(ctx, "full")))
+                                .then(literal("bottom_slab")
+                                        .executes(ctx -> statusFixture(ctx, "bottom_slab")))
+                                .then(literal("top_slab")
+                                        .executes(ctx -> statusFixture(ctx, "top_slab"))))
                         .then(literal("action")
                                 .then(literal("break-support")
                                         .executes(ctx -> actionBreakSupport(ctx, null))
@@ -236,6 +246,46 @@ public final class SlabbedLab {
         msg.append("  Pulse: stone placed+removed south of each candidate cell (NOTIFY_ALL).");
 
         String finalMsg = msg.toString();
+        source.sendFeedback(() -> Text.literal(finalMsg), false);
+        return 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Status command handler
+    // -------------------------------------------------------------------------
+
+    private static int statusFixture(CommandContext<ServerCommandSource> ctx, String lane) {
+        ServerCommandSource source = ctx.getSource();
+        ServerWorld world = source.getWorld();
+        BlockPos origin = fixtureOrigin(source);
+
+        List<SlabbedLabFixtures.LaneStatus> statuses = SlabbedLabFixtures.queryStatus(world, origin, lane);
+        if (statuses == null) {
+            source.sendError(Text.literal("[slablab] unknown lane '" + lane + "'. Valid: full, bottom_slab, top_slab."));
+            return 0;
+        }
+
+        StringBuilder msg = new StringBuilder("[slablab] status (dev-only). origin: ")
+                .append(origin.toShortString()).append("\n");
+
+        for (SlabbedLabFixtures.LaneStatus s : statuses) {
+            msg.append("  ").append(s.laneName()).append(" @ ").append(s.supportPos().toShortString()).append("\n");
+
+            if (s.supportMatch()) {
+                msg.append("    support: [OK] ").append(s.expectedSupport().getBlock().getTranslationKey()).append("\n");
+            } else {
+                msg.append("    support: [MISMATCH] expected ").append(s.expectedSupport().getBlock().getTranslationKey())
+                   .append(", found ").append(s.actualSupport().getBlock().getTranslationKey()).append("\n");
+            }
+
+            msg.append("    candidate: ").append(s.candidatePos().toShortString())
+               .append(s.candidateFree() ? " [free]" : " [occupied]").append("\n");
+
+            msg.append("    pulse: ").append(s.pulsePos().toShortString())
+               .append(s.pulseFree() ? " [free]" : " [occupied]").append("\n");
+        }
+
+        String finalMsg = msg.toString().stripTrailing();
         source.sendFeedback(() -> Text.literal(finalMsg), false);
         return 1;
     }
