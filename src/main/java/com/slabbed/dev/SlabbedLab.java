@@ -26,6 +26,7 @@ import static net.minecraft.server.command.CommandManager.literal;
  * /slablab action restore-support [lane]  — restores support block(s), triggers neighbor updates
  * /slablab action neighbor-update [lane]  — place+remove stone pulse south of candidate cell(s)
  * /slablab status [lane]                  — read-only report: support/candidate/pulse state per lane
+ * /slablab action sequence support-cycle  — deterministic 6-step support-loss repro sequence
  *
  * Optional lane selector: full | bottom_slab | top_slab (omit for all lanes)
  */
@@ -89,7 +90,16 @@ public final class SlabbedLab {
                                         .then(literal("bottom_slab")
                                                 .executes(ctx -> actionNeighborUpdate(ctx, "bottom_slab")))
                                         .then(literal("top_slab")
-                                                .executes(ctx -> actionNeighborUpdate(ctx, "top_slab")))))
+                                                .executes(ctx -> actionNeighborUpdate(ctx, "top_slab"))))
+                                .then(literal("sequence")
+                                        .then(literal("support-cycle")
+                                                .executes(ctx -> actionSupportCycle(ctx, null))
+                                                .then(literal("full")
+                                                        .executes(ctx -> actionSupportCycle(ctx, "full")))
+                                                .then(literal("bottom_slab")
+                                                        .executes(ctx -> actionSupportCycle(ctx, "bottom_slab")))
+                                                .then(literal("top_slab")
+                                                        .executes(ctx -> actionSupportCycle(ctx, "top_slab"))))))
         );
     }
 
@@ -248,6 +258,115 @@ public final class SlabbedLab {
         String finalMsg = msg.toString();
         source.sendFeedback(() -> Text.literal(finalMsg), false);
         return 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Sequence command handlers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Runs a deterministic 6-step support-loss repro cycle on the targeted lane(s).
+     *
+     * <p>Step order:
+     * <ol>
+     *   <li>initial-status   — snapshot via {@link SlabbedLabFixtures#queryStatus}
+     *   <li>break-support    — {@link SlabbedLabFixtures#breakSupport}
+     *   <li>neighbor-update  — {@link SlabbedLabFixtures#neighborUpdatePulse}
+     *   <li>post-break status— snapshot via {@link SlabbedLabFixtures#queryStatus}
+     *   <li>restore-support  — {@link SlabbedLabFixtures#restoreSupport}
+     *   <li>final status     — snapshot via {@link SlabbedLabFixtures#queryStatus}
+     * </ol>
+     *
+     * <p>Aborts on the first failure. No partial state is shown on abort; the error
+     * message identifies the failed step and the underlying reason.
+     */
+    private static int actionSupportCycle(CommandContext<ServerCommandSource> ctx, String lane) {
+        ServerCommandSource source = ctx.getSource();
+        ServerWorld world = source.getWorld();
+        BlockPos origin = fixtureOrigin(source);
+
+        String laneLabel = (lane != null) ? lane.toUpperCase() : "ALL";
+
+        // Step 1: initial status — also validates the lane selector (returns null for unknown lane).
+        List<SlabbedLabFixtures.LaneStatus> initStatus = SlabbedLabFixtures.queryStatus(world, origin, lane);
+        if (initStatus == null) {
+            source.sendError(Text.literal("[slablab] unknown lane '" + lane + "'. Valid: full, bottom_slab, top_slab."));
+            return 0;
+        }
+
+        // Step 2: break-support.
+        SlabbedLabFixtures.PlaceResult breakResult = SlabbedLabFixtures.breakSupport(world, origin, lane);
+        if (!breakResult.ok()) {
+            source.sendError(Text.literal("[slablab] support-cycle[" + laneLabel + "] failed at break-support: " + breakResult.error()));
+            return 0;
+        }
+
+        // Step 3: neighbor-update pulse.
+        SlabbedLabFixtures.PlaceResult pulseResult = SlabbedLabFixtures.neighborUpdatePulse(world, origin, lane);
+        if (!pulseResult.ok()) {
+            source.sendError(Text.literal("[slablab] support-cycle[" + laneLabel + "] failed at neighbor-update: " + pulseResult.error()));
+            return 0;
+        }
+
+        // Step 4: intermediate status snapshot.
+        List<SlabbedLabFixtures.LaneStatus> midStatus = SlabbedLabFixtures.queryStatus(world, origin, lane);
+
+        // Step 5: restore-support.
+        SlabbedLabFixtures.PlaceResult restoreResult = SlabbedLabFixtures.restoreSupport(world, origin, lane);
+        if (!restoreResult.ok()) {
+            source.sendError(Text.literal("[slablab] support-cycle[" + laneLabel + "] failed at restore-support: " + restoreResult.error()));
+            return 0;
+        }
+
+        // Step 6: final status snapshot.
+        List<SlabbedLabFixtures.LaneStatus> finalStatus = SlabbedLabFixtures.queryStatus(world, origin, lane);
+
+        // All steps succeeded — build the full report.
+        StringBuilder msg = new StringBuilder("[slablab] support-cycle[")
+                .append(laneLabel).append("] complete (dev-only). origin: ").append(origin.toShortString()).append("\n");
+
+        msg.append("  [1/6] initial-status\n");
+        appendStatusLines(msg, initStatus);
+
+        msg.append("  [2/6] break-support\n");
+        for (Map.Entry<String, BlockPos> e : breakResult.positions().entrySet()) {
+            msg.append("    ").append(e.getKey()).append(" @ ").append(e.getValue().toShortString()).append(" removed\n");
+        }
+
+        msg.append("  [3/6] neighbor-update\n");
+        for (Map.Entry<String, BlockPos> e : pulseResult.positions().entrySet()) {
+            msg.append("    ").append(e.getKey()).append(" @ ").append(e.getValue().toShortString()).append(" pulsed\n");
+        }
+
+        msg.append("  [4/6] post-break status\n");
+        appendStatusLines(msg, midStatus);
+
+        msg.append("  [5/6] restore-support\n");
+        for (Map.Entry<String, BlockPos> e : restoreResult.positions().entrySet()) {
+            msg.append("    ").append(e.getKey()).append(" @ ").append(e.getValue().toShortString()).append(" restored\n");
+        }
+
+        msg.append("  [6/6] final status\n");
+        appendStatusLines(msg, finalStatus);
+
+        String finalMsg = msg.toString().stripTrailing();
+        source.sendFeedback(() -> Text.literal(finalMsg), false);
+        return 1;
+    }
+
+    /** Appends one compact status line per lane to {@code sb}. Used by the sequence report. */
+    private static void appendStatusLines(StringBuilder sb, List<SlabbedLabFixtures.LaneStatus> statuses) {
+        for (SlabbedLabFixtures.LaneStatus s : statuses) {
+            sb.append("    ").append(s.laneName()).append(": ");
+            if (s.supportMatch()) {
+                sb.append("support[OK]");
+            } else {
+                sb.append("support[MISMATCH:")
+                  .append(s.actualSupport().getBlock().getTranslationKey()).append("]");
+            }
+            sb.append("  candidate:").append(s.candidateFree() ? "[free]" : "[occupied]");
+            sb.append("  pulse:").append(s.pulseFree() ? "[free]" : "[occupied]").append("\n");
+        }
     }
 
     // -------------------------------------------------------------------------
