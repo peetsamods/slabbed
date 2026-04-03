@@ -4,10 +4,14 @@ import com.slabbed.dev.SlabbedLabFixtures;
 import com.slabbed.dev.SlabbedLabFixtures.LaneStatus;
 import com.slabbed.dev.SlabbedLabFixtures.PlaceResult;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.shape.VoxelShape;
 
 /**
  * Server GameTest exercising the basic Slabbed Lab fixture lifecycle.
@@ -83,6 +87,59 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(postPulse.supportMatch(),
                 "FULL support should still match after pulse: expected "
                         + postPulse.expectedSupport() + ", got " + postPulse.actualSupport());
+
+        ctx.complete();
+    }
+
+    /**
+     * Regression guard: proves that outline and raycast shapes share the same
+     * Slabbed Y-offset for a block placed above a bottom-slab lane.
+     *
+     * <p>Uses {@link net.minecraft.block.ComposterBlock} because it is one of
+     * the few vanilla blocks that overrides {@code getRaycastShape} with a
+     * non-empty shape ({@code VoxelShapes.fullCube()}), making the parity
+     * assertion meaningful. Most solid blocks (e.g. stone) return
+     * {@code VoxelShapes.empty()} for {@code getRaycastShape}, causing the
+     * game to fall back to the outline shape for targeting anyway; the
+     * asymmetry only manifests for blocks with a non-empty raycast shape.
+     *
+     * <p>Before the {@code getRaycastShape} injection was added, the outline
+     * shape was correctly offset to minY=-0.5 while the raycast shape remained
+     * at minY=0.0. This test fails against that regressed state and passes
+     * once parity is restored.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void outlineRaycastParity(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        // Place the 3-lane fixture; BOTTOM_SLAB support lands at origin+(2,0,0).
+        PlaceResult placed = SlabbedLabFixtures.placeBasicFixture(world, origin);
+        ctx.assertTrue(placed.ok(), "placeBasicFixture failed: " + placed.error());
+
+        // Place a composter directly above the BOTTOM_SLAB lane support.
+        // Composter.getRaycastShape returns VoxelShapes.fullCube() (non-empty, minY=0.0).
+        // SlabSupport.getYOffset returns -0.5 via shouldOffset → hasSlabInColumn.
+        BlockPos testPos = origin.add(2, 1, 0);
+        world.setBlockState(testPos, Blocks.COMPOSTER.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        BlockState testState = world.getBlockState(testPos);
+        ctx.assertTrue(testState.isOf(Blocks.COMPOSTER), "composter not present at test position");
+
+        VoxelShape outline = testState.getOutlineShape(world, testPos, ShapeContext.absent());
+        VoxelShape raycast = testState.getRaycastShape(world, testPos);
+
+        double outlineMinY = outline.getBoundingBox().minY;
+        double raycastMinY = raycast.getBoundingBox().minY;
+
+        // Prove the offset is applied (not vacuously equal at the unshifted 0.0).
+        ctx.assertTrue(outlineMinY < 0.0,
+                "outline not slabbed-offset: expected minY < 0, got " + outlineMinY);
+
+        // Parity: raycast offset must equal outline offset.
+        ctx.assertTrue(outlineMinY == raycastMinY,
+                "outline/raycast parity broken: outline minY=" + outlineMinY
+                        + ", raycast minY=" + raycastMinY);
 
         ctx.complete();
     }
