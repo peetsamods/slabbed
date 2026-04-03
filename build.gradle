@@ -12,6 +12,12 @@ loom {
     }
 }
 
+fabricApi {
+    configureTests {
+        createSourceSet = true
+    }
+}
+
 version = project.mod_version
 group = project.maven_group
 
@@ -39,6 +45,9 @@ dependencies {
     modClientImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
+
+    // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
+    // extended to the gametest source set by configureTests { createSourceSet = true })
 }
 
 processResources {
