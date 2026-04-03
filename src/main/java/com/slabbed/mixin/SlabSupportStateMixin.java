@@ -69,6 +69,18 @@ public abstract class SlabSupportStateMixin {
         }
     }
 
+    @Inject(method = "getRaycastShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/shape/VoxelShape;",
+            at = @At("RETURN"), cancellable = true)
+    private void slabbed$offsetRaycast(BlockView world, BlockPos pos,
+                                       CallbackInfoReturnable<VoxelShape> cir) {
+        BlockState self = (BlockState) (Object) this;
+
+        double yOff = SlabSupport.getYOffset(world, pos, self);
+        if (yOff != 0.0) {
+            cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
+        }
+    }
+
     // ── outline (hit-box) offset ──────────────────────────────────────
 
     @Inject(method = "getOutlineShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/ShapeContext;)Lnet/minecraft/util/shape/VoxelShape;",
