@@ -12,18 +12,35 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.shape.VoxelShape;
 
 /**
- * Client GameTest: deterministic screenshot proof + carpet outline offset proof
- * for the Slabbed Lab 3-lane fixture.
+ * Client GameTest: deterministic proofs for the Slabbed Lab 3-lane fixture.
  *
  * What this test proves:
- *   1. All three fixture lanes (FULL, BOTTOM_SLAB, TOP_SLAB) rendered in the client
- *      world from a fixed south-facing, slightly-overhead viewpoint — screenshot is
- *      a manual regression reference only.
- *   2. {@code CarpetDyShapeMixin} (sole client carpet outline path after dedupe)
- *      applies exactly one -0.5 offset to {@code WHITE_CARPET} above the BOTTOM_SLAB
- *      lane: outline minY == -0.5, not 0.0 (missing) and not -1.0 (doubled).
+ *   1. Raycast shape offset (client): {@code SlabSupportStateMixin.slabbed$offsetRaycast}
+ *      applies exactly one -0.5 offset to {@code ComposterBlock} (non-empty raycast
+ *      shape) above the BOTTOM_SLAB lane: raycast minY == -0.5, not 0.0 and not -1.0.
+ *   2. Carpet outline offset (client): {@code CarpetDyShapeMixin} (sole client carpet
+ *      outline path after dedupe) applies exactly one -0.5 offset to {@code WHITE_CARPET}
+ *      above the BOTTOM_SLAB lane: outline minY == -0.5, not 0.0 and not -1.0.
+ *   3. Screenshot of all three fixture lanes from a fixed south-facing, slightly-overhead
+ *      viewpoint — manual regression reference only (no pixel assertions).
  *
- * Does NOT validate model rendering, raycast shapes, or pale-moss expansion.
+ * Does NOT validate model rendering or actual cursor-hit results.
+ *
+ * <p>Test block selection:
+ * <ul>
+ *   <li>COMPOSTER — {@code ComposterBlock.getRaycastShape} returns {@code VoxelShapes.fullCube()}
+ *       (non-empty, minY=0.0 unoffset). Most solid blocks (e.g. stone) return
+ *       {@code VoxelShapes.empty()} for {@code getRaycastShape}, making a bounding-box
+ *       assertion unsafe. Composter is the same choice used by {@code outlineRaycastParity}
+ *       server test.
+ *   <li>WHITE_CARPET — thin block above bottom slab; outline shape offset by
+ *       {@code CarpetDyShapeMixin} via {@code ClientDy.dyFor}.
+ * </ul>
+ *
+ * <p>Both proofs use the BOTTOM_SLAB lane at {@code FIXTURE_ORIGIN + (2,0,0)}, one block
+ * above: composter first, then replaced with carpet. Sync pattern: {@code ctx.waitTick()}
+ * flushes NOTIFY_LISTENERS block-update packets (processed during client game ticks, not
+ * during {@code waitForChunksRender}), then {@code waitForChunksRender} settles rebuilds.
  */
 public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
@@ -35,7 +52,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
     private static final BlockPos FIXTURE_ORIGIN = new BlockPos(0, 200, 0);
 
     /**
-     * Deterministic camera position for the screenshot.
+     * Deterministic camera position for the screenshot and block-state proofs.
      *
      * <p>Geometry:
      * <ul>
@@ -64,55 +81,84 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
             // Position the camera near the fixture BEFORE placing blocks so the chunk
             // section at Y=200 is already in the client's render view when block
-            // update packets arrive. If blocks are placed while the section is outside
-            // the client's view distance, the update packet may be silently dropped.
+            // update packets arrive.
             ctx.runOnClient(mc -> {
                 if (mc.player != null) {
                     mc.player.refreshPositionAndAngles(CAM_X, CAM_Y, CAM_Z, CAM_YAW, CAM_PITCH);
                 }
             });
-
-            // Wait for the chunk section at Y=200 to be fully loaded and rendered
-            // before placing blocks into it.
             singleplayer.getClientWorld().waitForChunksRender();
 
-            // Place the basic fixture and white carpet above the BOTTOM_SLAB lane on
-            // the server thread. runOnServer executes synchronously and propagates
-            // RuntimeException back to the test thread.
+            // ── Probe position: one block above the BOTTOM_SLAB lane support ────────
+            // BOTTOM_SLAB support = FIXTURE_ORIGIN + (2,0,0); probe = (2,201,0).
+            final BlockPos probePos = FIXTURE_ORIGIN.add(2, 1, 0);
+
+            // ── Step 1: place fixture + COMPOSTER for raycast proof ──────────────────
+            // ComposterBlock.getRaycastShape returns VoxelShapes.fullCube() (non-empty,
+            // minY=0.0 unoffset). SlabSupportStateMixin.slabbed$offsetRaycast (both-env)
+            // shifts it to minY=-0.5. Most other solid blocks return VoxelShapes.empty()
+            // for getRaycastShape, making a getBoundingBox() assertion unsafe.
             singleplayer.getServer().runOnServer(server -> {
                 SlabbedLabFixtures.PlaceResult result =
-                        SlabbedLabFixtures.placeBasicFixture(
-                                server.getOverworld(), FIXTURE_ORIGIN);
+                        SlabbedLabFixtures.placeBasicFixture(server.getOverworld(), FIXTURE_ORIGIN);
                 if (!result.ok()) {
                     throw new RuntimeException("placeBasicFixture failed: " + result.error());
                 }
-                // BOTTOM_SLAB lane support = FIXTURE_ORIGIN + (2,0,0); carpet goes one above.
-                BlockPos carpetPos = FIXTURE_ORIGIN.add(2, 1, 0);
                 server.getOverworld().setBlockState(
-                        carpetPos, Blocks.WHITE_CARPET.getDefaultState(), Block.NOTIFY_LISTENERS);
+                        probePos, Blocks.COMPOSTER.getDefaultState(), Block.NOTIFY_LISTENERS);
             });
 
-            // Block update packets from NOTIFY_LISTENERS are processed during client game
-            // ticks, not during waitForChunksRender(). Run one tick so the client applies
-            // the block changes to mc.world, then wait for chunk rebuilds to complete.
+            // Flush block-update packets (processed during client game ticks) then
+            // settle chunk rebuilds.
             ctx.waitTick();
             singleplayer.getClientWorld().waitForChunksRender();
 
-            // --- Carpet outline proof (client-side) ---
+            // ── Raycast proof (client-side) ──────────────────────────────────────────
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world is null during raycast check");
+                }
+                BlockState state = mc.world.getBlockState(probePos);
+                if (!state.isOf(Blocks.COMPOSTER)) {
+                    throw new RuntimeException(
+                            "client: composter not present at " + probePos.toShortString()
+                            + ", found: " + state.getBlock().getTranslationKey());
+                }
+                VoxelShape raycast = state.getRaycastShape(mc.world, probePos);
+                double minY = raycast.getBoundingBox().minY;
+                if (minY != -0.5) {
+                    String diagnosis = minY == 0.0
+                            ? " (offset missing — slabbed$offsetRaycast not firing)"
+                            : minY == -1.0
+                            ? " (double-offset — duplicate raycast path active)"
+                            : "";
+                    throw new RuntimeException(
+                            "composter raycast minY expected -0.5, got " + minY + diagnosis);
+                }
+            });
+
+            // ── Step 2: replace COMPOSTER with WHITE_CARPET for outline proof ────────
+            singleplayer.getServer().runOnServer(server ->
+                    server.getOverworld().setBlockState(
+                            probePos, Blocks.WHITE_CARPET.getDefaultState(), Block.NOTIFY_LISTENERS));
+
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            // ── Carpet outline proof (client-side) ───────────────────────────────────
             // CarpetDyShapeMixin (client-only) is the sole active carpet outline path
-            // after dedupe. Assert it applies exactly one -0.5 offset on the client world.
+            // after dedupe. Assert it applies exactly one -0.5 offset.
             ctx.runOnClient(mc -> {
                 if (mc.world == null) {
                     throw new RuntimeException("client world is null during carpet outline check");
                 }
-                BlockPos carpetPos = FIXTURE_ORIGIN.add(2, 1, 0);
-                BlockState carpetState = mc.world.getBlockState(carpetPos);
+                BlockState carpetState = mc.world.getBlockState(probePos);
                 if (!carpetState.isOf(Blocks.WHITE_CARPET)) {
                     throw new RuntimeException(
-                            "client: carpet not present at " + carpetPos.toShortString()
+                            "client: carpet not present at " + probePos.toShortString()
                             + ", found: " + carpetState.getBlock().getTranslationKey());
                 }
-                VoxelShape outline = carpetState.getOutlineShape(mc.world, carpetPos, ShapeContext.absent());
+                VoxelShape outline = carpetState.getOutlineShape(mc.world, probePos, ShapeContext.absent());
                 double minY = outline.getBoundingBox().minY;
                 if (minY != -0.5) {
                     String diagnosis = minY == 0.0
