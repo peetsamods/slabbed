@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
@@ -140,6 +141,50 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(outlineMinY == raycastMinY,
                 "outline/raycast parity broken: outline minY=" + outlineMinY
                         + ", raycast minY=" + raycastMinY);
+
+        ctx.complete();
+    }
+
+    /**
+     * Regression guard: proves that carpet outline offset is applied exactly once
+     * (not doubled) for a carpet placed above a bottom-slab lane on the SERVER.
+     *
+     * <p>After dedupe: {@code CarpetBlockMixin.slabbed$offsetShape} is removed.
+     * Server-side {@code getOutlineShape} for carpet returns the unmodified shape
+     * (minY == 0.0). Client-side, {@code CarpetDyShapeMixin.slabbed$offsetCarpetOutline}
+     * (client-only mixin) provides the single -0.5 offset.
+     *
+     * <p>Before the dedupe, {@code CarpetBlockMixin.slabbed$offsetShape} (both-env)
+     * was the sole effective handler on the server (due to cancellation short-circuit).
+     * This test fails against double-offset state (minY == -1.0) and trivially
+     * confirms the server path produces 0.0 post-dedupe.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void carpetOutlineNotDoubled(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        // Place the 3-lane fixture; BOTTOM_SLAB support lands at origin+(2,0,0).
+        PlaceResult placed = SlabbedLabFixtures.placeBasicFixture(world, origin);
+        ctx.assertTrue(placed.ok(), "placeBasicFixture failed: " + placed.error());
+
+        // Place white carpet directly above the BOTTOM_SLAB lane support.
+        // setBlockState bypasses canPlaceAt, so carpet lands regardless of support rules.
+        BlockPos carpetPos = origin.add(2, 1, 0);
+        world.setBlockState(carpetPos, Blocks.WHITE_CARPET.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        BlockState carpetState = world.getBlockState(carpetPos);
+        ctx.assertTrue(carpetState.isOf(Blocks.WHITE_CARPET), "white carpet not present at test position");
+        ctx.assertTrue(carpetState.getBlock() instanceof CarpetBlock, "block is not a CarpetBlock instance");
+
+        VoxelShape outline = carpetState.getOutlineShape(world, carpetPos, ShapeContext.absent());
+        double minY = outline.getBoundingBox().minY;
+
+        // Server: CarpetDyShapeMixin is client-only; CarpetBlockMixin.slabbed$offsetShape
+        // is removed. No server-side offset → minY must be 0.0 (unmodified carpet shape).
+        ctx.assertTrue(minY == 0.0,
+                "server carpet outline should be unmodified (minY=0.0), got " + minY
+                + ". If -0.5: server-side offset still active. If -1.0: double-offset.");
 
         ctx.complete();
     }
