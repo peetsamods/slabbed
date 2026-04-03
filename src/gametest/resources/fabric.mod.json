@@ -3,10 +3,13 @@
   "id": "slabbed_gametest",
   "version": "1.0.0",
   "name": "Slabbed GameTest",
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
     "fabric-gametest": [
       "com.slabbed.test.SlabbedLabFixtureTest"
+    ],
+    "fabric-client-gametest": [
+      "com.slabbed.test.SlabbedLabClientGameTest"
     ]
   },
   "depends": {
