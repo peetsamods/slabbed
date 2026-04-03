@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "slabbed_gametest",
+  "version": "1.0.0",
+  "name": "Slabbed GameTest",
+  "environment": "server",
+  "entrypoints": {
+    "fabric-gametest": [
+      "com.slabbed.test.SlabbedLabFixtureTest"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "fabric-gametest-api-v1": "*",
+    "slabbed": "*"
+  }
+}
