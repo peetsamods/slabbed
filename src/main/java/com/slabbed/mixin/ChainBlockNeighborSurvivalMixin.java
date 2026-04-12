@@ -1,5 +1,6 @@
 package com.slabbed.mixin;
 
+import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ChainBlock;
@@ -63,6 +64,9 @@ public abstract class ChainBlockNeighborSurvivalMixin {
         BlockPos cursor = pos.offset(walkDir);
         for (int i = 0; i < MAX_CHAIN_WALK; i++) {
             BlockState cur = world.getBlockState(cursor);
+            if (faceDir == Direction.DOWN && SlabSupport.isCeilingSupportBottomSurface(world, cursor)) {
+                return true;
+            }
             // found solid support
             if (cur.isSideSolidFullSquare(world, cursor, faceDir)) {
                 return true;
