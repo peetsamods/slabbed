@@ -349,31 +349,11 @@ public final class SlabSupport {
             }
         }
 
-        // Conservative: solid ground blocks sitting on a bottom slab render at slab height.
-        if (hasBottomSlabBelow(world, pos)) {
-            Block block = state.getBlock();
-
-            if (block instanceof SlabBlock
-                    || block instanceof StairsBlock
-                    || block instanceof FenceBlock
-                    || block instanceof WallBlock
-                    || block instanceof TrapdoorBlock
-                    || block instanceof PaneBlock
-                    || isThinTopLayer(state)
-                    || state.isAir()
-                    || !state.getFluidState().isEmpty()) {
-                // excluded partials / non-blocks / fluids / thin layers — no slab anchoring expansion
-            } else if (state.isSolidBlock(world, pos)) {
-                return -0.5;
-            }
-        }
-
         if (shouldOffset(world, pos, state)) {
             return -0.5;
         }
-        // ── blocks under a top slab: +0.5 UP ──────────────────────────
-        // Blacklist: these block types should NEVER float up into the slab space.
-        // Everything else (small decorative / ceiling blocks) gets +0.5.
+        // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
+        // Only explicit ceiling-mounted cases may float into the slab space.
         // Note: isSolidBlock is safe here because getYOffset has a recursion guard.
         Block blk = state.getBlock();
         if (blk instanceof SlabBlock
@@ -390,8 +370,8 @@ public final class SlabSupport {
 
         BlockState above = world.getBlockState(pos.up());
 
-        // direct: any non-blacklisted block directly under a top slab
-        if (isTopSlab(above)) {
+        // direct: ceiling-attached blocks directly under a top slab
+        if (isCeilingAttached(state) && isTopSlab(above)) {
             return 0.5;
         }
 
