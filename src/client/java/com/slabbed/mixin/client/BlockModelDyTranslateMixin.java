@@ -1,6 +1,7 @@
 package com.slabbed.mixin.client;
 
 import com.slabbed.client.ClientDy;
+import com.slabbed.client.model.ChainCeilingGeometry;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.BlockModelRenderer;
@@ -20,6 +21,8 @@ import java.util.List;
  */
 @Mixin(BlockModelRenderer.class)
 public class BlockModelDyTranslateMixin {
+    @org.spongepowered.asm.mixin.Unique
+    private static final ThreadLocal<Boolean> slabbed$usingAlternateChainGeometry = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     @Inject(method = "render(Lnet/minecraft/world/BlockRenderView;Ljava/util/List;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZI)V",
             at = @At("HEAD"))
@@ -32,6 +35,11 @@ public class BlockModelDyTranslateMixin {
                                 boolean cull,
                                 int overlay,
                                 CallbackInfo ci) {
+        if (ChainCeilingGeometry.applyIfPresent(parts, world, pos, state)) {
+            slabbed$usingAlternateChainGeometry.set(Boolean.TRUE);
+            return;
+        }
+
         double dy = ClientDy.dyFor(world, pos, state);
         if (dy == 0.0) {
             return;
@@ -51,6 +59,11 @@ public class BlockModelDyTranslateMixin {
                                boolean cull,
                                int overlay,
                                CallbackInfo ci) {
+        if (Boolean.TRUE.equals(slabbed$usingAlternateChainGeometry.get())) {
+            slabbed$usingAlternateChainGeometry.set(Boolean.FALSE);
+            return;
+        }
+
         double dy = ClientDy.dyFor(world, pos, state);
         if (dy == 0.0) {
             return;
@@ -69,6 +82,11 @@ public class BlockModelDyTranslateMixin {
                                       boolean cull,
                                       int overlay,
                                       CallbackInfo ci) {
+        if (ChainCeilingGeometry.applyIfPresent(parts, world, pos, state)) {
+            slabbed$usingAlternateChainGeometry.set(Boolean.TRUE);
+            return;
+        }
+
         double dy = ClientDy.dyFor(world, pos, state);
         if (dy == 0.0) {
             return;
@@ -88,6 +106,11 @@ public class BlockModelDyTranslateMixin {
                                      boolean cull,
                                      int overlay,
                                      CallbackInfo ci) {
+        if (Boolean.TRUE.equals(slabbed$usingAlternateChainGeometry.get())) {
+            slabbed$usingAlternateChainGeometry.set(Boolean.FALSE);
+            return;
+        }
+
         double dy = ClientDy.dyFor(world, pos, state);
         if (dy == 0.0) {
             return;
@@ -106,6 +129,11 @@ public class BlockModelDyTranslateMixin {
                                     boolean cull,
                                     int overlay,
                                     CallbackInfo ci) {
+        if (ChainCeilingGeometry.applyIfPresent(parts, world, pos, state)) {
+            slabbed$usingAlternateChainGeometry.set(Boolean.TRUE);
+            return;
+        }
+
         double dy = ClientDy.dyFor(world, pos, state);
         if (dy == 0.0) {
             return;
@@ -125,6 +153,11 @@ public class BlockModelDyTranslateMixin {
                                    boolean cull,
                                    int overlay,
                                    CallbackInfo ci) {
+        if (Boolean.TRUE.equals(slabbed$usingAlternateChainGeometry.get())) {
+            slabbed$usingAlternateChainGeometry.set(Boolean.FALSE);
+            return;
+        }
+
         double dy = ClientDy.dyFor(world, pos, state);
         if (dy == 0.0) {
             return;
