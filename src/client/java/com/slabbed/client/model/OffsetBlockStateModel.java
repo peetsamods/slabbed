@@ -55,6 +55,10 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
     @Override
     public void emitQuads(QuadEmitter emitter, BlockRenderView view, BlockPos pos, BlockState state, Random random,
                           Predicate<Direction> cullTest) {
+        if (ChainCeilingGeometry.emitIfPresent(fabricWrapped, emitter, view, pos, state, random, cullTest)) {
+            return;
+        }
+
         float dy;
         if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof PaleMossCarpetBlock) {
             dy = (float) ClientDy.dyFor(view, pos, state);
