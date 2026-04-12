@@ -235,6 +235,30 @@ public final class SlabSupport {
             return false;
         }
 
+        // Y-axis chains must defer to ceiling support before any generic downward logic.
+        if (state.getBlock() instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y) {
+            if (isCeilingSupportBottomSurface(world, pos.up())) {
+                return false;
+            }
+
+            BlockPos cursor = pos.up();
+            for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+                BlockState cur = world.getBlockState(cursor);
+                if (isCeilingSupportBottomSurface(world, cursor)) {
+                    return false;
+                }
+                if (cur.getBlock() instanceof ChainBlock
+                        && cur.contains(Properties.AXIS)
+                        && cur.get(Properties.AXIS) == Direction.Axis.Y) {
+                    cursor = cursor.up();
+                    continue;
+                }
+                break;
+            }
+        }
+
         // blocks under a top or double slab that get +0.5 UP via getYOffset should not
         // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
@@ -351,6 +375,28 @@ public final class SlabSupport {
 
         if (shouldOffset(world, pos, state)) {
             return -0.5;
+        }
+        if (state.getBlock() instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y) {
+            if (isCeilingSupportBottomSurface(world, pos.up())) {
+                return 0.5;
+            }
+
+            BlockPos cursor = pos.up();
+            for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+                BlockState cur = world.getBlockState(cursor);
+                if (isCeilingSupportBottomSurface(world, cursor)) {
+                    return 0.5;
+                }
+                if (cur.getBlock() instanceof ChainBlock
+                        && cur.contains(Properties.AXIS)
+                        && cur.get(Properties.AXIS) == Direction.Axis.Y) {
+                    cursor = cursor.up();
+                    continue;
+                }
+                break;
+            }
         }
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
         // Only explicit ceiling-mounted cases may float into the slab space.
