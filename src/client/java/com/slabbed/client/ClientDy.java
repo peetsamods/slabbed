@@ -4,7 +4,10 @@ import com.slabbed.util.SlabSupport;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
+import net.minecraft.block.ChainBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
+import net.minecraft.state.property.Properties;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.BlockView;
 
@@ -22,6 +25,11 @@ public final class ClientDy {
 
         Block block = state.getBlock();
         if (!(block instanceof CarpetBlock || block instanceof PaleMossCarpetBlock)) {
+            if (block instanceof ChainBlock
+                    && state.contains(Properties.AXIS)
+                    && state.get(Properties.AXIS) == Direction.Axis.Y) {
+                return SlabSupport.getYOffset(world, pos, state);
+            }
             return 0.0;
         }
 

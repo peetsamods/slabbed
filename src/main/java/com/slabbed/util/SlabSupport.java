@@ -235,20 +235,20 @@ public final class SlabSupport {
             return false;
         }
 
-        // blocks under a top slab that get +0.5 UP via getYOffset should not
+        // blocks under a top or double slab that get +0.5 UP via getYOffset should not
         // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
-        if (isCeilingAttached(state) && isTopSlab(world.getBlockState(pos.up()))) {
+        if (isCeilingAttached(state) && isCeilingSupportBottomSurface(world, pos.up())) {
             return false;
         }
 
         // ceiling-attached blocks further down a chain of ceiling blocks
-        // leading to a top slab also get +0.5 UP; exclude from -0.5
+        // leading to a top or double slab also get +0.5 UP; exclude from -0.5
         if (isCeilingAttached(state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
-                if (isTopSlab(cur)) {
+                if (isCeilingSupportBottomSurface(world, cursor)) {
                     return false;
                 }
                 if (isCeilingAttached(cur)) {
@@ -368,20 +368,18 @@ public final class SlabSupport {
             return 0.0;
         }
 
-        BlockState above = world.getBlockState(pos.up());
-
-        // direct: ceiling-attached blocks directly under a top slab
-        if (isCeilingAttached(state) && isTopSlab(above)) {
+        // direct: ceiling-attached blocks directly under a top or double slab
+        if (isCeilingAttached(state) && isCeilingSupportBottomSurface(world, pos.up())) {
             return 0.5;
         }
 
         // cascading: ceiling-attached block below other ceiling-attached blocks
-        // leading up to a top slab (e.g. 2nd dripstone, 2nd vine segment)
+        // leading up to a top or double slab (e.g. 2nd dripstone, 2nd vine segment)
         if (isCeilingAttached(state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
-                if (isTopSlab(cur)) {
+                if (isCeilingSupportBottomSurface(world, cursor)) {
                     return 0.5;
                 }
                 if (isCeilingAttached(cur)) {
