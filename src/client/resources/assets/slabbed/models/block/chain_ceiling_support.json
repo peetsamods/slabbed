@@ -1,6 +1,7 @@
 {
   "parent": "block/block",
   "textures": {
+    "texture": "minecraft:block/iron_chain",
     "particle": "#texture",
     "all": "#texture"
   },
