@@ -34,7 +34,7 @@ public final class ChainCeilingGeometry {
         return state.getBlock() instanceof ChainBlock
                 && state.contains(Properties.AXIS)
                 && state.get(Properties.AXIS) == Direction.Axis.Y
-                && SlabSupport.isCeilingSupportBottomSurface(world, pos.up());
+                && SlabSupport.isTopSlab(world.getBlockState(pos.up()));
     }
 
     public static boolean applyIfPresent(List<BlockModelPart> parts, BlockView world, BlockPos pos, BlockState state) {
