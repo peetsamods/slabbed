@@ -99,8 +99,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 .create()) {
             Path screenshotDir = resolveClientGameTestScreenshotDir();
             Set<String> knownScreenshotFiles = listScreenshotFileNames(screenshotDir);
-            List<String> writtenScreenshotFiles = new ArrayList<>();
-            List<String> proofIds = new ArrayList<>();
+            List<ManifestArtifact> artifacts = new ArrayList<>();
 
             // Wait for initial chunk download and first full render pass.
             singleplayer.getClientWorld().waitForChunksRender();
@@ -205,8 +204,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     "slabbed_lab_fixture_proof",
                     screenshotDir,
                     knownScreenshotFiles,
-                    writtenScreenshotFiles,
-                    proofIds);
+                    artifacts);
 
             // ── Step 3: model-height proof ────────────────────────────────────────────
             // Place OAK_LOG one block above both the FULL lane (no dy offset: getYOffset
@@ -255,10 +253,9 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     "slabbed_model_height_proof",
                     screenshotDir,
                     knownScreenshotFiles,
-                    writtenScreenshotFiles,
-                    proofIds);
+                    artifacts);
 
-            writeRunManifest(screenshotDir, writtenScreenshotFiles, proofIds);
+            writeRunManifest(screenshotDir, artifacts);
         }
     }
 
@@ -267,21 +264,20 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             String proofId,
             Path screenshotDir,
             Set<String> knownScreenshotFiles,
-            List<String> writtenScreenshotFiles,
-            List<String> proofIds
+            List<ManifestArtifact> artifacts
     ) {
         ctx.takeScreenshot(proofId);
-        proofIds.add(proofId);
+        String label = labelForProofId(proofId);
 
         String resolvedFile = resolveScreenshotFileNameForProofId(screenshotDir, proofId);
         if (resolvedFile != null) {
-            writtenScreenshotFiles.add(resolvedFile);
+            artifacts.add(new ManifestArtifact(resolvedFile, proofId, label));
         }
 
         Set<String> afterCapture = listScreenshotFileNames(screenshotDir);
         for (String fileName : afterCapture) {
             if (!knownScreenshotFiles.contains(fileName)) {
-                writtenScreenshotFiles.add(fileName);
+                artifacts.add(new ManifestArtifact(fileName, proofId, label));
             }
         }
         knownScreenshotFiles.clear();
@@ -314,19 +310,32 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             return stream
                     .filter(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(".png"))
                     .filter(path -> path.getFileName().toString().contains(proofId))
-                    .sorted((a, b) -> {
-                        try {
-                            return Files.getLastModifiedTime(b).compareTo(Files.getLastModifiedTime(a));
-                        } catch (IOException e) {
-                            return 0;
-                        }
-                    })
                     .map(path -> path.getFileName().toString())
+                    .sorted()
                     .findFirst()
                     .orElse(null);
         } catch (IOException ignored) {
             return null;
         }
+    }
+
+    private static String labelForProofId(String proofId) {
+        String[] parts = proofId.split("_");
+        StringBuilder label = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (part.isEmpty()) {
+                continue;
+            }
+            if (label.length() > 0) {
+                label.append(' ');
+            }
+            label.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) {
+                label.append(part.substring(1));
+            }
+        }
+        return label.toString();
     }
 
     private static Set<String> listScreenshotFileNames(Path screenshotDir) {
@@ -346,18 +355,18 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         return names;
     }
 
-    private static void writeRunManifest(Path screenshotDir, List<String> screenshotFiles, List<String> proofIds) {
+    private static void writeRunManifest(Path screenshotDir, List<ManifestArtifact> artifacts) {
         try {
             Files.createDirectories(screenshotDir);
             Path manifestPath = screenshotDir.resolve("run_manifest.json");
-            String json = buildManifestJson(screenshotDir, screenshotFiles, proofIds);
+            String json = buildManifestJson(screenshotDir, artifacts);
             Files.writeString(manifestPath, json);
         } catch (IOException ignored) {
             // Manifest emission is auxiliary evidence; test correctness remains assertion-driven.
         }
     }
 
-    private static String buildManifestJson(Path screenshotDir, List<String> screenshotFiles, List<String> proofIds) {
+    private static String buildManifestJson(Path screenshotDir, List<ManifestArtifact> artifacts) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
         sb.append("  \"timestamp\": \"").append(escapeJson(Instant.now().toString())).append("\",\n");
@@ -367,9 +376,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         sb.append("  \"outputDirectory\": \"")
                 .append(escapeJson(screenshotDir.toAbsolutePath().toString()))
                 .append("\",\n");
-        appendJsonArray(sb, "screenshotFiles", screenshotFiles);
-        sb.append(",\n");
-        appendJsonArray(sb, "proofIds", proofIds);
+        appendArtifactsJsonArray(sb, artifacts);
         sb.append("\n}\n");
         return sb.toString();
     }
@@ -384,15 +391,35 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static void appendJsonArray(StringBuilder sb, String key, List<String> values) {
-        LinkedHashSet<String> uniqueValues = new LinkedHashSet<>(values);
-        sb.append("  \"").append(escapeJson(key)).append("\": [");
+    private static void appendArtifactsJsonArray(StringBuilder sb, List<ManifestArtifact> artifacts) {
+        List<ManifestArtifact> normalized = new ArrayList<>();
+        for (ManifestArtifact artifact : artifacts) {
+            if (artifact.file() != null && !artifact.file().isBlank()) {
+                normalized.add(artifact);
+            }
+        }
+        normalized.sort((a, b) -> {
+            int proofCmp = a.proofId().compareTo(b.proofId());
+            if (proofCmp != 0) {
+                return proofCmp;
+            }
+            return a.file().compareTo(b.file());
+        });
+
+        LinkedHashSet<ManifestArtifact> uniqueArtifacts = new LinkedHashSet<>(normalized);
+        sb.append("  \"artifacts\": [");
         int i = 0;
-        for (String value : uniqueValues) {
+        for (ManifestArtifact artifact : uniqueArtifacts) {
             if (i > 0) {
                 sb.append(", ");
             }
-            sb.append("\"").append(escapeJson(value)).append("\"");
+            sb.append("{\"file\": \"")
+                    .append(escapeJson(artifact.file()))
+                    .append("\", \"proofId\": \"")
+                    .append(escapeJson(artifact.proofId()))
+                    .append("\", \"label\": \"")
+                    .append(escapeJson(artifact.label()))
+                    .append("\"}");
             i++;
         }
         sb.append("]");
@@ -400,5 +427,8 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
     private static String escapeJson(String raw) {
         return raw.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private record ManifestArtifact(String file, String proofId, String label) {
     }
 }
