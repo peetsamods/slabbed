@@ -4,12 +4,22 @@ import com.slabbed.dev.SlabbedLabFixtures;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.shape.VoxelShape;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Client GameTest: deterministic proofs for the Slabbed Lab 3-lane fixture.
@@ -87,6 +97,10 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
+            Path screenshotDir = resolveClientGameTestScreenshotDir();
+            Set<String> knownScreenshotFiles = listScreenshotFileNames(screenshotDir);
+            List<String> writtenScreenshotFiles = new ArrayList<>();
+            List<String> proofIds = new ArrayList<>();
 
             // Wait for initial chunk download and first full render pass.
             singleplayer.getClientWorld().waitForChunksRender();
@@ -186,7 +200,13 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             // Overview screenshot: all three lanes with carpet on BOTTOM_SLAB, from
             // the fixed overhead-south viewpoint.
             // Output: build/run/clientGameTest/screenshots/0000_slabbed_lab_fixture_proof.png
-            ctx.takeScreenshot("slabbed_lab_fixture_proof");
+            captureScreenshotAndRecord(
+                    ctx,
+                    "slabbed_lab_fixture_proof",
+                    screenshotDir,
+                    knownScreenshotFiles,
+                    writtenScreenshotFiles,
+                    proofIds);
 
             // ── Step 3: model-height proof ────────────────────────────────────────────
             // Place OAK_LOG one block above both the FULL lane (no dy offset: getYOffset
@@ -230,7 +250,155 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             // BOTTOM_SLAB lanes from eye level. A human reviewer can directly compare
             // the two log bases to confirm the slab offset is applied exactly once.
             // Output: build/run/clientGameTest/screenshots/0001_slabbed_model_height_proof.png
-            ctx.takeScreenshot("slabbed_model_height_proof");
+            captureScreenshotAndRecord(
+                    ctx,
+                    "slabbed_model_height_proof",
+                    screenshotDir,
+                    knownScreenshotFiles,
+                    writtenScreenshotFiles,
+                    proofIds);
+
+            writeRunManifest(screenshotDir, writtenScreenshotFiles, proofIds);
         }
+    }
+
+    private static void captureScreenshotAndRecord(
+            ClientGameTestContext ctx,
+            String proofId,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<String> writtenScreenshotFiles,
+            List<String> proofIds
+    ) {
+        ctx.takeScreenshot(proofId);
+        proofIds.add(proofId);
+
+        String resolvedFile = resolveScreenshotFileNameForProofId(screenshotDir, proofId);
+        if (resolvedFile != null) {
+            writtenScreenshotFiles.add(resolvedFile);
+        }
+
+        Set<String> afterCapture = listScreenshotFileNames(screenshotDir);
+        for (String fileName : afterCapture) {
+            if (!knownScreenshotFiles.contains(fileName)) {
+                writtenScreenshotFiles.add(fileName);
+            }
+        }
+        knownScreenshotFiles.clear();
+        knownScreenshotFiles.addAll(afterCapture);
+    }
+
+    private static Path resolveClientGameTestScreenshotDir() {
+        Path gameDir = FabricLoader.getInstance().getGameDir();
+        Path directScreenshots = gameDir.resolve("screenshots");
+        if (Files.isDirectory(directScreenshots)) {
+            return directScreenshots;
+        }
+
+        Path parent = gameDir.getParent();
+        if (parent != null) {
+            Path parentScreenshots = parent.resolve("screenshots");
+            if (Files.isDirectory(parentScreenshots)) {
+                return parentScreenshots;
+            }
+        }
+
+        return directScreenshots;
+    }
+
+    private static String resolveScreenshotFileNameForProofId(Path screenshotDir, String proofId) {
+        if (!Files.isDirectory(screenshotDir)) {
+            return null;
+        }
+        try (var stream = Files.list(screenshotDir)) {
+            return stream
+                    .filter(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(".png"))
+                    .filter(path -> path.getFileName().toString().contains(proofId))
+                    .sorted((a, b) -> {
+                        try {
+                            return Files.getLastModifiedTime(b).compareTo(Files.getLastModifiedTime(a));
+                        } catch (IOException e) {
+                            return 0;
+                        }
+                    })
+                    .map(path -> path.getFileName().toString())
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException ignored) {
+            return null;
+        }
+    }
+
+    private static Set<String> listScreenshotFileNames(Path screenshotDir) {
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        if (!Files.isDirectory(screenshotDir)) {
+            return names;
+        }
+        try (var stream = Files.list(screenshotDir)) {
+            stream
+                    .filter(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(".png"))
+                    .map(path -> path.getFileName().toString())
+                    .sorted()
+                    .forEach(names::add);
+        } catch (IOException ignored) {
+            // Keep manifest output best-effort and avoid changing test assertions.
+        }
+        return names;
+    }
+
+    private static void writeRunManifest(Path screenshotDir, List<String> screenshotFiles, List<String> proofIds) {
+        try {
+            Files.createDirectories(screenshotDir);
+            Path manifestPath = screenshotDir.resolve("run_manifest.json");
+            String json = buildManifestJson(screenshotDir, screenshotFiles, proofIds);
+            Files.writeString(manifestPath, json);
+        } catch (IOException ignored) {
+            // Manifest emission is auxiliary evidence; test correctness remains assertion-driven.
+        }
+    }
+
+    private static String buildManifestJson(Path screenshotDir, List<String> screenshotFiles, List<String> proofIds) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"timestamp\": \"").append(escapeJson(Instant.now().toString())).append("\",\n");
+        appendOptionalRuntimeGitField(sb, "gitBranch", System.getProperty("slabbed.git.branch"));
+        appendOptionalRuntimeGitField(sb, "gitShortHash", System.getProperty("slabbed.git.shortHash"));
+        sb.append("  \"scenario\": \"SlabbedLabClientGameTest.runTest\",\n");
+        sb.append("  \"outputDirectory\": \"")
+                .append(escapeJson(screenshotDir.toAbsolutePath().toString()))
+                .append("\",\n");
+        appendJsonArray(sb, "screenshotFiles", screenshotFiles);
+        sb.append(",\n");
+        appendJsonArray(sb, "proofIds", proofIds);
+        sb.append("\n}\n");
+        return sb.toString();
+    }
+
+    private static void appendOptionalRuntimeGitField(StringBuilder sb, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            sb.append("  \"")
+                    .append(escapeJson(key))
+                    .append("\": \"")
+                    .append(escapeJson(value))
+                    .append("\",\n");
+        }
+    }
+
+    private static void appendJsonArray(StringBuilder sb, String key, List<String> values) {
+        LinkedHashSet<String> uniqueValues = new LinkedHashSet<>(values);
+        sb.append("  \"").append(escapeJson(key)).append("\": [");
+        int i = 0;
+        for (String value : uniqueValues) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append("\"").append(escapeJson(value)).append("\"");
+            i++;
+        }
+        sb.append("]");
+    }
+
+    private static String escapeJson(String raw) {
+        return raw.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
