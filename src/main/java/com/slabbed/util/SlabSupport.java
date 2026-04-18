@@ -289,9 +289,13 @@ public final class SlabSupport {
         }
 
         // ── direct + recursive chain ──────────────────────────────────
-        // Only non-solid blocks (signs, chests, etc.) should be lowered by the
-        // generic column walk. Solid full cubes must NOT inherit -0.5 here.
-        if (!state.isSolidBlock(world, pos) && hasSlabInColumn(world, pos)) {
+        // Category helper isSlabSitCandidate gates the generic column walk.
+        // Lowers non-solid blocks (signs, chests, fences, panes, ...) AND
+        // every BlockEntityProvider (jukebox, spawner, beacon, end portal
+        // frame, ...) so full-cube BEs follow the same slab-sit contract as
+        // chests. Plain solid world cubes (stone, dirt, planks, sand, ...)
+        // stay excluded so natural terrain does not visually drop.
+        if (isSlabSitCandidate(world, pos, state) && hasSlabInColumn(world, pos)) {
             return true;
         }
 
@@ -434,6 +438,35 @@ public final class SlabSupport {
         }
 
         return isSupportingSlab(state) && (isBottomSlab(state) || isTopSlab(state));
+    }
+
+    /**
+     * Category predicate for the generic slab-column lowering fallback in
+     * {@link #shouldOffset}.
+     *
+     * <p>Returns {@code true} for blocks that should visually sit on slabs
+     * when a bottom slab exists somewhere in their column:
+     * <ul>
+     *   <li>Every {@link BlockEntityProvider} block — chests, hoppers,
+     *       furnaces, jukeboxes, spawners, end portal frames, beacons,
+     *       banners, signs (standing), etc. This matches the
+     *       {@link #isLoweredBlockEntityVisual} contract and ensures
+     *       full-cube BE blocks (jukebox, spawner, …) lower alongside
+     *       non-full-cube BE blocks (chest, hopper, …).</li>
+     *   <li>Any block that is not a full solid cube — fences, walls, panes,
+     *       torches, buttons, pressure plates, wall signs, etc.
+     *       ({@code !state.isSolidBlock}).</li>
+     * </ul>
+     *
+     * <p>Explicitly excludes plain solid world cubes (stone, dirt, planks,
+     * cobblestone, sand, gravel, terracotta, …) so natural terrain does not
+     * visually drop when a slab happens to sit below it.
+     */
+    private static boolean isSlabSitCandidate(BlockView world, BlockPos pos, BlockState state) {
+        if (state.getBlock() instanceof BlockEntityProvider) {
+            return true;
+        }
+        return !state.isSolidBlock(world, pos);
     }
 
     /**
