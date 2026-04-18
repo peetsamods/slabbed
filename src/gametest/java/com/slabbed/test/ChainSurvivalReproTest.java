@@ -39,6 +39,16 @@ import net.minecraft.util.math.Direction;
  */
 public final class ChainSurvivalReproTest {
 
+    private static BlockState copperChainY() {
+        return Blocks.COPPER_CHAINS.unaffected().getDefaultState()
+                .with(ChainBlock.AXIS, Direction.Axis.Y);
+    }
+
+    private static BlockState copperChainX() {
+        return Blocks.COPPER_CHAINS.unaffected().getDefaultState()
+                .with(ChainBlock.AXIS, Direction.Axis.X);
+    }
+
     /**
      * Y-axis chain hanging from a TOP slab underside must survive an initial
      * recheck — establishes the positive baseline.
@@ -576,6 +586,108 @@ public final class ChainSurvivalReproTest {
                 + " to stone at chainA+2×east; got AIR"
                 + " (slabbed$walkChainForSupport failed to traverse same-axis"
                 + " chainB)");
+
+        ctx.complete();
+    }
+
+    /**
+     * Oxidizable/copper chain mirror of the vanilla TOP-slab positive
+     * baseline: copper chain under TOP slab must survive initial recheck.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void copperChainUnderTopSlabSurvivesInitialRecheck(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos slabPos = chainPos.up();
+
+        world.setBlockState(slabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_ALL);
+        world.setBlockState(chainPos, copperChainY(), Block.NOTIFY_ALL);
+
+        BlockState chainState = world.getBlockState(chainPos);
+        ctx.assertTrue(chainState.isOf(Blocks.COPPER_CHAINS.unaffected()),
+                "copper chain not placed at " + chainPos.toShortString()
+                + ", found: " + chainState.getBlock().getTranslationKey());
+
+        BlockState result = chainState.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.UP,
+                slabPos, world.getBlockState(slabPos),
+                world.getRandom());
+        ctx.assertTrue(!result.isAir(),
+                "copper chain under TOP slab must survive initial recheck; got AIR"
+                + " (possible uncovered OxidizableChainBlock path)");
+
+        ctx.complete();
+    }
+
+    /**
+     * Oxidizable/copper chain mirror of sole-support removal:
+     * X-axis copper chain with one stone end-support must drop when that
+     * support is removed.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void copperChainDropsWhenSoleSupportRemoved(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos supportPos = chainPos.offset(Direction.EAST);
+
+        world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(chainPos, copperChainX(), Block.NOTIFY_ALL);
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.COPPER_CHAINS.unaffected()),
+                "X-axis copper chain not placed");
+
+        world.setBlockState(supportPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        BlockState after = world.getBlockState(chainPos);
+        if (after.isAir()) {
+            ctx.complete();
+            return;
+        }
+
+        BlockState forced = after.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.EAST,
+                supportPos, Blocks.AIR.getDefaultState(),
+                world.getRandom());
+        ctx.assertTrue(forced.isAir(),
+                "X-axis copper chain must drop after sole support removed; world="
+                + after.getBlock().getTranslationKey()
+                + ", forced=" + forced.getBlock().getTranslationKey());
+
+        ctx.complete();
+    }
+
+    /**
+     * Oxidizable/copper chain mirror of unrelated-neighbor stability:
+     * with east support intact, removing unrelated north neighbor must not pop.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void copperChainSurvivesUnrelatedNeighborRemoval(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos supportPos = chainPos.offset(Direction.EAST);
+        BlockPos unrelatedPos = chainPos.offset(Direction.NORTH);
+
+        world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(unrelatedPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(chainPos, copperChainX(), Block.NOTIFY_ALL);
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.COPPER_CHAINS.unaffected()),
+                "X-axis copper chain not placed");
+
+        world.setBlockState(unrelatedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        BlockState after = world.getBlockState(chainPos);
+        ctx.assertTrue(after.isOf(Blocks.COPPER_CHAINS.unaffected()),
+                "X-axis copper chain must survive unrelated NORTH update with"
+                + " east support intact; found " + after.getBlock().getTranslationKey());
+
+        BlockState forced = after.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.NORTH,
+                unrelatedPos, Blocks.AIR.getDefaultState(),
+                world.getRandom());
+        ctx.assertTrue(!forced.isAir(),
+                "X-axis copper chain forced recheck(direction=NORTH) must not drop"
+                + " when east support remains");
 
         ctx.complete();
     }
