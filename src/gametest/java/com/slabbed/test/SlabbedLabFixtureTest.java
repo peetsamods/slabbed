@@ -147,6 +147,51 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
+     * Regression guard: full-cube {@link net.minecraft.block.BlockEntityProvider}
+     * blocks (jukebox, spawner, end portal frame, …) must still sit on slabs
+     * with {@code dy=-0.5} and an outline offset by -0.5.
+     *
+     * <p>This is the positive counterpart to {@link #solidCubeNotLowered}.
+     * The {@code !state.isSolidBlock} gate in {@code SlabSupport.shouldOffset}
+     * alone excludes full-cube BEs because {@code Jukebox.isSolidBlock == true}
+     * — which in turn breaks the {@link SlabSupport#isLoweredBlockEntityVisual}
+     * contract that covers every BE block. The {@code isSlabSitCandidate}
+     * helper restores them via an explicit {@code BlockEntityProvider}
+     * category check without re-opening the generic solid-cube fallback.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void blockEntityFullCubeSitsOnSlab(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        PlaceResult placed = SlabbedLabFixtures.placeBasicFixture(world, origin);
+        ctx.assertTrue(placed.ok(), "placeBasicFixture failed: " + placed.error());
+
+        BlockPos testPos = origin.add(2, 1, 0); // above BOTTOM_SLAB lane
+        world.setBlockState(testPos, Blocks.JUKEBOX.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        BlockState state = world.getBlockState(testPos);
+        ctx.assertTrue(state.isOf(Blocks.JUKEBOX), "jukebox not present at test position");
+
+        double dy = SlabSupport.getYOffset(world, testPos, state);
+        ctx.assertTrue(dy == -0.5,
+                "jukebox above BOTTOM_SLAB should lower; dy=" + dy
+                + " (isSlabSitCandidate BlockEntityProvider path regressed)");
+
+        VoxelShape outline = state.getOutlineShape(world, testPos, ShapeContext.absent());
+        double minY = outline.getBoundingBox().minY;
+        ctx.assertTrue(minY == -0.5,
+                "jukebox outline minY should be -0.5, got " + minY);
+
+        // Contract: isLoweredBlockEntityVisual must agree for every BE block.
+        ctx.assertTrue(
+                SlabSupport.isLoweredBlockEntityVisual(world, testPos, state),
+                "isLoweredBlockEntityVisual must be true for jukebox above BOTTOM_SLAB");
+
+        ctx.complete();
+    }
+
+    /**
      * Regression guard: ordinary solid cubes should NOT inherit -0.5 offset from
      * the generic slab-column walk. They must stay at minY=0.0 even when a bottom
      * slab sits somewhere below.
