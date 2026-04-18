@@ -289,7 +289,9 @@ public final class SlabSupport {
         }
 
         // ── direct + recursive chain ──────────────────────────────────
-        if (hasSlabInColumn(world, pos)) {
+        // Only non-solid blocks (signs, chests, etc.) should be lowered by the
+        // generic column walk. Solid full cubes must NOT inherit -0.5 here.
+        if (!state.isSolidBlock(world, pos) && hasSlabInColumn(world, pos)) {
             return true;
         }
 
