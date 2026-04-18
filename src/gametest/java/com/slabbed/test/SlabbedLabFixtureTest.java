@@ -3,6 +3,7 @@ package com.slabbed.test;
 import com.slabbed.dev.SlabbedLabFixtures;
 import com.slabbed.dev.SlabbedLabFixtures.LaneStatus;
 import com.slabbed.dev.SlabbedLabFixtures.PlaceResult;
+import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -141,6 +142,35 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(outlineMinY == raycastMinY,
                 "outline/raycast parity broken: outline minY=" + outlineMinY
                         + ", raycast minY=" + raycastMinY);
+
+        ctx.complete();
+    }
+
+    /**
+     * Regression guard: ordinary solid cubes should NOT inherit -0.5 offset from
+     * the generic slab-column walk. They must stay at minY=0.0 even when a bottom
+     * slab sits somewhere below.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void solidCubeNotLowered(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        PlaceResult placed = SlabbedLabFixtures.placeBasicFixture(world, origin);
+        ctx.assertTrue(placed.ok(), "placeBasicFixture failed: " + placed.error());
+
+        BlockPos testPos = origin.add(2, 1, 0); // above BOTTOM_SLAB lane
+        world.setBlockState(testPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        BlockState state = world.getBlockState(testPos);
+        ctx.assertTrue(state.isOf(Blocks.STONE), "stone not present at test position");
+
+        double dy = SlabSupport.getYOffset(world, testPos, state);
+        ctx.assertTrue(dy == 0.0, "stone should not be lowered over slab column; dy=" + dy);
+
+        VoxelShape outline = state.getOutlineShape(world, testPos, ShapeContext.absent());
+        ctx.assertTrue(outline.getBoundingBox().minY == 0.0,
+                "stone outline minY should stay at 0.0, got " + outline.getBoundingBox().minY);
 
         ctx.complete();
     }
