@@ -2,6 +2,7 @@ package com.slabbed.mixin.client;
 
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.world.ClientWorld;
@@ -19,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Client-side raycast retarget for lowered block-entity-style blocks
+ * <p>Client-side raycast retarget for lowered block-entity-style blocks
  * (chests, etc.) placed on bottom slabs.
  *
  * <p>When the chest's visible lower half extends into {@code pos.down()}'s
@@ -30,6 +31,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * {@link SlabSupport#isLoweredBlockEntityVisual}) and, if the ray hits
  * its offset shape at an equal or closer distance, we replace
  * {@link MinecraftClient#crosshairTarget} with that result.
+ *
+ * <p>The shape tested is the block's <em>outline</em> shape, using the
+ * camera entity's {@link ShapeContext}. This mirrors vanilla crosshair
+ * targeting which uses {@code RaycastContext.ShapeType.OUTLINE}; using
+ * the raycast shape instead would silently miss blocks (chests, barrels,
+ * signs, etc.) whose {@code getRaycastShape} falls back to empty.
  *
  * <p>This retarget is the single ownership rule; the outline renderer
  * automatically follows because it reads {@code crosshairTarget}.
@@ -73,7 +80,12 @@ public abstract class GameRendererCrosshairRetargetMixin {
         // the ray than the slab-top intersection.
         Vec3d end = eye.add(dir.normalize().multiply(slabDist + 0.5));
 
-        VoxelShape shape = aboveState.getRaycastShape(world, abovePos);
+        // Mirror vanilla crosshair ownership: crosshair targeting uses
+        // RaycastContext.ShapeType.OUTLINE, which resolves to getOutlineShape
+        // with the camera entity's ShapeContext. Blocks whose native
+        // getRaycastShape is empty (most BlockEntityProvider blocks) would
+        // otherwise never retarget.
+        VoxelShape shape = aboveState.getOutlineShape(world, abovePos, ShapeContext.of(cam));
         BlockHitResult chestHit = shape.raycast(eye, end, abovePos);
         if (chestHit == null) {
             return;

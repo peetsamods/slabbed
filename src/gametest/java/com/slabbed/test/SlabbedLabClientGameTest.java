@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.dev.SlabbedLabFixtures;
+import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -9,7 +10,9 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 
 import java.io.IOException;
@@ -254,6 +257,168 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     screenshotDir,
                     knownScreenshotFiles,
                     artifacts);
+
+            // ── Step 4: chest crosshair retarget proof (client) ──────────────────────
+            // Replace the OAK_LOG on the BOTTOM_SLAB lane with a CHEST. Proves the
+            // retarget path after the outline-shape correction:
+            //   (a) SlabSupport.isLoweredBlockEntityVisual returns true for CHEST
+            //       above BOTTOM_SLAB — the single ownership helper.
+            //   (b) The chest's OUTLINE shape (via ShapeContext.of(player)) — the
+            //       same shape vanilla crosshair targeting uses — intersects a ray
+            //       aimed at the visually lowered lower half AND its hit is at a
+            //       distance ≤ the slab-below hit. That inequality is exactly what
+            //       GameRendererCrosshairRetargetMixin tests before replacing
+            //       client.crosshairTarget, so a live crosshair on this region
+            //       resolves to the chest at probePos, not the slab at probePos.down().
+            //   (c) The resolved BlockHitResult.getBlockPos() equals probePos,
+            //       proving ownership semantics end-to-end.
+            singleplayer.getServer().runOnServer(server ->
+                    server.getOverworld().setBlockState(
+                            probePos, Blocks.CHEST.getDefaultState(), Block.NOTIFY_LISTENERS));
+
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world is null during chest retarget check");
+                }
+                if (mc.player == null) {
+                    throw new RuntimeException("client player is null during chest retarget check");
+                }
+                BlockState chestState = mc.world.getBlockState(probePos);
+                if (!chestState.isOf(Blocks.CHEST)) {
+                    throw new RuntimeException(
+                            "client: chest not present at " + probePos.toShortString()
+                            + ", found: " + chestState.getBlock().getTranslationKey());
+                }
+
+                // (a) ownership predicate: isLoweredBlockEntityVisual == true
+                if (!SlabSupport.isLoweredBlockEntityVisual(mc.world, probePos, chestState)) {
+                    throw new RuntimeException(
+                            "SlabSupport.isLoweredBlockEntityVisual=false for CHEST above BOTTOM_SLAB"
+                            + " at " + probePos.toShortString()
+                            + "; retarget predicate broken");
+                }
+
+                // (b) + (c): outline-shape ray hit at chest's visually lowered lower half.
+                // Use a horizontal ray at Y = probePos.y - 0.3 (world ≈ 200.7), which
+                // lies inside the chest's outline shape offset to [200.5, 201.375] and
+                // strictly above the slab's native top face at Y=200.5.
+                Vec3d eye = new Vec3d(
+                        probePos.getX() + 0.5,
+                        probePos.getY() - 0.3,
+                        probePos.getZ() + 1.5);
+                Vec3d end = new Vec3d(
+                        probePos.getX() + 0.5,
+                        probePos.getY() - 0.3,
+                        probePos.getZ() - 1.0);
+
+                // Mirror the production mixin: outline shape, ShapeContext of the camera entity.
+                VoxelShape chestOutline =
+                        chestState.getOutlineShape(mc.world, probePos, ShapeContext.of(mc.player));
+                if (chestOutline.isEmpty()) {
+                    throw new RuntimeException(
+                            "CHEST outline shape is empty at " + probePos.toShortString()
+                            + " — slabbed$offsetOutline or vanilla chest outline unexpectedly empty");
+                }
+                BlockHitResult chestHit = chestOutline.raycast(eye, end, probePos);
+                if (chestHit == null) {
+                    throw new RuntimeException(
+                            "chest outline shape did not intersect lower-half ray at Y="
+                            + (probePos.getY() - 0.3)
+                            + " — retarget will silently miss");
+                }
+                if (!chestHit.getBlockPos().equals(probePos)) {
+                    throw new RuntimeException(
+                            "chest outline raycast hit wrong BlockPos: expected "
+                            + probePos.toShortString()
+                            + ", got " + chestHit.getBlockPos().toShortString());
+                }
+
+                // Compare distance against slab below. If slab isn't hit at this ray Y,
+                // the retarget trivially dominates (chest strictly owns).
+                BlockPos slabPos = probePos.down();
+                BlockState slabState = mc.world.getBlockState(slabPos);
+                VoxelShape slabOutline =
+                        slabState.getOutlineShape(mc.world, slabPos, ShapeContext.of(mc.player));
+                if (!slabOutline.isEmpty()) {
+                    BlockHitResult slabHit = slabOutline.raycast(eye, end, slabPos);
+                    if (slabHit != null) {
+                        double dChest = chestHit.getPos().squaredDistanceTo(eye);
+                        double dSlab = slabHit.getPos().squaredDistanceTo(eye);
+                        if (dChest > dSlab + 1.0e-6) {
+                            throw new RuntimeException(
+                                    "chest retarget hit must be ≤ slab hit; dChest=" + dChest
+                                    + ", dSlab=" + dSlab
+                                    + " — GameRendererCrosshairRetargetMixin will not fire");
+                        }
+                    }
+                }
+            });
+
+            // Lower-half aim screenshot: human-reviewable reference for the chest
+            // retarget surface. Camera is placed across the fixture at the chest
+            // lower-half eye height; yaw aims at the chest.
+            ctx.runOnClient(mc -> {
+                if (mc.player != null) {
+                    mc.player.refreshPositionAndAngles(
+                            probePos.getX() - 1.5,
+                            probePos.getY() - 0.92, // feet s.t. eye ≈ probe.y - 0.3
+                            probePos.getZ() + 4.0,
+                            90.0f, // yaw east: chest is east of camera
+                            0.0f);
+                }
+            });
+            singleplayer.getClientWorld().waitForChunksRender();
+            captureScreenshotAndRecord(
+                    ctx,
+                    "slabbed_chest_lower_half_proof",
+                    screenshotDir,
+                    knownScreenshotFiles,
+                    artifacts);
+
+            // ── Step 5: solid cube above slab column must NOT lower (fix f9be295) ───
+            // Replace the chest with STONE. With the fix landed, the generic
+            // hasSlabInColumn fallback in SlabSupport.shouldOffset is gated by
+            // !state.isSolidBlock, so full solid cubes return dy=0.0 and their
+            // outline stays at minY=0.0.
+            singleplayer.getServer().runOnServer(server ->
+                    server.getOverworld().setBlockState(
+                            probePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS));
+
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world is null during stone no-lower check");
+                }
+                BlockState stoneState = mc.world.getBlockState(probePos);
+                if (!stoneState.isOf(Blocks.STONE)) {
+                    throw new RuntimeException(
+                            "client: stone not present at " + probePos.toShortString()
+                            + ", found: " + stoneState.getBlock().getTranslationKey());
+                }
+
+                double dy = SlabSupport.getYOffset(mc.world, probePos, stoneState);
+                if (dy != 0.0) {
+                    throw new RuntimeException(
+                            "STONE above BOTTOM_SLAB must not lower; got dy=" + dy
+                            + " (fix f9be295 regression — isSolidBlock guard bypassed)");
+                }
+
+                VoxelShape outline = stoneState.getOutlineShape(mc.world, probePos, ShapeContext.absent());
+                if (outline.isEmpty()) {
+                    throw new RuntimeException("STONE outline unexpectedly empty");
+                }
+                double minY = outline.getBoundingBox().minY;
+                if (minY != 0.0) {
+                    throw new RuntimeException(
+                            "STONE outline minY expected 0.0, got " + minY
+                            + " — SlabSupportStateMixin.slabbed$offsetOutline still lowering solid cubes");
+                }
+            });
 
             writeRunManifest(screenshotDir, artifacts);
         }
