@@ -3,6 +3,7 @@ package com.slabbed.util;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ButtonBlock;
 import net.minecraft.block.CarpetBlock;
@@ -393,6 +394,31 @@ public final class SlabSupport {
         }
 
         return 0.0;
+    }
+
+    /**
+     * Shared ownership rule for client raycast/outline retargeting of lowered
+     * block-entity-style blocks (e.g. chests) sitting above a bottom slab.
+     *
+     * <p>When a block-entity block is visually lowered by -0.5 (its model, via
+     * {@code BlockEntityOffsetMixin}, and its outline/raycast shapes, via
+     * {@code SlabSupportStateMixin}), the lower half of its visible footprint
+     * overflows into {@code pos.down()}'s voxel. Vanilla DDA raycast traversal
+     * cannot see that overflowed portion at {@code pos} and instead hits the
+     * slab below. This helper is the single source of truth for detecting
+     * that case so raycast retarget and outline agree.
+     *
+     * @return true iff {@code state} is a {@link BlockEntityProvider} block
+     *         at {@code pos} whose {@link #getYOffset} is exactly {@code -0.5}.
+     */
+    public static boolean isLoweredBlockEntityVisual(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        if (!(state.getBlock() instanceof BlockEntityProvider)) {
+            return false;
+        }
+        return getYOffset(world, pos, state) == -0.5;
     }
 
     /**
