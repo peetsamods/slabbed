@@ -11,9 +11,11 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.RaycastContext;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -378,6 +380,154 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     knownScreenshotFiles,
                     artifacts);
 
+            // ── Step 4b: stacked-chest retarget proof (client) ──────────────────────
+            // Layout: lower chest at probePos (above BOTTOM_SLAB) and a second chest
+            // stacked directly above at probePos.up(). Because SlabSupport.shouldOffset
+            // uses hasSlabInColumn (a downward walk through non-air/non-slab blocks),
+            // BOTH chests qualify as isLoweredBlockEntityVisual: the lower chest
+            // directly, the upper chest via the chain through the lower chest.
+            //
+            // What we prove: a probe ray aimed at the visually lowered LOWER half
+            // of the LOWER chest resolves to the lower chest BlockPos under the
+            // exact path vanilla crosshair uses + the GameRendererCrosshairRetargetMixin
+            // TAIL. Not the slab below. Not the upper chest.
+            //
+            // The simulation here mirrors the production code verbatim:
+            //   1) vanilla `world.raycast` with ShapeType.OUTLINE — same shape
+            //      selection vanilla crosshair targeting uses.
+            //   2) mixin replay: if vanillaHit is a BLOCK and the block above is
+            //      isLoweredBlockEntityVisual, re-test that above-state's outline
+            //      shape with ShapeContext.of(player) on an extended ray; replace
+            //      only when the lowered shape's hit is at ≤ the original distance.
+            final BlockPos upperChestPos = probePos.up();
+            singleplayer.getServer().runOnServer(server -> {
+                server.getOverworld().setBlockState(
+                        probePos, Blocks.CHEST.getDefaultState(), Block.NOTIFY_LISTENERS);
+                server.getOverworld().setBlockState(
+                        upperChestPos, Blocks.CHEST.getDefaultState(), Block.NOTIFY_LISTENERS);
+            });
+
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world is null during stacked chest check");
+                }
+                if (mc.player == null) {
+                    throw new RuntimeException("client player is null during stacked chest check");
+                }
+                BlockState lowerState = mc.world.getBlockState(probePos);
+                BlockState upperState = mc.world.getBlockState(upperChestPos);
+                if (!lowerState.isOf(Blocks.CHEST)) {
+                    throw new RuntimeException(
+                            "lower chest not present at " + probePos.toShortString()
+                            + ", found: " + lowerState.getBlock().getTranslationKey());
+                }
+                if (!upperState.isOf(Blocks.CHEST)) {
+                    throw new RuntimeException(
+                            "upper chest not present at " + upperChestPos.toShortString()
+                            + ", found: " + upperState.getBlock().getTranslationKey());
+                }
+
+                // Sanity: per shouldOffset's hasSlabInColumn walk, BOTH chests are
+                // treated as lowered block-entity visuals. If either flips to false,
+                // the cascade-lowering behaviour has changed upstream and this
+                // proof's assumptions must be re-checked.
+                if (!SlabSupport.isLoweredBlockEntityVisual(mc.world, probePos, lowerState)) {
+                    throw new RuntimeException("lower chest should be isLoweredBlockEntityVisual");
+                }
+                if (!SlabSupport.isLoweredBlockEntityVisual(mc.world, upperChestPos, upperState)) {
+                    throw new RuntimeException(
+                            "upper chest should be isLoweredBlockEntityVisual (cascade via hasSlabInColumn)");
+                }
+
+                // Realistic side-aim at the lower chest's visually lowered lower
+                // half. Eye is just above slab-top height across the fixture;
+                // target is the mid-height of the chest's lower-half overflow
+                // region (world Y = probePos.y - 0.3 ≈ 200.7 for probePos.y=201).
+                // This ray direction reaches the slab voxel before any chest voxel
+                // along DDA so the retarget path is exercised end-to-end.
+                Vec3d eye = new Vec3d(
+                        probePos.getX() + 0.5,
+                        probePos.getY() + 1.12,
+                        probePos.getZ() + 3.0);
+                Vec3d target = new Vec3d(
+                        probePos.getX() + 0.5,
+                        probePos.getY() - 0.3,
+                        probePos.getZ() + 0.5);
+                Vec3d dir = target.subtract(eye).normalize();
+                Vec3d end = eye.add(dir.multiply(6.0));
+
+                // (1) Vanilla DDA raycast — ShapeType.OUTLINE mirrors the crosshair.
+                BlockHitResult vanillaHit = mc.world.raycast(new RaycastContext(
+                        eye, end,
+                        RaycastContext.ShapeType.OUTLINE,
+                        RaycastContext.FluidHandling.NONE,
+                        mc.player));
+
+                // (2) Mixin retarget replay. One-level-up, outline shape,
+                // ShapeContext.of(player), ≤ distance predicate.
+                BlockHitResult finalHit = vanillaHit;
+                if (vanillaHit.getType() == HitResult.Type.BLOCK) {
+                    BlockPos hitPos = vanillaHit.getBlockPos();
+                    BlockPos abovePos = hitPos.up();
+                    BlockState aboveState = mc.world.getBlockState(abovePos);
+                    if (SlabSupport.isLoweredBlockEntityVisual(mc.world, abovePos, aboveState)) {
+                        double origDist = vanillaHit.getPos().subtract(eye).length();
+                        if (origDist > 0.0) {
+                            Vec3d extEnd = eye.add(dir.multiply(origDist + 0.5));
+                            VoxelShape aboveOutline = aboveState.getOutlineShape(
+                                    mc.world, abovePos, ShapeContext.of(mc.player));
+                            if (!aboveOutline.isEmpty()) {
+                                BlockHitResult retargetHit =
+                                        aboveOutline.raycast(eye, extEnd, abovePos);
+                                if (retargetHit != null) {
+                                    double dRetarget = retargetHit.getPos().squaredDistanceTo(eye);
+                                    double dOrig = vanillaHit.getPos().squaredDistanceTo(eye);
+                                    if (dRetarget <= dOrig + 1.0e-6) {
+                                        finalHit = retargetHit;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // (3) Ownership assertion: the final resolved hit must be the
+                // LOWER chest, not the slab below and not the upper chest.
+                if (finalHit.getType() != HitResult.Type.BLOCK) {
+                    throw new RuntimeException(
+                            "stacked chest lower-half aim resolved to " + finalHit.getType()
+                            + "; expected BLOCK at " + probePos.toShortString()
+                            + ". vanillaHit=" + vanillaHit.getType()
+                            + (vanillaHit.getType() == HitResult.Type.BLOCK
+                                    ? " at " + vanillaHit.getBlockPos().toShortString() : ""));
+                }
+                BlockPos resolvedPos = finalHit.getBlockPos();
+                if (!resolvedPos.equals(probePos)) {
+                    BlockPos slabPos = probePos.down();
+                    String diagnosis;
+                    if (resolvedPos.equals(slabPos)) {
+                        diagnosis = " (retarget failed to fire — lower chest not promoted over slab)";
+                    } else if (resolvedPos.equals(upperChestPos)) {
+                        diagnosis = " (retarget incorrectly chose upper chest — single-level scan promoted past the intended lower-half owner)";
+                    } else {
+                        diagnosis = " (unexpected third-party pos)";
+                    }
+                    BlockState resolvedState = mc.world.getBlockState(resolvedPos);
+                    throw new RuntimeException(
+                            "stacked chest lower-half aim resolved to "
+                            + resolvedPos.toShortString()
+                            + " (" + resolvedState.getBlock().getTranslationKey() + ")"
+                            + "; expected lower chest at " + probePos.toShortString()
+                            + ". vanillaHit="
+                            + (vanillaHit.getType() == HitResult.Type.BLOCK
+                                    ? vanillaHit.getBlockPos().toShortString() : "MISS")
+                            + diagnosis);
+                }
+            });
+
             // ── Step 5: solid cube above slab column must NOT lower (fix f9be295) ───
             // Replace the chest with STONE. With the fix landed, the generic
             // hasSlabInColumn fallback in SlabSupport.shouldOffset is gated by
@@ -419,6 +569,113 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                             + " — SlabSupportStateMixin.slabbed$offsetOutline still lowering solid cubes");
                 }
             });
+
+            // ── Step 6: full-cube BlockEntityProvider slab-sit proof (client) ────────
+            // Regression coverage for the f9be295 → 7f92501 category boundary.
+            //
+            // JUKEBOX is a BlockEntityProvider AND a full solid cube, so the
+            // !state.isSolidBlock gate alone would exclude it from dy=-0.5,
+            // silently contradicting the isLoweredBlockEntityVisual contract
+            // (which covers every BE block regardless of cube shape).
+            // isSlabSitCandidate's explicit BlockEntityProvider allowlist
+            // restores it.
+            //
+            // Place JUKEBOX on the FULL lane (x=0, no offset: dy==0.0) and the
+            // BOTTOM_SLAB lane (x=2, dy==-0.5). Assert the two outcomes side by
+            // side and capture a screenshot from the model-height eye-level
+            // camera so a reviewer can see the BOTTOM_SLAB jukebox visibly
+            // sitting on the slab top while the FULL jukebox sits flush at
+            // the stone top.
+            final BlockPos jukeboxFullPos = FIXTURE_ORIGIN.add(0, 1, 0);
+            singleplayer.getServer().runOnServer(server -> {
+                // Clear the upper chest left behind by Step 4b so the screenshot
+                // is a clean side-by-side comparison.
+                server.getOverworld().setBlockState(
+                        upperChestPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+                // FULL lane: replaces OAK_LOG with JUKEBOX.
+                server.getOverworld().setBlockState(
+                        jukeboxFullPos, Blocks.JUKEBOX.getDefaultState(), Block.NOTIFY_LISTENERS);
+                // BOTTOM_SLAB lane: replaces STONE with JUKEBOX.
+                server.getOverworld().setBlockState(
+                        probePos, Blocks.JUKEBOX.getDefaultState(), Block.NOTIFY_LISTENERS);
+            });
+
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world is null during jukebox slab-sit check");
+                }
+                BlockState fullJukebox = mc.world.getBlockState(jukeboxFullPos);
+                BlockState slabJukebox = mc.world.getBlockState(probePos);
+                if (!fullJukebox.isOf(Blocks.JUKEBOX)) {
+                    throw new RuntimeException(
+                            "client: FULL-lane jukebox missing at " + jukeboxFullPos.toShortString()
+                            + ", found: " + fullJukebox.getBlock().getTranslationKey());
+                }
+                if (!slabJukebox.isOf(Blocks.JUKEBOX)) {
+                    throw new RuntimeException(
+                            "client: BOTTOM_SLAB-lane jukebox missing at " + probePos.toShortString()
+                            + ", found: " + slabJukebox.getBlock().getTranslationKey());
+                }
+
+                // FULL lane: no slab below → dy must be 0.0, outline minY == 0.0.
+                double dyFull = SlabSupport.getYOffset(mc.world, jukeboxFullPos, fullJukebox);
+                if (dyFull != 0.0) {
+                    throw new RuntimeException(
+                            "FULL-lane JUKEBOX must not lower; got dy=" + dyFull
+                            + " (isSlabSitCandidate firing without a slab in column?)");
+                }
+
+                // BOTTOM_SLAB lane: BlockEntityProvider + bottom slab below →
+                // dy must be -0.5 via the isSlabSitCandidate BE allowlist.
+                double dySlab = SlabSupport.getYOffset(mc.world, probePos, slabJukebox);
+                if (dySlab != -0.5) {
+                    throw new RuntimeException(
+                            "BOTTOM_SLAB-lane JUKEBOX must lower; got dy=" + dySlab
+                            + " (isSlabSitCandidate BlockEntityProvider allowlist regressed —"
+                            + " full-cube BE blocks no longer sit on slabs)");
+                }
+
+                VoxelShape slabOutline = slabJukebox.getOutlineShape(
+                        mc.world, probePos, ShapeContext.absent());
+                if (slabOutline.isEmpty()) {
+                    throw new RuntimeException("JUKEBOX outline unexpectedly empty");
+                }
+                double slabMinY = slabOutline.getBoundingBox().minY;
+                if (slabMinY != -0.5) {
+                    throw new RuntimeException(
+                            "BOTTOM_SLAB-lane JUKEBOX outline minY expected -0.5, got " + slabMinY
+                            + " — offsetOutline mixin disagrees with shouldOffset");
+                }
+
+                // Contract: isLoweredBlockEntityVisual covers every BE block.
+                if (!SlabSupport.isLoweredBlockEntityVisual(mc.world, probePos, slabJukebox)) {
+                    throw new RuntimeException(
+                            "isLoweredBlockEntityVisual=false for BOTTOM_SLAB JUKEBOX"
+                            + " — BE contract broken");
+                }
+            });
+
+            // Reuse the model-height side view (same eye-level as OAK_LOG proof)
+            // so the reviewer can visually verify: left jukebox (FULL lane)
+            // sits flush at the stone top Y=201.0; right jukebox (BOTTOM_SLAB
+            // lane) sits on the slab top Y=200.5. The 0.5-block vertical offset
+            // is the visible proof that the full-cube BE slab-sit path is live.
+            ctx.runOnClient(mc -> {
+                if (mc.player != null) {
+                    mc.player.refreshPositionAndAngles(
+                            MODEL_CAM_X, MODEL_CAM_Y, MODEL_CAM_Z, MODEL_CAM_YAW, MODEL_CAM_PITCH);
+                }
+            });
+            singleplayer.getClientWorld().waitForChunksRender();
+            captureScreenshotAndRecord(
+                    ctx,
+                    "slabbed_jukebox_slabsit_proof",
+                    screenshotDir,
+                    knownScreenshotFiles,
+                    artifacts);
 
             writeRunManifest(screenshotDir, artifacts);
         }
