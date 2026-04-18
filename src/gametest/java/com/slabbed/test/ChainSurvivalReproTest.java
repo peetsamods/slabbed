@@ -36,6 +36,12 @@ import net.minecraft.util.math.Direction;
  * DOUBLE slab); for other faces, {@code isSideSolidFullSquare}.
  *
  * <p>Does NOT mutate production logic. These are repro/regression tests only.
+ *
+ * <p><b>Chunk unload/reload caveat:</b> the current Fabric server GameTest
+ * harness used here does not expose direct chunk unload/reload controls (no
+ * chunk-ticket management API on {@link TestContext}). Because of that,
+ * chunk-reload survival is documented as an unmodeled runtime bucket in this
+ * suite rather than being faked by direct state replacement.
  */
 public final class ChainSurvivalReproTest {
 
@@ -688,6 +694,120 @@ public final class ChainSurvivalReproTest {
         ctx.assertTrue(!forced.isAir(),
                 "X-axis copper chain forced recheck(direction=NORTH) must not drop"
                 + " when east support remains");
+
+        ctx.complete();
+    }
+
+    /**
+     * Runtime-bucket audit: multiple neighbor updates in the same tick around
+     * a supported Y-axis chain must preserve the intended final state.
+     *
+     * <p>Sequence (single server tick, no waits):
+     * <ol>
+     *   <li>Top slab support above chain remains intact throughout.</li>
+     *   <li>Mutate 4 unrelated neighbors around the chain (place/remove).
+     *       This causes multiple directional getStateForNeighborUpdate calls
+     *       in one update burst.</li>
+     *   <li>Assert final chain state is still present and forced recheck is
+     *       non-air.</li>
+     * </ol>
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainSurvivesMultiNeighborBurstSameTick(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos slabPos = chainPos.up();
+        BlockPos north = chainPos.north();
+        BlockPos south = chainPos.south();
+        BlockPos east = chainPos.east();
+        BlockPos west = chainPos.west();
+
+        world.setBlockState(slabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_ALL);
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                Block.NOTIFY_ALL);
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+                "chain not placed at " + chainPos.toShortString());
+
+        // Same-tick neighbor burst: place/remove around chain while support
+        // above remains unchanged.
+        world.setBlockState(north, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(east, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(south, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(west, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(north, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(east, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(south, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(west, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        BlockState finalState = world.getBlockState(chainPos);
+        ctx.assertTrue(finalState.isOf(Blocks.IRON_CHAIN),
+                "chain popped after same-tick multi-neighbor burst with TOP slab"
+                + " support intact; final=" + finalState.getBlock().getTranslationKey());
+
+        BlockState forced = finalState.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.NORTH,
+                north, world.getBlockState(north),
+                world.getRandom());
+        ctx.assertTrue(!forced.isAir(),
+                "forced recheck after same-tick neighbor burst returned AIR"
+                + " despite TOP slab support remaining");
+
+        ctx.complete();
+    }
+
+    /**
+     * Runtime-bucket audit: gameplay-like placement order.
+     *
+     * <p>Models a closer live sequence than direct survival calls:
+     * place temporary side scaffolding, place top slab support, place chain,
+     * remove temporary scaffolding, then pulse another nearby update.
+     * Chain should remain because axis support (top slab) is still valid.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainPlacementOrderLikeGameplayStaysStable(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos slabPos = chainPos.up();
+        BlockPos scaffoldPos = chainPos.west();
+        BlockPos pulsePos = chainPos.east();
+
+        // Step 1: temporary scaffold near placement area.
+        world.setBlockState(scaffoldPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+
+        // Step 2: actual support for the chain.
+        world.setBlockState(slabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_ALL);
+
+        // Step 3: place chain in supported position.
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                Block.NOTIFY_ALL);
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+                "chain not placed in gameplay-order scenario");
+
+        // Step 4: remove temporary scaffold (common live action).
+        world.setBlockState(scaffoldPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        // Step 5: trigger an additional nearby update in same slice.
+        world.setBlockState(pulsePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(pulsePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        BlockState finalState = world.getBlockState(chainPos);
+        ctx.assertTrue(finalState.isOf(Blocks.IRON_CHAIN),
+                "chain popped during gameplay-like placement/removal ordering; final="
+                + finalState.getBlock().getTranslationKey());
+
+        BlockState forced = finalState.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.WEST,
+                scaffoldPos, world.getBlockState(scaffoldPos),
+                world.getRandom());
+        ctx.assertTrue(!forced.isAir(),
+                "forced recheck after gameplay-like ordering returned AIR"
+                + " with TOP slab support still above");
 
         ctx.complete();
     }
