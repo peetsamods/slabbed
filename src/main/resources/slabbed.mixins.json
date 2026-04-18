@@ -3,7 +3,6 @@
   "package": "com.slabbed.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "ChainBlockNeighborSurvivalMixin",
     "HangingSignAttachedMixin",
     "CarpetBlockMixin",
     "torch.TorchBlockMixin",
