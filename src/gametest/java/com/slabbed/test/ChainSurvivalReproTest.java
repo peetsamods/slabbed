@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -317,6 +318,264 @@ public final class ChainSurvivalReproTest {
                 "unsupported chain forced recheck must return AIR; got "
                 + forced.getBlock().getTranslationKey()
                 + " (slabbed$hasAxisSupport false-positive in empty column)");
+
+        ctx.complete();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Remaining-gap coverage — horizontal axes, bottom-slab contract,
+    // through-chain walk, mixed-cascade on horizontal.
+    //
+    // Per Yarn 1.21.11 mappings (mappings.tiny at class_5172 /
+    // net.minecraft.block.ChainBlock), ChainBlock declares only CODEC,
+    // WATERLOGGED, and SHAPES_BY_AXIS — no scheduledTick, no neighborUpdate,
+    // no canPlaceAt override. The only survival hook this mod installs is
+    // ChainBlockNeighborSurvivalMixin on getStateForNeighborUpdate.
+    // There is therefore NO separate scheduled-tick path to cover; the six
+    // tests below exercise every remaining category that could trigger a
+    // chain pop-off via the neighbor-update path.
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * X-axis chain supported only by a stone on its east end must survive an
+     * initial recheck. Positive baseline for the horizontal axis walk.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void xAxisChainWithStoneEastSupportSurvives(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos supportPos = chainPos.offset(Direction.EAST);
+
+        world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
+                Block.NOTIFY_ALL);
+
+        BlockState chainState = world.getBlockState(chainPos);
+        ctx.assertTrue(chainState.isOf(Blocks.IRON_CHAIN),
+                "X-axis chain not placed at " + chainPos.toShortString());
+
+        BlockState forced = chainState.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.EAST,
+                supportPos, world.getBlockState(supportPos),
+                world.getRandom());
+        ctx.assertTrue(!forced.isAir(),
+                "X-axis chain with stone east must survive recheck; got AIR"
+                + " (horizontal axis walk isSideSolidFullSquare(WEST) failed)");
+
+        ctx.complete();
+    }
+
+    /**
+     * X-axis chain must drop when its single east-end stone support is
+     * removed. Negative baseline for horizontal axis.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void xAxisChainDropsWhenSoleSupportRemoved(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos supportPos = chainPos.offset(Direction.EAST);
+
+        world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
+                Block.NOTIFY_ALL);
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+                "X-axis chain not placed");
+
+        world.setBlockState(supportPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        BlockState after = world.getBlockState(chainPos);
+        if (after.isAir()) {
+            ctx.complete();
+            return;
+        }
+        BlockState forced = after.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.EAST,
+                supportPos, Blocks.AIR.getDefaultState(),
+                world.getRandom());
+        ctx.assertTrue(forced.isAir(),
+                "X-axis chain must drop after sole east support removed; world="
+                + after.getBlock().getTranslationKey()
+                + ", forced=" + forced.getBlock().getTranslationKey());
+
+        ctx.complete();
+    }
+
+    /**
+     * X-axis chain with stone east (axis support) and stone north (unrelated
+     * neighbor) must SURVIVE removal of the unrelated neighbor. Closest
+     * headless match for the "removing a nearby block pops my chain" live
+     * class, applied to horizontal axis.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void xAxisChainSurvivesUnrelatedNeighborRemoval(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos supportPos = chainPos.offset(Direction.EAST);
+        BlockPos unrelatedPos = chainPos.offset(Direction.NORTH);
+
+        world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(unrelatedPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
+                Block.NOTIFY_ALL);
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+                "X-axis chain not placed");
+
+        world.setBlockState(unrelatedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        BlockState after = world.getBlockState(chainPos);
+        ctx.assertTrue(after.isOf(Blocks.IRON_CHAIN),
+                "X-axis chain must survive NORTH-neighbor removal when east"
+                + " support is still present; found "
+                + after.getBlock().getTranslationKey());
+
+        // Force the exact per-direction recheck the world makes.
+        BlockState forced = after.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.NORTH,
+                unrelatedPos, Blocks.AIR.getDefaultState(),
+                world.getRandom());
+        ctx.assertTrue(!forced.isAir(),
+                "X-axis chain forced recheck (direction=NORTH) must not drop"
+                + " chain; east stone still provides axis support");
+
+        ctx.complete();
+    }
+
+    /**
+     * Z-axis chain with stone south (axis support) and stone east (unrelated
+     * neighbor). Symmetric to the X-axis unrelated-neighbor-removal test;
+     * guards against axis-direction-specific bugs in slabbed$hasAxisSupport.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void zAxisChainSurvivesUnrelatedNeighborRemoval(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos supportPos = chainPos.offset(Direction.SOUTH);
+        BlockPos unrelatedPos = chainPos.offset(Direction.EAST);
+
+        world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(unrelatedPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Z),
+                Block.NOTIFY_ALL);
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+                "Z-axis chain not placed");
+
+        world.setBlockState(unrelatedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        BlockState after = world.getBlockState(chainPos);
+        ctx.assertTrue(after.isOf(Blocks.IRON_CHAIN),
+                "Z-axis chain must survive EAST-neighbor removal when south"
+                + " support is still present; found "
+                + after.getBlock().getTranslationKey());
+
+        BlockState forced = after.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.EAST,
+                unrelatedPos, Blocks.AIR.getDefaultState(),
+                world.getRandom());
+        ctx.assertTrue(!forced.isAir(),
+                "Z-axis chain forced recheck (direction=EAST) must not drop"
+                + " chain; south stone still provides axis support");
+
+        ctx.complete();
+    }
+
+    /**
+     * Bottom-slab-above contract test.
+     *
+     * <p>Two claims in one proof:
+     * <ol>
+     *   <li><b>Internal contract:</b>
+     *       {@link SlabSupport#isCeilingSupportBottomSurface} must return
+     *       {@code false} for a BOTTOM slab — BOTTOM slabs are not
+     *       ceiling support (only TOP and DOUBLE are).</li>
+     *   <li><b>End-to-end:</b> a Y-axis chain under a bottom slab still
+     *       survives because the slab's DOWN face IS a full solid square
+     *       (the slab occupies y=[0,0.5], its bottom y=0 face is a full
+     *       plane). The mixin's generic {@code isSideSolidFullSquare} branch
+     *       picks it up even though the ceiling-support branch does not.</li>
+     * </ol>
+     *
+     * <p>This pins the boundary so a future change that reroutes the ceiling
+     * surface path (e.g., adding BOTTOM to {@code isCeilingSupportBottomSurface})
+     * cannot silently change semantics.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void bottomSlabAboveCeilingContract(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos slabPos = chainPos.up();
+
+        world.setBlockState(slabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_ALL);
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                Block.NOTIFY_ALL);
+
+        // Claim 1: internal ceiling-support contract.
+        ctx.assertTrue(
+                !SlabSupport.isCeilingSupportBottomSurface(world, slabPos),
+                "BOTTOM slab must NOT be reported as ceiling support by"
+                + " SlabSupport.isCeilingSupportBottomSurface");
+
+        // Claim 2: chain still survives (bottom slab's DOWN face is a full
+        // solid square under vanilla semantics — its y=0 plane IS solid).
+        BlockState chainState = world.getBlockState(chainPos);
+        ctx.assertTrue(chainState.isOf(Blocks.IRON_CHAIN),
+                "chain under bottom slab not placed");
+
+        BlockState forced = chainState.getStateForNeighborUpdate(
+                world, world, chainPos, Direction.UP,
+                slabPos, world.getBlockState(slabPos),
+                world.getRandom());
+        ctx.assertTrue(!forced.isAir(),
+                "Y-axis chain under BOTTOM slab must survive via generic"
+                + " isSideSolidFullSquare(DOWN) — slab's y=0 face is a full"
+                + " solid square; got AIR (axis walk lost vanilla-geometry"
+                + " fallback)");
+
+        ctx.complete();
+    }
+
+    /**
+     * Horizontal through-chain walk: X-axis chain A, intermediate X-axis
+     * chain A+east, stone at A+2×east. Chain A must survive because the
+     * axis walk traverses the intermediate same-axis chain to reach stone
+     * support 2 blocks away.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void xAxisThroughChainWalkReachesDistantSupport(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos chainA = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos chainB = chainA.offset(Direction.EAST);
+        BlockPos supportPos = chainB.offset(Direction.EAST);
+
+        BlockState chainX = Blocks.IRON_CHAIN.getDefaultState()
+                .with(ChainBlock.AXIS, Direction.Axis.X);
+
+        world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(chainB, chainX, Block.NOTIFY_ALL);
+        world.setBlockState(chainA, chainX, Block.NOTIFY_ALL);
+
+        ctx.assertTrue(world.getBlockState(chainA).isOf(Blocks.IRON_CHAIN),
+                "chainA not placed");
+        ctx.assertTrue(world.getBlockState(chainB).isOf(Blocks.IRON_CHAIN),
+                "chainB not placed");
+
+        BlockState stateA = world.getBlockState(chainA);
+        BlockState forced = stateA.getStateForNeighborUpdate(
+                world, world, chainA, Direction.WEST,
+                chainA.offset(Direction.WEST),
+                world.getBlockState(chainA.offset(Direction.WEST)),
+                world.getRandom());
+        ctx.assertTrue(!forced.isAir(),
+                "X-axis chainA must survive recheck via through-chain walk"
+                + " to stone at chainA+2×east; got AIR"
+                + " (slabbed$walkChainForSupport failed to traverse same-axis"
+                + " chainB)");
 
         ctx.complete();
     }
