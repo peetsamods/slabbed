@@ -6,6 +6,7 @@
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
+    "GameRendererCrosshairRetargetMixin",
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin",
     "SectionBuilderMixin"
