@@ -6,6 +6,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ChainBlock;
+import net.minecraft.block.PistonBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.server.world.ServerWorld;
@@ -810,5 +811,165 @@ public final class ChainSurvivalReproTest {
                 + " with TOP slab support still above");
 
         ctx.complete();
+    }
+
+    /**
+     * Cross-system (piston) nearby pulse:
+     * a sticky piston extends/retracts a nearby side block, but the chain's
+     * actual top-slab support remains intact throughout. Chain must survive.
+     *
+     * <p>Modeling boundary: this harness validates externally observable state
+     * transitions only (final block states + forced neighbor recheck). It
+     * does not introspect the internal vanilla BlockEvent queue directly.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainUnderTopSlabSurvivesNearbyPistonExtendRetract(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos slabPos = chainPos.up();
+
+        BlockPos pistonPos = chainPos.west(3);
+        BlockPos movablePos = chainPos.west(2);
+        BlockPos powerPos = pistonPos.west();
+
+        world.setBlockState(slabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_ALL);
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                Block.NOTIFY_ALL);
+
+        world.setBlockState(pistonPos,
+                Blocks.STICKY_PISTON.getDefaultState().with(PistonBlock.FACING, Direction.EAST),
+                Block.NOTIFY_ALL);
+        world.setBlockState(movablePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+                "chain not placed before nearby piston pulse");
+
+        // Tick 1: extend piston.
+        ctx.runAtTick(1, () -> world.setBlockState(powerPos, Blocks.REDSTONE_BLOCK.getDefaultState(), Block.NOTIFY_ALL));
+
+        // Tick 3: retract piston.
+        ctx.runAtTick(3, () -> world.setBlockState(powerPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL));
+
+        // Tick 8: chain should still be present; support above never changed.
+        ctx.runAtTick(8, () -> {
+            BlockState finalState = world.getBlockState(chainPos);
+            ctx.assertTrue(finalState.isOf(Blocks.IRON_CHAIN),
+                    "chain popped after nearby piston extend/retract with TOP slab support intact; final="
+                    + finalState.getBlock().getTranslationKey());
+
+            BlockState forced = finalState.getStateForNeighborUpdate(
+                    world, world, chainPos, Direction.WEST,
+                    chainPos.west(), world.getBlockState(chainPos.west()),
+                    world.getRandom());
+            ctx.assertTrue(!forced.isAir(),
+                    "forced recheck after nearby piston pulse returned AIR despite TOP slab support");
+
+            ctx.complete();
+        });
+    }
+
+    /**
+     * Cross-system (piston) support removal:
+     * piston moves the TOP slab that is the chain's sole support off the
+     * support position. Chain must drop.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainDropsWhenPistonMovesTopSlabSupportAway(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos slabPos = chainPos.up();
+        BlockPos pistonPos = slabPos.west();
+        BlockPos powerPos = pistonPos.west();
+
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                Block.NOTIFY_ALL);
+        world.setBlockState(slabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_ALL);
+        world.setBlockState(pistonPos,
+                Blocks.PISTON.getDefaultState().with(PistonBlock.FACING, Direction.EAST),
+                Block.NOTIFY_ALL);
+
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+                "chain not placed before piston-driven support move");
+
+        // Tick 1: power piston; slab above chain is pushed east off support spot.
+        ctx.runAtTick(1, () -> world.setBlockState(powerPos, Blocks.REDSTONE_BLOCK.getDefaultState(), Block.NOTIFY_ALL));
+
+        // Tick 6: chain should be gone (or forced recheck must return AIR).
+        ctx.runAtTick(6, () -> {
+            BlockState after = world.getBlockState(chainPos);
+            if (after.isAir()) {
+                ctx.complete();
+                return;
+            }
+
+            BlockState forced = after.getStateForNeighborUpdate(
+                    world, world, chainPos, Direction.UP,
+                    slabPos, world.getBlockState(slabPos),
+                    world.getRandom());
+            ctx.assertTrue(forced.isAir(),
+                    "chain should drop after piston moved TOP slab support away; world="
+                    + after.getBlock().getTranslationKey()
+                    + ", forced=" + forced.getBlock().getTranslationKey());
+
+            ctx.complete();
+        });
+    }
+
+    /**
+     * Cross-system (observer/redstone-style pulse ordering):
+     * nearby observer receives two deterministic block changes across ticks.
+     * Chain must survive this pulse ordering while TOP slab support stays intact.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainUnderTopSlabSurvivesNearbyObserverPulseOrdering(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+
+        BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos slabPos = chainPos.up();
+
+        BlockPos observerPos = chainPos.west();
+        BlockPos observedPos = observerPos.west();
+
+        world.setBlockState(slabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_ALL);
+        world.setBlockState(chainPos,
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                Block.NOTIFY_ALL);
+
+        world.setBlockState(observerPos,
+                Blocks.OBSERVER.getDefaultState().with(net.minecraft.state.property.Properties.FACING, Direction.WEST),
+                Block.NOTIFY_ALL);
+
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+                "chain not placed before observer pulse ordering");
+
+        // Deterministic nearby pulse ordering: two observed block mutations.
+        ctx.runAtTick(1, () -> world.setBlockState(observedPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL));
+        ctx.runAtTick(3, () -> world.setBlockState(observedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL));
+
+        ctx.runAtTick(8, () -> {
+            BlockState finalState = world.getBlockState(chainPos);
+            ctx.assertTrue(finalState.isOf(Blocks.IRON_CHAIN),
+                    "chain popped during nearby observer pulse ordering with TOP slab support intact; final="
+                    + finalState.getBlock().getTranslationKey());
+
+            BlockState forced = finalState.getStateForNeighborUpdate(
+                    world, world, chainPos, Direction.WEST,
+                    observerPos, world.getBlockState(observerPos),
+                    world.getRandom());
+            ctx.assertTrue(!forced.isAir(),
+                    "forced recheck after observer pulse ordering returned AIR despite TOP slab support");
+
+            ctx.complete();
+        });
     }
 }
