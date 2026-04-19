@@ -25,6 +25,12 @@ These rules are intentionally strict. Slabbed must remain predictable, reversibl
   - a dedicated branch,
   - and a dedicated tag.
 
+### Current slab-sit product policy
+- Current slab-sit categories are selective, not broad full-block anchoring.
+- Allowed examples: chest, barrel, furnace, jukebox, crafting table, carpet, chain.
+- Excluded examples: stone, dirt, sand, planks, cobble, terracotta.
+- Broad support for ordinary solid full blocks anchoring on slab tops would be a separate scoped feature, not a bugfix.
+
 ## 6) Visual audit gate is mandatory
 - No `slabbed-<category>-pass` tag unless the category passes `slabbed-visual-alignment-audit`.
 
