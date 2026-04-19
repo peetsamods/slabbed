@@ -10,6 +10,7 @@ import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.CaveVinesBodyBlock;
 import net.minecraft.block.CaveVinesHeadBlock;
 import net.minecraft.block.ChainBlock;
+import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.HangingRootsBlock;
 import net.minecraft.block.HangingSignBlock;
@@ -463,7 +464,11 @@ public final class SlabSupport {
      * visually drop when a slab happens to sit below it.
      */
     private static boolean isSlabSitCandidate(BlockView world, BlockPos pos, BlockState state) {
-        if (state.getBlock() instanceof BlockEntityProvider) {
+        Block block = state.getBlock();
+        if (block instanceof BlockEntityProvider) {
+            return true;
+        }
+        if (block instanceof CraftingTableBlock) {
             return true;
         }
         return !state.isSolidBlock(world, pos);
