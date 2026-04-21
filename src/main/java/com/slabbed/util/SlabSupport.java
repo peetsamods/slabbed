@@ -290,13 +290,9 @@ public final class SlabSupport {
         }
 
         // ── direct + recursive chain ──────────────────────────────────
-        // Category helper isSlabSitCandidate gates the generic column walk.
-        // Lowers non-solid blocks (signs, chests, fences, panes, ...) AND
-        // every BlockEntityProvider (jukebox, spawner, beacon, end portal
-        // frame, ...) so full-cube BEs follow the same slab-sit contract as
-        // chests. Plain solid world cubes (stone, dirt, planks, sand, ...)
-        // stay excluded so natural terrain does not visually drop.
-        if (isSlabSitCandidate(world, pos, state) && hasSlabInColumn(world, pos)) {
+        // Intended product behavior: ordinary full blocks may anchor to slab
+        // columns as long as this remains in slab context.
+        if (hasSlabInColumn(world, pos)) {
             return true;
         }
 
