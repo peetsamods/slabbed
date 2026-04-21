@@ -20,15 +20,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * <p>Client-side raycast retarget for lowered block-entity-style blocks
- * (chests, etc.) placed on bottom slabs.
+ * <p>Client-side raycast retarget for lowered owners placed on bottom slabs.
  *
- * <p>When the chest's visible lower half extends into {@code pos.down()}'s
+ * <p>When the lowered block's visible lower half extends into {@code pos.down()}'s
  * voxel, vanilla per-voxel DDA raycast hits the slab below before it can
- * consider the chest's offset shape at {@code pos}. After vanilla
+ * consider the offset shape at {@code pos}. After vanilla
  * {@link GameRenderer#updateCrosshairTarget} has resolved the crosshair,
  * we re-test the ray against the owning block above (if it qualifies per
- * {@link SlabSupport#isLoweredBlockEntityVisual}) and, if the ray hits
+ * the lowered-owner helpers in {@link SlabSupport}) and, if the ray hits
  * its offset shape at an equal or closer distance, we replace
  * {@link MinecraftClient#crosshairTarget} with that result.
  *
@@ -64,11 +63,22 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
         BlockPos abovePos = slabHit.getBlockPos().up();
         BlockState aboveState = world.getBlockState(abovePos);
-        if (!SlabSupport.isLoweredBlockEntityVisual(world, abovePos, aboveState)
-                && !SlabSupport.isLoweredTorchVisual(world, abovePos, aboveState)) {
-            if (!SlabSupport.isLoweredBedVisual(world, abovePos, aboveState)) {
-                return;
-            }
+        boolean loweredOwner =
+                SlabSupport.isLoweredBlockEntityVisual(world, abovePos, aboveState)
+                        || SlabSupport.isLoweredTorchVisual(world, abovePos, aboveState)
+                        || SlabSupport.isLoweredBedVisual(world, abovePos, aboveState);
+        if (!loweredOwner) {
+            // Ordinary solid full blocks have an unambiguous owner signature:
+            // a lowered full-cube outline directly above the slab hit. Keep
+            // crafting tables out of this pass because they remain a no-go.
+            net.minecraft.block.Block block = aboveState.getBlock();
+            loweredOwner = aboveState.isSolidBlock(world, abovePos)
+                    && !(block instanceof net.minecraft.block.BlockEntityProvider)
+                    && !(block instanceof net.minecraft.block.CraftingTableBlock)
+                    && SlabSupport.getYOffset(world, abovePos, aboveState) == -0.5;
+        }
+        if (!loweredOwner) {
+            return;
         }
 
         Vec3d eye = cam.getCameraPosVec(tickProgress);
