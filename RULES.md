@@ -49,6 +49,15 @@ These rules are intentionally strict. Slabbed must remain predictable, reversibl
 - Build must pass before commit.
 - Tag milestones and first-working behaviors.
 
+## 10) Rescue boundary discipline
+- There must be exactly one post-vanilla crosshair rewrite site unless a later slice proves otherwise.
+- Lowered visuals are not automatically valid rescue targets.
+- A non-BE class may only get rescue logic if it has a class-owned targeting or ownership signal, not merely participation in shared slab-support lowering.
+- Proven rescue targets so far: lowered block entities, torch family, bed family.
+- Audited no-go targets so far: chain, crafting table.
+- Do not broaden rescue from generic `isSlabSitCandidate(...)`, generic ceiling-attached logic, or generic shared support checks alone.
+- Do not add packet/interact rewrite logic as a substitute for hit-ownership proof.
+
 ## 10) Stop conditions
 Stop immediately and do not continue “pushing forward” if:
 - build fails and the cause isn’t clear
