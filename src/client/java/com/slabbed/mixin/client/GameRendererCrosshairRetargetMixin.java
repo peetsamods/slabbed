@@ -66,7 +66,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
         BlockState aboveState = world.getBlockState(abovePos);
         if (!SlabSupport.isLoweredBlockEntityVisual(world, abovePos, aboveState)
                 && !SlabSupport.isLoweredTorchVisual(world, abovePos, aboveState)) {
-            return;
+            if (!SlabSupport.isLoweredBedVisual(world, abovePos, aboveState)) {
+                return;
+            }
         }
 
         Vec3d eye = cam.getCameraPosVec(tickProgress);

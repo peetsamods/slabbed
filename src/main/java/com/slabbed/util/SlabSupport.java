@@ -440,6 +440,15 @@ public final class SlabSupport {
         return getYOffset(world, pos, state) == -0.5;
     }
 
+    public static boolean isLoweredBedVisual(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        return state.getBlock() instanceof net.minecraft.block.BedBlock
+                && state.contains(Properties.BED_PART)
+                && getYOffset(world, pos, state) == -0.5;
+    }
+
     /**
      * Redstone dust support surface — treat slab tops like valid ground for downward stepping.
      */
