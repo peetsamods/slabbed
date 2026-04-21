@@ -64,7 +64,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
         BlockPos abovePos = slabHit.getBlockPos().up();
         BlockState aboveState = world.getBlockState(abovePos);
-        if (!SlabSupport.isLoweredBlockEntityVisual(world, abovePos, aboveState)) {
+        if (!SlabSupport.isLoweredBlockEntityVisual(world, abovePos, aboveState)
+                && !SlabSupport.isLoweredTorchVisual(world, abovePos, aboveState)) {
             return;
         }
 
