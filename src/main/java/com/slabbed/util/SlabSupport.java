@@ -428,6 +428,18 @@ public final class SlabSupport {
         return getYOffset(world, pos, state) == -0.5;
     }
 
+    public static boolean isLoweredTorchVisual(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        Block block = state.getBlock();
+        if (!(block instanceof net.minecraft.block.TorchBlock
+                || block instanceof net.minecraft.block.WallTorchBlock)) {
+            return false;
+        }
+        return getYOffset(world, pos, state) == -0.5;
+    }
+
     /**
      * Redstone dust support surface — treat slab tops like valid ground for downward stepping.
      */
