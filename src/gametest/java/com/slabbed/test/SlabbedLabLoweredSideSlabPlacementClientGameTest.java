@@ -33,6 +33,7 @@ public final class SlabbedLabLoweredSideSlabPlacementClientGameTest implements F
             SlabbedLabClientGameTest.writeRunManifest(screenshotDir, artifacts);
             SlabbedLabClientGameTest.assertLoweredSideSlabProofArtifacts(screenshotDir);
             SlabbedLabClientGameTest.writeProofSummary(screenshotDir);
+            SlabbedLabClientGameTest.writeProofIndex(screenshotDir);
         }
     }
 }
