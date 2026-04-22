@@ -726,6 +726,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             writeProofIndex(screenshotDir);
             writeLatestProofRun(screenshotDir);
             writeProofReceipt(screenshotDir);
+            assertLoweredSideSlabProofBundle(screenshotDir);
         }
     }
 
@@ -2105,6 +2106,127 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
+    static void assertLoweredSideSlabProofBundle(Path screenshotDir) {
+        Path manifestPath = screenshotDir.resolve("run_manifest.json");
+        Path summaryPath = screenshotDir.resolve("proof_summary.json");
+        Path indexPath = screenshotDir.resolve("proof_index.json");
+        Path latestPath = screenshotDir.resolve("latest_proof_run.json");
+        Path receiptPath = screenshotDir.resolve("proof_receipt.md");
+        if (!Files.isRegularFile(manifestPath)) {
+            throw new RuntimeException("bundle smoke check missing manifest: " + manifestPath.toAbsolutePath());
+        }
+        if (!Files.isRegularFile(summaryPath)) {
+            throw new RuntimeException("bundle smoke check missing summary: " + summaryPath.toAbsolutePath());
+        }
+        if (!Files.isRegularFile(indexPath)) {
+            throw new RuntimeException("bundle smoke check missing index: " + indexPath.toAbsolutePath());
+        }
+        if (!Files.isRegularFile(latestPath)) {
+            throw new RuntimeException("bundle smoke check missing latest pointer: " + latestPath.toAbsolutePath());
+        }
+        if (!Files.isRegularFile(receiptPath)) {
+            throw new RuntimeException("bundle smoke check missing receipt: " + receiptPath.toAbsolutePath());
+        }
+
+        final String manifestJson;
+        final String summaryJson;
+        final String indexJson;
+        final String latestJson;
+        final String receiptText;
+        try {
+            manifestJson = Files.readString(manifestPath);
+            summaryJson = Files.readString(summaryPath);
+            indexJson = Files.readString(indexPath);
+            latestJson = Files.readString(latestPath);
+            receiptText = Files.readString(receiptPath);
+        } catch (IOException e) {
+            throw new RuntimeException("bundle smoke check failed to read proof artifacts", e);
+        }
+
+        String manifestHead = extractJsonStringValue(manifestJson, "gitHeadShort");
+        String summaryHead = extractJsonStringValue(summaryJson, "gitHeadShort");
+        String indexHead = extractJsonStringValue(indexJson, "gitHeadShort");
+        String latestHead = extractJsonStringValue(latestJson, "gitHeadShort");
+        String receiptHead = extractMarkdownLineValue(receiptText, "- gitHeadShort:");
+        assertSharedBundleValue("gitHeadShort", manifestHead, summaryHead, indexHead, latestHead, receiptHead);
+
+        String manifestBranch = extractJsonStringValue(manifestJson, "gitBranch");
+        String summaryBranch = extractJsonStringValue(summaryJson, "gitBranch");
+        String indexBranch = extractJsonStringValue(indexJson, "gitBranch");
+        String latestBranch = extractJsonStringValue(latestJson, "gitBranch");
+        String receiptBranch = extractMarkdownLineValue(receiptText, "- gitBranch:");
+        assertSharedBundleValue("gitBranch", manifestBranch, summaryBranch, indexBranch, latestBranch, receiptBranch);
+
+        String summaryOverallStatus = extractJsonStringValue(summaryJson, "overallStatus");
+        String latestOverallStatus = extractJsonStringValue(latestJson, "overallStatus");
+        String receiptOverallStatus = extractMarkdownLineValue(receiptText, "- overallStatus:");
+        if (summaryOverallStatus == null || summaryOverallStatus.isBlank()) {
+            throw new RuntimeException("bundle smoke check missing overallStatus in summary");
+        }
+        if (latestOverallStatus == null || latestOverallStatus.isBlank()) {
+            throw new RuntimeException("bundle smoke check missing overallStatus in latest pointer");
+        }
+        if (receiptOverallStatus == null || receiptOverallStatus.isBlank()) {
+            throw new RuntimeException("bundle smoke check missing overallStatus in receipt");
+        }
+        assertSharedBundleValue(
+                "overallStatus",
+                summaryOverallStatus,
+                latestOverallStatus,
+                receiptOverallStatus);
+
+        String summaryExpectedCount = extractJsonNumericValue(summaryJson, "expectedProofCount");
+        String indexProofCount = extractJsonNumericValue(indexJson, "proofCount");
+        String latestExpectedCount = extractJsonNumericValue(latestJson, "expectedProofCount");
+        String receiptExpectedCount = extractMarkdownLineValue(receiptText, "- expectedProofCount:");
+        if (summaryExpectedCount == null || summaryExpectedCount.isBlank()) {
+            throw new RuntimeException("bundle smoke check missing expectedProofCount in summary");
+        }
+        if (indexProofCount == null || indexProofCount.isBlank()) {
+            throw new RuntimeException("bundle smoke check missing proofCount in index");
+        }
+        if (latestExpectedCount == null || latestExpectedCount.isBlank()) {
+            throw new RuntimeException("bundle smoke check missing expectedProofCount in latest pointer");
+        }
+        if (receiptExpectedCount == null || receiptExpectedCount.isBlank()) {
+            throw new RuntimeException("bundle smoke check missing expectedProofCount in receipt");
+        }
+        assertSharedBundleValue(
+                "expectedProofCount",
+                summaryExpectedCount,
+                indexProofCount,
+                latestExpectedCount,
+                receiptExpectedCount);
+
+        String latestManifestFile = extractJsonStringValue(latestJson, "manifestFile");
+        String latestSummaryFile = extractJsonStringValue(latestJson, "summaryFile");
+        String latestIndexFile = extractJsonStringValue(latestJson, "indexFile");
+        if (!"run_manifest.json".equals(latestManifestFile)) {
+            throw new RuntimeException("bundle smoke check latest pointer manifestFile drifted: " + latestManifestFile);
+        }
+        if (!"proof_summary.json".equals(latestSummaryFile)) {
+            throw new RuntimeException("bundle smoke check latest pointer summaryFile drifted: " + latestSummaryFile);
+        }
+        if (!"proof_index.json".equals(latestIndexFile)) {
+            throw new RuntimeException("bundle smoke check latest pointer indexFile drifted: " + latestIndexFile);
+        }
+
+        String manifestProofCount = Integer.toString(countOccurrences(manifestJson, "\"proofId\": \""));
+        if (!Integer.toString(LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS.size()).equals(manifestProofCount)) {
+            throw new RuntimeException(
+                    "bundle smoke check manifest proof count drifted: "
+                    + manifestProofCount
+                    + " expected="
+                    + LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS.size());
+        }
+
+        for (String proofId : LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS) {
+            if (!receiptText.contains(proofId)) {
+                throw new RuntimeException("bundle smoke check receipt missing proof row: " + proofId);
+            }
+        }
+    }
+
     static void assertLoweredSideSlabProofArtifacts(Path screenshotDir) {
         Path manifestPath = screenshotDir.resolve("run_manifest.json");
         if (!Files.isRegularFile(manifestPath)) {
@@ -2542,6 +2664,62 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             return null;
         }
         return json.substring(firstQuoteIndex + 1, secondQuoteIndex);
+    }
+
+    static String extractMarkdownLineValue(String markdown, String prefix) {
+        if (markdown == null || prefix == null) {
+            return null;
+        }
+        for (String line : markdown.split("\\R")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith(prefix)) {
+                return trimmed.substring(prefix.length()).trim();
+            }
+        }
+        return null;
+    }
+
+    static String extractJsonNumericValue(String json, String key) {
+        String needle = "\"" + key + "\"";
+        int keyIndex = json.indexOf(needle);
+        if (keyIndex < 0) {
+            return null;
+        }
+        int colonIndex = json.indexOf(':', keyIndex + needle.length());
+        if (colonIndex < 0) {
+            return null;
+        }
+        int cursor = colonIndex + 1;
+        while (cursor < json.length() && Character.isWhitespace(json.charAt(cursor))) {
+            cursor++;
+        }
+        int end = cursor;
+        while (end < json.length()) {
+            char c = json.charAt(end);
+            if (!(Character.isDigit(c) || c == '-' || c == '+')) {
+                break;
+            }
+            end++;
+        }
+        if (end == cursor) {
+            return null;
+        }
+        return json.substring(cursor, end);
+    }
+
+    static void assertSharedBundleValue(String field, String... values) {
+        String canonical = null;
+        for (String value : values) {
+            if (value == null || value.isBlank()) {
+                throw new RuntimeException("bundle smoke check missing " + field);
+            }
+            if (canonical == null) {
+                canonical = value.trim();
+            } else if (!canonical.equals(value.trim())) {
+                throw new RuntimeException(
+                        "bundle smoke check mismatch for " + field + ": " + java.util.Arrays.toString(values));
+            }
+        }
     }
 
     static String escapeMarkdownCell(String raw) {
