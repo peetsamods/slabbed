@@ -27,12 +27,15 @@ import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -1989,7 +1992,9 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         try {
             Files.createDirectories(screenshotDir);
             Path manifestPath = screenshotDir.resolve("run_manifest.json");
-            String json = buildManifestJson(screenshotDir, artifacts);
+            RunProvenance provenance = readRunProvenance();
+            List<ProofManifestEntry> proofEntries = buildLoweredSideSlabProofEntries(screenshotDir);
+            String json = buildManifestJson(screenshotDir, artifacts, provenance, proofEntries);
             Files.writeString(manifestPath, json);
         } catch (IOException ignored) {
             // Manifest emission is auxiliary evidence; test correctness remains assertion-driven.
@@ -2013,52 +2018,90 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
 
         List<String> missingNotes = new ArrayList<>();
+        List<String> missingPrimaryScreenshots = new ArrayList<>();
         List<String> missingManifestProofIds = new ArrayList<>();
+        List<String> missingProvenanceKeys = new ArrayList<>();
+        for (String key : List.of("generatedAtUtc", "gitHeadShort", "gitBranch", "gitTagsAtHead")) {
+            if (!manifestJson.contains("\"" + key + "\"")) {
+                missingProvenanceKeys.add(key);
+            }
+        }
         for (String proofId : LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS) {
             Path notesPath = screenshotDir.resolve(proofId + "_notes.json");
             if (!Files.isRegularFile(notesPath)) {
                 missingNotes.add(notesPath.getFileName().toString());
             }
-            if (!manifestJson.contains("\"proofId\": \"" + proofId + "\"")) {
+            String primaryScreenshotFile = resolveScreenshotFileNameForProofId(screenshotDir, proofId);
+            if (primaryScreenshotFile == null
+                    || !manifestJson.contains("\"primaryScreenshotFile\": \"" + primaryScreenshotFile + "\"")) {
+                missingPrimaryScreenshots.add(proofId);
+            }
+            if (countOccurrences(manifestJson, "\"proofId\": \"" + proofId + "\"") != 1) {
                 missingManifestProofIds.add(proofId);
             }
         }
 
-        if (!missingNotes.isEmpty() || !missingManifestProofIds.isEmpty()) {
+        if (!missingNotes.isEmpty()
+                || !missingPrimaryScreenshots.isEmpty()
+                || !missingManifestProofIds.isEmpty()
+                || !missingProvenanceKeys.isEmpty()) {
             StringBuilder message = new StringBuilder("lowered-side-slab proof ladder is incomplete");
             if (!missingNotes.isEmpty()) {
                 message.append("; missing notes: ").append(missingNotes);
             }
+            if (!missingPrimaryScreenshots.isEmpty()) {
+                message.append("; missing primary screenshots: ").append(missingPrimaryScreenshots);
+            }
             if (!missingManifestProofIds.isEmpty()) {
                 message.append("; missing manifest proof ids: ").append(missingManifestProofIds);
+            }
+            if (!missingProvenanceKeys.isEmpty()) {
+                message.append("; missing provenance keys: ").append(missingProvenanceKeys);
             }
             throw new RuntimeException(message.toString());
         }
     }
 
-    static String buildManifestJson(Path screenshotDir, List<ManifestArtifact> artifacts) {
+    static String buildManifestJson(
+            Path screenshotDir,
+            List<ManifestArtifact> artifacts,
+            RunProvenance provenance,
+            List<ProofManifestEntry> proofEntries
+    ) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
-        sb.append("  \"timestamp\": \"").append(escapeJson(Instant.now().toString())).append("\",\n");
-        appendOptionalRuntimeGitField(sb, "gitBranch", System.getProperty("slabbed.git.branch"));
-        appendOptionalRuntimeGitField(sb, "gitShortHash", System.getProperty("slabbed.git.shortHash"));
+        sb.append("  \"generatedAtUtc\": \"")
+                .append(escapeJson(provenance.generatedAtUtc()))
+                .append("\",\n");
+        sb.append("  \"gitHeadShort\": \"")
+                .append(escapeJson(provenance.gitHeadShort()))
+                .append("\",\n");
+        sb.append("  \"gitBranch\": \"")
+                .append(escapeJson(provenance.gitBranch()))
+                .append("\",\n");
+        appendStringArrayField(sb, "gitTagsAtHead", provenance.gitTagsAtHead());
         sb.append("  \"scenario\": \"SlabbedLabClientGameTest.runTest\",\n");
         sb.append("  \"outputDirectory\": \"")
                 .append(escapeJson(screenshotDir.toAbsolutePath().toString()))
                 .append("\",\n");
+        appendProofsJsonArray(sb, proofEntries);
+        sb.append(",\n");
         appendArtifactsJsonArray(sb, artifacts);
         sb.append("\n}\n");
         return sb.toString();
     }
 
-    static void appendOptionalRuntimeGitField(StringBuilder sb, String key, String value) {
-        if (value != null && !value.isBlank()) {
-            sb.append("  \"")
-                    .append(escapeJson(key))
-                    .append("\": \"")
-                    .append(escapeJson(value))
-                    .append("\",\n");
+    static void appendStringArrayField(StringBuilder sb, String key, List<String> values) {
+        sb.append("  \"")
+                .append(escapeJson(key))
+                .append("\": [");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append("\"").append(escapeJson(values.get(i))).append("\"");
         }
+        sb.append("],\n");
     }
 
     static void appendArtifactsJsonArray(StringBuilder sb, List<ManifestArtifact> artifacts) {
@@ -2085,8 +2128,6 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             }
             sb.append("{\"file\": \"")
                     .append(escapeJson(artifact.file()))
-                    .append("\", \"proofId\": \"")
-                    .append(escapeJson(artifact.proofId()))
                     .append("\", \"label\": \"")
                     .append(escapeJson(artifact.label()))
                     .append("\"}");
@@ -2095,8 +2136,139 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         sb.append("]");
     }
 
+    static void appendProofsJsonArray(StringBuilder sb, List<ProofManifestEntry> proofs) {
+        sb.append("  \"proofs\": [");
+        for (int i = 0; i < proofs.size(); i++) {
+            ProofManifestEntry proof = proofs.get(i);
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append("{\"proofId\": \"")
+                    .append(escapeJson(proof.proofId()))
+                    .append("\", \"label\": \"")
+                    .append(escapeJson(proof.label()))
+                    .append("\", \"notesFile\": \"")
+                    .append(escapeJson(proof.notesFile()))
+                    .append("\", \"primaryScreenshotFile\": \"")
+                    .append(escapeJson(proof.primaryScreenshotFile()))
+                    .append("\"}");
+        }
+        sb.append("]");
+    }
+
+    static RunProvenance readRunProvenance() {
+        String generatedAtUtc = Instant.now().toString();
+        String gitHeadShort = normalizeGitField(runGitCommand("rev-parse", "--short", "HEAD"));
+        String gitBranch = normalizeGitField(runGitCommand("rev-parse", "--abbrev-ref", "HEAD"));
+        List<String> gitTagsAtHead = readGitTagsAtHead();
+        if (gitTagsAtHead.isEmpty()) {
+            gitTagsAtHead = List.of();
+        }
+        return new RunProvenance(generatedAtUtc, gitHeadShort, gitBranch, gitTagsAtHead);
+    }
+
+    static List<String> readGitTagsAtHead() {
+        String output = runGitCommand("tag", "--points-at", "HEAD");
+        if (output == null) {
+            return List.of("unknown");
+        }
+        List<String> tags = new ArrayList<>();
+        for (String line : output.split("\\R")) {
+            if (!line.isBlank()) {
+                tags.add(line.trim());
+            }
+        }
+        tags.sort(String::compareTo);
+        return tags;
+    }
+
+    static String normalizeGitField(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+        return value.trim();
+    }
+
+    static String runGitCommand(String... args) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder();
+            pb.command(buildGitCommand(args));
+            pb.directory(Path.of(System.getProperty("user.dir", ".")).toFile());
+            Process process = pb.start();
+            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exit = process.waitFor();
+            if (exit != 0) {
+                return null;
+            }
+            if (!stderr.isBlank()) {
+                // Git can emit diagnostics to stderr even on success in some environments,
+                // but we only care about the command output. Keep the data path simple.
+            }
+            return stdout.trim();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    static List<String> buildGitCommand(String... args) {
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        for (String arg : args) {
+            command.add(arg);
+        }
+        return command;
+    }
+
+    static List<ProofManifestEntry> buildLoweredSideSlabProofEntries(Path screenshotDir) {
+        LinkedHashMap<String, ProofManifestEntry> entries = new LinkedHashMap<>();
+        for (String proofId : LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS) {
+            if (entries.containsKey(proofId)) {
+                throw new RuntimeException(
+                        "duplicate proofId in lowered-side-slab manifest ladder: " + proofId);
+            }
+
+            String notesFile = proofId + "_notes.json";
+            Path notesPath = screenshotDir.resolve(notesFile);
+            if (!Files.isRegularFile(notesPath)) {
+                throw new RuntimeException(
+                        "missing notes artifact for proofId " + proofId
+                        + ": " + notesPath.toAbsolutePath());
+            }
+
+            String primaryScreenshotFile = resolveScreenshotFileNameForProofId(screenshotDir, proofId);
+            if (primaryScreenshotFile == null) {
+                throw new RuntimeException(
+                        "missing primary screenshot artifact for proofId " + proofId
+                        + " in " + screenshotDir.toAbsolutePath());
+            }
+
+            entries.put(
+                    proofId,
+                    new ProofManifestEntry(
+                            proofId,
+                            labelForProofId(proofId),
+                            notesFile,
+                            primaryScreenshotFile));
+        }
+        return new ArrayList<>(entries.values());
+    }
+
     static String escapeJson(String raw) {
         return raw.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    static int countOccurrences(String haystack, String needle) {
+        if (haystack == null || haystack.isEmpty() || needle == null || needle.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int index = 0;
+        while ((index = haystack.indexOf(needle, index)) >= 0) {
+            count++;
+            index += needle.length();
+        }
+        return count;
     }
 
     static String nullToEmpty(String value) {
@@ -2104,6 +2276,22 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
     }
 
     static record NoteField(String key, String value) {
+    }
+
+    static record RunProvenance(
+            String generatedAtUtc,
+            String gitHeadShort,
+            String gitBranch,
+            List<String> gitTagsAtHead
+    ) {
+    }
+
+    static record ProofManifestEntry(
+            String proofId,
+            String label,
+            String notesFile,
+            String primaryScreenshotFile
+    ) {
     }
 
     static record ManifestArtifact(String file, String proofId, String label) {
