@@ -1270,6 +1270,8 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
 
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
@@ -1282,25 +1284,23 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         "bed rescue proof expected RED_BED FOOT at " + footPos.toShortString()
                         + ", found " + footState);
             }
-            BlockPos foundHead = null;
-            for (Direction dir : Direction.Type.HORIZONTAL) {
-                BlockPos neighbor = footPos.offset(dir);
-                BlockState neighborState = mc.world.getBlockState(neighbor);
-                if (neighborState.isOf(Blocks.RED_BED)
-                        && neighborState.contains(BedBlock.PART)
-                        && neighborState.get(BedBlock.PART) == BedPart.HEAD) {
-                    foundHead = neighbor;
-                    headStateText.set(neighborState.toString());
-                    break;
-                }
-            }
-            if (foundHead == null) {
+            Direction bedFacing = footState.contains(BedBlock.FACING)
+                    ? footState.get(BedBlock.FACING)
+                    : Direction.NORTH;
+            BlockPos expectedHeadPos = footPos.offset(bedFacing);
+            BlockState expectedHeadState = mc.world.getBlockState(expectedHeadPos);
+            if (!expectedHeadState.isOf(Blocks.RED_BED)
+                    || !expectedHeadState.contains(BedBlock.PART)
+                    || expectedHeadState.get(BedBlock.PART) != BedPart.HEAD) {
                 throw new RuntimeException(
-                        "bed rescue proof expected adjacent RED_BED HEAD near "
-                        + footPos.toShortString() + ", none found");
+                        "bed rescue proof expected RED_BED HEAD at "
+                        + expectedHeadPos.toShortString()
+                        + " from facing " + bedFacing
+                        + ", found " + expectedHeadState);
             }
             footStateText.set(footState.toString());
-            headPosText.set(foundHead.toShortString());
+            headPosText.set(expectedHeadPos.toShortString());
+            headStateText.set(expectedHeadState.toString());
         });
 
         captureScreenshotAndRecord(
