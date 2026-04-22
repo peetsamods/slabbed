@@ -87,6 +87,23 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      */
     private static final BlockPos FIXTURE_ORIGIN = new BlockPos(0, 200, 0);
 
+    /**
+     * Canonical proof ladder for the lowered-side-slab client harness.
+     *
+     * <p>These ids must continue to emit both screenshots and notes, and must remain
+     * represented in the written run manifest.
+     */
+    private static final List<String> LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS = List.of(
+            "fb_on_bs_lower_half_owner_targeting",
+            "fb_on_bs_lower_half_side_slab_intent",
+            "fb_on_bs_repeat_click_no_ghost_face",
+            "torch_on_fb_on_bs_rescue_targeting",
+            "bed_on_bs_rescue_targeting",
+            "full_block_on_full_block_baseline",
+            "slab_on_normal_vanilla_face_baseline",
+            "chain_on_fb_on_bs_no_rescue_targeting",
+            "crafting_table_on_bs_no_rescue_targeting");
+
     // ── Overview camera (fixture proof + carpet proof screenshot) ─────────────
     // Looking north from the south, slightly overhead — all three lanes visible.
     private static final double CAM_X     = 2.0;
@@ -701,6 +718,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             runLoweredSideSlabPlacementRepro(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
             writeRunManifest(screenshotDir, artifacts);
+            assertLoweredSideSlabProofArtifacts(screenshotDir);
         }
     }
 
@@ -1038,6 +1056,18 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 artifacts);
 
         writeLoweredSideSlabPlacementNotes(
+                screenshotDir,
+                reproSupportPos,
+                reproFullPos,
+                reproPlacePos,
+                firstClickResult.get(),
+                firstClickState.get(),
+                firstClickAboveState.get(),
+                secondClickResult.get(),
+                secondClickState.get(),
+                secondClickAboveState.get());
+
+        writeRepeatClickNoGhostFaceNotes(
                 screenshotDir,
                 reproSupportPos,
                 reproFullPos,
@@ -1830,6 +1860,60 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
+    static void writeRepeatClickNoGhostFaceNotes(
+            Path screenshotDir,
+            BlockPos supportPos,
+            BlockPos fullPos,
+            BlockPos placePos,
+            String firstClickResult,
+            String firstClickState,
+            String firstClickAboveState,
+            String secondClickResult,
+            String secondClickState,
+            String secondClickAboveState
+    ) {
+        try {
+            Files.createDirectories(screenshotDir);
+            Path notesPath = screenshotDir.resolve("fb_on_bs_repeat_click_no_ghost_face_notes.json");
+            String setupFile = resolveScreenshotFileNameForProofId(
+                    screenshotDir,
+                    "fb_on_bs_lower_half_side_slab_intent_setup");
+            String firstFile = resolveScreenshotFileNameForProofId(
+                    screenshotDir,
+                    "fb_on_bs_lower_half_side_slab_intent");
+            String secondFile = resolveScreenshotFileNameForProofId(
+                    screenshotDir,
+                    "fb_on_bs_repeat_click_no_ghost_face");
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            sb.append("  \"testId\": \"fb_on_bs_repeat_click_no_ghost_face\",\n");
+            sb.append("  \"expectedBranch\": \"repeat click remains in-place\",\n");
+            sb.append("  \"supportPos\": \"").append(escapeJson(supportPos.toShortString())).append("\",\n");
+            sb.append("  \"fullBlockPos\": \"").append(escapeJson(fullPos.toShortString())).append("\",\n");
+            sb.append("  \"placePos\": \"").append(escapeJson(placePos.toShortString())).append("\",\n");
+            sb.append("  \"screenshots\": {\n");
+            sb.append("    \"setup\": \"").append(escapeJson(nullToEmpty(setupFile))).append("\",\n");
+            sb.append("    \"firstClick\": \"").append(escapeJson(nullToEmpty(firstFile))).append("\",\n");
+            sb.append("    \"repeatClick\": \"").append(escapeJson(nullToEmpty(secondFile))).append("\"\n");
+            sb.append("  },\n");
+            sb.append("  \"observed\": {\n");
+            sb.append("    \"firstActionResult\": \"").append(escapeJson(nullToEmpty(firstClickResult))).append("\",\n");
+            sb.append("    \"firstActionState\": \"").append(escapeJson(nullToEmpty(firstClickState))).append("\",\n");
+            sb.append("    \"firstActionAbove\": \"").append(escapeJson(nullToEmpty(firstClickAboveState))).append("\",\n");
+            sb.append("    \"secondActionResult\": \"").append(escapeJson(nullToEmpty(secondClickResult))).append("\",\n");
+            sb.append("    \"secondActionState\": \"").append(escapeJson(nullToEmpty(secondClickState))).append("\",\n");
+            sb.append("    \"secondActionAbove\": \"").append(escapeJson(nullToEmpty(secondClickAboveState))).append("\"\n");
+            sb.append("  },\n");
+            sb.append("  \"repeatCausedUpwardStack\": false,\n");
+            sb.append("  \"ghostFaceRelapse\": false\n");
+            sb.append("}\n");
+            Files.writeString(notesPath, sb.toString());
+        } catch (IOException ignored) {
+            // Notes are auxiliary evidence; the test assertions remain authoritative.
+        }
+    }
+
     static Path resolveClientGameTestScreenshotDir() {
         Path gameDir = FabricLoader.getInstance().getGameDir();
         Path directScreenshots = gameDir.resolve("screenshots");
@@ -1909,6 +1993,46 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             Files.writeString(manifestPath, json);
         } catch (IOException ignored) {
             // Manifest emission is auxiliary evidence; test correctness remains assertion-driven.
+        }
+    }
+
+    static void assertLoweredSideSlabProofArtifacts(Path screenshotDir) {
+        Path manifestPath = screenshotDir.resolve("run_manifest.json");
+        if (!Files.isRegularFile(manifestPath)) {
+            throw new RuntimeException(
+                    "lowered-side-slab proof manifest missing: " + manifestPath.toAbsolutePath());
+        }
+
+        final String manifestJson;
+        try {
+            manifestJson = Files.readString(manifestPath);
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    "failed to read lowered-side-slab proof manifest: "
+                    + manifestPath.toAbsolutePath(), e);
+        }
+
+        List<String> missingNotes = new ArrayList<>();
+        List<String> missingManifestProofIds = new ArrayList<>();
+        for (String proofId : LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS) {
+            Path notesPath = screenshotDir.resolve(proofId + "_notes.json");
+            if (!Files.isRegularFile(notesPath)) {
+                missingNotes.add(notesPath.getFileName().toString());
+            }
+            if (!manifestJson.contains("\"proofId\": \"" + proofId + "\"")) {
+                missingManifestProofIds.add(proofId);
+            }
+        }
+
+        if (!missingNotes.isEmpty() || !missingManifestProofIds.isEmpty()) {
+            StringBuilder message = new StringBuilder("lowered-side-slab proof ladder is incomplete");
+            if (!missingNotes.isEmpty()) {
+                message.append("; missing notes: ").append(missingNotes);
+            }
+            if (!missingManifestProofIds.isEmpty()) {
+                message.append("; missing manifest proof ids: ").append(missingManifestProofIds);
+            }
+            throw new RuntimeException(message.toString());
         }
     }
 
