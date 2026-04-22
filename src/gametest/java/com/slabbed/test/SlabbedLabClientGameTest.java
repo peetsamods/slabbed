@@ -9,10 +9,19 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.BedBlock;
+import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.SlabType;
+import net.minecraft.block.enums.BedPart;
+import net.minecraft.util.Hand;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
@@ -25,6 +34,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Client GameTest: deterministic proofs for the Slabbed Lab 3-lane fixture.
@@ -677,6 +687,19 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     knownScreenshotFiles,
                     artifacts);
 
+            // ── Step 7: focused lowered-full-block side-slab repro ───────────────
+            // Exact bug class under test:
+            //   bottom slab support block
+            //   full block visually lowered on it
+            //   slab-item use on the lower-half horizontal face of the lowered block
+            //   repeat the same click path
+            //
+            // PASS criteria:
+            //   1) first click lands in the intended lowered-space side branch
+            //   2) second identical click combines in-place instead of climbing upward
+            //   3) no upward-stack or ghost-face relapse remains in the final frame
+            runLoweredSideSlabPlacementRepro(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
             writeRunManifest(screenshotDir, artifacts);
         }
     }
@@ -706,7 +729,886 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         knownScreenshotFiles.addAll(afterCapture);
     }
 
-    private static Path resolveClientGameTestScreenshotDir() {
+    static void runLoweredSideSlabPlacementRepro(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        // ownership
+        runLowerHalfOwnershipProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // placement-branch
+        runRepeatClickPlacementBranchProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // rescue guard
+        runTorchRescueGuardProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // rescue guard
+        runBedRescueGuardProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // baseline guard
+        runFullBlockBaselineGuardProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // baseline guard
+        runVanillaSlabBaselineGuardProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+    }
+
+    static void runLowerHalfOwnershipProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "fb_on_bs_lower_half_owner_targeting";
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(12, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos placePos = fullPos.east();
+        final BlockHitResult hit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, fullPos.getY() - 0.25, fullPos.getZ() + 0.5),
+                Direction.EAST,
+                fullPos,
+                false,
+                false);
+        AtomicReference<String> winningTarget = new AtomicReference<>();
+        AtomicReference<String> winningState = new AtomicReference<>();
+        AtomicReference<String> actionResult = new AtomicReference<>();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list is empty for ownership proof");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 4));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player is null during ownership proof setup");
+            }
+            mc.player.refreshPositionAndAngles(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() + 1.95,
+                    fullPos.getZ() + 3.25,
+                    180.0f,
+                    24.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 4));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(
+                ctx,
+                testId + "_setup",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for ownership interact proof");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            actionResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world is null during ownership assertion");
+            }
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState placedState = mc.world.getBlockState(placePos);
+            if (!supportState.isOf(Blocks.STONE_SLAB)
+                    || !supportState.contains(SlabBlock.TYPE)
+                    || supportState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException(
+                        "ownership proof failed: support slab changed unexpectedly at "
+                        + supportPos.toShortString() + " to " + supportState);
+            }
+            if (!placedState.isOf(Blocks.STONE_SLAB)
+                    || !placedState.contains(SlabBlock.TYPE)
+                    || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException(
+                        "ownership proof failed: expected side placement at "
+                        + placePos.toShortString() + " from full-block target, found " + placedState);
+            }
+            winningTarget.set(fullPos.toShortString());
+            winningState.set(placedState.toString());
+        });
+
+        captureScreenshotAndRecord(
+                ctx,
+                testId,
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "ownership",
+                "Lower-half targeting resolves to lowered full block and not to support slab.",
+                testId + "_setup",
+                testId,
+                List.of(
+                        new NoteField("supportPos", supportPos.toShortString()),
+                        new NoteField("placePos", placePos.toShortString()),
+                        new NoteField("expectedWinningTarget", fullPos.toShortString()),
+                        new NoteField("observedWinningTarget", nullToEmpty(winningTarget.get())),
+                        new NoteField("observedWinningState", nullToEmpty(winningState.get())),
+                        new NoteField("actionResult", nullToEmpty(actionResult.get()))
+                ),
+                true);
+    }
+
+    static void runRepeatClickPlacementBranchProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final BlockPos reproSupportPos = FIXTURE_ORIGIN.add(8, 0, 0);
+        final BlockPos reproFullPos = reproSupportPos.up();
+        final BlockPos reproPlacePos = reproFullPos.east();
+        final BlockHitResult reproHit = new BlockHitResult(
+                new Vec3d(
+                        reproFullPos.getX() + 1.0,
+                        reproFullPos.getY() - 0.25,
+                        reproFullPos.getZ() + 0.5),
+                Direction.EAST,
+                reproFullPos,
+                false,
+                false);
+        final double camX = reproFullPos.getX() + 0.5;
+        final double camY = reproFullPos.getY() + 1.95;
+        final double camZ = reproFullPos.getZ() + 3.25;
+        final float camYaw = 180.0f;
+        final float camPitch = 24.0f;
+
+        AtomicReference<String> firstClickState = new AtomicReference<>();
+        AtomicReference<String> firstClickAboveState = new AtomicReference<>();
+        AtomicReference<String> firstClickResult = new AtomicReference<>();
+        AtomicReference<String> secondClickState = new AtomicReference<>();
+        AtomicReference<String> secondClickAboveState = new AtomicReference<>();
+        AtomicReference<String> secondClickResult = new AtomicReference<>();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    reproSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(reproFullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(reproPlacePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(reproPlacePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list is empty for slab repro");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player is null during lowered slab repro setup");
+            }
+            mc.player.refreshPositionAndAngles(camX, camY, camZ, camYaw, camPitch);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(
+                ctx,
+                "fb_on_bs_lower_half_side_slab_intent_setup",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for lowered slab first click");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, reproHit);
+            firstClickResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world is null during lowered slab first assertion");
+            }
+            BlockState placed = mc.world.getBlockState(reproPlacePos);
+            BlockState above = mc.world.getBlockState(reproPlacePos.up());
+            if (!placed.isOf(Blocks.STONE_SLAB)) {
+                throw new RuntimeException(
+                        "first click expected STONE_SLAB at " + reproPlacePos.toShortString()
+                        + ", found " + placed.getBlock().getTranslationKey());
+            }
+            if (!placed.contains(SlabBlock.TYPE) || placed.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException(
+                        "first click expected bottom slab at " + reproPlacePos.toShortString()
+                        + ", found " + placed);
+            }
+            if (!above.isAir()) {
+                throw new RuntimeException(
+                        "first click must not upward-stack; expected air at "
+                        + reproPlacePos.up().toShortString()
+                        + ", found " + above.getBlock().getTranslationKey());
+            }
+            firstClickState.set(placed.toString());
+            firstClickAboveState.set(above.toString());
+        });
+
+        captureScreenshotAndRecord(
+                ctx,
+                "fb_on_bs_lower_half_side_slab_intent",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for lowered slab repeat click");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, reproHit);
+            secondClickResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world is null during lowered slab repeat assertion");
+            }
+            BlockState placed = mc.world.getBlockState(reproPlacePos);
+            BlockState above = mc.world.getBlockState(reproPlacePos.up());
+            if (!placed.isOf(Blocks.STONE_SLAB)) {
+                throw new RuntimeException(
+                        "repeat click expected STONE_SLAB at " + reproPlacePos.toShortString()
+                        + ", found " + placed.getBlock().getTranslationKey());
+            }
+            if (!placed.contains(SlabBlock.TYPE) || placed.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                throw new RuntimeException(
+                        "repeat click expected same-position combine to DOUBLE slab at "
+                        + reproPlacePos.toShortString() + ", found " + placed);
+            }
+            if (!above.isAir()) {
+                throw new RuntimeException(
+                        "repeat click must not upward-stack or leave a ghost face; expected air at "
+                        + reproPlacePos.up().toShortString()
+                        + ", found " + above.getBlock().getTranslationKey());
+            }
+            secondClickState.set(placed.toString());
+            secondClickAboveState.set(above.toString());
+        });
+
+        captureScreenshotAndRecord(
+                ctx,
+                "fb_on_bs_repeat_click_no_ghost_face",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        writeLoweredSideSlabPlacementNotes(
+                screenshotDir,
+                reproSupportPos,
+                reproFullPos,
+                reproPlacePos,
+                firstClickResult.get(),
+                firstClickState.get(),
+                firstClickAboveState.get(),
+                secondClickResult.get(),
+                secondClickState.get(),
+                secondClickAboveState.get());
+    }
+
+    static void runTorchRescueGuardProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "torch_on_fb_on_bs_rescue_targeting";
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(16, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos placePos = fullPos.east();
+        final BlockHitResult hit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, fullPos.getY() - 0.20, fullPos.getZ() + 0.5),
+                Direction.EAST,
+                fullPos,
+                false,
+                false);
+        AtomicReference<String> placeState = new AtomicReference<>();
+        AtomicReference<String> actionResult = new AtomicReference<>();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list is empty for torch proof");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.TORCH, 4));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player is null during torch proof setup");
+            }
+            mc.player.refreshPositionAndAngles(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() + 1.9,
+                    fullPos.getZ() + 3.0,
+                    180.0f,
+                    24.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.TORCH, 4));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(
+                ctx,
+                testId + "_setup",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for torch rescue proof");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            actionResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world is null during torch rescue assertion");
+            }
+            BlockState placed = mc.world.getBlockState(placePos);
+            if (!placed.isOf(Blocks.WALL_TORCH)) {
+                throw new RuntimeException(
+                        "torch rescue proof expected WALL_TORCH at " + placePos.toShortString()
+                        + ", found " + placed);
+            }
+            placeState.set(placed.toString());
+        });
+
+        captureScreenshotAndRecord(
+                ctx,
+                testId,
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "rescue guard",
+                "Torch targeting/placement remains correct on lowered full-block-over-slab stack.",
+                testId + "_setup",
+                testId,
+                List.of(
+                        new NoteField("targetPos", fullPos.toShortString()),
+                        new NoteField("placePos", placePos.toShortString()),
+                        new NoteField("actionResult", nullToEmpty(actionResult.get())),
+                        new NoteField("observedState", nullToEmpty(placeState.get()))
+                ),
+                true);
+    }
+
+    static void runBedRescueGuardProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "bed_on_bs_rescue_targeting";
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(20, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos topSupportSouth = fullPos.south();
+        final BlockPos footPos = fullPos.up();
+        final BlockHitResult hit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 0.5, fullPos.getY() + 1.0, fullPos.getZ() + 0.5),
+                Direction.UP,
+                fullPos,
+                false,
+                false);
+        AtomicReference<String> actionResult = new AtomicReference<>();
+        AtomicReference<String> footStateText = new AtomicReference<>();
+        AtomicReference<String> headPosText = new AtomicReference<>();
+        AtomicReference<String> headStateText = new AtomicReference<>();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(topSupportSouth, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(footPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(footPos.north(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(footPos.south(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(footPos.east(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(footPos.west(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list is empty for bed proof");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.RED_BED, 2));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player is null during bed proof setup");
+            }
+            mc.player.refreshPositionAndAngles(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() + 2.1,
+                    fullPos.getZ() + 3.0,
+                    180.0f,
+                    18.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.RED_BED, 2));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(
+                ctx,
+                testId + "_setup",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for bed rescue proof");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            actionResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world is null during bed rescue assertion");
+            }
+            BlockState footState = mc.world.getBlockState(footPos);
+            if (!footState.isOf(Blocks.RED_BED) || !footState.contains(BedBlock.PART)
+                    || footState.get(BedBlock.PART) != BedPart.FOOT) {
+                throw new RuntimeException(
+                        "bed rescue proof expected RED_BED FOOT at " + footPos.toShortString()
+                        + ", found " + footState);
+            }
+            BlockPos foundHead = null;
+            for (Direction dir : Direction.Type.HORIZONTAL) {
+                BlockPos neighbor = footPos.offset(dir);
+                BlockState neighborState = mc.world.getBlockState(neighbor);
+                if (neighborState.isOf(Blocks.RED_BED)
+                        && neighborState.contains(BedBlock.PART)
+                        && neighborState.get(BedBlock.PART) == BedPart.HEAD) {
+                    foundHead = neighbor;
+                    headStateText.set(neighborState.toString());
+                    break;
+                }
+            }
+            if (foundHead == null) {
+                throw new RuntimeException(
+                        "bed rescue proof expected adjacent RED_BED HEAD near "
+                        + footPos.toShortString() + ", none found");
+            }
+            footStateText.set(footState.toString());
+            headPosText.set(foundHead.toShortString());
+        });
+
+        captureScreenshotAndRecord(
+                ctx,
+                testId,
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "rescue guard",
+                "Bed targeting/placement remains correct on lowered full-block-over-slab stack.",
+                testId + "_setup",
+                testId,
+                List.of(
+                        new NoteField("targetPos", fullPos.toShortString()),
+                        new NoteField("footPos", footPos.toShortString()),
+                        new NoteField("headPos", nullToEmpty(headPosText.get())),
+                        new NoteField("actionResult", nullToEmpty(actionResult.get())),
+                        new NoteField("footState", nullToEmpty(footStateText.get())),
+                        new NoteField("headState", nullToEmpty(headStateText.get()))
+                ),
+                true);
+    }
+
+    static void runFullBlockBaselineGuardProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "full_block_on_full_block_baseline";
+        final BlockPos basePos = FIXTURE_ORIGIN.add(24, 0, 0);
+        final BlockPos hitPos = basePos.up();
+        final BlockPos placePos = hitPos.east();
+        final BlockHitResult hit = new BlockHitResult(
+                new Vec3d(hitPos.getX() + 1.0, hitPos.getY() - 0.25, hitPos.getZ() + 0.5),
+                Direction.EAST,
+                hitPos,
+                false,
+                false);
+        AtomicReference<String> actionResult = new AtomicReference<>();
+        AtomicReference<String> placeState = new AtomicReference<>();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(basePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(hitPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list is empty for full-block baseline");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE, 6));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player is null during full-block baseline setup");
+            }
+            mc.player.refreshPositionAndAngles(
+                    hitPos.getX() + 0.5,
+                    hitPos.getY() + 1.9,
+                    hitPos.getZ() + 3.0,
+                    180.0f,
+                    24.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 6));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(
+                ctx,
+                testId + "_setup",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for full-block baseline proof");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            actionResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world is null during full-block baseline assertion");
+            }
+            BlockState placed = mc.world.getBlockState(placePos);
+            BlockState down = mc.world.getBlockState(placePos.down());
+            if (!placed.isOf(Blocks.STONE)) {
+                throw new RuntimeException(
+                        "full-block baseline expected STONE at " + placePos.toShortString()
+                        + ", found " + placed);
+            }
+            if (!down.isAir()) {
+                throw new RuntimeException(
+                        "full-block baseline must not remap downward; expected air at "
+                        + placePos.down().toShortString() + ", found " + down);
+            }
+            placeState.set(placed.toString());
+        });
+
+        captureScreenshotAndRecord(
+                ctx,
+                testId,
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "baseline guard",
+                "Ordinary full-block-on-full-block side placement remains normal and unshifted.",
+                testId + "_setup",
+                testId,
+                List.of(
+                        new NoteField("targetPos", hitPos.toShortString()),
+                        new NoteField("placePos", placePos.toShortString()),
+                        new NoteField("actionResult", nullToEmpty(actionResult.get())),
+                        new NoteField("observedState", nullToEmpty(placeState.get()))
+                ),
+                true);
+    }
+
+    static void runVanillaSlabBaselineGuardProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "slab_on_normal_vanilla_face_baseline";
+        final BlockPos basePos = FIXTURE_ORIGIN.add(28, 0, 0);
+        final BlockPos hitPos = basePos.up();
+        final BlockPos placePos = hitPos.east();
+        final BlockHitResult hit = new BlockHitResult(
+                new Vec3d(hitPos.getX() + 1.0, hitPos.getY() - 0.25, hitPos.getZ() + 0.5),
+                Direction.EAST,
+                hitPos,
+                false,
+                false);
+        AtomicReference<String> actionResult = new AtomicReference<>();
+        AtomicReference<String> placeState = new AtomicReference<>();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(basePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(hitPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list is empty for slab baseline");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 6));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player is null during slab baseline setup");
+            }
+            mc.player.refreshPositionAndAngles(
+                    hitPos.getX() + 0.5,
+                    hitPos.getY() + 1.9,
+                    hitPos.getZ() + 3.0,
+                    180.0f,
+                    24.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 6));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(
+                ctx,
+                testId + "_setup",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for slab baseline proof");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            actionResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world is null during slab baseline assertion");
+            }
+            BlockState placed = mc.world.getBlockState(placePos);
+            BlockState down = mc.world.getBlockState(placePos.down());
+            if (!placed.isOf(Blocks.STONE_SLAB)
+                    || !placed.contains(SlabBlock.TYPE)
+                    || placed.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException(
+                        "slab baseline expected BOTTOM STONE_SLAB at " + placePos.toShortString()
+                        + ", found " + placed);
+            }
+            if (!down.isAir()) {
+                throw new RuntimeException(
+                        "slab baseline must not remap downward; expected air at "
+                        + placePos.down().toShortString() + ", found " + down);
+            }
+            placeState.set(placed.toString());
+        });
+
+        captureScreenshotAndRecord(
+                ctx,
+                testId,
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "baseline guard",
+                "Vanilla slab placement on normal full-block target remains unchanged.",
+                testId + "_setup",
+                testId,
+                List.of(
+                        new NoteField("targetPos", hitPos.toShortString()),
+                        new NoteField("placePos", placePos.toShortString()),
+                        new NoteField("actionResult", nullToEmpty(actionResult.get())),
+                        new NoteField("observedState", nullToEmpty(placeState.get()))
+                ),
+                true);
+    }
+
+    static void writeInvariantProofNotes(
+            Path screenshotDir,
+            String noteFileName,
+            String testId,
+            String proofClass,
+            String expectedInvariant,
+            String setupProofId,
+            String resultProofId,
+            List<NoteField> observedFields,
+            boolean pass
+    ) {
+        try {
+            Files.createDirectories(screenshotDir);
+            Path notesPath = screenshotDir.resolve(noteFileName);
+            String setupFile = resolveScreenshotFileNameForProofId(screenshotDir, setupProofId);
+            String resultFile = resolveScreenshotFileNameForProofId(screenshotDir, resultProofId);
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            sb.append("  \"testId\": \"").append(escapeJson(testId)).append("\",\n");
+            sb.append("  \"proofClass\": \"").append(escapeJson(proofClass)).append("\",\n");
+            sb.append("  \"expectedInvariant\": \"").append(escapeJson(expectedInvariant)).append("\",\n");
+            sb.append("  \"screenshots\": {\n");
+            sb.append("    \"setup\": \"").append(escapeJson(nullToEmpty(setupFile))).append("\",\n");
+            sb.append("    \"result\": \"").append(escapeJson(nullToEmpty(resultFile))).append("\"\n");
+            sb.append("  },\n");
+            sb.append("  \"observed\": {\n");
+            for (int i = 0; i < observedFields.size(); i++) {
+                NoteField field = observedFields.get(i);
+                sb.append("    \"")
+                        .append(escapeJson(field.key()))
+                        .append("\": \"")
+                        .append(escapeJson(nullToEmpty(field.value())))
+                        .append("\"");
+                if (i + 1 < observedFields.size()) {
+                    sb.append(",");
+                }
+                sb.append("\n");
+            }
+            sb.append("  },\n");
+            sb.append("  \"pass\": ").append(pass).append("\n");
+            sb.append("}\n");
+            Files.writeString(notesPath, sb.toString());
+        } catch (IOException ignored) {
+            // Notes are auxiliary evidence; assertion failures remain authoritative.
+        }
+    }
+
+    static void writeLoweredSideSlabPlacementNotes(
+            Path screenshotDir,
+            BlockPos supportPos,
+            BlockPos fullPos,
+            BlockPos placePos,
+            String firstClickResult,
+            String firstClickState,
+            String firstClickAboveState,
+            String secondClickResult,
+            String secondClickState,
+            String secondClickAboveState
+    ) {
+        try {
+            Files.createDirectories(screenshotDir);
+            Path notesPath = screenshotDir.resolve("fb_on_bs_lower_half_side_slab_intent_notes.json");
+            String setupFile = resolveScreenshotFileNameForProofId(
+                    screenshotDir,
+                    "fb_on_bs_lower_half_side_slab_intent_setup");
+            String firstFile = resolveScreenshotFileNameForProofId(
+                    screenshotDir,
+                    "fb_on_bs_lower_half_side_slab_intent");
+            String secondFile = resolveScreenshotFileNameForProofId(
+                    screenshotDir,
+                    "fb_on_bs_repeat_click_no_ghost_face");
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            sb.append("  \"testId\": \"fb_on_bs_lower_half_side_slab_intent\",\n");
+            sb.append("  \"expectedBranch\": \"lowered-space side branch\",\n");
+            sb.append("  \"supportPos\": \"").append(escapeJson(supportPos.toShortString())).append("\",\n");
+            sb.append("  \"fullBlockPos\": \"").append(escapeJson(fullPos.toShortString())).append("\",\n");
+            sb.append("  \"placePos\": \"").append(escapeJson(placePos.toShortString())).append("\",\n");
+            sb.append("  \"screenshots\": {\n");
+            sb.append("    \"setup\": \"").append(escapeJson(nullToEmpty(setupFile))).append("\",\n");
+            sb.append("    \"firstClick\": \"").append(escapeJson(nullToEmpty(firstFile))).append("\",\n");
+            sb.append("    \"repeatClick\": \"").append(escapeJson(nullToEmpty(secondFile))).append("\"\n");
+            sb.append("  },\n");
+            sb.append("  \"observed\": {\n");
+            sb.append("    \"firstActionResult\": \"").append(escapeJson(nullToEmpty(firstClickResult))).append("\",\n");
+            sb.append("    \"firstActionState\": \"").append(escapeJson(nullToEmpty(firstClickState))).append("\",\n");
+            sb.append("    \"firstActionAbove\": \"").append(escapeJson(nullToEmpty(firstClickAboveState))).append("\",\n");
+            sb.append("    \"secondActionResult\": \"").append(escapeJson(nullToEmpty(secondClickResult))).append("\",\n");
+            sb.append("    \"secondActionState\": \"").append(escapeJson(nullToEmpty(secondClickState))).append("\",\n");
+            sb.append("    \"secondActionAbove\": \"").append(escapeJson(nullToEmpty(secondClickAboveState))).append("\"\n");
+            sb.append("  },\n");
+            sb.append("  \"repeatCausedUpwardStack\": false,\n");
+            sb.append("  \"ghostFaceRelapse\": false\n");
+            sb.append("}\n");
+            Files.writeString(notesPath, sb.toString());
+        } catch (IOException ignored) {
+            // Notes are auxiliary evidence; the test assertions remain authoritative.
+        }
+    }
+
+    static Path resolveClientGameTestScreenshotDir() {
         Path gameDir = FabricLoader.getInstance().getGameDir();
         Path directScreenshots = gameDir.resolve("screenshots");
         if (Files.isDirectory(directScreenshots)) {
@@ -724,14 +1626,14 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         return directScreenshots;
     }
 
-    private static String resolveScreenshotFileNameForProofId(Path screenshotDir, String proofId) {
+    static String resolveScreenshotFileNameForProofId(Path screenshotDir, String proofId) {
         if (!Files.isDirectory(screenshotDir)) {
             return null;
         }
         try (var stream = Files.list(screenshotDir)) {
             return stream
                     .filter(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(".png"))
-                    .filter(path -> path.getFileName().toString().contains(proofId))
+                    .filter(path -> path.getFileName().toString().contains(proofId + ".png"))
                     .map(path -> path.getFileName().toString())
                     .sorted()
                     .findFirst()
@@ -741,7 +1643,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static String labelForProofId(String proofId) {
+    static String labelForProofId(String proofId) {
         String[] parts = proofId.split("_");
         StringBuilder label = new StringBuilder();
         for (int i = 0; i < parts.length; i++) {
@@ -760,7 +1662,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         return label.toString();
     }
 
-    private static Set<String> listScreenshotFileNames(Path screenshotDir) {
+    static Set<String> listScreenshotFileNames(Path screenshotDir) {
         LinkedHashSet<String> names = new LinkedHashSet<>();
         if (!Files.isDirectory(screenshotDir)) {
             return names;
@@ -777,7 +1679,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         return names;
     }
 
-    private static void writeRunManifest(Path screenshotDir, List<ManifestArtifact> artifacts) {
+    static void writeRunManifest(Path screenshotDir, List<ManifestArtifact> artifacts) {
         try {
             Files.createDirectories(screenshotDir);
             Path manifestPath = screenshotDir.resolve("run_manifest.json");
@@ -788,7 +1690,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static String buildManifestJson(Path screenshotDir, List<ManifestArtifact> artifacts) {
+    static String buildManifestJson(Path screenshotDir, List<ManifestArtifact> artifacts) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
         sb.append("  \"timestamp\": \"").append(escapeJson(Instant.now().toString())).append("\",\n");
@@ -803,7 +1705,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         return sb.toString();
     }
 
-    private static void appendOptionalRuntimeGitField(StringBuilder sb, String key, String value) {
+    static void appendOptionalRuntimeGitField(StringBuilder sb, String key, String value) {
         if (value != null && !value.isBlank()) {
             sb.append("  \"")
                     .append(escapeJson(key))
@@ -813,7 +1715,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static void appendArtifactsJsonArray(StringBuilder sb, List<ManifestArtifact> artifacts) {
+    static void appendArtifactsJsonArray(StringBuilder sb, List<ManifestArtifact> artifacts) {
         List<ManifestArtifact> normalized = new ArrayList<>();
         for (ManifestArtifact artifact : artifacts) {
             if (artifact.file() != null && !artifact.file().isBlank()) {
@@ -847,10 +1749,17 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         sb.append("]");
     }
 
-    private static String escapeJson(String raw) {
+    static String escapeJson(String raw) {
         return raw.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private record ManifestArtifact(String file, String proofId, String label) {
+    static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    static record NoteField(String key, String value) {
+    }
+
+    static record ManifestArtifact(String file, String proofId, String label) {
     }
 }
