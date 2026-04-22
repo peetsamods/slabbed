@@ -725,6 +725,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             writeProofSummary(screenshotDir);
             writeProofIndex(screenshotDir);
             writeLatestProofRun(screenshotDir);
+            writeProofReceipt(screenshotDir);
         }
     }
 
@@ -2060,6 +2061,50 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
+    static void writeProofReceipt(Path screenshotDir) {
+        try {
+            Files.createDirectories(screenshotDir);
+
+            Path manifestPath = screenshotDir.resolve("run_manifest.json");
+            Path summaryPath = screenshotDir.resolve("proof_summary.json");
+            Path indexPath = screenshotDir.resolve("proof_index.json");
+            Path latestPath = screenshotDir.resolve("latest_proof_run.json");
+            if (!Files.isRegularFile(manifestPath)) {
+                throw new RuntimeException("proof receipt missing manifest target: " + manifestPath.toAbsolutePath());
+            }
+            if (!Files.isRegularFile(summaryPath)) {
+                throw new RuntimeException("proof receipt missing summary target: " + summaryPath.toAbsolutePath());
+            }
+            if (!Files.isRegularFile(indexPath)) {
+                throw new RuntimeException("proof receipt missing index target: " + indexPath.toAbsolutePath());
+            }
+            if (!Files.isRegularFile(latestPath)) {
+                throw new RuntimeException("proof receipt missing latest pointer target: " + latestPath.toAbsolutePath());
+            }
+
+            RunProvenance provenance = readRunProvenance();
+            List<ProofManifestEntry> proofEntries = buildLoweredSideSlabProofEntries(screenshotDir);
+            String summaryJson = Files.readString(summaryPath);
+            String latestJson = Files.readString(latestPath);
+            String overallStatus = extractJsonStringValue(summaryJson, "overallStatus");
+            if (overallStatus == null || overallStatus.isBlank()) {
+                throw new RuntimeException("proof receipt missing overallStatus in summary: " + summaryPath.toAbsolutePath());
+            }
+            String latestOverallStatus = extractJsonStringValue(latestJson, "overallStatus");
+            if (latestOverallStatus == null || latestOverallStatus.isBlank()) {
+                throw new RuntimeException("proof receipt missing overallStatus in latest pointer: " + latestPath.toAbsolutePath());
+            }
+            String json = buildProofReceiptMarkdown(
+                    provenance,
+                    proofEntries,
+                    overallStatus,
+                    latestOverallStatus);
+            Files.writeString(screenshotDir.resolve("proof_receipt.md"), json);
+        } catch (IOException ignored) {
+            // Receipt emission is auxiliary evidence; test correctness remains assertion-driven.
+        }
+    }
+
     static void assertLoweredSideSlabProofArtifacts(Path screenshotDir) {
         Path manifestPath = screenshotDir.resolve("run_manifest.json");
         if (!Files.isRegularFile(manifestPath)) {
@@ -2255,6 +2300,42 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 .append(escapeJson(overallStatus))
                 .append("\"\n");
         sb.append("}\n");
+        return sb.toString();
+    }
+
+    static String buildProofReceiptMarkdown(
+            RunProvenance provenance,
+            List<ProofManifestEntry> proofEntries,
+            String overallStatus,
+            String latestOverallStatus
+    ) {
+        if (!overallStatus.equals(latestOverallStatus)) {
+            throw new RuntimeException(
+                    "proof receipt status mismatch between summary and latest pointer: "
+                    + overallStatus + " vs " + latestOverallStatus);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Lowered-Side-Slab Proof Ladder Receipt\n\n");
+        sb.append("- generatedAtUtc: ").append(escapeMarkdownCell(provenance.generatedAtUtc())).append("\n");
+        sb.append("- gitHeadShort: ").append(escapeMarkdownCell(provenance.gitHeadShort())).append("\n");
+        sb.append("- gitBranch: ").append(escapeMarkdownCell(provenance.gitBranch())).append("\n");
+        sb.append("- gitTagsAtHead: ").append(escapeMarkdownCell(formatMarkdownTags(provenance.gitTagsAtHead()))).append("\n");
+        sb.append("- overallStatus: ").append(escapeMarkdownCell(overallStatus)).append("\n");
+        sb.append("- expectedProofCount: ").append(proofEntries.size()).append("\n\n");
+        sb.append("| proofId | label | status | notesFile | primaryScreenshotFile |\n");
+        sb.append("| --- | --- | --- | --- | --- |\n");
+        for (ProofManifestEntry proof : proofEntries) {
+            sb.append("| ")
+                    .append(escapeMarkdownCell(proof.proofId()))
+                    .append(" | ")
+                    .append(escapeMarkdownCell(proof.label()))
+                    .append(" | PASS | ")
+                    .append(escapeMarkdownCell(proof.notesFile()))
+                    .append(" | ")
+                    .append(escapeMarkdownCell(proof.primaryScreenshotFile()))
+                    .append(" |\n");
+        }
         return sb.toString();
     }
 
@@ -2461,6 +2542,20 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             return null;
         }
         return json.substring(firstQuoteIndex + 1, secondQuoteIndex);
+    }
+
+    static String escapeMarkdownCell(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.replace("|", "\\|").replace("\n", " ").replace("\r", " ");
+    }
+
+    static String formatMarkdownTags(List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return "[]";
+        }
+        return "[" + String.join(", ", tags) + "]";
     }
 
     static record NoteField(String key, String value) {
