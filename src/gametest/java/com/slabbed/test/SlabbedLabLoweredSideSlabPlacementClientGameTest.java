@@ -36,6 +36,7 @@ public final class SlabbedLabLoweredSideSlabPlacementClientGameTest implements F
             SlabbedLabClientGameTest.writeProofIndex(screenshotDir);
             SlabbedLabClientGameTest.writeLatestProofRun(screenshotDir);
             SlabbedLabClientGameTest.writeProofReceipt(screenshotDir);
+            SlabbedLabClientGameTest.assertLoweredSideSlabProofBundle(screenshotDir);
         }
     }
 }
