@@ -724,6 +724,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             assertLoweredSideSlabProofArtifacts(screenshotDir);
             writeProofSummary(screenshotDir);
             writeProofIndex(screenshotDir);
+            writeLatestProofRun(screenshotDir);
         }
     }
 
@@ -2027,6 +2028,38 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
+    static void writeLatestProofRun(Path screenshotDir) {
+        try {
+            Files.createDirectories(screenshotDir);
+
+            Path manifestPath = screenshotDir.resolve("run_manifest.json");
+            Path summaryPath = screenshotDir.resolve("proof_summary.json");
+            Path indexPath = screenshotDir.resolve("proof_index.json");
+            if (!Files.isRegularFile(manifestPath)) {
+                throw new RuntimeException("latest proof pointer missing manifest target: " + manifestPath.toAbsolutePath());
+            }
+            if (!Files.isRegularFile(summaryPath)) {
+                throw new RuntimeException("latest proof pointer missing summary target: " + summaryPath.toAbsolutePath());
+            }
+            if (!Files.isRegularFile(indexPath)) {
+                throw new RuntimeException("latest proof pointer missing index target: " + indexPath.toAbsolutePath());
+            }
+
+            RunProvenance provenance = readRunProvenance();
+            List<ProofManifestEntry> proofEntries = buildLoweredSideSlabProofEntries(screenshotDir);
+            String summaryJson = Files.readString(summaryPath);
+            String overallStatus = extractJsonStringValue(summaryJson, "overallStatus");
+            if (overallStatus == null || overallStatus.isBlank()) {
+                throw new RuntimeException("latest proof pointer missing overallStatus in summary: " + summaryPath.toAbsolutePath());
+            }
+
+            String json = buildLatestProofRunJson(provenance, proofEntries.size(), overallStatus);
+            Files.writeString(screenshotDir.resolve("latest_proof_run.json"), json);
+        } catch (IOException ignored) {
+            // Pointer emission is auxiliary evidence; test correctness remains assertion-driven.
+        }
+    }
+
     static void assertLoweredSideSlabProofArtifacts(Path screenshotDir) {
         Path manifestPath = screenshotDir.resolve("run_manifest.json");
         if (!Files.isRegularFile(manifestPath)) {
@@ -2193,6 +2226,34 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     .append("\"}");
         }
         sb.append("]\n");
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    static String buildLatestProofRunJson(
+            RunProvenance provenance,
+            int expectedProofCount,
+            String overallStatus
+    ) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"generatedAtUtc\": \"")
+                .append(escapeJson(provenance.generatedAtUtc()))
+                .append("\",\n");
+        sb.append("  \"gitHeadShort\": \"")
+                .append(escapeJson(provenance.gitHeadShort()))
+                .append("\",\n");
+        sb.append("  \"gitBranch\": \"")
+                .append(escapeJson(provenance.gitBranch()))
+                .append("\",\n");
+        appendStringArrayField(sb, "gitTagsAtHead", provenance.gitTagsAtHead());
+        sb.append("  \"manifestFile\": \"run_manifest.json\",\n");
+        sb.append("  \"summaryFile\": \"proof_summary.json\",\n");
+        sb.append("  \"indexFile\": \"proof_index.json\",\n");
+        sb.append("  \"expectedProofCount\": ").append(expectedProofCount).append(",\n");
+        sb.append("  \"overallStatus\": \"")
+                .append(escapeJson(overallStatus))
+                .append("\"\n");
         sb.append("}\n");
         return sb.toString();
     }
@@ -2379,6 +2440,27 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
     static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    static String extractJsonStringValue(String json, String key) {
+        String needle = "\"" + key + "\"";
+        int keyIndex = json.indexOf(needle);
+        if (keyIndex < 0) {
+            return null;
+        }
+        int colonIndex = json.indexOf(':', keyIndex + needle.length());
+        if (colonIndex < 0) {
+            return null;
+        }
+        int firstQuoteIndex = json.indexOf('"', colonIndex + 1);
+        if (firstQuoteIndex < 0) {
+            return null;
+        }
+        int secondQuoteIndex = json.indexOf('"', firstQuoteIndex + 1);
+        if (secondQuoteIndex < 0) {
+            return null;
+        }
+        return json.substring(firstQuoteIndex + 1, secondQuoteIndex);
     }
 
     static record NoteField(String key, String value) {
