@@ -722,6 +722,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
             writeRunManifest(screenshotDir, artifacts);
             assertLoweredSideSlabProofArtifacts(screenshotDir);
+            writeProofSummary(screenshotDir);
         }
     }
 
@@ -2001,6 +2002,18 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
+    static void writeProofSummary(Path screenshotDir) {
+        try {
+            Files.createDirectories(screenshotDir);
+            RunProvenance provenance = readRunProvenance();
+            List<ProofManifestEntry> proofEntries = buildLoweredSideSlabProofEntries(screenshotDir);
+            String json = buildProofSummaryJson(provenance, proofEntries);
+            Files.writeString(screenshotDir.resolve("proof_summary.json"), json);
+        } catch (IOException ignored) {
+            // Summary emission is auxiliary evidence; test correctness remains assertion-driven.
+        }
+    }
+
     static void assertLoweredSideSlabProofArtifacts(Path screenshotDir) {
         Path manifestPath = screenshotDir.resolve("run_manifest.json");
         if (!Files.isRegularFile(manifestPath)) {
@@ -2088,6 +2101,46 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         sb.append(",\n");
         appendArtifactsJsonArray(sb, artifacts);
         sb.append("\n}\n");
+        return sb.toString();
+    }
+
+    static String buildProofSummaryJson(
+            RunProvenance provenance,
+            List<ProofManifestEntry> proofEntries
+    ) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"generatedAtUtc\": \"")
+                .append(escapeJson(provenance.generatedAtUtc()))
+                .append("\",\n");
+        sb.append("  \"gitHeadShort\": \"")
+                .append(escapeJson(provenance.gitHeadShort()))
+                .append("\",\n");
+        sb.append("  \"gitBranch\": \"")
+                .append(escapeJson(provenance.gitBranch()))
+                .append("\",\n");
+        appendStringArrayField(sb, "gitTagsAtHead", provenance.gitTagsAtHead());
+        sb.append("  \"overallStatus\": \"PASS\",\n");
+        sb.append("  \"expectedProofCount\": ").append(LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS.size()).append(",\n");
+        sb.append("  \"actualProofCount\": ").append(proofEntries.size()).append(",\n");
+        sb.append("  \"proofs\": [");
+        for (int i = 0; i < proofEntries.size(); i++) {
+            ProofManifestEntry proof = proofEntries.get(i);
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append("{\"proofId\": \"")
+                    .append(escapeJson(proof.proofId()))
+                    .append("\", \"label\": \"")
+                    .append(escapeJson(proof.label()))
+                    .append("\", \"status\": \"PASS\", \"notesFile\": \"")
+                    .append(escapeJson(proof.notesFile()))
+                    .append("\", \"primaryScreenshotFile\": \"")
+                    .append(escapeJson(proof.primaryScreenshotFile()))
+                    .append("\"}");
+        }
+        sb.append("]\n");
+        sb.append("}\n");
         return sb.toString();
     }
 
