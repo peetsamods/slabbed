@@ -748,6 +748,12 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // rescue guard
         runBedRescueGuardProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
+        // rescue guard no-go
+        runChainNoRescueTargetingProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // rescue guard no-go
+        runCraftingTableNoRescueTargetingProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
         // baseline guard
         runFullBlockBaselineGuardProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
@@ -1281,6 +1287,222 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         new NoteField("actionResult", nullToEmpty(actionResult.get())),
                         new NoteField("footState", nullToEmpty(footStateText.get())),
                         new NoteField("headState", nullToEmpty(headStateText.get()))
+                ),
+                true);
+    }
+
+    static void runChainNoRescueTargetingProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        runNoRescueTargetingProof(
+                ctx,
+                singleplayer,
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts,
+                "chain_on_fb_on_bs_no_rescue_targeting",
+                Blocks.IRON_CHAIN.getDefaultState().with(net.minecraft.block.ChainBlock.AXIS, Direction.Axis.Y),
+                new BlockPos(32, 0, 0),
+                "Chain must not be promoted as an owner-style rescue target above the slab hit.");
+    }
+
+    static void runCraftingTableNoRescueTargetingProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        runNoRescueTargetingProof(
+                ctx,
+                singleplayer,
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts,
+                "crafting_table_on_bs_no_rescue_targeting",
+                Blocks.CRAFTING_TABLE.getDefaultState(),
+                new BlockPos(36, 0, 0),
+                "Crafting table must not be promoted as an owner-style rescue target above the slab hit.");
+    }
+
+    static void runNoRescueTargetingProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts,
+            String testId,
+            BlockState aboveState,
+            BlockPos originOffset,
+            String expectedInvariant
+    ) {
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(originOffset.getX(), originOffset.getY(), originOffset.getZ());
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos placePos = fullPos.east();
+        final BlockPos slabPos = supportPos;
+        final BlockHitResult slabHit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, fullPos.getY() - 0.30, fullPos.getZ() + 0.5),
+                Direction.EAST,
+                fullPos,
+                false,
+                false);
+        AtomicReference<String> vanillaHitText = new AtomicReference<>();
+        AtomicReference<String> finalHitText = new AtomicReference<>();
+        AtomicReference<String> aboveStateText = new AtomicReference<>();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, aboveState, Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list is empty for no-rescue proof");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 4));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player is null during no-rescue proof setup");
+            }
+            mc.player.refreshPositionAndAngles(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() + 1.95,
+                    fullPos.getZ() + 3.25,
+                    180.0f,
+                    24.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 4));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(
+                ctx,
+                testId + "_setup",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("client not ready for no-rescue raycast proof");
+            }
+            BlockState slabState = mc.world.getBlockState(slabPos);
+            BlockState above = mc.world.getBlockState(fullPos);
+            if (!slabState.isOf(Blocks.STONE_SLAB) || !slabState.contains(SlabBlock.TYPE)
+                    || slabState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException(
+                        "no-rescue proof expected support slab at " + slabPos.toShortString()
+                        + ", found " + slabState);
+            }
+            if (!above.getBlock().equals(aboveState.getBlock())) {
+                throw new RuntimeException(
+                        "no-rescue proof expected " + aboveState.getBlock().getTranslationKey()
+                        + " at " + fullPos.toShortString() + ", found " + above);
+            }
+            if (SlabSupport.isLoweredBlockEntityVisual(mc.world, fullPos, above)) {
+                throw new RuntimeException(
+                        "no-rescue proof setup unexpectedly qualifies as lowered block-entity visual");
+            }
+
+            Vec3d eye = new Vec3d(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() + 1.12,
+                    fullPos.getZ() + 3.0);
+            Vec3d target = new Vec3d(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() - 0.30,
+                    fullPos.getZ() + 0.5);
+            Vec3d dir = target.subtract(eye).normalize();
+            Vec3d end = eye.add(dir.multiply(6.0));
+
+            BlockHitResult vanillaHit = mc.world.raycast(new RaycastContext(
+                    eye, end,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            if (vanillaHit.getType() != HitResult.Type.BLOCK) {
+                throw new RuntimeException(
+                        "no-rescue proof vanilla raycast missed; expected slab hit at "
+                        + fullPos.toShortString() + ", got " + vanillaHit.getType());
+            }
+            if (!vanillaHit.getBlockPos().equals(slabPos)) {
+                throw new RuntimeException(
+                        "no-rescue proof vanilla raycast expected slab hit at "
+                        + slabPos.toShortString() + ", got " + vanillaHit.getBlockPos().toShortString());
+            }
+            vanillaHitText.set(vanillaHit.getBlockPos().toShortString());
+
+            BlockHitResult finalHit = vanillaHit;
+            if (vanillaHit.getType() == HitResult.Type.BLOCK) {
+                BlockPos hitPos = vanillaHit.getBlockPos();
+                BlockPos abovePos = hitPos.up();
+                BlockState aboveStateAtHit = mc.world.getBlockState(abovePos);
+                boolean loweredOwner =
+                        SlabSupport.isLoweredBlockEntityVisual(mc.world, abovePos, aboveStateAtHit)
+                                || SlabSupport.isLoweredTorchVisual(mc.world, abovePos, aboveStateAtHit)
+                                || SlabSupport.isLoweredBedVisual(mc.world, abovePos, aboveStateAtHit);
+                if (!loweredOwner) {
+                    Block block = aboveStateAtHit.getBlock();
+                    loweredOwner = aboveStateAtHit.isSolidBlock(mc.world, abovePos)
+                            && !(block instanceof net.minecraft.block.BlockEntityProvider)
+                            && !(block instanceof net.minecraft.block.CraftingTableBlock)
+                            && SlabSupport.getYOffset(mc.world, abovePos, aboveStateAtHit) == -0.5;
+                }
+                if (loweredOwner) {
+                    VoxelShape aboveOutline = aboveStateAtHit.getOutlineShape(
+                            mc.world, abovePos, ShapeContext.of(mc.player));
+                    BlockHitResult retargetHit = aboveOutline.raycast(eye, end, abovePos);
+                    if (retargetHit != null) {
+                        double retargetDist2 = retargetHit.getPos().squaredDistanceTo(eye);
+                        double originalDist2 = vanillaHit.getPos().squaredDistanceTo(eye);
+                        if (retargetDist2 <= originalDist2 + 1.0e-6) {
+                            finalHit = retargetHit;
+                        }
+                    }
+                }
+            }
+            if (!finalHit.getBlockPos().equals(slabPos)) {
+                throw new RuntimeException(
+                        "no-rescue proof unexpectedly retargeted to "
+                        + finalHit.getBlockPos().toShortString()
+                        + " (" + finalHit.getBlockPos().up() + " owner path)"
+                        + "; expected slab hit at " + slabPos.toShortString());
+            }
+            finalHitText.set(finalHit.getBlockPos().toShortString());
+            aboveStateText.set(above.toString());
+        });
+
+        captureScreenshotAndRecord(
+                ctx,
+                testId,
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "rescue guard no-go",
+                expectedInvariant,
+                testId + "_setup",
+                testId,
+                List.of(
+                        new NoteField("supportPos", supportPos.toShortString()),
+                        new NoteField("fullPos", fullPos.toShortString()),
+                        new NoteField("slabHit", nullToEmpty(vanillaHitText.get())),
+                        new NoteField("finalHit", nullToEmpty(finalHitText.get())),
+                        new NoteField("aboveState", nullToEmpty(aboveStateText.get()))
                 ),
                 true);
     }
