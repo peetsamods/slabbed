@@ -78,6 +78,13 @@ build/run/clientGameTest/screenshots
 
 ---
 
+## Live verification
+
+For live player-feel verification after the automated bundle passes, use:
+`tools/lowered-side-slab-live-checklist.md`
+
+---
+
 ## Boundary notes
 
 - **Chain** (#8) and **crafting table** (#9) are audited no-rescue targets.
