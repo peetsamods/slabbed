@@ -46,6 +46,14 @@ Behavior is intentionally limited and may expand incrementally as edge cases are
 This project is licensed under **GPL-3.0-only**.  
 Source code is available at: https://github.com/joolbits/slabbed
 
+## Lowered Side Slab Proof Bundle
+
+The current Mac/Windows one-shot proof runners and artifact contract are documented in:
+`tools/lowered-side-slab-proof-bundle.md`
+
+Canonical proof artifacts are written under:
+`build/run/clientGameTest/screenshots`
+
 ## Issues / Feedback
 Bug reports and suggestions can be filed on GitHub:  
 https://github.com/joolbits/slabbed/issues
