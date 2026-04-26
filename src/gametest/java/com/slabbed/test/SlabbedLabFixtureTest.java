@@ -151,8 +151,7 @@ public final class SlabbedLabFixtureTest {
      * blocks (jukebox, spawner, end portal frame, …) must still sit on slabs
      * with {@code dy=-0.5} and an outline offset by -0.5.
      *
-     * <p>This is the positive counterpart to {@link #solidCubeNotLowered}.
-     * The {@code !state.isSolidBlock} gate in {@code SlabSupport.shouldOffset}
+     * <p>The {@code !state.isSolidBlock} gate in {@code SlabSupport.shouldOffset}
      * alone excludes full-cube BEs because {@code Jukebox.isSolidBlock == true}
      * — which in turn breaks the {@link SlabSupport#isLoweredBlockEntityVisual}
      * contract that covers every BE block. The {@code isSlabSitCandidate}
@@ -192,12 +191,15 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
-     * Regression guard: ordinary solid cubes should NOT inherit -0.5 offset from
-     * the generic slab-column walk. They must stay at minY=0.0 even when a bottom
-     * slab sits somewhere below.
+     * Canonical intent: ordinary solid cubes SHOULD inherit -0.5 offset from
+     * the generic slab-column walk when placed above a bottom slab support.
+     *
+     * <p>This is the global slab support policy: ordinary full blocks anchor/lower
+     * onto slabs. The previous selective-only policy that excluded solid cubes
+     * has been retired.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void solidCubeNotLowered(TestContext ctx) {
+    public void solidCubeLowersOverSlab(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
 
@@ -211,11 +213,11 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(state.isOf(Blocks.STONE), "stone not present at test position");
 
         double dy = SlabSupport.getYOffset(world, testPos, state);
-        ctx.assertTrue(dy == 0.0, "stone should not be lowered over slab column; dy=" + dy);
+        ctx.assertTrue(dy == -0.5, "stone should lower over slab column; dy=" + dy);
 
         VoxelShape outline = state.getOutlineShape(world, testPos, ShapeContext.absent());
-        ctx.assertTrue(outline.getBoundingBox().minY == 0.0,
-                "stone outline minY should stay at 0.0, got " + outline.getBoundingBox().minY);
+        ctx.assertTrue(outline.getBoundingBox().minY == -0.5,
+                "stone outline minY should be -0.5, got " + outline.getBoundingBox().minY);
 
         ctx.complete();
     }
