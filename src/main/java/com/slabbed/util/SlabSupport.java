@@ -384,6 +384,16 @@ public final class SlabSupport {
             }
         }
 
+        // Persistent slab-anchor: an ordinary FB placed directly on a bottom slab is
+        // recorded on the chunk via SlabAnchorAttachment at placement time and cleared
+        // when the FB itself is broken/replaced. Anchors persist across supporting BS
+        // removal so the FB does not visually jump upward.
+        // Only honour anchors for non-slab blocks; slabs were handled above.
+        if (!(state.getBlock() instanceof SlabBlock)
+                && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            return -0.5;
+        }
+
         if (shouldOffset(world, pos, state)) {
             // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
             // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
