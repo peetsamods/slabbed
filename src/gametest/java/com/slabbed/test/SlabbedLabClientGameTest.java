@@ -2747,6 +2747,235 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
     ) {
     }
 
+    // -------------------------------------------------------------------------
+    // Live placement repro: compares Camera-A (proof screenshot angle) and
+    // Camera-B (east-side, vanilla hitbox) raycasts against the synthetic hit
+    // result used by the existing proof, to expose the live/proof divergence.
+    // This method does NOT throw; it records findings in a JSON audit note.
+    // -------------------------------------------------------------------------
+    static void runLoweredSidePlacementLiveRepro(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts) {
+
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(8, 0, 0);
+        final BlockPos fullPos    = supportPos.up();
+        final BlockPos placePos   = fullPos.east();
+
+        // Synthetic hit from existing proof: Y is below the vanilla block floor,
+        // targeting the lowered visual space. The proof constructs this by hand and
+        // calls interactBlock directly — the live crosshair never produces this hit.
+        final double syntheticHitY = fullPos.getY() - 0.25;
+        final BlockHitResult syntheticHit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, syntheticHitY, fullPos.getZ() + 0.5),
+                Direction.EAST, fullPos, false, false);
+
+        // Camera-A: exact camera used for proof screenshots (yaw=180, pitch=24).
+        // This looks north from the south side — it cannot physically aim at the
+        // east face of the full block. Screenshot only; the proof's click is separate.
+        final double camAFeetX = fullPos.getX() + 0.5;
+        final double camAFeetY = fullPos.getY() + 1.95;
+        final double camAFeetZ = fullPos.getZ() + 3.25;
+        final float  camAYaw   = 180.0f;
+        final float  camAPitch = 24.0f;
+        // Eye offset for a standing player (~1.62 in vanilla survival).
+        final double eyeOffset = 1.62;
+        final Vec3d camAEye = new Vec3d(camAFeetX, camAFeetY + eyeOffset, camAFeetZ);
+        // Direction for yaw=180, pitch=24: straight north, slightly down.
+        final Vec3d camADir = new Vec3d(
+                -Math.sin(Math.toRadians(camAYaw))  * Math.cos(Math.toRadians(camAPitch)),
+                -Math.sin(Math.toRadians(camAPitch)),
+                 Math.cos(Math.toRadians(camAYaw))  * Math.cos(Math.toRadians(camAPitch)));
+
+        // Camera-B: positioned east of block, looking west (yaw=90, pitch=0).
+        // Eye at vanilla midpoint Y+0.5 — this is what a player east of the block
+        // would realistically use to target the east face.
+        final double camBEyeX  = fullPos.getX() + 2.5;
+        final double camBEyeY  = fullPos.getY() + 0.5;   // vanilla midpoint of east face
+        final double camBEyeZ  = fullPos.getZ() + 0.5;
+        final double camBFeetY = camBEyeY - eyeOffset;
+        final float  camBYaw   = 90.0f;
+        final float  camBPitch = 0.0f;
+        final Vec3d camBEye = new Vec3d(camBEyeX, camBEyeY, camBEyeZ);
+        final Vec3d camBDir = new Vec3d(-1.0, 0.0, 0.0); // purely west
+
+        AtomicReference<String> cameraAHitDesc  = new AtomicReference<>("pending");
+        AtomicReference<String> cameraBHitDesc  = new AtomicReference<>("pending");
+        AtomicReference<BlockHitResult> cameraBHit = new AtomicReference<>(null);
+        AtomicReference<String> clickResultStr  = new AtomicReference<>("not_run");
+        AtomicReference<String> placedStateStr  = new AtomicReference<>("not_checked");
+        AtomicReference<String> auditVerdict    = new AtomicReference<>("INDETERMINATE");
+
+        // World setup — same scenario as existing proof
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                server.getPlayerManager().getPlayerList().get(0)
+                        .setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            }
+        });
+
+        // --- Camera-A screenshot (proof screenshot angle) ---
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.refreshPositionAndAngles(camAFeetX, camAFeetY, camAFeetZ, camAYaw, camAPitch);
+                mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(ctx, "live_repro_side_slab_camera_a",
+                screenshotDir, knownScreenshotFiles, artifacts);
+
+        // Explicit raycast from Camera-A eye position
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                cameraAHitDesc.set("null_world_or_player");
+                return;
+            }
+            Vec3d end = camAEye.add(camADir.normalize().multiply(4.5));
+            BlockHitResult hit = mc.world.raycast(new RaycastContext(
+                    camAEye, end,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE, mc.player));
+            if (hit.getType() == HitResult.Type.MISS) {
+                cameraAHitDesc.set("MISS (no block within 4.5 reach)");
+            } else {
+                cameraAHitDesc.set("BLOCK blockPos=" + hit.getBlockPos().toShortString()
+                        + " face=" + hit.getSide().asString()
+                        + " hitY=" + String.format("%.4f", hit.getPos().y));
+            }
+        });
+
+        // --- Camera-B screenshot (east-side, vanilla hitbox angle) ---
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.refreshPositionAndAngles(
+                        camBEyeX, camBFeetY, camBEyeZ, camBYaw, camBPitch);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(ctx, "live_repro_side_slab_camera_b",
+                screenshotDir, knownScreenshotFiles, artifacts);
+
+        // Explicit raycast from Camera-B eye position
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                cameraBHitDesc.set("null_world_or_player");
+                return;
+            }
+            Vec3d end = camBEye.add(camBDir.multiply(4.5));
+            BlockHitResult hit = mc.world.raycast(new RaycastContext(
+                    camBEye, end,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE, mc.player));
+            if (hit.getType() == HitResult.Type.MISS) {
+                cameraBHitDesc.set("MISS");
+            } else {
+                cameraBHitDesc.set("BLOCK blockPos=" + hit.getBlockPos().toShortString()
+                        + " face=" + hit.getSide().asString()
+                        + " hitY=" + String.format("%.4f", hit.getPos().y));
+                if (hit.getType() == HitResult.Type.BLOCK) {
+                    cameraBHit.set(hit);
+                }
+            }
+        });
+
+        // --- Click using Camera-B live hit (or synthetic fallback) ---
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) return;
+            BlockHitResult hitToUse = cameraBHit.get() != null ? cameraBHit.get() : syntheticHit;
+            String hitSource = cameraBHit.get() != null ? "live_camera_b" : "synthetic_fallback";
+            ActionResult result = mc.interactionManager.interactBlock(
+                    mc.player, Hand.MAIN_HAND, hitToUse);
+            clickResultStr.set(result + " [source=" + hitSource + "]");
+            placedStateStr.set(mc.world.getBlockState(placePos).toString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(ctx, "live_repro_side_slab_after_click",
+                screenshotDir, knownScreenshotFiles, artifacts);
+
+        // --- Verdict ---
+        ctx.runOnClient(mc -> {
+            BlockHitResult bHit = cameraBHit.get();
+            String aDesc = cameraAHitDesc.get();
+            boolean aMisses = aDesc.startsWith("MISS");
+
+            if (aMisses && bHit != null) {
+                double liveY = bHit.getPos().y;
+                double diff  = liveY - syntheticHitY;
+                auditVerdict.set(String.format(
+                        "REPRO CONFIRMED:"
+                        + " Camera-A (proof screenshot angle) = MISS — proof camera cannot hit east face;"
+                        + " Camera-B live raycast hitY=%.4f vs synthetic hitY=%.4f (diff=+%.4f);"
+                        + " live hit is in vanilla block space [blockY, blockY+1];"
+                        + " synthetic hit is below vanilla floor (lowered visual space);"
+                        + " root cause: proof bypasses live raycast with a synthetic hit the player cannot reproduce;"
+                        + " real hitbox is vanilla, visual is lowered by 0.5 — no hitbox offset applied.",
+                        liveY, syntheticHitY, diff));
+            } else if (aMisses) {
+                auditVerdict.set(
+                        "PARTIAL: Camera-A = MISS (confirms proof camera decoupled from click);"
+                        + " Camera-B = null/MISS;"
+                        + " live hit path unverified; check if block was set up correctly or reach was too short.");
+            } else {
+                auditVerdict.set(
+                        "UNEXPECTED: Camera-A hit something (" + aDesc + ");"
+                        + " Camera-B=" + cameraBHitDesc.get()
+                        + "; further analysis needed.");
+            }
+        });
+
+        writeLiveSidePlacementAuditNotes(screenshotDir, supportPos, fullPos, placePos,
+                syntheticHitY, cameraAHitDesc.get(), cameraBHitDesc.get(),
+                clickResultStr.get(), placedStateStr.get(), auditVerdict.get(), artifacts);
+    }
+
+    private static void writeLiveSidePlacementAuditNotes(
+            Path screenshotDir,
+            BlockPos supportPos, BlockPos fullPos, BlockPos placePos,
+            double syntheticHitY,
+            String cameraADesc, String cameraBDesc,
+            String clickResult, String placedState, String verdict,
+            List<ManifestArtifact> artifacts) {
+        try {
+            Path notesPath = screenshotDir.resolve("live_repro_side_placement_audit.json");
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            sb.append("  \"testId\": \"live_repro_side_placement\",\n");
+            sb.append("  \"supportPos\": \"").append(supportPos.toShortString()).append("\",\n");
+            sb.append("  \"fullPos\": \"").append(fullPos.toShortString()).append("\",\n");
+            sb.append("  \"placePos\": \"").append(placePos.toShortString()).append("\",\n");
+            sb.append("  \"syntheticHitY\": ").append(String.format("%.4f", syntheticHitY)).append(",\n");
+            sb.append("  \"syntheticHitNote\": \"below vanilla block floor; targets lowered visual space; proof constructs this hit manually\",\n");
+            sb.append("  \"cameraA_proofScreenshotAngle\": \"").append(escapeJson(cameraADesc)).append("\",\n");
+            sb.append("  \"cameraA_note\": \"yaw=180 looking north; the proof screenshot camera; cannot physically aim at the east face\",\n");
+            sb.append("  \"cameraB_eastSideLookingWest\": \"").append(escapeJson(cameraBDesc)).append("\",\n");
+            sb.append("  \"cameraB_note\": \"yaw=90 looking west from east of block; eye at vanilla midpoint Y+0.5; what a live player would use\",\n");
+            sb.append("  \"clickResult\": \"").append(escapeJson(nullToEmpty(clickResult))).append("\",\n");
+            sb.append("  \"placedStateAtPlacePos\": \"").append(escapeJson(nullToEmpty(placedState))).append("\",\n");
+            sb.append("  \"auditVerdict\": \"").append(escapeJson(verdict)).append("\"\n");
+            sb.append("}\n");
+            java.nio.file.Files.writeString(notesPath, sb.toString());
+            artifacts.add(new ManifestArtifact(
+                    notesPath.getFileName().toString(),
+                    "live_repro_side_placement_audit",
+                    "live-repro-audit-notes"));
+        } catch (Exception e) {
+            System.err.println("[Slabbed] live_repro_side_placement_audit write failed: " + e);
+        }
+    }
+
     static record ProofManifestEntry(
             String proofId,
             String label,
