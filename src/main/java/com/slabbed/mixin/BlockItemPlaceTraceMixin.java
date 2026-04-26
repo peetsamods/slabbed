@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
+import com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit;
 import com.slabbed.util.SlabbedDebug;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.Block;
@@ -40,6 +41,7 @@ public abstract class BlockItemPlaceTraceMixin {
         World world = ctx.getWorld();
         Direction face = ctx.getSide();
         BlockPos placePos = ctx.getBlockPos();
+        LoweredSideLiveHitRemapRuntimeAudit.recordPlacementContext(ctx);
         BlockPos hitPos = placePos.offset(face.getOpposite());
         BlockState hitState = world.getBlockState(hitPos);
         BlockState placeState = world.getBlockState(placePos);
@@ -90,6 +92,7 @@ public abstract class BlockItemPlaceTraceMixin {
                     placeState,
                     dyPlace,
                     cir.getReturnValue());
+            LoweredSideLiveHitRemapRuntimeAudit.recordPlacementResult(ctx, cir.getReturnValue());
         } finally {
             SLABBED$TRACE.remove();
         }
