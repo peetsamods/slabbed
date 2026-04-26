@@ -351,23 +351,6 @@ public final class SlabSupport {
                     && hasBottomSlabBelow(world, belowPos)) {
                 return -0.5;
             }
-            // Adjacent-side-slab alignment: a bottom slab sitting directly on a bottom slab
-            // support should visually align with a lowered full block next to it.
-            // Trigger only when: this is a bottom slab, the block below is a bottom slab
-            // (shared support extends laterally), and at least one horizontal neighbour at
-            // the same Y is an ordinary solid lowered full block (non-slab, dy == -0.5).
-            // getYOffset on a non-slab neighbour cannot re-enter this slab branch.
-            if (isBottomSlab(state) && isBottomSlab(below)) {
-                for (Direction dir : Direction.Type.HORIZONTAL) {
-                    BlockPos neighborPos = pos.offset(dir);
-                    BlockState neighbor = world.getBlockState(neighborPos);
-                    if (neighbor.getBlock() instanceof SlabBlock) continue;
-                    if (!neighbor.isSolidBlock(world, neighborPos)) continue;
-                    if (getYOffset(world, neighborPos, neighbor) == -0.5) {
-                        return -0.5;
-                    }
-                }
-            }
         }
 
         if (shouldOffset(world, pos, state)) {
