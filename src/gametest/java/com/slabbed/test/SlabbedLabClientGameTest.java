@@ -1008,6 +1008,14 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         + reproPlacePos.up().toShortString()
                         + ", found " + above.getBlock().getTranslationKey());
             }
+            // Assert visual dy inheritance: adjacent side slab must align with lowered full block neighbor
+            double placedDy = com.slabbed.util.SlabSupport.getYOffset(mc.world, reproPlacePos, placed);
+            if (placedDy != -0.5) {
+                throw new RuntimeException(
+                        "adjacent side slab visual dy expected -0.5 at " + reproPlacePos.toShortString()
+                        + " to align with lowered full block neighbor, found " + placedDy
+                        + " for placed state " + placed);
+            }
             firstClickState.set(placed.toString());
             firstClickAboveState.set(above.toString());
         });
