@@ -2,6 +2,7 @@ package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
@@ -46,10 +47,37 @@ public abstract class SlabSupportStateMixin {
 
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$ceilingSupport(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
-        if (direction == Direction.DOWN
-                && shapeType == SideShapeType.CENTER
-                && SlabSupport.isCeilingSupportBottomSurface(world, pos)) {
+        BlockState self = (BlockState) (Object) this;
+        if (SlabSupport.isTopSlabUndersideSupport(self, direction)) {
             cir.setReturnValue(true);
+        }
+    }
+
+    @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
+    private void slabbed$ceilingSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+        BlockState self = (BlockState) (Object) this;
+        if (SlabSupport.isTopSlabUndersideSupport(self, direction)) {
+            cir.setReturnValue(true);
+        }
+    }
+
+    @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
+    private void slabbed$slabTopSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+        BlockState self = (BlockState) (Object) this;
+        if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
+            cir.setReturnValue(true);
+        }
+    }
+
+    @Inject(method = "getRaycastShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/shape/VoxelShape;",
+            at = @At("RETURN"), cancellable = true)
+    private void slabbed$offsetRaycast(BlockView world, BlockPos pos,
+                                       CallbackInfoReturnable<VoxelShape> cir) {
+        BlockState self = (BlockState) (Object) this;
+
+        double yOff = SlabSupport.getYOffset(world, pos, self);
+        if (yOff != 0.0) {
+            cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
         }
     }
 
@@ -60,6 +88,13 @@ public abstract class SlabSupportStateMixin {
     private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
+
+        // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
+        Block block = self.getBlock();
+        if (block instanceof net.minecraft.block.CarpetBlock || block instanceof net.minecraft.block.PaleMossCarpetBlock) {
+            return;
+        }
+
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
             cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
