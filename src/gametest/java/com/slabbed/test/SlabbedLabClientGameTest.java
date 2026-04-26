@@ -2835,6 +2835,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         AtomicReference<String> southSecondPlacedState = new AtomicReference<>("not_checked");
         AtomicReference<String> probeMidHitDesc = new AtomicReference<>("pending");
         AtomicReference<String> probeNaturalHitDesc = new AtomicReference<>("pending");
+        List<String[]> southPitchAuditRows = new ArrayList<>();
 
         // World setup — same scenario as existing proof
         singleplayer.getServer().runOnServer(server -> {
@@ -3063,6 +3064,124 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 probeNaturalHitDesc.get(),
                 artifacts);
 
+        final float[] southPitchSweep = new float[] {0.0f, 18.0f, 42.0f, 52.0f};
+        final String[] southPitchLabels = new String[] {
+                "south_pitch_horizontal",
+                "south_pitch_slight_down",
+                "south_pitch_center_down",
+                "south_pitch_clear_down"};
+
+        for (int i = 0; i < southPitchSweep.length; i++) {
+            final float sweepPitch = southPitchSweep[i];
+            final String sweepLabel = southPitchLabels[i];
+            final Vec3d sweepEye = southEye;
+            final Vec3d sweepDir = lookDirection(southYaw, sweepPitch);
+            AtomicReference<String> sweepHitDesc = new AtomicReference<>("pending");
+            AtomicReference<BlockHitResult> sweepHit = new AtomicReference<>(null);
+            AtomicReference<String> sweepClickResult = new AtomicReference<>("not_run");
+            AtomicReference<String> sweepPlacedState = new AtomicReference<>("not_checked");
+
+            singleplayer.getServer().runOnServer(server -> {
+                var world = server.getOverworld();
+                world.setBlockState(supportPos,
+                        Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                        Block.NOTIFY_LISTENERS);
+                world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+                world.setBlockState(southPlacePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+                world.setBlockState(southPlacePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+                if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                    server.getPlayerManager().getPlayerList().get(0)
+                            .setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+                }
+            });
+
+            ctx.runOnClient(mc -> {
+                if (mc.player != null) {
+                    mc.player.refreshPositionAndAngles(southEyeX, southEyeY, southEyeZ, southYaw, sweepPitch);
+                    mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+                }
+            });
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            ctx.runOnClient(mc -> {
+                if (mc.world == null || mc.player == null) {
+                    sweepHitDesc.set("null_world_or_player");
+                    return;
+                }
+                Vec3d end = sweepEye.add(sweepDir.normalize().multiply(4.5));
+                BlockHitResult hit = mc.world.raycast(new RaycastContext(
+                        sweepEye, end,
+                        RaycastContext.ShapeType.OUTLINE,
+                        RaycastContext.FluidHandling.NONE, mc.player));
+                if (hit.getType() == HitResult.Type.MISS) {
+                    sweepHitDesc.set("MISS");
+                } else {
+                    sweepHitDesc.set("BLOCK blockPos=" + hit.getBlockPos().toShortString()
+                            + " face=" + hit.getSide().asString()
+                            + " hitY=" + String.format("%.4f", hit.getPos().y));
+                    sweepHit.set(hit);
+                }
+            });
+
+            ctx.runOnClient(mc -> {
+                if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                    sweepClickResult.set("NOT_RUN");
+                    sweepPlacedState.set("not_checked");
+                    return;
+                }
+                BlockHitResult hitToUse = sweepHit.get();
+                if (hitToUse == null) {
+                    sweepClickResult.set("MISS_NO_CLICK");
+                    sweepPlacedState.set(mc.world.getBlockState(southPlacePos).toString());
+                    return;
+                }
+                ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hitToUse);
+                sweepClickResult.set(result.toString());
+                sweepPlacedState.set(mc.world.getBlockState(southPlacePos).toString());
+            });
+
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            captureScreenshotAndRecord(ctx, sweepLabel, screenshotDir, knownScreenshotFiles, artifacts);
+
+            String verdict;
+            if (sweepHit.get() == null) {
+                verdict = "MISS";
+            } else if (sweepPlacedState.get() != null
+                    && sweepPlacedState.get().contains("stone_slab")
+                    && sweepPlacedState.get().contains("type=bottom")) {
+                verdict = "PASS";
+            } else {
+                verdict = "FAIL";
+            }
+
+            southPitchAuditRows.add(new String[] {
+                    sweepLabel,
+                    Float.toString(sweepPitch),
+                    String.format("%.4f,%.4f,%.4f", sweepDir.x, sweepDir.y, sweepDir.z),
+                    sweepHitDesc.get(),
+                    sweepHit.get() == null ? "null" : sweepHit.get().getBlockPos().toShortString(),
+                    sweepHit.get() == null ? "null" : sweepHit.get().getSide().asString(),
+                    sweepHit.get() == null ? "null" : String.format("%.4f", sweepHit.get().getPos().y),
+                    southPlacePos.toShortString(),
+                    sweepClickResult.get(),
+                    sweepPlacedState.get(),
+                    verdict,
+                    resolveScreenshotFileNameForProofId(screenshotDir, sweepLabel)
+            });
+        }
+
+        writeLoweredSideSouthPitchAuditNotes(
+                screenshotDir,
+                supportPos,
+                fullPos,
+                southPlacePos,
+                southEye,
+                southYaw,
+                southPitchAuditRows,
+                artifacts);
+
         // --- Verdict ---
         ctx.runOnClient(mc -> {
             BlockHitResult bHit = cameraBHit.get();
@@ -3097,6 +3216,13 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         writeLiveSidePlacementAuditNotes(screenshotDir, supportPos, fullPos, placePos,
                 syntheticHitY, cameraAHitDesc.get(), cameraBHitDesc.get(),
                 clickResultStr.get(), placedStateStr.get(), auditVerdict.get(), artifacts);
+    }
+
+    private static Vec3d lookDirection(float yaw, float pitch) {
+        return new Vec3d(
+                -Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)),
+                -Math.sin(Math.toRadians(pitch)),
+                 Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)));
     }
 
     private static void writeLoweredSideNaturalAngleAuditNotes(
@@ -3252,6 +3378,91 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     "natural-angle-audit-notes"));
         } catch (Exception e) {
             System.err.println("[Slabbed] lowered_side_natural_angle_audit write failed: " + e);
+        }
+    }
+
+    private static void writeLoweredSideSouthPitchAuditNotes(
+            Path screenshotDir,
+            BlockPos supportPos,
+            BlockPos fullPos,
+            BlockPos southPlacePos,
+            Vec3d southEye,
+            float southYaw,
+            List<String[]> southPitchAuditRows,
+            List<ManifestArtifact> artifacts) {
+        try {
+            Files.createDirectories(screenshotDir);
+            Path notesPath = screenshotDir.resolve("lowered_side_south_pitch_audit.json");
+
+            boolean horizontalPass = false;
+            boolean slightDownPass = false;
+            boolean centerDownPass = false;
+            boolean clearDownPass = false;
+            for (String[] row : southPitchAuditRows) {
+                if (row[0].equals("south_pitch_horizontal")) {
+                    horizontalPass = "PASS".equals(row[10]);
+                } else if (row[0].equals("south_pitch_slight_down")) {
+                    slightDownPass = "PASS".equals(row[10]);
+                } else if (row[0].equals("south_pitch_center_down")) {
+                    centerDownPass = "PASS".equals(row[10]);
+                } else if (row[0].equals("south_pitch_clear_down")) {
+                    clearDownPass = "PASS".equals(row[10]);
+                }
+            }
+
+            String conclusion;
+            if (centerDownPass || clearDownPass) {
+                conclusion = "Downward pitch can hit the lowered south face and place correctly; this is likely an aim/instruction boundary, not a production placement bug.";
+            } else if (horizontalPass || slightDownPass) {
+                conclusion = "South face can be hit at shallow pitch; the boundary is finer than the original natural aim and should be documented for live retest.";
+            } else {
+                conclusion = "Even downward south pitches missed; this suggests a possible south-face raycast/outline issue that needs focused production diagnosis.";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            sb.append("  \"testId\": \"lowered_side_south_pitch_audit\",\n");
+            sb.append("  \"supportPos\": \"").append(escapeJson(supportPos.toShortString())).append("\",\n");
+            sb.append("  \"fullBlockPos\": \"").append(escapeJson(fullPos.toShortString())).append("\",\n");
+            sb.append("  \"southPlacementPos\": \"").append(escapeJson(southPlacePos.toShortString())).append("\",\n");
+            sb.append("  \"camera\": {\n");
+            sb.append("    \"position\": \"").append(escapeJson(southEye.toString())).append("\",\n");
+            sb.append("    \"yaw\": ").append(southYaw).append("\n");
+            sb.append("  },\n");
+            sb.append("  \"conclusion\": \"").append(escapeJson(conclusion)).append("\",\n");
+            sb.append("  \"cases\": [\n");
+            for (int i = 0; i < southPitchAuditRows.size(); i++) {
+                String[] row = southPitchAuditRows.get(i);
+                sb.append("    {\n");
+                sb.append("      \"caseName\": \"").append(escapeJson(row[0])).append("\",\n");
+                sb.append("      \"pitch\": ").append(row[1]).append(",\n");
+                sb.append("      \"rayDirection\": \"").append(escapeJson(row[2])).append("\",\n");
+                sb.append("      \"raycast\": {\n");
+                sb.append("        \"result\": \"").append(escapeJson(row[3])).append("\",\n");
+                sb.append("        \"hitBlockPos\": \"").append(escapeJson(row[4])).append("\",\n");
+                sb.append("        \"hitFace\": \"").append(escapeJson(row[5])).append("\",\n");
+                sb.append("        \"hitY\": \"").append(escapeJson(row[6])).append("\"\n");
+                sb.append("      },\n");
+                sb.append("      \"intendedPlacementPos\": \"").append(escapeJson(row[7])).append("\",\n");
+                sb.append("      \"actualPlacementResult\": \"").append(escapeJson(row[8])).append("\",\n");
+                sb.append("      \"actualPlacedBlock\": \"").append(escapeJson(row[9])).append("\",\n");
+                sb.append("      \"verdict\": \"").append(escapeJson(row[10])).append("\",\n");
+                sb.append("      \"screenshot\": \"").append(escapeJson(row[11])).append("\"\n");
+                sb.append("    }");
+                if (i + 1 < southPitchAuditRows.size()) {
+                    sb.append(",");
+                }
+                sb.append("\n");
+            }
+            sb.append("  ]\n");
+            sb.append("}\n");
+            Files.writeString(notesPath, sb.toString());
+            artifacts.add(new ManifestArtifact(
+                    notesPath.getFileName().toString(),
+                    "lowered_side_south_pitch_audit",
+                    "south-pitch-audit-notes"));
+        } catch (Exception e) {
+            System.err.println("[Slabbed] lowered_side_south_pitch_audit write failed: " + e);
         }
     }
 
