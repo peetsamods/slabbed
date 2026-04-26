@@ -4,9 +4,11 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "BlockEntityOffsetMixin",
+    "BlockModelDyTranslateMixin",
+    "CarpetDyShapeMixin",
+    "GameRendererCrosshairRetargetMixin",
     "ItemFrameRenderOffsetMixin",
-    "MinecartRenderOffsetMixin",
-    "SectionBuilderMixin"
+    "MinecartRenderOffsetMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }
