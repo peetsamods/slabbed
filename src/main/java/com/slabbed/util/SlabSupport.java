@@ -339,6 +339,29 @@ public final class SlabSupport {
         }
     }
 
+    /**
+     * Returns true if {@code slabPos} holds a bottom or double slab that is adjacent
+     * to a solid full block sitting on a bottom slab — the exact condition that gives
+     * the slab its -0.5 adjacent-side-slab dy.  Does not call getYOffset (safe inside
+     * the IN_GET_Y_OFFSET recursion guard).
+     */
+    private static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
+        SlabType type = slabState.get(SlabBlock.TYPE);
+        if (type != SlabType.BOTTOM && type != SlabType.DOUBLE) {
+            return false;
+        }
+        for (Direction dir : Direction.Type.HORIZONTAL) {
+            BlockPos neighborPos = slabPos.offset(dir);
+            BlockState neighbor = world.getBlockState(neighborPos);
+            if (neighbor.getBlock() instanceof SlabBlock) continue;
+            if (!neighbor.isSolidBlock(world, neighborPos)) continue;
+            if (hasBottomSlabBelow(world, neighborPos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
@@ -353,25 +376,22 @@ public final class SlabSupport {
             }
             // Adjacent-side-slab alignment: a bottom or double slab placed at the side of a
             // lowered full block must visually inherit the lowered -0.5 dy so model/outline/
-            // raycast align with the neighbor. Check horizontal neighbors only; ignore slab
-            // neighbors (no slab-to-slab dy spread). Use hasBottomSlabBelow directly: calling
+            // raycast align with the neighbor. Use hasBottomSlabBelow directly: calling
             // getYOffset here would be short-circuited to 0.0 by the IN_GET_Y_OFFSET recursion
             // guard since this code runs inside getYOffsetInner.
-            SlabType slabType = state.get(SlabBlock.TYPE);
-            if (slabType == SlabType.BOTTOM || slabType == SlabType.DOUBLE) {
-                for (Direction dir : Direction.Type.HORIZONTAL) {
-                    BlockPos neighborPos = pos.offset(dir);
-                    BlockState neighbor = world.getBlockState(neighborPos);
-                    if (neighbor.getBlock() instanceof SlabBlock) continue;
-                    if (!neighbor.isSolidBlock(world, neighborPos)) continue;
-                    if (hasBottomSlabBelow(world, neighborPos)) {
-                        return -0.5;
-                    }
-                }
+            if (isAdjacentSideSlabLowered(world, pos, state)) {
+                return -0.5;
             }
         }
 
         if (shouldOffset(world, pos, state)) {
+            // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
+            // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
+            // slab's visual top surface, for a total of -1.0.
+            BlockState belowSlab = world.getBlockState(pos.down());
+            if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
+                return -1.0;
+            }
             return -0.5;
         }
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
@@ -451,7 +471,8 @@ public final class SlabSupport {
                 || block instanceof net.minecraft.block.WallTorchBlock)) {
             return false;
         }
-        return getYOffset(world, pos, state) == -0.5;
+        // compound dy (-1.0) also qualifies: torch above an adjacent-lowered bottom slab
+        return getYOffset(world, pos, state) < 0.0;
     }
 
     public static boolean isLoweredBedVisual(BlockView world, BlockPos pos, BlockState state) {
