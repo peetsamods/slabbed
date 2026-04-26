@@ -791,6 +791,375 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
         // baseline guard
         runVanillaSlabBaselineGuardProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // BS-FB-0.5S interaction integrity (release-gate audit; side-channel notes only,
+        // intentionally does NOT emit manifest/ladder artifacts so the canonical 9-ID
+        // bundle count and verifier stay green until product-decision fixes land).
+        runBsFb05sInteractionIntegrityProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+    }
+
+    /**
+     * BS-FB-0.5S interaction integrity proof.
+     *
+     * <p>Fixture: bottom slab (BS) at supportPos, full block (FB) at supportPos.up()
+     * lowered onto BS, side slab (0.5S) at fullPos.east() sitting lowered at half-height.
+     *
+     * <p>Captures three subcases observed in live testing after the 0.2.0-beta.2 private
+     * launch. This is an audit-only probe — it writes a single side-channel notes file
+     * {@code bs_fb_05s_interaction_integrity_notes.json} and does not call
+     * {@link #captureScreenshotAndRecord(ClientGameTestContext, String, Path, Set, List)}
+     * so the canonical {@link #LOWERED_SIDE_SLAB_EXPECTED_PROOF_IDS} ladder and the
+     * Python bundle verifier remain unaffected.
+     *
+     * <p>Subcases:
+     * <ul>
+     *   <li><b>A — top-half placement boundary</b>: synthesizes a click on the top half
+     *       of the lowered FB's east face. Records whether the side slab branch placed
+     *       at placePos. Audit-only (product-decision: top-half routing intent is
+     *       undecided at release time).</li>
+     *   <li><b>B — visible side slab target</b>: natural side ray at the visible side
+     *       slab's center. RED if resolved BlockPos != slabPos — that matches the live
+     *       "limited/picky hitbox coverage" symptom and the "wrong block breaks
+     *       repeatedly" symptom when the side slab is aimed at.</li>
+     *   <li><b>C — supporting BS removal</b>: confirms initial FB dy = -0.5, removes
+     *       BS, waits, re-reads FB dy. RED if FB dy drifts to 0.0 (matches live
+     *       "breaking the supporting bottom slab makes the full block move upward").</li>
+     * </ul>
+     */
+    static void runBsFb05sInteractionIntegrityProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "bs_fb_05s_interaction_integrity";
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(40, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos slabPos = fullPos.east();
+        final BlockPos placePos = fullPos.east();
+
+        AtomicReference<String> caseAPlacedState = new AtomicReference<>("");
+        AtomicReference<String> caseAActionResult = new AtomicReference<>("");
+        AtomicReference<String> caseACenterResolved = new AtomicReference<>("");
+        AtomicReference<String> caseBCenterResolved = new AtomicReference<>("");
+        AtomicReference<String> caseBUpperResolved = new AtomicReference<>("");
+        AtomicReference<String> caseBLowerResolved = new AtomicReference<>("");
+        AtomicReference<String> caseCInitialFbDy = new AtomicReference<>("");
+        AtomicReference<String> caseCInitialSlabDy = new AtomicReference<>("");
+        AtomicReference<String> caseCPostBreakFbDy = new AtomicReference<>("");
+        AtomicReference<String> caseCPostBreakSlabDy = new AtomicReference<>("");
+        AtomicReference<String> caseCPostBreakFbState = new AtomicReference<>("");
+        AtomicReference<String> caseAVerdict = new AtomicReference<>("audit-only");
+        AtomicReference<String> caseBVerdict = new AtomicReference<>("audit-only");
+        AtomicReference<String> caseCVerdict = new AtomicReference<>("audit-only");
+
+        // ── Case A: top-half placement boundary ───────────────────────────────
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list empty for bs-fb-05s integrity proof");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 4));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player null during bs-fb-05s integrity setup");
+            }
+            mc.player.refreshPositionAndAngles(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() + 1.95,
+                    fullPos.getZ() + 3.25,
+                    180.0f,
+                    24.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 4));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // Synthesize click on top half of the lowered FB's east face.
+        // Lowered FB visual spans world Y ∈ [fullPos.y - 0.5, fullPos.y + 0.5];
+        // top half center is world Y = fullPos.y + 0.25.
+        final BlockHitResult topHalfHit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, fullPos.getY() + 0.25, fullPos.getZ() + 0.5),
+                Direction.EAST,
+                fullPos,
+                false,
+                false);
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for case A");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, topHalfHit);
+            caseAActionResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during case A readback");
+            }
+            BlockState placed = mc.world.getBlockState(placePos);
+            caseACenterResolved.set(fullPos.toShortString());
+            caseAPlacedState.set(placed.toString());
+            if (placed.isOf(Blocks.STONE_SLAB)) {
+                caseAVerdict.set("audit-only: side slab placed from top-half aim (product-decision — "
+                        + "top-half routing intent undecided)");
+            } else {
+                caseAVerdict.set("audit-only: top-half aim did not produce side slab (" + placed + ")");
+            }
+        });
+
+        // Clear for Case B.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // ── Case B: visible side slab target ──────────────────────────────────
+        // Place the side slab (0.5S) manually; its dy must inherit -0.5 via the
+        // adjacent-lowered rule (proven by the existing side-slab intent proof).
+        singleplayer.getServer().runOnServer(server -> {
+            server.getOverworld().setBlockState(
+                    slabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("client not ready for case B");
+            }
+            // Visible side slab body at world Y ∈ [slabPos.y - 0.5, slabPos.y].
+            // Center = slabPos.y - 0.25. Upper visible = slabPos.y - 0.05.
+            // Lower visible = slabPos.y - 0.45.
+            //
+            // Eye placement: must be ABOVE the slab's native voxel floor (Y ≥ slabPos.y)
+            // so the DDA ray actually enters the Y=slabPos.y block column when approaching
+            // from south. A player standing at ground level south of the fixture has eye
+            // height ≈ slabPos.y + 1.5 (feet on the BS top = slabPos.y - 0.5, eye = +1.62
+            // above feet ≈ slabPos.y + 1.12). Using slabPos.y + 1.5 is a conservative
+            // natural eye height that ensures DDA enters the Y=slabPos.y voxel and tests
+            // the -0.5-offset slab outline.
+            double centerY = slabPos.getY() - 0.25;
+            double upperY  = slabPos.getY() - 0.05;
+            double lowerY  = slabPos.getY() - 0.45;
+            double eyeY = slabPos.getY() + 1.5;
+            // Approach from south (Z+), looking north-and-down at the slab's south face.
+            Vec3d eyeCenter = new Vec3d(slabPos.getX() + 0.5, eyeY, slabPos.getZ() + 2.5);
+            Vec3d tgtCenter = new Vec3d(slabPos.getX() + 0.5, centerY, slabPos.getZ() + 0.5);
+            Vec3d tgtUpper  = new Vec3d(slabPos.getX() + 0.5, upperY,  slabPos.getZ() + 0.5);
+            Vec3d tgtLower  = new Vec3d(slabPos.getX() + 0.5, lowerY,  slabPos.getZ() + 0.5);
+            BlockPos resolvedCenter = resolveVisibleOutlineHit(mc, eyeCenter, tgtCenter, 6.0);
+            BlockPos resolvedUpper  = resolveVisibleOutlineHit(mc, eyeCenter, tgtUpper,  6.0);
+            BlockPos resolvedLower  = resolveVisibleOutlineHit(mc, eyeCenter, tgtLower,  6.0);
+            caseBCenterResolved.set(resolvedCenter == null ? "MISS" : resolvedCenter.toShortString());
+            caseBUpperResolved.set(resolvedUpper  == null ? "MISS" : resolvedUpper.toShortString());
+            caseBLowerResolved.set(resolvedLower  == null ? "MISS" : resolvedLower.toShortString());
+            if (resolvedCenter == null || !resolvedCenter.equals(slabPos)) {
+                caseBVerdict.set("RED: center aim at visible side slab resolved to "
+                        + (resolvedCenter == null ? "MISS" : resolvedCenter.toShortString())
+                        + "; expected " + slabPos.toShortString()
+                        + " (release-blocking: hitbox coverage / wrong-break targeting)");
+            } else {
+                caseBVerdict.set("audit-only: center aim hit side slab (upper="
+                        + caseBUpperResolved.get() + ", lower=" + caseBLowerResolved.get() + ")");
+            }
+        });
+
+        // ── Case C: supporting BS removal ─────────────────────────────────────
+        // The fixture so far installed the FB via setBlockState, which bypasses
+        // Block.onPlaced and therefore does not engage the persistent slab-anchor
+        // path. To test the production contract honestly, replace the FB via a
+        // synthetic player placement (interactBlock on the BS top face) so
+        // Block.onPlaced fires → SlabAnchorAttachment records the anchor.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            // Clear Case B's side slab and the FB so the placement site is empty.
+            world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            // Switch the player's hand to STONE so the synthetic click places the FB.
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                        Hand.MAIN_HAND,
+                        new ItemStack(Items.STONE, 4));
+            }
+        });
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 4));
+                // Reposition the player above the supporting BS so server-side
+                // reach + line-of-sight validation accepts the synthetic UP-face
+                // click. Case A left the player facing south at z=3.25; for Case C
+                // the click target is at z=0 (north of that), so we move directly
+                // above and pitch straight down.
+                mc.player.refreshPositionAndAngles(
+                        supportPos.getX() + 0.5,
+                        supportPos.getY() + 2.5,
+                        supportPos.getZ() + 0.5,
+                        0.0f,
+                        90.0f);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // Click the top face of the supporting bottom slab. BS top sits at world
+        // Y = supportPos.y + 0.5; UP-face hit at the slab's top centre routes
+        // BlockItem.place to supportPos.up() == fullPos, where Block.onPlaced
+        // fires and the anchor is recorded.
+        final BlockHitResult fbPlaceHit = new BlockHitResult(
+                new Vec3d(supportPos.getX() + 0.5,
+                          supportPos.getY() + 0.5,
+                          supportPos.getZ() + 0.5),
+                Direction.UP,
+                supportPos,
+                false,
+                false);
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for case C natural placement");
+            }
+            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, fbPlaceHit);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during case C pre-read");
+            }
+            BlockState fbState0 = mc.world.getBlockState(fullPos);
+            BlockState slabState0 = mc.world.getBlockState(slabPos);
+            caseCInitialFbDy.set(Double.toString(SlabSupport.getYOffset(mc.world, fullPos, fbState0)));
+            caseCInitialSlabDy.set(Double.toString(SlabSupport.getYOffset(mc.world, slabPos, slabState0)));
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            // Break the supporting bottom slab under the lowered FB.
+            server.getOverworld().breakBlock(supportPos, false);
+        });
+
+        // Let neighbor updates and any revalidation settle.
+        for (int i = 0; i < 5; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during case C post-read");
+            }
+            BlockState fbState1 = mc.world.getBlockState(fullPos);
+            BlockState slabState1 = mc.world.getBlockState(slabPos);
+            double fbDy1 = SlabSupport.getYOffset(mc.world, fullPos, fbState1);
+            double slabDy1 = SlabSupport.getYOffset(mc.world, slabPos, slabState1);
+            caseCPostBreakFbDy.set(Double.toString(fbDy1));
+            caseCPostBreakSlabDy.set(Double.toString(slabDy1));
+            caseCPostBreakFbState.set(fbState1.toString());
+            double fbDy0 = parseDoubleSafe(caseCInitialFbDy.get(), 0.0);
+            if (fbDy0 != -0.5) {
+                caseCVerdict.set("audit-only: pre-break FB dy was " + fbDy0
+                        + " (not the expected lowered -0.5 baseline)");
+            } else if (!fbState1.isOf(Blocks.STONE)) {
+                caseCVerdict.set("RED: FB block at " + fullPos.toShortString()
+                        + " is no longer STONE after supporting BS break (fbState=" + fbState1
+                        + "); persistent slab-anchor must keep the FB in place");
+            } else if (fbDy1 != -0.5) {
+                caseCVerdict.set("RED: FB dy drifted from -0.5 → " + fbDy1
+                        + " after supporting BS break (release-blocking: FB moves upward visually)");
+            } else {
+                caseCVerdict.set("GREEN: FB stayed STONE with dy=-0.5 after supporting BS break"
+                        + " (slab dy=" + slabDy1 + ")");
+            }
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "bs-fb-05s interaction integrity",
+                "BS-FB-0.5S side aim resolves to side slab; supporting BS break does not raise FB.",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("supportPos", supportPos.toShortString()),
+                        new NoteField("fullPos", fullPos.toShortString()),
+                        new NoteField("slabPos", slabPos.toShortString()),
+                        new NoteField("caseA_topHalfActionResult", caseAActionResult.get()),
+                        new NoteField("caseA_topHalfPlacedState", caseAPlacedState.get()),
+                        new NoteField("caseA_verdict", caseAVerdict.get()),
+                        new NoteField("caseB_centerResolved", caseBCenterResolved.get()),
+                        new NoteField("caseB_upperResolved", caseBUpperResolved.get()),
+                        new NoteField("caseB_lowerResolved", caseBLowerResolved.get()),
+                        new NoteField("caseB_verdict", caseBVerdict.get()),
+                        new NoteField("caseC_initialFbDy", caseCInitialFbDy.get()),
+                        new NoteField("caseC_initialSlabDy", caseCInitialSlabDy.get()),
+                        new NoteField("caseC_postBreakFbDy", caseCPostBreakFbDy.get()),
+                        new NoteField("caseC_postBreakSlabDy", caseCPostBreakSlabDy.get()),
+                        new NoteField("caseC_postBreakFbState", caseCPostBreakFbState.get()),
+                        new NoteField("caseC_verdict", caseCVerdict.get())
+                ),
+                !caseBVerdict.get().startsWith("RED") && !caseCVerdict.get().startsWith("RED"));
+
+        // Fail after notes are written so observations are persisted even when red.
+        StringBuilder failMsg = new StringBuilder();
+        if (caseBVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] caseB ").append(caseBVerdict.get()).append("\n");
+        }
+        if (caseCVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] caseC expected FB dy stays at -0.5 across BS removal;"
+                    + " initialFbDy=").append(caseCInitialFbDy.get())
+                    .append(" postBreakFbDy=").append(caseCPostBreakFbDy.get())
+                    .append(" postBreakFbState=").append(caseCPostBreakFbState.get()).append("\n");
+        }
+        if (failMsg.length() > 0) {
+            throw new RuntimeException(failMsg.toString().trim());
+        }
+    }
+
+    /**
+     * Vanilla OUTLINE raycast (no torch-visual retarget) — used to probe what the
+     * crosshair naturally resolves to for visible side-slab aims.
+     */
+    private static BlockPos resolveVisibleOutlineHit(
+            net.minecraft.client.MinecraftClient mc, Vec3d eye, Vec3d target, double rayLen
+    ) {
+        Vec3d dir = target.subtract(eye).normalize();
+        Vec3d end = eye.add(dir.multiply(rayLen));
+        BlockHitResult hit = mc.world.raycast(new RaycastContext(
+                eye, end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                mc.player));
+        return hit.getType() == HitResult.Type.BLOCK ? hit.getBlockPos() : null;
+    }
+
+    private static double parseDoubleSafe(String s, double fallback) {
+        try {
+            return Double.parseDouble(s);
+        } catch (Exception e) {
+            return fallback;
+        }
     }
 
     static void runLowerHalfOwnershipProof(
