@@ -8,7 +8,9 @@
     "torch.TorchBlockMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
+    "TorchParticleAccessor",
     "TorchParticleMixin",
+    "WallTorchParticleMixin",
     "RedstoneWireBlockMixin",
     "BlockItemPlaceTraceMixin",
     "BlockItemPlacementIntentMixin"
