@@ -351,13 +351,14 @@ public final class SlabSupport {
                     && hasBottomSlabBelow(world, belowPos)) {
                 return -0.5;
             }
-            // Adjacent-side-slab alignment: a bottom slab placed at the side of a lowered
-            // full block must visually inherit the lowered -0.5 dy so model/outline/raycast
-            // align with the neighbor. Check horizontal neighbors only; ignore slab neighbors
-            // (no slab-to-slab dy spread). Use hasBottomSlabBelow directly: calling getYOffset
-            // here would be short-circuited to 0.0 by the IN_GET_Y_OFFSET recursion guard
-            // since this code runs inside getYOffsetInner.
-            if (isBottomSlab(state)) {
+            // Adjacent-side-slab alignment: a bottom or double slab placed at the side of a
+            // lowered full block must visually inherit the lowered -0.5 dy so model/outline/
+            // raycast align with the neighbor. Check horizontal neighbors only; ignore slab
+            // neighbors (no slab-to-slab dy spread). Use hasBottomSlabBelow directly: calling
+            // getYOffset here would be short-circuited to 0.0 by the IN_GET_Y_OFFSET recursion
+            // guard since this code runs inside getYOffsetInner.
+            SlabType slabType = state.get(SlabBlock.TYPE);
+            if (slabType == SlabType.BOTTOM || slabType == SlabType.DOUBLE) {
                 for (Direction dir : Direction.Type.HORIZONTAL) {
                     BlockPos neighborPos = pos.offset(dir);
                     BlockState neighbor = world.getBlockState(neighborPos);
