@@ -2801,12 +2801,40 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         final Vec3d camBEye = new Vec3d(camBEyeX, camBEyeY, camBEyeZ);
         final Vec3d camBDir = new Vec3d(-1.0, 0.0, 0.0); // purely west
 
+        // Natural south-facing approach used to probe the live feel path that the
+        // existing synthetic proof did not exercise.
+        final double southEyeX = fullPos.getX() + 0.5;
+        final double southEyeY = fullPos.getY() + 1.95;
+        final double southEyeZ = fullPos.getZ() + 3.25;
+        final float southYaw = 180.0f;
+        final float southPitch = 16.0f;
+        final Vec3d southEye = new Vec3d(southEyeX, southEyeY + eyeOffset, southEyeZ);
+        final Vec3d southDir = new Vec3d(0.0, 0.0, -1.0);
+        final BlockPos southPlacePos = fullPos.south();
+
+        // Eye-height boundary probes: one that should comfortably intersect the
+        // lowered visual space and one that mimics a natural horizontal aim.
+        final double probeMidEyeY = fullPos.getY() + 1.15;
+        final double probeNaturalEyeY = fullPos.getY() + 1.95;
+        final Vec3d probeMidEye = new Vec3d(fullPos.getX() + 0.5, probeMidEyeY, fullPos.getZ() + 3.25);
+        final Vec3d probeNaturalEye = new Vec3d(fullPos.getX() + 0.5, probeNaturalEyeY, fullPos.getZ() + 3.25);
+        final Vec3d probeDir = new Vec3d(0.0, 0.0, -1.0);
+
         AtomicReference<String> cameraAHitDesc  = new AtomicReference<>("pending");
         AtomicReference<String> cameraBHitDesc  = new AtomicReference<>("pending");
         AtomicReference<BlockHitResult> cameraBHit = new AtomicReference<>(null);
         AtomicReference<String> clickResultStr  = new AtomicReference<>("not_run");
         AtomicReference<String> placedStateStr  = new AtomicReference<>("not_checked");
         AtomicReference<String> auditVerdict    = new AtomicReference<>("INDETERMINATE");
+
+        AtomicReference<String> southHitDesc = new AtomicReference<>("pending");
+        AtomicReference<BlockHitResult> southHit = new AtomicReference<>(null);
+        AtomicReference<String> southFirstClickResult = new AtomicReference<>("not_run");
+        AtomicReference<String> southFirstPlacedState = new AtomicReference<>("not_checked");
+        AtomicReference<String> southSecondClickResult = new AtomicReference<>("not_run");
+        AtomicReference<String> southSecondPlacedState = new AtomicReference<>("not_checked");
+        AtomicReference<String> probeMidHitDesc = new AtomicReference<>("pending");
+        AtomicReference<String> probeNaturalHitDesc = new AtomicReference<>("pending");
 
         // World setup — same scenario as existing proof
         singleplayer.getServer().runOnServer(server -> {
@@ -2905,6 +2933,136 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         captureScreenshotAndRecord(ctx, "live_repro_side_slab_after_click",
                 screenshotDir, knownScreenshotFiles, artifacts);
 
+        // --- Natural south-facing approach screenshot + raycast + click ---
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.refreshPositionAndAngles(southEyeX, southEyeY, southEyeZ, southYaw, southPitch);
+                mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(ctx, "natural_south_face_after_click",
+                screenshotDir, knownScreenshotFiles, artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                southHitDesc.set("null_world_or_player");
+                return;
+            }
+            Vec3d end = southEye.add(southDir.multiply(4.5));
+            BlockHitResult hit = mc.world.raycast(new RaycastContext(
+                    southEye, end,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE, mc.player));
+            if (hit.getType() == HitResult.Type.MISS) {
+                southHitDesc.set("MISS");
+            } else {
+                southHitDesc.set("BLOCK blockPos=" + hit.getBlockPos().toShortString()
+                        + " face=" + hit.getSide().asString()
+                        + " hitY=" + String.format("%.4f", hit.getPos().y));
+                southHit.set(hit);
+            }
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                return;
+            }
+            BlockHitResult hitToUse = southHit.get();
+            if (hitToUse == null) {
+                southFirstClickResult.set("MISS_NO_CLICK");
+                southFirstPlacedState.set(mc.world.getBlockState(southPlacePos).toString());
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hitToUse);
+            southFirstClickResult.set(result.toString());
+            southFirstPlacedState.set(mc.world.getBlockState(southPlacePos).toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        captureScreenshotAndRecord(ctx, "natural_south_repeat_after_click",
+                screenshotDir, knownScreenshotFiles, artifacts);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                return;
+            }
+            BlockHitResult hitToUse = southHit.get();
+            if (hitToUse == null) {
+                southSecondClickResult.set("MISS_NO_REPEAT_CLICK");
+                southSecondPlacedState.set(mc.world.getBlockState(southPlacePos).toString());
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hitToUse);
+            southSecondClickResult.set(result.toString());
+            southSecondPlacedState.set(mc.world.getBlockState(southPlacePos).toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                probeMidHitDesc.set("null_world_or_player");
+                probeNaturalHitDesc.set("null_world_or_player");
+                return;
+            }
+
+            Vec3d midEnd = probeMidEye.add(probeDir.multiply(4.5));
+            BlockHitResult midHit = mc.world.raycast(new RaycastContext(
+                    probeMidEye, midEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE, mc.player));
+            if (midHit.getType() == HitResult.Type.MISS) {
+                probeMidHitDesc.set("MISS");
+            } else {
+                probeMidHitDesc.set("BLOCK blockPos=" + midHit.getBlockPos().toShortString()
+                        + " face=" + midHit.getSide().asString()
+                        + " hitY=" + String.format("%.4f", midHit.getPos().y));
+            }
+
+            Vec3d naturalEnd = probeNaturalEye.add(probeDir.multiply(4.5));
+            BlockHitResult naturalHit = mc.world.raycast(new RaycastContext(
+                    probeNaturalEye, naturalEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE, mc.player));
+            if (naturalHit.getType() == HitResult.Type.MISS) {
+                probeNaturalHitDesc.set("MISS");
+            } else {
+                probeNaturalHitDesc.set("BLOCK blockPos=" + naturalHit.getBlockPos().toShortString()
+                        + " face=" + naturalHit.getSide().asString()
+                        + " hitY=" + String.format("%.4f", naturalHit.getPos().y));
+            }
+        });
+
+        captureScreenshotAndRecord(ctx, "eye_height_offset_hit",
+                screenshotDir, knownScreenshotFiles, artifacts);
+        captureScreenshotAndRecord(ctx, "eye_height_natural_horizontal",
+                screenshotDir, knownScreenshotFiles, artifacts);
+
+        writeLoweredSideNaturalAngleAuditNotes(
+                screenshotDir,
+                supportPos,
+                fullPos,
+                placePos,
+                southPlacePos,
+                cameraBHit.get(),
+                cameraBHitDesc.get(),
+                clickResultStr.get(),
+                placedStateStr.get(),
+                southHit.get(),
+                southHitDesc.get(),
+                southFirstClickResult.get(),
+                southFirstPlacedState.get(),
+                southSecondClickResult.get(),
+                southSecondPlacedState.get(),
+                probeMidHitDesc.get(),
+                probeNaturalHitDesc.get(),
+                artifacts);
+
         // --- Verdict ---
         ctx.runOnClient(mc -> {
             BlockHitResult bHit = cameraBHit.get();
@@ -2939,6 +3097,162 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         writeLiveSidePlacementAuditNotes(screenshotDir, supportPos, fullPos, placePos,
                 syntheticHitY, cameraAHitDesc.get(), cameraBHitDesc.get(),
                 clickResultStr.get(), placedStateStr.get(), auditVerdict.get(), artifacts);
+    }
+
+    private static void writeLoweredSideNaturalAngleAuditNotes(
+            Path screenshotDir,
+            BlockPos supportPos,
+            BlockPos fullPos,
+            BlockPos eastPlacePos,
+            BlockPos southPlacePos,
+            BlockHitResult cameraBHit,
+            String cameraBDesc,
+            String cameraBClickResult,
+            String cameraBPlacedState,
+            BlockHitResult southHit,
+            String southHitDesc,
+            String southFirstClickResult,
+            String southFirstPlacedState,
+            String southSecondClickResult,
+            String southSecondPlacedState,
+            String probeMidHitDesc,
+            String probeNaturalHitDesc,
+            List<ManifestArtifact> artifacts) {
+        try {
+            Files.createDirectories(screenshotDir);
+            Path notesPath = screenshotDir.resolve("lowered_side_natural_angle_audit.json");
+            String cameraBHitFace = cameraBHit == null ? "null" : cameraBHit.getSide().asString();
+            String cameraBHitPos = cameraBHit == null ? "null" : cameraBHit.getBlockPos().toShortString();
+            String cameraBHitY = cameraBHit == null ? "null" : String.format("%.4f", cameraBHit.getPos().y);
+            String southHitFace = southHit == null ? "null" : southHit.getSide().asString();
+            String southHitPos = southHit == null ? "null" : southHit.getBlockPos().toShortString();
+            String southHitY = southHit == null ? "null" : String.format("%.4f", southHit.getPos().y);
+
+            String cameraBVerdict;
+            if (cameraBHit != null && cameraBDesc.startsWith("BLOCK")) {
+                cameraBVerdict = "PASS";
+            } else if (cameraBHit == null) {
+                cameraBVerdict = "MISS";
+            } else {
+                cameraBVerdict = "FAIL";
+            }
+
+            String southVerdict;
+            if (southHit == null) {
+                southVerdict = "MISS";
+            } else if (southFirstPlacedState != null && southFirstPlacedState.contains("stone_slab")) {
+                southVerdict = southFirstPlacedState.contains("type=bottom") || southFirstPlacedState.contains("type=double")
+                        ? "PASS"
+                        : "FAIL";
+            } else {
+                southVerdict = "FAIL";
+            }
+
+            String midVerdict = probeMidHitDesc.startsWith("BLOCK") ? "PASS" : "FAIL";
+            String naturalVerdict = probeNaturalHitDesc.startsWith("BLOCK") ? "PASS" : "MISS";
+            String repeatVerdict = southSecondPlacedState != null && southSecondPlacedState.contains("type=double")
+                    ? "PASS"
+                    : "FAIL";
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            sb.append("  \"testId\": \"lowered_side_natural_angle_audit\",\n");
+            sb.append("  \"supportPos\": \"").append(escapeJson(supportPos.toShortString())).append("\",\n");
+            sb.append("  \"fullBlockPos\": \"").append(escapeJson(fullPos.toShortString())).append("\",\n");
+            sb.append("  \"eastPlacementPos\": \"").append(escapeJson(eastPlacePos.toShortString())).append("\",\n");
+            sb.append("  \"southPlacementPos\": \"").append(escapeJson(southPlacePos.toShortString())).append("\",\n");
+            sb.append("  \"conclusion\": {\n");
+            sb.append("    \"eastFacePath\": \"").append(escapeJson(cameraBVerdict)).append("\",\n");
+            sb.append("    \"southFacePath\": \"").append(escapeJson(southVerdict)).append("\",\n");
+            sb.append("    \"naturalEyeHeightHorizontal\": \"").append(escapeJson(naturalVerdict)).append("\",\n");
+            sb.append("    \"repeatClickPath\": \"").append(escapeJson(repeatVerdict)).append("\",\n");
+            sb.append("    \"boundaryProbeMid\": \"").append(escapeJson(midVerdict)).append("\"\n");
+            sb.append("  },\n");
+            sb.append("  \"cases\": [\n");
+            sb.append("    {\n");
+            sb.append("      \"caseName\": \"camera_b_east_face_after_click\",\n");
+            sb.append("      \"camera\": {\n");
+            sb.append("        \"position\": \"").append(escapeJson("east-of-block, looking west, vanilla midpoint eye")).append("\",\n");
+            sb.append("        \"yaw\": 90.0,\n");
+            sb.append("        \"pitch\": 0.0\n");
+            sb.append("      },\n");
+            sb.append("      \"raycast\": {\n");
+            sb.append("        \"result\": \"").append(escapeJson(cameraBDesc)).append("\",\n");
+            sb.append("        \"hitFace\": \"").append(escapeJson(cameraBHitFace)).append("\",\n");
+            sb.append("        \"hitPos\": \"").append(escapeJson(cameraBHitPos)).append("\",\n");
+            sb.append("        \"hitY\": \"").append(escapeJson(cameraBHitY)).append("\"\n");
+            sb.append("      },\n");
+            sb.append("      \"targetBlockPos\": \"").append(escapeJson(eastPlacePos.toShortString())).append("\",\n");
+            sb.append("      \"actualPlacementResult\": \"").append(escapeJson(nullToEmpty(cameraBClickResult))).append("\",\n");
+            sb.append("      \"actualPlacedBlock\": \"").append(escapeJson(nullToEmpty(cameraBPlacedState))).append("\",\n");
+            sb.append("      \"verdict\": \"").append(escapeJson(cameraBVerdict)).append("\"\n");
+            sb.append("    },\n");
+            sb.append("    {\n");
+            sb.append("      \"caseName\": \"natural_south_face_after_click\",\n");
+            sb.append("      \"camera\": {\n");
+            sb.append("        \"position\": \"").append(escapeJson("south-of-block, looking north-ish, natural approach")).append("\",\n");
+            sb.append("        \"yaw\": 180.0,\n");
+            sb.append("        \"pitch\": 16.0\n");
+            sb.append("      },\n");
+            sb.append("      \"raycast\": {\n");
+            sb.append("        \"result\": \"").append(escapeJson(southHitDesc)).append("\",\n");
+            sb.append("        \"hitFace\": \"").append(escapeJson(southHitFace)).append("\",\n");
+            sb.append("        \"hitPos\": \"").append(escapeJson(southHitPos)).append("\",\n");
+            sb.append("        \"hitY\": \"").append(escapeJson(southHitY)).append("\"\n");
+            sb.append("      },\n");
+            sb.append("      \"targetBlockPos\": \"").append(escapeJson(southPlacePos.toShortString())).append("\",\n");
+            sb.append("      \"actualPlacementResult\": \"").append(escapeJson(nullToEmpty(southFirstClickResult))).append("\",\n");
+            sb.append("      \"actualPlacedBlock\": \"").append(escapeJson(nullToEmpty(southFirstPlacedState))).append("\",\n");
+            sb.append("      \"verdict\": \"").append(escapeJson(southVerdict)).append("\"\n");
+            sb.append("    },\n");
+            sb.append("    {\n");
+            sb.append("      \"caseName\": \"eye_height_offset_hit\",\n");
+            sb.append("      \"camera\": {\n");
+            sb.append("        \"position\": \"near lowered-space middle/top\",\n");
+            sb.append("        \"yaw\": 180.0,\n");
+            sb.append("        \"pitch\": 16.0\n");
+            sb.append("      },\n");
+            sb.append("      \"raycast\": {\n");
+            sb.append("        \"result\": \"").append(escapeJson(probeMidHitDesc)).append("\"\n");
+            sb.append("      },\n");
+            sb.append("      \"verdict\": \"").append(escapeJson(midVerdict)).append("\"\n");
+            sb.append("    },\n");
+            sb.append("    {\n");
+            sb.append("      \"caseName\": \"eye_height_natural_horizontal\",\n");
+            sb.append("      \"camera\": {\n");
+            sb.append("        \"position\": \"normal-ish player eye height, horizontal aim\",\n");
+            sb.append("        \"yaw\": 180.0,\n");
+            sb.append("        \"pitch\": 0.0\n");
+            sb.append("      },\n");
+            sb.append("      \"raycast\": {\n");
+            sb.append("        \"result\": \"").append(escapeJson(probeNaturalHitDesc)).append("\"\n");
+            sb.append("      },\n");
+            sb.append("      \"verdict\": \"").append(escapeJson(naturalVerdict)).append("\"\n");
+            sb.append("    },\n");
+            sb.append("    {\n");
+            sb.append("      \"caseName\": \"natural_south_repeat_after_click\",\n");
+            sb.append("      \"camera\": {\n");
+            sb.append("        \"position\": \"south-of-block repeat click\",\n");
+            sb.append("        \"yaw\": 180.0,\n");
+            sb.append("        \"pitch\": 16.0\n");
+            sb.append("      },\n");
+            sb.append("      \"raycast\": {\n");
+            sb.append("        \"result\": \"").append(escapeJson(southHitDesc)).append("\"\n");
+            sb.append("      },\n");
+            sb.append("      \"actualPlacementResult\": \"").append(escapeJson(nullToEmpty(southSecondClickResult))).append("\",\n");
+            sb.append("      \"actualPlacedBlock\": \"").append(escapeJson(nullToEmpty(southSecondPlacedState))).append("\",\n");
+            sb.append("      \"verdict\": \"").append(escapeJson(repeatVerdict)).append("\"\n");
+            sb.append("    }\n");
+            sb.append("  ]\n");
+            sb.append("}\n");
+            Files.writeString(notesPath, sb.toString());
+            artifacts.add(new ManifestArtifact(
+                    notesPath.getFileName().toString(),
+                    "lowered_side_natural_angle_audit",
+                    "natural-angle-audit-notes"));
+        } catch (Exception e) {
+            System.err.println("[Slabbed] lowered_side_natural_angle_audit write failed: " + e);
+        }
     }
 
     private static void writeLiveSidePlacementAuditNotes(
