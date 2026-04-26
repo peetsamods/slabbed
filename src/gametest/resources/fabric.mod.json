@@ -10,7 +10,8 @@
       "com.slabbed.test.ChainSurvivalReproTest"
     ],
     "fabric-client-gametest": [
-      "com.slabbed.test.SlabbedLabLoweredSideSlabPlacementClientGameTest"
+      "com.slabbed.test.SlabbedLabLoweredSideSlabPlacementClientGameTest",
+      "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest"
     ]
   },
   "depends": {
