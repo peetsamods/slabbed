@@ -53,6 +53,16 @@ With a full block sitting lowered on a bottom slab, place a slab against its sid
 - **PASS:** the side slab appears where you aimed, at the height that visually matches the lowered block's side.
 - **FAIL:** the slab appears above or below the visible side face, or placement fails unexpectedly.
 
+### Aim guidance for lowered side placement
+
+- The lowered visible block can be missed if you aim horizontally from normal eye height.
+- For side placement checks, aim at the **visible lowered side face itself**, not the upper vanilla-space area above it.
+- Prefer testing from a position where the crosshair outline visibly hugs the lowered block.
+- If one face misses, rotate around and try another side face before marking a production failure.
+- Do not count a miss as a placement failure unless the crosshair is visibly outlining the lowered block side.
+- Check 3 repeat-click should only be judged after Check 2 successfully placed the side slab.
+- If the outline/crosshair cannot be made to hug the lowered side from any face, record **FAIL** as ray acquisition / targeting feel.
+
 ### 3 — Repeat click: no ghost-face behavior
 
 After placing against the lowered side, click the same face again.
