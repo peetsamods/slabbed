@@ -1,9 +1,8 @@
 package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
-import com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit;
-import com.slabbed.util.SlabbedDebug;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
@@ -34,14 +33,17 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "place", at = @At("HEAD"))
     private void slabbed$tracePlaceHead(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
-        if (!SlabbedDebug.DEBUG_SBSB) return;
+        if (!SlabbedAuditBridge.isEnabled()) return;
         BlockItem self = (BlockItem) (Object) this;
         if (!slabbed$isTracedBlock(self.getBlock())) return;
 
         World world = ctx.getWorld();
         Direction face = ctx.getSide();
         BlockPos placePos = ctx.getBlockPos();
-        LoweredSideLiveHitRemapRuntimeAudit.recordPlacementContext(ctx);
+        SlabbedAuditBridge.invoke(
+                "recordPlacementContext",
+                new Class<?>[]{ItemPlacementContext.class},
+                ctx);
         BlockPos hitPos = placePos.offset(face.getOpposite());
         BlockState hitState = world.getBlockState(hitPos);
         BlockState placeState = world.getBlockState(placePos);
@@ -92,7 +94,10 @@ public abstract class BlockItemPlaceTraceMixin {
                     placeState,
                     dyPlace,
                     cir.getReturnValue());
-            LoweredSideLiveHitRemapRuntimeAudit.recordPlacementResult(ctx, cir.getReturnValue());
+            SlabbedAuditBridge.invoke(
+                    "recordPlacementResult",
+                    new Class<?>[]{ItemPlacementContext.class, ActionResult.class},
+                    ctx, cir.getReturnValue());
         } finally {
             SLABBED$TRACE.remove();
         }
