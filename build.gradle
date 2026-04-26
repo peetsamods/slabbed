@@ -76,6 +76,17 @@ jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}"}
     }
+
+    // Exclude dev-only and debug-only content from public release jar
+    exclude("com/slabbed/dev/**")
+    exclude("com/slabbed/debug/**")
+    exclude("com/slabbed/mixin/debug/**")
+    exclude("com/slabbed/client/GapFillerOverlay.class")
+    exclude("com/slabbed/client/ScreenshotCaptureContext*.class")
+    exclude("com/slabbed/client/ScreenshotCaptureService*.class")
+    exclude("com/slabbed/client/CaptureProfile.class")
+    exclude("com/slabbed/util/SlabbedDebug.class")
+    exclude("slabbed.debug.mixins.json")
 }
 
 // configure the maven publication
