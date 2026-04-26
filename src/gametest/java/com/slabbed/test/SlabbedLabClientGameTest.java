@@ -1060,6 +1060,14 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         + reproPlacePos.up().toShortString()
                         + ", found " + above.getBlock().getTranslationKey());
             }
+            // Assert visual dy inheritance: adjacent side double slab must retain lowered dy after repeat click
+            double repeatedDy = com.slabbed.util.SlabSupport.getYOffset(mc.world, reproPlacePos, placed);
+            if (repeatedDy != -0.5) {
+                throw new RuntimeException(
+                        "adjacent side double slab visual dy expected -0.5 at " + reproPlacePos.toShortString()
+                        + " to retain lowered visual alignment after repeat click, found " + repeatedDy
+                        + " for placed state " + placed);
+            }
             secondClickState.set(placed.toString());
             secondClickAboveState.set(above.toString());
         });
