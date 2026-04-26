@@ -15,9 +15,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Offsets torch flame and smoke particles down by 0.5 when the torch
- * sits on a bottom slab, matching the model offset applied during
- * chunk meshing.
+ * Offsets torch flame and smoke particles by the same dy used for the model
+ * (SlabSupport.getYOffset), so particles stay flush with the torch head in all
+ * slab contexts including the compound adjacent-side-slab case (-1.0).
  */
 @Mixin(TorchBlock.class)
 public abstract class TorchParticleMixin {
@@ -27,11 +27,12 @@ public abstract class TorchParticleMixin {
 
     @Inject(method = "randomDisplayTick", at = @At("HEAD"), cancellable = true)
     private void slabbed$offsetParticles(BlockState state, World world, BlockPos pos, Random random, CallbackInfo ci) {
-        if (!SlabSupport.shouldOffset(world, pos, state)) {
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (dy == 0.0) {
             return;
         }
         double x = pos.getX() + 0.5;
-        double y = pos.getY() + 0.7 - 0.5;
+        double y = pos.getY() + 0.7 + dy;
         double z = pos.getZ() + 0.5;
         world.addParticleClient(ParticleTypes.SMOKE, x, y, z, 0.0, 0.0, 0.0);
         world.addParticleClient(this.particle, x, y, z, 0.0, 0.0, 0.0);

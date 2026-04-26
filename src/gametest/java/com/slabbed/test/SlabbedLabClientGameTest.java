@@ -768,6 +768,12 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // placement-branch
         runRepeatClickPlacementBranchProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
+        // compound dy: torch on adjacent-lowered bottom slab (RED — expected -1.0, currently returns -0.5)
+        runTorchOnAdjacentLoweredSlabDyProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // comfort selection: floor torch on BS-FB-0.5S must be selectable from natural side aim
+        runTorchOnBsFb05sComfortSelectableProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
         // rescue guard
         runTorchRescueGuardProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
@@ -1102,6 +1108,243 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 secondClickResult.get(),
                 secondClickState.get(),
                 secondClickAboveState.get());
+    }
+
+    /**
+     * RED proof — torch compound dy bug.
+     *
+     * <p>Geometry: bottom slab at supportPos, full solid block at fullPos (one above),
+     * adjacent bottom slab at slabPos (east of fullPos, inherits -0.5 dy from adjacent side-slab V2B),
+     * floor torch at torchPos (directly above slabPos).
+     *
+     * <p>The torch sits on a bottom slab whose own visual dy is -0.5 (adjacent side-slab rule).
+     * The torch therefore needs getYOffset == -1.0 to align with the slab's visual top surface.
+     * Current code caps at -0.5, causing a 0.5 visual float.
+     *
+     * <p>Expected: FAIL with "torch compound dy expected -1.0 ... found -0.5"
+     */
+    static void runTorchOnAdjacentLoweredSlabDyProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(32, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos slabPos = fullPos.east();
+        final BlockPos torchPos = slabPos.up();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(net.minecraft.block.SlabBlock.TYPE, net.minecraft.block.enums.SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(net.minecraft.block.SlabBlock.TYPE, net.minecraft.block.enums.SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(torchPos, Blocks.TORCH.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world is null during torch compound dy assertion");
+            }
+            BlockState torchState = mc.world.getBlockState(torchPos);
+            if (!torchState.isOf(Blocks.TORCH)) {
+                throw new RuntimeException(
+                        "torch compound dy proof: expected TORCH at " + torchPos.toShortString()
+                        + ", found " + torchState.getBlock().getTranslationKey());
+            }
+            double dy = com.slabbed.util.SlabSupport.getYOffset(mc.world, torchPos, torchState);
+            if (dy != -1.0) {
+                throw new RuntimeException(
+                        "torch compound dy expected -1.0 at " + torchPos.toShortString()
+                        + " (torch above adjacent-lowered bottom slab), found " + dy
+                        + " for state " + torchState);
+            }
+        });
+    }
+
+    /**
+     * Floor torch on BS-FB-0.5S — selection comfort proof.
+     *
+     * <p>Geometry (BS-FB-0.5S):
+     * <ul>
+     *   <li>supportPos = bottom slab support</li>
+     *   <li>fullPos    = supportPos.up() — STONE (lowered onto support, dy=-0.5 visual)</li>
+     *   <li>slabPos    = fullPos.east()  — adjacent bottom slab (V2B inherits dy=-0.5)</li>
+     *   <li>torchPos   = slabPos.up()    — TORCH (compound dy=-1.0)</li>
+     * </ul>
+     *
+     * <p>Visual top of slabPos is at world Y=slabPos.y (V2B -0.5 over native +0.5).
+     * Vanilla {@code AbstractTorchBlock.SHAPE} = {@code Block.createCuboidShape(6,0,6,10,10,10)}
+     * (X/Z 0.375–0.625, Y 0.0–0.625). With dy=-1.0 the torch outline sits at world
+     * Y=torchPos.y-1.0 to torchPos.y-0.375 — that means the visible portion above the
+     * slab visual top (world Y=slabPos.y) is only 0.125 blocks tall. Players aiming
+     * at the visible torch from natural side angles routinely miss this thin sliver
+     * or hit the slab below.
+     *
+     * <p>This proof simulates a natural player aim from south of the fixture toward
+     * the visible torch. The resolved hit (after vanilla DDA + the
+     * {@code GameRendererCrosshairRetargetMixin} TAIL replay) must equal {@code torchPos},
+     * not {@code slabPos} below.
+     *
+     * <p>Expected: RED before comfort fix — natural side aim at the visible torch
+     * either hits the slab below or misses; resolved pos != torchPos.
+     */
+    static void runTorchOnBsFb05sComfortSelectableProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "torch_on_bs_fb_0_5s_comfort_selectable";
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(36, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos slabPos = fullPos.east();
+        final BlockPos torchPos = slabPos.up();
+        final BlockPos slabBelowTorch = slabPos;
+
+        AtomicReference<String> aim1Resolved = new AtomicReference<>("");
+        AtomicReference<String> aim2Resolved = new AtomicReference<>("");
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(torchPos, Blocks.TORCH.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("client not ready for torch comfort proof");
+            }
+            BlockState ts = mc.world.getBlockState(torchPos);
+            if (!ts.isOf(Blocks.TORCH)) {
+                throw new RuntimeException(
+                        "torch comfort proof: expected TORCH at " + torchPos.toShortString()
+                        + ", found " + ts.getBlock().getTranslationKey());
+            }
+
+            // Aim 1 — natural side aim: player standing south, eye near slab visual top,
+            // looking at the centre of the visible torch sliver above the slab top.
+            // Visible torch sliver is world Y=slabPos.y to slabPos.y+0.125 ≈ centre at Y=slabPos.y+0.06.
+            Vec3d eye1 = new Vec3d(
+                    torchPos.getX() + 0.5,
+                    slabBelowTorch.getY() + 0.30,
+                    torchPos.getZ() - 2.5);
+            Vec3d target1 = new Vec3d(
+                    torchPos.getX() + 0.5,
+                    slabBelowTorch.getY() + 0.06,
+                    torchPos.getZ() + 0.5);
+            BlockPos resolved1 = resolveTorchAimWithRescue(mc, eye1, target1, 6.0);
+            aim1Resolved.set(resolved1 == null ? "MISS" : resolved1.toShortString());
+            if (resolved1 == null || !resolved1.equals(torchPos)) {
+                throw new RuntimeException(
+                        "[" + testId + "] aim1 (natural side) resolved to "
+                        + (resolved1 == null ? "MISS" : resolved1.toShortString())
+                        + "; expected torch at " + torchPos.toShortString()
+                        + " — comfort selection failing on visible torch sliver above slab top");
+            }
+
+            // Aim 2 — slightly downward aim toward torch tip: player standing south on
+            // adjacent ground (full block top), eye 1.62 above feet, looking at the
+            // upper portion of the visible torch.
+            Vec3d eye2 = new Vec3d(
+                    torchPos.getX() + 0.5,
+                    fullPos.getY() + 1.0 + 1.62,
+                    torchPos.getZ() - 2.0);
+            Vec3d target2 = new Vec3d(
+                    torchPos.getX() + 0.5,
+                    slabBelowTorch.getY() + 0.10,
+                    torchPos.getZ() + 0.5);
+            BlockPos resolved2 = resolveTorchAimWithRescue(mc, eye2, target2, 6.0);
+            aim2Resolved.set(resolved2 == null ? "MISS" : resolved2.toShortString());
+            if (resolved2 == null || !resolved2.equals(torchPos)) {
+                throw new RuntimeException(
+                        "[" + testId + "] aim2 (downward) resolved to "
+                        + (resolved2 == null ? "MISS" : resolved2.toShortString())
+                        + "; expected torch at " + torchPos.toShortString()
+                        + " — comfort selection failing on downward aim at torch tip");
+            }
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "torch comfort selection",
+                "Floor torch on BS-FB-0.5S resolves to torchPos under natural player aim angles.",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("supportPos", supportPos.toShortString()),
+                        new NoteField("fullPos", fullPos.toShortString()),
+                        new NoteField("slabPos", slabPos.toShortString()),
+                        new NoteField("torchPos", torchPos.toShortString()),
+                        new NoteField("aim1Resolved", aim1Resolved.get()),
+                        new NoteField("aim2Resolved", aim2Resolved.get())
+                ),
+                true);
+    }
+
+    /**
+     * Mirrors the production crosshair-resolve path: vanilla DDA OUTLINE raycast
+     * followed by the {@code GameRendererCrosshairRetargetMixin} TAIL replay
+     * (one-level-up lowered owner, outline shape, ShapeContext.of(player),
+     * ≤ distance predicate). Returns the resolved BlockPos, or {@code null} on miss.
+     */
+    private static BlockPos resolveTorchAimWithRescue(
+            net.minecraft.client.MinecraftClient mc, Vec3d eye, Vec3d target, double rayLen
+    ) {
+        Vec3d dir = target.subtract(eye).normalize();
+        Vec3d end = eye.add(dir.multiply(rayLen));
+        BlockHitResult vanillaHit = mc.world.raycast(new RaycastContext(
+                eye, end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                mc.player));
+        if (vanillaHit.getType() != HitResult.Type.BLOCK) {
+            return null;
+        }
+        BlockHitResult finalHit = vanillaHit;
+        BlockPos hitPos = vanillaHit.getBlockPos();
+        BlockPos abovePos = hitPos.up();
+        BlockState aboveState = mc.world.getBlockState(abovePos);
+        if (SlabSupport.isLoweredTorchVisual(mc.world, abovePos, aboveState)) {
+            double origDist = vanillaHit.getPos().subtract(eye).length();
+            if (origDist > 0.0) {
+                Vec3d extEnd = eye.add(dir.multiply(origDist + 0.5));
+                VoxelShape aboveOutline = aboveState.getOutlineShape(
+                        mc.world, abovePos, ShapeContext.of(mc.player));
+                if (!aboveOutline.isEmpty()) {
+                    BlockHitResult retargetHit = aboveOutline.raycast(eye, extEnd, abovePos);
+                    if (retargetHit != null) {
+                        double dRetarget = retargetHit.getPos().squaredDistanceTo(eye);
+                        double dOrig = vanillaHit.getPos().squaredDistanceTo(eye);
+                        if (dRetarget <= dOrig + 1.0e-6) {
+                            finalHit = retargetHit;
+                        }
+                    }
+                }
+            }
+        }
+        return finalHit.getBlockPos();
     }
 
     static void runTorchRescueGuardProof(
