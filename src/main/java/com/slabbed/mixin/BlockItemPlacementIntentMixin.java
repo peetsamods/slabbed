@@ -19,6 +19,38 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
 
+    private static final double UP_FACE_EDGE_BAND = 0.20d;
+
+    private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
+        double localX = hitPos.x - targetPos.getX();
+        double localZ = hitPos.z - targetPos.getZ();
+        if (localX < 0.0d || localX > 1.0d || localZ < 0.0d || localZ > 1.0d) {
+            return null;
+        }
+
+        double distWest = localX;
+        double distEast = 1.0d - localX;
+        double distNorth = localZ;
+        double distSouth = 1.0d - localZ;
+
+        double min = distWest;
+        Direction nearest = Direction.WEST;
+        if (distEast < min) {
+            min = distEast;
+            nearest = Direction.EAST;
+        }
+        if (distNorth < min) {
+            min = distNorth;
+            nearest = Direction.NORTH;
+        }
+        if (distSouth < min) {
+            min = distSouth;
+            nearest = Direction.SOUTH;
+        }
+
+        return min <= UP_FACE_EDGE_BAND ? nearest : null;
+    }
+
     @ModifyArg(
             method = "useOnBlock",
             at = @At(
@@ -40,12 +72,25 @@ public abstract class BlockItemPlacementIntentMixin {
                     false,
                     false,
                     "item_not_slab",
-                    null);
+                    null,
+                    null,
+                    "none");
             return context;
         }
 
-        Direction side = context.getSide();
-        boolean faceHorizontal = side.getAxis().isHorizontal();
+        Direction originalSide = context.getSide();
+        Vec3d originalHitPos = context.getHitPos();
+        Direction effectiveSide = originalSide;
+        boolean inferredUpFaceLoweredSide = false;
+        if (originalSide == Direction.UP) {
+            Direction inferred = slabbed$inferLoweredSideFromUpFaceHit(originalHitPos, context.getBlockPos());
+            if (inferred != null) {
+                effectiveSide = inferred;
+                inferredUpFaceLoweredSide = true;
+            }
+        }
+
+        boolean faceHorizontal = effectiveSide.getAxis().isHorizontal();
         if (!faceHorizontal) {
             LoweredSideLiveHitRemapRuntimeAudit.recordRemapAttempt(
                     context,
@@ -58,7 +103,9 @@ public abstract class BlockItemPlacementIntentMixin {
                     false,
                     false,
                     "face_not_horizontal",
-                    null);
+                    null,
+                    null,
+                    "none");
             return context;
         }
 
@@ -85,7 +132,9 @@ public abstract class BlockItemPlacementIntentMixin {
                     ordinaryLoweredFullBlockGuard,
                     false,
                     "target_not_solid",
-                    null);
+                    null,
+                    effectiveSide,
+                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
             return context;
         }
         if (targetHasBlockEntity) {
@@ -100,7 +149,9 @@ public abstract class BlockItemPlacementIntentMixin {
                     ordinaryLoweredFullBlockGuard,
                     false,
                     "target_has_block_entity",
-                    null);
+                    null,
+                    effectiveSide,
+                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
             return context;
         }
         if (targetIsCraftingTable) {
@@ -115,7 +166,9 @@ public abstract class BlockItemPlacementIntentMixin {
                     ordinaryLoweredFullBlockGuard,
                     false,
                     "target_is_crafting_table",
-                    null);
+                    null,
+                    effectiveSide,
+                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
             return context;
         }
         if (yOffset != -0.5d) {
@@ -130,13 +183,14 @@ public abstract class BlockItemPlacementIntentMixin {
                     ordinaryLoweredFullBlockGuard,
                     false,
                     "y_offset_not_-0.5",
-                    null);
+                    null,
+                    effectiveSide,
+                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
             return context;
         }
 
         // Keep hit Y just below the slab half-split to avoid TOP reinterpretation.
-        Vec3d hitPos = context.getHitPos();
-        Vec3d remappedHitPos = new Vec3d(hitPos.x, targetPos.getY() + 0.499d, hitPos.z);
+        Vec3d remappedHitPos = new Vec3d(originalHitPos.x, targetPos.getY() + 0.499d, originalHitPos.z);
         LoweredSideLiveHitRemapRuntimeAudit.recordRemapAttempt(
                 context,
                 true,
@@ -148,10 +202,12 @@ public abstract class BlockItemPlacementIntentMixin {
                 ordinaryLoweredFullBlockGuard,
                 true,
                 "none",
-                remappedHitPos);
+                remappedHitPos,
+                effectiveSide,
+                inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
         BlockHitResult remappedHit = new BlockHitResult(
                 remappedHitPos,
-                side,
+                effectiveSide,
                 targetPos,
                 context.hitsInsideBlock(),
                 false

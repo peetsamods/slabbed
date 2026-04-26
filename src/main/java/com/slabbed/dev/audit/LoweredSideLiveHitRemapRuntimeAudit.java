@@ -39,7 +39,9 @@ public final class LoweredSideLiveHitRemapRuntimeAudit {
             boolean ordinaryLoweredFullBlockGuard,
             boolean remapGuardMatched,
             String failedGuard,
-            Vec3d remappedHitPos
+            Vec3d remappedHitPos,
+            Direction effectiveRemapFace,
+            String remapMode
     ) {
         if (!SlabbedDebug.DEBUG_SBSB) {
             return;
@@ -70,6 +72,8 @@ public final class LoweredSideLiveHitRemapRuntimeAudit {
         frame.ordinaryLoweredFullBlockGuard = ordinaryLoweredFullBlockGuard;
         frame.remapGuardMatched = remapGuardMatched;
         frame.failedGuard = failedGuard;
+        frame.effectiveRemapFace = effectiveRemapFace == null ? null : effectiveRemapFace.asString();
+        frame.remapMode = remapMode;
 
         if (remappedHitPos != null) {
             frame.remappedHitX = remappedHitPos.x;
@@ -116,9 +120,9 @@ public final class LoweredSideLiveHitRemapRuntimeAudit {
                 frame.finalPlacedSlabType = "none";
             }
 
-            if (frame.remapGuardMatched && frame.targetBlockPos != null && frame.hitFace != null) {
+            if (frame.remapGuardMatched && frame.targetBlockPos != null && frame.effectiveRemapFace != null) {
                 BlockPos target = parseBlockPos(frame.targetBlockPos);
-                Direction face = Direction.byId(frame.hitFace);
+                Direction face = Direction.byId(frame.effectiveRemapFace);
                 if (target != null && face != null) {
                     BlockPos expected = target.offset(face);
                     frame.verdict = expected.equals(placedPos)
@@ -205,6 +209,8 @@ public final class LoweredSideLiveHitRemapRuntimeAudit {
         appendField(sb, "ordinarySolidLoweredFullBlockGuard", Boolean.toString(f.ordinaryLoweredFullBlockGuard), true);
         appendField(sb, "remapGuardMatched", Boolean.toString(f.remapGuardMatched), true);
         appendField(sb, "failedGuard", f.failedGuard, true);
+        appendField(sb, "effectiveRemapFace", f.effectiveRemapFace, true);
+        appendField(sb, "remapMode", f.remapMode, true);
         appendField(sb, "remappedHitX", formatNullableDouble(f.remappedHitX), true);
         appendField(sb, "remappedHitY", formatNullableDouble(f.remappedHitY), true);
         appendField(sb, "remappedHitZ", formatNullableDouble(f.remappedHitZ), true);
@@ -302,6 +308,8 @@ public final class LoweredSideLiveHitRemapRuntimeAudit {
         boolean ordinaryLoweredFullBlockGuard;
         boolean remapGuardMatched;
         String failedGuard;
+        String effectiveRemapFace;
+        String remapMode;
         Double remappedHitX;
         Double remappedHitY;
         Double remappedHitZ;
