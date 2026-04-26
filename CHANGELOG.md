@@ -1,33 +1,23 @@
 ## [Unreleased]
-### Added
-- Slabbed lab developer workflow for scripted fixture resets, support actions, and neighbor-update audits.
-- Category audit scaffolding for carpets and torches, with structured failure reporting.
-- Client screenshot capture tooling and gap-filler overlay support for repeatable visual proofs.
-- GameTest wiring for server and client test entrypoints.
 
-### Changed
-- `SlabSupport` now clamps shared offset eligibility to slab-aware cases instead of applying broader offset rules.
-- Raycast shapes now follow the same Y-offset logic as outline shapes so targeting stays aligned with visuals.
-- Chain survival checks now recognize slab ceiling support during downward support walks.
-- Mod metadata and build wiring were updated to register client-only mixins and the new GameTest source set.
+## [0.2.0-beta.2] — Side-Slab Torch Stability
 
 ### Fixed
-- Restored chain ceiling support under top slabs and double slabs.
-- Restored raycast offset parity after the prior offset regression.
-- Deduped the carpet outline offset path to avoid double application.
-- Added model-height and offset proof coverage so the visual regressions are backed by client tests.
+- Fixed adjacent side slabs beside lowered slab-supported full blocks so they remain visually lowered.
+- Fixed repeat-click / double-slab behavior on adjacent lowered side slabs.
+- Fixed floor torch placement, selection, and flame particle behavior on BS-FB-0.5S setups.
+- Fixed wall torch flame particles floating above lowered torch visuals.
+- Removed forced ghost wireframe debug boxes from normal runClient.
+- Corrected a stale server proof so ordinary full blocks lowering onto slabs is protected as intended behavior.
 
-### Tests
-- Added server GameTests for the slabbed lab fixture flow.
-- Added client GameTests for screenshot-based proof collection.
-- Tightened client screenshot capture and overlay behavior to make proof runs repeatable.
+### Improved
+- Added proof coverage for adjacent side-slab dy inheritance.
+- Added proof coverage for floor torch compound dy and selectable comfort.
+- Preserved known no-rescue boundaries for chain and crafting table.
+- Enforced release artifact purity by excluding dev/debug tooling from the public jar.
 
-### Known issues
-- Stairs still have visual and face-culling quirks and need refinement.
-- Rail slope transitions between ground-height and slab-height rails remain visually awkward.
-- Slab-on-offset-object targeting can still be finicky around placement edge cases.
-- Carpet and snow still obey vanilla replacement behavior when a slab is placed in the same block space.
-- Hanging roots still follow vanilla survival rules and do not yet have special slab support.
+### Known note
+- Floor torch selection on BS-FB-0.5S may reach slightly downward into the supporting slab area; accepted because breaking that support would break the torch anyway.
 
 ## [0.2.0-beta.1-hotfix.1]
 ### Fixed
