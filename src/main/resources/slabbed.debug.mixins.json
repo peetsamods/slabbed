@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "package": "com.slabbed.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "debug.BlockStateSideSolidDebugMixin",
+    "debug.BlockItemPlacementDebugMixin",
+    "debug.BlockItemGetPlacementStateDebugMixin",
+    "debug.BlockItemPlaceDebugMixin",
+    "debug.accessor.ItemUsageContextInvoker"
+  ],
+  "client": [],
+  "injectors": { "defaultRequire": 1 }
+}
