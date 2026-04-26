@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "slabbed_gametest",
+  "version": "1.0.0",
+  "name": "Slabbed GameTest",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "com.slabbed.test.SlabbedLabFixtureTest",
+      "com.slabbed.test.ChainSurvivalReproTest"
+    ],
+    "fabric-client-gametest": [
+      "com.slabbed.test.SlabbedLabLoweredSideSlabPlacementClientGameTest",
+      "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "fabric-gametest-api-v1": "*",
+    "slabbed": "*"
+  }
+}

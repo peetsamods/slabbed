@@ -25,6 +25,15 @@ Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally
 - Java: **21**
 - Environment: **Server-side** (works in singleplayer and on servers; clients do not need the mod)
 
+### Limitations
+- Carpet and snow layers cannot coexist with slab placement in the same block space; placing a slab will replace them (vanilla behavior). Slabbed prevents ghosting by excluding thin top-layer blocks from visual offsets.
+- Hanging roots follow vanilla survival rules; no special slab support yet.
+
+### Compatibility / Known incompatibilities
+- **Countered’s Terrain Slabs (`terrainslabs`)**: Slabbed includes a **gated compat veto** that prevents applying **visual Y-offsets** to `terrainslabs:*` blocks to avoid see-through/ghost terrain artifacts.
+  - Scope: offsets only (does not change physics/worldgen).
+  - If artifacts persist, disable Terrain Slabs or accept terrain visuals may be inconsistent.
+
 ## Installation
 1. Install Fabric Loader for the target Minecraft version
 2. Install Fabric API
@@ -37,6 +46,14 @@ Behavior is intentionally limited and may expand incrementally as edge cases are
 ## License
 This project is licensed under **GPL-3.0-only**.  
 Source code is available at: https://github.com/joolbits/slabbed
+
+## Lowered Side Slab Proof Bundle
+
+The current Mac/Windows one-shot proof runners and artifact contract are documented in:
+`tools/lowered-side-slab-proof-bundle.md`
+
+Canonical proof artifacts are written under:
+`build/run/clientGameTest/screenshots`
 
 ## Issues / Feedback
 Bug reports and suggestions can be filed on GitHub:  
