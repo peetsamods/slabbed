@@ -6,9 +6,13 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
+import net.minecraft.block.SlabBlock;
+import net.minecraft.block.TorchBlock;
+import net.minecraft.block.WallTorchBlock;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -34,6 +38,77 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(AbstractBlock.AbstractBlockState.class)
 public abstract class SlabSupportStateMixin {
+
+    /**
+     * Comfort selection shape for lowered floor torches.
+     *
+     * <p>Vanilla {@code AbstractTorchBlock.SHAPE} is a 4-pixel-wide post 10 pixels tall
+     * (X/Z 6–10/16, Y 0–10/16). With a negative dy offset the visible torch sits
+     * outside its native voxel range. Vanilla DDA only tests a voxel's outline shape
+     * when the ray enters that voxel, so rays aimed at the visible torch from natural
+     * side angles either (a) miss entirely, or (b) hit the slab below.
+     *
+     * <p>The fix is two-sided:
+     * <ul>
+     *   <li><b>Torch outline/raycast</b>: replaced with this 4-pixel-wide post that
+     *       fills the entire native voxel (Y 0–16). After the negative dy offset is
+     *       applied, the comfort shape spans world Y=torchPos.y+dy to torchPos.y.
+     *       This is what the wireframe renderer draws after the rescue retarget.</li>
+     *   <li><b>Slab overlay</b>: when a slab has a lowered floor torch directly above,
+     *       this same shape is unioned into the slab's outline (in the slab's voxel
+     *       frame, translated by 1+torchDy) so vanilla DDA produces a slab hit at the
+     *       comfort area. The existing rescue mixin then retargets that slab hit to
+     *       the torch above. Without this overlay DDA never enters the torch voxel
+     *       and rescue cannot fire.</li>
+     * </ul>
+     *
+     * <p>The comfort area is contained within the same 4-pixel X/Z post column as
+     * vanilla's torch SHAPE — the visual triad (model, outline, raycast) all stay
+     * aligned, and the click target never extends outside the torch's natural column.
+     * Vanilla itself already gives torches a selection larger than the visual sprite
+     * (the flame extends above the post outline), so this comfort patch follows the
+     * same player-trust precedent.
+     */
+    private static final VoxelShape SLABBED$COMFORT_TORCH_SHAPE =
+            Block.createCuboidShape(6.0, 0.0, 6.0, 10.0, 16.0, 10.0);
+
+    /**
+     * Returns true iff {@code state} is a floor torch (TorchBlock, not WallTorchBlock)
+     * and the resolved dy is negative. WallTorchBlock is excluded explicitly: this
+     * comfort path only addresses the floor-torch tiny-shape selection issue.
+     */
+    private static boolean slabbed$isLoweredFloorTorch(BlockState state, double yOff) {
+        if (yOff >= 0.0) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return block instanceof TorchBlock && !(block instanceof WallTorchBlock);
+    }
+
+    /**
+     * Builds the torch comfort overlay in {@code slabPos}'s voxel frame, or returns
+     * {@code null} if the block above {@code slabPos} is not a lowered floor torch.
+     *
+     * <p>Torch comfort shape is voxel-relative Y=0–1 in the torch's frame. Translated
+     * to the slab's frame the comfort shape sits at Y=(1+torchDy) to (2+torchDy),
+     * so we offset {@link #SLABBED$COMFORT_TORCH_SHAPE} by {@code 1.0 + torchDy}.
+     */
+    private static VoxelShape slabbed$slabTorchComfortOverlay(BlockView world, BlockPos slabPos) {
+        if (world == null || slabPos == null) {
+            return null;
+        }
+        BlockPos abovePos = slabPos.up();
+        BlockState above = world.getBlockState(abovePos);
+        Block aboveBlock = above.getBlock();
+        if (!(aboveBlock instanceof TorchBlock) || aboveBlock instanceof WallTorchBlock) {
+            return null;
+        }
+        double torchDy = SlabSupport.getYOffset(world, abovePos, above);
+        if (torchDy >= 0.0) {
+            return null;
+        }
+        return SLABBED$COMFORT_TORCH_SHAPE.offset(0.0, 1.0 + torchDy, 0.0);
+    }
 
     // ── placement / survival support ──────────────────────────────────
 
@@ -77,7 +152,11 @@ public abstract class SlabSupportStateMixin {
 
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
-            cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
+            VoxelShape shape = cir.getReturnValue();
+            if (slabbed$isLoweredFloorTorch(self, yOff)) {
+                shape = SLABBED$COMFORT_TORCH_SHAPE;
+            }
+            cir.setReturnValue(shape.offset(0.0, yOff, 0.0));
         }
     }
 
@@ -95,9 +174,31 @@ public abstract class SlabSupportStateMixin {
             return;
         }
 
+        VoxelShape shape = cir.getReturnValue();
+        boolean changed = false;
+
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
-            cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
+            if (slabbed$isLoweredFloorTorch(self, yOff)) {
+                shape = SLABBED$COMFORT_TORCH_SHAPE;
+            }
+            shape = shape.offset(0.0, yOff, 0.0);
+            changed = true;
+        }
+
+        // Slab + lowered floor torch comfort overlay: union the torch comfort column
+        // into the slab's outline so vanilla DDA produces a slab hit; the existing
+        // rescue mixin then retargets that hit to the torch above.
+        if (block instanceof SlabBlock) {
+            VoxelShape overlay = slabbed$slabTorchComfortOverlay(world, pos);
+            if (overlay != null) {
+                shape = VoxelShapes.union(shape, overlay);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            cir.setReturnValue(shape);
         }
     }
 }
