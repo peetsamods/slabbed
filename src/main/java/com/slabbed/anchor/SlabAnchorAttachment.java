@@ -1,5 +1,6 @@
 package com.slabbed.anchor;
 
+import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
@@ -38,6 +39,18 @@ import net.minecraft.world.chunk.WorldChunk;
 public final class SlabAnchorAttachment {
     private SlabAnchorAttachment() {
     }
+
+    public static final boolean TRACE =
+            Boolean.getBoolean("slabbed.anchor.trace");
+
+    /**
+     * Client-side fallback for anchor queries issued by chunk render paths that
+     * receive a non-{@link World} {@link net.minecraft.world.BlockView}
+     * (e.g. {@code ChunkRendererRegion}).  Set by the client entrypoint; always
+     * null on a dedicated server.  No {@code MinecraftClient} reference needed
+     * in common code.
+     */
+    public static Predicate<BlockPos> clientAnchorLookup = null;
 
     private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
 
@@ -99,11 +112,19 @@ public final class SlabAnchorAttachment {
         if (world == null || world.isClient()) {
             return;
         }
-        if (!qualifiesForDirectAnchor(world, pos, state)) {
+        boolean qualifies = qualifiesForDirectAnchor(world, pos, state);
+        if (TRACE) {
+            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={}",
+                    pos.toShortString(), state, qualifies);
+        }
+        if (!qualifies) {
             return;
         }
         WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
+            if (TRACE) {
+                Slabbed.LOGGER.info("[ANCHOR] add reject pos={} reason=chunk_null", pos.toShortString());
+            }
             return;
         }
         LongOpenHashSet set = chunk.getAttached(ANCHOR_TYPE);
@@ -113,6 +134,10 @@ public final class SlabAnchorAttachment {
         if (set.add(pos.asLong())) {
             // setAttached triggers persistence + auto-sync for synced attachments.
             chunk.setAttached(ANCHOR_TYPE, set);
+            if (TRACE) {
+                Slabbed.LOGGER.info("[ANCHOR] add success pos={} chunk={} setSize={}",
+                        pos.toShortString(), chunk.getPos(), set.size());
+            }
         }
     }
 
@@ -129,9 +154,16 @@ public final class SlabAnchorAttachment {
         }
         LongOpenHashSet set = chunk.getAttached(ANCHOR_TYPE);
         if (set == null || set.isEmpty()) {
+            if (TRACE) {
+                Slabbed.LOGGER.info("[ANCHOR] remove pos={} existed=false", pos.toShortString());
+            }
             return;
         }
-        if (set.remove(pos.asLong())) {
+        boolean removed = set.remove(pos.asLong());
+        if (TRACE) {
+            Slabbed.LOGGER.info("[ANCHOR] remove pos={} existed={}", pos.toShortString(), removed);
+        }
+        if (removed) {
             if (set.isEmpty()) {
                 chunk.removeAttached(ANCHOR_TYPE);
             } else {
@@ -150,15 +182,26 @@ public final class SlabAnchorAttachment {
      * safe to call from shape mixins that may receive partial views during chunk gen.
      */
     public static boolean isAnchored(BlockView world, BlockPos pos) {
-        if (!(world instanceof World w) || pos == null) {
+        if (pos == null) {
             return false;
+        }
+        if (!(world instanceof World w)) {
+            // Chunk render paths (e.g. ChunkRendererRegion) are not World instances and
+            // cannot access chunk attachments directly.  Delegate to the client fallback
+            // hook so the model render path sees the same anchor state as outline/raycast.
+            return clientAnchorLookup != null && clientAnchorLookup.test(pos);
         }
         WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return false;
         }
         LongOpenHashSet set = chunk.getAttached(ANCHOR_TYPE);
-        return set != null && set.contains(pos.asLong());
+        boolean anchored = set != null && set.contains(pos.asLong());
+        if (TRACE && anchored) {
+            Slabbed.LOGGER.info("[ANCHOR] query true side={} pos={}",
+                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+        }
+        return anchored;
     }
 
     // ── qualifier ─────────────────────────────────────────────────────
