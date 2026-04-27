@@ -867,9 +867,12 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         AtomicReference<String> caseCClientAnchoredImmediateAfterBreak = new AtomicReference<>("");
         AtomicReference<String> caseCClientDyAfter1TickBreak = new AtomicReference<>("");
         AtomicReference<String> caseCClientAnchoredAfter1TickBreak = new AtomicReference<>("");
+        AtomicReference<String> caseDLowerCenterResolved = new AtomicReference<>("");
+        AtomicReference<String> caseDLowerEdgeResolved = new AtomicReference<>("");
         AtomicReference<String> caseAVerdict = new AtomicReference<>("audit-only");
         AtomicReference<String> caseBVerdict = new AtomicReference<>("audit-only");
         AtomicReference<String> caseCVerdict = new AtomicReference<>("audit-only");
+        AtomicReference<String> caseDSelectionVerdict = new AtomicReference<>("audit-only");
 
         // ── Case A: top-half placement boundary ───────────────────────────────
         singleplayer.getServer().runOnServer(server -> {
@@ -1179,6 +1182,56 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             }
         });
 
+        // ── Case D: lower-half selection comfort after BS break ───────────────
+        // The FB is still visually lowered, but the live ray must now resolve the
+        // anchored FB itself from the lower visible half and not MISS / stale slab.
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("client not ready for case D lower-half selection probe");
+            }
+
+            Vec3d centerLowerTarget = new Vec3d(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() - 0.30,
+                    fullPos.getZ() + 0.5);
+            Vec3d lowerEdgeTarget = new Vec3d(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() - 0.38,
+                    fullPos.getZ() + 0.5);
+
+            resolvePlayerRaycast(mc, centerLowerTarget, 6.0);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult centerLowerHit = mc.crosshairTarget;
+            String centerLowerActual = centerLowerHit == null || centerLowerHit.getType() == HitResult.Type.MISS
+                    ? "MISS"
+                    : ((BlockHitResult) centerLowerHit).getBlockPos().toShortString();
+            caseDLowerCenterResolved.set(centerLowerActual);
+            if (centerLowerHit == null
+                    || centerLowerHit.getType() != HitResult.Type.BLOCK
+                    || !((BlockHitResult) centerLowerHit).getBlockPos().equals(fullPos)) {
+                caseDSelectionVerdict.set("RED: [anchored_fb_lower_half_selection] expected anchored FB at "
+                        + fullPos.toShortString() + ", got " + centerLowerActual + " (center-lower)");
+                throw new RuntimeException(caseDSelectionVerdict.get());
+            }
+
+            resolvePlayerRaycast(mc, lowerEdgeTarget, 6.0);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult lowerEdgeHit = mc.crosshairTarget;
+            String lowerEdgeActual = lowerEdgeHit == null || lowerEdgeHit.getType() == HitResult.Type.MISS
+                    ? "MISS"
+                    : ((BlockHitResult) lowerEdgeHit).getBlockPos().toShortString();
+            caseDLowerEdgeResolved.set(lowerEdgeActual);
+            if (lowerEdgeHit == null
+                    || lowerEdgeHit.getType() != HitResult.Type.BLOCK
+                    || !((BlockHitResult) lowerEdgeHit).getBlockPos().equals(fullPos)) {
+                caseDSelectionVerdict.set("RED: [anchored_fb_lower_half_selection] expected anchored FB at "
+                        + fullPos.toShortString() + ", got " + lowerEdgeActual + " (lower-edge)");
+                throw new RuntimeException(caseDSelectionVerdict.get());
+            }
+
+            caseDSelectionVerdict.set("GREEN: anchored FB resolved from lower-half rays");
+        });
+
         writeInvariantProofNotes(
                 screenshotDir,
                 testId + "_notes.json",
@@ -1217,9 +1270,14 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         new NoteField("caseC_clientDyImmediateAfterBreak", caseCClientDyImmediateAfterBreak.get()),
                         new NoteField("caseC_clientAnchoredImmediateAfterBreak", caseCClientAnchoredImmediateAfterBreak.get()),
                         new NoteField("caseC_clientDyAfter1TickBreak", caseCClientDyAfter1TickBreak.get()),
-                        new NoteField("caseC_clientAnchoredAfter1TickBreak", caseCClientAnchoredAfter1TickBreak.get())
+                        new NoteField("caseC_clientAnchoredAfter1TickBreak", caseCClientAnchoredAfter1TickBreak.get()),
+                        new NoteField("caseD_lowerCenterResolved", caseDLowerCenterResolved.get()),
+                        new NoteField("caseD_lowerEdgeResolved", caseDLowerEdgeResolved.get()),
+                        new NoteField("caseD_verdict", caseDSelectionVerdict.get())
                 ),
-                !caseBVerdict.get().startsWith("RED") && !caseCVerdict.get().startsWith("RED"));
+                !caseBVerdict.get().startsWith("RED")
+                        && !caseCVerdict.get().startsWith("RED")
+                        && !caseDSelectionVerdict.get().startsWith("RED"));
 
         // Fail after notes are written so observations are persisted even when red.
         StringBuilder failMsg = new StringBuilder();
@@ -1231,6 +1289,9 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     + " initialFbDy=").append(caseCInitialFbDy.get())
                     .append(" postBreakFbDy=").append(caseCPostBreakFbDy.get())
                     .append(" postBreakFbState=").append(caseCPostBreakFbState.get()).append("\n");
+        }
+        if (caseDSelectionVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] caseD ").append(caseDSelectionVerdict.get()).append("\n");
         }
         if (failMsg.length() > 0) {
             throw new RuntimeException(failMsg.toString().trim());
@@ -1252,6 +1313,22 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 RaycastContext.FluidHandling.NONE,
                 mc.player));
         return hit.getType() == HitResult.Type.BLOCK ? hit.getBlockPos() : null;
+    }
+
+    private static HitResult resolvePlayerRaycast(
+            net.minecraft.client.MinecraftClient mc, Vec3d target, double reach
+    ) {
+        if (mc.player == null) {
+            return null;
+        }
+
+        Vec3d eye = mc.player.getCameraPosVec(0.0f);
+        Vec3d delta = target.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        mc.player.refreshPositionAndAngles(mc.player.getX(), mc.player.getY(), mc.player.getZ(), yaw, pitch);
+        return mc.player.raycast(reach, 0.0f, false);
     }
 
     private static double parseDoubleSafe(String s, double fallback) {
