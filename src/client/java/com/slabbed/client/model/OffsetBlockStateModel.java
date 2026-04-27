@@ -1,4 +1,6 @@
 package com.slabbed.client.model;
+import com.slabbed.Slabbed;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
@@ -9,6 +11,7 @@ import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.WallBlock;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.model.BlockModelPart;
 import net.minecraft.client.render.model.BlockStateModel;
 import net.minecraft.client.texture.Sprite;
@@ -16,6 +19,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
+import net.minecraft.world.World;
 
 import java.util.List;
 import java.util.function.Predicate;
@@ -65,6 +69,20 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
                 if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof PaneBlock) {
                     dy = 0.0f;
                 }
+            }
+        }
+
+        // Prove that the render-path BlockView is not a World, causing isAnchored to return false.
+        // Fires only when -Dslabbed.anchor.trace=true AND view is NOT a World instance.
+        if (SlabAnchorAttachment.TRACE && !(view instanceof World)) {
+            boolean anchoredViaFallback = false;
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc != null && mc.world != null) {
+                anchoredViaFallback = SlabAnchorAttachment.isAnchored(mc.world, pos);
+            }
+            if (anchoredViaFallback || dy != 0.0f) {
+                Slabbed.LOGGER.info("[ANCHOR] model dy view={} pos={} dy={} anchoredViaWorldFallback={}",
+                        view.getClass().getSimpleName(), pos.toShortString(), dy, anchoredViaFallback);
             }
         }
 
