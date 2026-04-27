@@ -21,10 +21,12 @@ public final class ClientDy {
         }
 
         Block block = state.getBlock();
-        if (!(block instanceof CarpetBlock || block instanceof PaleMossCarpetBlock)) {
-            return 0.0;
+        if (block instanceof CarpetBlock || block instanceof PaleMossCarpetBlock) {
+            // Carpet special case: simple geometric check without anchor logic
+            return SlabSupport.hasBottomSlabBelow(world, pos) ? -0.5 : 0.0;
         }
 
-        return SlabSupport.hasBottomSlabBelow(world, pos) ? -0.5 : 0.0;
+        // For all other blocks, use the full SlabSupport policy including persistent anchors
+        return SlabSupport.getYOffset(world, pos, state);
     }
 }

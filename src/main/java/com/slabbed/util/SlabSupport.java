@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.Slabbed;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
@@ -391,6 +392,11 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
+                String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
+                        side, pos.toShortString(), state);
+            }
             return -0.5;
         }
 

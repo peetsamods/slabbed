@@ -1,7 +1,11 @@
 package com.slabbed.mixin.client;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.BlockEntityProvider;
+import net.minecraft.block.CraftingTableBlock;
+import net.minecraft.block.SlabBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.GameRenderer;
@@ -12,6 +16,8 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemStack;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -48,7 +54,20 @@ public abstract class GameRendererCrosshairRetargetMixin {
     @Inject(method = "updateCrosshairTarget", at = @At("TAIL"))
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
         HitResult ht = client.crosshairTarget;
-        if (ht == null || ht.getType() != HitResult.Type.BLOCK) {
+        if (ht == null) {
+            return;
+        }
+        if (!slabbed$isSlabPlacementIntent()) {
+            BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
+            if (anchoredHit != null) {
+                client.crosshairTarget = anchoredHit;
+                return;
+            }
+        }
+        if (ht.getType() == HitResult.Type.MISS) {
+            return;
+        }
+        if (ht.getType() != HitResult.Type.BLOCK) {
             return;
         }
         if (!(ht instanceof BlockHitResult slabHit)) {
@@ -112,5 +131,87 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
 
         client.crosshairTarget = chestHit;
+    }
+
+    private boolean slabbed$isSlabPlacementIntent() {
+        if (client.player == null) {
+            return false;
+        }
+        ItemStack stack = client.player.getMainHandStack();
+        return stack.getItem() instanceof BlockItem bi && bi.getBlock() instanceof SlabBlock;
+    }
+
+    private BlockHitResult slabbed$retargetAnchoredLoweredFullBlock(float tickProgress, HitResult currentHit) {
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return null;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d dir = cam.getRotationVec(tickProgress);
+        double reach = 6.0;
+        Vec3d end = eye.add(dir.multiply(reach));
+        double currentDist2 = Double.POSITIVE_INFINITY;
+        if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
+            currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
+        }
+        int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
+
+        for (int i = 1; i <= steps; i++) {
+            double t = reach * i / steps;
+            if (t * t > currentDist2 + 1.0e-6) {
+                break;
+            }
+            Vec3d sample = eye.add(dir.multiply(t));
+            BlockPos samplePos = BlockPos.ofFloored(sample);
+
+            BlockPos candidatePos = samplePos;
+            BlockState candidateState = world.getBlockState(candidatePos);
+            BlockHitResult hit = slabbed$raycastAnchoredLoweredFullBlock(world, cam, eye, end, candidatePos, candidateState);
+            if (hit != null) {
+                return hit;
+            }
+
+            candidatePos = samplePos.up();
+            candidateState = world.getBlockState(candidatePos);
+            hit = slabbed$raycastAnchoredLoweredFullBlock(world, cam, eye, end, candidatePos, candidateState);
+            if (hit != null) {
+                return hit;
+            }
+        }
+
+        return null;
+    }
+
+    private static BlockHitResult slabbed$raycastAnchoredLoweredFullBlock(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos, BlockState state
+    ) {
+        if (!slabbed$isAnchoredLoweredFullBlock(world, pos, state)) {
+            return null;
+        }
+        VoxelShape shape = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        BlockHitResult hit = shape.raycast(eye, end, pos);
+        if (hit == null) {
+            return null;
+        }
+        return hit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6 ? hit : null;
+    }
+
+    private static boolean slabbed$isAnchoredLoweredFullBlock(ClientWorld world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        if (!state.isSolidBlock(world, pos)) {
+            return false;
+        }
+
+        net.minecraft.block.Block block = state.getBlock();
+        if (block instanceof BlockEntityProvider || block instanceof CraftingTableBlock) {
+            return false;
+        }
+
+        return SlabAnchorAttachment.isAnchored(world, pos)
+                && SlabSupport.getYOffset(world, pos, state) == -0.5;
     }
 }
