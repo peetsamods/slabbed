@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.dev.SlabbedLabFixtures;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -850,6 +851,22 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         AtomicReference<String> caseCPostBreakFbDy = new AtomicReference<>("");
         AtomicReference<String> caseCPostBreakSlabDy = new AtomicReference<>("");
         AtomicReference<String> caseCPostBreakFbState = new AtomicReference<>("");
+        // Server-side anchor observations (split proof)
+        AtomicReference<String> caseCServerAnchorAfterPlace = new AtomicReference<>("");
+        AtomicReference<String> caseCServerFbStateAfterPlace = new AtomicReference<>("");
+        AtomicReference<String> caseCServerAnchorAfterBreak = new AtomicReference<>("");
+        AtomicReference<String> caseCServerFbStateAfterBreak = new AtomicReference<>("");
+        // Client-side dy timing observations (split proof)
+        AtomicReference<String> caseCClientDyImmediateAfterPlace = new AtomicReference<>("");
+        AtomicReference<String> caseCClientAnchoredImmediateAfterPlace = new AtomicReference<>("");
+        AtomicReference<String> caseCClientDyAfter1Tick = new AtomicReference<>("");
+        AtomicReference<String> caseCClientAnchoredAfter1Tick = new AtomicReference<>("");
+        AtomicReference<String> caseCClientDyAfterRender = new AtomicReference<>("");
+        AtomicReference<String> caseCClientAnchoredAfterRender = new AtomicReference<>("");
+        AtomicReference<String> caseCClientDyImmediateAfterBreak = new AtomicReference<>("");
+        AtomicReference<String> caseCClientAnchoredImmediateAfterBreak = new AtomicReference<>("");
+        AtomicReference<String> caseCClientDyAfter1TickBreak = new AtomicReference<>("");
+        AtomicReference<String> caseCClientAnchoredAfter1TickBreak = new AtomicReference<>("");
         AtomicReference<String> caseAVerdict = new AtomicReference<>("audit-only");
         AtomicReference<String> caseBVerdict = new AtomicReference<>("audit-only");
         AtomicReference<String> caseCVerdict = new AtomicReference<>("audit-only");
@@ -986,18 +1003,14 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             }
         });
 
-        // ── Case C: supporting BS removal ─────────────────────────────────────
-        // The fixture so far installed the FB via setBlockState, which bypasses
-        // Block.onPlaced and therefore does not engage the persistent slab-anchor
-        // path. To test the production contract honestly, replace the FB via a
-        // synthetic player placement (interactBlock on the BS top face) so
-        // Block.onPlaced fires → SlabAnchorAttachment records the anchor.
+        // ── Case C: persistent anchor split proof ─────────────────────────────
+        // Clear Case B's side slab and FB so the placement site is empty.
+        // The FB is then placed via synthetic interactBlock so Block.onPlaced
+        // fires and SlabAnchorAttachment records the server-side anchor.
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
-            // Clear Case B's side slab and the FB so the placement site is empty.
             world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(fullPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
-            // Switch the player's hand to STONE so the synthetic click places the FB.
             if (!server.getPlayerManager().getPlayerList().isEmpty()) {
                 server.getPlayerManager().getPlayerList().get(0).setStackInHand(
                         Hand.MAIN_HAND,
@@ -1007,11 +1020,6 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> {
             if (mc.player != null) {
                 mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 4));
-                // Reposition the player above the supporting BS so server-side
-                // reach + line-of-sight validation accepts the synthetic UP-face
-                // click. Case A left the player facing south at z=3.25; for Case C
-                // the click target is at z=0 (north of that), so we move directly
-                // above and pitch straight down.
                 mc.player.refreshPositionAndAngles(
                         supportPos.getX() + 0.5,
                         supportPos.getY() + 2.5,
@@ -1023,10 +1031,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
 
-        // Click the top face of the supporting bottom slab. BS top sits at world
-        // Y = supportPos.y + 0.5; UP-face hit at the slab's top centre routes
-        // BlockItem.place to supportPos.up() == fullPos, where Block.onPlaced
-        // fires and the anchor is recorded.
+        // Synthetic UP-face click places STONE at fullPos via Block.onPlaced.
         final BlockHitResult fbPlaceHit = new BlockHitResult(
                 new Vec3d(supportPos.getX() + 0.5,
                           supportPos.getY() + 0.5,
@@ -1041,33 +1046,101 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             }
             mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, fbPlaceHit);
         });
+
+        // ── C-A: client dy immediately after placement (before sync/render settles) ──
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) return;
+            BlockState fbS = mc.world.getBlockState(fullPos);
+            double dy = SlabSupport.getYOffset(mc.world, fullPos, fbS);
+            boolean anchored = SlabAnchorAttachment.isAnchored(mc.world, fullPos);
+            caseCClientDyImmediateAfterPlace.set(Double.toString(dy));
+            caseCClientAnchoredImmediateAfterPlace.set(Boolean.toString(anchored));
+        });
+
         ctx.waitTick();
+
+        // ── C-A after 1 tick ──
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) return;
+            BlockState fbS = mc.world.getBlockState(fullPos);
+            double dy = SlabSupport.getYOffset(mc.world, fullPos, fbS);
+            boolean anchored = SlabAnchorAttachment.isAnchored(mc.world, fullPos);
+            caseCClientDyAfter1Tick.set(Double.toString(dy));
+            caseCClientAnchoredAfter1Tick.set(Boolean.toString(anchored));
+        });
+
         singleplayer.getClientWorld().waitForChunksRender();
 
+        // ── C-A after render settled ──
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                throw new RuntimeException("client world null during case C pre-read");
+                throw new RuntimeException("client world null during case C post-place render read");
             }
             BlockState fbState0 = mc.world.getBlockState(fullPos);
             BlockState slabState0 = mc.world.getBlockState(slabPos);
-            caseCInitialFbDy.set(Double.toString(SlabSupport.getYOffset(mc.world, fullPos, fbState0)));
+            double dy = SlabSupport.getYOffset(mc.world, fullPos, fbState0);
+            boolean anchored = SlabAnchorAttachment.isAnchored(mc.world, fullPos);
+            caseCClientDyAfterRender.set(Double.toString(dy));
+            caseCClientAnchoredAfterRender.set(Boolean.toString(anchored));
+            caseCInitialFbDy.set(Double.toString(dy));
             caseCInitialSlabDy.set(Double.toString(SlabSupport.getYOffset(mc.world, slabPos, slabState0)));
         });
 
+        // ── C-B: server anchor creation (server-authoritative read) ──────────────
         singleplayer.getServer().runOnServer(server -> {
-            // Break the supporting bottom slab under the lowered FB.
+            var world = server.getOverworld();
+            BlockState fbSrv = world.getBlockState(fullPos);
+            boolean anchored = SlabAnchorAttachment.isAnchored(world, fullPos);
+            caseCServerAnchorAfterPlace.set(Boolean.toString(anchored));
+            caseCServerFbStateAfterPlace.set(fbSrv.toString());
+        });
+
+        // ── C-C: break supporting BS ─────────────────────────────────────────────
+        singleplayer.getServer().runOnServer(server -> {
             server.getOverworld().breakBlock(supportPos, false);
         });
 
-        // Let neighbor updates and any revalidation settle.
-        for (int i = 0; i < 5; i++) {
+        // ── C-C client dy immediately after break (before sync/render settles) ──
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) return;
+            BlockState fbS = mc.world.getBlockState(fullPos);
+            double dy = SlabSupport.getYOffset(mc.world, fullPos, fbS);
+            boolean anchored = SlabAnchorAttachment.isAnchored(mc.world, fullPos);
+            caseCClientDyImmediateAfterBreak.set(Double.toString(dy));
+            caseCClientAnchoredImmediateAfterBreak.set(Boolean.toString(anchored));
+        });
+
+        ctx.waitTick();
+
+        // ── C-C after 1 tick ──
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) return;
+            BlockState fbS = mc.world.getBlockState(fullPos);
+            double dy = SlabSupport.getYOffset(mc.world, fullPos, fbS);
+            boolean anchored = SlabAnchorAttachment.isAnchored(mc.world, fullPos);
+            caseCClientDyAfter1TickBreak.set(Double.toString(dy));
+            caseCClientAnchoredAfter1TickBreak.set(Boolean.toString(anchored));
+        });
+
+        // Let neighbor updates and any revalidation settle fully.
+        for (int i = 0; i < 4; i++) {
             ctx.waitTick();
         }
         singleplayer.getClientWorld().waitForChunksRender();
 
+        // ── C-C server anchor after break (authoritative) ────────────────────────
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState fbSrv = world.getBlockState(fullPos);
+            boolean anchored = SlabAnchorAttachment.isAnchored(world, fullPos);
+            caseCServerAnchorAfterBreak.set(Boolean.toString(anchored));
+            caseCServerFbStateAfterBreak.set(fbSrv.toString());
+        });
+
+        // ── C-C client dy after full settle ──────────────────────────────────────
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                throw new RuntimeException("client world null during case C post-read");
+                throw new RuntimeException("client world null during case C post-break read");
             }
             BlockState fbState1 = mc.world.getBlockState(fullPos);
             BlockState slabState1 = mc.world.getBlockState(slabPos);
@@ -1076,17 +1149,30 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             caseCPostBreakFbDy.set(Double.toString(fbDy1));
             caseCPostBreakSlabDy.set(Double.toString(slabDy1));
             caseCPostBreakFbState.set(fbState1.toString());
+
+            // Verdict based on settled state.
             double fbDy0 = parseDoubleSafe(caseCInitialFbDy.get(), 0.0);
+            boolean serverAnchorCreated = Boolean.parseBoolean(caseCServerAnchorAfterPlace.get());
+            boolean serverAnchorPersisted = Boolean.parseBoolean(caseCServerAnchorAfterBreak.get());
             if (fbDy0 != -0.5) {
                 caseCVerdict.set("audit-only: pre-break FB dy was " + fbDy0
                         + " (not the expected lowered -0.5 baseline)");
+            } else if (!serverAnchorCreated) {
+                caseCVerdict.set("RED: server anchor not created after FB placement"
+                        + " — Block.onPlaced mixin or qualifiesForDirectAnchor failed");
+            } else if (!serverAnchorPersisted) {
+                caseCVerdict.set("RED: server anchor was removed after BS break"
+                        + " — onStateReplaced mixin fired at wrong pos or removeAnchor called incorrectly");
             } else if (!fbState1.isOf(Blocks.STONE)) {
-                caseCVerdict.set("RED: FB block at " + fullPos.toShortString()
-                        + " is no longer STONE after supporting BS break (fbState=" + fbState1
-                        + "); persistent slab-anchor must keep the FB in place");
+                caseCVerdict.set("RED: FB block is no longer STONE after BS break (fbState=" + fbState1 + ")");
             } else if (fbDy1 != -0.5) {
-                caseCVerdict.set("RED: FB dy drifted from -0.5 → " + fbDy1
-                        + " after supporting BS break (release-blocking: FB moves upward visually)");
+                String clientTiming =
+                        " clientDyImmediate=" + caseCClientDyImmediateAfterBreak.get()
+                        + " clientDy1Tick=" + caseCClientDyAfter1TickBreak.get()
+                        + " clientAnchoredImmediate=" + caseCClientAnchoredImmediateAfterBreak.get()
+                        + " clientAnchored1Tick=" + caseCClientAnchoredAfter1TickBreak.get();
+                caseCVerdict.set("RED: server anchor persisted but client dy drifted -0.5→" + fbDy1
+                        + " after BS break — client render refresh race suspected." + clientTiming);
             } else {
                 caseCVerdict.set("GREEN: FB stayed STONE with dy=-0.5 after supporting BS break"
                         + " (slab dy=" + slabDy1 + ")");
@@ -1117,7 +1203,21 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         new NoteField("caseC_postBreakFbDy", caseCPostBreakFbDy.get()),
                         new NoteField("caseC_postBreakSlabDy", caseCPostBreakSlabDy.get()),
                         new NoteField("caseC_postBreakFbState", caseCPostBreakFbState.get()),
-                        new NoteField("caseC_verdict", caseCVerdict.get())
+                        new NoteField("caseC_verdict", caseCVerdict.get()),
+                        new NoteField("caseC_serverAnchorAfterPlace", caseCServerAnchorAfterPlace.get()),
+                        new NoteField("caseC_serverFbStateAfterPlace", caseCServerFbStateAfterPlace.get()),
+                        new NoteField("caseC_serverAnchorAfterBreak", caseCServerAnchorAfterBreak.get()),
+                        new NoteField("caseC_serverFbStateAfterBreak", caseCServerFbStateAfterBreak.get()),
+                        new NoteField("caseC_clientDyImmediateAfterPlace", caseCClientDyImmediateAfterPlace.get()),
+                        new NoteField("caseC_clientAnchoredImmediateAfterPlace", caseCClientAnchoredImmediateAfterPlace.get()),
+                        new NoteField("caseC_clientDyAfter1Tick", caseCClientDyAfter1Tick.get()),
+                        new NoteField("caseC_clientAnchoredAfter1Tick", caseCClientAnchoredAfter1Tick.get()),
+                        new NoteField("caseC_clientDyAfterRender", caseCClientDyAfterRender.get()),
+                        new NoteField("caseC_clientAnchoredAfterRender", caseCClientAnchoredAfterRender.get()),
+                        new NoteField("caseC_clientDyImmediateAfterBreak", caseCClientDyImmediateAfterBreak.get()),
+                        new NoteField("caseC_clientAnchoredImmediateAfterBreak", caseCClientAnchoredImmediateAfterBreak.get()),
+                        new NoteField("caseC_clientDyAfter1TickBreak", caseCClientDyAfter1TickBreak.get()),
+                        new NoteField("caseC_clientAnchoredAfter1TickBreak", caseCClientAnchoredAfter1TickBreak.get())
                 ),
                 !caseBVerdict.get().startsWith("RED") && !caseCVerdict.get().startsWith("RED"));
 
