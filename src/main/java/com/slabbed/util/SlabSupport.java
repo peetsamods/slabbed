@@ -1,6 +1,7 @@
 package com.slabbed.util;
 
 import com.slabbed.Slabbed;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
@@ -356,7 +357,8 @@ public final class SlabSupport {
             BlockState neighbor = world.getBlockState(neighborPos);
             if (neighbor.getBlock() instanceof SlabBlock) continue;
             if (!neighbor.isSolidBlock(world, neighborPos)) continue;
-            if (hasBottomSlabBelow(world, neighborPos)) {
+            if (hasBottomSlabBelow(world, neighborPos)
+                    || SlabAnchorAttachment.isAnchored(world, neighborPos)) {
                 return true;
             }
         }

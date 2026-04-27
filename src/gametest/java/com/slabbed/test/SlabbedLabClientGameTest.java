@@ -822,9 +822,10 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      *       slab's center. RED if resolved BlockPos != slabPos — that matches the live
      *       "limited/picky hitbox coverage" symptom and the "wrong block breaks
      *       repeatedly" symptom when the side slab is aimed at.</li>
-     *   <li><b>C — supporting BS removal</b>: confirms initial FB dy = -0.5, removes
-     *       BS, waits, re-reads FB dy. RED if FB dy drifts to 0.0 (matches live
-     *       "breaking the supporting bottom slab makes the full block move upward").</li>
+     *   <li><b>C — supporting BS removal</b>: confirms initial FB dy = -0.5 and side
+     *       slab dy = -0.5, removes BS, waits, re-reads FB dy and side-slab dy.
+     *       RED if FB dy drifts to 0.0 or the side slab moves back up after support
+     *       removal.</li>
      * </ul>
      */
     static void runBsFb05sInteractionIntegrityProof(
@@ -1007,12 +1008,10 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         });
 
         // ── Case C: persistent anchor split proof ─────────────────────────────
-        // Clear Case B's side slab and FB so the placement site is empty.
-        // The FB is then placed via synthetic interactBlock so Block.onPlaced
-        // fires and SlabAnchorAttachment records the server-side anchor.
+        // Keep the side slab in place for the persistence read; only clear the FB
+        // so Block.onPlaced can re-anchor the lowered full block.
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
-            world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(fullPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             if (!server.getPlayerManager().getPlayerList().isEmpty()) {
                 server.getPlayerManager().getPlayerList().get(0).setStackInHand(
@@ -1155,11 +1154,15 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
             // Verdict based on settled state.
             double fbDy0 = parseDoubleSafe(caseCInitialFbDy.get(), 0.0);
+            double slabDy0 = parseDoubleSafe(caseCInitialSlabDy.get(), 0.0);
             boolean serverAnchorCreated = Boolean.parseBoolean(caseCServerAnchorAfterPlace.get());
             boolean serverAnchorPersisted = Boolean.parseBoolean(caseCServerAnchorAfterBreak.get());
             if (fbDy0 != -0.5) {
                 caseCVerdict.set("audit-only: pre-break FB dy was " + fbDy0
                         + " (not the expected lowered -0.5 baseline)");
+            } else if (slabDy0 != -0.5) {
+                caseCVerdict.set("RED: pre-break side slab dy was " + slabDy0
+                        + " instead of -0.5");
             } else if (!serverAnchorCreated) {
                 caseCVerdict.set("RED: server anchor not created after FB placement"
                         + " — Block.onPlaced mixin or qualifiesForDirectAnchor failed");
@@ -1176,6 +1179,9 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         + " clientAnchored1Tick=" + caseCClientAnchoredAfter1TickBreak.get();
                 caseCVerdict.set("RED: server anchor persisted but client dy drifted -0.5→" + fbDy1
                         + " after BS break — client render refresh race suspected." + clientTiming);
+            } else if (slabDy1 != -0.5) {
+                caseCVerdict.set("RED: side slab dy drifted -0.5→" + slabDy1
+                        + " after BS break — side slab moved back up with the support removed");
             } else {
                 caseCVerdict.set("GREEN: FB stayed STONE with dy=-0.5 after supporting BS break"
                         + " (slab dy=" + slabDy1 + ")");
@@ -1237,7 +1243,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 testId + "_notes.json",
                 testId,
                 "bs-fb-05s interaction integrity",
-                "BS-FB-0.5S side aim resolves to side slab; supporting BS break does not raise FB.",
+                "BS-FB-0.5S side aim resolves to side slab; supporting BS break keeps FB and side slab lowered.",
                 testId,
                 testId,
                 List.of(
@@ -1287,7 +1293,9 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         if (caseCVerdict.get().startsWith("RED")) {
             failMsg.append("[").append(testId).append("] caseC expected FB dy stays at -0.5 across BS removal;"
                     + " initialFbDy=").append(caseCInitialFbDy.get())
+                    .append(" initialSlabDy=").append(caseCInitialSlabDy.get())
                     .append(" postBreakFbDy=").append(caseCPostBreakFbDy.get())
+                    .append(" postBreakSlabDy=").append(caseCPostBreakSlabDy.get())
                     .append(" postBreakFbState=").append(caseCPostBreakFbState.get()).append("\n");
         }
         if (caseDSelectionVerdict.get().startsWith("RED")) {
