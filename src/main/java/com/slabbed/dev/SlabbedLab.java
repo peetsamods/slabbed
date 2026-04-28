@@ -2,6 +2,7 @@ package com.slabbed.dev;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
+import com.slabbed.debug.BsFbLiveTrace;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.permission.Permission;
 import net.minecraft.command.permission.PermissionLevel;
@@ -83,6 +84,14 @@ public final class SlabbedLab {
                                                 .executes(ctx -> actionRestoreSupport(ctx, "bottom_slab")))
                                         .then(literal("top_slab")
                                                 .executes(ctx -> actionRestoreSupport(ctx, "top_slab"))))
+                                .then(literal("inspect")
+                                        .executes(ctx -> actionInspect(ctx, null))
+                                        .then(literal("full")
+                                                .executes(ctx -> actionInspect(ctx, "full")))
+                                        .then(literal("bottom_slab")
+                                                .executes(ctx -> actionInspect(ctx, "bottom_slab")))
+                                        .then(literal("top_slab")
+                                                .executes(ctx -> actionInspect(ctx, "top_slab"))))
                                 .then(literal("neighbor-update")
                                         .executes(ctx -> actionNeighborUpdate(ctx, null))
                                         .then(literal("full")
@@ -121,6 +130,8 @@ public final class SlabbedLab {
         ServerWorld world = source.getWorld();
         BlockPos origin = fixtureOrigin(source);
 
+        SlabbedLabFixtures.rememberOrigin(origin);
+
         SlabbedLabFixtures.PlaceResult result = SlabbedLabFixtures.placeBasicFixture(world, origin);
         if (!result.ok()) {
             source.sendError(Text.literal("[slablab] " + result.error()));
@@ -129,19 +140,43 @@ public final class SlabbedLab {
 
         StringBuilder msg = new StringBuilder("[slablab] basic fixture placed (dev-only).\n");
         for (Map.Entry<String, BlockPos> e : result.positions().entrySet()) {
-            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append("\n");
+            msg.append("  ").append(e.getKey()).append(" supportPos=").append(e.getValue().toShortString())
+               .append(" fullPos=").append(e.getValue().up().toShortString()).append("\n");
         }
-        msg.append("  Candidate space: one block above each support.");
+        msg.append("  Expected blocks: FULL=stone, BOTTOM_SLAB=bottom slab, TOP_SLAB=top slab.");
 
         String finalMsg = msg.toString();
         source.sendFeedback(() -> Text.literal(finalMsg), false);
         return 1;
     }
 
+    private static int actionInspect(CommandContext<ServerCommandSource> ctx, String lane) {
+        ServerCommandSource source = ctx.getSource();
+        ServerWorld world = source.getWorld();
+        BlockPos origin = SlabbedLabFixtures.activeOriginOr(fixtureOrigin(source));
+
+        String laneName = lane == null ? "bottom_slab" : lane;
+        String details = SlabbedLabFixtures.describeLaneInspection(world, origin, laneName);
+        source.sendFeedback(() -> Text.literal("[slablab] inspect (dev-only). origin=" + origin.toShortString() + " " + details), false);
+
+        // BS-FB Live Trace: pair the chat report with server+client log lines for the same fullPos.
+        if (BsFbLiveTrace.ENABLED) {
+            BlockPos supportPos = SlabbedLabFixtures.laneSupportPos(origin, laneName);
+            if (supportPos != null) {
+                BlockPos fullPos = supportPos.up();
+                String label = "INSPECT_" + laneName.toUpperCase();
+                BsFbLiveTrace.capture(world, supportPos, fullPos, label);
+                BsFbLiveTrace.captureClient(supportPos, fullPos, label);
+            }
+        }
+
+        return 1;
+    }
+
     private static int clearFixture(CommandContext<ServerCommandSource> ctx) {
         ServerCommandSource source = ctx.getSource();
         ServerWorld world = source.getWorld();
-        BlockPos origin = fixtureOrigin(source);
+        BlockPos origin = SlabbedLabFixtures.activeOriginOr(fixtureOrigin(source));
 
         SlabbedLabFixtures.PlaceResult result = SlabbedLabFixtures.clearBasicFixture(world, origin);
         if (!result.ok()) {
@@ -151,7 +186,8 @@ public final class SlabbedLab {
 
         StringBuilder msg = new StringBuilder("[slablab] basic fixture cleared (dev-only).\n");
         for (Map.Entry<String, BlockPos> e : result.positions().entrySet()) {
-            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append(" removed\n");
+            msg.append("  ").append(e.getKey()).append(" supportPos=").append(e.getValue().toShortString())
+               .append(" removed\n");
         }
         msg.append("  origin: ").append(origin.toShortString()).append(".");
 
@@ -173,6 +209,7 @@ public final class SlabbedLab {
         }
 
         // Step 2: rebuild fixture at the same origin.
+        SlabbedLabFixtures.rememberOrigin(origin);
         SlabbedLabFixtures.PlaceResult placeResult = SlabbedLabFixtures.placeBasicFixture(world, origin);
         if (!placeResult.ok()) {
             source.sendError(Text.literal("[slablab] reset: cleared but rebuild failed: " + placeResult.error()));
@@ -181,9 +218,10 @@ public final class SlabbedLab {
 
         StringBuilder msg = new StringBuilder("[slablab] basic fixture reset (dev-only).\n");
         for (Map.Entry<String, BlockPos> e : placeResult.positions().entrySet()) {
-            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append("\n");
+            msg.append("  ").append(e.getKey()).append(" supportPos=").append(e.getValue().toShortString())
+               .append(" fullPos=").append(e.getValue().up().toShortString()).append("\n");
         }
-        msg.append("  Candidate space: one block above each support.");
+        msg.append("  Expected blocks: FULL=stone, BOTTOM_SLAB=bottom slab, TOP_SLAB=top slab.");
 
         String finalMsg = msg.toString();
         source.sendFeedback(() -> Text.literal(finalMsg), false);
@@ -197,7 +235,7 @@ public final class SlabbedLab {
     private static int actionBreakSupport(CommandContext<ServerCommandSource> ctx, String lane) {
         ServerCommandSource source = ctx.getSource();
         ServerWorld world = source.getWorld();
-        BlockPos origin = fixtureOrigin(source);
+        BlockPos origin = SlabbedLabFixtures.activeOriginOr(fixtureOrigin(source));
 
         SlabbedLabFixtures.PlaceResult result = SlabbedLabFixtures.breakSupport(world, origin, lane);
         if (!result.ok()) {
@@ -207,7 +245,9 @@ public final class SlabbedLab {
 
         StringBuilder msg = new StringBuilder("[slablab] break-support (dev-only).\n");
         for (Map.Entry<String, BlockPos> e : result.positions().entrySet()) {
-            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append(" support removed\n");
+            msg.append("  ").append(e.getKey()).append(" supportPos=").append(e.getValue().toShortString())
+               .append(" fullPos=").append(e.getValue().up().toShortString())
+               .append(" support removed\n");
         }
         msg.append("  Neighbor updates triggered.");
 
@@ -219,7 +259,7 @@ public final class SlabbedLab {
     private static int actionRestoreSupport(CommandContext<ServerCommandSource> ctx, String lane) {
         ServerCommandSource source = ctx.getSource();
         ServerWorld world = source.getWorld();
-        BlockPos origin = fixtureOrigin(source);
+        BlockPos origin = SlabbedLabFixtures.activeOriginOr(fixtureOrigin(source));
 
         SlabbedLabFixtures.PlaceResult result = SlabbedLabFixtures.restoreSupport(world, origin, lane);
         if (!result.ok()) {
@@ -229,7 +269,9 @@ public final class SlabbedLab {
 
         StringBuilder msg = new StringBuilder("[slablab] restore-support (dev-only).\n");
         for (Map.Entry<String, BlockPos> e : result.positions().entrySet()) {
-            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append(" support restored\n");
+            msg.append("  ").append(e.getKey()).append(" supportPos=").append(e.getValue().toShortString())
+               .append(" fullPos=").append(e.getValue().up().toShortString())
+               .append(" support restored\n");
         }
         msg.append("  Neighbor updates triggered.");
 
@@ -241,7 +283,7 @@ public final class SlabbedLab {
     private static int actionNeighborUpdate(CommandContext<ServerCommandSource> ctx, String lane) {
         ServerCommandSource source = ctx.getSource();
         ServerWorld world = source.getWorld();
-        BlockPos origin = fixtureOrigin(source);
+        BlockPos origin = SlabbedLabFixtures.activeOriginOr(fixtureOrigin(source));
 
         SlabbedLabFixtures.PlaceResult result = SlabbedLabFixtures.neighborUpdatePulse(world, origin, lane);
         if (!result.ok()) {
@@ -251,7 +293,9 @@ public final class SlabbedLab {
 
         StringBuilder msg = new StringBuilder("[slablab] neighbor-update (dev-only).\n");
         for (Map.Entry<String, BlockPos> e : result.positions().entrySet()) {
-            msg.append("  ").append(e.getKey()).append(" \u2192 ").append(e.getValue().toShortString()).append(" candidate pulsed\n");
+            msg.append("  ").append(e.getKey()).append(" candidatePos=").append(e.getValue().toShortString())
+               .append(" pulsePos=").append(e.getValue().south().toShortString())
+               .append(" candidate pulsed\n");
         }
         msg.append("  Pulse: stone placed+removed south of each candidate cell (NOTIFY_ALL).");
 
@@ -376,7 +420,7 @@ public final class SlabbedLab {
     private static int statusFixture(CommandContext<ServerCommandSource> ctx, String lane) {
         ServerCommandSource source = ctx.getSource();
         ServerWorld world = source.getWorld();
-        BlockPos origin = fixtureOrigin(source);
+        BlockPos origin = SlabbedLabFixtures.activeOriginOr(fixtureOrigin(source));
 
         List<SlabbedLabFixtures.LaneStatus> statuses = SlabbedLabFixtures.queryStatus(world, origin, lane);
         if (statuses == null) {
