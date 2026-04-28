@@ -3848,6 +3848,13 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         AtomicReference<String> lowerRayText = new AtomicReference<>("not_run");
         AtomicReference<String> centerRayText = new AtomicReference<>("not_run");
         AtomicReference<String> topRayText = new AtomicReference<>("not_run");
+        AtomicReference<String> modelSeenText = new AtomicReference<>("not_checked");
+        AtomicReference<String> modelViewClassText = new AtomicReference<>("not_checked");
+        AtomicReference<String> modelStateText = new AtomicReference<>("not_checked");
+        AtomicReference<String> modelDyText = new AtomicReference<>("not_checked");
+        AtomicReference<String> modelClientDyText = new AtomicReference<>("not_checked");
+        AtomicReference<String> modelSlabSupportDyText = new AtomicReference<>("not_checked");
+        AtomicReference<String> modelExcludedText = new AtomicReference<>("not_checked");
         AtomicReference<String> verdict = new AtomicReference<>("BLOCKED");
 
         singleplayer.getServer().runOnServer(server -> {
@@ -3907,12 +3914,22 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
 
+        ctx.runOnClient(mc -> {
+            System.setProperty("slabbed.render.offset.trace", "true");
+            com.slabbed.client.model.OffsetBlockStateModel.resetRenderOffsetTrace(chainPos);
+        });
         singleplayer.getServer().runOnServer(server -> server.getOverworld().setBlockState(
                 chainPos,
                 Blocks.IRON_CHAIN.getDefaultState().with(net.minecraft.block.ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_LISTENERS));
         for (int i = 0; i < 2; i++) ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+        captureScreenshotAndRecord(
+                ctx,
+                testId + "_model_path",
+                screenshotDir,
+                knownScreenshotFiles,
+                artifacts);
 
         ctx.runOnClient(mc -> {
             if (mc.world == null || mc.player == null) {
@@ -3965,6 +3982,17 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             topRayText.set(slabbed$describeHorizontalOutlineRay(
                     mc, chainPos, topY, "top"));
 
+            com.slabbed.client.model.OffsetBlockStateModel.RenderOffsetTrace modelTrace =
+                    com.slabbed.client.model.OffsetBlockStateModel.snapshotRenderOffsetTrace();
+            modelSeenText.set(Boolean.toString(modelTrace.seen()));
+            modelViewClassText.set(modelTrace.viewClass());
+            modelStateText.set(modelTrace.state());
+            modelDyText.set(Double.toString(modelTrace.modelDy()));
+            modelClientDyText.set(Double.toString(modelTrace.clientDy()));
+            modelSlabSupportDyText.set(Double.toString(modelTrace.slabSupportDy()));
+            modelExcludedText.set(Boolean.toString(modelTrace.excludedByWrapper()));
+            System.clearProperty("slabbed.render.offset.trace");
+
             boolean slabOk = slabState.isOf(Blocks.STONE_SLAB)
                     && slabState.contains(SlabBlock.TYPE)
                     && slabState.get(SlabBlock.TYPE) == SlabType.BOTTOM
@@ -3984,6 +4012,12 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 verdict.set("RED: chain selection ownership is top-only or misses lower/center visible body");
             } else if (!topHitsChain) {
                 verdict.set("RED: chain top visible body ray missed");
+            } else if (!modelTrace.seen()) {
+                verdict.set("RED: OffsetBlockStateModel never saw lowered chain");
+            } else if (chainDyOk && Math.abs(modelTrace.modelDy() - (-1.0d)) > 1.0e-6) {
+                verdict.set("RED: logical/outline/raycast lowered but model path dy=" + modelTrace.modelDy());
+            } else if (Math.abs(modelTrace.clientDy() - modelTrace.slabSupportDy()) > 1.0e-6) {
+                verdict.set("RED: ClientDy disagrees with SlabSupport in model path");
             } else {
                 verdict.set("PASS: chain dy, outline, and lower/center/top raycast agree");
             }
@@ -4015,6 +4049,13 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         new NoteField("lowerRay", lowerRayText.get()),
                         new NoteField("centerRay", centerRayText.get()),
                         new NoteField("topRay", topRayText.get()),
+                        new NoteField("modelSeen", modelSeenText.get()),
+                        new NoteField("modelViewClass", modelViewClassText.get()),
+                        new NoteField("modelState", modelStateText.get()),
+                        new NoteField("modelDy", modelDyText.get()),
+                        new NoteField("modelClientDy", modelClientDyText.get()),
+                        new NoteField("modelSlabSupportDy", modelSlabSupportDyText.get()),
+                        new NoteField("modelExcludedByWrapper", modelExcludedText.get()),
                         new NoteField("verdict", verdict.get())
                 ),
                 !verdict.get().startsWith("RED")
@@ -4028,7 +4069,10 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     + " chainOutlineY=" + chainOutlineYText.get()
                     + " lowerRay=" + lowerRayText.get()
                     + " centerRay=" + centerRayText.get()
-                    + " topRay=" + topRayText.get());
+                    + " topRay=" + topRayText.get()
+                    + " modelSeen=" + modelSeenText.get()
+                    + " modelDy=" + modelDyText.get()
+                    + " modelView=" + modelViewClassText.get());
         }
     }
 
