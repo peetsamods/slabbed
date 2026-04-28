@@ -11,7 +11,8 @@
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLoweredSideSlabPlacementClientGameTest",
-      "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest"
+      "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest",
+      "com.slabbed.test.SlabbedLabSbMixedStackBreakClientGameTest"
     ]
   },
   "depends": {
