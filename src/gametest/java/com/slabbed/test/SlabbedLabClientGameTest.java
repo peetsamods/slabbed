@@ -837,6 +837,11 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // plus chain-on-top must align dy, outline, and raycast ownership).
         // Side-channel notes only.
         runBsFb05sTopSupportTriadProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // BS-FB-0.5S+ full-block stack air-gap proof (RED PROOF — live-real
+        // BOTTOM side slab plus full blocks on top must not leave a half-gap).
+        // Side-channel notes only.
+        runBsFb05sFullBlockTopAirGapProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
     }
 
     /**
@@ -4096,6 +4101,218 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         return label + ":BLOCK blockPos=" + hit.getBlockPos().toShortString()
                 + " face=" + hit.getSide().asString()
                 + " hitY=" + String.format("%.4f", hit.getPos().y);
+    }
+
+    static void runBsFb05sFullBlockTopAirGapProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "bs_fb_05s_full_block_top_air_gap";
+        final BlockPos bsPos = FIXTURE_ORIGIN.add(88, 0, 0);
+        final BlockPos fbPos = bsPos.up();
+        final BlockPos slabPos = fbPos.east();
+        final BlockPos firstPos = slabPos.up();
+        final BlockPos secondPos = firstPos.up();
+        final double eyeOffset = 1.62;
+        final Vec3d slabEye = new Vec3d(fbPos.getX() + 2.5, fbPos.getY() + 0.5, fbPos.getZ() + 0.5);
+        final Vec3d slabRayEnd = slabEye.add(new Vec3d(-1.0, 0.0, 0.0).multiply(4.5));
+
+        AtomicReference<String> slabHitText = new AtomicReference<>("pending");
+        AtomicReference<BlockHitResult> slabHitRef = new AtomicReference<>(null);
+        AtomicReference<String> slabActionText = new AtomicReference<>("not_run");
+        AtomicReference<String> firstActionText = new AtomicReference<>("not_run");
+        AtomicReference<String> secondActionText = new AtomicReference<>("not_run");
+        AtomicReference<String> slabStateText = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabTypeText = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabDyText = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabVisualYText = new AtomicReference<>("not_checked");
+        AtomicReference<String> firstStateText = new AtomicReference<>("not_checked");
+        AtomicReference<String> firstDyText = new AtomicReference<>("not_checked");
+        AtomicReference<String> firstOutlineYText = new AtomicReference<>("not_checked");
+        AtomicReference<String> firstVisualYText = new AtomicReference<>("not_checked");
+        AtomicReference<String> secondStateText = new AtomicReference<>("not_checked");
+        AtomicReference<String> secondDyText = new AtomicReference<>("not_checked");
+        AtomicReference<String> secondOutlineYText = new AtomicReference<>("not_checked");
+        AtomicReference<String> secondVisualYText = new AtomicReference<>("not_checked");
+        AtomicReference<String> firstBottomEqualsSupportTopText = new AtomicReference<>("not_checked");
+        AtomicReference<String> supportGapText = new AtomicReference<>("not_checked");
+        AtomicReference<String> verdict = new AtomicReference<>("BLOCKED");
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(bsPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fbPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(firstPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(secondPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, fbPos, world.getBlockState(fbPos));
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list empty for " + testId);
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                verdict.set("BLOCKED: client unavailable");
+                return;
+            }
+            mc.player.refreshPositionAndAngles(slabEye.x, slabEye.y - eyeOffset, slabEye.z, 90.0f, 0.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            BlockHitResult hit = mc.world.raycast(new RaycastContext(
+                    slabEye, slabRayEnd, RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE, mc.player));
+            if (hit.getType() == HitResult.Type.MISS) {
+                slabHitText.set("MISS");
+                return;
+            }
+            slabHitRef.set(hit);
+            slabHitText.set("BLOCK blockPos=" + hit.getBlockPos().toShortString()
+                    + " face=" + hit.getSide().asString()
+                    + " hitY=" + String.format("%.4f", hit.getPos().y));
+            slabActionText.set(mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null) {
+                verdict.set("BLOCKED: client interaction unavailable");
+                return;
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+            BlockHitResult firstHit = new BlockHitResult(
+                    new Vec3d(slabPos.getX() + 0.5, slabPos.getY(), slabPos.getZ() + 0.5),
+                    Direction.UP, slabPos, false, false);
+            firstActionText.set(mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, firstHit).toString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null) {
+                verdict.set("BLOCKED: client interaction unavailable");
+                return;
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+            BlockHitResult secondHit = new BlockHitResult(
+                    new Vec3d(firstPos.getX() + 0.5, firstPos.getY(), firstPos.getZ() + 0.5),
+                    Direction.UP, firstPos, false, false);
+            secondActionText.set(mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, secondHit).toString());
+        });
+        for (int i = 0; i < 2; i++) ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during " + testId);
+            }
+            BlockState slabState = mc.world.getBlockState(slabPos);
+            BlockState firstState = mc.world.getBlockState(firstPos);
+            BlockState secondState = mc.world.getBlockState(secondPos);
+            slabStateText.set(slabState.toString());
+            slabTypeText.set(slabState.contains(SlabBlock.TYPE) ? slabState.get(SlabBlock.TYPE).toString() : "none");
+            firstStateText.set(firstState.toString());
+            secondStateText.set(secondState.toString());
+            double slabDy = SlabSupport.getYOffset(mc.world, slabPos, slabState);
+            double firstDy = SlabSupport.getYOffset(mc.world, firstPos, firstState);
+            double secondDy = SlabSupport.getYOffset(mc.world, secondPos, secondState);
+            slabDyText.set(Double.toString(slabDy));
+            firstDyText.set(Double.toString(firstDy));
+            secondDyText.set(Double.toString(secondDy));
+
+            VoxelShape slabOut = slabState.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+            VoxelShape firstOut = firstState.getOutlineShape(mc.world, firstPos, ShapeContext.absent());
+            VoxelShape secondOut = secondState.getOutlineShape(mc.world, secondPos, ShapeContext.absent());
+            double slabTop = slabPos.getY() + (slabOut.isEmpty() ? 0.0 : slabOut.getBoundingBox().maxY);
+            double firstMin = firstPos.getY() + (firstOut.isEmpty() ? 0.0 : firstOut.getBoundingBox().minY);
+            double firstMax = firstPos.getY() + (firstOut.isEmpty() ? 0.0 : firstOut.getBoundingBox().maxY);
+            double secondMin = secondPos.getY() + (secondOut.isEmpty() ? 0.0 : secondOut.getBoundingBox().minY);
+            double secondMax = secondPos.getY() + (secondOut.isEmpty() ? 0.0 : secondOut.getBoundingBox().maxY);
+            double supportGap = firstMin - slabTop;
+
+            slabVisualYText.set(formatYRange(
+                    slabPos.getY() + (slabOut.isEmpty() ? 0.0 : slabOut.getBoundingBox().minY), slabTop));
+            firstOutlineYText.set(formatYRange(firstMin, firstMax));
+            secondOutlineYText.set(formatYRange(secondMin, secondMax));
+            firstVisualYText.set(formatYRange(firstMin, firstMax));
+            secondVisualYText.set(formatYRange(secondMin, secondMax));
+            firstBottomEqualsSupportTopText.set(Boolean.toString(Math.abs(supportGap) < 1.0e-6));
+            supportGapText.set(Double.toString(supportGap));
+
+            boolean slabOk = slabState.isOf(Blocks.STONE_SLAB)
+                    && slabState.contains(SlabBlock.TYPE)
+                    && slabState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(slabDy - (-0.5d)) < 1.0e-6;
+            boolean firstPlaced = firstState.isOf(Blocks.STONE);
+            boolean secondPlaced = secondState.isOf(Blocks.STONE);
+            if (!slabOk || !firstPlaced || !secondPlaced) {
+                verdict.set("BLOCKED: live-real full-block stack setup failed");
+            } else if (supportGap > 0.49d) {
+                verdict.set("RED: first full block leaves half-block air gap over 0.5S support");
+            } else if (Math.abs(firstDy - (-1.0d)) > 1.0e-6) {
+                verdict.set("RED: first full block dy=" + firstDy + " expected -1.0");
+            } else if (Math.abs(secondMin - firstMax) > 1.0e-6) {
+                verdict.set("RED: second full block stack does not sit on first block");
+            } else {
+                verdict.set("PASS: full block stack sits on visible 0.5S top");
+            }
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "bs-fb-0.5s full block air gap",
+                "Live-real full block stack on lowered BOTTOM 0.5S should sit on the visible support top.",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("bsPos", bsPos.toShortString()),
+                        new NoteField("fbPos", fbPos.toShortString()),
+                        new NoteField("slabHit", slabHitText.get()),
+                        new NoteField("slabActionResult", slabActionText.get()),
+                        new NoteField("firstActionResult", firstActionText.get()),
+                        new NoteField("secondActionResult", secondActionText.get()),
+                        new NoteField("slabPos", slabPos.toShortString()),
+                        new NoteField("slabState", slabStateText.get()),
+                        new NoteField("slabType", slabTypeText.get()),
+                        new NoteField("slabDy", slabDyText.get()),
+                        new NoteField("slabVisualY", slabVisualYText.get()),
+                        new NoteField("firstPos", firstPos.toShortString()),
+                        new NoteField("firstState", firstStateText.get()),
+                        new NoteField("firstDy", firstDyText.get()),
+                        new NoteField("firstOutlineY", firstOutlineYText.get()),
+                        new NoteField("firstEffectiveVisualY", firstVisualYText.get()),
+                        new NoteField("secondPos", secondPos.toShortString()),
+                        new NoteField("secondState", secondStateText.get()),
+                        new NoteField("secondDy", secondDyText.get()),
+                        new NoteField("secondOutlineY", secondOutlineYText.get()),
+                        new NoteField("secondEffectiveVisualY", secondVisualYText.get()),
+                        new NoteField("firstBottomEqualsSupportTop", firstBottomEqualsSupportTopText.get()),
+                        new NoteField("supportGap", supportGapText.get()),
+                        new NoteField("verdict", verdict.get())
+                ),
+                !verdict.get().startsWith("RED") && !verdict.get().startsWith("BLOCKED"));
+
+        if (verdict.get().startsWith("RED") || verdict.get().startsWith("BLOCKED")) {
+            throw new RuntimeException("[" + testId + "] " + verdict.get()
+                    + " slabType=" + slabTypeText.get()
+                    + " slabDy=" + slabDyText.get()
+                    + " firstDy=" + firstDyText.get()
+                    + " firstOutlineY=" + firstOutlineYText.get()
+                    + " secondDy=" + secondDyText.get()
+                    + " supportGap=" + supportGapText.get());
+        }
     }
 
     /**
