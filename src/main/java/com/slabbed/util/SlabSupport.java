@@ -415,6 +415,10 @@ public final class SlabSupport {
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
                 return -1.0;
             }
+            double columnDy = slabColumnYOffset(world, pos);
+            if (columnDy != 0.0) {
+                return columnDy;
+            }
             return -0.5;
         }
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
@@ -562,6 +566,15 @@ public final class SlabSupport {
      * (its visible top sits at slab height), so anything stacked on top of it
      * inherits the same lowered surface even after the original BS support
      * has been broken.
+     *
+     * <p>A slab encountered anywhere in the bounded column walk that is itself
+     * a lowered adjacent-side slab — i.e. a 1S/0.5S/double slab horizontally
+     * beside an anchored or BS-supported FB — also counts as a positive: its
+     * visible top face sits at the lowered support height, so anything stacked
+     * above it (directly or through intermediate full blocks) must inherit the
+     * same -0.5 dy. Vanilla top slabs that are not lowered still terminate the
+     * walk false via the slab terminator below. Walk remains bounded by
+     * {@link #MAX_CHAIN_DEPTH}.
      */
     private static boolean hasSlabInColumn(BlockView world, BlockPos pos) {
         BlockPos cursor = pos.down();
@@ -573,11 +586,34 @@ public final class SlabSupport {
             if (SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return true;
             }
+            if (cur.getBlock() instanceof SlabBlock
+                    && isAdjacentSideSlabLowered(world, cursor, cur)) {
+                return true;
+            }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return false;
             }
             cursor = cursor.down();
         }
         return false;
+    }
+
+    private static double slabColumnYOffset(BlockView world, BlockPos pos) {
+        BlockPos cursor = pos.down();
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState cur = world.getBlockState(cursor);
+            if (cur.getBlock() instanceof SlabBlock
+                    && isAdjacentSideSlabLowered(world, cursor, cur)) {
+                return isBottomSlab(cur) ? -1.0 : -0.5;
+            }
+            if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
+                return -0.5;
+            }
+            if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
+                return 0.0;
+            }
+            cursor = cursor.down();
+        }
+        return 0.0;
     }
 }
