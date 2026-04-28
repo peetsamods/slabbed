@@ -415,6 +415,10 @@ public final class SlabSupport {
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
                 return -1.0;
             }
+            double columnDy = slabColumnYOffset(world, pos);
+            if (columnDy != 0.0) {
+                return columnDy;
+            }
             return -0.5;
         }
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
@@ -592,5 +596,24 @@ public final class SlabSupport {
             cursor = cursor.down();
         }
         return false;
+    }
+
+    private static double slabColumnYOffset(BlockView world, BlockPos pos) {
+        BlockPos cursor = pos.down();
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState cur = world.getBlockState(cursor);
+            if (cur.getBlock() instanceof SlabBlock
+                    && isAdjacentSideSlabLowered(world, cursor, cur)) {
+                return isBottomSlab(cur) ? -1.0 : -0.5;
+            }
+            if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
+                return -0.5;
+            }
+            if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
+                return 0.0;
+            }
+            cursor = cursor.down();
+        }
+        return 0.0;
     }
 }
