@@ -392,6 +392,21 @@ public final class SlabSupport {
             }
         }
 
+        // Persistent slab-anchor: an ordinary FB placed directly on a bottom slab is
+        // recorded on the chunk via SlabAnchorAttachment at placement time and cleared
+        // when the FB itself is broken/replaced. Anchors persist across supporting BS
+        // removal so the FB does not visually jump upward.
+        // Only honour anchors for non-slab blocks; slabs were handled above.
+        if (!(state.getBlock() instanceof SlabBlock)
+                && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
+                String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
+                        side, pos.toShortString(), state);
+            }
+            return -0.5;
+        }
+
         if (shouldOffset(world, pos, state)) {
             // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
             // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
@@ -403,23 +418,6 @@ public final class SlabSupport {
             double columnDy = slabColumnYOffset(world, pos);
             if (columnDy != 0.0) {
                 return columnDy;
-            }
-            return -0.5;
-        }
-
-        // Persistent slab-anchor: an ordinary FB placed directly on a bottom slab is
-        // recorded on the chunk via SlabAnchorAttachment at placement time and cleared
-        // when the FB itself is broken/replaced. Anchors persist across supporting BS
-        // removal so the FB does not visually jump upward.
-        // Only honour anchors for non-slab blocks; slabs were handled above. This runs
-        // after the support-column calculation so a lowered 0.5S side slab below can
-        // provide its compound -1.0 support height instead of being masked by the anchor.
-        if (!(state.getBlock() instanceof SlabBlock)
-                && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
-            if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
-                String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
-                Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
-                        side, pos.toShortString(), state);
             }
             return -0.5;
         }
