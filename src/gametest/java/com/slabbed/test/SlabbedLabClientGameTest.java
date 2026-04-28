@@ -849,8 +849,16 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         AtomicReference<String> caseBLowerResolved = new AtomicReference<>("");
         AtomicReference<String> caseCInitialFbDy = new AtomicReference<>("");
         AtomicReference<String> caseCInitialSlabDy = new AtomicReference<>("");
+        AtomicReference<String> caseCInitialFbEffectiveVisualY = new AtomicReference<>("");
+        AtomicReference<String> caseCInitialSlabEffectiveVisualY = new AtomicReference<>("");
+        AtomicReference<String> caseCInitialAssemblyVisibleY = new AtomicReference<>("");
         AtomicReference<String> caseCPostBreakFbDy = new AtomicReference<>("");
         AtomicReference<String> caseCPostBreakSlabDy = new AtomicReference<>("");
+        AtomicReference<String> caseCPostBreakFbEffectiveVisualY = new AtomicReference<>("");
+        AtomicReference<String> caseCPostBreakSlabEffectiveVisualY = new AtomicReference<>("");
+        AtomicReference<String> caseCPostBreakAssemblyVisibleY = new AtomicReference<>("");
+        AtomicReference<String> caseCAssemblyVisibleDeltaY = new AtomicReference<>("");
+        AtomicReference<String> caseCAssemblyShiftedUp = new AtomicReference<>("");
         AtomicReference<String> caseCPostBreakFbState = new AtomicReference<>("");
         // Server-side anchor observations (split proof)
         AtomicReference<String> caseCServerAnchorAfterPlace = new AtomicReference<>("");
@@ -1081,11 +1089,23 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             BlockState fbState0 = mc.world.getBlockState(fullPos);
             BlockState slabState0 = mc.world.getBlockState(slabPos);
             double dy = SlabSupport.getYOffset(mc.world, fullPos, fbState0);
+            double slabDy0 = SlabSupport.getYOffset(mc.world, slabPos, slabState0);
+            VoxelShape fbOutline0 = fbState0.getOutlineShape(mc.world, fullPos, ShapeContext.absent());
+            VoxelShape slabOutline0 = slabState0.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+            double fbMinY0 = fullPos.getY() + fbOutline0.getBoundingBox().minY;
+            double fbMaxY0 = fullPos.getY() + fbOutline0.getBoundingBox().maxY;
+            double slabMinY0 = slabPos.getY() + slabOutline0.getBoundingBox().minY;
+            double slabMaxY0 = slabPos.getY() + slabOutline0.getBoundingBox().maxY;
+            double assemblyMinY0 = Math.min(fbMinY0, slabMinY0);
+            double assemblyMaxY0 = Math.max(fbMaxY0, slabMaxY0);
             boolean anchored = SlabAnchorAttachment.isAnchored(mc.world, fullPos);
             caseCClientDyAfterRender.set(Double.toString(dy));
             caseCClientAnchoredAfterRender.set(Boolean.toString(anchored));
             caseCInitialFbDy.set(Double.toString(dy));
-            caseCInitialSlabDy.set(Double.toString(SlabSupport.getYOffset(mc.world, slabPos, slabState0)));
+            caseCInitialSlabDy.set(Double.toString(slabDy0));
+            caseCInitialFbEffectiveVisualY.set(formatYRange(fbMinY0, fbMaxY0));
+            caseCInitialSlabEffectiveVisualY.set(formatYRange(slabMinY0, slabMaxY0));
+            caseCInitialAssemblyVisibleY.set(formatYRange(assemblyMinY0, assemblyMaxY0));
         });
 
         // ── C-B: server anchor creation (server-authoritative read) ──────────────
@@ -1148,8 +1168,26 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             BlockState slabState1 = mc.world.getBlockState(slabPos);
             double fbDy1 = SlabSupport.getYOffset(mc.world, fullPos, fbState1);
             double slabDy1 = SlabSupport.getYOffset(mc.world, slabPos, slabState1);
+            VoxelShape fbOutline1 = fbState1.getOutlineShape(mc.world, fullPos, ShapeContext.absent());
+            VoxelShape slabOutline1 = slabState1.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+            double fbMinY1 = fullPos.getY() + fbOutline1.getBoundingBox().minY;
+            double fbMaxY1 = fullPos.getY() + fbOutline1.getBoundingBox().maxY;
+            double slabMinY1 = slabPos.getY() + slabOutline1.getBoundingBox().minY;
+            double slabMaxY1 = slabPos.getY() + slabOutline1.getBoundingBox().maxY;
+            double assemblyMinY1 = Math.min(fbMinY1, slabMinY1);
+            double assemblyMaxY1 = Math.max(fbMaxY1, slabMaxY1);
+            double assemblyMinY0 = parseRangeMin(caseCInitialAssemblyVisibleY.get(), assemblyMinY1);
+            double assemblyMaxY0 = parseRangeMax(caseCInitialAssemblyVisibleY.get(), assemblyMaxY1);
+            double assemblyMinDelta = assemblyMinY1 - assemblyMinY0;
+            double assemblyMaxDelta = assemblyMaxY1 - assemblyMaxY0;
+            boolean assemblyShiftedUp = assemblyMinDelta > 0.001 || assemblyMaxDelta > 0.001;
             caseCPostBreakFbDy.set(Double.toString(fbDy1));
             caseCPostBreakSlabDy.set(Double.toString(slabDy1));
+            caseCPostBreakFbEffectiveVisualY.set(formatYRange(fbMinY1, fbMaxY1));
+            caseCPostBreakSlabEffectiveVisualY.set(formatYRange(slabMinY1, slabMaxY1));
+            caseCPostBreakAssemblyVisibleY.set(formatYRange(assemblyMinY1, assemblyMaxY1));
+            caseCAssemblyVisibleDeltaY.set(formatYRange(assemblyMinDelta, assemblyMaxDelta));
+            caseCAssemblyShiftedUp.set(Boolean.toString(assemblyShiftedUp));
             caseCPostBreakFbState.set(fbState1.toString());
 
             // Verdict based on settled state.
@@ -1182,9 +1220,20 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             } else if (slabDy1 != -0.5) {
                 caseCVerdict.set("RED: side slab dy drifted -0.5→" + slabDy1
                         + " after BS break — side slab moved back up with the support removed");
+            } else if (assemblyShiftedUp) {
+                caseCVerdict.set("RED: assembly visible Y shifted upward after BS break"
+                        + " initialAssemblyY=" + caseCInitialAssemblyVisibleY.get()
+                        + " postBreakAssemblyY=" + caseCPostBreakAssemblyVisibleY.get()
+                        + " deltaY=" + caseCAssemblyVisibleDeltaY.get());
+            } else if (Math.abs(assemblyMinDelta) > 0.001 || Math.abs(assemblyMaxDelta) > 0.001) {
+                caseCVerdict.set("RED: assembly visible Y changed after BS break"
+                        + " initialAssemblyY=" + caseCInitialAssemblyVisibleY.get()
+                        + " postBreakAssemblyY=" + caseCPostBreakAssemblyVisibleY.get()
+                        + " deltaY=" + caseCAssemblyVisibleDeltaY.get());
             } else {
                 caseCVerdict.set("GREEN: FB stayed STONE with dy=-0.5 after supporting BS break"
-                        + " (slab dy=" + slabDy1 + ")");
+                        + " (slab dy=" + slabDy1
+                        + ", assemblyY=" + caseCPostBreakAssemblyVisibleY.get() + ")");
             }
         });
 
@@ -1259,8 +1308,16 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         new NoteField("caseB_verdict", caseBVerdict.get()),
                         new NoteField("caseC_initialFbDy", caseCInitialFbDy.get()),
                         new NoteField("caseC_initialSlabDy", caseCInitialSlabDy.get()),
+                        new NoteField("caseC_initialFbEffectiveVisualY", caseCInitialFbEffectiveVisualY.get()),
+                        new NoteField("caseC_initialSlabEffectiveVisualY", caseCInitialSlabEffectiveVisualY.get()),
+                        new NoteField("caseC_initialAssemblyVisibleY", caseCInitialAssemblyVisibleY.get()),
                         new NoteField("caseC_postBreakFbDy", caseCPostBreakFbDy.get()),
                         new NoteField("caseC_postBreakSlabDy", caseCPostBreakSlabDy.get()),
+                        new NoteField("caseC_postBreakFbEffectiveVisualY", caseCPostBreakFbEffectiveVisualY.get()),
+                        new NoteField("caseC_postBreakSlabEffectiveVisualY", caseCPostBreakSlabEffectiveVisualY.get()),
+                        new NoteField("caseC_postBreakAssemblyVisibleY", caseCPostBreakAssemblyVisibleY.get()),
+                        new NoteField("caseC_assemblyVisibleDeltaY", caseCAssemblyVisibleDeltaY.get()),
+                        new NoteField("caseC_assemblyShiftedUp", caseCAssemblyShiftedUp.get()),
                         new NoteField("caseC_postBreakFbState", caseCPostBreakFbState.get()),
                         new NoteField("caseC_verdict", caseCVerdict.get()),
                         new NoteField("caseC_serverAnchorAfterPlace", caseCServerAnchorAfterPlace.get()),
@@ -1294,8 +1351,14 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             failMsg.append("[").append(testId).append("] caseC expected FB dy stays at -0.5 across BS removal;"
                     + " initialFbDy=").append(caseCInitialFbDy.get())
                     .append(" initialSlabDy=").append(caseCInitialSlabDy.get())
+                    .append(" initialFbEffectiveVisualY=").append(caseCInitialFbEffectiveVisualY.get())
+                    .append(" initialSlabEffectiveVisualY=").append(caseCInitialSlabEffectiveVisualY.get())
                     .append(" postBreakFbDy=").append(caseCPostBreakFbDy.get())
                     .append(" postBreakSlabDy=").append(caseCPostBreakSlabDy.get())
+                    .append(" postBreakFbEffectiveVisualY=").append(caseCPostBreakFbEffectiveVisualY.get())
+                    .append(" postBreakSlabEffectiveVisualY=").append(caseCPostBreakSlabEffectiveVisualY.get())
+                    .append(" assemblyVisibleDeltaY=").append(caseCAssemblyVisibleDeltaY.get())
+                    .append(" assemblyShiftedUp=").append(caseCAssemblyShiftedUp.get())
                     .append(" postBreakFbState=").append(caseCPostBreakFbState.get()).append("\n");
         }
         if (caseDSelectionVerdict.get().startsWith("RED")) {
@@ -1345,6 +1408,26 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         } catch (Exception e) {
             return fallback;
         }
+    }
+
+    private static String formatYRange(double minY, double maxY) {
+        return Double.toString(minY) + ".." + Double.toString(maxY);
+    }
+
+    private static double parseRangeMin(String range, double fallback) {
+        int split = range == null ? -1 : range.indexOf("..");
+        if (split < 0) {
+            return fallback;
+        }
+        return parseDoubleSafe(range.substring(0, split), fallback);
+    }
+
+    private static double parseRangeMax(String range, double fallback) {
+        int split = range == null ? -1 : range.indexOf("..");
+        if (split < 0) {
+            return fallback;
+        }
+        return parseDoubleSafe(range.substring(split + 2), fallback);
     }
 
     static void runLowerHalfOwnershipProof(
