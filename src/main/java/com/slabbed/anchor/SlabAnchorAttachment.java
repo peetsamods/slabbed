@@ -3,6 +3,7 @@ package com.slabbed.anchor;
 import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
+import com.slabbed.debug.BsFbLiveTrace;
 import com.slabbed.util.SlabSupport;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
@@ -127,16 +128,19 @@ public final class SlabAnchorAttachment {
             }
             return;
         }
-        LongOpenHashSet set = chunk.getAttached(ANCHOR_TYPE);
-        if (set == null) {
-            set = new LongOpenHashSet();
-        }
+        LongOpenHashSet existing = chunk.getAttached(ANCHOR_TYPE);
+        LongOpenHashSet set = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
         if (set.add(pos.asLong())) {
             // setAttached triggers persistence + auto-sync for synced attachments.
             chunk.setAttached(ANCHOR_TYPE, set);
             if (TRACE) {
                 Slabbed.LOGGER.info("[ANCHOR] add success pos={} chunk={} setSize={}",
                         pos.toShortString(), chunk.getPos(), set.size());
+            }
+            // BS-FB Live Trace: capture anchor addition
+            if (BsFbLiveTrace.ENABLED) {
+                BlockPos supportPos = pos.down();
+                BsFbLiveTrace.capture(world, supportPos, pos, "ANCHOR_ADDED");
             }
         }
     }
@@ -152,13 +156,14 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return;
         }
-        LongOpenHashSet set = chunk.getAttached(ANCHOR_TYPE);
-        if (set == null || set.isEmpty()) {
+        LongOpenHashSet existing = chunk.getAttached(ANCHOR_TYPE);
+        if (existing == null || existing.isEmpty()) {
             if (TRACE) {
                 Slabbed.LOGGER.info("[ANCHOR] remove pos={} existed=false", pos.toShortString());
             }
             return;
         }
+        LongOpenHashSet set = new LongOpenHashSet(existing);
         boolean removed = set.remove(pos.asLong());
         if (TRACE) {
             Slabbed.LOGGER.info("[ANCHOR] remove pos={} existed={}", pos.toShortString(), removed);
@@ -168,6 +173,11 @@ public final class SlabAnchorAttachment {
                 chunk.removeAttached(ANCHOR_TYPE);
             } else {
                 chunk.setAttached(ANCHOR_TYPE, set);
+            }
+            // BS-FB Live Trace: capture anchor removal
+            if (BsFbLiveTrace.ENABLED) {
+                BlockPos supportPos = pos.down();
+                BsFbLiveTrace.capture(world, supportPos, pos, "ANCHOR_REMOVED");
             }
         }
     }
