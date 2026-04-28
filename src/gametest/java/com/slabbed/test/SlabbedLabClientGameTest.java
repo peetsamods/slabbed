@@ -798,6 +798,12 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // bundle count and verifier stay green until product-decision fixes land).
         runBsFb05sInteractionIntegrityProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
+        // BS-FB-0.5S live placement intent (RED PROOF — captures Julia's live
+        // path where an intended 0.5S side slab ray hits vanilla block space
+        // and places TOP instead of BOTTOM).
+        // Side-channel notes only.
+        runBsFb05sLivePlacementIntentProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
         // BS-FB-1S top-half placement law (RED PROOF — capture missing behavior).
         // Side-channel notes only; deliberately does NOT emit manifest/ladder artifacts.
         runBsFb1sTopHalfPlacementLawProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
@@ -1853,6 +1859,188 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
         if (failMsg.length() > 0) {
             throw new RuntimeException(failMsg.toString().trim());
+        }
+    }
+
+    /**
+     * BS-FB-0.5S live placement intent proof.
+     *
+     * <p>Uses the same real east-side player ray that produced the live repro
+     * {@code hitY=201.5000}: BS support, anchored lowered FB, slab in hand,
+     * crosshair/raycast against the vanilla outline. RED if the player-intended
+     * 0.5S side-slab placement lands as TOP instead of BOTTOM.
+     */
+    static void runBsFb05sLivePlacementIntentProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "bs_fb_05s_live_placement_intent";
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(44, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos placePos = fullPos.east();
+        final double eyeOffset = 1.62;
+        final double eyeX = fullPos.getX() + 2.5;
+        final double eyeY = fullPos.getY() + 0.5;
+        final double eyeZ = fullPos.getZ() + 0.5;
+        final double feetY = eyeY - eyeOffset;
+        final Vec3d eye = new Vec3d(eyeX, eyeY, eyeZ);
+        final Vec3d dir = new Vec3d(-1.0, 0.0, 0.0);
+
+        AtomicReference<String> initialTarget = new AtomicReference<>("pending");
+        AtomicReference<String> hitVec = new AtomicReference<>("pending");
+        AtomicReference<String> hitY = new AtomicReference<>("pending");
+        AtomicReference<String> intendedClassification = new AtomicReference<>(
+                "player-intended 0.5S side slab -> expected BOTTOM");
+        AtomicReference<BlockHitResult> liveHit = new AtomicReference<>(null);
+        AtomicReference<String> actionResult = new AtomicReference<>("not_run");
+        AtomicReference<String> placedPos = new AtomicReference<>(placePos.toShortString());
+        AtomicReference<String> placedState = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabType = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabDy = new AtomicReference<>("not_checked");
+        AtomicReference<String> fbAnchored = new AtomicReference<>("not_checked");
+        AtomicReference<String> verdict = new AtomicReference<>("BLOCKED");
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, fullPos, world.getBlockState(fullPos));
+            fbAnchored.set(Boolean.toString(SlabAnchorAttachment.isAnchored(world, fullPos)));
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list empty for " + testId);
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player null during " + testId + " setup");
+            }
+            mc.player.refreshPositionAndAngles(eyeX, feetY, eyeZ, 90.0f, 0.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                initialTarget.set("null_world_or_player");
+                verdict.set("BLOCKED: client world/player unavailable for live ray");
+                return;
+            }
+            Vec3d end = eye.add(dir.multiply(4.5));
+            BlockHitResult hit = mc.world.raycast(new RaycastContext(
+                    eye, end,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE, mc.player));
+            if (hit.getType() == HitResult.Type.MISS) {
+                initialTarget.set("MISS");
+                hitVec.set("MISS");
+                hitY.set("MISS");
+                verdict.set("BLOCKED: live ray missed lowered FB");
+                return;
+            }
+            liveHit.set(hit);
+            initialTarget.set(hit.getBlockPos().toShortString() + " face=" + hit.getSide().asString());
+            hitVec.set(String.format("%.4f, %.4f, %.4f", hit.getPos().x, hit.getPos().y, hit.getPos().z));
+            hitY.set(String.format("%.4f", hit.getPos().y));
+            if (Math.abs(hit.getPos().y - (fullPos.getY() + 0.5)) < 1.0e-6) {
+                intendedClassification.set(
+                        "player-intended 0.5S/BOTTOM, but real ray hits vanilla midpoint/top boundary");
+            }
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                verdict.set("BLOCKED: client interaction path unavailable");
+                return;
+            }
+            BlockHitResult hit = liveHit.get();
+            if (hit == null) {
+                actionResult.set("MISS_NO_CLICK");
+                placedState.set(mc.world.getBlockState(placePos).toString());
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            actionResult.set(result.toString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during " + testId + " readback");
+            }
+            BlockState placed = mc.world.getBlockState(placePos);
+            placedState.set(placed.toString());
+            if (placed.contains(SlabBlock.TYPE)) {
+                slabType.set(placed.get(SlabBlock.TYPE).toString());
+            } else {
+                slabType.set("none");
+            }
+            double dy = SlabSupport.getYOffset(mc.world, placePos, placed);
+            slabDy.set(Double.toString(dy));
+
+            boolean isBottom = placed.isOf(Blocks.STONE_SLAB)
+                    && placed.contains(SlabBlock.TYPE)
+                    && placed.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+            boolean isTop = placed.isOf(Blocks.STONE_SLAB)
+                    && placed.contains(SlabBlock.TYPE)
+                    && placed.get(SlabBlock.TYPE) == SlabType.TOP;
+            if (isBottom) {
+                verdict.set("PASS: live intended 0.5S path placed BOTTOM");
+            } else if (isTop) {
+                verdict.set("RED: live intended 0.5S path placed TOP");
+            } else {
+                verdict.set("RED: live intended 0.5S path did not place BOTTOM; placed=" + placed);
+            }
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "bs-fb-0.5s live placement intent",
+                "A live player-intended 0.5S side-slab ray against the anchored lowered FB should place "
+                        + "BOTTOM at the side position; TOP means the real ray is being classified by vanilla block space.",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("supportPos", supportPos.toShortString()),
+                        new NoteField("fullPos", fullPos.toShortString()),
+                        new NoteField("fbAnchored", fbAnchored.get()),
+                        new NoteField("initialTarget", initialTarget.get()),
+                        new NoteField("hitVec", hitVec.get()),
+                        new NoteField("hitY", hitY.get()),
+                        new NoteField("intendedClassification", intendedClassification.get()),
+                        new NoteField("actionResult", actionResult.get()),
+                        new NoteField("placedPos", placedPos.get()),
+                        new NoteField("placedState", placedState.get()),
+                        new NoteField("slabType", slabType.get()),
+                        new NoteField("slabDy", slabDy.get()),
+                        new NoteField("verdict", verdict.get())
+                ),
+                !verdict.get().startsWith("RED")
+                        && !verdict.get().startsWith("BLOCKED"));
+
+        if (verdict.get().startsWith("RED") || verdict.get().startsWith("BLOCKED")) {
+            throw new RuntimeException("[" + testId + "] " + verdict.get()
+                    + " initialTarget=" + initialTarget.get()
+                    + " hitVec=" + hitVec.get()
+                    + " hitY=" + hitY.get()
+                    + " placedPos=" + placedPos.get()
+                    + " placedState=" + placedState.get()
+                    + " slabType=" + slabType.get()
+                    + " slabDy=" + slabDy.get());
         }
     }
 
