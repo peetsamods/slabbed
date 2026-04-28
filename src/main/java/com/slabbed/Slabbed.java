@@ -14,6 +14,7 @@ public class Slabbed implements ModInitializer {
     @Override
     public void onInitialize() {
         LOGGER.info("Slabbed initialized");
+        com.slabbed.anchor.SlabAnchorAttachment.register();
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
             initDevFeatures();
         }
