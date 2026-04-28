@@ -22,6 +22,13 @@ public abstract class BlockItemPlacementIntentMixin {
     private static final double UP_FACE_EDGE_BAND = 0.20d;
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
 
+    private static boolean slabbed$isOrdinaryLoweredFullBlock(ItemUsageContext context, BlockPos pos, BlockState state) {
+        return state.isSolidBlock(context.getWorld(), pos)
+                && !(state.getBlock() instanceof BlockEntityProvider)
+                && !(state.getBlock() instanceof CraftingTableBlock)
+                && SlabSupport.getYOffset(context.getWorld(), pos, state) == -0.5d;
+    }
+
     private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
         double localX = hitPos.x - targetPos.getX();
         double localZ = hitPos.z - targetPos.getZ();
@@ -236,6 +243,19 @@ public abstract class BlockItemPlacementIntentMixin {
                     effectiveSide,
                     inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
             return context;
+        }
+
+        BlockPos abovePos = targetPos.up();
+        BlockState aboveState = context.getWorld().getBlockState(abovePos);
+        boolean upperVisibleHitBelongsToAboveLoweredFullBlock =
+                originalHitPos.y >= abovePos.getY()
+                        && originalHitPos.y <= abovePos.getY() + 0.5d + LOWERED_VISUAL_BOUNDARY_EPSILON
+                        && slabbed$isOrdinaryLoweredFullBlock(context, abovePos, aboveState);
+        if (upperVisibleHitBelongsToAboveLoweredFullBlock) {
+            targetPos = abovePos;
+            targetState = aboveState;
+            yOffset = SlabSupport.getYOffset(context.getWorld(), targetPos, targetState);
+            ordinaryLoweredFullBlockGuard = true;
         }
 
         // Decide BOTTOM vs TOP from the *original* hit Y relative to the lowered
