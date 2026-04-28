@@ -3937,6 +3937,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             chainStateText.set(chainState.toString());
             double chainDy = SlabSupport.getYOffset(mc.world, chainPos, chainState);
             chainDyText.set(Double.toString(chainDy));
+            mc.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
             VoxelShape chainOutline = chainState.getOutlineShape(mc.world, chainPos, ShapeContext.absent());
             if (chainOutline.isEmpty()) {
                 chainOutlineYText.set("empty");
@@ -4038,15 +4039,15 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             String label
     ) {
         Vec3d eye = new Vec3d(targetPos.getX() + 2.5d, y, targetPos.getZ() + 0.5d);
-        Vec3d end = new Vec3d(targetPos.getX() - 1.5d, y, targetPos.getZ() + 0.5d);
-        BlockHitResult hit = mc.world.raycast(new RaycastContext(
-                eye,
-                end,
-                RaycastContext.ShapeType.OUTLINE,
-                RaycastContext.FluidHandling.NONE,
-                mc.player));
-        if (hit.getType() == HitResult.Type.MISS) {
+        Vec3d target = new Vec3d(targetPos.getX() + 0.5d, y, targetPos.getZ() + 0.5d);
+        resolvePlayerRaycastFromEye(mc, eye, target, 6.0);
+        mc.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult crosshair = mc.crosshairTarget;
+        if (crosshair == null || crosshair.getType() == HitResult.Type.MISS) {
             return label + ":MISS y=" + String.format("%.4f", y);
+        }
+        if (!(crosshair instanceof BlockHitResult hit)) {
+            return label + ":" + crosshair.getType() + " y=" + String.format("%.4f", y);
         }
         return label + ":BLOCK blockPos=" + hit.getBlockPos().toShortString()
                 + " face=" + hit.getSide().asString()
