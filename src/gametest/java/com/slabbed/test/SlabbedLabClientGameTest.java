@@ -878,6 +878,13 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         AtomicReference<String> caseCClientAnchoredAfter1TickBreak = new AtomicReference<>("");
         AtomicReference<String> caseDLowerCenterResolved = new AtomicReference<>("");
         AtomicReference<String> caseDLowerEdgeResolved = new AtomicReference<>("");
+        AtomicReference<String> caseECenterResolved = new AtomicReference<>("");
+        AtomicReference<String> caseELowerFrontResolved = new AtomicReference<>("");
+        AtomicReference<String> caseEUndersideResolved = new AtomicReference<>("");
+        AtomicReference<String> caseECenterVerdict = new AtomicReference<>("audit-only");
+        AtomicReference<String> caseELowerFrontVerdict = new AtomicReference<>("audit-only");
+        AtomicReference<String> caseEUndersideVerdict = new AtomicReference<>("audit-only");
+        AtomicReference<String> caseEVerdict = new AtomicReference<>("audit-only");
         AtomicReference<String> caseAVerdict = new AtomicReference<>("audit-only");
         AtomicReference<String> caseBVerdict = new AtomicReference<>("audit-only");
         AtomicReference<String> caseCVerdict = new AtomicReference<>("audit-only");
@@ -1287,6 +1294,77 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             caseDSelectionVerdict.set("GREEN: anchored FB resolved from lower-half rays");
         });
 
+        // ── Case E: side slab hitbox comfort after BS break ────────────────────
+        // What we prove: rays aimed at visibly lowered side-slab points must own
+        // the side slab BlockPos. If one of those rays instead resolves to the FB
+        // behind it, the comfort/selection surface is still too limited.
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("client not ready for case E side slab comfort probe");
+            }
+
+            Vec3d eye = new Vec3d(
+                    slabPos.getX() + 0.5,
+                    slabPos.getY() + 1.50,
+                    slabPos.getZ() + 2.50);
+
+            Vec3d centerTarget = new Vec3d(
+                    slabPos.getX() + 0.5,
+                    slabPos.getY() - 0.25,
+                    slabPos.getZ() + 0.5);
+            Vec3d lowerFrontTarget = new Vec3d(
+                    slabPos.getX() + 0.5,
+                    slabPos.getY() - 0.40,
+                    slabPos.getZ() + 0.5);
+            Vec3d undersideTarget = new Vec3d(
+                    slabPos.getX() + 0.5,
+                    slabPos.getY() - 0.48,
+                    slabPos.getZ() + 0.5);
+
+            resolvePlayerRaycastFromEye(mc, eye, centerTarget, 6.0);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult centerHit = mc.crosshairTarget;
+            String centerActual = centerHit == null || centerHit.getType() == HitResult.Type.MISS
+                    ? "MISS"
+                    : ((BlockHitResult) centerHit).getBlockPos().toShortString();
+            caseECenterResolved.set(centerActual);
+            caseECenterVerdict.set(slabPos.toShortString().equals(centerActual)
+                    ? "PASS" : "RED");
+
+            resolvePlayerRaycastFromEye(mc, eye, lowerFrontTarget, 6.0);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult lowerFrontHit = mc.crosshairTarget;
+            String lowerFrontActual = lowerFrontHit == null || lowerFrontHit.getType() == HitResult.Type.MISS
+                    ? "MISS"
+                    : ((BlockHitResult) lowerFrontHit).getBlockPos().toShortString();
+            caseELowerFrontResolved.set(lowerFrontActual);
+            caseELowerFrontVerdict.set(slabPos.toShortString().equals(lowerFrontActual)
+                    ? "PASS" : "RED");
+
+            resolvePlayerRaycastFromEye(mc, eye, undersideTarget, 6.0);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult undersideHit = mc.crosshairTarget;
+            String undersideActual = undersideHit == null || undersideHit.getType() == HitResult.Type.MISS
+                    ? "MISS"
+                    : ((BlockHitResult) undersideHit).getBlockPos().toShortString();
+            caseEUndersideResolved.set(undersideActual);
+            caseEUndersideVerdict.set(slabPos.toShortString().equals(undersideActual)
+                    ? "PASS" : "RED");
+
+            if (!slabPos.toShortString().equals(centerActual)) {
+                caseEVerdict.set("RED: center visible side-slab ray resolved to " + centerActual
+                        + "; expected " + slabPos.toShortString());
+            } else if (!slabPos.toShortString().equals(lowerFrontActual)) {
+                caseEVerdict.set("RED: lower-front visible side-slab ray resolved to " + lowerFrontActual
+                        + "; expected " + slabPos.toShortString());
+            } else if (!slabPos.toShortString().equals(undersideActual)) {
+                caseEVerdict.set("RED: underside-adjacent visible side-slab ray resolved to " + undersideActual
+                        + "; expected " + slabPos.toShortString());
+            } else {
+                caseEVerdict.set("GREEN: visible side-slab rays resolved to slabPos across the comfort sweep");
+            }
+        });
+
         writeInvariantProofNotes(
                 screenshotDir,
                 testId + "_notes.json",
@@ -1336,11 +1414,19 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         new NoteField("caseC_clientAnchoredAfter1TickBreak", caseCClientAnchoredAfter1TickBreak.get()),
                         new NoteField("caseD_lowerCenterResolved", caseDLowerCenterResolved.get()),
                         new NoteField("caseD_lowerEdgeResolved", caseDLowerEdgeResolved.get()),
-                        new NoteField("caseD_verdict", caseDSelectionVerdict.get())
+                        new NoteField("caseD_verdict", caseDSelectionVerdict.get()),
+                        new NoteField("caseE_centerResolved", caseECenterResolved.get()),
+                        new NoteField("caseE_centerVerdict", caseECenterVerdict.get()),
+                        new NoteField("caseE_lowerFrontResolved", caseELowerFrontResolved.get()),
+                        new NoteField("caseE_lowerFrontVerdict", caseELowerFrontVerdict.get()),
+                        new NoteField("caseE_undersideResolved", caseEUndersideResolved.get()),
+                        new NoteField("caseE_undersideVerdict", caseEUndersideVerdict.get()),
+                        new NoteField("caseE_verdict", caseEVerdict.get())
                 ),
                 !caseBVerdict.get().startsWith("RED")
                         && !caseCVerdict.get().startsWith("RED")
-                        && !caseDSelectionVerdict.get().startsWith("RED"));
+                        && !caseDSelectionVerdict.get().startsWith("RED")
+                        && !caseEVerdict.get().startsWith("RED"));
 
         // Fail after notes are written so observations are persisted even when red.
         StringBuilder failMsg = new StringBuilder();
@@ -1363,6 +1449,12 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
         if (caseDSelectionVerdict.get().startsWith("RED")) {
             failMsg.append("[").append(testId).append("] caseD ").append(caseDSelectionVerdict.get()).append("\n");
+        }
+        if (caseEVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] caseE ").append(caseEVerdict.get())
+                    .append(" center=").append(caseECenterResolved.get()).append(" (").append(caseECenterVerdict.get()).append(")")
+                    .append(" lowerFront=").append(caseELowerFrontResolved.get()).append(" (").append(caseELowerFrontVerdict.get()).append(")")
+                    .append(" underside=").append(caseEUndersideResolved.get()).append(" (").append(caseEUndersideVerdict.get()).append(")").append("\n");
         }
         if (failMsg.length() > 0) {
             throw new RuntimeException(failMsg.toString().trim());
@@ -1399,6 +1491,21 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
         float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
         mc.player.refreshPositionAndAngles(mc.player.getX(), mc.player.getY(), mc.player.getZ(), yaw, pitch);
+        return mc.player.raycast(reach, 0.0f, false);
+    }
+
+    private static HitResult resolvePlayerRaycastFromEye(
+            net.minecraft.client.MinecraftClient mc, Vec3d eye, Vec3d target, double reach
+    ) {
+        if (mc.player == null) {
+            return null;
+        }
+
+        Vec3d delta = target.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        mc.player.refreshPositionAndAngles(eye.x, eye.y, eye.z, yaw, pitch);
         return mc.player.raycast(reach, 0.0f, false);
     }
 
