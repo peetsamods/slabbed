@@ -7,6 +7,7 @@ import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.world.ClientWorld;
@@ -63,6 +64,11 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 client.crosshairTarget = anchoredHit;
                 return;
             }
+        }
+        BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht);
+        if (loweredSlabHit != null) {
+            client.crosshairTarget = loweredSlabHit;
+            return;
         }
         if (ht.getType() == HitResult.Type.MISS) {
             return;
@@ -139,6 +145,73 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
         ItemStack stack = client.player.getMainHandStack();
         return stack.getItem() instanceof BlockItem bi && bi.getBlock() instanceof SlabBlock;
+    }
+
+    private BlockHitResult slabbed$retargetLoweredSideSlab(float tickProgress, HitResult currentHit) {
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return null;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d dir = cam.getRotationVec(tickProgress);
+        double reach = 6.0;
+        Vec3d end = eye.add(dir.multiply(reach));
+        double currentDist2 = Double.POSITIVE_INFINITY;
+        if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
+            currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
+        }
+        int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
+
+        BlockHitResult bestHit = null;
+        double bestDist2 = currentDist2;
+        for (int i = 1; i <= steps; i++) {
+            double t = reach * i / steps;
+            if (t * t > bestDist2 + 1.0e-6) {
+                break;
+            }
+            Vec3d sample = eye.add(dir.multiply(t));
+            BlockPos samplePos = BlockPos.ofFloored(sample);
+
+            BlockHitResult hit = slabbed$raycastLoweredSideSlab(world, cam, eye, end, samplePos);
+            if (hit != null) {
+                double dist2 = hit.getPos().squaredDistanceTo(eye);
+                if (dist2 <= bestDist2 + 1.0e-6) {
+                    bestHit = hit;
+                    bestDist2 = dist2;
+                }
+            }
+
+            hit = slabbed$raycastLoweredSideSlab(world, cam, eye, end, samplePos.up());
+            if (hit != null) {
+                double dist2 = hit.getPos().squaredDistanceTo(eye);
+                if (dist2 <= bestDist2 + 1.0e-6) {
+                    bestHit = hit;
+                    bestDist2 = dist2;
+                }
+            }
+        }
+
+        return bestHit;
+    }
+
+    private static BlockHitResult slabbed$raycastLoweredSideSlab(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos
+    ) {
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || SlabSupport.getYOffset(world, pos, state) != -0.5) {
+            return null;
+        }
+        VoxelShape shape = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        BlockHitResult hit = shape.raycast(eye, end, pos);
+        if (hit == null) {
+            return null;
+        }
+        return hit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6 ? hit : null;
     }
 
     private BlockHitResult slabbed$retargetAnchoredLoweredFullBlock(float tickProgress, HitResult currentHit) {
