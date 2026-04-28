@@ -13,7 +13,9 @@
     "WallTorchParticleMixin",
     "RedstoneWireBlockMixin",
     "BlockItemPlaceTraceMixin",
-    "BlockItemPlacementIntentMixin"
+    "BlockItemPlacementIntentMixin",
+    "BlockOnPlacedAnchorMixin",
+    "BlockOnStateReplacedAnchorMixin"
   ],
   "client": [],
   "injectors": { "defaultRequire": 1 }

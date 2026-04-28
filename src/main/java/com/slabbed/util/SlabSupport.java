@@ -1,5 +1,7 @@
 package com.slabbed.util;
 
+import com.slabbed.Slabbed;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
@@ -340,14 +342,19 @@ public final class SlabSupport {
     }
 
     /**
-     * Returns true if {@code slabPos} holds a bottom or double slab that is adjacent
-     * to a solid full block sitting on a bottom slab — the exact condition that gives
-     * the slab its -0.5 adjacent-side-slab dy.  Does not call getYOffset (safe inside
-     * the IN_GET_Y_OFFSET recursion guard).
+     * Returns true if {@code slabPos} holds any slab variant (BOTTOM, TOP, or
+     * DOUBLE) that is adjacent to a solid full block sitting on a bottom slab —
+     * the exact condition that gives the slab its -0.5 adjacent-side-slab dy.
+     * Does not call getYOffset (safe inside the IN_GET_Y_OFFSET recursion guard).
+     *
+     * <p>BOTTOM → BS-FB-0.5S (slab visually fills the lower half beside the
+     * lowered FB, world Y span [pos.y - 0.5, pos.y]).
+     * <br>TOP → BS-FB-1S (slab visually fills the upper half beside the lowered
+     * FB, world Y span [pos.y, pos.y + 0.5]).
+     * <br>DOUBLE → full-cube alignment with the lowered FB.
      */
     private static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
-        SlabType type = slabState.get(SlabBlock.TYPE);
-        if (type != SlabType.BOTTOM && type != SlabType.DOUBLE) {
+        if (!slabState.contains(SlabBlock.TYPE)) {
             return false;
         }
         for (Direction dir : Direction.Type.HORIZONTAL) {
@@ -355,7 +362,8 @@ public final class SlabSupport {
             BlockState neighbor = world.getBlockState(neighborPos);
             if (neighbor.getBlock() instanceof SlabBlock) continue;
             if (!neighbor.isSolidBlock(world, neighborPos)) continue;
-            if (hasBottomSlabBelow(world, neighborPos)) {
+            if (hasBottomSlabBelow(world, neighborPos)
+                    || SlabAnchorAttachment.isAnchored(world, neighborPos)) {
                 return true;
             }
         }
@@ -382,6 +390,21 @@ public final class SlabSupport {
             if (isAdjacentSideSlabLowered(world, pos, state)) {
                 return -0.5;
             }
+        }
+
+        // Persistent slab-anchor: an ordinary FB placed directly on a bottom slab is
+        // recorded on the chunk via SlabAnchorAttachment at placement time and cleared
+        // when the FB itself is broken/replaced. Anchors persist across supporting BS
+        // removal so the FB does not visually jump upward.
+        // Only honour anchors for non-slab blocks; slabs were handled above.
+        if (!(state.getBlock() instanceof SlabBlock)
+                && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
+                String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
+                        side, pos.toShortString(), state);
+            }
+            return -0.5;
         }
 
         if (shouldOffset(world, pos, state)) {
