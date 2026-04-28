@@ -797,6 +797,10 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // intentionally does NOT emit manifest/ladder artifacts so the canonical 9-ID
         // bundle count and verifier stay green until product-decision fixes land).
         runBsFb05sInteractionIntegrityProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // BS-FB-1S top-half placement law (RED PROOF — capture missing behavior).
+        // Side-channel notes only; deliberately does NOT emit manifest/ladder artifacts.
+        runBsFb1sTopHalfPlacementLawProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
     }
 
     /**
@@ -1515,6 +1519,312 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     .append(" center=").append(caseECenterResolved.get()).append(" (").append(caseECenterVerdict.get()).append(")")
                     .append(" lowerFront=").append(caseELowerFrontResolved.get()).append(" (").append(caseELowerFrontVerdict.get()).append(")")
                     .append(" underside=").append(caseEUndersideResolved.get()).append(" (").append(caseEUndersideVerdict.get()).append(")").append("\n");
+        }
+        if (failMsg.length() > 0) {
+            throw new RuntimeException(failMsg.toString().trim());
+        }
+    }
+
+    /**
+     * BS-FB-1S top-half placement law proof (RED PROOF — captures missing
+     * behavior).
+     *
+     * <p>Fixture: bottom slab (BS) at supportPos, ordinary full block (FB) at
+     * supportPos.up() lowered onto BS (anchored, dy=-0.5). Player holds a stone
+     * slab item and clicks the side face of the lowered FB at two heights.
+     *
+     * <p>Product law under test:
+     * <ul>
+     *   <li><b>Lower-half side click</b> (world Y = fullPos.y - 0.25, EAST face)
+     *       must place a BOTTOM stone_slab at placePos = fullPos.east()
+     *       inheriting dy = -0.5 (BS-FB-0.5S baseline; already implemented).
+     *       Visual Y span: [placePos.y - 0.5, placePos.y].</li>
+     *   <li><b>Upper-half side click</b> (world Y = fullPos.y + 0.25, EAST face)
+     *       must place a TOP stone_slab at placePos = fullPos.east()
+     *       inheriting dy = -0.5 (BS-FB-1S desired law).
+     *       Visual Y span: [placePos.y, placePos.y + 0.5] — i.e. the upper
+     *       half band beside the lowered FB, completing a 1-block visual
+     *       column on the slab top.</li>
+     * </ul>
+     *
+     * <p>Current implementation status: {@link com.slabbed.mixin.BlockItemPlacementIntentMixin}
+     * remaps every horizontal-face hit on a lowered FB to {@code targetPos.y + 0.499}
+     * unconditionally, forcing BOTTOM placement regardless of upper/lower half
+     * intent. The upper-half case is therefore expected RED until a routing
+     * branch differentiates the two intents.
+     *
+     * <p>Side-channel only: writes notes to
+     * {@code bs_fb_1s_top_half_placement_law_notes.json}; does not register a
+     * manifest artifact, so the canonical 9-ID bundle stays unaffected.
+     *
+     * <p>This proof intentionally fails the gametest suite when the upper-half
+     * verdict is RED — that is the captured product-law gap.
+     */
+    static void runBsFb1sTopHalfPlacementLawProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "bs_fb_1s_top_half_placement_law";
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(48, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos placePos = fullPos.east();
+
+        AtomicReference<String> lowerHalfActionResult = new AtomicReference<>("");
+        AtomicReference<String> lowerHalfPlacedState = new AtomicReference<>("");
+        AtomicReference<String> lowerHalfPlacedPos = new AtomicReference<>("");
+        AtomicReference<String> lowerHalfSlabType = new AtomicReference<>("");
+        AtomicReference<String> lowerHalfDy = new AtomicReference<>("");
+        AtomicReference<String> lowerHalfVisualY = new AtomicReference<>("");
+        AtomicReference<String> lowerHalfVerdict = new AtomicReference<>("audit-only");
+
+        AtomicReference<String> upperHalfActionResult = new AtomicReference<>("");
+        AtomicReference<String> upperHalfPlacedState = new AtomicReference<>("");
+        AtomicReference<String> upperHalfPlacedPos = new AtomicReference<>("");
+        AtomicReference<String> upperHalfSlabType = new AtomicReference<>("");
+        AtomicReference<String> upperHalfDy = new AtomicReference<>("");
+        AtomicReference<String> upperHalfVisualY = new AtomicReference<>("");
+        AtomicReference<String> upperHalfVerdict = new AtomicReference<>("audit-only");
+
+        // ── Setup: BS support, lowered FB, slab in hand, clean placePos ─────────
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list empty for bs-fb-1s placement proof");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player null during bs-fb-1s placement setup");
+            }
+            mc.player.refreshPositionAndAngles(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() + 1.95,
+                    fullPos.getZ() + 3.25,
+                    180.0f,
+                    24.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // ── Lower-half side click → expect BS-FB-0.5S (BOTTOM at placePos, dy=-0.5) ─
+        // Lowered FB visual spans world Y ∈ [fullPos.y - 0.5, fullPos.y + 0.5];
+        // lower half center is world Y = fullPos.y - 0.25.
+        final BlockHitResult lowerHalfHit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, fullPos.getY() - 0.25, fullPos.getZ() + 0.5),
+                Direction.EAST,
+                fullPos,
+                false,
+                false);
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for bs-fb-1s lower-half click");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, lowerHalfHit);
+            lowerHalfActionResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during bs-fb-1s lower-half readback");
+            }
+            BlockState placed = mc.world.getBlockState(placePos);
+            lowerHalfPlacedState.set(placed.toString());
+            lowerHalfPlacedPos.set(placePos.toShortString());
+            String typeLabel;
+            if (placed.contains(SlabBlock.TYPE)) {
+                typeLabel = placed.get(SlabBlock.TYPE).toString();
+            } else {
+                typeLabel = "none";
+            }
+            lowerHalfSlabType.set(typeLabel);
+            double dy = SlabSupport.getYOffset(mc.world, placePos, placed);
+            lowerHalfDy.set(Double.toString(dy));
+            VoxelShape outline = placed.getOutlineShape(mc.world, placePos, ShapeContext.absent());
+            if (outline.isEmpty()) {
+                lowerHalfVisualY.set("empty");
+            } else {
+                double minY = placePos.getY() + outline.getBoundingBox().minY;
+                double maxY = placePos.getY() + outline.getBoundingBox().maxY;
+                lowerHalfVisualY.set(formatYRange(minY, maxY));
+            }
+
+            boolean isStoneSlab = placed.isOf(Blocks.STONE_SLAB);
+            boolean isBottom = placed.contains(SlabBlock.TYPE)
+                    && placed.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+            boolean dyOk = Math.abs(dy - (-0.5)) < 1.0e-6;
+            if (isStoneSlab && isBottom && dyOk) {
+                lowerHalfVerdict.set("GREEN: BS-FB-0.5S baseline — BOTTOM stone_slab at "
+                        + placePos.toShortString() + " with dy=-0.5");
+            } else {
+                lowerHalfVerdict.set("RED: BS-FB-0.5S baseline regressed — placed=" + placed
+                        + " type=" + typeLabel + " dy=" + dy);
+            }
+        });
+
+        // ── Reset placePos for upper-half click ────────────────────────────────
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // ── Upper-half side click → expect BS-FB-1S (TOP at placePos, dy=-0.5) ──
+        // Upper half center is world Y = fullPos.y + 0.25.
+        final BlockHitResult upperHalfHit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, fullPos.getY() + 0.25, fullPos.getZ() + 0.5),
+                Direction.EAST,
+                fullPos,
+                false,
+                false);
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for bs-fb-1s upper-half click");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHalfHit);
+            upperHalfActionResult.set(result.toString());
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during bs-fb-1s upper-half readback");
+            }
+            // Probe both placePos and placePos.up() — current behavior may push
+            // the slab into placePos.up() if vanilla face routing kicks in for
+            // the upper-half hit.
+            BlockState atPlace = mc.world.getBlockState(placePos);
+            BlockState atPlaceUp = mc.world.getBlockState(placePos.up());
+            BlockPos resolvedPos;
+            BlockState resolvedState;
+            if (atPlace.isOf(Blocks.STONE_SLAB)) {
+                resolvedPos = placePos;
+                resolvedState = atPlace;
+            } else if (atPlaceUp.isOf(Blocks.STONE_SLAB)) {
+                resolvedPos = placePos.up();
+                resolvedState = atPlaceUp;
+            } else {
+                resolvedPos = placePos;
+                resolvedState = atPlace;
+            }
+            upperHalfPlacedState.set(resolvedState.toString());
+            upperHalfPlacedPos.set(resolvedPos.toShortString());
+            String typeLabel;
+            if (resolvedState.contains(SlabBlock.TYPE)) {
+                typeLabel = resolvedState.get(SlabBlock.TYPE).toString();
+            } else {
+                typeLabel = "none";
+            }
+            upperHalfSlabType.set(typeLabel);
+            double dy = SlabSupport.getYOffset(mc.world, resolvedPos, resolvedState);
+            upperHalfDy.set(Double.toString(dy));
+            VoxelShape outline = resolvedState.getOutlineShape(mc.world, resolvedPos, ShapeContext.absent());
+            if (outline.isEmpty()) {
+                upperHalfVisualY.set("empty");
+            } else {
+                double minY = resolvedPos.getY() + outline.getBoundingBox().minY;
+                double maxY = resolvedPos.getY() + outline.getBoundingBox().maxY;
+                upperHalfVisualY.set(formatYRange(minY, maxY));
+            }
+
+            boolean isStoneSlab = resolvedState.isOf(Blocks.STONE_SLAB);
+            boolean isTop = resolvedState.contains(SlabBlock.TYPE)
+                    && resolvedState.get(SlabBlock.TYPE) == SlabType.TOP;
+            boolean atExpectedPos = resolvedPos.equals(placePos);
+            boolean dyOk = Math.abs(dy - (-0.5)) < 1.0e-6;
+            if (isStoneSlab && isTop && atExpectedPos && dyOk) {
+                upperHalfVerdict.set("PASS: BS-FB-1S desired — TOP stone_slab at "
+                        + placePos.toShortString() + " with dy=-0.5");
+            } else if (!isStoneSlab) {
+                upperHalfVerdict.set("RED: BS-FB-1S not implemented — upper-half click did not place a stone_slab"
+                        + " (resolvedPos=" + resolvedPos.toShortString() + " resolvedState=" + resolvedState + ")");
+            } else if (!atExpectedPos) {
+                upperHalfVerdict.set("RED: BS-FB-1S not implemented — slab placed at wrong position "
+                        + resolvedPos.toShortString() + " (expected " + placePos.toShortString()
+                        + "); type=" + typeLabel + " dy=" + dy);
+            } else if (!isTop) {
+                upperHalfVerdict.set("RED: BS-FB-1S not implemented — upper-half click placed "
+                        + typeLabel + " slab at " + resolvedPos.toShortString()
+                        + " (expected TOP for 1S law); dy=" + dy);
+            } else {
+                upperHalfVerdict.set("RED: BS-FB-1S dy mismatch — TOP slab at "
+                        + resolvedPos.toShortString() + " has dy=" + dy + " (expected -0.5)");
+            }
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "bs-fb-1s top-half placement law",
+                "Lower-half side click places BOTTOM slab (0.5S, dy=-0.5); "
+                        + "upper-half side click places TOP slab (1S, dy=-0.5) at the same side position.",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("supportPos", supportPos.toShortString()),
+                        new NoteField("fullPos", fullPos.toShortString()),
+                        new NoteField("placePos", placePos.toShortString()),
+                        new NoteField("lowerHalf_actionResult", lowerHalfActionResult.get()),
+                        new NoteField("lowerHalf_placedPos", lowerHalfPlacedPos.get()),
+                        new NoteField("lowerHalf_placedState", lowerHalfPlacedState.get()),
+                        new NoteField("lowerHalf_slabType", lowerHalfSlabType.get()),
+                        new NoteField("lowerHalf_dy", lowerHalfDy.get()),
+                        new NoteField("lowerHalf_visualY", lowerHalfVisualY.get()),
+                        new NoteField("lowerHalf_verdict", lowerHalfVerdict.get()),
+                        new NoteField("upperHalf_actionResult", upperHalfActionResult.get()),
+                        new NoteField("upperHalf_placedPos", upperHalfPlacedPos.get()),
+                        new NoteField("upperHalf_placedState", upperHalfPlacedState.get()),
+                        new NoteField("upperHalf_slabType", upperHalfSlabType.get()),
+                        new NoteField("upperHalf_dy", upperHalfDy.get()),
+                        new NoteField("upperHalf_visualY", upperHalfVisualY.get()),
+                        new NoteField("upperHalf_verdict", upperHalfVerdict.get())
+                ),
+                !lowerHalfVerdict.get().startsWith("RED")
+                        && !upperHalfVerdict.get().startsWith("RED"));
+
+        // Fail after notes are written so observations are persisted even when red.
+        StringBuilder failMsg = new StringBuilder();
+        if (lowerHalfVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] lowerHalf ").append(lowerHalfVerdict.get())
+                    .append(" actionResult=").append(lowerHalfActionResult.get())
+                    .append(" placedState=").append(lowerHalfPlacedState.get())
+                    .append(" slabType=").append(lowerHalfSlabType.get())
+                    .append(" dy=").append(lowerHalfDy.get())
+                    .append(" visualY=").append(lowerHalfVisualY.get()).append("\n");
+        }
+        if (upperHalfVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] upperHalf ").append(upperHalfVerdict.get())
+                    .append(" actionResult=").append(upperHalfActionResult.get())
+                    .append(" placedPos=").append(upperHalfPlacedPos.get())
+                    .append(" placedState=").append(upperHalfPlacedState.get())
+                    .append(" slabType=").append(upperHalfSlabType.get())
+                    .append(" dy=").append(upperHalfDy.get())
+                    .append(" visualY=").append(upperHalfVisualY.get()).append("\n");
         }
         if (failMsg.length() > 0) {
             throw new RuntimeException(failMsg.toString().trim());
