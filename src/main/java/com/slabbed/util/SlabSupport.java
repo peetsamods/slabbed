@@ -562,6 +562,13 @@ public final class SlabSupport {
      * (its visible top sits at slab height), so anything stacked on top of it
      * inherits the same lowered surface even after the original BS support
      * has been broken.
+     *
+     * <p>A slab directly below {@code pos} (i==0) that is itself a lowered
+     * adjacent-side slab — i.e. a 1S/0.5S/double slab horizontally beside an
+     * anchored or BS-supported FB — also counts as a positive: its visible top
+     * face sits at the lowered support height, so an object placed directly on
+     * top must inherit the same -0.5 dy. Only the immediate cursor qualifies;
+     * deeper slabs still terminate the walk false (no tower propagation).
      */
     private static boolean hasSlabInColumn(BlockView world, BlockPos pos) {
         BlockPos cursor = pos.down();
@@ -571,6 +578,10 @@ public final class SlabSupport {
                 return true;
             }
             if (SlabAnchorAttachment.isAnchored(world, cursor)) {
+                return true;
+            }
+            if (i == 0 && cur.getBlock() instanceof SlabBlock
+                    && isAdjacentSideSlabLowered(world, cursor, cur)) {
                 return true;
             }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
