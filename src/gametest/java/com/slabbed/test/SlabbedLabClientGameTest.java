@@ -878,6 +878,10 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         AtomicReference<String> caseCClientAnchoredAfter1TickBreak = new AtomicReference<>("");
         AtomicReference<String> caseDLowerCenterResolved = new AtomicReference<>("");
         AtomicReference<String> caseDLowerEdgeResolved = new AtomicReference<>("");
+        AtomicReference<String> caseFSlabHeldLowerCenterResolved = new AtomicReference<>("");
+        AtomicReference<String> caseFSlabHeldLowerEdgeResolved = new AtomicReference<>("");
+        AtomicReference<String> caseFSlabHeldGuardCause = new AtomicReference<>("audit-only");
+        AtomicReference<String> caseFSlabHeldVerdict = new AtomicReference<>("audit-only");
         AtomicReference<String> caseECenterResolved = new AtomicReference<>("");
         AtomicReference<String> caseELowerFrontResolved = new AtomicReference<>("");
         AtomicReference<String> caseEUndersideResolved = new AtomicReference<>("");
@@ -1294,6 +1298,53 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             caseDSelectionVerdict.set("GREEN: anchored FB resolved from lower-half rays");
         });
 
+        // ── Case F: slab-held lower-half FB selection audit ───────────────────
+        // Holding a slab must preserve 0.5S side-slab placement, but this audit
+        // proves whether that placement guard also suppresses anchored FB rescue.
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("client not ready for case F slab-held FB selection probe");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 4));
+
+            Vec3d centerLowerTarget = new Vec3d(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() - 0.30,
+                    fullPos.getZ() + 0.5);
+            Vec3d lowerEdgeTarget = new Vec3d(
+                    fullPos.getX() + 0.5,
+                    fullPos.getY() - 0.38,
+                    fullPos.getZ() + 0.5);
+
+            resolvePlayerRaycast(mc, centerLowerTarget, 6.0);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult centerLowerHit = mc.crosshairTarget;
+            String centerLowerActual = centerLowerHit == null || centerLowerHit.getType() == HitResult.Type.MISS
+                    ? "MISS"
+                    : ((BlockHitResult) centerLowerHit).getBlockPos().toShortString();
+            caseFSlabHeldLowerCenterResolved.set(centerLowerActual);
+
+            resolvePlayerRaycast(mc, lowerEdgeTarget, 6.0);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult lowerEdgeHit = mc.crosshairTarget;
+            String lowerEdgeActual = lowerEdgeHit == null || lowerEdgeHit.getType() == HitResult.Type.MISS
+                    ? "MISS"
+                    : ((BlockHitResult) lowerEdgeHit).getBlockPos().toShortString();
+            caseFSlabHeldLowerEdgeResolved.set(lowerEdgeActual);
+
+            boolean slabHeldFailure = !fullPos.toShortString().equals(centerLowerActual)
+                    || !fullPos.toShortString().equals(lowerEdgeActual);
+            if (slabHeldFailure) {
+                caseFSlabHeldGuardCause.set("LIKELY: slab-held placement guard skipped anchored-FB rescue; non-slab Case D passed with same lower-half target");
+                caseFSlabHeldVerdict.set("RED: slab-held lower-half FB targeting resolved center="
+                        + centerLowerActual + ", lowerEdge=" + lowerEdgeActual
+                        + "; expected " + fullPos.toShortString());
+            } else {
+                caseFSlabHeldGuardCause.set("DISPROVEN: slab-held lower-half FB targeting still resolved to anchored FB");
+                caseFSlabHeldVerdict.set("GREEN: slab-held lower-half FB rays resolved to anchored FB");
+            }
+        });
+
         // ── Case E: side slab hitbox comfort after BS break ────────────────────
         // What we prove: rays aimed at visibly lowered side-slab points must own
         // the side slab BlockPos. If one of those rays instead resolves to the FB
@@ -1415,6 +1466,10 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                         new NoteField("caseD_lowerCenterResolved", caseDLowerCenterResolved.get()),
                         new NoteField("caseD_lowerEdgeResolved", caseDLowerEdgeResolved.get()),
                         new NoteField("caseD_verdict", caseDSelectionVerdict.get()),
+                        new NoteField("caseF_slabHeldLowerCenterResolved", caseFSlabHeldLowerCenterResolved.get()),
+                        new NoteField("caseF_slabHeldLowerEdgeResolved", caseFSlabHeldLowerEdgeResolved.get()),
+                        new NoteField("caseF_slabHeldGuardCause", caseFSlabHeldGuardCause.get()),
+                        new NoteField("caseF_slabHeldVerdict", caseFSlabHeldVerdict.get()),
                         new NoteField("caseE_centerResolved", caseECenterResolved.get()),
                         new NoteField("caseE_centerVerdict", caseECenterVerdict.get()),
                         new NoteField("caseE_lowerFrontResolved", caseELowerFrontResolved.get()),
@@ -1426,6 +1481,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 !caseBVerdict.get().startsWith("RED")
                         && !caseCVerdict.get().startsWith("RED")
                         && !caseDSelectionVerdict.get().startsWith("RED")
+                        && !caseFSlabHeldVerdict.get().startsWith("RED")
                         && !caseEVerdict.get().startsWith("RED"));
 
         // Fail after notes are written so observations are persisted even when red.
@@ -1449,6 +1505,10 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
         if (caseDSelectionVerdict.get().startsWith("RED")) {
             failMsg.append("[").append(testId).append("] caseD ").append(caseDSelectionVerdict.get()).append("\n");
+        }
+        if (caseFSlabHeldVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] caseF ").append(caseFSlabHeldVerdict.get())
+                    .append(" guardCause=").append(caseFSlabHeldGuardCause.get()).append("\n");
         }
         if (caseEVerdict.get().startsWith("RED")) {
             failMsg.append("[").append(testId).append("] caseE ").append(caseEVerdict.get())
