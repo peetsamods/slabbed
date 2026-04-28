@@ -237,8 +237,20 @@ public abstract class BlockItemPlacementIntentMixin {
             return context;
         }
 
-        // Keep hit Y just below the slab half-split to avoid TOP reinterpretation.
-        Vec3d remappedHitPos = new Vec3d(originalHitPos.x, targetPos.getY() + 0.499d, originalHitPos.z);
+        // Decide BOTTOM vs TOP from the *original* hit Y relative to the lowered
+        // FB visual half-split. Lowered FB visual spans world Y ∈
+        // [targetPos.y - 0.5, targetPos.y + 0.5], so targetPos.y is the half-line.
+        //   originalHitPos.y < targetPos.y  → lower visual half  → BS-FB-0.5S (BOTTOM)
+        //   originalHitPos.y >= targetPos.y → upper visual half  → BS-FB-1S  (TOP)
+        // The remapped Y is then clamped just inside the matching half so that
+        // vanilla SlabBlock.getPlacementState's `hit.y - placePos.y <= 0.5`
+        // discriminator picks the desired SlabType. (placePos.y == targetPos.y
+        // because the side offset is horizontal.)
+        boolean upperHalfIntent = originalHitPos.y >= targetPos.getY();
+        double remappedY = upperHalfIntent
+                ? targetPos.getY() + 0.501d   // > 0.5 → vanilla → TOP
+                : targetPos.getY() + 0.499d;  // ≤ 0.5 → vanilla → BOTTOM
+        Vec3d remappedHitPos = new Vec3d(originalHitPos.x, remappedY, originalHitPos.z);
         slabbed$recordRemapAttempt(
                 context,
                 true,
