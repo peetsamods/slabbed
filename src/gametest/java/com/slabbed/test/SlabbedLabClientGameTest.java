@@ -1505,7 +1505,8 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
         float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
         float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
-        mc.player.refreshPositionAndAngles(eye.x, eye.y, eye.z, yaw, pitch);
+        double feetY = eye.y - mc.player.getStandingEyeHeight();
+        mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
         return mc.player.raycast(reach, 0.0f, false);
     }
 
