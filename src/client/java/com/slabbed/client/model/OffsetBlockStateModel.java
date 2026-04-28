@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
+import net.minecraft.block.ChainBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
@@ -30,6 +31,9 @@ import java.util.function.Predicate;
  */
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
 public final class OffsetBlockStateModel implements BlockStateModel, FabricBlockStateModel {
+    private static volatile BlockPos slabbed$tracePos = null;
+    private static volatile RenderOffsetTrace slabbed$lastTrace = RenderOffsetTrace.missing();
+
     private final BlockStateModel wrapped;
     private final FabricBlockStateModel fabricWrapped;
 
@@ -53,6 +57,30 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         return wrapped.particleSprite();
     }
 
+    public record RenderOffsetTrace(
+            boolean seen,
+            String viewClass,
+            String pos,
+            String state,
+            double modelDy,
+            double clientDy,
+            double slabSupportDy,
+            boolean excludedByWrapper
+    ) {
+        static RenderOffsetTrace missing() {
+            return new RenderOffsetTrace(false, "none", "none", "none", 0.0, 0.0, 0.0, false);
+        }
+    }
+
+    public static void resetRenderOffsetTrace(BlockPos pos) {
+        slabbed$tracePos = pos;
+        slabbed$lastTrace = RenderOffsetTrace.missing();
+    }
+
+    public static RenderOffsetTrace snapshotRenderOffsetTrace() {
+        return slabbed$lastTrace;
+    }
+
     /**
      * Fabric renderer entry point used by Indigo/Sodium+Indium.
      */
@@ -70,6 +98,23 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
                     dy = 0.0f;
                 }
             }
+        }
+
+        if (Boolean.getBoolean("slabbed.render.offset.trace")
+                && state.getBlock() instanceof ChainBlock
+                && pos.equals(slabbed$tracePos)) {
+            boolean excluded = state.getBlock() instanceof FenceBlock
+                    || state.getBlock() instanceof WallBlock
+                    || state.getBlock() instanceof PaneBlock;
+            slabbed$lastTrace = new RenderOffsetTrace(
+                    true,
+                    view.getClass().getName(),
+                    pos.toShortString(),
+                    state.toString(),
+                    dy,
+                    ClientDy.dyFor(view, pos, state),
+                    SlabSupport.getYOffset(view, pos, state),
+                    excluded);
         }
 
         // Prove that the render-path BlockView is not a World, causing isAnchored to return false.
