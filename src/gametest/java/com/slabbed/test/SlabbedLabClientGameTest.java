@@ -819,6 +819,13 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // should sit on the slab's visible lowered top, not float at vanilla y+1).
         // Side-channel notes only.
         runBsFb1sTopSupportLawProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // BS-FB-0.5S top-support law (RED PROOF — captures missing top-face support
+        // on the lowered BOTTOM 0.5S side slab: object on top of a lowered BS-FB-0.5S
+        // slab should seat on the slab's visible lowered top, not float a full block
+        // higher at vanilla y+1).
+        // Side-channel notes only.
+        runBsFb05sTopSupportLawProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
     }
 
     /**
@@ -3365,6 +3372,245 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
         if (caseEVerdict.get().startsWith("RED")) {
             failMsg.append("[").append(testId).append("] caseE ").append(caseEVerdict.get()).append("\n");
+        }
+        if (failMsg.length() > 0) {
+            throw new RuntimeException(failMsg.toString().trim());
+        }
+    }
+
+    /**
+     * 0.5S top-support law: object directly on top of a lowered BOTTOM
+     * (BS-FB-0.5S) side slab should seat on the slab's visible lowered top
+     * face. Slab cell at y+1 holds the BOTTOM slab visually shifted to
+     * [y+0.5, y+1.0]; the object cell is one above, so the expected dy is
+     * -1.0 (object visualY collapses onto [y+1.0, y+2.0]).
+     *
+     * <p>Cases:
+     * <ul>
+     *   <li>A — chain on lowered 0.5S (RED if dy ≠ -1.0)</li>
+     *   <li>B — torch on lowered 0.5S (RED if dy ≠ -1.0)</li>
+     *   <li>C — stone on lowered 0.5S (OBSERVED; record only)</li>
+     * </ul>
+     * Each case is read pre-BS-break and post-BS-break + settle ticks.
+     * Side-channel notes only.
+     */
+    static void runBsFb05sTopSupportLawProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "bs_fb_05s_top_support_law";
+        final BlockPos bsPos   = FIXTURE_ORIGIN.add(80, 0, 0);
+        final BlockPos fbPos   = bsPos.up();
+        final BlockPos slabPos = fbPos.east();
+        final BlockPos topPos  = slabPos.up();
+
+        AtomicReference<String> slabDyPre        = new AtomicReference<>("");
+        AtomicReference<String> slabVisualYPre   = new AtomicReference<>("");
+        AtomicReference<String> slabDyPost       = new AtomicReference<>("");
+        AtomicReference<String> fbAnchoredPost   = new AtomicReference<>("");
+
+        AtomicReference<String> caseATopState    = new AtomicReference<>("");
+        AtomicReference<String> caseATopDy       = new AtomicReference<>("");
+        AtomicReference<String> caseATopVisualY  = new AtomicReference<>("");
+        AtomicReference<String> caseATopDyPost   = new AtomicReference<>("");
+        AtomicReference<String> caseATopVisualYPost = new AtomicReference<>("");
+        AtomicReference<String> caseAVerdict     = new AtomicReference<>("");
+
+        AtomicReference<String> caseBTopState    = new AtomicReference<>("");
+        AtomicReference<String> caseBTopDy       = new AtomicReference<>("");
+        AtomicReference<String> caseBTopVisualY  = new AtomicReference<>("");
+        AtomicReference<String> caseBTopDyPost   = new AtomicReference<>("");
+        AtomicReference<String> caseBTopVisualYPost = new AtomicReference<>("");
+        AtomicReference<String> caseBVerdict     = new AtomicReference<>("");
+
+        AtomicReference<String> caseCTopState    = new AtomicReference<>("");
+        AtomicReference<String> caseCTopDy       = new AtomicReference<>("");
+        AtomicReference<String> caseCTopVisualY  = new AtomicReference<>("");
+        AtomicReference<String> caseCTopDyPost   = new AtomicReference<>("");
+        AtomicReference<String> caseCTopVisualYPost = new AtomicReference<>("");
+        AtomicReference<String> caseCVerdict     = new AtomicReference<>("");
+
+        // Reusable setup: BS + anchored FB + lowered BOTTOM 0.5S slab.
+        Runnable setupFixture = () -> singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(bsPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fbPos,   Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(topPos,  Blocks.AIR.getDefaultState(),   Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, fbPos, world.getBlockState(fbPos));
+        });
+
+        // Helper to capture pre/post readings for a single case.
+        java.util.function.BiConsumer<AtomicReference<String>[], BlockState> captureCase =
+                (refs, placed) -> {
+            // refs: 0=topState 1=topDy 2=topVisualY 3=topDyPost 4=topVisualYPost
+            setupFixture.run();
+            for (int i = 0; i < 4; i++) ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            singleplayer.getServer().runOnServer(server ->
+                    server.getOverworld().setBlockState(topPos, placed, Block.NOTIFY_LISTENERS));
+            for (int i = 0; i < 2; i++) ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world null during 0.5s pre-break read");
+                }
+                BlockState slab = mc.world.getBlockState(slabPos);
+                BlockState top  = mc.world.getBlockState(topPos);
+                double slabDy = SlabSupport.getYOffset(mc.world, slabPos, slab);
+                double topDy  = SlabSupport.getYOffset(mc.world, topPos, top);
+                VoxelShape slabOut = slab.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+                VoxelShape topOut  = top.getOutlineShape(mc.world, topPos, ShapeContext.absent());
+                double slabMinY = slabPos.getY() + (slabOut.isEmpty() ? 0.0 : slabOut.getBoundingBox().minY);
+                double slabMaxY = slabPos.getY() + (slabOut.isEmpty() ? 0.0 : slabOut.getBoundingBox().maxY);
+                double topMinY  = topPos.getY()  + (topOut.isEmpty()  ? 0.0 : topOut.getBoundingBox().minY);
+                double topMaxY  = topPos.getY()  + (topOut.isEmpty()  ? 0.0 : topOut.getBoundingBox().maxY);
+                slabDyPre.set(Double.toString(slabDy));
+                slabVisualYPre.set(formatYRange(slabMinY, slabMaxY));
+                refs[0].set(top.toString());
+                refs[1].set(Double.toString(topDy));
+                refs[2].set(formatYRange(topMinY, topMaxY));
+            });
+            singleplayer.getServer().runOnServer(server -> server.getOverworld().breakBlock(bsPos, false));
+            for (int i = 0; i < 5; i++) ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world null during 0.5s post-break read");
+                }
+                BlockState slab = mc.world.getBlockState(slabPos);
+                BlockState top  = mc.world.getBlockState(topPos);
+                double slabDy = SlabSupport.getYOffset(mc.world, slabPos, slab);
+                double topDy  = SlabSupport.getYOffset(mc.world, topPos, top);
+                VoxelShape topOut = top.getOutlineShape(mc.world, topPos, ShapeContext.absent());
+                double topMinY = topPos.getY() + (topOut.isEmpty() ? 0.0 : topOut.getBoundingBox().minY);
+                double topMaxY = topPos.getY() + (topOut.isEmpty() ? 0.0 : topOut.getBoundingBox().maxY);
+                slabDyPost.set(Double.toString(slabDy));
+                refs[3].set(Double.toString(topDy));
+                refs[4].set(formatYRange(topMinY, topMaxY));
+            });
+            singleplayer.getServer().runOnServer(server ->
+                    fbAnchoredPost.set(Boolean.toString(
+                            SlabAnchorAttachment.isAnchored(server.getOverworld(), fbPos))));
+        };
+
+        @SuppressWarnings("unchecked")
+        AtomicReference<String>[] aRefs = new AtomicReference[]{
+                caseATopState, caseATopDy, caseATopVisualY, caseATopDyPost, caseATopVisualYPost};
+        captureCase.accept(aRefs, Blocks.IRON_CHAIN.getDefaultState()
+                .with(net.minecraft.block.ChainBlock.AXIS, Direction.Axis.Y));
+        try {
+            double pre  = Double.parseDouble(caseATopDy.get());
+            double post = Double.parseDouble(caseATopDyPost.get());
+            boolean preOk  = Math.abs(pre  - (-1.0)) < 1.0e-6;
+            boolean postOk = Math.abs(post - (-1.0)) < 1.0e-6;
+            if (preOk && postOk) {
+                caseAVerdict.set("PASS: chain on 0.5S has dy=-1.0 pre AND post BS-break");
+            } else {
+                caseAVerdict.set("RED: chain on 0.5S floats — dy pre=" + caseATopDy.get()
+                        + " post=" + caseATopDyPost.get() + " (expected -1.0);"
+                        + " slabDy=" + slabDyPre.get() + " slabVisualY=" + slabVisualYPre.get()
+                        + " chainVisualY pre=" + caseATopVisualY.get()
+                        + " post=" + caseATopVisualYPost.get());
+            }
+        } catch (NumberFormatException e) {
+            caseAVerdict.set("RED: caseA dy parse failure topDy=" + caseATopDy.get());
+        }
+
+        @SuppressWarnings("unchecked")
+        AtomicReference<String>[] bRefs = new AtomicReference[]{
+                caseBTopState, caseBTopDy, caseBTopVisualY, caseBTopDyPost, caseBTopVisualYPost};
+        captureCase.accept(bRefs, Blocks.TORCH.getDefaultState());
+        try {
+            double pre  = Double.parseDouble(caseBTopDy.get());
+            double post = Double.parseDouble(caseBTopDyPost.get());
+            boolean preOk  = Math.abs(pre  - (-1.0)) < 1.0e-6;
+            boolean postOk = Math.abs(post - (-1.0)) < 1.0e-6;
+            if (preOk && postOk) {
+                caseBVerdict.set("PASS: torch on 0.5S has dy=-1.0 pre AND post BS-break");
+            } else {
+                caseBVerdict.set("RED: torch on 0.5S floats — dy pre=" + caseBTopDy.get()
+                        + " post=" + caseBTopDyPost.get() + " (expected -1.0);"
+                        + " torchVisualY pre=" + caseBTopVisualY.get()
+                        + " post=" + caseBTopVisualYPost.get());
+            }
+        } catch (NumberFormatException e) {
+            caseBVerdict.set("RED: caseB dy parse failure topDy=" + caseBTopDy.get());
+        }
+
+        @SuppressWarnings("unchecked")
+        AtomicReference<String>[] cRefs = new AtomicReference[]{
+                caseCTopState, caseCTopDy, caseCTopVisualY, caseCTopDyPost, caseCTopVisualYPost};
+        captureCase.accept(cRefs, Blocks.STONE.getDefaultState());
+        caseCVerdict.set("OBSERVED: stone on 0.5S dy pre=" + caseCTopDy.get()
+                + " post=" + caseCTopDyPost.get()
+                + "; stoneVisualY pre=" + caseCTopVisualY.get()
+                + " post=" + caseCTopVisualYPost.get());
+
+        // Cleanup.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(topPos,  Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(fbPos,   Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(bsPos,   Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.removeAnchor(world, fbPos);
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "bs-fb-0.5s top-support law",
+                "Object placed on top of a lowered 0.5S (BS-FB-0.5S BOTTOM) side slab should "
+                        + "sit on the slab's visible lowered top face (dy=-1.0), not float at "
+                        + "vanilla y+1 with a full-block gap.",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("bsPos",                       bsPos.toShortString()),
+                        new NoteField("fbPos",                       fbPos.toShortString()),
+                        new NoteField("slabPos",                     slabPos.toShortString()),
+                        new NoteField("topPos",                      topPos.toShortString()),
+                        new NoteField("slab_dy_pre",                 slabDyPre.get()),
+                        new NoteField("slab_visualY_pre",            slabVisualYPre.get()),
+                        new NoteField("slab_dy_postBreak",           slabDyPost.get()),
+                        new NoteField("fb_anchored_postBreak",       fbAnchoredPost.get()),
+                        new NoteField("caseA_top_state",             caseATopState.get()),
+                        new NoteField("caseA_top_dy",                caseATopDy.get()),
+                        new NoteField("caseA_top_visualY",           caseATopVisualY.get()),
+                        new NoteField("caseA_top_dy_postBreak",      caseATopDyPost.get()),
+                        new NoteField("caseA_top_visualY_postBreak", caseATopVisualYPost.get()),
+                        new NoteField("caseA_verdict",               caseAVerdict.get()),
+                        new NoteField("caseB_top_state",             caseBTopState.get()),
+                        new NoteField("caseB_top_dy",                caseBTopDy.get()),
+                        new NoteField("caseB_top_visualY",           caseBTopVisualY.get()),
+                        new NoteField("caseB_top_dy_postBreak",      caseBTopDyPost.get()),
+                        new NoteField("caseB_top_visualY_postBreak", caseBTopVisualYPost.get()),
+                        new NoteField("caseB_verdict",               caseBVerdict.get()),
+                        new NoteField("caseC_top_state",             caseCTopState.get()),
+                        new NoteField("caseC_top_dy",                caseCTopDy.get()),
+                        new NoteField("caseC_top_visualY",           caseCTopVisualY.get()),
+                        new NoteField("caseC_top_dy_postBreak",      caseCTopDyPost.get()),
+                        new NoteField("caseC_top_visualY_postBreak", caseCTopVisualYPost.get()),
+                        new NoteField("caseC_verdict",               caseCVerdict.get())
+                ),
+                !caseAVerdict.get().startsWith("RED")
+                        && !caseBVerdict.get().startsWith("RED"));
+
+        StringBuilder failMsg = new StringBuilder();
+        if (caseAVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] caseA ").append(caseAVerdict.get()).append("\n");
+        }
+        if (caseBVerdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] caseB ").append(caseBVerdict.get()).append("\n");
         }
         if (failMsg.length() > 0) {
             throw new RuntimeException(failMsg.toString().trim());
