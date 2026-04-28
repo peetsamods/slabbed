@@ -26,15 +26,16 @@ import net.minecraft.world.chunk.WorldChunk;
 /**
  * Persistent slab-anchor registry.
  *
- * <p>When an ordinary full block is placed directly on a bottom slab, that placement is
+ * <p>When an ordinary full block is placed directly on a bottom slab, or on an
+ * ordinary full-block chain that is already lowered by a slab anchor, that placement is
  * recorded as an anchor on the chunk so the block keeps its lowered dy even if the
- * supporting bottom slab is later removed. Anchors are cleared when the anchored block
- * itself is broken/replaced.
+ * support below is later removed. Anchors are cleared when the anchored block itself is
+ * broken/replaced.
  *
  * <p>Storage: per-{@link WorldChunk} {@link LongOpenHashSet} of packed {@link BlockPos}
  * longs. Persisted via Fabric data attachment, synced to all watching clients.
  *
- * <p>Scope: direct FB-on-BS only. No retroactive anchoring, no chain anchoring,
+ * <p>Scope: ordinary full-block vertical slab chains only. No retroactive anchoring,
  * no side-slab persistence, no torch interaction.
  */
 public final class SlabAnchorAttachment {
@@ -107,13 +108,13 @@ public final class SlabAnchorAttachment {
 
     /**
      * Records an anchor at {@code pos}. Server-side only; no-op on client world or
-     * if {@code pos} does not qualify under {@link #qualifiesForDirectAnchor}.
+     * if {@code pos} does not qualify under {@link #qualifiesForAnchor}.
      */
     public static void addAnchor(World world, BlockPos pos, BlockState state) {
         if (world == null || world.isClient()) {
             return;
         }
-        boolean qualifies = qualifiesForDirectAnchor(world, pos, state);
+        boolean qualifies = qualifiesForAnchor(world, pos, state);
         if (TRACE) {
             Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={}",
                     pos.toShortString(), state, qualifies);
@@ -217,18 +218,20 @@ public final class SlabAnchorAttachment {
     // ── qualifier ─────────────────────────────────────────────────────
 
     /**
-     * Tight predicate matching the existing direct FB-on-BS rule:
+     * Tight predicate matching persistent ordinary full-block slab-chain rules:
      * <ul>
      *   <li>not air, not fluid</li>
      *   <li>not a slab, carpet, thin top layer, block-entity, bed, or double-block</li>
      *   <li>solid full block</li>
-     *   <li>has a bottom slab directly below ({@link SlabSupport#hasBottomSlabBelow})</li>
+     *   <li>has a bottom slab directly below, or sits directly on an ordinary full
+     *       block already lowered by exactly {@code -0.5}</li>
      * </ul>
      *
-     * <p>Strictly narrower than {@link SlabSupport#shouldOffset}: chain-of-blocks and
-     * compound bed/double-half cases are intentionally excluded from anchoring v1.
+     * <p>Strictly narrower than {@link SlabSupport#shouldOffset}: compound
+     * bed/double-half cases, side slabs, carpets, block entities, and non-full blocks
+     * remain excluded.
      */
-    public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean qualifiesForAnchor(BlockView world, BlockPos pos, BlockState state) {
         if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
             return false;
         }
@@ -254,6 +257,33 @@ public final class SlabAnchorAttachment {
         if (!state.isSolidBlock(world, pos)) {
             return false;
         }
-        return SlabSupport.hasBottomSlabBelow(world, pos);
+        if (SlabSupport.hasBottomSlabBelow(world, pos)) {
+            return true;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        return qualifiesAsVerticalChainSupport(world, belowPos, below);
+    }
+
+    public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {
+        return qualifiesForAnchor(world, pos, state) && SlabSupport.hasBottomSlabBelow(world, pos);
+    }
+
+    private static boolean qualifiesAsVerticalChainSupport(BlockView world, BlockPos pos, BlockState state) {
+        if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        var block = state.getBlock();
+        if (block instanceof SlabBlock
+                || block instanceof CarpetBlock
+                || block instanceof PaleMossCarpetBlock
+                || block instanceof BlockEntityProvider
+                || SlabSupport.isThinTopLayer(state)
+                || state.contains(Properties.BED_PART)
+                || state.contains(Properties.DOUBLE_BLOCK_HALF)
+                || !state.isSolidBlock(world, pos)) {
+            return false;
+        }
+        return SlabSupport.getYOffset(world, pos, state) == -0.5;
     }
 }
