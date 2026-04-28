@@ -556,12 +556,21 @@ public final class SlabSupport {
     /**
      * Walks down from {@code pos} through non-air, non-slab blocks looking
      * for a bottom slab. Returns true as soon as one is found.
+     *
+     * <p>An anchored full block in the column also terminates the walk as a
+     * positive — the anchor records that this block is itself lowered by -0.5
+     * (its visible top sits at slab height), so anything stacked on top of it
+     * inherits the same lowered surface even after the original BS support
+     * has been broken.
      */
     private static boolean hasSlabInColumn(BlockView world, BlockPos pos) {
         BlockPos cursor = pos.down();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = world.getBlockState(cursor);
             if (isBottomSlab(cur)) {
+                return true;
+            }
+            if (SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return true;
             }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
