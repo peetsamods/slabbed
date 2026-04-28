@@ -1,5 +1,6 @@
 package com.slabbed.dev;
 
+import com.slabbed.debug.BsFbLiveTrace;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -20,6 +21,8 @@ import java.util.Map;
 public final class SlabbedLabFixtures {
 
     private SlabbedLabFixtures() {}
+
+    private static BlockPos activeOrigin = null;
 
     /** X-spacing between lane centres, in blocks. */
     private static final int LANE_STRIDE = 2;
@@ -63,6 +66,23 @@ public final class SlabbedLabFixtures {
         return positions;
     }
 
+    public static void rememberOrigin(BlockPos origin) {
+        activeOrigin = origin;
+    }
+
+    public static BlockPos activeOriginOr(BlockPos fallback) {
+        return activeOrigin != null ? activeOrigin : fallback;
+    }
+
+    public static LinkedHashMap<String, BlockPos> lanePositions(BlockPos origin) {
+        return buildPositions(origin);
+    }
+
+    public static BlockPos laneSupportPos(BlockPos origin, String laneName) {
+        LinkedHashMap<String, BlockPos> positions = buildPositions(origin);
+        return positions.get(laneName.toUpperCase());
+    }
+
     /**
      * Resolves the target lane set from a nullable lane selector.
      *
@@ -104,6 +124,8 @@ public final class SlabbedLabFixtures {
     public static PlaceResult placeBasicFixture(ServerWorld world, BlockPos origin) {
         LinkedHashMap<String, BlockState> lanes     = buildLanes();
         LinkedHashMap<String, BlockPos>   positions = buildPositions(origin);
+
+        rememberOrigin(origin);
 
         // Safety scan: all positions × (support + CHECK_HEIGHT above) must be air.
         // Full scan before any edit — no partial world state on abort.
@@ -197,11 +219,16 @@ public final class SlabbedLabFixtures {
 
             if (!actual.equals(expected)) {
                 return PlaceResult.fail(
-                        "cannot break " + entry.getKey() + " at " + pos.toShortString()
-                        + ": expected " + expected.getBlock().getTranslationKey()
-                        + ", found " + actual.getBlock().getTranslationKey()
-                        + ". No blocks changed.");
+                        laneMismatchMessage("break", entry.getKey(), pos, expected, actual));
             }
+        }
+
+        // BS-FB Live Trace: capture before breaking support (Moment A)
+        for (String name : targetLanes.keySet()) {
+            BlockPos supportPos = allPositions.get(name);
+            BlockPos fullPos = supportPos.up();
+            BsFbLiveTrace.capture(world, supportPos, fullPos, "BEFORE_BREAK_" + name);
+            BsFbLiveTrace.captureClient(supportPos, fullPos, "BEFORE_BREAK_" + name);
         }
 
         // Remove support blocks with full neighbor notification — reproduces real support loss.
@@ -210,6 +237,37 @@ public final class SlabbedLabFixtures {
             BlockPos pos = allPositions.get(name);
             world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
             affected.put(name, pos);
+        }
+
+        // BS-FB Live Trace: capture immediately after breaking support (Moment B)
+        for (String name : targetLanes.keySet()) {
+            BlockPos supportPos = allPositions.get(name);
+            BlockPos fullPos = supportPos.up();
+            BsFbLiveTrace.capture(world, supportPos, fullPos, "AFTER_BREAK_" + name);
+            BsFbLiveTrace.captureClient(supportPos, fullPos, "AFTER_BREAK_" + name);
+        }
+
+        // BS-FB Live Trace: schedule delayed captures (Moments C: 1, 2, 5 ticks after break)
+        if (BsFbLiveTrace.ENABLED) {
+            long currentTick = world.getServer().getTicks();
+            int[] delays = new int[] {1, 2, 5};
+            for (int d : delays) {
+                final int finalDelay = d;
+                world.getServer().execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (world.getServer().getTicks() >= currentTick + finalDelay) {
+                            for (String name : targetLanes.keySet()) {
+                                BlockPos supportPos = allPositions.get(name);
+                                BlockPos fullPos = supportPos.up();
+                                String label = "DELAY_" + finalDelay + "TICKS_AFTER_BREAK_" + name;
+                                BsFbLiveTrace.capture(world, supportPos, fullPos, label);
+                                BsFbLiveTrace.captureClient(supportPos, fullPos, label);
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         return PlaceResult.success(origin, affected);
@@ -242,9 +300,7 @@ public final class SlabbedLabFixtures {
 
             if (!actual.isAir()) {
                 return PlaceResult.fail(
-                        "cannot restore " + entry.getKey() + " at " + pos.toShortString()
-                        + ": expected air, found " + actual.getBlock().getTranslationKey()
-                        + ". No blocks changed.");
+                        laneMismatchMessage("restore", entry.getKey(), pos, Blocks.AIR.getDefaultState(), actual));
             }
         }
 
@@ -254,6 +310,33 @@ public final class SlabbedLabFixtures {
             BlockPos pos = allPositions.get(entry.getKey());
             world.setBlockState(pos, entry.getValue(), Block.NOTIFY_ALL);
             affected.put(entry.getKey(), pos);
+        }
+
+        // BS-FB Live Trace: capture immediately after placement (Moment D)
+        for (String name : targetLanes.keySet()) {
+            BlockPos supportPos = allPositions.get(name);
+            BlockPos fullPos = supportPos.up();
+            BsFbLiveTrace.capture(world, supportPos, fullPos, "AFTER_PLACEMENT_" + name);
+        }
+
+        // BS-FB Live Trace: schedule delayed captures (Moments E: 2-10 ticks after placement)
+        if (BsFbLiveTrace.ENABLED) {
+            long currentTick = world.getServer().getTicks();
+            for (int delay = 2; delay <= 10; delay++) {
+                final int finalDelay = delay;
+                world.getServer().execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (world.getServer().getTicks() >= currentTick + finalDelay) {
+                            for (String name : targetLanes.keySet()) {
+                                BlockPos supportPos = allPositions.get(name);
+                                BlockPos fullPos = supportPos.up();
+                                BsFbLiveTrace.capture(world, supportPos, fullPos, "DELAY_" + finalDelay + "TICKS_AFTER_PLACE_" + name);
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         return PlaceResult.success(origin, affected);
@@ -358,6 +441,83 @@ public final class SlabbedLabFixtures {
         }
 
         return result;
+    }
+
+    public static String describeLane(ServerWorld world, BlockPos origin, String laneName) {
+        LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
+        if (targetLanes == null) {
+            return "unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.";
+        }
+        BlockState expected = targetLanes.get(laneName.toUpperCase());
+        BlockPos supportPos = buildPositions(origin).get(laneName.toUpperCase());
+        BlockState actual = world.getBlockState(supportPos);
+        StringBuilder sb = new StringBuilder();
+        sb.append("expected lane=").append(laneName.toUpperCase())
+          .append(" supportPos=").append(supportPos.toShortString())
+          .append(" actualState=").append(actual)
+          .append(" expectedState=").append(expected)
+          .append(" suggestion=");
+        if (actual.isAir()) {
+            sb.append("/slablab fixture basic");
+        } else {
+            sb.append("/slablab fixture clear");
+        }
+        return sb.toString();
+    }
+
+    public static String describeLaneInspection(ServerWorld world, BlockPos origin, String laneName) {
+        LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
+        if (targetLanes == null) {
+            return "unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.";
+        }
+
+        String key = laneName.toUpperCase();
+        BlockPos supportPos = buildPositions(origin).get(key);
+        BlockPos fullPos = supportPos.up();
+        BlockPos slabPos = supportPos;
+
+        BlockState supportState = world.getBlockState(supportPos);
+        BlockState fullState = world.getBlockState(fullPos);
+        boolean anchored = com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, fullPos);
+        double fullDy = com.slabbed.util.SlabSupport.getYOffset(world, fullPos, fullState);
+        double slabDy = com.slabbed.util.SlabSupport.getYOffset(world, slabPos, supportState);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("lane=").append(key)
+          .append(" supportPos=").append(supportPos.toShortString())
+          .append(" supportState=").append(supportState)
+          .append(" fullPos=").append(fullPos.toShortString())
+          .append(" fullState=").append(fullState)
+          .append(" slabPos=").append(slabPos.toShortString())
+          .append(" slabPosUp=").append(fullPos.toShortString())
+          .append(" anchor=").append(anchored)
+          .append(" fullDy=").append(fullDy)
+          .append(" slabDy=").append(slabDy);
+
+        if (supportState.getBlock() instanceof SlabBlock && supportState.contains(SlabBlock.TYPE)) {
+            sb.append(" slabTypeAtSupport=").append(supportState.get(SlabBlock.TYPE));
+        }
+        if (fullState.getBlock() instanceof SlabBlock && fullState.contains(SlabBlock.TYPE)) {
+            sb.append(" slabTypeAtFull=").append(fullState.get(SlabBlock.TYPE));
+        }
+
+        return sb.toString();
+    }
+
+    private static String laneMismatchMessage(String action, String laneName, BlockPos pos, BlockState expected, BlockState actual) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("cannot ").append(action).append(' ')
+          .append("lane=").append(laneName)
+          .append(" supportPos=").append(pos.toShortString())
+          .append(" actualState=").append(actual)
+          .append(" expectedState=").append(expected)
+          .append(" suggestion=");
+        if (actual.isAir()) {
+            sb.append("/slablab fixture basic");
+        } else {
+            sb.append("/slablab fixture clear");
+        }
+        return sb.toString();
     }
 
     // -------------------------------------------------------------------------
