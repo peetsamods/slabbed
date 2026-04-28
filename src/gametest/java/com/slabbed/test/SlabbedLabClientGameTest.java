@@ -801,6 +801,12 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // BS-FB-1S top-half placement law (RED PROOF — capture missing behavior).
         // Side-channel notes only; deliberately does NOT emit manifest/ladder artifacts.
         runBsFb1sTopHalfPlacementLawProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // BS-FB-1S live regression after BS break (RED PROOF candidate — captures
+        // Julia's live observation that breaking the original support causes the
+        // BS-FB system to rise and fresh 0.5S placements to jump into 1S).
+        // Side-channel notes only.
+        runBsFb1sLiveRegressionProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
     }
 
     /**
@@ -1828,6 +1834,696 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
         if (failMsg.length() > 0) {
             throw new RuntimeException(failMsg.toString().trim());
+        }
+    }
+
+    /**
+     * BS-FB-1S live-regression proof: post-support-removal stability + fresh
+     * 0.5S placement after the original BS support has been broken.
+     *
+     * <p>Captures Julia's live observation after b72629c
+     * (save/bs-fb-1s-top-half-placement):
+     * <ol>
+     *   <li>Existing BS-FB-0.5S systems should remain visually stable when the
+     *       supporting BS is broken (FB and side slab dy stay -0.5, slab type
+     *       stays BOTTOM, assembly visual Y does not rise).</li>
+     *   <li>A fresh BOTTOM (0.5S) side slab placed via lower-half side click
+     *       on the still-anchored lowered FB should remain BOTTOM with dy=-0.5
+     *       across 1, 2, 5, and 10 ticks of settle (no BOTTOM→TOP type drift,
+     *       no upward dy/visualY jump).</li>
+     * </ol>
+     *
+     * <p>Side-channel only: writes
+     * {@code bs_fb_1s_live_regression_after_bs_break_notes.json}; does not
+     * register manifest artifacts.
+     *
+     * <p>Stops the gametest suite (RED) if the regression is reproduced — that
+     * is the captured proof of Julia's live failure.
+     */
+    static void runBsFb1sLiveRegressionProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "bs_fb_1s_live_regression_after_bs_break";
+        final BlockPos supportPos = FIXTURE_ORIGIN.add(56, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos slabPos = fullPos.east();
+
+        // ── Case 1 state ───────────────────────────────────────────────────────
+        AtomicReference<String> case1FbDyPre = new AtomicReference<>("");
+        AtomicReference<String> case1FbVisualYPre = new AtomicReference<>("");
+        AtomicReference<String> case1SlabDyPre = new AtomicReference<>("");
+        AtomicReference<String> case1SlabTypePre = new AtomicReference<>("");
+        AtomicReference<String> case1SlabVisualYPre = new AtomicReference<>("");
+        AtomicReference<String> case1AssemblyYPre = new AtomicReference<>("");
+        AtomicReference<String> case1FbDyPost = new AtomicReference<>("");
+        AtomicReference<String> case1FbVisualYPost = new AtomicReference<>("");
+        AtomicReference<String> case1SlabDyPost = new AtomicReference<>("");
+        AtomicReference<String> case1SlabTypePost = new AtomicReference<>("");
+        AtomicReference<String> case1SlabVisualYPost = new AtomicReference<>("");
+        AtomicReference<String> case1AssemblyYPost = new AtomicReference<>("");
+        AtomicReference<String> case1AssemblyDeltaY = new AtomicReference<>("");
+        AtomicReference<String> case1ServerAnchorPost = new AtomicReference<>("");
+        AtomicReference<String> case1Verdict = new AtomicReference<>("audit-only");
+
+        // ── Case 2 state ───────────────────────────────────────────────────────
+        AtomicReference<String> case2FbAnchoredPostBreak = new AtomicReference<>("");
+        AtomicReference<String> case2FbDyPostBreak = new AtomicReference<>("");
+        AtomicReference<String> case2FbStatePostBreak = new AtomicReference<>("");
+        AtomicReference<String> case2FbStatePreClick = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateAfterPlace = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateBeforeBreak = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateImmediatePostBreak = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateBreakTick1 = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateBreakTick2 = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateBreakTick3 = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateBreakTick4 = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateBreakTick5 = new AtomicReference<>("");
+        AtomicReference<String> case2FbStateBreakTick6 = new AtomicReference<>("");
+        AtomicReference<String> case2PlaceActionResult = new AtomicReference<>("");
+        AtomicReference<String> case2Tick0Type = new AtomicReference<>("");
+        AtomicReference<String> case2Tick0Dy = new AtomicReference<>("");
+        AtomicReference<String> case2Tick0VisualY = new AtomicReference<>("");
+        AtomicReference<String> case2Tick1Type = new AtomicReference<>("");
+        AtomicReference<String> case2Tick1Dy = new AtomicReference<>("");
+        AtomicReference<String> case2Tick1VisualY = new AtomicReference<>("");
+        AtomicReference<String> case2Tick2Type = new AtomicReference<>("");
+        AtomicReference<String> case2Tick2Dy = new AtomicReference<>("");
+        AtomicReference<String> case2Tick2VisualY = new AtomicReference<>("");
+        AtomicReference<String> case2Tick5Type = new AtomicReference<>("");
+        AtomicReference<String> case2Tick5Dy = new AtomicReference<>("");
+        AtomicReference<String> case2Tick5VisualY = new AtomicReference<>("");
+        AtomicReference<String> case2Tick10Type = new AtomicReference<>("");
+        AtomicReference<String> case2Tick10Dy = new AtomicReference<>("");
+        AtomicReference<String> case2Tick10VisualY = new AtomicReference<>("");
+        AtomicReference<String> case2Verdict = new AtomicReference<>("audit-only");
+        AtomicReference<String> case2SlabScanT0 = new AtomicReference<>("");
+        AtomicReference<String> case2SlabScanT10 = new AtomicReference<>("");
+
+        // ───────────────────────────────────────────────────────────────────────
+        // Case 1: existing BS-FB-0.5S post-break stability (natural placement
+        // path so Block.onPlaced creates the FB anchor — mirrors live play).
+        // ───────────────────────────────────────────────────────────────────────
+        // 1a) BS support via setBlockState (vanilla slabs need no anchor).
+        //     Clear fullPos and slabPos so subsequent natural placements land cleanly.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+
+        // 1b) Place FB via natural up-face click on the BS so Block.onPlaced
+        //     fires and SlabAnchorAttachment.addAnchor records the anchor.
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.refreshPositionAndAngles(
+                        supportPos.getX() + 0.5,
+                        supportPos.getY() + 2.5,
+                        supportPos.getZ() + 0.5,
+                        0.0f,
+                        90.0f);
+                mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 4));
+            }
+        });
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                        Hand.MAIN_HAND, new ItemStack(Items.STONE, 4));
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult fbPlaceHit = new BlockHitResult(
+                new Vec3d(supportPos.getX() + 0.5,
+                        supportPos.getY() + 0.5,
+                        supportPos.getZ() + 0.5),
+                Direction.UP,
+                supportPos,
+                false,
+                false);
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for case 1 natural FB placement");
+            }
+            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, fbPlaceHit);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // 1c) Place BOTTOM side slab at slabPos via natural east-face click on
+        //     the now-anchored lowered FB (lower-half hit → BlockItemPlacement
+        //     IntentMixin remaps to BOTTOM at slabPos with adjacent-rule dy=-0.5).
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+                mc.player.refreshPositionAndAngles(
+                        fullPos.getX() + 0.5,
+                        fullPos.getY() + 1.95,
+                        fullPos.getZ() + 3.25,
+                        180.0f,
+                        24.0f);
+            }
+        });
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                        Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult sidePlaceHit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, fullPos.getY() - 0.25, fullPos.getZ() + 0.5),
+                Direction.EAST,
+                fullPos,
+                false,
+                false);
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for case 1 natural side slab placement");
+            }
+            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, sidePlaceHit);
+        });
+
+        // Settle: 4 ticks + chunk render.
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during case 1 pre-break read");
+            }
+            BlockState fbState = mc.world.getBlockState(fullPos);
+            BlockState slabState = mc.world.getBlockState(slabPos);
+            double fbDy = SlabSupport.getYOffset(mc.world, fullPos, fbState);
+            double slabDy = SlabSupport.getYOffset(mc.world, slabPos, slabState);
+            VoxelShape fbOutline = fbState.getOutlineShape(mc.world, fullPos, ShapeContext.absent());
+            VoxelShape slabOutline = slabState.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+            double fbMinY = fullPos.getY() + (fbOutline.isEmpty() ? 0.0 : fbOutline.getBoundingBox().minY);
+            double fbMaxY = fullPos.getY() + (fbOutline.isEmpty() ? 0.0 : fbOutline.getBoundingBox().maxY);
+            double slabMinY = slabPos.getY() + (slabOutline.isEmpty() ? 0.0 : slabOutline.getBoundingBox().minY);
+            double slabMaxY = slabPos.getY() + (slabOutline.isEmpty() ? 0.0 : slabOutline.getBoundingBox().maxY);
+            case1FbDyPre.set(Double.toString(fbDy));
+            case1FbVisualYPre.set(formatYRange(fbMinY, fbMaxY));
+            case1SlabDyPre.set(Double.toString(slabDy));
+            case1SlabTypePre.set(slabState.contains(SlabBlock.TYPE)
+                    ? slabState.get(SlabBlock.TYPE).toString() : "none");
+            case1SlabVisualYPre.set(formatYRange(slabMinY, slabMaxY));
+            case1AssemblyYPre.set(formatYRange(Math.min(fbMinY, slabMinY), Math.max(fbMaxY, slabMaxY)));
+        });
+
+        // Break supporting BS.
+        singleplayer.getServer().runOnServer(server -> {
+            server.getOverworld().breakBlock(supportPos, false);
+        });
+
+        // Settle: 6 ticks + chunk render.
+        for (int i = 0; i < 6; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> {
+            case1ServerAnchorPost.set(Boolean.toString(SlabAnchorAttachment.isAnchored(server.getOverworld(), fullPos)));
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during case 1 post-break read");
+            }
+            BlockState fbState = mc.world.getBlockState(fullPos);
+            BlockState slabState = mc.world.getBlockState(slabPos);
+            double fbDy = SlabSupport.getYOffset(mc.world, fullPos, fbState);
+            double slabDy = SlabSupport.getYOffset(mc.world, slabPos, slabState);
+            VoxelShape fbOutline = fbState.getOutlineShape(mc.world, fullPos, ShapeContext.absent());
+            VoxelShape slabOutline = slabState.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+            double fbMinY = fullPos.getY() + (fbOutline.isEmpty() ? 0.0 : fbOutline.getBoundingBox().minY);
+            double fbMaxY = fullPos.getY() + (fbOutline.isEmpty() ? 0.0 : fbOutline.getBoundingBox().maxY);
+            double slabMinY = slabPos.getY() + (slabOutline.isEmpty() ? 0.0 : slabOutline.getBoundingBox().minY);
+            double slabMaxY = slabPos.getY() + (slabOutline.isEmpty() ? 0.0 : slabOutline.getBoundingBox().maxY);
+            case1FbDyPost.set(Double.toString(fbDy));
+            case1FbVisualYPost.set(formatYRange(fbMinY, fbMaxY));
+            case1SlabDyPost.set(Double.toString(slabDy));
+            case1SlabTypePost.set(slabState.contains(SlabBlock.TYPE)
+                    ? slabState.get(SlabBlock.TYPE).toString() : "none");
+            case1SlabVisualYPost.set(formatYRange(slabMinY, slabMaxY));
+            double assemblyMinPost = Math.min(fbMinY, slabMinY);
+            double assemblyMaxPost = Math.max(fbMaxY, slabMaxY);
+            case1AssemblyYPost.set(formatYRange(assemblyMinPost, assemblyMaxPost));
+            double assemblyMinPre = parseRangeMin(case1AssemblyYPre.get(), assemblyMinPost);
+            double assemblyMaxPre = parseRangeMax(case1AssemblyYPre.get(), assemblyMaxPost);
+            case1AssemblyDeltaY.set(formatYRange(assemblyMinPost - assemblyMinPre, assemblyMaxPost - assemblyMaxPre));
+
+            String preType = case1SlabTypePre.get();
+            String postType = case1SlabTypePost.get();
+            boolean assemblyRose = (assemblyMinPost - assemblyMinPre) > 0.001
+                    || (assemblyMaxPost - assemblyMaxPre) > 0.001;
+            boolean fbDyRegressed = Math.abs(fbDy - (-0.5)) > 1.0e-6;
+            boolean slabDyRegressed = Math.abs(slabDy - (-0.5)) > 1.0e-6;
+            boolean slabTypeChanged = !preType.equals(postType);
+
+            if (fbDyRegressed) {
+                case1Verdict.set("RED: FB dy drifted from -0.5 to " + fbDy + " after BS break");
+            } else if (slabDyRegressed) {
+                case1Verdict.set("RED: side slab dy drifted from -0.5 to " + slabDy + " after BS break");
+            } else if (slabTypeChanged) {
+                case1Verdict.set("RED: side slab type changed " + preType + "→" + postType + " after BS break");
+            } else if (assemblyRose) {
+                case1Verdict.set("RED: assembly visual Y rose after BS break"
+                        + " preY=" + case1AssemblyYPre.get()
+                        + " postY=" + case1AssemblyYPost.get()
+                        + " deltaY=" + case1AssemblyDeltaY.get());
+            } else {
+                case1Verdict.set("GREEN: BS-FB-0.5S stable across BS break — FB dy=-0.5, slab dy=-0.5,"
+                        + " slab type=" + postType + ", assemblyY=" + case1AssemblyYPost.get());
+            }
+        });
+
+        // ───────────────────────────────────────────────────────────────────────
+        // Case 2: fresh 0.5S placement after support removal
+        // ───────────────────────────────────────────────────────────────────────
+        // Setup uses setBlockState + an explicit SlabAnchorAttachment.addAnchor
+        // call to mirror the post-natural-placement state without depending on
+        // player positioning surviving from Case 1. This is exactly the
+        // server-side state Block.onPlaced + BlockOnPlacedAnchorMixin would
+        // produce after the player places STONE on the BS naturally.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            // Mimic Block.onPlaced → BlockOnPlacedAnchorMixin → addAnchor.
+            SlabAnchorAttachment.addAnchor(world, fullPos, world.getBlockState(fullPos));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // Capture FB state IMMEDIATELY after the synthetic anchor setup.
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateAfterPlace.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+
+        // Settle anchor sync + render.
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // Teleport the player FAR away so any harness auto-tick interaction
+        // cannot target the FB or its column. Isolates the FB-removal path
+        // from any player-position-driven interaction.
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+                mc.player.refreshPositionAndAngles(
+                        fullPos.getX() + 100.0,
+                        fullPos.getY() + 50.0,
+                        fullPos.getZ() + 100.0,
+                        180.0f,
+                        0.0f);
+                mc.player.setVelocity(Vec3d.ZERO);
+            }
+        });
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var p = server.getPlayerManager().getPlayerList().get(0);
+                p.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+                p.refreshPositionAndAngles(
+                        fullPos.getX() + 100.0,
+                        fullPos.getY() + 50.0,
+                        fullPos.getZ() + 100.0,
+                        180.0f,
+                        0.0f);
+                p.setVelocity(Vec3d.ZERO);
+            }
+        });
+        ctx.waitTick();
+
+        // FB state right before BS break.
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateBeforeBreak.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+
+        // Break BS support; FB should remain anchored at dy=-0.5.
+        singleplayer.getServer().runOnServer(server -> {
+            server.getOverworld().breakBlock(supportPos, false);
+        });
+
+        // Capture FB state immediately after the breakBlock call (still in same
+        // server tick).
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateImmediatePostBreak.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+
+        // Per-tick captures during the settle window.
+        ctx.waitTick();
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateBreakTick1.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+        ctx.waitTick();
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateBreakTick2.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+        ctx.waitTick();
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateBreakTick3.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+        ctx.waitTick();
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateBreakTick4.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+        ctx.waitTick();
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateBreakTick5.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+        ctx.waitTick();
+        singleplayer.getServer().runOnServer(server -> {
+            case2FbStateBreakTick6.set(server.getOverworld().getBlockState(fullPos).toString());
+        });
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null during case 2 post-break-pre-place read");
+            }
+            BlockState fbState = mc.world.getBlockState(fullPos);
+            case2FbAnchoredPostBreak.set(Boolean.toString(SlabAnchorAttachment.isAnchored(mc.world, fullPos)));
+            case2FbDyPostBreak.set(Double.toString(SlabSupport.getYOffset(mc.world, fullPos, fbState)));
+            case2FbStatePostBreak.set(fbState.toString());
+        });
+
+        // Synthesize a lower-half side click. Hit Y is the *original* world-Y on
+        // the lowered visual lower half: targetPos.y - 0.25.
+        final BlockHitResult lowerHalfHit = new BlockHitResult(
+                new Vec3d(fullPos.getX() + 1.0, fullPos.getY() - 0.25, fullPos.getZ() + 0.5),
+                Direction.EAST,
+                fullPos,
+                false,
+                false);
+
+        // Reposition the player right before the click to defeat any fall
+        // accumulation from the post-break settle window — keep player within
+        // reach of the synthesized hit so the server accepts the placement.
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.refreshPositionAndAngles(
+                        fullPos.getX() + 0.5,
+                        fullPos.getY() + 1.95,
+                        fullPos.getZ() + 3.25,
+                        180.0f,
+                        24.0f);
+                mc.player.setVelocity(Vec3d.ZERO);
+            }
+        });
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var p = server.getPlayerManager().getPlayerList().get(0);
+                p.refreshPositionAndAngles(
+                        fullPos.getX() + 0.5,
+                        fullPos.getY() + 1.95,
+                        fullPos.getZ() + 3.25,
+                        180.0f,
+                        24.0f);
+                p.setVelocity(Vec3d.ZERO);
+            }
+        });
+        ctx.waitTick();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world null pre-click in case 2");
+            }
+            case2FbStatePreClick.set(mc.world.getBlockState(fullPos).toString());
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for case 2 lower-half click");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, lowerHalfHit);
+            case2PlaceActionResult.set(result.toString());
+        });
+
+        // Sample at tick 0 (immediate, no waitTick yet beyond the click submission).
+        ctx.runOnClient(mc -> slabbed$captureSlabSample(mc, slabPos,
+                case2Tick0Type, case2Tick0Dy, case2Tick0VisualY));
+        ctx.runOnClient(mc -> case2SlabScanT0.set(slabbed$scanForStoneSlabs(mc, fullPos, 5, 3)));
+
+        ctx.waitTick();
+        ctx.runOnClient(mc -> slabbed$captureSlabSample(mc, slabPos,
+                case2Tick1Type, case2Tick1Dy, case2Tick1VisualY));
+
+        ctx.waitTick();
+        ctx.runOnClient(mc -> slabbed$captureSlabSample(mc, slabPos,
+                case2Tick2Type, case2Tick2Dy, case2Tick2VisualY));
+
+        for (int i = 0; i < 3; i++) {
+            ctx.waitTick();
+        }
+        ctx.runOnClient(mc -> slabbed$captureSlabSample(mc, slabPos,
+                case2Tick5Type, case2Tick5Dy, case2Tick5VisualY));
+
+        for (int i = 0; i < 5; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> slabbed$captureSlabSample(mc, slabPos,
+                case2Tick10Type, case2Tick10Dy, case2Tick10VisualY));
+        ctx.runOnClient(mc -> case2SlabScanT10.set(slabbed$scanForStoneSlabs(mc, fullPos, 5, 3)));
+
+        // Case 2 verdict — distinguish the live-mechanism failure (FB removed
+        // post-BS-break, anchor lingers without block, fresh slab lands AT the
+        // now-empty fullPos with dy=0.0) from a pure type/visual drift.
+        ctx.runOnClient(mc -> {
+            String[] tickLabels = {"0", "1", "2", "5", "10"};
+            String[] types = {case2Tick0Type.get(), case2Tick1Type.get(), case2Tick2Type.get(),
+                    case2Tick5Type.get(), case2Tick10Type.get()};
+            String[] dys = {case2Tick0Dy.get(), case2Tick1Dy.get(), case2Tick2Dy.get(),
+                    case2Tick5Dy.get(), case2Tick10Dy.get()};
+            String[] visualYs = {case2Tick0VisualY.get(), case2Tick1VisualY.get(),
+                    case2Tick2VisualY.get(), case2Tick5VisualY.get(), case2Tick10VisualY.get()};
+
+            String fbStatePostBreak = case2FbStatePostBreak.get();
+            String fbStatePreClick = case2FbStatePreClick.get();
+            boolean fbRemovedAfterBreak = fbStatePostBreak.contains("minecraft:air")
+                    || fbStatePreClick.contains("minecraft:air");
+
+            String reason = null;
+            for (int i = 0; i < tickLabels.length; i++) {
+                if (!"bottom".equals(types[i])) {
+                    reason = "tick " + tickLabels[i] + " type=" + types[i] + " (expected bottom)";
+                    break;
+                }
+                if (!"-0.5".equals(dys[i])) {
+                    reason = "tick " + tickLabels[i] + " dy=" + dys[i] + " (expected -0.5)";
+                    break;
+                }
+                double minY = parseRangeMin(visualYs[i], Double.NaN);
+                double maxY = parseRangeMax(visualYs[i], Double.NaN);
+                double expectedMin = slabPos.getY() - 0.5;
+                double expectedMax = slabPos.getY();
+                if (Math.abs(minY - expectedMin) > 0.001 || Math.abs(maxY - expectedMax) > 0.001) {
+                    reason = "tick " + tickLabels[i] + " visualY=" + visualYs[i]
+                            + " (expected " + formatYRange(expectedMin, expectedMax) + ")";
+                    break;
+                }
+            }
+
+            if (reason != null) {
+                String prefix = fbRemovedAfterBreak
+                        ? "RED: FB at fullPos was REMOVED after BS break (live-regression mechanism) — "
+                                + "fbStatePostBreak=" + fbStatePostBreak
+                                + " fbStatePreClick=" + fbStatePreClick
+                                + " — "
+                        : "RED: fresh 0.5S placement drifted across settle — ";
+                case2Verdict.set(prefix + reason
+                        + " | tick0=" + types[0] + "/" + dys[0] + "/" + visualYs[0]
+                        + " tick1=" + types[1] + "/" + dys[1] + "/" + visualYs[1]
+                        + " tick2=" + types[2] + "/" + dys[2] + "/" + visualYs[2]
+                        + " tick5=" + types[3] + "/" + dys[3] + "/" + visualYs[3]
+                        + " tick10=" + types[4] + "/" + dys[4] + "/" + visualYs[4]);
+            } else if (fbRemovedAfterBreak) {
+                case2Verdict.set("RED: FB at fullPos was REMOVED after BS break even though slab placement "
+                        + "happened to read consistent values — fbStatePostBreak=" + fbStatePostBreak
+                        + " fbStatePreClick=" + fbStatePreClick);
+            } else {
+                case2Verdict.set("GREEN: fresh 0.5S placement stayed BOTTOM with dy=-0.5 and "
+                        + "visualY=" + (slabPos.getY() - 0.5) + ".." + slabPos.getY() + " across 0/1/2/5/10 ticks; "
+                        + "FB stayed STONE at fullPos throughout (fbStatePostBreak=" + fbStatePostBreak + ")");
+            }
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "bs-fb-1s live regression after bs break",
+                "BS-FB-0.5S stays stable across BS break (no rise, no type change); fresh 0.5S "
+                        + "placement after BS break stays BOTTOM with dy=-0.5 across 0/1/2/5/10 ticks.",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("supportPos", supportPos.toShortString()),
+                        new NoteField("fullPos", fullPos.toShortString()),
+                        new NoteField("slabPos", slabPos.toShortString()),
+                        new NoteField("case1_fbDyPre", case1FbDyPre.get()),
+                        new NoteField("case1_fbVisualYPre", case1FbVisualYPre.get()),
+                        new NoteField("case1_slabDyPre", case1SlabDyPre.get()),
+                        new NoteField("case1_slabTypePre", case1SlabTypePre.get()),
+                        new NoteField("case1_slabVisualYPre", case1SlabVisualYPre.get()),
+                        new NoteField("case1_assemblyYPre", case1AssemblyYPre.get()),
+                        new NoteField("case1_serverAnchorPost", case1ServerAnchorPost.get()),
+                        new NoteField("case1_fbDyPost", case1FbDyPost.get()),
+                        new NoteField("case1_fbVisualYPost", case1FbVisualYPost.get()),
+                        new NoteField("case1_slabDyPost", case1SlabDyPost.get()),
+                        new NoteField("case1_slabTypePost", case1SlabTypePost.get()),
+                        new NoteField("case1_slabVisualYPost", case1SlabVisualYPost.get()),
+                        new NoteField("case1_assemblyYPost", case1AssemblyYPost.get()),
+                        new NoteField("case1_assemblyDeltaY", case1AssemblyDeltaY.get()),
+                        new NoteField("case1_verdict", case1Verdict.get()),
+                        new NoteField("case2_fbStateAfterPlace", case2FbStateAfterPlace.get()),
+                        new NoteField("case2_fbStateBeforeBreak", case2FbStateBeforeBreak.get()),
+                        new NoteField("case2_fbStateImmediatePostBreak", case2FbStateImmediatePostBreak.get()),
+                        new NoteField("case2_fbStateBreakTick1", case2FbStateBreakTick1.get()),
+                        new NoteField("case2_fbStateBreakTick2", case2FbStateBreakTick2.get()),
+                        new NoteField("case2_fbStateBreakTick3", case2FbStateBreakTick3.get()),
+                        new NoteField("case2_fbStateBreakTick4", case2FbStateBreakTick4.get()),
+                        new NoteField("case2_fbStateBreakTick5", case2FbStateBreakTick5.get()),
+                        new NoteField("case2_fbStateBreakTick6", case2FbStateBreakTick6.get()),
+                        new NoteField("case2_fbAnchoredPostBreak", case2FbAnchoredPostBreak.get()),
+                        new NoteField("case2_fbDyPostBreak", case2FbDyPostBreak.get()),
+                        new NoteField("case2_fbStatePostBreak", case2FbStatePostBreak.get()),
+                        new NoteField("case2_fbStatePreClick", case2FbStatePreClick.get()),
+                        new NoteField("case2_placeActionResult", case2PlaceActionResult.get()),
+                        new NoteField("case2_tick0_type", case2Tick0Type.get()),
+                        new NoteField("case2_tick0_dy", case2Tick0Dy.get()),
+                        new NoteField("case2_tick0_visualY", case2Tick0VisualY.get()),
+                        new NoteField("case2_tick1_type", case2Tick1Type.get()),
+                        new NoteField("case2_tick1_dy", case2Tick1Dy.get()),
+                        new NoteField("case2_tick1_visualY", case2Tick1VisualY.get()),
+                        new NoteField("case2_tick2_type", case2Tick2Type.get()),
+                        new NoteField("case2_tick2_dy", case2Tick2Dy.get()),
+                        new NoteField("case2_tick2_visualY", case2Tick2VisualY.get()),
+                        new NoteField("case2_tick5_type", case2Tick5Type.get()),
+                        new NoteField("case2_tick5_dy", case2Tick5Dy.get()),
+                        new NoteField("case2_tick5_visualY", case2Tick5VisualY.get()),
+                        new NoteField("case2_tick10_type", case2Tick10Type.get()),
+                        new NoteField("case2_tick10_dy", case2Tick10Dy.get()),
+                        new NoteField("case2_tick10_visualY", case2Tick10VisualY.get()),
+                        new NoteField("case2_slabScan_tick0", case2SlabScanT0.get()),
+                        new NoteField("case2_slabScan_tick10", case2SlabScanT10.get()),
+                        new NoteField("case2_verdict", case2Verdict.get())
+                ),
+                !case1Verdict.get().startsWith("RED")
+                        && !case2Verdict.get().startsWith("RED"));
+
+        StringBuilder failMsg = new StringBuilder();
+        if (case1Verdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] case1 ").append(case1Verdict.get()).append("\n");
+        }
+        if (case2Verdict.get().startsWith("RED")) {
+            failMsg.append("[").append(testId).append("] case2 ").append(case2Verdict.get()).append("\n");
+        }
+        if (failMsg.length() > 0) {
+            throw new RuntimeException(failMsg.toString().trim());
+        }
+    }
+
+    /**
+     * Diagnostic scan that walks an XZ {@code radius} square × {@code yRadius}
+     * vertical band centred on {@code center} and reports every stone_slab it
+     * finds. Used to locate where a synthesised side-click placement actually
+     * landed when the expected position is empty.
+     */
+    private static String slabbed$scanForStoneSlabs(
+            net.minecraft.client.MinecraftClient mc, BlockPos center, int radius, int yRadius
+    ) {
+        if (mc.world == null) {
+            return "client_world_null";
+        }
+        StringBuilder sb = new StringBuilder();
+        int found = 0;
+        for (int dy = -yRadius; dy <= yRadius; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    BlockPos probe = center.add(dx, dy, dz);
+                    BlockState state = mc.world.getBlockState(probe);
+                    if (!state.isOf(Blocks.STONE_SLAB)) {
+                        continue;
+                    }
+                    if (found > 0) sb.append(';');
+                    String type = state.contains(SlabBlock.TYPE)
+                            ? state.get(SlabBlock.TYPE).toString() : "none";
+                    double slabDy = SlabSupport.getYOffset(mc.world, probe, state);
+                    sb.append(probe.toShortString())
+                            .append(":type=").append(type)
+                            .append(",dy=").append(slabDy);
+                    found++;
+                }
+            }
+        }
+        if (found == 0) {
+            return "no_stone_slabs_in_radius=" + radius + ",yRadius=" + yRadius;
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Captures a slab placement sample (type + dy + outline-derived visual Y
+     * range) for the live-regression proof's tick sweep.
+     */
+    private static void slabbed$captureSlabSample(
+            net.minecraft.client.MinecraftClient mc,
+            BlockPos slabPos,
+            AtomicReference<String> typeOut,
+            AtomicReference<String> dyOut,
+            AtomicReference<String> visualYOut
+    ) {
+        if (mc.world == null) {
+            typeOut.set("client_world_null");
+            dyOut.set("");
+            visualYOut.set("");
+            return;
+        }
+        BlockState state = mc.world.getBlockState(slabPos);
+        if (!state.isOf(Blocks.STONE_SLAB)) {
+            typeOut.set("not_stone_slab(" + state.getBlock().getTranslationKey() + ")");
+            dyOut.set("");
+            VoxelShape outline = state.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+            if (outline.isEmpty()) {
+                visualYOut.set("empty");
+            } else {
+                visualYOut.set(formatYRange(
+                        slabPos.getY() + outline.getBoundingBox().minY,
+                        slabPos.getY() + outline.getBoundingBox().maxY));
+            }
+            return;
+        }
+        typeOut.set(state.contains(SlabBlock.TYPE) ? state.get(SlabBlock.TYPE).toString() : "none");
+        dyOut.set(Double.toString(SlabSupport.getYOffset(mc.world, slabPos, state)));
+        VoxelShape outline = state.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+        if (outline.isEmpty()) {
+            visualYOut.set("empty");
+        } else {
+            visualYOut.set(formatYRange(
+                    slabPos.getY() + outline.getBoundingBox().minY,
+                    slabPos.getY() + outline.getBoundingBox().maxY));
         }
     }
 
