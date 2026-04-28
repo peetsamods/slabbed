@@ -342,14 +342,19 @@ public final class SlabSupport {
     }
 
     /**
-     * Returns true if {@code slabPos} holds a bottom or double slab that is adjacent
-     * to a solid full block sitting on a bottom slab — the exact condition that gives
-     * the slab its -0.5 adjacent-side-slab dy.  Does not call getYOffset (safe inside
-     * the IN_GET_Y_OFFSET recursion guard).
+     * Returns true if {@code slabPos} holds any slab variant (BOTTOM, TOP, or
+     * DOUBLE) that is adjacent to a solid full block sitting on a bottom slab —
+     * the exact condition that gives the slab its -0.5 adjacent-side-slab dy.
+     * Does not call getYOffset (safe inside the IN_GET_Y_OFFSET recursion guard).
+     *
+     * <p>BOTTOM → BS-FB-0.5S (slab visually fills the lower half beside the
+     * lowered FB, world Y span [pos.y - 0.5, pos.y]).
+     * <br>TOP → BS-FB-1S (slab visually fills the upper half beside the lowered
+     * FB, world Y span [pos.y, pos.y + 0.5]).
+     * <br>DOUBLE → full-cube alignment with the lowered FB.
      */
     private static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
-        SlabType type = slabState.get(SlabBlock.TYPE);
-        if (type != SlabType.BOTTOM && type != SlabType.DOUBLE) {
+        if (!slabState.contains(SlabBlock.TYPE)) {
             return false;
         }
         for (Direction dir : Direction.Type.HORIZONTAL) {
