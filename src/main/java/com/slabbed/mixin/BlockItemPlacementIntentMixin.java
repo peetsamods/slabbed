@@ -20,6 +20,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 public abstract class BlockItemPlacementIntentMixin {
 
     private static final double UP_FACE_EDGE_BAND = 0.20d;
+    private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
 
     private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
         double localX = hitPos.x - targetPos.getX();
@@ -241,12 +242,20 @@ public abstract class BlockItemPlacementIntentMixin {
         // FB visual half-split. Lowered FB visual spans world Y ∈
         // [targetPos.y - 0.5, targetPos.y + 0.5], so targetPos.y is the half-line.
         //   originalHitPos.y < targetPos.y  → lower visual half  → BS-FB-0.5S (BOTTOM)
-        //   originalHitPos.y >= targetPos.y → upper visual half  → BS-FB-1S  (TOP)
+        //   originalHitPos.y > targetPos.y  → upper visual half  → BS-FB-1S  (TOP)
+        // A live ray that lands exactly on the lowered visual upper boundary
+        // (targetPos.y + 0.5) is still the player-facing 0.5S side-placement
+        // intent; keep that boundary in BOTTOM while preserving true upper-half
+        // hits such as targetPos.y + 0.25 as TOP.
         // The remapped Y is then clamped just inside the matching half so that
         // vanilla SlabBlock.getPlacementState's `hit.y - placePos.y <= 0.5`
         // discriminator picks the desired SlabType. (placePos.y == targetPos.y
         // because the side offset is horizontal.)
-        boolean upperHalfIntent = originalHitPos.y >= targetPos.getY();
+        double loweredVisualUpperBoundary = targetPos.getY() + 0.5d;
+        boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
+                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+        boolean upperHalfIntent = originalHitPos.y >= targetPos.getY()
+                && !exactLoweredVisualBoundary;
         double remappedY = upperHalfIntent
                 ? targetPos.getY() + 0.501d   // > 0.5 → vanilla → TOP
                 : targetPos.getY() + 0.499d;  // ≤ 0.5 → vanilla → BOTTOM
