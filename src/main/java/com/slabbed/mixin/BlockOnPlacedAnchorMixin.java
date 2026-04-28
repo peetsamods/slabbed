@@ -14,8 +14,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Records a persistent slab-anchor when an ordinary full block is placed directly on a
- * bottom slab. Server-side only; {@link SlabAnchorAttachment#addAnchor} no-ops on client
- * worlds and on positions that do not satisfy {@code qualifiesForDirectAnchor}.
+ * bottom slab or lowered full-block slab chain. Server-side only;
+ * {@link SlabAnchorAttachment#addAnchor} no-ops on client worlds and on positions
+ * that do not satisfy the anchor qualifier.
  */
 @Mixin(Block.class)
 public abstract class BlockOnPlacedAnchorMixin {
