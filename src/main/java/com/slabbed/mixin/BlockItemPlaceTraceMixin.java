@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
+import com.slabbed.debug.SlabbedInspect;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.Block;
@@ -26,6 +27,7 @@ public abstract class BlockItemPlaceTraceMixin {
     private record TraceCtx(String side, Identifier itemId, Direction face, BlockPos hitPos, BlockPos placePos) {}
 
     private static final ThreadLocal<TraceCtx> SLABBED$TRACE = new ThreadLocal<>();
+    private static final ThreadLocal<TraceCtx> SLABBED$INSPECT_TRACE = new ThreadLocal<>();
 
     private static boolean slabbed$isTracedBlock(Block block) {
         return block instanceof SlabBlock || block instanceof CarpetBlock || block.getDefaultState().isOpaqueFullCube();
@@ -33,18 +35,27 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "place", at = @At("HEAD"))
     private void slabbed$tracePlaceHead(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
-        if (!SlabbedAuditBridge.isEnabled()) return;
         BlockItem self = (BlockItem) (Object) this;
         if (!slabbed$isTracedBlock(self.getBlock())) return;
 
         World world = ctx.getWorld();
         Direction face = ctx.getSide();
         BlockPos placePos = ctx.getBlockPos();
+        BlockPos hitPos = placePos.offset(face.getOpposite());
+        String side = world.isClient() ? "CLIENT" : "SERVER";
+        Identifier itemId = Registries.ITEM.getId(self);
+
+        if (SlabbedInspect.ENABLED) {
+            SLABBED$INSPECT_TRACE.set(new TraceCtx(side, itemId, face, hitPos, placePos));
+            SlabbedInspect.logPlacement("HEAD", world, itemId, ctx, hitPos, placePos, null);
+        }
+
+        if (!SlabbedAuditBridge.isEnabled()) return;
+
         SlabbedAuditBridge.invoke(
                 "recordPlacementContext",
                 new Class<?>[]{ItemPlacementContext.class},
                 ctx);
-        BlockPos hitPos = placePos.offset(face.getOpposite());
         BlockState hitState = world.getBlockState(hitPos);
         BlockState placeState = world.getBlockState(placePos);
 
@@ -52,8 +63,6 @@ public abstract class BlockItemPlaceTraceMixin {
         double dyPlace = SlabSupport.getYOffset(world, placePos, placeState);
         if (dyHit == 0.0 && dyPlace == 0.0) return;
 
-        String side = world.isClient() ? "CLIENT" : "SERVER";
-        Identifier itemId = Registries.ITEM.getId(self);
         SLABBED$TRACE.set(new TraceCtx(side, itemId, face, hitPos, placePos));
 
         Slabbed.LOGGER.info("[SBSB-TRACE][HEAD] side={} item={} face={} hitPos={} hitState={} dyHit={} placePos={} placeState={} dyPlace={} placeAbove={}",
@@ -71,6 +80,25 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "place", at = @At("RETURN"))
     private void slabbed$tracePlaceReturn(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
+        TraceCtx inspectTrace = SLABBED$INSPECT_TRACE.get();
+        if (inspectTrace != null) {
+            try {
+                BlockItem self = (BlockItem) (Object) this;
+                if (slabbed$isTracedBlock(self.getBlock())) {
+                    SlabbedInspect.logPlacement(
+                            "RETURN",
+                            ctx.getWorld(),
+                            inspectTrace.itemId(),
+                            ctx,
+                            inspectTrace.hitPos(),
+                            inspectTrace.placePos(),
+                            cir.getReturnValue());
+                }
+            } finally {
+                SLABBED$INSPECT_TRACE.remove();
+            }
+        }
+
         TraceCtx trace = SLABBED$TRACE.get();
         if (trace == null) {
             return;

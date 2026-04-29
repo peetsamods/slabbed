@@ -1,5 +1,6 @@
 package com.slabbed.mixin;
 
+import com.slabbed.debug.SlabbedInspect;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.BlockEntityProvider;
@@ -107,6 +108,13 @@ public abstract class BlockItemPlacementIntentMixin {
                 hitDescriptor);
     }
 
+    private static ItemUsageContext slabbed$inspectReturn(
+            ItemUsageContext incoming, ItemUsageContext outgoing, String reason
+    ) {
+        SlabbedInspect.logIntent(incoming, outgoing, reason);
+        return outgoing;
+    }
+
     @ModifyArg(
             method = "useOnBlock",
             at = @At(
@@ -131,7 +139,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     null,
                     null,
                     "none");
-            return context;
+            return slabbed$inspectReturn(context, context, "item_not_slab");
         }
 
         Direction originalSide = context.getSide();
@@ -162,7 +170,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     null,
                     null,
                     "none");
-            return context;
+            return slabbed$inspectReturn(context, context, "face_not_horizontal");
         }
 
         BlockPos targetPos = context.getBlockPos();
@@ -191,7 +199,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     null,
                     effectiveSide,
                     inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
-            return context;
+            return slabbed$inspectReturn(context, context, "target_not_solid");
         }
         if (targetHasBlockEntity) {
             slabbed$recordRemapAttempt(
@@ -208,7 +216,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     null,
                     effectiveSide,
                     inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
-            return context;
+            return slabbed$inspectReturn(context, context, "target_has_block_entity");
         }
         if (targetIsCraftingTable) {
             slabbed$recordRemapAttempt(
@@ -225,7 +233,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     null,
                     effectiveSide,
                     inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
-            return context;
+            return slabbed$inspectReturn(context, context, "target_is_crafting_table");
         }
         if (yOffset != -0.5d) {
             slabbed$recordRemapAttempt(
@@ -242,7 +250,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     null,
                     effectiveSide,
                     inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
-            return context;
+            return slabbed$inspectReturn(context, context, "y_offset_not_-0.5");
         }
 
         BlockPos abovePos = targetPos.up();
@@ -302,7 +310,8 @@ public abstract class BlockItemPlacementIntentMixin {
                 false
         );
 
-        return new ItemUsageContext(context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit) {
+        ItemUsageContext remappedContext = new ItemUsageContext(context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit) {
         };
+        return slabbed$inspectReturn(context, remappedContext, "remapped");
     }
 }
