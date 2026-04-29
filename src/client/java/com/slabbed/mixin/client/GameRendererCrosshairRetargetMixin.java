@@ -72,7 +72,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         // candidate is on the ray, the anchored-FB rescue still fires even
         // with a slab in hand — preventing live-trace failures where the
         // initial target sits on a farther/underneath block.
-        BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht, slabHeld);
+        BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
         BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht);
         BlockHitResult chosen = slabbed$chooseRescue(tickProgress, anchoredHit, loweredSlabHit, slabHeld);
         BlockHitResult loweredChainHit = slabHeld ? null : slabbed$retargetLoweredChainTopSupport(tickProgress, ht);
@@ -397,9 +397,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         return false;
     }
 
-    private BlockHitResult slabbed$retargetAnchoredLoweredFullBlock(
-            float tickProgress, HitResult currentHit, boolean slabHeld
-    ) {
+    private BlockHitResult slabbed$retargetAnchoredLoweredFullBlock(float tickProgress, HitResult currentHit) {
         ClientWorld world = client.world;
         Entity cam = client.getCameraEntity();
         if (world == null || cam == null) {
@@ -441,16 +439,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
             candidateState = world.getBlockState(candidatePos);
             hit = slabbed$raycastAnchoredLoweredFullBlock(world, cam, eye, end, candidatePos, candidateState);
             if (hit != null) {
-                // Slab placement keeps the existing seam rewrite. Empty-hand
-                // selection must keep the actual lowered outline owner.
-                BlockState sampleState = world.getBlockState(samplePos);
-                if (slabHeld && slabbed$isAnchoredLoweredFullBlock(world, samplePos, sampleState)) {
-                    double hitY = hit.getPos().y;
-                    double sampleOutlineTop = samplePos.getY() + 0.5;
-                    if (hitY >= sampleOutlineTop && hitY < samplePos.getY() + 1.0) {
-                        hit = new BlockHitResult(hit.getPos(), hit.getSide(), samplePos, false);
-                    }
-                }
                 double dist2 = hit.getPos().squaredDistanceTo(eye);
                 if (dist2 <= bestDist2 + 1.0e-6) {
                     bestHit = hit;
