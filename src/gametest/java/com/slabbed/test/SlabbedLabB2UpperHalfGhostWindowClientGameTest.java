@@ -96,32 +96,131 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
         final BlockPos b1Pos = sPos.up();
         final BlockPos b2Pos = b1Pos.up();
         final BlockPos b3Pos = b2Pos.up();
-        // SB1B2-0.5: BOTTOM slab east of B2; inherits dy=-0.5 from adjacent anchored B2.
-        // Visual east face at X=2.0, visual Y span [201.5, 202.0].
         final BlockPos sbPos = b2Pos.east();
-
-        // Eye is to the east of the stack (player side).
         final double eyeX = sbPos.getX() + 1.75;  // 2.75
-        final Vec3d eyeSb    = new Vec3d(eyeX, sbPos.getY() + 1.5, sbPos.getZ() + 0.5);
-        final Vec3d eyeB2up  = new Vec3d(eyeX, B2_UPPER_Y,  sbPos.getZ() + 0.5);
-        final Vec3d eyeBug   = new Vec3d(eyeX, BUG_TRIGGER_Y, sbPos.getZ() + 0.5);
+        List<AimPoint> aimPoints = List.of(
+                aim("sb_lower_visible_horizontal", eyeX, SB_AIM_Y - 0.20, sbPos.getX() + 1.0,
+                        SB_AIM_Y - 0.20, sbPos, null, true, "SB1B2-0.5 lower visible side body"),
+                aim("sb_center_visible_horizontal", eyeX, SB_AIM_Y, sbPos.getX() + 1.0,
+                        SB_AIM_Y, sbPos, null, true, "SB1B2-0.5 center visible side body"),
+                aim("sb_upper_visible_horizontal", eyeX, SB_AIM_Y + 0.20, sbPos.getX() + 1.0,
+                        SB_AIM_Y + 0.20, sbPos, null, true, "SB1B2-0.5 upper visible side body"),
+                aim("b2_05_just_below_halfline", eyeX, b2Pos.getY() - 0.025, b2Pos.getX() + 1.0,
+                        b2Pos.getY() - 0.025, sbPos, b2Pos, true, "B2-0.5 just below B2 half-line"),
+                aim("b2_halfline_seam", eyeX, b2Pos.getY(), b2Pos.getX() + 1.0,
+                        b2Pos.getY(), sbPos, b2Pos, true, "B2 0.5/1S placement seam"),
+                aim("b2_1_just_above_halfline", eyeX, b2Pos.getY() + 0.025, b2Pos.getX() + 1.0,
+                        b2Pos.getY() + 0.025, b2Pos, null, true, "B2-1 just above placement seam"),
+                aim("b2_1_center", eyeX, b2Pos.getY() + 0.25, b2Pos.getX() + 1.0,
+                        b2Pos.getY() + 0.25, b2Pos, null, true, "B2-1 center visible body"),
+                aim("b2_1_just_below_top", eyeX, b2Pos.getY() + 0.475, b2Pos.getX() + 1.0,
+                        b2Pos.getY() + 0.475, b2Pos, null, true, "B2-1 just below visual top"),
+                aim("b2_top_seam", eyeX, b2Pos.getY() + 0.50, b2Pos.getX() + 1.0,
+                        b2Pos.getY() + 0.50, b2Pos, b3Pos, true, "B2/B3 outline seam"),
+                aim("b2_top_just_above_seam", eyeX, b2Pos.getY() + 0.525, b2Pos.getX() + 1.0,
+                        b2Pos.getY() + 0.525, b2Pos, null, true, "B2-1 live seam band just above top"),
+                aim("b2_top_trigger_202_55", eyeX, BUG_TRIGGER_Y, b2Pos.getX() + 1.0,
+                        BUG_TRIGGER_Y, b2Pos, null, true, "B2-1 live trigger height"),
+                aim("b3_05_center_observation", eyeX, b3Pos.getY() - 0.25, b3Pos.getX() + 1.0,
+                        b3Pos.getY() - 0.25, b3Pos, null, false, "B3-0.5 observation band")
+        );
 
-        // Aim at B2's physical east face (X=1.0) except for sbAim which aims through SB1B2-0.5's visible body.
-        final Vec3d aimSb   = new Vec3d(sbPos.getX() + 0.5, SB_AIM_Y,      sbPos.getZ() + 0.5);
-        final Vec3d aimB2up = new Vec3d(b2Pos.getX() + 1.0, B2_UPPER_Y,    sbPos.getZ() + 0.5);
-        final Vec3d aimBug  = new Vec3d(b2Pos.getX() + 1.0, BUG_TRIGGER_Y, sbPos.getZ() + 0.5);
+        List<SweepRow> rows = new ArrayList<>();
+        for (AimPoint aim : aimPoints) {
+            resetFixture(singleplayer, testId, sPos, b1Pos, b2Pos, b3Pos, sbPos);
+            for (int i = 0; i < 4; i++) ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
 
-        AtomicReference<String> targetAtSb   = new AtomicReference<>("not_recorded");
-        AtomicReference<String> targetAtB2up = new AtomicReference<>("not_recorded");
-        AtomicReference<String> targetAtBug  = new AtomicReference<>("not_recorded");
-        AtomicReference<String> click1Result = new AtomicReference<>("not_run");
-        AtomicReference<String> click2Result = new AtomicReference<>("not_run");
-        AtomicReference<Frame>  before       = new AtomicReference<>(Frame.empty("before"));
-        AtomicReference<Frame>  afterClick1  = new AtomicReference<>(Frame.empty("afterClick1"));
-        AtomicReference<Frame>  afterClick2  = new AtomicReference<>(Frame.empty("afterClick2"));
-        AtomicReference<String> verdict      = new AtomicReference<>("BLOCKED");
+            Frame before = capture(ctx, aim.label() + "_before", sPos, b1Pos, b2Pos, b3Pos, sbPos);
+            HitSnapshot hit1 = aimAndCaptureHit(ctx, aim.eye(), aim.target());
+            String click1 = clickCurrentTarget(ctx);
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            Frame afterClick1 = capture(ctx, aim.label() + "_afterClick1", sPos, b1Pos, b2Pos, b3Pos, sbPos);
 
-        // ── server-side fixture ───────────────────────────────────────────────
+            HitSnapshot hit2 = aimAndCaptureHit(ctx, aim.eye(), aim.target());
+            String click2 = clickCurrentTarget(ctx);
+            for (int i = 0; i < 3; i++) ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            Frame afterClick2 = capture(ctx, aim.label() + "_afterClick2", sPos, b1Pos, b2Pos, b3Pos, sbPos);
+
+            rows.add(SweepRow.from(aim, hit1, click1, hit2, click2, before, afterClick1, afterClick2,
+                    b2Pos, b3Pos, sbPos));
+        }
+
+        ctx.takeScreenshot(testId + "_sweep_result");
+
+        List<String> redRows = rows.stream()
+                .filter(row -> row.verdict().startsWith("RED"))
+                .map(row -> row.label() + "=" + row.verdict())
+                .toList();
+        String verdict = redRows.isEmpty()
+                ? "GREEN: B2/SB1B2 visible ownership sweep stayed on expected owners with no B3 placement or ghost window"
+                : "RED: B2/SB1B2 visible ownership sweep failed " + redRows;
+
+        List<SlabbedLabClientGameTest.NoteField> fields = new ArrayList<>();
+        fields.add(new SlabbedLabClientGameTest.NoteField("proofId", testId));
+        fields.add(new SlabbedLabClientGameTest.NoteField("falsGreenMechanism",
+                "6d9c106 sampled one SB point and two B2 seam points; this sweep records horizontal live-like "
+                        + "aim heights across SB1B2-0.5, B2-1, the B2/B3 seam, and B3-0.5."));
+        fields.add(new SlabbedLabClientGameTest.NoteField("sPos",  sPos.toShortString()));
+        fields.add(new SlabbedLabClientGameTest.NoteField("b1Pos", b1Pos.toShortString()));
+        fields.add(new SlabbedLabClientGameTest.NoteField("b2Pos", b2Pos.toShortString()));
+        fields.add(new SlabbedLabClientGameTest.NoteField("b3Pos", b3Pos.toShortString()));
+        fields.add(new SlabbedLabClientGameTest.NoteField("sbPos", sbPos.toShortString()));
+        fields.add(new SlabbedLabClientGameTest.NoteField("sweepCount", Integer.toString(rows.size())));
+        for (int i = 0; i < rows.size(); i++) {
+            SweepRow row = rows.get(i);
+            String prefix = String.format("sweep_%02d", i);
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_label", row.label()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_aimLabel", row.aimLabel()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_eye", row.eye()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_target", row.target()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_heldItem", "minecraft:stone_slab"));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_expectedVisibleOwner", row.expectedVisibleOwner()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_actualCrosshairOwner", row.actualCrosshairOwner()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_hitFace", row.hitFace()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_hitVec", row.hitVec()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_click1Result", row.click1Result()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_click1Placement", row.click1Placement()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_click2Result", row.click2Result()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_ghostWindowGapIndicator", row.ghostWindowGap()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_b2Box", row.b2Box()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_sideSlabBox", row.sideSlabBox()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_b3Box", row.b3Box()));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_verdict", row.verdict()));
+        }
+        fields.add(new SlabbedLabClientGameTest.NoteField("verdict", verdict));
+
+        SlabbedLabClientGameTest.writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "live-accurate B2 seam aim-height sweep proof",
+                "Every visible SB1B2-0.5/B2-owned height should resolve to the visible owner, never B3.",
+                testId + "_sweep_result",
+                testId + "_sweep_result",
+                fields,
+                verdict.startsWith("GREEN"));
+
+        if (verdict.startsWith("RED")) {
+            throw new RuntimeException("[" + testId + "] " + verdict);
+        }
+    }
+
+    // ── fixture helpers ───────────────────────────────────────────────────────
+
+    private static AimPoint aim(String label, double eyeX, double eyeY, double targetX, double targetY,
+                                BlockPos expectedOwner, BlockPos alternateOwner, boolean redOnMismatch,
+                                String aimLabel) {
+        Vec3d eye = new Vec3d(eyeX, eyeY, FIXTURE_ORIGIN.getZ() + 0.5);
+        Vec3d target = new Vec3d(targetX, targetY, FIXTURE_ORIGIN.getZ() + 0.5);
+        return new AimPoint(label, aimLabel, eye, target, expectedOwner, alternateOwner, redOnMismatch);
+    }
+
+    private static void resetFixture(TestSingleplayerContext singleplayer, String testId,
+                                     BlockPos sPos, BlockPos b1Pos, BlockPos b2Pos, BlockPos b3Pos,
+                                     BlockPos sbPos) {
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
             world.setBlockState(sPos,
@@ -130,9 +229,10 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
             world.setBlockState(b1Pos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(b2Pos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(b3Pos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
-            // Clear all other horizontal neighbours so the only slab side is sbPos.
             clearSideSurface(world, b2Pos, b3Pos, sbPos);
-            // SB1B2-0.5: place after clearing so b3.east().down() cleanup cannot erase it.
+            for (BlockPos pos : List.of(sbPos.east(), sbPos.east().up(), sbPos.east().down())) {
+                world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            }
             world.setBlockState(sbPos,
                     Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                     Block.NOTIFY_LISTENERS);
@@ -145,152 +245,7 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
             server.getPlayerManager().getPlayerList().get(0)
                     .setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
         });
-        for (int i = 0; i < 4; i++) ctx.waitTick();
-        singleplayer.getClientWorld().waitForChunksRender();
-
-        before.set(capture(ctx, "before", sPos, b1Pos, b2Pos, b3Pos, sbPos));
-        ctx.takeScreenshot(testId + "_before");
-        singleplayer.getClientWorld().waitForChunksRender();
-
-        // ── sub-test A: SB1B2-0.5 selectability ──────────────────────────────
-        // Aim at SB1B2-0.5's visible east face. Should resolve to sbPos, not MISS.
-        targetAtSb.set(aimAndDescribeCrosshair(ctx, eyeSb, aimSb));
-
-        // ── sub-test B control: B2 upper body (inside outline) ───────────────
-        // At Y=202.45 B2's outline hits (maxY=202.5). Crosshair must be B2.
-        targetAtB2up.set(aimAndDescribeCrosshair(ctx, eyeB2up, aimB2up));
-
-        // ── sub-test B bug: Y just above B2's outline top ────────────────────
-        // At Y=202.55 B2's outline misses; the anchored-FB scan finds B3 via
-        // samplePos.up() and returns it.  This is the "B2-1" trigger zone.
-        targetAtBug.set(aimAndDescribeCrosshair(ctx, eyeBug, aimBug));
-        ctx.takeScreenshot(testId + "_before_click");
-        singleplayer.getClientWorld().waitForChunksRender();
-
-        // ── click 1 from bug-trigger aim ─────────────────────────────────────
-        ctx.runOnClient(mc -> {
-            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
-                click1Result.set("BLOCKED");
-                return;
-            }
-            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
-            HitResult target = mc.crosshairTarget;
-            if (!(target instanceof BlockHitResult hit) || target.getType() != HitResult.Type.BLOCK) {
-                click1Result.set("MISS_NO_CLICK target=" + describeHit(target));
-                return;
-            }
-            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            click1Result.set(result.toString());
-        });
-        ctx.waitTick();
-        singleplayer.getClientWorld().waitForChunksRender();
-        afterClick1.set(capture(ctx, "afterClick1", sPos, b1Pos, b2Pos, b3Pos, sbPos));
-        ctx.takeScreenshot(testId + "_after_click1");
-
-        // ── click 2 from same aim ─────────────────────────────────────────────
-        aimAndDescribeCrosshair(ctx, eyeBug, aimBug);
-        ctx.runOnClient(mc -> {
-            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
-                click2Result.set("BLOCKED");
-                return;
-            }
-            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
-            HitResult target = mc.crosshairTarget;
-            if (!(target instanceof BlockHitResult hit) || target.getType() != HitResult.Type.BLOCK) {
-                click2Result.set("MISS_NO_CLICK target=" + describeHit(target));
-                return;
-            }
-            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            click2Result.set(result.toString());
-        });
-        for (int i = 0; i < 3; i++) ctx.waitTick();
-        singleplayer.getClientWorld().waitForChunksRender();
-        afterClick2.set(capture(ctx, "afterClick2", sPos, b1Pos, b2Pos, b3Pos, sbPos));
-        ctx.takeScreenshot(testId + "_after_click2");
-
-        // ── verdict ────────────────────────────────────────────────────────────
-        // RED conditions (any one is sufficient):
-        // A) SB1B2-0.5 not selectable: crosshair did not resolve to sbPos
-        // B) Bug-trigger crosshair is B3 (anchored-FB scan samplePos.up() error)
-        // C) Placement after bug-trigger click went to B3.east=(1,203,0) not B2.east=(1,202,0)
-        // D) Repeat click created ghost-window gap
-        boolean sbSelectable   = targetAtSb.get().contains("blockPos=" + sbPos.toShortString());
-        boolean b2upCorrect    = targetAtB2up.get().contains("blockPos=" + b2Pos.toShortString());
-        boolean bugCrosshairB3 = targetAtBug.get().contains("blockPos=" + b3Pos.toShortString());
-        boolean placedAtB3side = afterClick1.get().hasSlabAt(b3Pos);
-        boolean placedAtB2side = afterClick1.get().hasSlabAt(sbPos);
-        boolean ghostWindowGap = afterClick2.get().hasGhostWindowGap(b2Pos, b3Pos);
-
-        if (!b2upCorrect) {
-            verdict.set("BLOCKED: control aim at B2 upper body (Y=202.45) did not resolve to B2 — "
-                    + "fixture or retarget mixin not functioning; target=" + targetAtB2up.get());
-        } else if (!sbSelectable || bugCrosshairB3 || placedAtB3side || ghostWindowGap) {
-            StringBuilder reasons = new StringBuilder("RED:");
-            if (!sbSelectable)   reasons.append(" SB1B2-0.5-not-selectable(target=").append(targetAtSb.get()).append(")");
-            if (bugCrosshairB3)  reasons.append(" bug-trigger-crosshair-is-B3(").append(targetAtBug.get()).append(")");
-            if (placedAtB3side)  reasons.append(" click1-placed-at-B3-side(B3-0.5)");
-            if (!placedAtB2side && !placedAtB3side) reasons.append(" click1-placed-nowhere-expected");
-            if (ghostWindowGap)  reasons.append(" click2-ghost-window-gap");
-            verdict.set(reasons.toString());
-        } else {
-            verdict.set("GREEN: SB1B2-0.5 selectable, bug-trigger aim resolves to B2 not B3, "
-                    + "placement on B2 east, no ghost-window gap");
-        }
-
-        // ── artifact ───────────────────────────────────────────────────────────
-        List<SlabbedLabClientGameTest.NoteField> fields = new ArrayList<>();
-        fields.add(new SlabbedLabClientGameTest.NoteField("proofId", testId));
-        fields.add(new SlabbedLabClientGameTest.NoteField("falsGreenMechanism",
-                "prior proof cleared SB1B2-0.5 and aimed at Y=202.45 (inside B2 outline); "
-                        + "upperVisibleHitBelongsToAboveLoweredFullBlock fix never triggered (needs hitY>=203)"));
-        fields.add(new SlabbedLabClientGameTest.NoteField("rootCause",
-                "anchored-FB scan samplePos.up() returns B3 when ray Y>202.5 (above B2 outline top); "
-                        + "BlockItemPlacementIntentMixin sees B3 with hitY<203 => BOTTOM => B3.east=B3-0.5"));
-        fields.add(new SlabbedLabClientGameTest.NoteField("sPos",  sPos.toShortString()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("b1Pos", b1Pos.toShortString()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("b2Pos", b2Pos.toShortString()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("b3Pos", b3Pos.toShortString()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("sbPos", sbPos.toShortString()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("beforeStateTable", before.get().describe()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestA_sbAimY",   String.valueOf(SB_AIM_Y)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestA_sbTarget", targetAtSb.get()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestA_sbSelectable", Boolean.toString(sbSelectable)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestB_controlAimY",   String.valueOf(B2_UPPER_Y)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestB_controlTarget", targetAtB2up.get()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestB_controlCorrect", Boolean.toString(b2upCorrect)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestB_bugAimY",    String.valueOf(BUG_TRIGGER_Y)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestB_bugTarget",  targetAtBug.get()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("subTestB_bugCrosshairIsB3", Boolean.toString(bugCrosshairB3)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("click1Result",  click1Result.get()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("click1PlacedAtB2side", Boolean.toString(placedAtB2side)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("click1PlacedAtB3side", Boolean.toString(placedAtB3side)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("afterClick1StateTable", afterClick1.get().describe()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("click2Result",  click2Result.get()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("ghostWindowGapIndicator", Boolean.toString(ghostWindowGap)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("afterClick2StateTable", afterClick2.get().describe()));
-        fields.add(new SlabbedLabClientGameTest.NoteField("verdict", verdict.get()));
-
-        SlabbedLabClientGameTest.writeInvariantProofNotes(
-                screenshotDir,
-                testId + "_notes.json",
-                testId,
-                "live-accurate B2-upper-half ghost-window proof",
-                "With SB1B2-0.5 present: aiming just above B2 outline top should not route to B3.",
-                testId + "_before",
-                testId + "_after_click2",
-                fields,
-                verdict.get().startsWith("GREEN"));
-
-        if (verdict.get().startsWith("RED") || verdict.get().startsWith("BLOCKED")) {
-            throw new RuntimeException("[" + testId + "] " + verdict.get()
-                    + " sbTarget=" + targetAtSb.get()
-                    + " b2upTarget=" + targetAtB2up.get()
-                    + " bugTarget=" + targetAtBug.get()
-                    + " click1=" + click1Result.get());
-        }
     }
-
-    // ── fixture helpers ───────────────────────────────────────────────────────
 
     /** Clear all horizontal neighbours of b2/b3, except the preserved side sbPos. */
     private static void clearSideSurface(net.minecraft.world.World world,
@@ -317,6 +272,40 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
             positionPlayer(mc, eye, target);
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             out.set(describeHit(mc.crosshairTarget));
+        });
+        return out.get();
+    }
+
+    private static HitSnapshot aimAndCaptureHit(ClientGameTestContext ctx, Vec3d eye, Vec3d target) {
+        AtomicReference<HitSnapshot> out = new AtomicReference<>(HitSnapshot.miss("not_recorded"));
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                out.set(HitSnapshot.miss("null_world_or_player"));
+                return;
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            positionPlayer(mc, eye, target);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            out.set(HitSnapshot.from(mc.crosshairTarget));
+        });
+        return out.get();
+    }
+
+    private static String clickCurrentTarget(ClientGameTestContext ctx) {
+        AtomicReference<String> out = new AtomicReference<>("not_run");
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                out.set("BLOCKED");
+                return;
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            HitResult target = mc.crosshairTarget;
+            if (!(target instanceof BlockHitResult hit) || target.getType() != HitResult.Type.BLOCK) {
+                out.set("MISS_NO_CLICK target=" + describeHit(target));
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            out.set(result.toString());
         });
         return out.get();
     }
@@ -388,6 +377,97 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
     }
 
     // ── records ───────────────────────────────────────────────────────────────
+
+    private record AimPoint(String label, String aimLabel, Vec3d eye, Vec3d target,
+                            BlockPos expectedOwner, BlockPos alternateOwner, boolean redOnMismatch) {
+        String expectedOwnerLabel() {
+            String primary = expectedOwner == null ? "none" : expectedOwner.toShortString();
+            if (alternateOwner == null) {
+                return primary;
+            }
+            return primary + " or " + alternateOwner.toShortString();
+        }
+    }
+
+    private record HitSnapshot(String type, BlockPos blockPos, String face, String hitVec) {
+        static HitSnapshot from(HitResult hit) {
+            if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
+                return miss(hit == null ? "null" : hit.getType().toString());
+            }
+            return new HitSnapshot("BLOCK", blockHit.getBlockPos(), blockHit.getSide().asString(),
+                    fmtVec(blockHit.getPos()));
+        }
+
+        static HitSnapshot miss(String type) {
+            return new HitSnapshot(type, null, "none", "none");
+        }
+
+        boolean matches(BlockPos pos) {
+            return pos != null && pos.equals(blockPos);
+        }
+
+        String owner() {
+            return blockPos == null ? type : blockPos.toShortString();
+        }
+
+        String describe() {
+            return blockPos == null
+                    ? type
+                    : "BLOCK blockPos=" + blockPos.toShortString() + " face=" + face + " hit=" + hitVec;
+        }
+    }
+
+    private record SweepRow(String label, String aimLabel, String eye, String target,
+                            String expectedVisibleOwner, String actualCrosshairOwner,
+                            String hitFace, String hitVec, String click1Result,
+                            String click1Placement, String click2Result,
+                            String ghostWindowGap, String b2Box, String sideSlabBox,
+                            String b3Box, String verdict) {
+        static SweepRow from(AimPoint aim, HitSnapshot hit1, String click1Result,
+                             HitSnapshot hit2, String click2Result, Frame before,
+                             Frame afterClick1, Frame afterClick2,
+                             BlockPos b2Pos, BlockPos b3Pos, BlockPos sbPos) {
+            boolean ownerOk = hit1.matches(aim.expectedOwner())
+                    || (aim.alternateOwner() != null && hit1.matches(aim.alternateOwner()));
+            boolean placedAtB3side = afterClick1.hasSlabAt(b3Pos);
+            boolean ghostWindowGap = afterClick2.hasGhostWindowGap(b2Pos, b3Pos);
+            List<String> reasons = new ArrayList<>();
+            if (aim.redOnMismatch() && !ownerOk) {
+                reasons.add("owner=" + hit1.owner() + " expected=" + aim.expectedOwnerLabel());
+            }
+            if (aim.redOnMismatch() && placedAtB3side) {
+                reasons.add("click1-placed-B3-0.5");
+            }
+            if (aim.redOnMismatch() && ghostWindowGap) {
+                reasons.add("ghost-window-gap");
+            }
+            String verdict = reasons.isEmpty()
+                    ? (aim.redOnMismatch() ? "GREEN" : "OBSERVED")
+                    : "RED: " + String.join("; ", reasons);
+            String placement = placedAtB3side
+                    ? "B3-0.5"
+                    : (afterClick1.sb().isSlab()
+                    ? "B2-side " + afterClick1.sb().slabType()
+                    : "none");
+            return new SweepRow(
+                    aim.label(),
+                    aim.aimLabel(),
+                    fmtVec(aim.eye()),
+                    fmtVec(aim.target()),
+                    aim.expectedOwnerLabel(),
+                    hit1.describe(),
+                    hit1.face(),
+                    hit1.hitVec(),
+                    click1Result,
+                    placement,
+                    click2Result + " secondTarget=" + hit2.describe(),
+                    Boolean.toString(ghostWindowGap),
+                    before.b2().describe(),
+                    before.sb().describe(),
+                    before.b3().describe(),
+                    verdict);
+        }
+    }
 
     private record Frame(String label,
                          BoxSample s, BoxSample b1, BoxSample b2, BoxSample b3,
