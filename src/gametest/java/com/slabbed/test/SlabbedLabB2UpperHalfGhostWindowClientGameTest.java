@@ -34,8 +34,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>Root cause (confirmed by audit of 0d62de3):
  * {@code slabbed$retargetAnchoredLoweredFullBlock} samples along the ray and
  * checks {@code samplePos.up()} at each step.  When the ray Y is just above
- * B2's visual outline top (202.5), B2 misses but B3's outline (202.5–203.5)
- * hits via the {@code .up()} probe.  The scan returns B3 immediately.
+ * B2's visual outline top (202.5), B2 misses and B3's outline (202.5–203.5)
+ * is the visible owner.
  * {@code BlockItemPlacementIntentMixin} then sees targetPos=B3 with
  * hitY=202.55 < B3.Y=203 → BOTTOM intent → places at B3.east = "B3-0.5".
  *
@@ -57,10 +57,10 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>Places SB1B2-0.5 at b2Pos.east()=(1,202,0) as BOTTOM slab.</li>
  *   <li>Sub-test A: aims at SB1B2-0.5's visible body (Y=201.75) and
  *       asserts the crosshair lands on it.</li>
- *   <li>Sub-test B: aims at Y=202.55 — the "B2-1" trigger zone just above
- *       B2's outline top — asserts crosshair resolves to B3 (the bug), then
- *       clicks and asserts slab lands at B3-0.5 instead of B2's east.</li>
- *   <li>Sub-test C: second click from same aim, asserts ghost-window gap.</li>
+ *   <li>Sub-test B: aims at Y=202.55 — the B3-visible seam band just above
+ *       B2's outline top — asserts crosshair resolves to B3, then clicks and
+ *       asserts slab placement does not create B3-0.5.</li>
+ *   <li>Sub-test C: second click from same aim asserts no ghost-window gap.</li>
  * </ul>
  */
 public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements FabricClientGameTest {
@@ -68,7 +68,7 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
     private static final double EPSILON = 1.0e-6;
 
     // B2 visual outline top = b2Pos.getY() + 0.5 = 202.5.
-    // Aim just above it to enter the anchored-FB scan's samplePos.up() B3-hit zone.
+    // Aim just above it to enter B3's visible lower band.
     private static final double SB_AIM_Y     = 201.75;   // SB1B2-0.5 visible east face mid
     private static final double B2_UPPER_Y   = 202.45;   // inside B2's visual outline (control)
     private static final double BUG_TRIGGER_Y = 202.55;  // above B2 outline top → B3 via .up()
@@ -118,9 +118,9 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
                 aim("b2_top_seam", eyeX, b2Pos.getY() + 0.50, b2Pos.getX() + 1.0,
                         b2Pos.getY() + 0.50, b2Pos, b3Pos, true, "B2/B3 outline seam"),
                 aim("b2_top_just_above_seam", eyeX, b2Pos.getY() + 0.525, b2Pos.getX() + 1.0,
-                        b2Pos.getY() + 0.525, b2Pos, null, true, "B2-1 live seam band just above top"),
+                        b2Pos.getY() + 0.525, b3Pos, null, true, "B3 visible seam band just above B2 top"),
                 aim("b2_top_trigger_202_55", eyeX, BUG_TRIGGER_Y, b2Pos.getX() + 1.0,
-                        BUG_TRIGGER_Y, b2Pos, null, true, "B2-1 live trigger height"),
+                        BUG_TRIGGER_Y, b3Pos, null, true, "B3 visible live trigger height"),
                 aim("b3_05_center_observation", eyeX, b3Pos.getY() - 0.25, b3Pos.getX() + 1.0,
                         b3Pos.getY() - 0.25, b3Pos, null, false, "B3-0.5 observation band")
         );
@@ -197,7 +197,7 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
                 testId + "_notes.json",
                 testId,
                 "live-accurate B2 seam aim-height sweep proof",
-                "Every visible SB1B2-0.5/B2-owned height should resolve to the visible owner, never B3.",
+                "Every visible SB1B2-0.5/B2/B3 height should resolve to the visible owner without B3-side placement or a ghost window.",
                 testId + "_sweep_result",
                 testId + "_sweep_result",
                 fields,

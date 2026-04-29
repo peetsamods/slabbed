@@ -14,6 +14,7 @@ import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -62,39 +63,55 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
         ctx.takeScreenshot(testId + "_b1_present");
 
         List<OwnershipRow> rows = new ArrayList<>();
-        rows.add(captureAim(ctx, "b2_lower_quarter_b1_present", "lower quarter of B2 visible box",
-                b2Pos, b2Pos, true, presentFrame.b2().yAt(0.25d)));
-        rows.add(captureAim(ctx, "b2_center_b1_present", "center of B2 visible box",
-                b2Pos, b2Pos, true, presentFrame.b2().yAt(0.50d)));
-        rows.add(captureAim(ctx, "b2_upper_quarter_b1_present", "upper quarter of B2 visible box",
-                b2Pos, b2Pos, true, presentFrame.b2().yAt(0.75d)));
+        rows.add(captureAim(ctx, "b2_lower_quarter_empty_b1_present", "lower quarter of B2 visible box",
+                "empty", ItemStack.EMPTY, b2Pos, b2Pos, true, presentFrame.b2().yAt(0.25d)));
+        rows.add(captureAim(ctx, "b2_lower_quarter_full_block_b1_present", "lower quarter of B2 visible box",
+                "minecraft:stone", new ItemStack(Items.STONE), b2Pos, b2Pos, true, presentFrame.b2().yAt(0.25d)));
+        rows.add(captureAim(ctx, "b2_lower_quarter_slab_b1_present", "lower quarter of B2 visible box",
+                "minecraft:stone_slab", new ItemStack(Items.STONE_SLAB), b2Pos, b2Pos, true, presentFrame.b2().yAt(0.25d)));
+        rows.add(captureAim(ctx, "b2_center_empty_b1_present", "center of B2 visible box",
+                "empty", ItemStack.EMPTY, b2Pos, b2Pos, true, presentFrame.b2().yAt(0.50d)));
+        rows.add(captureAim(ctx, "b2_upper_quarter_empty_b1_present", "upper quarter of B2 visible box",
+                "empty", ItemStack.EMPTY, b2Pos, b2Pos, true, presentFrame.b2().yAt(0.75d)));
 
-        rows.add(captureAim(ctx, "b3_lower_quarter_b1_present", "lower quarter of B3 visible box",
-                b3Pos, b3Pos, true, presentFrame.b3().yAt(0.25d)));
-        rows.add(captureAim(ctx, "b3_center_b1_present", "center of B3 visible box",
-                b3Pos, b3Pos, true, presentFrame.b3().yAt(0.50d)));
-        rows.add(captureAim(ctx, "b3_upper_quarter_b1_present", "upper quarter of B3 visible box",
-                b3Pos, b3Pos, true, presentFrame.b3().yAt(0.75d)));
+        rows.add(captureAim(ctx, "b3_lower_quarter_empty_b1_present", "lower quarter of B3 visible box",
+                "empty", ItemStack.EMPTY, b3Pos, b3Pos, true, presentFrame.b3().yAt(0.25d)));
+        rows.add(captureAim(ctx, "b3_lower_quarter_full_block_b1_present", "lower quarter of B3 visible box",
+                "minecraft:stone", new ItemStack(Items.STONE), b3Pos, b3Pos, true, presentFrame.b3().yAt(0.25d)));
+        rows.add(captureAim(ctx, "b3_lower_quarter_slab_b1_present", "lower quarter of B3 visible box",
+                "minecraft:stone_slab", new ItemStack(Items.STONE_SLAB), b3Pos, b3Pos, true, presentFrame.b3().yAt(0.25d)));
+        rows.add(captureAim(ctx, "b3_center_empty_b1_present", "center of B3 visible box",
+                "empty", ItemStack.EMPTY, b3Pos, b3Pos, true, presentFrame.b3().yAt(0.50d)));
+        rows.add(captureAim(ctx, "b3_upper_quarter_empty_b1_present", "upper quarter of B3 visible box",
+                "empty", ItemStack.EMPTY, b3Pos, b3Pos, true, presentFrame.b3().yAt(0.75d)));
 
         setupFixture(singleplayer, s1Pos, b1Pos, b2Pos, b3Pos, false);
         settle(ctx, singleplayer, 4);
         Frame absentFrame = captureFrame(ctx, "b1_removed", s1Pos, b1Pos, b2Pos, b3Pos);
         ctx.takeScreenshot(testId + "_b1_removed");
         rows.add(captureAim(ctx, "b2_lower_quarter_b1_removed", "same lower quarter of B2 visible box after B1 removal",
-                b2Pos, b2Pos, false, absentFrame.b2().yAt(0.25d)));
+                "empty", ItemStack.EMPTY, b2Pos, b2Pos, false, absentFrame.b2().yAt(0.25d)));
 
         boolean b2PresentWrong = rows.stream()
                 .filter(row -> row.lowerBlockPresent() && row.expectedOwner().equals(b2Pos))
+                .filter(row -> !"minecraft:stone_slab".equals(row.heldItem()))
                 .anyMatch(row -> !row.actualOwner().equals(b2Pos));
         boolean b2RemovedCorrect = rows.stream()
                 .filter(row -> !row.lowerBlockPresent() && row.expectedOwner().equals(b2Pos))
                 .anyMatch(row -> row.actualOwner().equals(b2Pos));
-        boolean exactHalfBlockShift = rows.stream()
+        boolean exactHalfBlockShiftWithoutSlab = rows.stream()
+                .filter(row -> !"minecraft:stone_slab".equals(row.heldItem()))
                 .anyMatch(row -> row.actualOwner().equals(row.expectedOwner().down()));
-        boolean red = (b2PresentWrong && b2RemovedCorrect) || exactHalfBlockShift;
+        boolean b2SlabHeldChanged = slabHeldChanged(rows,
+                "b2_lower_quarter_full_block_b1_present",
+                "b2_lower_quarter_slab_b1_present");
+        boolean b3SlabHeldChanged = slabHeldChanged(rows,
+                "b3_lower_quarter_full_block_b1_present",
+                "b3_lower_quarter_slab_b1_present");
+        boolean red = b2SlabHeldChanged || b3SlabHeldChanged;
         String verdict = red
-                ? "RED: vertical lowered full-block visible ownership resolves to the lower block"
-                : "GREEN: B2/B3 visible lower, center, and upper rays resolved to their visible owners";
+                ? "RED: slab-held targeting changes vertical lowered full-block visible ownership"
+                : "GREEN: held item does not change B2/B3 visible lower-quarter ownership";
 
         List<SlabbedLabClientGameTest.NoteField> fields = new ArrayList<>();
         fields.add(new SlabbedLabClientGameTest.NoteField("proofId", testId));
@@ -106,7 +123,13 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
         fields.add(new SlabbedLabClientGameTest.NoteField("b1RemovedFrame", absentFrame.describe()));
         fields.add(new SlabbedLabClientGameTest.NoteField("b2PresentWrongOwner", Boolean.toString(b2PresentWrong)));
         fields.add(new SlabbedLabClientGameTest.NoteField("b2RemovedLowerQuarterCorrect", Boolean.toString(b2RemovedCorrect)));
-        fields.add(new SlabbedLabClientGameTest.NoteField("exactHalfBlockShift", Boolean.toString(exactHalfBlockShift)));
+        fields.add(new SlabbedLabClientGameTest.NoteField("exactHalfBlockShiftWithoutSlab", Boolean.toString(exactHalfBlockShiftWithoutSlab)));
+        fields.add(new SlabbedLabClientGameTest.NoteField("b2SlabHeldChangedOwner", Boolean.toString(b2SlabHeldChanged)));
+        fields.add(new SlabbedLabClientGameTest.NoteField("b3SlabHeldChangedOwner", Boolean.toString(b3SlabHeldChanged)));
+        fields.add(new SlabbedLabClientGameTest.NoteField("rescueDecision",
+                "not directly exposed to gametest; inferred from held-item owner delta"));
+        fields.add(new SlabbedLabClientGameTest.NoteField("sideSlabRetargetFired",
+                "not directly exposed to gametest; no side slab exists in this vertical fixture"));
         fields.add(new SlabbedLabClientGameTest.NoteField("ghostWindowPlacementIssue",
                 "not proven here; this proof exercises selection ownership only"));
         for (int i = 0; i < rows.size(); i++) {
@@ -118,8 +141,8 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
                 screenshotDir,
                 testId + "_notes.json",
                 testId,
-                "vertical lowered full-block selection ownership",
-                "Visible lower, center, and upper portions of B2/B3 should resolve to the visible full-block owner.",
+                "slab-held vertical lowered full-block selection ownership",
+                "Holding a slab should not change visible lower-quarter B2/B3 ownership versus holding a full block.",
                 testId + "_b1_present",
                 testId + "_b1_removed",
                 fields,
@@ -210,23 +233,25 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
             ClientGameTestContext ctx,
             String label,
             String aimLabel,
+            String heldItem,
+            ItemStack heldStack,
             BlockPos targetPos,
             BlockPos expectedOwner,
             boolean lowerBlockPresent,
             double targetY
     ) {
         AtomicReference<OwnershipRow> out = new AtomicReference<>(OwnershipRow.blocked(
-                label, aimLabel, expectedOwner, lowerBlockPresent, "not_run"));
+                label, aimLabel, heldItem, expectedOwner, lowerBlockPresent, "not_run"));
         ctx.runOnClient(mc -> {
             if (mc.world == null || mc.player == null) {
-                out.set(OwnershipRow.blocked(label, aimLabel, expectedOwner, lowerBlockPresent,
+                out.set(OwnershipRow.blocked(label, aimLabel, heldItem, expectedOwner, lowerBlockPresent,
                         "client_world_or_player_null"));
                 return;
             }
             Vec3d eye = new Vec3d(targetPos.getX() + 2.75d, targetY, targetPos.getZ() + 0.5d);
             Vec3d target = new Vec3d(targetPos.getX() + 1.0d, targetY, targetPos.getZ() + 0.5d);
             positionPlayer(mc, eye, target);
-            mc.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+            mc.player.setStackInHand(Hand.MAIN_HAND, heldStack.copy());
             Vec3d end = eye.add(target.subtract(eye).normalize().multiply(6.0d));
             HitResult vanilla = mc.world.raycast(new RaycastContext(
                     eye,
@@ -243,6 +268,7 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
             out.set(new OwnershipRow(
                     label,
                     aimLabel,
+                    heldItem,
                     fmtVec(eye),
                     fmtVec(target),
                     expectedOwner,
@@ -253,6 +279,19 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
                     verdict));
         });
         return out.get();
+    }
+
+    private static boolean slabHeldChanged(List<OwnershipRow> rows, String fullBlockLabel, String slabLabel) {
+        OwnershipRow fullBlock = findRow(rows, fullBlockLabel);
+        OwnershipRow slab = findRow(rows, slabLabel);
+        return fullBlock != null
+                && slab != null
+                && fullBlock.expectedOwner().equals(fullBlock.actualOwner())
+                && slab.actualOwner().equals(slab.expectedOwner().down());
+    }
+
+    private static OwnershipRow findRow(List<OwnershipRow> rows, String label) {
+        return rows.stream().filter(row -> row.label().equals(label)).findFirst().orElse(null);
     }
 
     private static void positionPlayer(MinecraftClient mc, Vec3d eye, Vec3d target) {
@@ -341,6 +380,7 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
     private record OwnershipRow(
             String label,
             String aimLabel,
+            String heldItem,
             String eye,
             String target,
             BlockPos expectedOwner,
@@ -353,17 +393,19 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
         static OwnershipRow blocked(
                 String label,
                 String aimLabel,
+                String heldItem,
                 BlockPos expectedOwner,
                 boolean lowerBlockPresent,
                 String reason
         ) {
-            return new OwnershipRow(label, aimLabel, "none", "none", expectedOwner, null,
+            return new OwnershipRow(label, aimLabel, heldItem, "none", "none", expectedOwner, null,
                     "not_run", reason, lowerBlockPresent, "BLOCKED: " + reason);
         }
 
         void appendFields(List<SlabbedLabClientGameTest.NoteField> fields, String prefix) {
             fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_label", label));
             fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_aimPoint", aimLabel));
+            fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_heldItem", heldItem));
             fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_eye", eye));
             fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_target", target));
             fields.add(new SlabbedLabClientGameTest.NoteField(prefix + "_expectedOwner", expectedOwner.toShortString()));
