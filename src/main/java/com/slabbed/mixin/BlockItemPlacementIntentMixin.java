@@ -6,16 +6,25 @@ import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemUsageContext;
+import net.minecraft.util.function.BooleanBiFunction;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
+import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
@@ -28,6 +37,29 @@ public abstract class BlockItemPlacementIntentMixin {
                 && !(state.getBlock() instanceof BlockEntityProvider)
                 && !(state.getBlock() instanceof CraftingTableBlock)
                 && SlabSupport.getYOffset(context.getWorld(), pos, state) == -0.5d;
+    }
+
+    private static boolean slabbed$isLoweredSlab(BlockState state, World world, BlockPos pos) {
+        return state.getBlock() instanceof SlabBlock
+                && SlabSupport.getYOffset(world, pos, state) < 0.0d;
+    }
+
+    private static boolean slabbed$isSameSlabLane(BlockState candidate, BlockState target) {
+        return candidate.contains(SlabBlock.TYPE)
+                && target.contains(SlabBlock.TYPE)
+                && candidate.get(SlabBlock.TYPE) == target.get(SlabBlock.TYPE);
+    }
+
+    private static boolean slabbed$isLoweredSlabFacePlacement(ItemPlacementContext context, BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock)
+                || context.getSide().getAxis().isVertical()) {
+            return false;
+        }
+        World world = context.getWorld();
+        BlockPos targetPos = context.getBlockPos().offset(context.getSide().getOpposite());
+        BlockState targetState = world.getBlockState(targetPos);
+        return slabbed$isLoweredSlab(targetState, world, targetPos)
+                && slabbed$isSameSlabLane(state, targetState);
     }
 
     private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
@@ -115,6 +147,44 @@ public abstract class BlockItemPlacementIntentMixin {
         return outgoing;
     }
 
+    @Inject(method = "canPlace", at = @At("HEAD"), cancellable = true)
+    private void slabbed$allowLoweredSlabLanePlayerOverlap(
+            ItemPlacementContext context,
+            BlockState state,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        if (!slabbed$isLoweredSlabFacePlacement(context, state)) {
+            return;
+        }
+
+        World world = context.getWorld();
+        PlayerEntity player = context.getPlayer();
+        BlockPos placePos = context.getBlockPos();
+        if (player == null
+                || !context.canPlace()
+                || !state.canPlaceAt(world, placePos)) {
+            return;
+        }
+
+        ShapeContext shapeContext = ShapeContext.ofPlacement(player);
+        if (world.canPlace(state, placePos, shapeContext)) {
+            return;
+        }
+
+        VoxelShape placementShape = state.getCollisionShape(world, placePos, shapeContext).offset(placePos);
+        if (placementShape.isEmpty()) {
+            return;
+        }
+
+        boolean hitsPlacingPlayer = VoxelShapes.matchesAnywhere(
+                placementShape,
+                VoxelShapes.cuboid(player.getBoundingBox()),
+                BooleanBiFunction.AND);
+        if (hitsPlacingPlayer && world.doesNotIntersectEntities(player, placementShape)) {
+            cir.setReturnValue(true);
+        }
+    }
+
     @ModifyArg(
             method = "useOnBlock",
             at = @At(
@@ -176,6 +246,7 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
         boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
+        boolean targetIsLoweredSlab = slabbed$isLoweredSlab(targetState, context.getWorld(), targetPos);
         boolean targetHasBlockEntity = targetState.getBlock() instanceof BlockEntityProvider;
         boolean targetIsCraftingTable = targetState.getBlock() instanceof CraftingTableBlock;
         double yOffset = SlabSupport.getYOffset(context.getWorld(), targetPos, targetState);
@@ -184,7 +255,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 && !targetIsCraftingTable
                 && yOffset == -0.5d;
 
-        if (!targetIsSolid) {
+        if (!targetIsSolid && !targetIsLoweredSlab) {
             slabbed$recordRemapAttempt(
                     context,
                     true,
