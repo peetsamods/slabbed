@@ -353,10 +353,13 @@ public final class SlabSupport {
      * FB, world Y span [pos.y, pos.y + 0.5]).
      * <br>DOUBLE → full-cube alignment with the lowered FB.
      */
-    private static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
-        if (!slabState.contains(SlabBlock.TYPE)) {
-            return false;
-        }
+    private static boolean isSameSlabType(BlockState a, BlockState b) {
+        return a.contains(SlabBlock.TYPE)
+                && b.contains(SlabBlock.TYPE)
+                && a.get(SlabBlock.TYPE) == b.get(SlabBlock.TYPE);
+    }
+
+    private static boolean hasLoweredSolidSideSupport(BlockView world, BlockPos slabPos) {
         for (Direction dir : Direction.Type.HORIZONTAL) {
             BlockPos neighborPos = slabPos.offset(dir);
             BlockState neighbor = world.getBlockState(neighborPos);
@@ -368,6 +371,27 @@ public final class SlabSupport {
             }
         }
         return false;
+    }
+
+    private static boolean hasSameSlabLoweredLaneNeighbor(BlockView world, BlockPos slabPos, BlockState slabState) {
+        for (Direction dir : Direction.Type.HORIZONTAL) {
+            BlockPos neighborPos = slabPos.offset(dir);
+            BlockState neighbor = world.getBlockState(neighborPos);
+            if (!(neighbor.getBlock() instanceof SlabBlock)) continue;
+            if (!isSameSlabType(slabState, neighbor)) continue;
+            if (hasLoweredSolidSideSupport(world, neighborPos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
+        if (!slabState.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        return hasLoweredSolidSideSupport(world, slabPos)
+                || hasSameSlabLoweredLaneNeighbor(world, slabPos, slabState);
     }
 
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
