@@ -2,6 +2,7 @@ package com.slabbed.mixin.client;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.debug.SlabbedInspect;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockEntityProvider;
@@ -71,7 +72,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         // candidate is on the ray, the anchored-FB rescue still fires even
         // with a slab in hand — preventing live-trace failures where the
         // initial target sits on a farther/underneath block.
-        BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
+        BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht, slabHeld);
         BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht);
         BlockHitResult chosen = slabbed$chooseRescue(tickProgress, anchoredHit, loweredSlabHit, slabHeld);
         BlockHitResult loweredChainHit = slabHeld ? null : slabbed$retargetLoweredChainTopSupport(tickProgress, ht);
@@ -396,7 +397,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
         return false;
     }
 
-    private BlockHitResult slabbed$retargetAnchoredLoweredFullBlock(float tickProgress, HitResult currentHit) {
+    private BlockHitResult slabbed$retargetAnchoredLoweredFullBlock(
+            float tickProgress, HitResult currentHit, boolean slabHeld
+    ) {
         ClientWorld world = client.world;
         Entity cam = client.getCameraEntity();
         if (world == null || cam == null) {
@@ -413,9 +416,11 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
         int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
 
+        BlockHitResult bestHit = null;
+        double bestDist2 = currentDist2;
         for (int i = 1; i <= steps; i++) {
             double t = reach * i / steps;
-            if (t * t > currentDist2 + 1.0e-6) {
+            if (t * t > bestDist2 + 1.0e-6) {
                 break;
             }
             Vec3d sample = eye.add(dir.multiply(t));
@@ -425,32 +430,36 @@ public abstract class GameRendererCrosshairRetargetMixin {
             BlockState candidateState = world.getBlockState(candidatePos);
             BlockHitResult hit = slabbed$raycastAnchoredLoweredFullBlock(world, cam, eye, end, candidatePos, candidateState);
             if (hit != null) {
-                return hit;
+                double dist2 = hit.getPos().squaredDistanceTo(eye);
+                if (dist2 <= bestDist2 + 1.0e-6) {
+                    bestHit = hit;
+                    bestDist2 = dist2;
+                }
             }
 
             candidatePos = samplePos.up();
             candidateState = world.getBlockState(candidatePos);
             hit = slabbed$raycastAnchoredLoweredFullBlock(world, cam, eye, end, candidatePos, candidateState);
             if (hit != null) {
-                // When samplePos is also an anchored lowered FB and the hit Y is
-                // inside samplePos's voxel but above its dy=-0.5 outline top
-                // (samplePos.Y + 0.5), the .up() probe fired because the ray is
-                // at the visual seam above samplePos.  Re-address to samplePos so
-                // placement intent resolves to the player-facing lower block, not
-                // the upper one found by the .up() shortcut.
+                // Slab placement keeps the existing seam rewrite. Empty-hand
+                // selection must keep the actual lowered outline owner.
                 BlockState sampleState = world.getBlockState(samplePos);
-                if (slabbed$isAnchoredLoweredFullBlock(world, samplePos, sampleState)) {
+                if (slabHeld && slabbed$isAnchoredLoweredFullBlock(world, samplePos, sampleState)) {
                     double hitY = hit.getPos().y;
                     double sampleOutlineTop = samplePos.getY() + 0.5;
                     if (hitY >= sampleOutlineTop && hitY < samplePos.getY() + 1.0) {
-                        return new BlockHitResult(hit.getPos(), hit.getSide(), samplePos, false);
+                        hit = new BlockHitResult(hit.getPos(), hit.getSide(), samplePos, false);
                     }
                 }
-                return hit;
+                double dist2 = hit.getPos().squaredDistanceTo(eye);
+                if (dist2 <= bestDist2 + 1.0e-6) {
+                    bestHit = hit;
+                    bestDist2 = dist2;
+                }
             }
         }
 
-        return null;
+        return bestHit;
     }
 
     private static BlockHitResult slabbed$raycastAnchoredLoweredFullBlock(
@@ -487,10 +496,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private void slabbed$traceTargeting(
             float tickProgress, HitResult initialTarget, String anchoredDecision, boolean sideSlabRetargetFired
     ) {
-        if (!Boolean.getBoolean("slabbed.target.trace")) {
-            return;
-        }
-
         ClientWorld world = client.world;
         Entity cam = client.getCameraEntity();
         if (world == null || cam == null || client.player == null) {
@@ -501,6 +506,23 @@ public abstract class GameRendererCrosshairRetargetMixin {
         Vec3d dir = cam.getRotationVec(tickProgress);
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
+        ItemStack held = client.player.getMainHandStack();
+        SlabbedInspect.logClientTarget(
+                world,
+                eye,
+                end,
+                client.player.getYaw(),
+                client.player.getPitch(),
+                held,
+                initialTarget,
+                client.crosshairTarget,
+                anchoredDecision,
+                sideSlabRetargetFired);
+
+        if (!Boolean.getBoolean("slabbed.target.trace")) {
+            return;
+        }
+
         double vanillaDist2 = Double.POSITIVE_INFINITY;
         if (initialTarget != null && initialTarget.getType() == HitResult.Type.BLOCK) {
             vanillaDist2 = initialTarget.getPos().squaredDistanceTo(eye);
@@ -512,7 +534,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
             return;
         }
 
-        ItemStack held = client.player.getMainHandStack();
         StringBuilder line = new StringBuilder(512);
         line.append("[slabbed.target.trace] heldItem=").append(held.getItem().getTranslationKey());
         line.append(" heldIsSlab=").append(slabbed$isSlabPlacementIntent());
