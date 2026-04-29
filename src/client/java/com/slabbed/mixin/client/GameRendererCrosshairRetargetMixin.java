@@ -432,6 +432,20 @@ public abstract class GameRendererCrosshairRetargetMixin {
             candidateState = world.getBlockState(candidatePos);
             hit = slabbed$raycastAnchoredLoweredFullBlock(world, cam, eye, end, candidatePos, candidateState);
             if (hit != null) {
+                // When samplePos is also an anchored lowered FB and the hit Y is
+                // inside samplePos's voxel but above its dy=-0.5 outline top
+                // (samplePos.Y + 0.5), the .up() probe fired because the ray is
+                // at the visual seam above samplePos.  Re-address to samplePos so
+                // placement intent resolves to the player-facing lower block, not
+                // the upper one found by the .up() shortcut.
+                BlockState sampleState = world.getBlockState(samplePos);
+                if (slabbed$isAnchoredLoweredFullBlock(world, samplePos, sampleState)) {
+                    double hitY = hit.getPos().y;
+                    double sampleOutlineTop = samplePos.getY() + 0.5;
+                    if (hitY >= sampleOutlineTop && hitY < samplePos.getY() + 1.0) {
+                        return new BlockHitResult(hit.getPos(), hit.getSide(), samplePos, false);
+                    }
+                }
                 return hit;
             }
         }
