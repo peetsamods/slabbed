@@ -14,7 +14,8 @@
       "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest",
       "com.slabbed.test.SlabbedLabSbMixedStackBreakClientGameTest",
       "com.slabbed.test.SlabbedLabB2UpperHalfGhostWindowClientGameTest",
-      "com.slabbed.test.SlabbedLabVerticalChainHitboxOwnershipClientGameTest"
+      "com.slabbed.test.SlabbedLabVerticalChainHitboxOwnershipClientGameTest",
+      "com.slabbed.test.SlabbedLabVanillaIllegalSlabToSlabPlacementClientGameTest"
     ]
   },
   "depends": {
