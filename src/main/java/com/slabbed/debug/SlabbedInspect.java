@@ -21,6 +21,13 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.World;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * Temporary live diagnostic for slab targeting, placement, dy, and ghost-window investigations.
  *
@@ -33,9 +40,11 @@ public final class SlabbedInspect {
 
     public static final boolean ENABLED = Boolean.getBoolean("slabbed.inspect")
             || Boolean.getBoolean("slabbed.b2.live.trace");
+    private static final AtomicBoolean SESSION_MARKED = new AtomicBoolean(false);
 
     private static String lastTargetKey = "";
     private static long lastTargetNanos = 0L;
+    private static final double LEGAL_TOP_NEGATIVE_DY = -0.5d;
 
     public static void logClientTarget(
             World world,
@@ -135,6 +144,37 @@ public final class SlabbedInspect {
                 result == null ? "pending" : result,
                 result == null ? "pending" : result.isAccepted());
         logNearby(world, "PLACE_" + stage, hitPos, placePos);
+    }
+
+    public static void logSessionStart() {
+        if (!ENABLED || !SESSION_MARKED.compareAndSet(false, true)) {
+            return;
+        }
+
+        Slabbed.LOGGER.info("[SLABBED-INSPECT][SESSION] startedAt={} gitHead={} inspect={}",
+                Instant.now(),
+                detectGitHead(),
+                Boolean.toString(ENABLED));
+    }
+
+    public static void logPlacementNoReturn(
+            World world,
+            Identifier itemId,
+            Direction face,
+            BlockPos hitPos,
+            BlockPos placePos
+    ) {
+        if (!ENABLED || world == null) return;
+        Slabbed.LOGGER.info("[SLABBED-INSPECT][PLACE_NO_RETURN] side={} item={} heldItem={} face={} hitPos={} "
+                        + "hitBlock={} placePos={} placeBlock={} reason=use_on_block_returned_without_place_return",
+                side(world),
+                itemId == null ? "unknown" : itemId,
+                itemId == null ? "unknown" : itemId,
+                face,
+                pos(hitPos),
+                block(world, hitPos),
+                pos(placePos),
+                block(world, placePos));
     }
 
     private static boolean shouldLogTarget(String targetKey) {
@@ -251,8 +291,8 @@ public final class SlabbedInspect {
             return "";
         }
         SlabType type = state.get(SlabBlock.TYPE);
-        if (type == SlabType.TOP && dy < 0.0d) {
-            return " warning=TOP_SLAB_WITH_NEGATIVE_DY";
+        if (type == SlabType.TOP && dy < 0.0d && Math.abs(dy - LEGAL_TOP_NEGATIVE_DY) > 1.0e-9) {
+            return " warning=TOP_SLAB_WITH_UNSUPPORTED_NEGATIVE_DY";
         }
         if (type == SlabType.BOTTOM && dy > 0.0d) {
             return " warning=BOTTOM_SLAB_WITH_POSITIVE_DY";
@@ -271,5 +311,21 @@ public final class SlabbedInspect {
         return vec == null
                 ? "none"
                 : String.format("%.4f,%.4f,%.4f", vec.x, vec.y, vec.z);
+    }
+
+    private static String detectGitHead() {
+        try {
+            Process proc = new ProcessBuilder("git", "rev-parse", "--short", "HEAD").start();
+            if (!proc.waitFor(250, TimeUnit.MILLISECONDS)) {
+                proc.destroy();
+                return "git-timeout";
+            }
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
+                String line = reader.readLine();
+                return line == null || line.isBlank() ? "git-unknown" : line.trim();
+            }
+        } catch (Throwable e) {
+            return "git-error";
+        }
     }
 }
