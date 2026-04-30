@@ -8,6 +8,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
@@ -44,10 +45,32 @@ public abstract class BlockItemPlacementIntentMixin {
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d;
     }
 
-    private static boolean slabbed$isSameSlabLane(BlockState candidate, BlockState target) {
+    private static boolean slabbed$isCompatibleLoweredSlabLane(BlockState candidate, BlockState target) {
         return candidate.contains(SlabBlock.TYPE)
                 && target.contains(SlabBlock.TYPE)
-                && candidate.get(SlabBlock.TYPE) == target.get(SlabBlock.TYPE);
+                && (candidate.get(SlabBlock.TYPE) == target.get(SlabBlock.TYPE)
+                || candidate.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                || target.get(SlabBlock.TYPE) == SlabType.DOUBLE);
+    }
+
+    private static SlabType slabbed$getExpectedLoweredSidePlacementType(BlockState targetState) {
+        if (!targetState.contains(SlabBlock.TYPE)) {
+            return SlabType.BOTTOM;
+        }
+        return targetState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                ? SlabType.BOTTOM
+                : SlabType.TOP;
+    }
+
+    private static SlabType slabbed$getLoweredDoubleHitIntentType(BlockPos targetPos, Vec3d hitPos) {
+        // Lowered DOUBLE occupies [y-0.5, y+0.5]. Its visual half split is at block y.
+        double loweredMidY = targetPos.getY();
+        boolean exactMid = Math.abs(hitPos.y - loweredMidY) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+        return (hitPos.y < loweredMidY || exactMid) ? SlabType.BOTTOM : SlabType.TOP;
+    }
+
+    private static double slabbed$placementYForType(BlockPos targetPos, SlabType expectedType) {
+        return targetPos.getY() + (expectedType == SlabType.BOTTOM ? 0.499d : 0.501d);
     }
 
     private static boolean slabbed$isLoweredSlabFacePlacement(ItemPlacementContext context, BlockState state) {
@@ -59,7 +82,7 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos targetPos = context.getBlockPos().offset(context.getSide().getOpposite());
         BlockState targetState = world.getBlockState(targetPos);
         return slabbed$isLoweredSlab(targetState, world, targetPos)
-                && slabbed$isSameSlabLane(state, targetState);
+                && slabbed$isCompatibleLoweredSlabLane(state, targetState);
     }
 
     private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
@@ -224,8 +247,18 @@ public abstract class BlockItemPlacementIntentMixin {
             }
         }
 
+        BlockPos targetPos = context.getBlockPos();
+        BlockState targetState = context.getWorld().getBlockState(targetPos);
+        boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
+        boolean targetIsLoweredSlab = slabbed$isLoweredSlab(targetState, context.getWorld(), targetPos);
+        boolean targetSupportsTopMerge = targetState.getBlock() instanceof SlabBlock
+                && targetState.get(SlabBlock.TYPE) == SlabType.TOP
+                && originalSide == Direction.UP;
+        if (targetSupportsTopMerge && !inferredUpFaceLoweredSide) {
+            effectiveSide = Direction.DOWN;
+        }
         boolean faceHorizontal = effectiveSide.getAxis().isHorizontal();
-        if (!faceHorizontal) {
+        if (!faceHorizontal && !targetSupportsTopMerge) {
             slabbed$recordRemapAttempt(
                     context,
                     true,
@@ -242,11 +275,6 @@ public abstract class BlockItemPlacementIntentMixin {
                     "none");
             return slabbed$inspectReturn(context, context, "face_not_horizontal");
         }
-
-        BlockPos targetPos = context.getBlockPos();
-        BlockState targetState = context.getWorld().getBlockState(targetPos);
-        boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
-        boolean targetIsLoweredSlab = slabbed$isLoweredSlab(targetState, context.getWorld(), targetPos);
         boolean targetHasBlockEntity = targetState.getBlock() instanceof BlockEntityProvider;
         boolean targetIsCraftingTable = targetState.getBlock() instanceof CraftingTableBlock;
         double yOffset = SlabSupport.getYOffset(context.getWorld(), targetPos, targetState);
@@ -337,27 +365,33 @@ public abstract class BlockItemPlacementIntentMixin {
             ordinaryLoweredFullBlockGuard = true;
         }
 
-        // Decide BOTTOM vs TOP from the *original* hit Y relative to the lowered
-        // FB visual half-split. Lowered FB visual spans world Y ∈
-        // [targetPos.y - 0.5, targetPos.y + 0.5], so targetPos.y is the half-line.
-        //   originalHitPos.y < targetPos.y  → lower visual half  → BS-FB-0.5S (BOTTOM)
-        //   originalHitPos.y > targetPos.y  → upper visual half  → BS-FB-1S  (TOP)
-        // A live ray that lands exactly on the lowered visual upper boundary
-        // (targetPos.y + 0.5) is still the player-facing 0.5S side-placement
-        // intent; keep that boundary in BOTTOM while preserving true upper-half
-        // hits such as targetPos.y + 0.25 as TOP.
-        // The remapped Y is then clamped just inside the matching half so that
-        // vanilla SlabBlock.getPlacementState's `hit.y - placePos.y <= 0.5`
-        // discriminator picks the desired SlabType. (placePos.y == targetPos.y
-        // because the side offset is horizontal.)
-        double loweredVisualUpperBoundary = targetPos.getY() + 0.5d;
-        boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
-                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-        boolean upperHalfIntent = originalHitPos.y >= targetPos.getY()
-                && !exactLoweredVisualBoundary;
-        double remappedY = upperHalfIntent
-                ? targetPos.getY() + 0.501d   // > 0.5 → vanilla → TOP
-                : targetPos.getY() + 0.499d;  // ≤ 0.5 → vanilla → BOTTOM
+        // Resolve legal state intent:
+        // - lowered slab target: lane semantics (TOP/BOTTOM/DOUBLE) are source of truth.
+        // - full block target: keep legacy geometric intent for 0.5S vs 1S law.
+        SlabType expectedType;
+        double remappedY;
+        if (targetState.getBlock() instanceof SlabBlock) {
+            if (originalSide == Direction.UP
+                    && targetState.get(SlabBlock.TYPE) == SlabType.TOP) {
+                expectedType = SlabType.DOUBLE;
+            } else if (targetState.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                    && effectiveSide.getAxis().isHorizontal()) {
+                expectedType = slabbed$getLoweredDoubleHitIntentType(targetPos, originalHitPos);
+            } else {
+                expectedType = slabbed$getExpectedLoweredSidePlacementType(targetState);
+            }
+            remappedY = slabbed$placementYForType(targetPos, expectedType);
+        } else {
+            double loweredVisualUpperBoundary = targetPos.getY() + 0.5d;
+            boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
+                    <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+            boolean upperHalfIntent = originalHitPos.y >= targetPos.getY() && !exactLoweredVisualBoundary;
+            expectedType = upperHalfIntent ? SlabType.TOP : SlabType.BOTTOM;
+            remappedY = slabbed$placementYForType(targetPos, expectedType);
+        }
+        if (originalSide == Direction.UP && expectedType == SlabType.BOTTOM) {
+            remappedY = targetPos.getY() + 0.501d;
+        }
         Vec3d remappedHitPos = new Vec3d(originalHitPos.x, remappedY, originalHitPos.z);
         slabbed$recordRemapAttempt(
                 context,

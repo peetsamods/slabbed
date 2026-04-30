@@ -295,7 +295,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         BlockState state = world.getBlockState(pos);
         if (!(state.getBlock() instanceof SlabBlock)
                 || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || (state.get(SlabBlock.TYPE) != SlabType.BOTTOM && state.get(SlabBlock.TYPE) != SlabType.DOUBLE)
                 || SlabSupport.getYOffset(world, pos, state) != -0.5) {
             return null;
         }
