@@ -9,6 +9,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemUsageContext;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.ActionResult;
@@ -28,6 +29,8 @@ public abstract class BlockItemPlaceTraceMixin {
 
     private static final ThreadLocal<TraceCtx> SLABBED$TRACE = new ThreadLocal<>();
     private static final ThreadLocal<TraceCtx> SLABBED$INSPECT_TRACE = new ThreadLocal<>();
+    private static final ThreadLocal<TraceCtx> SLABBED$INSPECT_USE_TRACE = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> SLABBED$INSPECT_PLACE_CALLED = new ThreadLocal<>();
 
     private static boolean slabbed$isTracedBlock(Block block) {
         return block instanceof SlabBlock || block instanceof CarpetBlock || block.getDefaultState().isOpaqueFullCube();
@@ -47,6 +50,7 @@ public abstract class BlockItemPlaceTraceMixin {
 
         if (SlabbedInspect.ENABLED) {
             SLABBED$INSPECT_TRACE.set(new TraceCtx(side, itemId, face, hitPos, placePos));
+            SLABBED$INSPECT_PLACE_CALLED.set(Boolean.TRUE);
             SlabbedInspect.logPlacement("HEAD", world, itemId, ctx, hitPos, placePos, null);
         }
 
@@ -128,6 +132,51 @@ public abstract class BlockItemPlaceTraceMixin {
                     ctx, cir.getReturnValue());
         } finally {
             SLABBED$TRACE.remove();
+        }
+    }
+
+    @Inject(method = "useOnBlock", at = @At("HEAD"))
+    private void slabbed$traceUseOnBlockHead(ItemUsageContext context, CallbackInfoReturnable<ActionResult> cir) {
+        if (!SlabbedInspect.ENABLED) {
+            return;
+        }
+
+        BlockItem self = (BlockItem) (Object) this;
+        if (!slabbed$isTracedBlock(self.getBlock())) {
+            return;
+        }
+        SLABBED$INSPECT_PLACE_CALLED.remove();
+        if (context == null || context.getWorld() == null) {
+            return;
+        }
+        BlockPos placePos = context.getBlockPos().offset(context.getSide());
+        SLABBED$INSPECT_USE_TRACE.set(new TraceCtx(
+                context.getWorld().isClient() ? "CLIENT" : "SERVER",
+                Registries.ITEM.getId(self),
+                context.getSide(),
+                context.getBlockPos(),
+                placePos
+        ));
+    }
+
+    @Inject(method = "useOnBlock", at = @At("RETURN"))
+    private void slabbed$traceUseOnBlockReturn(ItemUsageContext context, CallbackInfoReturnable<ActionResult> cir) {
+        if (!SlabbedInspect.ENABLED) {
+            return;
+        }
+
+        try {
+            TraceCtx trace = SLABBED$INSPECT_USE_TRACE.get();
+            if (trace != null
+                    && !Boolean.TRUE.equals(SLABBED$INSPECT_PLACE_CALLED.get())
+                    && trace.itemId() != null
+                    && context != null
+                    && context.getWorld() != null) {
+                SlabbedInspect.logPlacementNoReturn(context.getWorld(), trace.itemId(), trace.face(), trace.hitPos(), trace.placePos());
+            }
+        } finally {
+            SLABBED$INSPECT_USE_TRACE.remove();
+            SLABBED$INSPECT_PLACE_CALLED.remove();
         }
     }
 }
