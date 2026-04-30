@@ -40,6 +40,10 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.WorldView;
 
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Central helper for slab support semantics.
  */
@@ -353,10 +357,13 @@ public final class SlabSupport {
      * FB, world Y span [pos.y, pos.y + 0.5]).
      * <br>DOUBLE → full-cube alignment with the lowered FB.
      */
-    private static boolean isSameSlabType(BlockState a, BlockState b) {
-        return a.contains(SlabBlock.TYPE)
-                && b.contains(SlabBlock.TYPE)
-                && a.get(SlabBlock.TYPE) == b.get(SlabBlock.TYPE);
+    private static boolean isCompatibleLoweredSlabLane(BlockState a, BlockState b) {
+        if (!a.contains(SlabBlock.TYPE) || !b.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        SlabType aType = a.get(SlabBlock.TYPE);
+        SlabType bType = b.get(SlabBlock.TYPE);
+        return aType == bType || aType == SlabType.DOUBLE || bType == SlabType.DOUBLE;
     }
 
     private static boolean hasLoweredSolidSideSupport(BlockView world, BlockPos slabPos) {
@@ -373,14 +380,41 @@ public final class SlabSupport {
         return false;
     }
 
-    private static boolean hasSameSlabLoweredLaneNeighbor(BlockView world, BlockPos slabPos, BlockState slabState) {
-        for (Direction dir : Direction.Type.HORIZONTAL) {
-            BlockPos neighborPos = slabPos.offset(dir);
-            BlockState neighbor = world.getBlockState(neighborPos);
-            if (!(neighbor.getBlock() instanceof SlabBlock)) continue;
-            if (!isSameSlabType(slabState, neighbor)) continue;
-            if (hasLoweredSolidSideSupport(world, neighborPos)) {
+    private static boolean hasLoweredSlabLaneSupport(BlockView world, BlockPos slabPos, BlockState slabState) {
+        if (!(slabState.getBlock() instanceof SlabBlock) || !slabState.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        Set<BlockPos> visited = new HashSet<>();
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        visited.add(slabPos);
+        queue.add(slabPos);
+        int explored = 0;
+
+        while (!queue.isEmpty() && explored < MAX_CHAIN_DEPTH) {
+            BlockPos cursor = queue.removeFirst();
+            explored++;
+            if (hasLoweredSolidSideSupport(world, cursor)) {
                 return true;
+            }
+
+            BlockState cursorState = world.getBlockState(cursor);
+            if (!(cursorState.getBlock() instanceof SlabBlock) || !cursorState.contains(SlabBlock.TYPE)) {
+                continue;
+            }
+
+            for (Direction dir : Direction.Type.HORIZONTAL) {
+                BlockPos neighborPos = cursor.offset(dir);
+                if (!visited.add(neighborPos)) {
+                    continue;
+                }
+                BlockState neighborState = world.getBlockState(neighborPos);
+                if (!(neighborState.getBlock() instanceof SlabBlock)) {
+                    continue;
+                }
+                if (!isCompatibleLoweredSlabLane(cursorState, neighborState)) {
+                    continue;
+                }
+                queue.add(neighborPos);
             }
         }
         return false;
@@ -390,8 +424,7 @@ public final class SlabSupport {
         if (!slabState.contains(SlabBlock.TYPE)) {
             return false;
         }
-        return hasLoweredSolidSideSupport(world, slabPos)
-                || hasSameSlabLoweredLaneNeighbor(world, slabPos, slabState);
+        return hasLoweredSlabLaneSupport(world, slabPos, slabState);
     }
 
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
