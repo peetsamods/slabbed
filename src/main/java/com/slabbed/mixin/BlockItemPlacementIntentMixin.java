@@ -1,5 +1,6 @@
 package com.slabbed.mixin;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.debug.SlabbedInspect;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
@@ -418,5 +419,28 @@ public abstract class BlockItemPlacementIntentMixin {
         ItemUsageContext remappedContext = new ItemUsageContext(context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit) {
         };
         return slabbed$inspectReturn(context, remappedContext, "remapped");
+    }
+
+    @Inject(method = "place", at = @At("RETURN"))
+    private void slabbed$anchorLoweredFullBlockSidePlacement(
+            ItemPlacementContext context,
+            CallbackInfoReturnable<net.minecraft.util.ActionResult> cir
+    ) {
+        if (!cir.getReturnValue().isAccepted()
+                || ((BlockItem) (Object) this).getBlock() instanceof SlabBlock
+                || context.getSide().getAxis().isVertical()) {
+            return;
+        }
+
+        World world = context.getWorld();
+        BlockPos placePos = context.getBlockPos();
+        BlockState placedState = world.getBlockState(placePos);
+        if (!SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, placePos, placedState)) {
+            return;
+        }
+
+        BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
+        BlockState sourceState = world.getBlockState(sourcePos);
+        SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(world, placePos, placedState, sourcePos, sourceState);
     }
 }

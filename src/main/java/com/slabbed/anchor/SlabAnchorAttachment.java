@@ -122,6 +122,26 @@ public final class SlabAnchorAttachment {
         if (!qualifies) {
             return;
         }
+        addAnchorUnchecked(world, pos);
+    }
+
+    public static void addSideAdjacentLoweredFullAnchor(
+            World world,
+            BlockPos pos,
+            BlockState state,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (world == null) {
+            return;
+        }
+        if (!qualifiesForSideAdjacentLoweredFullAnchor(world, pos, state, sourcePos, sourceState)) {
+            return;
+        }
+        addAnchorUnchecked(world, pos);
+    }
+
+    private static void addAnchorUnchecked(World world, BlockPos pos) {
         WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             if (TRACE) {
@@ -232,6 +252,18 @@ public final class SlabAnchorAttachment {
      * remain excluded.
      */
     public static boolean qualifiesForAnchor(BlockView world, BlockPos pos, BlockState state) {
+        if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)) {
+            return false;
+        }
+        if (SlabSupport.hasBottomSlabBelow(world, pos)) {
+            return true;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        return qualifiesAsVerticalChainSupport(world, belowPos, below);
+    }
+
+    public static boolean isOrdinaryFullBlockAnchorCandidate(BlockView world, BlockPos pos, BlockState state) {
         if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
             return false;
         }
@@ -257,12 +289,7 @@ public final class SlabAnchorAttachment {
         if (!state.isSolidBlock(world, pos)) {
             return false;
         }
-        if (SlabSupport.hasBottomSlabBelow(world, pos)) {
-            return true;
-        }
-        BlockPos belowPos = pos.down();
-        BlockState below = world.getBlockState(belowPos);
-        return qualifiesAsVerticalChainSupport(world, belowPos, below);
+        return true;
     }
 
     public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {
@@ -270,20 +297,30 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesAsVerticalChainSupport(BlockView world, BlockPos pos, BlockState state) {
-        if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
-            return false;
-        }
-        var block = state.getBlock();
-        if (block instanceof SlabBlock
-                || block instanceof CarpetBlock
-                || block instanceof PaleMossCarpetBlock
-                || block instanceof BlockEntityProvider
-                || SlabSupport.isThinTopLayer(state)
-                || state.contains(Properties.BED_PART)
-                || state.contains(Properties.DOUBLE_BLOCK_HALF)
-                || !state.isSolidBlock(world, pos)) {
+        if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)) {
             return false;
         }
         return SlabSupport.getYOffset(world, pos, state) == -0.5;
+    }
+
+    private static boolean qualifiesForSideAdjacentLoweredFullAnchor(
+            BlockView world,
+            BlockPos pos,
+            BlockState state,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)
+                || !isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)) {
+            return false;
+        }
+        int dx = Math.abs(pos.getX() - sourcePos.getX());
+        int dy = Math.abs(pos.getY() - sourcePos.getY());
+        int dz = Math.abs(pos.getZ() - sourcePos.getZ());
+        if (dy != 0 || dx + dz != 1) {
+            return false;
+        }
+        return isAnchored(world, sourcePos)
+                && SlabSupport.getYOffset(world, sourcePos, sourceState) == -0.5;
     }
 }
