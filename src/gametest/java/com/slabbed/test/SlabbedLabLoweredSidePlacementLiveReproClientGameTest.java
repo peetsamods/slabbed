@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -27,6 +28,7 @@ import net.minecraft.util.math.Vec3d;
  * - target=DOUBLE + face=NORTH with preexisting TOP at placePos => expected place=DOUBLE / dy=-0.500 (merge stays in lowered lane)
  * - lowered DOUBLE lower-half click intent => owner remains lowered DOUBLE, first side placement is BOTTOM dy=-0.500, second click merges legally
  * - target=TOP + face=UP => expected place=DOUBLE / dy=-0.500 (vertical merge)
+ * - runVerticalBottomUnderLoweredDoubleStackSeamCase => expected normal BOTTOM at y=0 with lowered DOUBLE at y+1 and dy timeline over place/break action
  */
 public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest implements FabricClientGameTest {
 
@@ -79,6 +81,907 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 .setUseConsistentSettings(true)
                 .create()) {
             runLoweredTopUpMergeCase(ctx, singleplayer);
+        }
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runOrphanedLoweredLaneSupportRemovalCase(ctx, singleplayer);
+        }
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runMixedDoubleBottomTeardownLawCase(ctx, singleplayer);
+        }
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runVerticalBottomUnderLoweredDoubleStackSeamCase(ctx, singleplayer);
+        }
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runAdjacentLoweredFullJumpPreservationCase(ctx, singleplayer);
+        }
+
+        // Historical false-green / stale proof harness paths:
+        // - runSideBySideDependentAdjacentFullJumpLiveOrderCase
+        // - runSideBySideDependentAdjacentFullSlabChurnJumpCase
+        // - runDependentAdjacentLoweredFullJumpCase
+        // - runDependentAdjacentLoweredLivePlacementChurnCase
+    }
+
+    /**
+     * Legal state law for adjacent full-block stability:
+     * If a neighboring lowered full block remains supported by a legal direct or
+     * inherited path after an adjacent lowered FB is broken, its dy must remain
+     * exactly -0.5 for the observed post-break window.
+     *
+     * This case models two lowered FBs side-by-side, each with direct BS support,
+     * and verifies that breaking one does not immediately lift the other.
+     */
+    private static void runAdjacentLoweredFullJumpPreservationCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos leftSupportPos = SUPPORT_POS;
+        final BlockPos leftFullPos = FULL_POS;
+        final BlockPos rightSupportPos = SUPPORT_POS.offset(face);
+        final BlockPos rightFullPos = FULL_POS.offset(face);
+
+        setupFixture(singleplayer, leftSupportPos, leftFullPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    rightSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    rightFullPos,
+                    Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            BlockState leftFull = world.getBlockState(leftFullPos);
+            BlockState rightFull = world.getBlockState(rightFullPos);
+            SlabAnchorAttachment.addAnchor(world, leftFullPos, leftFull);
+            SlabAnchorAttachment.addAnchor(world, rightFullPos, rightFull);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing before adjacent FB jump case");
+            }
+            BlockState leftFull = mc.world.getBlockState(leftFullPos);
+            BlockState rightFull = mc.world.getBlockState(rightFullPos);
+            if (!leftFull.isOf(Blocks.STONE) || !rightFull.isOf(Blocks.STONE)) {
+                throw new RuntimeException("expected both adjacent FBs before break, found left=" + leftFull
+                        + " right=" + rightFull);
+            }
+            if (!SlabAnchorAttachment.isAnchored(mc.world, leftFullPos)
+                    || !SlabAnchorAttachment.isAnchored(mc.world, rightFullPos)) {
+                throw new RuntimeException("adjacent FB case expected both FBs anchored pre-break");
+            }
+
+            double leftDy = SlabSupport.getYOffset(mc.world, leftFullPos, leftFull);
+            double rightDy = SlabSupport.getYOffset(mc.world, rightFullPos, rightFull);
+            if (Math.abs(leftDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("left FB was not lowered before break: dy=" + leftDy);
+            }
+            if (Math.abs(rightDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("right FB was not lowered before break: dy=" + rightDy);
+            }
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(leftFullPos, false);
+        });
+
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int tick = i;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after break tick " + tick);
+                }
+                BlockState leftAfter = mc.world.getBlockState(leftFullPos);
+                if (tick == 3 && !leftAfter.isAir()) {
+                    throw new RuntimeException("left FB expected to be removed on tick " + tick
+                            + " but found " + leftAfter);
+                }
+
+                BlockState rightAfter = mc.world.getBlockState(rightFullPos);
+                if (!rightAfter.isOf(Blocks.STONE)) {
+                    throw new RuntimeException("right FB must remain stone on tick " + tick
+                            + " but found " + rightAfter);
+                }
+                double rightDy = SlabSupport.getYOffset(mc.world, rightFullPos, rightAfter);
+                if (Math.abs(rightDy + 0.5d) > EPSILON) {
+                    throw new RuntimeException("right FB lost legal lowered support on tick " + tick
+                            + " dy=" + rightDy);
+                }
+            });
+        }
+
+        // Diagnostic, not normative: if immediate jump appears, restoring a slab below
+        // the broken slot should not be treated as proof of the fix itself.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    leftSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing after slab replacement diagnostic");
+            }
+            BlockState rightAfter = mc.world.getBlockState(rightFullPos);
+            if (!rightAfter.isOf(Blocks.STONE)) {
+                throw new RuntimeException("right FB must remain stone during diagnostic step, found "
+                        + rightAfter);
+            }
+            if (!SlabAnchorAttachment.isAnchored(mc.world, rightFullPos)) {
+                throw new RuntimeException("right FB should remain anchored during diagnostic step");
+            }
+            double rightDy = SlabSupport.getYOffset(mc.world, rightFullPos, rightAfter);
+            if (Math.abs(rightDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("diagnostic replacement of left support did not keep right FB lowered");
+            }
+        });
+    }
+
+    /**
+     * Dependent-support adjacent full-block law:
+     * Source FB-A is directly anchored by BS.
+     * FB-B is lowered through an inherited side-slab path (TOP slab at x+1,y is lowered by FB-A),
+     * but FB-B has no direct bottom-slab support.
+     *
+     * If FB-B remains a stone block after FB-A break, it must not jump upward.
+     * If FB-B loses all legal support, explicit normalization/removal is allowed, but
+     * a visible upward jump to dy=0.0 on a surviving stone block is not.
+     */
+    private static void runDependentAdjacentLoweredFullJumpCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos sourceSupportPos = SUPPORT_POS;
+        final BlockPos sourceFullPos = FULL_POS;
+        final BlockPos inheritedSlabPos = sourceFullPos.offset(face);
+        final BlockPos survivorFullPos = inheritedSlabPos.up();
+
+        setupFixture(singleplayer, sourceSupportPos, sourceFullPos);
+        setLoweredSlabTarget(singleplayer, inheritedSlabPos, SlabType.TOP);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    survivorFullPos,
+                    Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            BlockState sourceState = world.getBlockState(sourceFullPos);
+            BlockState slabState = world.getBlockState(inheritedSlabPos);
+            BlockState survivorState = world.getBlockState(survivorFullPos);
+            SlabAnchorAttachment.addAnchor(world, sourceFullPos, sourceState);
+            SlabAnchorAttachment.addAnchor(world, survivorFullPos, survivorState);
+            if (!sourceState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("dependent-support setup expected source FB at "
+                        + sourceFullPos.toShortString() + ", found " + sourceState);
+            }
+            if (!survivorState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("dependent-support setup expected survivor FB at "
+                        + survivorFullPos.toShortString() + ", found " + survivorState);
+            }
+            if (!slabState.isOf(Blocks.STONE_SLAB) || !slabState.contains(SlabBlock.TYPE)
+                    || slabState.get(SlabBlock.TYPE) != SlabType.TOP) {
+                throw new RuntimeException("dependent-support setup expected inherited TOP support slab at "
+                        + inheritedSlabPos.toShortString() + ", found " + slabState);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing before dependent-support case");
+            }
+            BlockState sourceState = mc.world.getBlockState(sourceFullPos);
+            BlockState survivorState = mc.world.getBlockState(survivorFullPos);
+            BlockState supportBelowSurvivor = mc.world.getBlockState(survivorFullPos.down());
+            BlockState slabState = mc.world.getBlockState(inheritedSlabPos);
+            if (!sourceState.isOf(Blocks.STONE) || !survivorState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("dependent-support precheck expected two FBs, found source="
+                        + sourceState + " survivor=" + survivorState);
+            }
+            if (!slabState.isOf(Blocks.STONE_SLAB) || !slabState.contains(SlabBlock.TYPE)
+                    || slabState.get(SlabBlock.TYPE) != SlabType.TOP) {
+                throw new RuntimeException("dependent-support precheck expected TOP slab at inherited support pos, found "
+                        + slabState);
+            }
+            if (SlabAnchorAttachment.isAnchored(mc.world, sourceFullPos) == false) {
+                throw new RuntimeException("dependent-support precheck source FB must be anchored directly");
+            }
+            if (!SlabAnchorAttachment.isAnchored(mc.world, survivorFullPos)) {
+                throw new RuntimeException("dependent-support precheck survivor FB must be anchored through inherited support");
+            }
+            if (SlabSupport.hasBottomSlabBelow(mc.world, survivorFullPos)) {
+                throw new RuntimeException("dependent-support precheck survivor FB must not have direct bottom-slab support");
+            }
+            if (!supportBelowSurvivor.isOf(Blocks.STONE_SLAB)
+                    || !supportBelowSurvivor.contains(SlabBlock.TYPE)
+                    || supportBelowSurvivor.get(SlabBlock.TYPE) != SlabType.TOP) {
+                throw new RuntimeException("dependent-support precheck expected TOP support directly under survivor, found "
+                        + supportBelowSurvivor);
+            }
+
+            double sourceDy = SlabSupport.getYOffset(mc.world, sourceFullPos, sourceState);
+            double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorState);
+            if (Math.abs(sourceDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("dependent-support precheck source FB expected dy=-0.500, found " + sourceDy);
+            }
+            if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("dependent-support precheck survivor FB was not lowered, found " + survivorDy);
+            }
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(sourceFullPos, false);
+        });
+
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int tick = i;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after dependent source break tick " + tick);
+                }
+                BlockState sourceAfter = mc.world.getBlockState(sourceFullPos);
+                if (!sourceAfter.isAir()) {
+                    throw new RuntimeException("expected source FB removed on tick " + tick
+                            + ", found " + sourceAfter);
+                }
+                BlockState survivorAfter = mc.world.getBlockState(survivorFullPos);
+                if (survivorAfter.isOf(Blocks.STONE)) {
+                    double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorAfter);
+                    if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                        throw new RuntimeException("dependent-support case survivor FB should not jump upward while surviving at tick "
+                                + tick + ", dy=" + survivorDy);
+                    }
+                }
+            });
+        }
+
+        // Diagnostic only: replacing the inherited-support TOP slab should restore legal lowered outcome.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    inheritedSlabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing after dependent-support diagnostic replacement");
+            }
+            if (mc.world.getBlockState(survivorFullPos).isOf(Blocks.STONE)) {
+                double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos,
+                        mc.world.getBlockState(survivorFullPos));
+                if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                    throw new RuntimeException("dependent-support diagnostic replacement did not restore survivor dy=-0.500");
+                }
+            }
+        });
+    }
+
+    /**
+     * Side-by-side dependent-support adjacent full-block law with mixed lifecycle:
+     * FB-A is placed naturally on BS. A TOP lane slab remains under FB-B on the side
+     * column without direct BOTTOM support. FB-B is then naturally placed at the same Y
+     * level as FB-A.
+     * FB-B has no direct bottom slab beneath.
+     *
+     * If FB-B survives after FB-A break, it must not jump from dy=-0.5 to dy=0.0.
+     * If FB-B has no legal support after the break, explicit removal/normalization is
+     * accepted, but an unexplained upward jump on a surviving stone block is forbidden.
+     */
+    private static void runSideBySideDependentAdjacentFullJumpLiveOrderCase(
+        ClientGameTestContext ctx,
+        TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos sourceSupportPos = SUPPORT_POS;
+        // Live-law map:
+        //  - sourceCarrierPos at y=sourceSupportPos+1 is directly supported by BS.
+        //  - sourceFullPos at y=sourceSupportPos+2 inherits a legal lowered source path from the carrier.
+        //  - sideSlabPos is directly beneath survivor on the adjacent lane and is lowered through sourceCarrier.
+        //  - survivorFullPos is side-by-side to sourceFullPos at the same Y, with no direct bottom-slab support.
+        final BlockPos sourceCarrierPos = sourceSupportPos.up();
+        final BlockPos sourceFullPos = sourceCarrierPos.up();
+        final BlockPos sideSlabPos = sourceCarrierPos.offset(face);
+        final BlockPos survivorFullPos = sourceFullPos.offset(face);
+        final BlockHitResult placeSourceHit = resolveLoweredUpMergeHit(sourceCarrierPos);
+        final BlockHitResult placeSurvivorHit = resolveLoweredFaceHit(sourceFullPos, face, 0.5d);
+
+        setupFixture(singleplayer, sourceSupportPos, sourceCarrierPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(sourceFullPos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(sideSlabPos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(survivorFullPos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    sideSlabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE, 8));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        movePlayerForUp(ctx, singleplayer, sourceCarrierPos);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-order dependent source-place");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+            ActionResult sourcePlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSourceHit);
+            if (!sourcePlace.isAccepted()) {
+                throw new RuntimeException("live-order source placement click was not accepted: " + sourcePlace);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE, 8));
+        });
+        movePlayerForFace(ctx, singleplayer, sourceFullPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-order side neighbor full placement");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+            ActionResult survivorPlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSurvivorHit);
+            if (!survivorPlace.isAccepted()) {
+                throw new RuntimeException("live-order survivor full click was not accepted: " + survivorPlace);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing before live-order dependent side-by-side checks");
+            }
+            BlockState sourceState = mc.world.getBlockState(sourceFullPos);
+            BlockState slabState = mc.world.getBlockState(sideSlabPos);
+            BlockState survivorState = mc.world.getBlockState(survivorFullPos);
+            if (!sourceState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("live-order dependent precheck expected source FB, found " + sourceState);
+            }
+            if (!survivorState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("live-order dependent precheck expected side-by-side survivor FB, found "
+                        + survivorState);
+            }
+            if (!slabState.isOf(Blocks.STONE_SLAB) || !slabState.contains(SlabBlock.TYPE)) {
+                throw new RuntimeException("live-order dependent precheck expected lane slab at "
+                        + sideSlabPos.toShortString() + ", found " + slabState);
+            }
+            if (!SlabAnchorAttachment.isAnchored(mc.world, sourceFullPos)) {
+                throw new RuntimeException("live-order precheck expects source FB anchored on legal inherited path");
+            }
+            boolean survivorDirectBottomSupport = SlabSupport.hasBottomSlabBelow(mc.world, survivorFullPos);
+            boolean survivorInheritedOrAnchored = SlabAnchorAttachment.isAnchored(mc.world, survivorFullPos)
+                    || (!survivorDirectBottomSupport && SlabSupport.shouldOffset(mc.world, survivorFullPos, survivorState));
+            boolean sideSlabIsTop = slabState.isOf(Blocks.STONE_SLAB)
+                    && slabState.contains(SlabBlock.TYPE)
+                    && slabState.get(SlabBlock.TYPE) == SlabType.TOP;
+            if (!sideSlabIsTop) {
+                throw new RuntimeException("live-order precheck expected TOP lane slab (not BOTTOM) at "
+                        + sideSlabPos.toShortString() + ", found " + slabState);
+            }
+            if (survivorDirectBottomSupport) {
+                throw new RuntimeException("live-order survivor precheck expected no direct bottom-slab support");
+            }
+            double sourceDy = SlabSupport.getYOffset(mc.world, sourceFullPos, sourceState);
+            double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorState);
+            System.out.println("[LIVE-ORDER] precheck sourcePos=" + sourceFullPos.toShortString()
+                    + " survivorPos=" + survivorFullPos.toShortString()
+                    + " sideSlabPos=" + sideSlabPos.toShortString()
+                    + " sourceDy=" + sourceDy
+                    + " survivorDy=" + survivorDy
+                    + " directBottom=" + survivorDirectBottomSupport
+                    + " inheritedOrAnchored=" + survivorInheritedOrAnchored);
+            if (!survivorInheritedOrAnchored) {
+                throw new RuntimeException("live-order survivor precheck expected inherited/anchored support source truth: "
+                        + "direct=" + survivorDirectBottomSupport + " inherited=" + survivorInheritedOrAnchored);
+            }
+            if (Math.abs(sourceDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("live-order precheck source FB must be lowered, found dy=" + sourceDy);
+            }
+            if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("live-order precheck survivor FB must be lowered, found dy=" + survivorDy);
+            }
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(sourceFullPos, false);
+        });
+
+        for (int tick = 0; tick < 4; tick++) {
+            // Define tick 0 as the first observation point after the break event.
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int readTick = tick;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after live-order dependent break tick " + readTick);
+                }
+                BlockState sourceAfter = mc.world.getBlockState(sourceFullPos);
+                if (!sourceAfter.isAir()) {
+                    throw new RuntimeException("live-order case expected source FB removed by tick " + readTick
+                            + ", found " + sourceAfter);
+                }
+                BlockState survivorAfter = mc.world.getBlockState(survivorFullPos);
+                if (survivorAfter.isAir()) {
+                    return;
+                }
+                if (!survivorAfter.isOf(Blocks.STONE)) {
+                    throw new RuntimeException("live-order dependent case expected stone survivor on tick " + readTick
+                            + ", found " + survivorAfter);
+                }
+                double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorAfter);
+                System.out.println("[LIVE-ORDER] tick=" + readTick + " survivorDy=" + survivorDy
+                        + " sourceRemoved=" + sourceAfter.isAir()
+                        + " survivorState=" + survivorAfter);
+                if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                    throw new RuntimeException("live-order survivor FB jumped on tick " + readTick
+                            + " while still present, dy=" + survivorDy);
+                }
+            });
+        }
+
+        System.out.println("[LIVE-ORDER] side-by-side dependent jump chase complete for sourcePos="
+                + sourceFullPos.toShortString()
+                + " survivorPos=" + survivorFullPos.toShortString());
+
+        // Diagnostic only: re-place the lane slab and confirm whether that action restores
+        // the side-by-side FB dy. This does not define the intended fix.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(sideSlabPos, false);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    sideSlabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing during live-order slab replacement diagnostic");
+            }
+            BlockState survivorAfter = mc.world.getBlockState(survivorFullPos);
+            if (survivorAfter.isOf(Blocks.STONE)) {
+                double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorAfter);
+                if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                    throw new RuntimeException("live-order diagnostic replacement did not restore survivor dy=-0.5");
+                }
+            }
+        });
+    }
+
+    /**
+     * Side-by-side dependent-support law with explicit slab churn:
+     *
+     * 1) Build the same precondition as the live-order side-by-side case:
+     *    FB-A direct BS support; FB-B side-by-side at same Y with no direct BOTTOM support.
+     * 2) Break and replace the inherited-support TOP slab path around FB-B while FB-A is alive.
+     * 3) Break FB-A (the pointed block in Julia's report).
+     * 4) Re-place the slab path again and optionally churn it once more.
+     *
+     * For every phase, tick 0/1/2/3 are asserted:
+     * - if FB-B remains legal (direct OR inherited support), dy must stay -0.500.
+     * - if FB-B loses legal support, it must not be treated as a legal lowered survivor.
+     */
+    private static void runSideBySideDependentAdjacentFullSlabChurnJumpCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos sourceSupportPos = SUPPORT_POS;
+        final BlockPos sourceCarrierPos = sourceSupportPos.up();
+        final BlockPos sourceFullPos = sourceCarrierPos.up();
+        final BlockPos sideSlabPos = sourceCarrierPos.offset(face);
+        final BlockPos survivorFullPos = sourceFullPos.offset(face);
+
+        final BlockHitResult placeSourceHit = resolveLoweredUpMergeHit(sourceCarrierPos);
+        final BlockHitResult placeSideSlabHit = resolveLoweredSideFaceHit(sourceCarrierPos, face, SlabType.TOP);
+        final BlockHitResult placeSurvivorHit = resolveLoweredUpMergeHit(sideSlabPos);
+
+        setupFixture(singleplayer, sourceSupportPos, sourceCarrierPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    sourceFullPos,
+                    Blocks.AIR.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    sideSlabPos,
+                    Blocks.AIR.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    survivorFullPos,
+                    Blocks.AIR.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE, 8));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        movePlayerForUp(ctx, singleplayer, sourceCarrierPos);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-order churn source-place");
+            }
+            ActionResult sourcePlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSourceHit);
+            if (!sourcePlace.isAccepted()) {
+                throw new RuntimeException("live-order churn source click was not accepted: " + sourcePlace);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> {
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+        movePlayerForFace(ctx, singleplayer, sourceCarrierPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-order churn side slab place");
+            }
+            ActionResult slabPlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSideSlabHit);
+            if (!slabPlace.isAccepted()) {
+                throw new RuntimeException("live-order churn side slab click was not accepted: " + slabPlace);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> {
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE, 8));
+        });
+        movePlayerForUp(ctx, singleplayer, sideSlabPos);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-order churn survivor-place");
+            }
+            ActionResult survivorPlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSurvivorHit);
+            if (!survivorPlace.isAccepted()) {
+                throw new RuntimeException("live-order churn survivor click was not accepted: " + survivorPlace);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing before live-order churn precheck");
+            }
+            BlockState sourceState = mc.world.getBlockState(sourceFullPos);
+            BlockState slabState = mc.world.getBlockState(sideSlabPos);
+            BlockState survivorState = mc.world.getBlockState(survivorFullPos);
+            if (!sourceState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("live-order churn precheck expected source FB, found " + sourceState);
+            }
+            if (!survivorState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("live-order churn precheck expected side-by-side survivor FB, found "
+                        + survivorState);
+            }
+            if (!slabState.isOf(Blocks.STONE_SLAB) || !slabState.contains(SlabBlock.TYPE)) {
+                throw new RuntimeException("live-order churn precheck expected lane slab at "
+                        + sideSlabPos.toShortString() + ", found " + slabState);
+            }
+            if (slabState.get(SlabBlock.TYPE) != SlabType.TOP) {
+                throw new RuntimeException("live-order churn precheck expected TOP lane slab, found " + slabState);
+            }
+            boolean sourceAnchored = SlabAnchorAttachment.isAnchored(mc.world, sourceFullPos);
+            boolean survivorDirectBottomSupport = SlabSupport.hasBottomSlabBelow(mc.world, survivorFullPos);
+            boolean survivorInheritedOrAnchored = SlabAnchorAttachment.isAnchored(mc.world, survivorFullPos)
+                    || (!survivorDirectBottomSupport && SlabSupport.shouldOffset(mc.world, survivorFullPos, survivorState));
+            double sourceDy = SlabSupport.getYOffset(mc.world, sourceFullPos, sourceState);
+            double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorState);
+            if (!sourceAnchored) {
+                throw new RuntimeException("live-order churn precheck source FB expected anchored");
+            }
+            if (!survivorInheritedOrAnchored) {
+                throw new RuntimeException("live-order churn precheck expected survivor inherited/anchored support source truth: "
+                        + "direct=" + survivorDirectBottomSupport + " inherited=" + survivorInheritedOrAnchored);
+            }
+            if (survivorDirectBottomSupport) {
+                throw new RuntimeException("live-order churn precheck survivor expected no direct BOTTOM support");
+            }
+            if (Math.abs(sourceDy + 0.5d) > EPSILON || Math.abs(survivorDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("live-order churn precheck expected dy=-0.5 both before churn, sourceDy="
+                        + sourceDy + " survivorDy=" + survivorDy);
+            }
+            System.out.println("[LIVE-CHURN] precheck sourcePos=" + sourceFullPos.toShortString()
+                    + " sideSlabPos=" + sideSlabPos.toShortString()
+                    + " survivorPos=" + survivorFullPos.toShortString()
+                    + " sourceDy=" + sourceDy
+                    + " survivorDy=" + survivorDy
+                    + " directBottom=" + survivorDirectBottomSupport
+                    + " inheritedOrAnchored=" + survivorInheritedOrAnchored);
+        });
+
+        // Step 1: slab break while source FB still present (live-churn operation "block broke here").
+        singleplayer.getServer().runOnServer(server -> server.getOverworld().breakBlock(sideSlabPos, false));
+        assertSurvivorChurnSupportTimeline(ctx, singleplayer, "after side-slab break (source alive)",
+                sourceFullPos, survivorFullPos);
+
+        // Step 2: replace slab; Julia’s follow-up often restores legal state here.
+        singleplayer.getServer().runOnServer(server -> {
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+        movePlayerForFace(ctx, singleplayer, sourceCarrierPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-order churn slab replacement");
+            }
+            ActionResult rePlaceSlab = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSideSlabHit);
+            if (!rePlaceSlab.isAccepted()) {
+                throw new RuntimeException("live-order churn re-place slab click was not accepted: " + rePlaceSlab);
+            }
+        });
+        assertSurvivorChurnSupportTimeline(ctx, singleplayer, "after side-slab re-place (source alive)",
+                sourceFullPos, survivorFullPos);
+
+        // Step 3: break the pointed source FB.
+        singleplayer.getServer().runOnServer(server -> server.getOverworld().breakBlock(sourceFullPos, false));
+        assertSurvivorChurnSupportTimeline(ctx, singleplayer, "after source break",
+                sourceFullPos, survivorFullPos);
+
+        // Step 4: replace the slab again as a direct diagnostic replay.
+        movePlayerForFace(ctx, singleplayer, sourceCarrierPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-order churn post-source slab replace");
+            }
+            ActionResult finalRePlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSideSlabHit);
+            if (!finalRePlace.isAccepted()) {
+                throw new RuntimeException("live-order churn post-source slab re-place click was not accepted: "
+                        + finalRePlace);
+            }
+        });
+        assertSurvivorChurnSupportTimeline(ctx, singleplayer, "after source break + slab re-place",
+                sourceFullPos, survivorFullPos);
+
+        // Optional last churn: break/replace slab once more to capture repeated live churn behavior.
+        singleplayer.getServer().runOnServer(server -> server.getOverworld().breakBlock(sideSlabPos, false));
+        assertSurvivorChurnSupportTimeline(ctx, singleplayer, "after final side-slab re-break",
+                sourceFullPos, survivorFullPos);
+    }
+
+    /**
+     * Live-path dependent-support law with real placement and slab churn:
+     * Source FB-A is placed on bottom slab.
+     * Top slab at x+1,y is placed as part of a player action, then survivor FB-B is placed above it.
+     * While A still exists, B should not jump upward during slab break/replace churn if no direct support is removed from B itself.
+     * This test keeps break/replace on the inherited slab and checks dy at tick 0 and ticks 1/2/3.
+     */
+    private static void runDependentAdjacentLoweredLivePlacementChurnCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos sourceSupportPos = SUPPORT_POS;
+        final BlockPos sourceFullPos = FULL_POS;
+        final BlockPos inheritedSlabPos = sourceFullPos.offset(face);
+        final BlockPos survivorFullPos = inheritedSlabPos.up();
+        final BlockHitResult placeSourceHit = resolveLoweredUpMergeHit(sourceSupportPos);
+        final BlockHitResult placeSlabHit = resolveLoweredSideFaceHit(sourceFullPos, face, SlabType.TOP);
+        final BlockHitResult placeSurvivorHit = resolveLoweredUpMergeHit(inheritedSlabPos);
+
+        setupFixture(singleplayer, sourceSupportPos, sourceFullPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    sourceFullPos,
+                    Blocks.AIR.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    inheritedSlabPos,
+                    Blocks.AIR.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    survivorFullPos,
+                    Blocks.AIR.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE, 8));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        movePlayerForUp(ctx, singleplayer, sourceSupportPos);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-placement source full place");
+            }
+            ActionResult sourcePlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSourceHit);
+            if (!sourcePlace.isAccepted()) {
+                throw new RuntimeException("live-placement source full click was not accepted: " + sourcePlace);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    sourceFullPos,
+                    Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            // Explicitly force source anchor for the baseline path; this mirrors a placed FB on BS.
+            BlockState sourceState = world.getBlockState(sourceFullPos);
+            SlabAnchorAttachment.addAnchor(world, sourceFullPos, sourceState);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+        movePlayerForFace(ctx, singleplayer, sourceFullPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-placement inherited slab place");
+            }
+            ActionResult slabPlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSlabHit);
+            if (!slabPlace.isAccepted()) {
+                throw new RuntimeException("live-placement inherited slab click was not accepted: " + slabPlace);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE, 8));
+        });
+        movePlayerForUp(ctx, singleplayer, inheritedSlabPos);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live-placement survivor full place");
+            }
+            ActionResult survivorPlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSurvivorHit);
+            if (!survivorPlace.isAccepted()) {
+                throw new RuntimeException("live-placement survivor full click was not accepted: " + survivorPlace);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing before live-placement churn checks");
+            }
+            BlockState sourceState = mc.world.getBlockState(sourceFullPos);
+            BlockState slabState = mc.world.getBlockState(inheritedSlabPos);
+            BlockState survivorState = mc.world.getBlockState(survivorFullPos);
+            if (!sourceState.isOf(Blocks.STONE) || !survivorState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("live-placement churn case expected source/survivor stones, found source="
+                        + sourceState + " survivor=" + survivorState);
+            }
+            if (!slabState.isOf(Blocks.STONE_SLAB) || !slabState.contains(SlabBlock.TYPE)
+                    || slabState.get(SlabBlock.TYPE) != SlabType.TOP) {
+                throw new RuntimeException("live-placement churn case expected inherited TOP slab, found " + slabState);
+            }
+            double sourceDy = SlabSupport.getYOffset(mc.world, sourceFullPos, sourceState);
+            double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorState);
+            if (Math.abs(sourceDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("live-placement churn source FB expected dy=-0.500, found " + sourceDy);
+            }
+            if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("live-placement churn survivor FB expected pre-churn dy=-0.500, found " + survivorDy);
+            }
+        });
+
+        // Slab churn: break and immediately re-place the inherited slab path.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(inheritedSlabPos, false);
+        });
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int tick = i;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after live slab break tick " + tick);
+                }
+                BlockState survivorAfter = mc.world.getBlockState(survivorFullPos);
+                if (survivorAfter.isOf(Blocks.STONE)) {
+                    double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorAfter);
+                    if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                        throw new RuntimeException("live-placement case survivor jumped after inherited slab break on tick "
+                                + tick + ", dy=" + survivorDy);
+                    }
+                }
+            });
+        }
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+        movePlayerForFace(ctx, singleplayer, sourceFullPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for live slab re-place");
+            }
+            ActionResult rePlaceSlab = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSlabHit);
+            if (!rePlaceSlab.isAccepted()) {
+                throw new RuntimeException("live-placement churn case re-place slab click was not accepted: " + rePlaceSlab);
+            }
+        });
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int tick = i;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after live slab re-place tick " + tick);
+                }
+                BlockState survivorAfter = mc.world.getBlockState(survivorFullPos);
+                if (survivorAfter.isOf(Blocks.STONE)) {
+                    double survivorDy = SlabSupport.getYOffset(mc.world, survivorFullPos, survivorAfter);
+                    if (Math.abs(survivorDy + 0.5d) > EPSILON) {
+                        throw new RuntimeException("live-placement case survivor jumped around slab re-place on tick "
+                                + tick + ", dy=" + survivorDy);
+                    }
+                }
+            });
         }
     }
 
@@ -175,6 +1078,439 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("UP target=TOP expected merged DOUBLE dy=-0.500, found " + placedDy);
             }
         });
+    }
+
+    /**
+     * Legal state law for orphaned lowered side-lane slabs:
+     * BSFB > TS > TS is allowed while BS/FB support exists; once both original BS and
+     * original FB are removed, the remaining lane must not silently stay lowered.
+     * With no valid lowered support relation left, remaining TS slabs normalize to dy=0.
+     */
+    private static void runOrphanedLoweredLaneSupportRemovalCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos laneRootPos = FULL_POS.offset(face);
+        final BlockPos laneTailPos = laneRootPos.offset(face);
+        final BlockHitResult extendHit = resolveLoweredSideFaceHit(laneRootPos, face, SlabType.TOP);
+
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            SlabAnchorAttachment.addAnchor(world, FULL_POS, world.getBlockState(FULL_POS));
+        });
+        setLoweredSlabTarget(singleplayer, laneRootPos, SlabType.TOP);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        movePlayerForFace(ctx, singleplayer, laneRootPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for orphaned-lane setup");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, extendHit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("orphaned-lane setup extension click was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing after orphaned-lane setup");
+            }
+            BlockState laneRoot = mc.world.getBlockState(laneRootPos);
+            BlockState laneTail = mc.world.getBlockState(laneTailPos);
+            assertTopLowered(laneRootPos, laneRoot, mc.world, "orphan-setup laneRoot");
+            assertTopLowered(laneTailPos, laneTail, mc.world, "orphan-setup laneTail");
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(SUPPORT_POS, false);
+        });
+        for (int i = 0; i < 3; i++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int tick = i;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after BS break tick " + tick);
+                }
+                BlockState fullAfterBsBreak = mc.world.getBlockState(FULL_POS);
+                if (!fullAfterBsBreak.isOf(Blocks.STONE)) {
+                    throw new RuntimeException("expected FB to remain after BS break at tick " + tick
+                            + ", found " + fullAfterBsBreak);
+                }
+                if (!SlabAnchorAttachment.isAnchored(mc.world, FULL_POS)) {
+                    throw new RuntimeException("expected FB anchor to persist after BS break at tick " + tick);
+                }
+                assertLaneDy(mc.world, laneRootPos, laneTailPos, -0.5d,
+                        "post-BS-break tick " + tick);
+            });
+        }
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(FULL_POS, false);
+        });
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int tick = i;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after FB break tick " + tick);
+                }
+                BlockState support = mc.world.getBlockState(SUPPORT_POS);
+                BlockState full = mc.world.getBlockState(FULL_POS);
+                if (!support.isAir() || !full.isAir()) {
+                    throw new RuntimeException("expected original BS and FB to be removed at tick " + tick
+                            + "; support=" + support + " full=" + full);
+                }
+                if (SlabAnchorAttachment.isAnchored(mc.world, FULL_POS)) {
+                    throw new RuntimeException("anchor persisted after FB removal at tick " + tick
+                            + " pos=" + FULL_POS.toShortString());
+                }
+                assertLaneDy(mc.world, laneRootPos, laneTailPos, 0.0d,
+                        "post-FB-break tick " + tick);
+            });
+        }
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing after orphaned-lane support removal");
+            }
+
+            BlockState support = mc.world.getBlockState(SUPPORT_POS);
+            BlockState full = mc.world.getBlockState(FULL_POS);
+            if (!support.isAir() || !full.isAir()) {
+                throw new RuntimeException("expected original BS and FB to be removed; support="
+                        + support + " full=" + full);
+            }
+            if (SlabAnchorAttachment.isAnchored(mc.world, FULL_POS)) {
+                throw new RuntimeException("anchor persisted after original FB removal at "
+                        + FULL_POS.toShortString());
+            }
+
+            BlockState laneRoot = mc.world.getBlockState(laneRootPos);
+            BlockState laneTail = mc.world.getBlockState(laneTailPos);
+            if (!laneRoot.isOf(Blocks.STONE_SLAB)
+                    || !laneRoot.contains(SlabBlock.TYPE)
+                    || laneRoot.get(SlabBlock.TYPE) != SlabType.TOP) {
+                throw new RuntimeException("laneRoot state changed unexpectedly after support removal: " + laneRoot);
+            }
+            if (!laneTail.isOf(Blocks.STONE_SLAB)
+                    || !laneTail.contains(SlabBlock.TYPE)
+                    || laneTail.get(SlabBlock.TYPE) != SlabType.TOP) {
+                throw new RuntimeException("laneTail state changed unexpectedly after support removal: " + laneTail);
+            }
+            assertLaneDy(mc.world, laneRootPos, laneTailPos, 0.0d,
+                    "post-FB-break final");
+        });
+    }
+
+    /**
+     * Legal state law for mixed-state clue (lowered DOUBLE beside normal BOTTOM):
+     * A) after original FB removal, remaining lane slabs may normalize uniformly to dy=0;
+     * B) remaining lane slabs may stay uniformly lowered only with a valid lowered support chain;
+     * C) unsupported/mixed pieces may be removed by explicit invalidation.
+     *
+     * Forbidden outcomes:
+     * - adjacent lowered DOUBLE dy=-0.5 with normal BOTTOM dy=0 in the same remaining lane;
+     * - hidden ghost state or unstable one-tick jump/correction after BS/FB teardown.
+     */
+    private static void runMixedDoubleBottomTeardownLawCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos laneDoublePos = FULL_POS.offset(face);
+        final BlockPos laneBottomPos = laneDoublePos.offset(face);
+        final BlockHitResult lowerHalfSideHit = resolveLoweredFaceHit(laneDoublePos, face, -0.25d);
+
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            SlabAnchorAttachment.addAnchor(world, FULL_POS, world.getBlockState(FULL_POS));
+        });
+        setLoweredSlabTarget(singleplayer, laneDoublePos, SlabType.DOUBLE);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        movePlayerForFace(ctx, singleplayer, laneDoublePos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for mixed DOUBLE/BOTTOM setup");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, lowerHalfSideHit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("mixed DOUBLE/BOTTOM setup click was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing after mixed DOUBLE/BOTTOM setup");
+            }
+            BlockState laneDouble = mc.world.getBlockState(laneDoublePos);
+            BlockState laneBottom = mc.world.getBlockState(laneBottomPos);
+            if (!laneDouble.isOf(Blocks.STONE_SLAB)
+                    || !laneDouble.contains(SlabBlock.TYPE)
+                    || laneDouble.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                throw new RuntimeException("mixed setup expected lowered DOUBLE at "
+                        + laneDoublePos.toShortString() + ", found " + laneDouble);
+            }
+            if (!laneBottom.isOf(Blocks.STONE_SLAB)
+                    || !laneBottom.contains(SlabBlock.TYPE)
+                    || laneBottom.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException("mixed setup expected BOTTOM at "
+                        + laneBottomPos.toShortString() + ", found " + laneBottom);
+            }
+            double doubleDy = SlabSupport.getYOffset(mc.world, laneDoublePos, laneDouble);
+            if (Math.abs(doubleDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("mixed setup expected lowered DOUBLE dy=-0.500, found "
+                        + doubleDy + " state=" + laneDouble);
+            }
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(SUPPORT_POS, false);
+        });
+        for (int i = 0; i < 3; i++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int tick = i;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing in mixed case after BS break tick " + tick);
+                }
+                BlockState fullAfterBsBreak = mc.world.getBlockState(FULL_POS);
+                if (!fullAfterBsBreak.isOf(Blocks.STONE) || !SlabAnchorAttachment.isAnchored(mc.world, FULL_POS)) {
+                    throw new RuntimeException("mixed case expected anchored FB after BS break at tick " + tick
+                            + ", full=" + fullAfterBsBreak
+                            + " anchored=" + SlabAnchorAttachment.isAnchored(mc.world, FULL_POS));
+                }
+                assertForbiddenMixedDoubleBottomStateAbsent(mc.world, laneDoublePos, laneBottomPos,
+                        "mixed-case post-BS-break tick " + tick);
+            });
+        }
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(FULL_POS, false);
+        });
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int tick = i;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing in mixed case after FB break tick " + tick);
+                }
+                BlockState support = mc.world.getBlockState(SUPPORT_POS);
+                BlockState full = mc.world.getBlockState(FULL_POS);
+                if (!support.isAir() || !full.isAir()) {
+                    throw new RuntimeException("mixed case expected original BS/FB removed at tick " + tick
+                            + ", support=" + support + " full=" + full);
+                }
+                assertForbiddenMixedDoubleBottomStateAbsent(mc.world, laneDoublePos, laneBottomPos,
+                        "mixed-case post-FB-break tick " + tick);
+                assertNoLoweredRemainderWithoutSupport(mc.world, laneDoublePos, laneBottomPos,
+                        "mixed-case post-FB-break tick " + tick);
+            });
+        }
+    }
+
+    /**
+     * Legal state law for vertical mixed-seam seam:
+     * A) normal BOTTOM (dy=0.000) directly below lowered DOUBLE (dy=-0.500) is legal only if the live
+     *    placement and client model path agree on both blocks' ownership and there is no ghost seam.
+     *
+     * This case replays the live clue map directly:
+     *  - bottomPos -> STONE_SLAB[type=bottom] at dy=0.000
+     *  - bottomPos.up() -> STONE_SLAB[type=double] at dy=-0.500
+     */
+    private static void runVerticalBottomUnderLoweredDoubleStackSeamCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos bottomPos = SUPPORT_POS;
+        final BlockPos loweredDoublePos = FULL_POS;
+        final BlockPos seamSupportPos = loweredDoublePos.east();
+        final BlockPos[] aimedTargetPos = new BlockPos[1];
+        final Direction[] aimedTargetSide = new Direction[1];
+
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    bottomPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+
+            world.setBlockState(
+                    seamSupportPos,
+                    Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    seamSupportPos.down(),
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, seamSupportPos, world.getBlockState(seamSupportPos));
+
+            BlockState bottomState = world.getBlockState(bottomPos);
+            world.setBlockState(
+                    loweredDoublePos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            BlockState loweredDoubleState = world.getBlockState(loweredDoublePos);
+            if (!bottomState.isOf(Blocks.STONE_SLAB)
+                    || !bottomState.contains(SlabBlock.TYPE)
+                    || bottomState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException("vertical seam setup expected BOTTOM at "
+                        + bottomPos.toShortString()
+                        + ", found " + bottomState);
+            }
+            if (!loweredDoubleState.isOf(Blocks.STONE_SLAB)
+                    || !loweredDoubleState.contains(SlabBlock.TYPE)
+                    || loweredDoubleState.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                throw new RuntimeException("vertical seam setup expected DOUBLE at "
+                        + loweredDoublePos.toShortString()
+                        + ", found " + loweredDoubleState);
+            }
+
+            double bottomDy = SlabSupport.getYOffset(world, bottomPos, bottomState);
+            double loweredDoubleDy = SlabSupport.getYOffset(world, loweredDoublePos, loweredDoubleState);
+            if (Math.abs(bottomDy) > EPSILON) {
+                throw new RuntimeException("vertical seam setup expected bottom dy=0.000 at "
+                        + bottomPos.toShortString()
+                        + ", found " + bottomDy);
+            }
+            if (Math.abs(loweredDoubleDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("vertical seam setup expected lowered DOUBLE dy=-0.500 at "
+                        + loweredDoublePos.toShortString()
+                        + ", found " + loweredDoubleDy);
+            }
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                return;
+            }
+            server.getPlayerManager()
+                    .getPlayerList()
+                    .get(0)
+                    .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(bottomPos.getX() + 0.5d, bottomPos.getY() + 3.9d, bottomPos.getZ() + 0.5d),
+                new Vec3d(bottomPos.getX() + 0.5d, bottomPos.getY() + 0.5d, bottomPos.getZ() + 0.5d));
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("client world missing before vertical seam setup check");
+            }
+            BlockState seamBottom = mc.world.getBlockState(bottomPos);
+            BlockState seamDouble = mc.world.getBlockState(loweredDoublePos);
+            double bottomDy = SlabSupport.getYOffset(mc.world, bottomPos, seamBottom);
+            double loweredDoubleDy = SlabSupport.getYOffset(mc.world, loweredDoublePos, seamDouble);
+
+            System.out.println("[VERTICAL-SEAM] baseline tick=0"
+                    + " bottom=" + seamBottom + " dy=" + bottomDy
+                    + " lower=" + seamDouble + " dy=" + loweredDoubleDy);
+
+            if (!seamBottom.isOf(Blocks.STONE_SLAB)
+                    || !seamBottom.contains(SlabBlock.TYPE)
+                    || seamBottom.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException("vertical seam baseline lost BOTTOM at "
+                        + bottomPos.toShortString()
+                        + ", found " + seamBottom);
+            }
+            if (!seamDouble.isOf(Blocks.STONE_SLAB)
+                    || !seamDouble.contains(SlabBlock.TYPE)
+                    || seamDouble.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                throw new RuntimeException("vertical seam baseline lost DOUBLE at "
+                        + loweredDoublePos.toShortString()
+                        + ", found " + seamDouble);
+            }
+
+            if (mc.gameRenderer == null) {
+                throw new RuntimeException("vertical seam baseline expected game renderer for crosshair ownership check");
+            }
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            if (!(mc.crosshairTarget instanceof BlockHitResult baselineHit)) {
+                throw new RuntimeException("vertical seam baseline expected crosshair target while aligned to seam");
+            }
+            if (!baselineHit.getBlockPos().equals(bottomPos)
+                    && !baselineHit.getBlockPos().equals(loweredDoublePos)) {
+                throw new RuntimeException("vertical seam baseline crosshair ownership drift at "
+                        + baselineHit.getBlockPos()
+                        + ", expected " + bottomPos + " or " + loweredDoublePos);
+            }
+            aimedTargetPos[0] = bottomPos;
+            aimedTargetSide[0] = Direction.UP;
+            System.out.println("[VERTICAL-SEAM] baseline crosshair target="
+                    + baselineHit.getBlockPos()
+                    + " side=" + baselineHit.getSide());
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for vertical seam placement/break action");
+            }
+            if (aimedTargetPos[0] == null || aimedTargetSide[0] == null) {
+                throw new RuntimeException("vertical seam action missing baseline target");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            mc.interactionManager.attackBlock(aimedTargetPos[0], aimedTargetSide[0]);
+        });
+
+        for (int tick = 0; tick < 4; tick++) {
+            if (tick > 0) {
+                ctx.waitTick();
+                singleplayer.getClientWorld().waitForChunksRender();
+            }
+            final int readTick = tick;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after vertical seam action tick " + readTick);
+                }
+
+                BlockState bottomAfter = mc.world.getBlockState(bottomPos);
+                BlockState doubleAfter = mc.world.getBlockState(loweredDoublePos);
+                double bottomAfterDy = bottomAfter.isOf(Blocks.STONE_SLAB) && bottomAfter.contains(SlabBlock.TYPE)
+                        ? SlabSupport.getYOffset(mc.world, bottomPos, bottomAfter)
+                        : Double.NaN;
+                double doubleAfterDy = doubleAfter.isOf(Blocks.STONE_SLAB) && doubleAfter.contains(SlabBlock.TYPE)
+                        ? SlabSupport.getYOffset(mc.world, loweredDoublePos, doubleAfter)
+                        : Double.NaN;
+                System.out.println("[VERTICAL-SEAM] tick=" + readTick
+                        + " seam-bottom=" + bottomAfter + " dy=" + bottomAfterDy
+                        + " seam-double=" + doubleAfter + " dy=" + doubleAfterDy);
+                if (readTick > 0 && !bottomAfter.isAir()) {
+                    throw new RuntimeException("vertical seam operation expected bottom target to clear on tick "
+                            + readTick + ", found " + bottomAfter);
+                }
+                if (readTick > 0) {
+                    assertForbiddenMixedDoubleBottomStateAbsent(
+                            mc.world,
+                            loweredDoublePos,
+                            bottomPos,
+                            "vertical seam post-op tick " + readTick);
+                }
+            });
+        }
     }
 
     private static void runLoweredDoubleSideMergeCase(
@@ -420,6 +1756,101 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
     }
 
+    private static void assertTopLowered(
+            BlockPos pos,
+            BlockState state,
+            net.minecraft.world.BlockView world,
+            String label
+    ) {
+        if (!state.isOf(Blocks.STONE_SLAB)
+                || !state.contains(SlabBlock.TYPE)
+                || state.get(SlabBlock.TYPE) != SlabType.TOP) {
+            throw new RuntimeException(label + " expected TOP slab at "
+                    + pos.toShortString() + ", found " + state);
+        }
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (Math.abs(dy + 0.5d) > EPSILON) {
+            throw new RuntimeException(label + " expected lowered dy=-0.500 at "
+                    + pos.toShortString() + ", found dy=" + dy + " state=" + state);
+        }
+    }
+
+    private static void assertLaneDy(
+            net.minecraft.world.BlockView world,
+            BlockPos laneRootPos,
+            BlockPos laneTailPos,
+            double expectedDy,
+            String label
+    ) {
+        BlockState laneRoot = world.getBlockState(laneRootPos);
+        BlockState laneTail = world.getBlockState(laneTailPos);
+        if (!laneRoot.isOf(Blocks.STONE_SLAB) || !laneRoot.contains(SlabBlock.TYPE)) {
+            throw new RuntimeException(label + " laneRoot must remain slab, found " + laneRoot);
+        }
+        if (!laneTail.isOf(Blocks.STONE_SLAB) || !laneTail.contains(SlabBlock.TYPE)) {
+            throw new RuntimeException(label + " laneTail must remain slab, found " + laneTail);
+        }
+        double rootDy = SlabSupport.getYOffset(world, laneRootPos, laneRoot);
+        double tailDy = SlabSupport.getYOffset(world, laneTailPos, laneTail);
+        if (Math.abs(rootDy - expectedDy) > EPSILON || Math.abs(tailDy - expectedDy) > EPSILON) {
+            throw new RuntimeException(label + " expected both lane dy values to be " + expectedDy
+                    + " but rootDy=" + rootDy + " tailDy=" + tailDy
+                    + " rootState=" + laneRoot + " tailState=" + laneTail);
+        }
+    }
+
+    private static void assertForbiddenMixedDoubleBottomStateAbsent(
+            net.minecraft.world.BlockView world,
+            BlockPos laneDoublePos,
+            BlockPos laneBottomPos,
+            String label
+    ) {
+        BlockState laneDouble = world.getBlockState(laneDoublePos);
+        BlockState laneBottom = world.getBlockState(laneBottomPos);
+        if (!laneDouble.isOf(Blocks.STONE_SLAB)
+                || !laneDouble.contains(SlabBlock.TYPE)
+                || laneDouble.get(SlabBlock.TYPE) != SlabType.DOUBLE
+                || !laneBottom.isOf(Blocks.STONE_SLAB)
+                || !laneBottom.contains(SlabBlock.TYPE)
+                || laneBottom.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+            return;
+        }
+        double doubleDy = SlabSupport.getYOffset(world, laneDoublePos, laneDouble);
+        double bottomDy = SlabSupport.getYOffset(world, laneBottomPos, laneBottom);
+        if (Math.abs(doubleDy + 0.5d) <= EPSILON && Math.abs(bottomDy) <= EPSILON) {
+            throw new RuntimeException(label + " found forbidden mixed state: lowered DOUBLE dy=-0.500 adjacent to "
+                    + "normal BOTTOM dy=0 at double=" + laneDoublePos.toShortString()
+                    + " bottom=" + laneBottomPos.toShortString()
+                    + " states=(" + laneDouble + ", " + laneBottom + ")");
+        }
+    }
+
+    private static void assertNoLoweredRemainderWithoutSupport(
+            net.minecraft.world.BlockView world,
+            BlockPos laneDoublePos,
+            BlockPos laneBottomPos,
+            String label
+    ) {
+        BlockState laneDouble = world.getBlockState(laneDoublePos);
+        BlockState laneBottom = world.getBlockState(laneBottomPos);
+        if (laneDouble.isOf(Blocks.STONE_SLAB) && laneDouble.contains(SlabBlock.TYPE)) {
+            double doubleDy = SlabSupport.getYOffset(world, laneDoublePos, laneDouble);
+            if (doubleDy < 0.0d) {
+                throw new RuntimeException(label + " unsupported lowered remainder at DOUBLE slot "
+                        + laneDoublePos.toShortString()
+                        + " dy=" + doubleDy + " state=" + laneDouble);
+            }
+        }
+        if (laneBottom.isOf(Blocks.STONE_SLAB) && laneBottom.contains(SlabBlock.TYPE)) {
+            double bottomDy = SlabSupport.getYOffset(world, laneBottomPos, laneBottom);
+            if (bottomDy < 0.0d) {
+                throw new RuntimeException(label + " unsupported lowered remainder at BOTTOM slot "
+                        + laneBottomPos.toShortString()
+                        + " dy=" + bottomDy + " state=" + laneBottom);
+            }
+        }
+    }
+
     private static BlockHitResult resolveLoweredSideFaceHit(BlockPos targetPos, Direction face, SlabType targetType) {
         double yOffset = targetType == SlabType.BOTTOM ? -0.25d : 0.25d;
         return resolveLoweredFaceHit(targetPos, face, yOffset);
@@ -462,6 +1893,59 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     false);
             default -> throw new IllegalArgumentException("unsupported face for repro: " + face);
         };
+    }
+
+    private static void assertSurvivorChurnSupportTimeline(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String operationLabel,
+            BlockPos sourceFullPos,
+            BlockPos survivorFullPos
+    ) {
+        for (int tick = 0; tick < 4; tick++) {
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            final int readTick = tick;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing during support timeline " + operationLabel
+                            + " tick " + readTick);
+                }
+
+                BlockState sourceAfter = mc.world.getBlockState(sourceFullPos);
+                BlockState survivorAfter = mc.world.getBlockState(survivorFullPos);
+                if (!survivorAfter.isAir() && !survivorAfter.isOf(Blocks.STONE)) {
+                    throw new RuntimeException(operationLabel + " tick " + readTick
+                            + " expected air or stone at survivor, found " + survivorAfter);
+                }
+
+                boolean survivorDirectBottomSupport = SlabSupport.hasBottomSlabBelow(mc.world, survivorFullPos);
+                boolean survivorInheritedOrAnchored = SlabAnchorAttachment.isAnchored(mc.world, survivorFullPos)
+                        || (!survivorDirectBottomSupport && survivorAfter.isOf(Blocks.STONE)
+                        && SlabSupport.shouldOffset(mc.world, survivorFullPos, survivorAfter));
+                double survivorDy = survivorAfter.isOf(Blocks.STONE)
+                        ? SlabSupport.getYOffset(mc.world, survivorFullPos, survivorAfter)
+                        : Double.NaN;
+                System.out.println("[SIDE-CHURN] " + operationLabel + " tick=" + readTick
+                        + " sourcePresent=" + sourceAfter.isOf(Blocks.STONE)
+                        + " survivorState=" + survivorAfter
+                        + " directBottom=" + survivorDirectBottomSupport
+                        + " inherited=" + survivorInheritedOrAnchored
+                        + " dy=" + survivorDy);
+
+                if (survivorAfter.isOf(Blocks.STONE)) {
+                    boolean legalSurvivor = survivorDirectBottomSupport || survivorInheritedOrAnchored;
+                    if (legalSurvivor && Math.abs(survivorDy + 0.5d) > EPSILON) {
+                        throw new RuntimeException(operationLabel + " tick " + readTick
+                                + " survivor jumped or de-dropped while still legal (dy=" + survivorDy + ")");
+                    }
+                    if (!legalSurvivor && Math.abs(survivorDy + 0.5d) <= EPSILON) {
+                        throw new RuntimeException(operationLabel + " tick " + readTick
+                                + " survivor remains lowered with no legal support path");
+                    }
+                }
+            });
+        }
     }
 
     private static void movePlayerForFace(
