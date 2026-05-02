@@ -116,6 +116,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
+            runLiveTopDoubleStoneTopDependencyTransitionCase(ctx, singleplayer);
+        }
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
             runAdjacentLoweredFullJumpPreservationCase(ctx, singleplayer);
         }
 
@@ -767,6 +773,176 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 if (!Double.isNaN(topDy) && Math.abs(topDy + 0.5d) > EPSILON) {
                     throw new RuntimeException("live-chain replay TOP drifted after TOP restore tick " + readTick
                             + " topDy=" + topDy);
+                }
+            });
+        }
+    }
+
+    /**
+     * TOP dependency law for the same live chain:
+     * TOP sits upstream of lowered DOUBLE A, which in this captured topology should not be
+     * allowed to silently transition to a normal (dy=0.0) lane while B remains anchored.
+     *
+     * Law A:
+     * If B remains anchored and legal after TOP is removed, A should remain present as lowered
+     * DOUBLE (dy=-0.500) rather than normalizing upward or becoming a seam ghost.
+     */
+    private static void runLiveTopDoubleStoneTopDependencyTransitionCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos bPos = new BlockPos(0, 201, 2);
+        final BlockPos bSupportPos = bPos.down();
+        final BlockPos aPos = bPos.north();
+        final BlockPos aTopPos = aPos.north();
+        final BlockHitResult breakTopTarget = resolveLoweredSideFaceHit(aTopPos, Direction.SOUTH, SlabType.BOTTOM);
+        final double breakTopEyeY = aTopPos.getY() + 2.8d;
+        final double breakTopEyeX = aTopPos.getX() + 0.5d;
+        final double breakTopEyeZ = aTopPos.getZ() + 1.7d;
+        final double breakTopTargetX = aTopPos.getX() + 0.5d;
+        final double breakTopTargetY = aTopPos.getY() + 0.5d;
+        final double breakTopTargetZ = aTopPos.getZ() + 0.5d;
+
+        setupFixture(singleplayer, bSupportPos, bPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(aTopPos, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(aPos, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            BlockState topState = world.getBlockState(aTopPos);
+            BlockState aState = world.getBlockState(aPos);
+            BlockState bState = world.getBlockState(bPos);
+            BlockState bSupportState = world.getBlockState(bSupportPos);
+            SlabAnchorAttachment.addAnchor(world, bPos, bState);
+            if (!topState.isOf(Blocks.STONE_SLAB)
+                    || !topState.contains(SlabBlock.TYPE)
+                    || topState.get(SlabBlock.TYPE) != SlabType.TOP) {
+                throw new RuntimeException("top-dependency precheck expected TOP at " + aTopPos.toShortString()
+                    + ", found " + topState);
+            }
+            if (!aState.isOf(Blocks.STONE_SLAB)
+                    || !aState.contains(SlabBlock.TYPE)
+                    || aState.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                throw new RuntimeException("top-dependency precheck expected A DOUBLE at "
+                        + aPos.toShortString() + ", found " + aState);
+            }
+            if (!bState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("top-dependency precheck expected anchored stone at "
+                        + bPos.toShortString() + ", found " + bState);
+            }
+            if (!bSupportState.isOf(Blocks.STONE_SLAB)
+                    || !bSupportState.contains(SlabBlock.TYPE)
+                    || bSupportState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException("top-dependency precheck expected BOTTOM support at "
+                        + bSupportPos.toShortString() + ", found " + bSupportState);
+            }
+
+            double topDy = SlabSupport.getYOffset(world, aTopPos, topState);
+            double aDy = SlabSupport.getYOffset(world, aPos, aState);
+            double bDy = SlabSupport.getYOffset(world, bPos, bState);
+            double bSupportDy = SlabSupport.getYOffset(world, bSupportPos, bSupportState);
+            if (Math.abs(topDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("top-dependency precheck expected TOP dy=-0.500 at "
+                        + aTopPos.toShortString() + ", found " + topDy);
+            }
+            if (Math.abs(aDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("top-dependency precheck expected A dy=-0.500 at "
+                        + aPos.toShortString() + ", found " + aDy);
+            }
+            if (Math.abs(bDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("top-dependency precheck expected B dy=-0.500 at "
+                        + bPos.toShortString() + ", found " + bDy);
+            }
+            if (Math.abs(bSupportDy) > EPSILON) {
+                throw new RuntimeException("top-dependency precheck expected B support dy=0.000 at "
+                        + bSupportPos.toShortString() + ", found " + bSupportDy);
+            }
+            if (!SlabAnchorAttachment.isAnchored(world, bPos)) {
+                throw new RuntimeException("top-dependency precheck expected B anchored at "
+                        + bPos.toShortString());
+            }
+            System.out.println("[TOP-DEPENDENCY] precheck map="
+                    + "TOP=" + topState + "@dy=" + topDy
+                    + ", A=" + aState + "@dy=" + aDy
+                    + ", B=" + bState + "@dy=" + bDy
+                    + ", B.anchor=" + SlabAnchorAttachment.isAnchored(world, bPos)
+                    + ", B.down=" + bSupportState + "@dy=" + bSupportDy);
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                return;
+            }
+            server.getPlayerManager().getPlayerList().get(0).changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(breakTopEyeX, breakTopEyeY, breakTopEyeZ),
+                new Vec3d(breakTopTargetX, breakTopTargetY, breakTopTargetZ));
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for top-dependency TOP break");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            mc.interactionManager.attackBlock(breakTopTarget.getBlockPos(), breakTopTarget.getSide());
+        });
+
+        for (int tick = 0; tick < 4; tick++) {
+            if (tick > 0) {
+                ctx.waitTick();
+                singleplayer.getClientWorld().waitForChunksRender();
+            }
+            final int readTick = tick;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after TOP dependency case tick " + readTick);
+                }
+                BlockState aAfter = mc.world.getBlockState(aPos);
+                BlockState topAfter = mc.world.getBlockState(aTopPos);
+                BlockState bAfter = mc.world.getBlockState(bPos);
+                double aDy = aAfter.isOf(Blocks.STONE_SLAB)
+                        && aAfter.contains(SlabBlock.TYPE)
+                        && aAfter.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                        ? SlabSupport.getYOffset(mc.world, aPos, aAfter)
+                        : Double.NaN;
+                double bDy = SlabSupport.getYOffset(mc.world, bPos, bAfter);
+                boolean bAnchored = SlabAnchorAttachment.isAnchored(mc.world, bPos);
+                System.out.println("[TOP-DEPENDENCY] tick=" + readTick
+                        + " TOP=" + topAfter + " A=" + aAfter + " A-dy=" + aDy
+                        + " B=" + bAfter + " B-dy=" + bDy + " B.anchor=" + bAnchored);
+
+                if (!topAfter.isAir()) {
+                    throw new RuntimeException("top-dependency case expected TOP removed at tick " + readTick
+                            + ", found " + topAfter);
+                }
+                if (!bAfter.isOf(Blocks.STONE)) {
+                    throw new RuntimeException("top-dependency case expected B stone at tick " + readTick
+                            + ", found " + bAfter);
+                }
+                if (!bAnchored) {
+                    throw new RuntimeException("top-dependency case expected B anchored at tick " + readTick
+                            + ", but it was not");
+                }
+                if (Math.abs(bDy + 0.5d) > EPSILON) {
+                    throw new RuntimeException("top-dependency case expected B dy=-0.500 at tick " + readTick
+                            + ", found " + bDy);
+                }
+                if (!aAfter.isOf(Blocks.STONE_SLAB)
+                        || !aAfter.contains(SlabBlock.TYPE)
+                        || aAfter.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                    throw new RuntimeException("top-dependency case ambiguous A transition after TOP removal at tick "
+                            + readTick + ", expected lowered DOUBLE; found " + aAfter
+                            + ". Legal transition to non-DOUBLE is intentionally not accepted by this proof.");
+                }
+                if (Math.abs(aDy + 0.5d) > EPSILON) {
+                    throw new RuntimeException("top-dependency case expected A stay lowered DOUBLE after TOP removal at tick "
+                            + readTick + ", found dy=" + aDy);
                 }
             });
         }
