@@ -104,6 +104,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
+            runAdjacentLoweredDoubleBreakStoneJumpCase(ctx, singleplayer);
+        }
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
             runAdjacentLoweredFullJumpPreservationCase(ctx, singleplayer);
         }
 
@@ -237,6 +243,206 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("diagnostic replacement of left support did not keep right FB lowered");
             }
         });
+    }
+
+    /**
+     * Legal state law for the live A-break/B-jump capture:
+     * A lowered DOUBLE slab may be adjacent to a lowered stone B that is already
+     * legally supported by its own bottom slab. Breaking A must not make B jump
+     * upward while B remains present; replacing A should not be required to restore B.
+     */
+    private static void runAdjacentLoweredDoubleBreakStoneJumpCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos aPos = SUPPORT_POS;
+        final Direction adjacency = Direction.SOUTH;
+        final BlockPos bPos = SUPPORT_POS.offset(adjacency);
+        final BlockPos bSupportPos = bPos.down();
+        final BlockHitResult breakTarget = resolveLoweredSideFaceHit(aPos, adjacency, SlabType.BOTTOM);
+        final double eyeY = aPos.getY() + 2.8d;
+        final double eyeX = aPos.getX() + 0.5d;
+        final double eyeZ = adjacency == Direction.NORTH
+                ? aPos.getZ() - 1.7d
+                : adjacency == Direction.SOUTH
+                        ? aPos.getZ() + 1.7d
+                        : aPos.getZ() + 0.5d;
+        final double targetX = aPos.getX() + 0.5d;
+        final double targetY = aPos.getY() + 0.5d;
+        final double targetZ = aPos.getZ() + 0.5d;
+
+        setupFixture(singleplayer, aPos, FULL_POS);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    bSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    bPos,
+                    Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    aPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, bPos, world.getBlockState(bPos));
+
+            BlockState aState = world.getBlockState(aPos);
+            BlockState bState = world.getBlockState(bPos);
+            BlockState bSupportState = world.getBlockState(bSupportPos);
+            if (!aState.isOf(Blocks.STONE_SLAB)
+                    || !aState.contains(SlabBlock.TYPE)
+                    || aState.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                throw new RuntimeException("adjacent-double proof expected A lowered DOUBLE at "
+                        + aPos.toShortString() + ", found " + aState);
+            }
+            if (!bState.isOf(Blocks.STONE)) {
+                throw new RuntimeException("adjacent-double proof expected B stone at "
+                        + bPos.toShortString() + ", found " + bState);
+            }
+            if (!bSupportState.isOf(Blocks.STONE_SLAB)
+                    || !bSupportState.contains(SlabBlock.TYPE)
+                    || bSupportState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException("adjacent-double proof expected B bottom support at "
+                        + bSupportPos.toShortString() + ", found " + bSupportState);
+            }
+            double aDy = SlabSupport.getYOffset(world, aPos, aState);
+            double bDy = SlabSupport.getYOffset(world, bPos, bState);
+            System.out.println("[ADJ-DOUBLE-JUMP] initial map: "
+                    + "A=" + aState + "@dy=" + aDy
+                    + ", B=" + bState + "@dy=" + bDy
+                    + ", B below=" + bSupportState + ", B anchored=" + SlabAnchorAttachment.isAnchored(world, bPos));
+            if (Math.abs(aDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("adjacent-double proof expected A dy=-0.500, found " + aDy);
+            }
+            if (Math.abs(bDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("adjacent-double proof expected B dy=-0.500, found " + bDy);
+            }
+            if (!SlabAnchorAttachment.isAnchored(world, bPos)) {
+                throw new RuntimeException("adjacent-double proof expected B anchored before break");
+            }
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                return;
+            }
+            server.getPlayerManager()
+                    .getPlayerList()
+                    .get(0)
+                    .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(eyeX, eyeY, eyeZ),
+                new Vec3d(targetX, targetY, targetZ));
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null || mc.gameRenderer == null) {
+                throw new RuntimeException("client not ready for adjacent-double break proof");
+            }
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready to break A");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            mc.interactionManager.attackBlock(breakTarget.getBlockPos(), breakTarget.getSide());
+        });
+
+        for (int tick = 0; tick < 4; tick++) {
+            if (tick > 0) {
+                ctx.waitTick();
+                singleplayer.getClientWorld().waitForChunksRender();
+            }
+            final int readTick = tick;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after A break tick " + readTick);
+                }
+                BlockState aAfter = mc.world.getBlockState(aPos);
+                BlockState bAfter = mc.world.getBlockState(bPos);
+                double bDy = SlabSupport.getYOffset(mc.world, bPos, bAfter);
+                boolean bAnchored = SlabAnchorAttachment.isAnchored(mc.world, bPos);
+                System.out.println("[ADJ-DOUBLE-JUMP] break tick=" + readTick
+                        + " A=" + aAfter
+                        + " B=" + bAfter
+                        + " bDy=" + bDy
+                        + " anchored=" + bAnchored);
+                if (readTick > 0 && !aAfter.isAir()) {
+                    throw new RuntimeException("adjacent-double proof expected A to clear after break by tick 1, found "
+                            + aAfter + " at tick=" + readTick);
+                }
+                if (!bAfter.isOf(Blocks.STONE)) {
+                    throw new RuntimeException("adjacent-double proof lost B on break tick " + readTick
+                            + ", found " + bAfter);
+                }
+                if (!bAnchored) {
+                    throw new RuntimeException("adjacent-double proof lost B anchor on break tick " + readTick);
+                }
+                if (Math.abs(bDy + 0.5d) > EPSILON) {
+                    throw new RuntimeException("adjacent-double proof B jumped on break tick " + readTick
+                            + " dy=" + bDy + " state=" + bAfter);
+                }
+            });
+        }
+
+        // Keep replace deterministic for now: direct A restoration to lowered DOUBLE after a break.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    aPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        for (int tick = 0; tick < 4; tick++) {
+            if (tick > 0) {
+                ctx.waitTick();
+                singleplayer.getClientWorld().waitForChunksRender();
+            }
+            final int readTick = tick;
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing after A replace tick " + readTick);
+                }
+                BlockState aAfter = mc.world.getBlockState(aPos);
+                BlockState bAfter = mc.world.getBlockState(bPos);
+                double bDy = SlabSupport.getYOffset(mc.world, bPos, bAfter);
+                boolean bAnchored = SlabAnchorAttachment.isAnchored(mc.world, bPos);
+                System.out.println("[ADJ-DOUBLE-JUMP] replace tick=" + readTick
+                        + " A=" + aAfter
+                        + " B=" + bAfter
+                        + " bDy=" + bDy
+                        + " anchored=" + bAnchored);
+                if (readTick == 0 && (!aAfter.isOf(Blocks.STONE_SLAB)
+                        || !aAfter.contains(SlabBlock.TYPE)
+                        || aAfter.get(SlabBlock.TYPE) != SlabType.DOUBLE)) {
+                    throw new RuntimeException("adjacent-double proof expected A restored on replace tick 0, found "
+                            + aAfter);
+                }
+                if (!bAfter.isOf(Blocks.STONE)) {
+                    throw new RuntimeException("adjacent-double proof lost B on replace tick " + readTick
+                            + ", found " + bAfter);
+                }
+                if (!bAnchored) {
+                    throw new RuntimeException("adjacent-double proof lost B anchor on replace tick " + readTick);
+                }
+                if (Math.abs(bDy + 0.5d) > EPSILON) {
+                    throw new RuntimeException("adjacent-double proof B drifted on replace tick " + readTick
+                            + " dy=" + bDy + " state=" + bAfter);
+                }
+            });
+        }
     }
 
     /**
