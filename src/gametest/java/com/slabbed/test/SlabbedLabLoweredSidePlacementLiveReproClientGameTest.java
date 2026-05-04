@@ -48,6 +48,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (Boolean.getBoolean("slabbed.dynamicBridgeOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runDynamicBridgeTopSlabSelectionReproCase(ctx, singleplayer);
+            }
+            return;
+        }
+
         // Expand coverage for legal lowered slab targets and explicit merge semantics.
         for (Direction face : FACES_TO_TEST) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
@@ -102,6 +111,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 .setUseConsistentSettings(true)
                 .create()) {
             runBridgeShapeLowerHalfReproCase(ctx, singleplayer);
+        }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runDynamicBridgeTopSlabSelectionReproCase(ctx, singleplayer);
         }
 
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
@@ -3218,6 +3232,466 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " vanilla=" + vanillaOwner
                     + " outline=" + outlineOwner);
         });
+    }
+
+    private static void runDynamicBridgeTopSlabSelectionReproCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos leftSupport = SUPPORT_POS.add(24, 0, 0);
+        final BlockPos leftFull = leftSupport.up();
+        final BlockPos fb1Pos = leftFull.east();
+        final BlockPos fb2Pos = fb1Pos.east();
+        final BlockPos rightSupport = fb2Pos.east().down();
+        final BlockPos rightFull = rightSupport.up();
+        final BlockPos topSlabPos = fb1Pos.up();
+        final BlockPos aboveTopSlabPos = topSlabPos.up();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            int minX = leftSupport.getX() - 2;
+            int maxX = rightSupport.getX() + 2;
+            int minZ = leftSupport.getZ() - 2;
+            int maxZ = leftSupport.getZ() + 2;
+            int minY = leftSupport.getY() - 1;
+            int maxY = leftSupport.getY() + 4;
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    for (int y = minY; y <= maxY; y++) {
+                        world.setBlockState(
+                                new BlockPos(x, y, z),
+                                Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+            for (int x = minX; x <= maxX; x++) {
+                world.setBlockState(
+                        new BlockPos(x, leftSupport.getY() - 1, leftSupport.getZ()),
+                        Blocks.STONE.getDefaultState(),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+            }
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                server.getPlayerManager().getPlayerList().get(0)
+                        .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final String shape = "shape=dynamic_BSFB->FB->FB->BSFB_single_top_slab"
+                + " leftSupport=" + leftSupport.toShortString()
+                + " leftFull=" + leftFull.toShortString()
+                + " fb1=" + fb1Pos.toShortString()
+                + " fb2=" + fb2Pos.toShortString()
+                + " rightSupport=" + rightSupport.toShortString()
+                + " rightFull=" + rightFull.toShortString()
+                + " topSlab=" + topSlabPos.toShortString();
+
+        final BlockHitResult placeLeftSupportHit = resolveLoweredUpMergeHit(leftSupport.down());
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(leftSupport.getX() + 0.5d, leftSupport.getY() + 1.65d, leftSupport.getZ() + 2.45d),
+                placeLeftSupportHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for dynamic bridge left support slab");
+            }
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            BlockPos hitPos = placeLeftSupportHit.getBlockPos();
+            Direction hitFace = placeLeftSupportHit.getSide();
+            BlockPos intendedPlacePos = hitPos.offset(hitFace);
+            BlockState hitState = mc.world.getBlockState(hitPos);
+            BlockState intendedPlaceStateBefore = mc.world.getBlockState(intendedPlacePos);
+            ItemStack heldStack = mc.player.getMainHandStack();
+            String held = heldStack.isEmpty() ? "empty" : heldStack.getItem().toString();
+            String crosshairOwner = asOwner(mc.crosshairTarget);
+            Vec3d liveEye = mc.player.getCameraPosVec(0.0f);
+            Vec3d hitVec = placeLeftSupportHit.getPos();
+            double dist = liveEye.distanceTo(hitVec);
+            var slabState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+            var slabShape = slabState.getCollisionShape(mc.world, intendedPlacePos);
+            var slabBox = slabShape.isEmpty() ? null : slabShape.getBoundingBox().offset(intendedPlacePos);
+            var playerBox = mc.player.getBoundingBox();
+            boolean intersectsPlayer = slabBox != null && slabBox.intersects(playerBox);
+            System.out.println("[DYNAMIC_BRIDGE_ISO] step=left_support_pre"
+                    + " playerPos=(" + mc.player.getX() + ", " + mc.player.getY() + ", " + mc.player.getZ() + ")"
+                    + " eye=" + liveEye
+                    + " playerBox=" + formatBox(playerBox)
+                    + " held=" + held
+                    + " hitPos=" + hitPos.toShortString()
+                    + " hitFace=" + hitFace
+                    + " hitState=" + hitState
+                    + " hitVec=" + hitVec
+                    + " dist=" + dist
+                    + " crosshairOwner=" + crosshairOwner
+                    + " intendedPlacePos=" + intendedPlacePos.toShortString()
+                    + " intendedBefore=" + intendedPlaceStateBefore
+                    + " slabCollision=" + (slabBox == null ? "EMPTY" : formatBox(slabBox))
+                    + " slabIntersectsPlayer=" + intersectsPlayer
+                    + " " + shape);
+            System.out.println("[DYNAMIC_BRIDGE_ISO] step=left_support_hit"
+                    + " targetBlock=" + hitPos.toShortString()
+                    + " face=" + hitFace
+                    + " intendedPlace=" + intendedPlacePos.toShortString()
+                    + " crosshair=" + crosshairOwner
+                    + " dist=" + dist);
+            ActionResult supportResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeLeftSupportHit);
+            BlockState intendedPlaceStateAfter = mc.world.getBlockState(intendedPlacePos);
+            System.out.println("[DYNAMIC_BRIDGE_ISO] step=left_support_result"
+                    + " result=" + supportResult
+                    + " intendedAfter=" + intendedPlaceStateAfter
+                    + " expectedPlace=" + intendedPlacePos.toShortString()
+                    + " held=" + held
+                    + " slabIntersectsPlayer=" + intersectsPlayer
+                    + " dist=" + dist);
+            if (!supportResult.isAccepted()) {
+                System.out.println("[DYNAMIC_BRIDGE_ISO_RED] step=left_support_place rejected"
+                        + " reason=result=" + supportResult
+                        + " hitPos=" + hitPos.toShortString()
+                        + " face=" + hitFace
+                        + " intendedPlace=" + intendedPlacePos.toShortString()
+                        + " crosshair=" + crosshairOwner
+                        + " dist=" + dist
+                        + " slabIntersectsPlayer=" + intersectsPlayer
+                        + " intendedAfter=" + intendedPlaceStateAfter
+                        + " " + shape);
+                throw new RuntimeException("dynamic bridge left support slab placement rejected: " + supportResult);
+            }
+            System.out.println("[DYNAMIC_BRIDGE_ISO_GREEN] step=left_support_place"
+                    + " expected=" + intendedPlacePos.toShortString()
+                    + " actual=" + intendedPlacePos.toShortString()
+                    + " vanilla=" + asOwner(mc.world.raycast(new RaycastContext(
+                    liveEye,
+                    liveEye.add(mc.player.getRotationVec(0.0f).multiply(6.0d)),
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player)))
+                    + " outline=" + intendedPlacePos.toShortString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult placeLeftFullHit = resolveLoweredUpMergeHit(leftSupport);
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(leftSupport.getX() + 0.5d, leftSupport.getY() + 2.35d, leftSupport.getZ() + 2.45d),
+                placeLeftFullHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for dynamic bridge left full block");
+            }
+            ActionResult leftFullResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeLeftFullHit);
+            if (!leftFullResult.isAccepted()) {
+                throw new RuntimeException("dynamic bridge left full block placement rejected: " + leftFullResult);
+            }
+            BlockState supportState = mc.world.getBlockState(leftSupport);
+            BlockState leftState = mc.world.getBlockState(leftFull);
+            double supportDy = supportState.isOf(Blocks.STONE_SLAB) ? SlabSupport.getYOffset(mc.world, leftSupport, supportState) : Double.NaN;
+            double leftDy = leftState.isOf(Blocks.STONE) ? SlabSupport.getYOffset(mc.world, leftFull, leftState) : Double.NaN;
+            System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB] step=build_left_bsfb support="
+                    + leftSupport.toShortString() + " supportState=" + supportState + " supportDy=" + supportDy
+                    + " full=" + leftFull.toShortString() + " fullState=" + leftState + " fullDy=" + leftDy
+                    + " " + shape);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult placeFb1Hit = resolveLoweredFaceHit(leftFull, Direction.EAST, 0.5d);
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(leftFull.getX() + 0.5d, leftFull.getY() + 1.8d, leftFull.getZ() + 2.55d),
+                placeFb1Hit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for dynamic bridge fb1 placement");
+            }
+            ActionResult fb1Result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeFb1Hit);
+            if (!fb1Result.isAccepted()) {
+                throw new RuntimeException("dynamic bridge fb1 placement rejected: " + fb1Result);
+            }
+            BlockState fb1 = mc.world.getBlockState(fb1Pos);
+            double fb1Dy = fb1.isOf(Blocks.STONE) ? SlabSupport.getYOffset(mc.world, fb1Pos, fb1) : Double.NaN;
+            System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB] step=place_fb1 pos="
+                    + fb1Pos.toShortString() + " state=" + fb1 + " dy=" + fb1Dy + " " + shape);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult placeFb2Hit = resolveLoweredFaceHit(fb1Pos, Direction.EAST, 0.5d);
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(fb1Pos.getX() + 0.5d, fb1Pos.getY() + 1.8d, fb1Pos.getZ() + 2.55d),
+                placeFb2Hit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for dynamic bridge fb2 placement");
+            }
+            ActionResult fb2Result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeFb2Hit);
+            if (!fb2Result.isAccepted()) {
+                throw new RuntimeException("dynamic bridge fb2 placement rejected: " + fb2Result);
+            }
+            BlockState fb2 = mc.world.getBlockState(fb2Pos);
+            double fb2Dy = fb2.isOf(Blocks.STONE) ? SlabSupport.getYOffset(mc.world, fb2Pos, fb2) : Double.NaN;
+            System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB] step=place_fb2 pos="
+                    + fb2Pos.toShortString() + " state=" + fb2 + " dy=" + fb2Dy + " " + shape);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult placeRightSupportHit = resolveLoweredUpMergeHit(rightSupport.down());
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(rightSupport.getX() + 0.5d, rightSupport.getY() + 1.65d, rightSupport.getZ() + 2.45d),
+                placeRightSupportHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for dynamic bridge right support slab");
+            }
+            ActionResult supportResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeRightSupportHit);
+            if (!supportResult.isAccepted()) {
+                throw new RuntimeException("dynamic bridge right support slab placement rejected: " + supportResult);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult placeRightFullHit = resolveLoweredUpMergeHit(rightSupport);
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(rightSupport.getX() + 0.5d, rightSupport.getY() + 2.35d, rightSupport.getZ() + 2.45d),
+                placeRightFullHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for dynamic bridge right full block");
+            }
+            ActionResult rightFullResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeRightFullHit);
+            if (!rightFullResult.isAccepted()) {
+                throw new RuntimeException("dynamic bridge right full block placement rejected: " + rightFullResult);
+            }
+            BlockState supportState = mc.world.getBlockState(rightSupport);
+            BlockState rightState = mc.world.getBlockState(rightFull);
+            double supportDy = supportState.isOf(Blocks.STONE_SLAB) ? SlabSupport.getYOffset(mc.world, rightSupport, supportState) : Double.NaN;
+            double rightDy = rightState.isOf(Blocks.STONE) ? SlabSupport.getYOffset(mc.world, rightFull, rightState) : Double.NaN;
+            System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB] step=build_right_bsfb support="
+                    + rightSupport.toShortString() + " supportState=" + supportState + " supportDy=" + supportDy
+                    + " full=" + rightFull.toShortString() + " fullState=" + rightState + " fullDy=" + rightDy
+                    + " " + shape);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult placeSingleTopSlabHit = resolveLoweredUpMergeHit(fb1Pos);
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(fb1Pos.getX() + 0.5d, fb1Pos.getY() + 1.8d, fb1Pos.getZ() + 2.55d),
+                placeSingleTopSlabHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for dynamic bridge top slab placement");
+            }
+            ActionResult slabResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSingleTopSlabHit);
+            if (!slabResult.isAccepted()) {
+                throw new RuntimeException("dynamic bridge single top slab placement rejected: " + slabResult);
+            }
+            BlockState topState = mc.world.getBlockState(topSlabPos);
+            if (!topState.isOf(Blocks.STONE_SLAB) || !topState.contains(SlabBlock.TYPE)) {
+                throw new RuntimeException("dynamic bridge expected single slab at " + topSlabPos.toShortString()
+                        + ", found " + topState);
+            }
+            SlabType topType = topState.get(SlabBlock.TYPE);
+            double topDy = SlabSupport.getYOffset(mc.world, topSlabPos, topState);
+            System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB] step=place_single_top_slab pos="
+                    + topSlabPos.toShortString() + " state=" + topState
+                    + " type=" + topType + " dy=" + topDy + " " + shape);
+            if (topType == SlabType.DOUBLE) {
+                throw new RuntimeException("dynamic bridge invalid repro: single top slab merged to DOUBLE at "
+                        + topSlabPos.toShortString());
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        runDynamicBridgeOwnershipProbe(
+                ctx,
+                topSlabPos,
+                new Vec3d(topSlabPos.getX() + 0.5d, topSlabPos.getY() + 1.65d, topSlabPos.getZ() + 2.45d),
+                new Vec3d(topSlabPos.getX() + 0.5d, topSlabPos.getY() + 0.18d, topSlabPos.getZ() + 0.5d),
+                "select_single_top_slab",
+                "front_lower_center",
+                new ItemStack(Items.STONE_SLAB, 8),
+                shape);
+
+        final BlockHitResult placeOnTopSlabHit = resolveLoweredUpMergeHit(topSlabPos);
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(topSlabPos.getX() + 0.5d, topSlabPos.getY() + 2.35d, topSlabPos.getZ() + 2.35d),
+                placeOnTopSlabHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                throw new RuntimeException("client not ready for dynamic bridge build-on-top");
+            }
+            ActionResult topBuildResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeOnTopSlabHit);
+            if (!topBuildResult.isAccepted()) {
+                throw new RuntimeException("dynamic bridge build-on-top rejected: " + topBuildResult);
+            }
+            BlockState builtState = mc.world.getBlockState(aboveTopSlabPos);
+            double builtDy = builtState.isOf(Blocks.STONE) ? SlabSupport.getYOffset(mc.world, aboveTopSlabPos, builtState) : Double.NaN;
+            System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB] step=build_on_top_slab pos="
+                    + aboveTopSlabPos.toShortString() + " state=" + builtState + " dy=" + builtDy + " " + shape);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        runDynamicBridgeOwnershipProbe(
+                ctx,
+                aboveTopSlabPos,
+                new Vec3d(aboveTopSlabPos.getX() + 0.5d, aboveTopSlabPos.getY() + 1.65d, aboveTopSlabPos.getZ() + 2.45d),
+                new Vec3d(aboveTopSlabPos.getX() + 0.5d, aboveTopSlabPos.getY() - 0.30d, aboveTopSlabPos.getZ() + 0.5d),
+                "lower_half_after_build",
+                "front_lower_center",
+                new ItemStack(Items.STONE_SLAB, 8),
+                shape);
+    }
+
+    private static void runDynamicBridgeOwnershipProbe(
+            ClientGameTestContext ctx,
+            BlockPos expectedOwnerPos,
+            Vec3d eye,
+            Vec3d aimPoint,
+            String step,
+            String aimRegion,
+            ItemStack heldStack,
+            String setupDetails
+    ) {
+        final double reach = 6.0d;
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[DYNAMIC_BRIDGE_TOP_SLAB_RED] step=" + step + " client not ready");
+            }
+            if (heldStack == null || heldStack.isEmpty()) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+            } else {
+                mc.player.setStackInHand(Hand.MAIN_HAND, heldStack.copy());
+            }
+
+            Vec3d delta = aimPoint.subtract(eye);
+            double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+            float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+            float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+            double feetY = eye.y - mc.player.getStandingEyeHeight();
+            mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            mc.player.setVelocity(Vec3d.ZERO);
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(reach));
+            HitResult crosshair = mc.crosshairTarget;
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            BlockState expectedState = mc.world.getBlockState(expectedOwnerPos);
+            BlockHitResult outlineHit = expectedState.getOutlineShape(mc.world, expectedOwnerPos)
+                    .raycast(rayStart, rayEnd, expectedOwnerPos);
+
+            String expectedOwner = expectedOwnerPos.toShortString();
+            String crosshairOwner = asOwner(crosshair);
+            String vanillaOwner = asOwner(vanilla);
+            String outlineOwner = outlineHit == null ? "MISS" : outlineHit.getBlockPos().toShortString();
+            String held = mc.player.getMainHandStack().isEmpty()
+                    ? "empty"
+                    : mc.player.getMainHandStack().getItem().toString();
+            double expectedDy = SlabSupport.getYOffset(mc.world, expectedOwnerPos, expectedState);
+            String visualBox = expectedState.getOutlineShape(mc.world, expectedOwnerPos).isEmpty()
+                    ? "EMPTY"
+                    : formatBox(expectedState.getOutlineShape(mc.world, expectedOwnerPos).getBoundingBox().offset(expectedOwnerPos));
+
+            System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB] step=" + step
+                    + " expected=" + expectedOwner
+                    + " actual=" + crosshairOwner
+                    + " vanilla=" + vanillaOwner
+                    + " outline=" + outlineOwner
+                    + " held=" + held
+                    + " aimRegion=" + aimRegion
+                    + " expectedState=" + expectedState
+                    + " expectedDy=" + expectedDy
+                    + " eye=" + eye
+                    + " aim=" + aimPoint
+                    + " liveEye=" + rayStart
+                    + " dir=" + rayDir
+                    + " visualBox=" + visualBox
+                    + " " + setupDetails);
+
+            boolean ownerMatch = expectedOwner.equals(crosshairOwner);
+            boolean expectedOutlineHit = expectedOwner.equals(outlineOwner);
+            if (ownerMatch) {
+                System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB_GREEN] step=" + step
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+                return;
+            }
+            if (expectedOutlineHit) {
+                System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB_RED] step=" + step
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+                throw new RuntimeException("[DYNAMIC_BRIDGE_TOP_SLAB_RED] step=" + step
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+            }
+
+            System.out.println("[DYNAMIC_BRIDGE_TOP_SLAB] step=" + step
+                    + " calibration=aim_miss expected=" + expectedOwner
+                    + " actual=" + crosshairOwner
+                    + " vanilla=" + vanillaOwner
+                    + " outline=" + outlineOwner);
+        });
+    }
+
+    private static void syncHeldMainHand(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            ItemStack stack
+    ) {
+        ItemStack held = stack == null ? ItemStack.EMPTY : stack.copy();
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                server.getPlayerManager().getPlayerList().get(0).setStackInHand(Hand.MAIN_HAND, held.copy());
+            }
+        });
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, held.copy());
+            }
+        });
+        ctx.waitTick();
     }
 
     private static void syncPlayerAim(
