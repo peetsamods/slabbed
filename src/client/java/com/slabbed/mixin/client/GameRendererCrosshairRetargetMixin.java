@@ -2,6 +2,7 @@ package com.slabbed.mixin.client;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.client.debug.SlabbedRetargetTestHooks;
 import com.slabbed.debug.SlabbedInspect;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
@@ -65,15 +66,41 @@ public abstract class GameRendererCrosshairRetargetMixin {
         HitResult initialTarget = ht;
         boolean slabHeld = slabbed$isSlabPlacementIntent();
 
-        if (slabHeld && ht instanceof BlockHitResult blockHit && blockHit.getSide() == Direction.UP) {
+        // Slab-held intent guard: when vanilla's initial crosshair already
+        // sits on an intended placement target (anchored/lowered full-block
+        // UP hit, lowered slab face, or lowered full-block placement-intent
+        // face), preserve that face and do not let DDA scans steal ownership.
+        if (slabHeld && ht instanceof BlockHitResult initialHit) {
             ClientWorld world = client.world;
-            BlockPos pos = blockHit.getBlockPos();
-            if (world != null && slabbed$isAnchoredLoweredFullBlock(world, pos, world.getBlockState(pos))) {
-                slabbed$traceTargeting(tickProgress, initialTarget,
-                        "scan-skip-slab-held-anchored-lowered-full-block-up", false);
+            BlockPos pos = initialHit.getBlockPos();
+            if (world != null
+                    && initialHit.getSide() == Direction.UP
+                    && slabbed$isAnchoredLoweredFullBlock(world, pos, world.getBlockState(pos))) {
+                slabbed$traceTargeting(
+                        tickProgress,
+                        initialTarget,
+                        "scan-skip-slab-held-anchored-lowered-full-block-up",
+                        false);
+                return;
+            }
+            if (slabbed$isInitialHitOnLoweredSlabFace(initialHit)) {
+                slabbed$traceTargeting(
+                        tickProgress,
+                        initialTarget,
+                        "scan-skip-initial-already-lowered-slab-face",
+                        false);
+                return;
+            }
+            if (slabbed$isInitialHitOnLoweredFullBlockPlacementIntent(initialHit)) {
+                slabbed$traceTargeting(
+                        tickProgress,
+                        initialTarget,
+                        "scan-skip-initial-already-lowered-full-block-placement-intent",
+                        false);
                 return;
             }
         }
+
 
         // Narrow slab-held guard: always evaluate both anchored-FB and
         // lowered-side-slab rescues, then choose by closer-or-tied distance.
@@ -83,7 +110,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         // with a slab in hand — preventing live-trace failures where the
         // initial target sits on a farther/underneath block.
         BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
-        BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht);
+        BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht, slabHeld);
         BlockHitResult chosen = slabbed$chooseRescue(tickProgress, anchoredHit, loweredSlabHit, slabHeld);
         BlockHitResult loweredChainHit = slabHeld ? null : slabbed$retargetLoweredChainTopSupport(tickProgress, ht);
         if (loweredChainHit != null && slabbed$isCloserOrTied(tickProgress, loweredChainHit, chosen)) {
@@ -250,7 +277,73 @@ public abstract class GameRendererCrosshairRetargetMixin {
         return stack.getItem() instanceof BlockItem bi && bi.getBlock() instanceof SlabBlock;
     }
 
-    private BlockHitResult slabbed$retargetLoweredSideSlab(float tickProgress, HitResult currentHit) {
+    private boolean slabbed$isInitialHitOnLoweredSlabFace(BlockHitResult hit) {
+        ClientWorld world = client.world;
+        if (world == null) {
+            return false;
+        }
+        BlockPos pos = hit.getBlockPos();
+        BlockState state = world.getBlockState(pos);
+        return state.getBlock() instanceof SlabBlock
+                && state.contains(SlabBlock.TYPE)
+                && state.getFluidState().isEmpty()
+                && SlabSupport.getYOffset(world, pos, state) == -0.5;
+    }
+
+    private boolean slabbed$isInitialHitOnLoweredFullBlockPlacementIntent(BlockHitResult hit) {
+        ClientWorld world = client.world;
+        if (world == null || hit.getType() != HitResult.Type.BLOCK || hit.getSide() == Direction.DOWN) {
+            return false;
+        }
+        BlockPos pos = hit.getBlockPos();
+        BlockState state = world.getBlockState(pos);
+        if (state.getBlock() instanceof SlabBlock || !slabbed$isAnchoredOrLoweredFullBlock(world, pos, state)) {
+            return false;
+        }
+        BlockPos placePos = pos.offset(hit.getSide());
+        BlockState placeState = world.getBlockState(placePos);
+        return placeState.isAir() || slabbed$isLoweredSlabLaneState(world, placePos, placeState);
+    }
+
+    private static boolean slabbed$isOrdinaryFullBlock(ClientWorld world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        if (!state.isSolidBlock(world, pos)) {
+            return false;
+        }
+        if (state.getBlock() instanceof SlabBlock) {
+            return false;
+        }
+        net.minecraft.block.Block block = state.getBlock();
+        return !(block instanceof BlockEntityProvider) && !(block instanceof CraftingTableBlock);
+    }
+
+    private static boolean slabbed$isAnchoredOrLoweredFullBlock(ClientWorld world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null || state.getBlock() instanceof SlabBlock) {
+            return false;
+        }
+        if (!state.isSolidBlock(world, pos)) {
+            return false;
+        }
+
+        net.minecraft.block.Block block = state.getBlock();
+        if (block instanceof BlockEntityProvider || block instanceof CraftingTableBlock) {
+            return false;
+        }
+
+        return SlabAnchorAttachment.isAnchored(world, pos)
+                || SlabSupport.getYOffset(world, pos, state) == -0.5;
+    }
+
+    private static boolean slabbed$isLoweredSlabLaneState(ClientWorld world, BlockPos pos, BlockState state) {
+        return state.getBlock() instanceof SlabBlock
+                && state.contains(SlabBlock.TYPE)
+                && state.getFluidState().isEmpty()
+                && SlabSupport.getYOffset(world, pos, state) == -0.5;
+    }
+
+    private BlockHitResult slabbed$retargetLoweredSideSlab(float tickProgress, HitResult currentHit, boolean slabHeld) {
         ClientWorld world = client.world;
         Entity cam = client.getCameraEntity();
         if (world == null || cam == null) {
@@ -261,60 +354,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         Vec3d dir = cam.getRotationVec(tickProgress);
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
-        double currentDist2 = Double.POSITIVE_INFINITY;
-        if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
-            currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
-        }
-        int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
-
-        BlockHitResult bestHit = null;
-        double bestDist2 = currentDist2;
-        for (int i = 1; i <= steps; i++) {
-            double t = reach * i / steps;
-            if (t * t > bestDist2 + 1.0e-6) {
-                break;
-            }
-            Vec3d sample = eye.add(dir.multiply(t));
-            BlockPos samplePos = BlockPos.ofFloored(sample);
-
-            BlockHitResult hit = slabbed$raycastLoweredSideSlab(world, cam, eye, end, samplePos);
-            if (hit != null) {
-                double dist2 = hit.getPos().squaredDistanceTo(eye);
-                if (dist2 <= bestDist2 + 1.0e-6) {
-                    bestHit = hit;
-                    bestDist2 = dist2;
-                }
-            }
-
-            hit = slabbed$raycastLoweredSideSlab(world, cam, eye, end, samplePos.up());
-            if (hit != null) {
-                double dist2 = hit.getPos().squaredDistanceTo(eye);
-                if (dist2 <= bestDist2 + 1.0e-6) {
-                    bestHit = hit;
-                    bestDist2 = dist2;
-                }
-            }
-        }
-
-        return bestHit;
-    }
-
-    private static BlockHitResult slabbed$raycastLoweredSideSlab(
-            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos
-    ) {
-        BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || (state.get(SlabBlock.TYPE) != SlabType.BOTTOM && state.get(SlabBlock.TYPE) != SlabType.DOUBLE)
-                || SlabSupport.getYOffset(world, pos, state) != -0.5) {
-            return null;
-        }
-        VoxelShape shape = state.getOutlineShape(world, pos, ShapeContext.of(cam));
-        BlockHitResult hit = shape.raycast(eye, end, pos);
-        if (hit == null) {
-            return null;
-        }
-        return hit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6 ? hit : null;
+        return SlabbedRetargetTestHooks.findLoweredSideSlabRetarget(world, cam, eye, end, currentHit, slabHeld);
     }
 
     private BlockHitResult slabbed$retargetLoweredChainTopSupport(float tickProgress, HitResult currentHit) {
