@@ -88,6 +88,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 .create()) {
             runLowerHalfOwnershipLoweredSlabCase(ctx, singleplayer);
         }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runLiteralScreenshotCraftingTableCase(ctx, singleplayer);
+        }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runLiteralScreenshotLoweredSlabSideCase(ctx, singleplayer);
+        }
 
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
@@ -2784,6 +2794,204 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " actual=" + crosshairOwner
                     + " vanilla=" + vanillaOwner
                     + " liveRay=" + liveOwner
+                    + " outline=" + outlineOwner);
+        });
+    }
+
+    private static void runLiteralScreenshotCraftingTableCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(64, 0, 0);
+        final BlockPos tablePos = FULL_POS.add(64, 0, 0);
+        final Vec3d eyeSouth = new Vec3d(
+                tablePos.getX() + 0.62d,
+                tablePos.getY() + 1.65d,
+                tablePos.getZ() + 2.30d);
+        final Vec3d aimFrontLowerSeam = new Vec3d(
+                tablePos.getX() + 0.74d,
+                tablePos.getY() - 0.34d,
+                tablePos.getZ() + 0.50d);
+
+        setupFixture(singleplayer, supportPos, tablePos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    tablePos,
+                    Blocks.CRAFTING_TABLE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        String setup = "support=" + supportPos.toShortString()
+                + " table=" + tablePos.toShortString()
+                + " shape=bottom_slab_plus_crafting_table";
+        runScreenshotReproProbe(
+                ctx,
+                singleplayer,
+                tablePos,
+                eyeSouth,
+                aimFrontLowerSeam,
+                "crafting_table_bottom_slab_slab_held",
+                "front_lower_seam",
+                new ItemStack(Items.CRAFTING_TABLE, 1),
+                setup);
+        runScreenshotReproProbe(
+                ctx,
+                singleplayer,
+                tablePos,
+                eyeSouth,
+                aimFrontLowerSeam,
+                "crafting_table_bottom_slab_empty_hand",
+                "front_lower_seam",
+                ItemStack.EMPTY,
+                setup);
+    }
+
+    private static void runLiteralScreenshotLoweredSlabSideCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(76, 0, 0);
+        final BlockPos fullPos = FULL_POS.add(76, 0, 0);
+        final BlockPos slabPos = fullPos.south();
+        final Vec3d eyeWest = new Vec3d(
+                slabPos.getX() - 2.25d,
+                slabPos.getY() + 1.61d,
+                slabPos.getZ() + 0.42d);
+        final Vec3d aimSideLowSeam = new Vec3d(
+                slabPos.getX() + 0.02d,
+                slabPos.getY() + 0.02d,
+                slabPos.getZ() + 0.86d);
+
+        setupFixture(singleplayer, supportPos, fullPos);
+        setLoweredSlabTarget(singleplayer, slabPos, SlabType.TOP);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        String setup = "support=" + supportPos.toShortString()
+                + " full=" + fullPos.toShortString()
+                + " slab=" + slabPos.toShortString()
+                + " slabType=top shape=bottom_slab_plus_lowered_side_slab";
+        runScreenshotReproProbe(
+                ctx,
+                singleplayer,
+                slabPos,
+                eyeWest,
+                aimSideLowSeam,
+                "lowered_slab_side_low_seam_slab_held",
+                "side_low_seam",
+                new ItemStack(Items.STONE_SLAB, 8),
+                setup);
+    }
+
+    private static void runScreenshotReproProbe(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            BlockPos expectedOwnerPos,
+            Vec3d eye,
+            Vec3d aimPoint,
+            String caseId,
+            String aimRegion,
+            ItemStack heldStack,
+            String setupDetails
+    ) {
+        final double reach = 6.0d;
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[SCREENSHOT_REPRO_RED] case=" + caseId + " client not ready");
+            }
+            if (heldStack == null || heldStack.isEmpty()) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+            } else {
+                mc.player.setStackInHand(Hand.MAIN_HAND, heldStack.copy());
+            }
+
+            Vec3d delta = aimPoint.subtract(eye);
+            double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+            float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+            float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+            double feetY = eye.y - mc.player.getStandingEyeHeight();
+            mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            mc.player.setVelocity(Vec3d.ZERO);
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(reach));
+            HitResult crosshair = mc.crosshairTarget;
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            BlockState expectedState = mc.world.getBlockState(expectedOwnerPos);
+            BlockHitResult outlineHit = expectedState.getOutlineShape(mc.world, expectedOwnerPos)
+                    .raycast(rayStart, rayEnd, expectedOwnerPos);
+
+            String expectedOwner = expectedOwnerPos.toShortString();
+            String crosshairOwner = asOwner(crosshair);
+            String vanillaOwner = asOwner(vanilla);
+            String outlineOwner = outlineHit == null ? "MISS" : outlineHit.getBlockPos().toShortString();
+            String held = mc.player.getMainHandStack().isEmpty()
+                    ? "empty"
+                    : mc.player.getMainHandStack().getItem().toString();
+            String hitSide = crosshair instanceof BlockHitResult bhr ? bhr.getSide().toString() : "MISS";
+            double expectedDy = SlabSupport.getYOffset(mc.world, expectedOwnerPos, expectedState);
+            String visualBox = expectedState.getOutlineShape(mc.world, expectedOwnerPos).isEmpty()
+                    ? "EMPTY"
+                    : formatBox(expectedState.getOutlineShape(mc.world, expectedOwnerPos)
+                    .getBoundingBox().offset(expectedOwnerPos));
+
+            System.out.println("[SCREENSHOT_REPRO] case=" + caseId
+                    + " setup held=" + held
+                    + " aimRegion=" + aimRegion
+                    + " expected=" + expectedOwner
+                    + " eye=" + eye
+                    + " aim=" + aimPoint
+                    + " liveEye=" + rayStart
+                    + " dir=" + rayDir
+                    + " reach=" + reach
+                    + " visualBox=" + visualBox
+                    + " expectedState=" + expectedState
+                    + " expectedDy=" + expectedDy
+                    + " " + setupDetails);
+            System.out.println("[SCREENSHOT_REPRO] case=" + caseId
+                    + " ray expected=" + expectedOwner
+                    + " actual=" + crosshairOwner
+                    + " vanilla=" + vanillaOwner
+                    + " outline=" + outlineOwner
+                    + " hitSide=" + hitSide);
+
+            boolean ownerMatch = expectedOwner.equals(crosshairOwner);
+            boolean expectedOutlineHit = expectedOwner.equals(outlineOwner);
+            if (ownerMatch) {
+                System.out.println("[SCREENSHOT_REPRO_GREEN] case=" + caseId
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+                return;
+            }
+            if (expectedOutlineHit) {
+                System.out.println("[SCREENSHOT_REPRO_RED] case=" + caseId
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+                throw new RuntimeException("[SCREENSHOT_REPRO_RED] case=" + caseId
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+            }
+            System.out.println("[SCREENSHOT_REPRO] case=" + caseId
+                    + " calibration=aim_miss expected=" + expectedOwner
+                    + " actual=" + crosshairOwner
+                    + " vanilla=" + vanillaOwner
                     + " outline=" + outlineOwner);
         });
     }
