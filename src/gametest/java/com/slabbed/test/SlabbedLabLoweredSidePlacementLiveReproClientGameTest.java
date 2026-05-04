@@ -14,9 +14,11 @@ import net.minecraft.item.Items;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 
 /**
  * Focused live repro matrix for lowered slab lane grammar.
@@ -75,6 +77,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 .setUseConsistentSettings(true)
                 .create()) {
             runLoweredDoubleLowerHalfOwnershipCase(ctx, singleplayer, Direction.NORTH);
+        }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runLowerHalfOwnershipVisibleBodyCase(ctx, singleplayer);
+        }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runLowerHalfOwnershipLoweredSlabCase(ctx, singleplayer);
         }
 
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
@@ -2545,6 +2557,237 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
     }
 
+    private static void runLowerHalfOwnershipVisibleBodyCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(40, 0, 0);
+        final BlockPos fullPos = FULL_POS.add(40, 0, 0);
+        final Vec3d eyeSouth = new Vec3d(
+                fullPos.getX() + 0.5d,
+                fullPos.getY() + 1.65d,
+                fullPos.getZ() + 2.55d);
+        final Vec3d aimFrontLower = new Vec3d(
+                fullPos.getX() + 0.5d,
+                fullPos.getY() - 0.34d,
+                fullPos.getZ() + 0.5d);
+        final Vec3d aimUndersideAdjacent = new Vec3d(
+                fullPos.getX() + 0.5d,
+                fullPos.getY() - 0.49d,
+                fullPos.getZ() + 0.82d);
+
+        setupFixture(singleplayer, supportPos, fullPos);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        runLowerHalfOwnershipProbe(
+                ctx,
+                singleplayer,
+                fullPos,
+                eyeSouth,
+                aimFrontLower,
+                "lowered_full_front_lower_half_slab_held_baseline",
+                "front_lower",
+                true,
+                "support=" + supportPos.toShortString() + " full=" + fullPos.toShortString());
+        runLowerHalfOwnershipProbe(
+                ctx,
+                singleplayer,
+                fullPos,
+                eyeSouth,
+                aimUndersideAdjacent,
+                "lowered_full_underside_adjacent_empty_hand",
+                "underside_adjacent",
+                false,
+                "support=" + supportPos.toShortString() + " full=" + fullPos.toShortString());
+        runLowerHalfOwnershipProbe(
+                ctx,
+                singleplayer,
+                fullPos,
+                eyeSouth,
+                aimUndersideAdjacent,
+                "lowered_full_underside_adjacent_slab_held",
+                "underside_adjacent",
+                true,
+                "support=" + supportPos.toShortString() + " full=" + fullPos.toShortString());
+    }
+
+    private static void runLowerHalfOwnershipLoweredSlabCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(52, 0, 0);
+        final BlockPos fullPos = FULL_POS.add(52, 0, 0);
+        final BlockPos slabPos = fullPos.south();
+        final Vec3d eyeSouth = new Vec3d(
+                slabPos.getX() + 0.5d,
+                slabPos.getY() + 1.65d,
+                slabPos.getZ() + 3.55d);
+        final Vec3d aimFrontLower = new Vec3d(
+                slabPos.getX() + 0.5d,
+                slabPos.getY() + 0.08d,
+                slabPos.getZ() + 0.5d);
+        final Vec3d aimUndersideAdjacent = new Vec3d(
+                slabPos.getX() + 0.5d,
+                slabPos.getY() + 0.01d,
+                slabPos.getZ() + 0.82d);
+
+        setupFixture(singleplayer, supportPos, fullPos);
+        setLoweredSlabTarget(singleplayer, slabPos, SlabType.TOP);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        String slabSetup = "support=" + supportPos.toShortString()
+                + " full=" + fullPos.toShortString()
+                + " slab=" + slabPos.toShortString()
+                + " slabType=top";
+        runLowerHalfOwnershipProbe(
+                ctx,
+                singleplayer,
+                slabPos,
+                eyeSouth,
+                aimFrontLower,
+                "lowered_slab_front_lower_half_empty_hand",
+                "front_lower",
+                false,
+                slabSetup);
+        runLowerHalfOwnershipProbe(
+                ctx,
+                singleplayer,
+                slabPos,
+                eyeSouth,
+                aimFrontLower,
+                "lowered_slab_front_lower_half_slab_held",
+                "front_lower",
+                true,
+                slabSetup);
+        runLowerHalfOwnershipProbe(
+                ctx,
+                singleplayer,
+                slabPos,
+                eyeSouth,
+                aimUndersideAdjacent,
+                "lowered_slab_underside_adjacent_empty_hand",
+                "underside_adjacent",
+                false,
+                slabSetup);
+        runLowerHalfOwnershipProbe(
+                ctx,
+                singleplayer,
+                slabPos,
+                eyeSouth,
+                aimUndersideAdjacent,
+                "lowered_slab_underside_adjacent_slab_held",
+                "underside_adjacent",
+                true,
+                slabSetup);
+    }
+
+    private static void runLowerHalfOwnershipProbe(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            BlockPos expectedOwnerPos,
+            Vec3d eye,
+            Vec3d aimPoint,
+            String caseId,
+            String aimRegion,
+            boolean slabHeld,
+            String setupDetails
+    ) {
+        final double reach = 6.0d;
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[LOWER_HALF_OWNERSHIP_RED] case=" + caseId + " client not ready");
+            }
+
+            if (slabHeld) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            } else {
+                mc.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+            }
+
+            Vec3d delta = aimPoint.subtract(eye);
+            double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+            float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+            float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+            double feetY = eye.y - mc.player.getStandingEyeHeight();
+            mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            mc.player.setVelocity(Vec3d.ZERO);
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(reach));
+            HitResult crosshair = mc.crosshairTarget;
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            HitResult liveRay = mc.player.raycast(reach, 0.0f, false);
+            BlockHitResult outlineHit = mc.world.getBlockState(expectedOwnerPos)
+                    .getOutlineShape(mc.world, expectedOwnerPos)
+                    .raycast(rayStart, rayEnd, expectedOwnerPos);
+
+            BlockState expectedState = mc.world.getBlockState(expectedOwnerPos);
+            var expectedShape = expectedState.getOutlineShape(mc.world, expectedOwnerPos);
+            String expectedOwner = expectedOwnerPos.toShortString();
+            String crosshairOwner = asOwner(crosshair);
+            String vanillaOwner = asOwner(vanilla);
+            String liveOwner = asOwner(liveRay);
+            String outlineOwner = outlineHit == null ? "MISS" : outlineHit.getBlockPos().toShortString();
+            String held = mc.player.getMainHandStack().isEmpty()
+                    ? "empty"
+                    : mc.player.getMainHandStack().getItem().toString();
+            double expectedDy = SlabSupport.getYOffset(mc.world, expectedOwnerPos, expectedState);
+            String visualBox = expectedShape.isEmpty()
+                    ? "EMPTY"
+                    : formatBox(expectedShape.getBoundingBox().offset(expectedOwnerPos));
+
+            System.out.println("[LOWER_HALF_OWNERSHIP] case=" + caseId
+                    + " setup held=" + held
+                    + " aimRegion=" + aimRegion
+                    + " expected=" + expectedOwner
+                    + " aim=" + aimPoint
+                    + " eye=" + eye
+                    + " liveEye=" + rayStart
+                    + " dir=" + rayDir
+                    + " reach=" + reach
+                    + " visualBox=" + visualBox
+                    + " expectedState=" + expectedState
+                    + " expectedDy=" + expectedDy
+                    + " " + setupDetails);
+            System.out.println("[LOWER_HALF_OWNERSHIP] case=" + caseId
+                    + " ray expected=" + expectedOwner
+                    + " actual=" + crosshairOwner
+                    + " vanilla=" + vanillaOwner
+                    + " liveRay=" + liveOwner
+                    + " outline=" + outlineOwner);
+
+            if (!expectedOwner.equals(crosshairOwner)) {
+                System.out.println("[LOWER_HALF_OWNERSHIP_RED] case=" + caseId
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " liveRay=" + liveOwner
+                        + " outline=" + outlineOwner);
+                throw new RuntimeException("[LOWER_HALF_OWNERSHIP_RED] case=" + caseId
+                        + " expected=" + expectedOwner + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner + " liveRay=" + liveOwner
+                        + " outline=" + outlineOwner);
+            }
+
+            System.out.println("[LOWER_HALF_OWNERSHIP_GREEN] case=" + caseId
+                    + " expected=" + expectedOwner
+                    + " actual=" + crosshairOwner
+                    + " vanilla=" + vanillaOwner
+                    + " liveRay=" + liveOwner
+                    + " outline=" + outlineOwner);
+        });
+    }
+
     private static void syncPlayerAim(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
@@ -2782,6 +3025,19 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     false);
             default -> throw new IllegalArgumentException("unsupported face for repro: " + face);
         };
+    }
+
+    private static String asOwner(HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return "MISS";
+        }
+        return blockHit.getBlockPos().toShortString();
+    }
+
+    private static String formatBox(net.minecraft.util.math.Box box) {
+        return String.format(
+                "min=(%.3f,%.3f,%.3f),max=(%.3f,%.3f,%.3f)",
+                box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ);
     }
 
     private static void assertSurvivorChurnSupportTimeline(
