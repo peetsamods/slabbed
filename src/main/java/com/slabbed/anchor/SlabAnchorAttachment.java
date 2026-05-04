@@ -14,6 +14,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.SlabType;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.state.property.Properties;
@@ -35,8 +36,8 @@ import net.minecraft.world.chunk.WorldChunk;
  * <p>Storage: per-{@link WorldChunk} {@link LongOpenHashSet} of packed {@link BlockPos}
  * longs. Persisted via Fabric data attachment, synced to all watching clients.
  *
- * <p>Scope: ordinary full-block vertical slab chains only. No retroactive anchoring,
- * no side-slab persistence, no torch interaction.
+ * <p>Scope: ordinary full-block vertical slab chains and accepted lowered slab
+ * lane states only. No retroactive anchoring and no torch interaction.
  */
 public final class SlabAnchorAttachment {
     private SlabAnchorAttachment() {
@@ -53,8 +54,11 @@ public final class SlabAnchorAttachment {
      * in common code.
      */
     public static Predicate<BlockPos> clientAnchorLookup = null;
+    public static Predicate<BlockPos> clientLoweredSlabCarrierLookup = null;
 
     private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
+    private static final Identifier LOWERED_SLAB_CARRIER_ID =
+            Identifier.of(Slabbed.MOD_ID, "lowered_slab_carriers");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -92,6 +96,11 @@ public final class SlabAnchorAttachment {
                     .persistent(SET_CODEC)
                     .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
             );
+    public static final AttachmentType<LongOpenHashSet> LOWERED_SLAB_CARRIER_TYPE =
+            AttachmentRegistry.<LongOpenHashSet>create(LOWERED_SLAB_CARRIER_ID, builder -> builder
+                    .persistent(SET_CODEC)
+                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
 
     /**
      * Triggers static-init class loading. Call once from the mod entrypoint so the
@@ -99,7 +108,7 @@ public final class SlabAnchorAttachment {
      */
     public static void register() {
         // Touch the class so the static field initializes and registers with Fabric.
-        if (ANCHOR_TYPE == null) {
+        if (ANCHOR_TYPE == null || LOWERED_SLAB_CARRIER_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
     }
@@ -142,65 +151,104 @@ public final class SlabAnchorAttachment {
     }
 
     private static void addAnchorUnchecked(World world, BlockPos pos) {
+        boolean added = addToAttachment(world, pos, ANCHOR_TYPE, "anchor");
+        if (added && BsFbLiveTrace.ENABLED) {
+            BlockPos supportPos = pos.down();
+            BsFbLiveTrace.capture(world, supportPos, pos, "ANCHOR_ADDED");
+        }
+    }
+
+    public static void updatePersistentLoweredSlabCarrier(World world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClient()) {
+            return;
+        }
+        boolean qualifies = qualifiesForPersistentLoweredSlabCarrier(world, pos, state);
+        if (TRACE) {
+            Slabbed.LOGGER.info("[ANCHOR] lowered slab carrier update side=SERVER pos={} state={} qualifies={}",
+                    pos.toShortString(), state, qualifies);
+        }
+        if (qualifies) {
+            addToAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
+        } else if (state != null && state.getBlock() instanceof SlabBlock) {
+            removeFromAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
+        }
+    }
+
+    private static boolean addToAttachment(
+            World world,
+            BlockPos pos,
+            AttachmentType<LongOpenHashSet> type,
+            String label
+    ) {
         WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             if (TRACE) {
-                Slabbed.LOGGER.info("[ANCHOR] add reject pos={} reason=chunk_null", pos.toShortString());
+                Slabbed.LOGGER.info("[ANCHOR] {} add reject pos={} reason=chunk_null", label, pos.toShortString());
             }
-            return;
+            return false;
         }
-        LongOpenHashSet existing = chunk.getAttached(ANCHOR_TYPE);
+        LongOpenHashSet existing = chunk.getAttached(type);
         LongOpenHashSet set = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
         if (set.add(pos.asLong())) {
             // setAttached triggers persistence + auto-sync for synced attachments.
-            chunk.setAttached(ANCHOR_TYPE, set);
+            chunk.setAttached(type, set);
             if (TRACE) {
-                Slabbed.LOGGER.info("[ANCHOR] add success pos={} chunk={} setSize={}",
-                        pos.toShortString(), chunk.getPos(), set.size());
+                Slabbed.LOGGER.info("[ANCHOR] {} add success pos={} chunk={} setSize={}",
+                        label, pos.toShortString(), chunk.getPos(), set.size());
             }
-            // BS-FB Live Trace: capture anchor addition
-            if (BsFbLiveTrace.ENABLED) {
-                BlockPos supportPos = pos.down();
-                BsFbLiveTrace.capture(world, supportPos, pos, "ANCHOR_ADDED");
-            }
+            return true;
         }
+        return false;
     }
 
     /**
      * Clears any anchor at {@code pos}. Server-side only.
      */
     public static void removeAnchor(World world, BlockPos pos) {
+        boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
+        if (removed && BsFbLiveTrace.ENABLED) {
+            BlockPos supportPos = pos.down();
+            BsFbLiveTrace.capture(world, supportPos, pos, "ANCHOR_REMOVED");
+        }
+    }
+
+    public static void removePersistentLoweredSlabCarrier(World world, BlockPos pos) {
+        removeFromAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
+    }
+
+    private static boolean removeFromAttachment(
+            World world,
+            BlockPos pos,
+            AttachmentType<LongOpenHashSet> type,
+            String label
+    ) {
         if (world == null || world.isClient()) {
-            return;
+            return false;
         }
         WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
-            return;
+            return false;
         }
-        LongOpenHashSet existing = chunk.getAttached(ANCHOR_TYPE);
+        LongOpenHashSet existing = chunk.getAttached(type);
         if (existing == null || existing.isEmpty()) {
             if (TRACE) {
-                Slabbed.LOGGER.info("[ANCHOR] remove pos={} existed=false", pos.toShortString());
+                Slabbed.LOGGER.info("[ANCHOR] {} remove pos={} existed=false", label, pos.toShortString());
             }
-            return;
+            return false;
         }
         LongOpenHashSet set = new LongOpenHashSet(existing);
         boolean removed = set.remove(pos.asLong());
         if (TRACE) {
-            Slabbed.LOGGER.info("[ANCHOR] remove pos={} existed={}", pos.toShortString(), removed);
+            Slabbed.LOGGER.info("[ANCHOR] {} remove pos={} existed={}", label, pos.toShortString(), removed);
         }
         if (removed) {
             if (set.isEmpty()) {
-                chunk.removeAttached(ANCHOR_TYPE);
+                chunk.removeAttached(type);
             } else {
-                chunk.setAttached(ANCHOR_TYPE, set);
-            }
-            // BS-FB Live Trace: capture anchor removal
-            if (BsFbLiveTrace.ENABLED) {
-                BlockPos supportPos = pos.down();
-                BsFbLiveTrace.capture(world, supportPos, pos, "ANCHOR_REMOVED");
+                chunk.setAttached(type, set);
             }
         }
+        return removed;
     }
 
     // ── shared query ──────────────────────────────────────────────────
@@ -233,6 +281,26 @@ public final class SlabAnchorAttachment {
                     w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return anchored;
+    }
+
+    public static boolean isPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
+        if (!isPersistentLoweredSlabCarrierState(state) || pos == null) {
+            return false;
+        }
+        if (!(world instanceof World w)) {
+            return clientLoweredSlabCarrierLookup != null && clientLoweredSlabCarrierLookup.test(pos);
+        }
+        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return false;
+        }
+        LongOpenHashSet set = chunk.getAttached(LOWERED_SLAB_CARRIER_TYPE);
+        boolean carrier = set != null && set.contains(pos.asLong());
+        if (TRACE && carrier) {
+            Slabbed.LOGGER.info("[ANCHOR] lowered slab carrier query true side={} pos={}",
+                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+        }
+        return carrier;
     }
 
     // ── qualifier ─────────────────────────────────────────────────────
@@ -296,11 +364,42 @@ public final class SlabAnchorAttachment {
         return qualifiesForAnchor(world, pos, state) && SlabSupport.hasBottomSlabBelow(world, pos);
     }
 
-    private static boolean qualifiesAsVerticalChainSupport(BlockView world, BlockPos pos, BlockState state) {
-        if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)) {
+    public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
+        return isPersistentLoweredSlabCarrierState(state)
+                && (SlabSupport.isLoweredSideLaneSlabCarrier(world, pos, state)
+                || qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(world, pos, state));
+    }
+
+    private static boolean isPersistentLoweredSlabCarrierState(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof SlabBlock
+                && state.contains(SlabBlock.TYPE)
+                && state.getFluidState().isEmpty();
+    }
+
+    private static boolean qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(
+            BlockView world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (world == null || pos == null || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.getFluidState().isEmpty()
+                || SlabSupport.getYOffset(world, pos, state) != -0.5) {
             return false;
         }
-        return SlabSupport.getYOffset(world, pos, state) == -0.5;
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
+            return false;
+        }
+        return isAnchored(world, belowPos) || SlabSupport.getYOffset(world, belowPos, below) == -0.5;
+    }
+
+    private static boolean qualifiesAsVerticalChainSupport(BlockView world, BlockPos pos, BlockState state) {
+        return SlabSupport.isFullHeightLoweredCarrier(world, pos, state);
     }
 
     private static boolean qualifiesForSideAdjacentLoweredFullAnchor(
@@ -311,7 +410,7 @@ public final class SlabAnchorAttachment {
             BlockState sourceState
     ) {
         if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)
-                || !isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)) {
+                || !SlabSupport.isFullHeightLoweredCarrier(world, sourcePos, sourceState)) {
             return false;
         }
         int dx = Math.abs(pos.getX() - sourcePos.getX());
@@ -320,7 +419,6 @@ public final class SlabAnchorAttachment {
         if (dy != 0 || dx + dz != 1) {
             return false;
         }
-        return isAnchored(world, sourcePos)
-                && SlabSupport.getYOffset(world, sourcePos, sourceState) == -0.5;
+        return SlabSupport.getYOffset(world, sourcePos, sourceState) == -0.5;
     }
 }
