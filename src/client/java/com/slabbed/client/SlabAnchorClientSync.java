@@ -5,6 +5,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
@@ -12,8 +13,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.WorldChunk;
 
 /**
- * Schedules a client-side block rerender for every anchored position when the
- * {@link SlabAnchorAttachment#ANCHOR_TYPE} chunk attachment changes on the client.
+ * Schedules a client-side block rerender for every anchored/lowered-carrier
+ * position when synced chunk attachments change on the client.
  *
  * <p>Without this, the first chunk render may run before the attachment sync
  * packet arrives, causing {@code SlabSupport.getYOffset} to return 0.0 (no
@@ -47,13 +48,40 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE);
             return set != null && set.contains(pos.asLong());
         };
+        SlabAnchorAttachment.clientLoweredSlabCarrierLookup = pos -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc == null || mc.world == null) {
+                return false;
+            }
+            WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk == null) {
+                return false;
+            }
+            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
 
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
 
     private static void onChunkLoad(net.minecraft.client.world.ClientWorld world, WorldChunk chunk) {
         // Register listener for future attachment changes (e.g. live anchor add/remove sync).
-        chunk.<LongOpenHashSet>onAttachedSet(SlabAnchorAttachment.ANCHOR_TYPE).register((oldSet, newSet) -> {
+        registerRerenderListener(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
+        registerRerenderListener(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+
+        // Also handle any attachment value already present at chunk-load time.
+        // This covers the case where the chunk attachment sync packet arrived before
+        // CHUNK_LOAD (or together with the initial chunk data), so onAttachedSet never
+        // fires but the attachment is already populated.
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+    }
+
+    private static void registerRerenderListener(
+            WorldChunk chunk,
+            AttachmentType<LongOpenHashSet> attachmentType
+    ) {
+        chunk.<LongOpenHashSet>onAttachedSet(attachmentType).register((oldSet, newSet) -> {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.worldRenderer == null) {
                 return;
@@ -61,12 +89,13 @@ public final class SlabAnchorClientSync {
             scheduleRerendersForSet(mc, oldSet);
             scheduleRerendersForSet(mc, newSet);
         });
+    }
 
-        // Also handle any attachment value already present at chunk-load time.
-        // This covers the case where the chunk attachment sync packet arrived before
-        // CHUNK_LOAD (or together with the initial chunk data), so onAttachedSet never
-        // fires but the attachment is already populated.
-        LongOpenHashSet initial = chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE);
+    private static void scheduleInitialRerenders(
+            WorldChunk chunk,
+            AttachmentType<LongOpenHashSet> attachmentType
+    ) {
+        LongOpenHashSet initial = chunk.getAttached(attachmentType);
         if (initial != null && !initial.isEmpty()) {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.worldRenderer != null) {
