@@ -360,13 +360,19 @@ public final class SlabSupport {
      * FB, world Y span [pos.y, pos.y + 0.5]).
      * <br>DOUBLE → full-cube alignment with the lowered FB.
      */
+    public static boolean isCompatibleLoweredSlabLane(SlabType existingType, SlabType incomingType) {
+        return existingType == incomingType
+                || existingType == SlabType.DOUBLE
+                || incomingType == SlabType.DOUBLE;
+    }
+
     private static boolean isCompatibleLoweredSlabLane(BlockState a, BlockState b) {
         if (!a.contains(SlabBlock.TYPE) || !b.contains(SlabBlock.TYPE)) {
             return false;
         }
         SlabType aType = a.get(SlabBlock.TYPE);
         SlabType bType = b.get(SlabBlock.TYPE);
-        return aType == bType || aType == SlabType.DOUBLE || bType == SlabType.DOUBLE;
+        return isCompatibleLoweredSlabLane(aType, bType);
     }
 
     private static boolean hasLoweredSolidSideSupport(BlockView world, BlockPos slabPos) {
