@@ -10,7 +10,8 @@
       "com.slabbed.test.ChainSurvivalReproTest"
     ],
     "fabric-client-gametest": [
-      "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest"
+      "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest",
+      "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest"
     ]
   },
   "depends": {

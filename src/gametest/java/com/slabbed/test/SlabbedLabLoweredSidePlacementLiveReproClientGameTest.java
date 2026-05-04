@@ -80,6 +80,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
+            runLoweredDoubleLowerHalfBoundaryCase(ctx, singleplayer, Direction.EAST);
+        }
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
             runLoweredTopUpMergeCase(ctx, singleplayer);
         }
 
@@ -2363,6 +2369,77 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 }
             });
         }
+    }
+
+    private static void runLoweredDoubleLowerHalfBoundaryCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Direction face
+    ) {
+        System.out.println("[LOWERED_DOUBLE_BOUNDARY] start face=" + face);
+        final BlockPos targetPos = FULL_POS.offset(face);
+        final BlockPos behindPos = targetPos.offset(face);
+        final BlockHitResult hit = resolveLoweredFaceHit(targetPos, face, -0.5d);
+
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        setLoweredSlabTarget(singleplayer, targetPos, SlabType.TOP);
+        setLoweredSlabTarget(singleplayer, targetPos, SlabType.DOUBLE);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        movePlayerForFace(ctx, singleplayer, targetPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for lowered-DOUBLE boundary ownership case on " + face);
+            }
+            ActionResult firstResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!firstResult.isAccepted()) {
+                throw new RuntimeException("boundary lower-half click on lowered DOUBLE was not accepted: " + firstResult);
+            }
+
+            BlockState targetState = mc.world.getBlockState(targetPos);
+            BlockState behindAfterFirst = mc.world.getBlockState(behindPos);
+            if (!targetState.isOf(Blocks.STONE_SLAB)
+                    || !targetState.contains(SlabBlock.TYPE)
+                    || targetState.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                throw new RuntimeException("boundary case changed lowered DOUBLE target unexpectedly: " + targetState + " result=" + firstResult);
+            }
+            double targetDy = SlabSupport.getYOffset(mc.world, targetPos, targetState);
+            if (Math.abs(targetDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("boundary case target lost lowered DOUBLE dy: " + targetDy + " result=" + firstResult);
+            }
+            if (!behindAfterFirst.isOf(Blocks.STONE_SLAB)
+                    || !behindAfterFirst.contains(SlabBlock.TYPE)
+                    || behindAfterFirst.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw new RuntimeException("boundary case first click expected BOTTOM at " + behindPos + ", found " + behindAfterFirst);
+            }
+            double behindFirstDy = SlabSupport.getYOffset(mc.world, behindPos, behindAfterFirst);
+            if (Math.abs(behindFirstDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("boundary case first click behind state not lowered lane: dy="
+                        + behindFirstDy + " state=" + behindAfterFirst + " result=" + firstResult);
+            }
+
+            ActionResult secondResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!secondResult.isAccepted()) {
+                throw new RuntimeException("boundary case second click on lowered DOUBLE was not accepted: " + secondResult);
+            }
+            BlockState behindAfterSecond = mc.world.getBlockState(behindPos);
+            if (!behindAfterSecond.isOf(Blocks.STONE_SLAB)
+                    || !behindAfterSecond.contains(SlabBlock.TYPE)
+                    || behindAfterSecond.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                throw new RuntimeException("boundary case second click expected legal merge to DOUBLE, found "
+                        + behindAfterSecond + " result=" + secondResult);
+            }
+            double behindSecondDy = SlabSupport.getYOffset(mc.world, behindPos, behindAfterSecond);
+            if (Math.abs(behindSecondDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("boundary case second click merged behind state out of lowered lane: dy="
+                        + behindSecondDy + " state=" + behindAfterSecond + " result=" + secondResult);
+            }
+            System.out.println("[LOWERED_DOUBLE_BOUNDARY_GREEN] face=" + face
+                    + " targetDy=" + targetDy + " behindSecondDy=" + behindSecondDy
+                    + " behindAfterFirst=" + behindAfterFirst.get(SlabBlock.TYPE)
+                    + " behindAfterSecond=" + behindAfterSecond.get(SlabBlock.TYPE));
+        });
     }
 
     private static void syncPlayerAim(
