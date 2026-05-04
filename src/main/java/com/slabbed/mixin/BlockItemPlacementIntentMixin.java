@@ -46,14 +46,6 @@ public abstract class BlockItemPlacementIntentMixin {
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d;
     }
 
-    private static boolean slabbed$isCompatibleLoweredSlabLane(BlockState candidate, BlockState target) {
-        return candidate.contains(SlabBlock.TYPE)
-                && target.contains(SlabBlock.TYPE)
-                && (candidate.get(SlabBlock.TYPE) == target.get(SlabBlock.TYPE)
-                || candidate.get(SlabBlock.TYPE) == SlabType.DOUBLE
-                || target.get(SlabBlock.TYPE) == SlabType.DOUBLE);
-    }
-
     private static SlabType slabbed$getExpectedLoweredSidePlacementType(BlockState targetState) {
         if (!targetState.contains(SlabBlock.TYPE)) {
             return SlabType.BOTTOM;
@@ -83,7 +75,11 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos targetPos = context.getBlockPos().offset(context.getSide().getOpposite());
         BlockState targetState = world.getBlockState(targetPos);
         return slabbed$isLoweredSlab(targetState, world, targetPos)
-                && slabbed$isCompatibleLoweredSlabLane(state, targetState);
+                && state.contains(SlabBlock.TYPE)
+                && targetState.contains(SlabBlock.TYPE)
+                && SlabSupport.isCompatibleLoweredSlabLane(
+                        targetState.get(SlabBlock.TYPE),
+                        state.get(SlabBlock.TYPE));
     }
 
     private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
