@@ -123,6 +123,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 .create()) {
             runLoweredDoubleLowerHalfBoundaryCase(ctx, singleplayer, Direction.EAST);
         }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runLoweredDoubleSidePlacementCreatedNormalBottomLaneProofCase(ctx, singleplayer);
+        }
 
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
@@ -1890,6 +1895,151 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (Math.abs(placedDy + 0.5d) > EPSILON) {
                 throw new RuntimeException("expected lowered dy=-0.500 for " + targetType + " target on "
                         + face + " side, found dy=" + placedDy + " state=" + placed);
+            }
+        });
+    }
+
+    private static void runLoweredDoubleSidePlacementCreatedNormalBottomLaneProofCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final String proof = "LOWERED_DOUBLE_SIDE_PLACEMENT_CREATED_NORMAL_BOTTOM_LANE";
+        final Direction clickedFace = Direction.SOUTH;
+        final BlockPos targetPos = FULL_POS.offset(clickedFace);
+        final BlockPos placePos = targetPos.offset(clickedFace);
+        final BlockPos downPos = placePos.down();
+        final BlockPos northPos = placePos.north();
+        final BlockPos eastPos = northPos.east();
+        final BlockPos southPos = placePos.south();
+        final BlockHitResult hit = resolveLoweredFaceHit(targetPos, clickedFace, -0.5d);
+
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        setLoweredSlabTarget(singleplayer, targetPos, SlabType.DOUBLE);
+        setLoweredSlabTarget(singleplayer, eastPos, SlabType.BOTTOM);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        movePlayerForFace(ctx, singleplayer, targetPos, clickedFace);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[" + proof + "] client not ready");
+            }
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            BlockState targetState = mc.world.getBlockState(targetPos);
+            BlockState placeBefore = mc.world.getBlockState(placePos);
+            BlockState downState = mc.world.getBlockState(downPos);
+            BlockState northState = mc.world.getBlockState(northPos);
+            BlockState eastState = mc.world.getBlockState(eastPos);
+            BlockState southState = mc.world.getBlockState(southPos);
+            ItemStack heldStack = mc.player.getMainHandStack();
+            String heldItem = heldStack.isEmpty() ? "empty" : heldStack.getItem().toString();
+
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            BlockState placeAfter = mc.world.getBlockState(placePos);
+
+            String expected = "minecraft:stone_slab[type=top] dy=-0.500 lowered=true";
+            boolean expectedLoweredLaneByLaw = SlabSupport.isCompatibleLoweredSlabLane(SlabType.DOUBLE, SlabType.TOP);
+
+            SlabType actualType = placeAfter.isOf(Blocks.STONE_SLAB) && placeAfter.contains(SlabBlock.TYPE)
+                    ? placeAfter.get(SlabBlock.TYPE)
+                    : null;
+            double actualDy = SlabSupport.getYOffset(mc.world, placePos, placeAfter);
+            boolean actualLowered = actualDy < -EPSILON;
+
+            double targetDy = SlabSupport.getYOffset(mc.world, targetPos, targetState);
+            boolean targetLowered = targetDy < -EPSILON;
+            double downDy = SlabSupport.getYOffset(mc.world, downPos, downState);
+            boolean downLowered = downDy < -EPSILON;
+            double northDy = SlabSupport.getYOffset(mc.world, northPos, northState);
+            boolean northLowered = northDy < -EPSILON;
+            double eastDy = SlabSupport.getYOffset(mc.world, eastPos, eastState);
+            boolean eastLowered = eastDy < -EPSILON;
+            double southDy = SlabSupport.getYOffset(mc.world, southPos, southState);
+            boolean southLowered = southDy < -EPSILON;
+
+            boolean actualNormalBottom = placeAfter.isOf(Blocks.STONE_SLAB)
+                    && placeAfter.contains(SlabBlock.TYPE)
+                    && placeAfter.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(actualDy) <= EPSILON
+                    && !actualLowered;
+            boolean contextLowered = targetLowered && northLowered && eastLowered;
+            boolean actualExpectedLowered = placeAfter.isOf(Blocks.STONE_SLAB)
+                    && placeAfter.contains(SlabBlock.TYPE)
+                    && placeAfter.get(SlabBlock.TYPE) == SlabType.TOP
+                    && Math.abs(actualDy + 0.5d) <= EPSILON
+                    && actualLowered;
+
+            boolean actualBottomLoweredHalf = placeAfter.isOf(Blocks.STONE_SLAB)
+                    && placeAfter.contains(SlabBlock.TYPE)
+                    && placeAfter.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(actualDy + 0.5d) <= EPSILON
+                    && actualLowered;
+
+            String classification;
+            if (result.isAccepted() && actualNormalBottom && contextLowered && expectedLoweredLaneByLaw) {
+                classification = "RED_LIVE_REPRO";
+            } else if (result.isAccepted() && actualBottomLoweredHalf) {
+                classification = "HYPOTHESIS_NOT_REPRODUCED";
+            } else if (result.isAccepted() && actualExpectedLowered && expectedLoweredLaneByLaw) {
+                classification = "GREEN_ALREADY_FIXED";
+            } else {
+                classification = "PROOF_GAP";
+            }
+
+            System.out.println("[" + proof + "] heldItem=" + heldItem);
+            System.out.println("[" + proof + "] clicked targetPos=" + targetPos.toShortString()
+                    + " targetState=" + targetState
+                    + " targetType=" + (targetState.contains(SlabBlock.TYPE) ? targetState.get(SlabBlock.TYPE) : "none")
+                    + " targetDy=" + targetDy
+                    + " targetLowered=" + targetLowered);
+            System.out.println("[" + proof + "] clicked face=" + clickedFace.asString()
+                    + " hitPos=" + hit.getPos()
+                    + " intended placePos=" + placePos.toShortString());
+            System.out.println("[" + proof + "] before placePosState=" + placeBefore);
+            System.out.println("[" + proof + "] neighbor down pos=" + downPos.toShortString()
+                    + " state=" + downState
+                    + " slabType=" + (downState.contains(SlabBlock.TYPE) ? downState.get(SlabBlock.TYPE) : "none")
+                    + " dy=" + downDy
+                    + " lowered=" + downLowered);
+            System.out.println("[" + proof + "] neighbor north pos=" + northPos.toShortString()
+                    + " state=" + northState
+                    + " slabType=" + (northState.contains(SlabBlock.TYPE) ? northState.get(SlabBlock.TYPE) : "none")
+                    + " dy=" + northDy
+                    + " lowered=" + northLowered);
+            System.out.println("[" + proof + "] neighbor east pos=" + eastPos.toShortString()
+                    + " state=" + eastState
+                    + " slabType=" + (eastState.contains(SlabBlock.TYPE) ? eastState.get(SlabBlock.TYPE) : "none")
+                    + " dy=" + eastDy
+                    + " lowered=" + eastLowered);
+            System.out.println("[" + proof + "] neighbor south pos=" + southPos.toShortString()
+                    + " state=" + southState
+                    + " slabType=" + (southState.contains(SlabBlock.TYPE) ? southState.get(SlabBlock.TYPE) : "none")
+                    + " dy=" + southDy
+                    + " lowered=" + southLowered);
+            System.out.println("[" + proof + "] placement result=" + result);
+            System.out.println("[" + proof + "] after placePosState=" + placeAfter);
+            System.out.println("[" + proof + "] expected lowered-lane result=" + expected
+                    + " lawCompatible=" + expectedLoweredLaneByLaw);
+            System.out.println("[" + proof + "] actual slabType=" + (actualType == null ? "none" : actualType)
+                    + " dy=" + actualDy
+                    + " lowered=" + actualLowered);
+            if ("HYPOTHESIS_NOT_REPRODUCED".equals(classification)) {
+                System.out.println("[" + proof + "] expectedBadPattern=bottom_dy0"
+                        + " actual=bottom_dy-0.5_lowered_true"
+                        + " noGameplayFixWarranted=true");
+            }
+            System.out.println("[" + proof + "] classification=" + classification);
+
+            if ("RED_LIVE_REPRO".equals(classification)) {
+                throw new RuntimeException("RED_LIVE_REPRO: " + proof
+                        + " created normal bottom lane in lowered side-lane context");
             }
         });
     }
