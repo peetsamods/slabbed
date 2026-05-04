@@ -118,6 +118,7 @@ public final class SlabbedLabUltraGoblin2StressClientGameTest implements FabricC
         });
 
         runVisibleLoweredSlabMissAngleOwnerGapProof(ctx, singleplayer);
+        runItemSensitiveSlabHeldRangeJankProof(ctx, singleplayer);
 
         System.out.println(PREFIX + "[PHASE_END] PHASE_19_LIVE_RECORDER_SLAB_HELD_RETARGET_OVERREACH_REPRO");
         System.out.println(PREFIX + "[GREEN] phase=SUMMARY raysTested=1 raysOwned=1");
@@ -259,6 +260,113 @@ public final class SlabbedLabUltraGoblin2StressClientGameTest implements FabricC
                     + " ray=MISS-angle eye=" + missAngleEye
                     + " end=" + missAngleEnd
                     + " hitAngleOutline=" + describeHit(hitOutline));
+        });
+    }
+
+    private static void runItemSensitiveSlabHeldRangeJankProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        String proofName = "RED_ITEM_SENSITIVE_SLAB_HELD_RANGE_JANK";
+        System.out.println("[SBSB-TRACE][ITEM_SENSITIVE_RANGE_ROUTE] running " + proofName);
+
+        // Pair-1 live A/B coordinates from inspect traces.
+        // stone: final=3,-59,-28/east ; stone_slab: final=3,-60,-27/north.
+        BlockPos slabOwner = new BlockPos(3, -60, -27);
+        BlockPos loweredDoubleOwner = new BlockPos(3, -59, -28);
+        BlockPos companionSlab = new BlockPos(2, -60, -27);
+        BlockPos anchoredFullBlock = new BlockPos(3, -59, -27);
+        Vec3d rayEye = new Vec3d(6.3188d, -58.3800d, -28.8129d);
+        Vec3d rayEnd = new Vec3d(1.3210d, -60.2220d, -26.0510d);
+        float yaw = 61.076f;
+        float pitch = 17.880f;
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = slabOwner.getX() - 3; x <= loweredDoubleOwner.getX() + 3; x++) {
+                for (int y = slabOwner.getY() - 3; y <= loweredDoubleOwner.getY() + 3; y++) {
+                    for (int z = loweredDoubleOwner.getZ() - 3; z <= slabOwner.getZ() + 3; z++) {
+                        BlockPos clearPos = new BlockPos(x, y, z);
+                        SlabAnchorAttachment.removeAnchor(world, clearPos);
+                        SlabAnchorAttachment.removePersistentLoweredSlabCarrier(world, clearPos);
+                        world.setBlockState(clearPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+            world.setBlockState(companionSlab, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabOwner, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+            world.setBlockState(anchoredFullBlock, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, anchoredFullBlock, world.getBlockState(anchoredFullBlock));
+            world.setBlockState(loweredDoubleOwner, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, loweredDoubleOwner, world.getBlockState(loweredDoubleOwner));
+        });
+
+        waitForPlacementSync(ctx);
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncPlayerAim(ctx, singleplayer, rayEye, rayEnd);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null) {
+                throw new RuntimeException(proofName + " client not ready");
+            }
+            var cam = mc.getCameraEntity();
+            if (cam == null) {
+                throw new RuntimeException(proofName + " camera missing");
+            }
+            BlockPos expectedOwner = loweredDoubleOwner;
+
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+            HitResult stoneInitial = mc.player.raycast(6.0d, 0.0f, false);
+            HitResult stoneFinal = SlabbedRetargetTestHooks.findLoweredSideSlabRetarget(mc.world, cam, rayEye, rayEnd, stoneInitial, false);
+            HitResult stoneResolved = stoneFinal != null ? stoneFinal : stoneInitial;
+            boolean stoneRetargetFired = stoneFinal != null;
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            HitResult slabInitial = mc.player.raycast(6.0d, 0.0f, false);
+            HitResult slabFinal = SlabbedRetargetTestHooks.findLoweredSideSlabRetarget(mc.world, cam, rayEye, rayEnd, slabInitial, true);
+            HitResult slabResolved = slabFinal != null ? slabFinal : slabInitial;
+            boolean slabRetargetFired = slabFinal != null;
+
+            String stonePos = (stoneResolved instanceof BlockHitResult s) ? s.getBlockPos().toShortString() : describeHit(stoneResolved);
+            String slabPos = (slabResolved instanceof BlockHitResult s) ? s.getBlockPos().toShortString() : describeHit(slabResolved);
+
+            System.out.println("[SBSB-TRACE][ITEM_SENSITIVE_RANGE_ROUTE] "
+                    + "proof=" + proofName
+                    + " rayEye=" + rayEye
+                    + " rayEnd=" + rayEnd
+                    + " yaw=" + yaw
+                    + " pitch=" + pitch
+                    + " expectedOwner=" + expectedOwner.toShortString()
+                    + " stone.held=stone"
+                    + " stone.initial=" + describeHit(stoneInitial)
+                    + " stone.final=" + describeHit(stoneResolved)
+                    + " stone.sideSlabRetargetFired=" + stoneRetargetFired
+                    + " stone.comfortFired=false"
+                    + " slab.held=stone_slab"
+                    + " slab.initial=" + describeHit(slabInitial)
+                    + " slab.final=" + describeHit(slabResolved)
+                    + " slab.sideSlabRetargetFired=" + slabRetargetFired
+                    + " slab.comfortFired=false"
+                    + " note=live-log-exact-coordinate-space");
+
+            boolean stoneMatches = stoneResolved instanceof BlockHitResult s && s.getBlockPos().equals(expectedOwner);
+            boolean slabMatches = slabResolved instanceof BlockHitResult s && s.getBlockPos().equals(expectedOwner);
+            if (!stoneMatches || !slabMatches) {
+                throw new RuntimeException("RED: " + proofName
+                        + " slab-held targeting lost lowered owner for same camera/geometry"
+                        + " expectedLoweredOwner=" + expectedOwner.toShortString()
+                        + " stoneHeldResult=" + stonePos
+                        + " slabHeldResult=" + slabPos
+                        + " ray=eye=" + rayEye + " end=" + rayEnd
+                        + " yaw=" + yaw + " pitch=" + pitch
+                        + " stoneRetargetFired=" + stoneRetargetFired
+                        + " slabRetargetFired=" + slabRetargetFired);
+            }
+            System.out.println("[GREEN] " + proofName
+                    + " expectedLoweredOwner=" + expectedOwner.toShortString()
+                    + " stoneHeldResult=" + stonePos
+                    + " slabHeldResult=" + slabPos
+                    + " stoneRetargetFired=" + stoneRetargetFired
+                    + " slabRetargetFired=" + slabRetargetFired);
         });
     }
 
