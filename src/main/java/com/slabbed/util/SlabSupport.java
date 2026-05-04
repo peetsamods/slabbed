@@ -464,7 +464,10 @@ public final class SlabSupport {
                 || !state.getFluidState().isEmpty()) {
             return false;
         }
-        return isLoweredCarrier(world, pos, state, MAX_CHAIN_DEPTH, false);
+        if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {
+            return true;
+        }
+        return isLoweredCarrier(world, pos.down(), world.getBlockState(pos.down()), MAX_CHAIN_DEPTH, false);
     }
 
     private static boolean isFullHeightLoweredCarrierForSideSupport(BlockView world, BlockPos pos, BlockState state) {
