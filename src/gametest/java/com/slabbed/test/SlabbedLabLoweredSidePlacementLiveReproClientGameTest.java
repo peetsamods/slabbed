@@ -98,6 +98,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 .create()) {
             runLiteralScreenshotLoweredSlabSideCase(ctx, singleplayer);
         }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runBridgeShapeLowerHalfReproCase(ctx, singleplayer);
+        }
 
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
@@ -2989,6 +2994,225 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " outline=" + outlineOwner);
             }
             System.out.println("[SCREENSHOT_REPRO] case=" + caseId
+                    + " calibration=aim_miss expected=" + expectedOwner
+                    + " actual=" + crosshairOwner
+                    + " vanilla=" + vanillaOwner
+                    + " outline=" + outlineOwner);
+        });
+    }
+
+    private static void runBridgeShapeLowerHalfReproCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos leftSupport = SUPPORT_POS.add(88, 0, 0);
+        final BlockPos leftFull = leftSupport.up();
+        final BlockPos midFullA = leftFull.east();
+        final BlockPos midFullB = midFullA.east();
+        final BlockPos rightFull = midFullB.east();
+        final BlockPos rightSupport = rightFull.down();
+        final BlockPos topSlabA = midFullA.up();
+        final BlockPos topSlabB = midFullB.up();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = leftSupport.getX() - 3; x <= rightSupport.getX() + 3; x++) {
+                for (int z = leftSupport.getZ() - 2; z <= leftSupport.getZ() + 2; z++) {
+                    for (int y = leftSupport.getY() - 1; y <= leftSupport.getY() + 3; y++) {
+                        world.setBlockState(
+                                new BlockPos(x, y, z),
+                                Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+
+            world.setBlockState(
+                    leftSupport,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    rightSupport,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(leftFull, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(midFullA, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(midFullB, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(rightFull, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+
+            SlabAnchorAttachment.addAnchor(world, leftFull, world.getBlockState(leftFull));
+            SlabAnchorAttachment.addAnchor(world, rightFull, world.getBlockState(rightFull));
+            SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(
+                    world,
+                    midFullA,
+                    world.getBlockState(midFullA),
+                    leftFull,
+                    world.getBlockState(leftFull));
+            SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(
+                    world,
+                    midFullB,
+                    world.getBlockState(midFullB),
+                    midFullA,
+                    world.getBlockState(midFullA));
+
+            world.setBlockState(
+                    topSlabA,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    topSlabB,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        String shape = "shape=BSFB->FB->FB->BSFB_with_top_slabs"
+                + " leftSupport=" + leftSupport.toShortString()
+                + " leftFull=" + leftFull.toShortString()
+                + " midA=" + midFullA.toShortString()
+                + " midB=" + midFullB.toShortString()
+                + " rightFull=" + rightFull.toShortString()
+                + " rightSupport=" + rightSupport.toShortString()
+                + " topA=" + topSlabA.toShortString()
+                + " topB=" + topSlabB.toShortString();
+
+        runBridgeLowerHalfProbe(
+                ctx,
+                midFullA,
+                new Vec3d(midFullA.getX() + 0.5d, midFullA.getY() + 1.65d, midFullA.getZ() + 2.55d),
+                new Vec3d(midFullA.getX() + 0.5d, midFullA.getY() - 0.30d, midFullA.getZ() + 0.5d),
+                "bridge_fb1_front_lower_slab_held",
+                "front_lower_center",
+                new ItemStack(Items.STONE_SLAB, 8),
+                shape);
+        runBridgeLowerHalfProbe(
+                ctx,
+                midFullB,
+                new Vec3d(midFullB.getX() + 0.5d, midFullB.getY() + 1.65d, midFullB.getZ() + 2.55d),
+                new Vec3d(midFullB.getX() + 0.5d, midFullB.getY() - 0.30d, midFullB.getZ() + 0.5d),
+                "bridge_fb2_front_lower_empty_hand",
+                "front_lower_center",
+                ItemStack.EMPTY,
+                shape);
+        runBridgeLowerHalfProbe(
+                ctx,
+                topSlabA,
+                new Vec3d(topSlabA.getX() - 2.35d, topSlabA.getY() + 1.60d, topSlabA.getZ() + 0.5d),
+                new Vec3d(topSlabA.getX() + 0.02d, topSlabA.getY() + 0.10d, topSlabA.getZ() + 0.5d),
+                "bridge_top_slabA_side_lower_slab_held",
+                "side_lower_center",
+                new ItemStack(Items.STONE_SLAB, 8),
+                shape);
+        runBridgeLowerHalfProbe(
+                ctx,
+                topSlabB,
+                new Vec3d(topSlabB.getX() + 2.35d, topSlabB.getY() + 1.60d, topSlabB.getZ() + 0.5d),
+                new Vec3d(topSlabB.getX() + 0.98d, topSlabB.getY() + 0.10d, topSlabB.getZ() + 0.5d),
+                "bridge_top_slabB_side_lower_empty_hand",
+                "side_lower_center",
+                ItemStack.EMPTY,
+                shape);
+    }
+
+    private static void runBridgeLowerHalfProbe(
+            ClientGameTestContext ctx,
+            BlockPos expectedOwnerPos,
+            Vec3d eye,
+            Vec3d aimPoint,
+            String caseId,
+            String aimRegion,
+            ItemStack heldStack,
+            String setupDetails
+    ) {
+        final double reach = 6.0d;
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[BRIDGE_LOWER_HALF_RED] case=" + caseId + " client not ready");
+            }
+            if (heldStack == null || heldStack.isEmpty()) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+            } else {
+                mc.player.setStackInHand(Hand.MAIN_HAND, heldStack.copy());
+            }
+
+            Vec3d delta = aimPoint.subtract(eye);
+            double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+            float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+            float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+            double feetY = eye.y - mc.player.getStandingEyeHeight();
+            mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            mc.player.setVelocity(Vec3d.ZERO);
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(reach));
+            HitResult crosshair = mc.crosshairTarget;
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            BlockState expectedState = mc.world.getBlockState(expectedOwnerPos);
+            BlockHitResult outlineHit = expectedState.getOutlineShape(mc.world, expectedOwnerPos)
+                    .raycast(rayStart, rayEnd, expectedOwnerPos);
+
+            String expectedOwner = expectedOwnerPos.toShortString();
+            String crosshairOwner = asOwner(crosshair);
+            String vanillaOwner = asOwner(vanilla);
+            String outlineOwner = outlineHit == null ? "MISS" : outlineHit.getBlockPos().toShortString();
+            String held = mc.player.getMainHandStack().isEmpty()
+                    ? "empty"
+                    : mc.player.getMainHandStack().getItem().toString();
+            double expectedDy = SlabSupport.getYOffset(mc.world, expectedOwnerPos, expectedState);
+            String visualBox = expectedState.getOutlineShape(mc.world, expectedOwnerPos).isEmpty()
+                    ? "EMPTY"
+                    : formatBox(expectedState.getOutlineShape(mc.world, expectedOwnerPos)
+                    .getBoundingBox().offset(expectedOwnerPos));
+
+            System.out.println("[BRIDGE_LOWER_HALF] case=" + caseId
+                    + " held=" + held
+                    + " aimRegion=" + aimRegion
+                    + " expected=" + expectedOwner
+                    + " actual=" + crosshairOwner
+                    + " vanilla=" + vanillaOwner
+                    + " outline=" + outlineOwner
+                    + " expectedState=" + expectedState
+                    + " expectedDy=" + expectedDy
+                    + " eye=" + eye
+                    + " aim=" + aimPoint
+                    + " liveEye=" + rayStart
+                    + " dir=" + rayDir
+                    + " visualBox=" + visualBox
+                    + " " + setupDetails);
+
+            boolean ownerMatch = expectedOwner.equals(crosshairOwner);
+            boolean expectedOutlineHit = expectedOwner.equals(outlineOwner);
+            if (ownerMatch) {
+                System.out.println("[BRIDGE_LOWER_HALF_GREEN] case=" + caseId
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+                return;
+            }
+            if (expectedOutlineHit) {
+                System.out.println("[BRIDGE_LOWER_HALF_RED] case=" + caseId
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+                throw new RuntimeException("[BRIDGE_LOWER_HALF_RED] case=" + caseId
+                        + " expected=" + expectedOwner
+                        + " actual=" + crosshairOwner
+                        + " vanilla=" + vanillaOwner
+                        + " outline=" + outlineOwner);
+            }
+
+            System.out.println("[BRIDGE_LOWER_HALF] case=" + caseId
                     + " calibration=aim_miss expected=" + expectedOwner
                     + " actual=" + crosshairOwner
                     + " vanilla=" + vanillaOwner
