@@ -1,12 +1,14 @@
 package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.client.debug.SlabbedRetargetTestHooks;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.item.ItemStack;
@@ -20,6 +22,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import java.util.function.Predicate;
 
 public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements FabricClientGameTest {
 
@@ -114,6 +117,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
 
         waitForPlacementSync(ctx);
         singleplayer.getClientWorld().waitForChunksRender();
+        runJuliaLiveTraceSideSlabRetargetRed(ctx, singleplayer);
 
         // Step 1: verify seeded lowered support slab.
         ctx.runOnClient(mc -> {
@@ -869,6 +873,119 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
         });
     }
 
+    private static void runJuliaLiveTraceSideSlabRetargetRed(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        String proofName = "RED_JULIA_LIVE_TRACE_SLAB_HELD_SIDE_SLAB_RETARGET_STEAL";
+        BlockPos initialPos = new BlockPos(19, -59, 0);
+        Direction initialFace = Direction.EAST;
+        Vec3d initialHitVec = new Vec3d(19.353d, -58.445d, 0.408d);
+        BlockPos dangerousCandidate = new BlockPos(17, -58, -1);
+        BlockPos candidateSupport = dangerousCandidate.north();
+        Vec3d eye = new Vec3d(14.566d, -58.380d, -1.035d);
+        Vec3d end = new Vec3d(20.311d, -58.458d, 0.696d);
+        BlockHitResult initialHit = new BlockHitResult(initialHitVec, initialFace, initialPos, false);
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = 14; x <= 21; x++) {
+                for (int y = -60; y <= -57; y++) {
+                    for (int z = -3; z <= 1; z++) {
+                        world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+            world.setBlockState(initialPos, Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(dangerousCandidate,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(candidateSupport.down(),
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(candidateSupport, Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, candidateSupport, world.getBlockState(candidateSupport));
+            forceAddPersistentLoweredSlabCarrierForTest(
+                    world, dangerousCandidate, proofName);
+        });
+        waitForPlacementSync(ctx);
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null) {
+                throw new RuntimeException(proofName + " client not ready");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            forceAddPersistentLoweredSlabCarrierForClientTest(
+                    mc.world, dangerousCandidate, proofName);
+            var cam = mc.getCameraEntity();
+            if (cam == null) {
+                throw new RuntimeException(proofName + " client camera missing");
+            }
+
+            if (!initialHit.getBlockPos().equals(initialPos) || initialHit.getSide() != initialFace) {
+                throw new RuntimeException(proofName + " setup initial mismatch initial=" + describeHit(initialHit));
+            }
+            BlockState candidateState = mc.world.getBlockState(dangerousCandidate);
+            double candidateDy = SlabSupport.getYOffset(mc.world, dangerousCandidate, candidateState);
+            BlockHitResult outlineHit = candidateState.getOutlineShape(mc.world, dangerousCandidate,
+                    ShapeContext.of(cam)).raycast(eye, end, dangerousCandidate);
+            BlockHitResult nativeHit = candidateState.getRaycastShape(mc.world, dangerousCandidate)
+                    .raycast(eye, end, dangerousCandidate);
+            BlockHitResult retarget = SlabbedRetargetTestHooks.findLoweredSideSlabRetarget(
+                    mc.world, cam, eye, end, initialHit, true);
+            boolean sideSlabRetargetFired = retarget != null;
+            HitResult finalTarget = sideSlabRetargetFired ? retarget : initialHit;
+
+            System.out.println("[SBSB-TRACE][" + proofName + "]"
+                    + " initial=" + describeHit(initialHit)
+                    + " final=" + describeHit(finalTarget)
+                    + " sideSlabCandidate=" + dangerousCandidate.toShortString()
+                    + " candidateState=" + candidateState
+                    + " candidateDy=" + candidateDy
+                    + " outline=" + describeHit(outlineHit)
+                    + " nativeRaycast=" + describeHit(nativeHit)
+                    + " sideSlabRetargetFired=" + sideSlabRetargetFired);
+
+            if (!candidateState.isOf(Blocks.STONE_SLAB)
+                    || !candidateState.contains(SlabBlock.TYPE)
+                    || candidateState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || Math.abs(candidateDy + 0.5d) > EPSILON
+                    || outlineHit == null
+                    || nativeHit != null) {
+                throw new RuntimeException(proofName + " setup expected lowered BOTTOM candidate"
+                        + " with outline hit and native raycast miss, candidate=" + candidateState
+                        + "/dy=" + candidateDy
+                        + " outline=" + describeHit(outlineHit)
+                        + " nativeRaycast=" + describeHit(nativeHit));
+            }
+
+            if (retarget != null
+                    && retarget.getBlockPos().equals(dangerousCandidate)
+                    && retarget.getSide() == Direction.WEST) {
+                throw new RuntimeException("RED: " + proofName
+                        + " side-slab retarget stole ownership from valid live initial target"
+                        + " initial=" + describeHit(initialHit)
+                        + " final=" + describeHit(retarget)
+                        + " candidateDy=" + candidateDy
+                        + " outline=" + describeHit(outlineHit)
+                        + " nativeRaycast=miss"
+                        + " sideSlabRetargetFired=true");
+            }
+
+            if (retarget != null) {
+                throw new RuntimeException("RED: " + proofName
+                        + " unexpected slab-held retarget from Julia trace"
+                        + " initial=" + describeHit(initialHit)
+                        + " final=" + describeHit(retarget)
+                        + " sideSlabRetargetFired=true");
+            }
+        });
+    }
+
     private static void runDoubleSlabFullHeightCarrierTriadProof(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
@@ -960,6 +1077,39 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
                 net.minecraft.block.Block.NOTIFY_LISTENERS);
         SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, carrierPos, world.getBlockState(carrierPos));
+    }
+
+    private static void forceAddPersistentLoweredSlabCarrierForTest(
+            World world,
+            BlockPos carrierPos,
+            String proofName
+    ) {
+        BlockState state = world.getBlockState(carrierPos);
+        if (!state.getBlock().equals(Blocks.AIR)) {
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, carrierPos, state);
+        }
+        if (!SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, carrierPos, state)) {
+            throw new RuntimeException("RED: " + proofName
+                    + " helper failed to seed persistent lowered slab carrier on server for "
+                    + carrierPos.toShortString());
+        }
+    }
+
+    private static void forceAddPersistentLoweredSlabCarrierForClientTest(
+            World world,
+            BlockPos carrierPos,
+            String proofName
+    ) {
+        forceAddPersistentLoweredSlabCarrierForTest(world, carrierPos, proofName);
+        Predicate<BlockPos> previous = SlabAnchorAttachment.clientLoweredSlabCarrierLookup;
+        SlabAnchorAttachment.clientLoweredSlabCarrierLookup = pos -> pos.equals(carrierPos)
+                || previous != null && previous.test(pos);
+        BlockState state = world.getBlockState(carrierPos);
+        if (!SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, carrierPos, state)) {
+            throw new RuntimeException("RED: " + proofName
+                    + " helper failed to seed persistent lowered slab carrier on client for "
+                    + carrierPos.toShortString());
+        }
     }
 
     private static void assertLoweredDoubleCarrier(World world, String label, BlockPos carrierPos) {
