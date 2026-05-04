@@ -128,6 +128,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
+            runLiveTopDoubleStoneTopDependencyNoAttackControlCase(ctx, singleplayer);
+        }
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
             runAdjacentLoweredFullJumpPreservationCase(ctx, singleplayer);
         }
 
@@ -951,6 +957,103 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             + readTick + ", found dy=" + aDy);
                 }
             });
+        }
+    }
+
+    /**
+     * No-attack control for top-dependency:
+     * keep TOP untouched, break only A (lower support transition), and verify whether TOP
+     * survives on both server and client across ticks 0..3.
+     */
+    private static void runLiveTopDoubleStoneTopDependencyNoAttackControlCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos bPos = new BlockPos(0, 201, 2);
+        final BlockPos bSupportPos = bPos.down();
+        final BlockPos aPos = bPos.north();
+        final BlockPos aTopPos = aPos.north();
+        final java.util.concurrent.atomic.AtomicBoolean serverTopDropped = new java.util.concurrent.atomic.AtomicBoolean(false);
+        final java.util.concurrent.atomic.AtomicBoolean clientTopDropped = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        setupFixture(singleplayer, bSupportPos, bPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(aTopPos, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(aPos, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            BlockState topState = world.getBlockState(aTopPos);
+            BlockState aState = world.getBlockState(aPos);
+            BlockState bState = world.getBlockState(bPos);
+            BlockState bSupportState = world.getBlockState(bSupportPos);
+            SlabAnchorAttachment.addAnchor(world, bPos, bState);
+            double topDy = SlabSupport.getYOffset(world, aTopPos, topState);
+            double aDy = SlabSupport.getYOffset(world, aPos, aState);
+            double bDy = SlabSupport.getYOffset(world, bPos, bState);
+            double bSupportDy = SlabSupport.getYOffset(world, bSupportPos, bSupportState);
+            System.out.println("[TOP-DEPENDENCY-CONTROL] precheck side=SERVER"
+                    + " TOP=" + topState + "@dy=" + topDy
+                    + ", A=" + aState + "@dy=" + aDy
+                    + ", B=" + bState + "@dy=" + bDy
+                    + ", B.anchor=" + SlabAnchorAttachment.isAnchored(world, bPos)
+                    + ", B.down=" + bSupportState + "@dy=" + bSupportDy);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        singleplayer.getServer().runOnServer(server -> server.getOverworld().breakBlock(aPos, false));
+
+        for (int tick = 0; tick < 4; tick++) {
+            if (tick > 0) {
+                ctx.waitTick();
+                singleplayer.getClientWorld().waitForChunksRender();
+            }
+            final int readTick = tick;
+            singleplayer.getServer().runOnServer(server -> {
+                var world = server.getOverworld();
+                BlockState topAfter = world.getBlockState(aTopPos);
+                BlockState aAfter = world.getBlockState(aPos);
+                BlockState bAfter = world.getBlockState(bPos);
+                System.out.println("[TOP-DEPENDENCY-CONTROL] tick=" + readTick
+                        + " side=SERVER"
+                        + " TOP=" + topAfter
+                        + " A=" + aAfter
+                        + " B=" + bAfter
+                        + " B.anchor=" + SlabAnchorAttachment.isAnchored(world, bPos));
+                if (topAfter.isAir()) {
+                    serverTopDropped.set(true);
+                }
+            });
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("client world missing for top-dependency no-attack control tick " + readTick);
+                }
+                BlockState topAfter = mc.world.getBlockState(aTopPos);
+                BlockState aAfter = mc.world.getBlockState(aPos);
+                BlockState bAfter = mc.world.getBlockState(bPos);
+                System.out.println("[TOP-DEPENDENCY-CONTROL] tick=" + readTick
+                        + " side=CLIENT"
+                        + " TOP=" + topAfter
+                        + " A=" + aAfter
+                        + " B=" + bAfter
+                        + " B.anchor=" + SlabAnchorAttachment.isAnchored(mc.world, bPos));
+                if (topAfter.isAir()) {
+                    clientTopDropped.set(true);
+                }
+            });
+        }
+
+        boolean serverDropped = serverTopDropped.get();
+        boolean clientDropped = clientTopDropped.get();
+        if (serverDropped || clientDropped) {
+            System.out.println("[TOP-DEPENDENCY-CONTROL_RED] top_dropped_without_direct_attack"
+                    + " serverDropped=" + serverDropped
+                    + " clientDropped=" + clientDropped);
+        } else {
+            System.out.println("[TOP-DEPENDENCY-CONTROL_GREEN] top_survived_without_direct_attack"
+                    + " serverDropped=false clientDropped=false");
         }
     }
 
