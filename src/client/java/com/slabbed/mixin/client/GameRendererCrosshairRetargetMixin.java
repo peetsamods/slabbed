@@ -65,6 +65,16 @@ public abstract class GameRendererCrosshairRetargetMixin {
         HitResult initialTarget = ht;
         boolean slabHeld = slabbed$isSlabPlacementIntent();
 
+        if (slabHeld && ht instanceof BlockHitResult blockHit && blockHit.getSide() == Direction.UP) {
+            ClientWorld world = client.world;
+            BlockPos pos = blockHit.getBlockPos();
+            if (world != null && slabbed$isAnchoredLoweredFullBlock(world, pos, world.getBlockState(pos))) {
+                slabbed$traceTargeting(tickProgress, initialTarget,
+                        "scan-skip-slab-held-anchored-lowered-full-block-up", false);
+                return;
+            }
+        }
+
         // Narrow slab-held guard: always evaluate both anchored-FB and
         // lowered-side-slab rescues, then choose by closer-or-tied distance.
         // When the held item is a slab, ties resolve to the side-slab so a
