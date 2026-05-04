@@ -33,6 +33,8 @@ import java.util.function.Predicate;
 public final class OffsetBlockStateModel implements BlockStateModel, FabricBlockStateModel {
     private static volatile BlockPos slabbed$tracePos = null;
     private static volatile RenderOffsetTrace slabbed$lastTrace = RenderOffsetTrace.missing();
+    private static volatile BlockPos slabbed$modelDyOwnerTracePos = null;
+    private static volatile ModelDyOwnerTrace slabbed$modelDyOwnerLastTrace = ModelDyOwnerTrace.missing();
 
     private final BlockStateModel wrapped;
     private final FabricBlockStateModel fabricWrapped;
@@ -72,6 +74,21 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         }
     }
 
+    public record ModelDyOwnerTrace(
+            boolean seen,
+            String viewClass,
+            String pos,
+            String state,
+            int emitCalls,
+            int appliedCalls,
+            double totalAppliedDy,
+            double lastDy
+    ) {
+        static ModelDyOwnerTrace missing() {
+            return new ModelDyOwnerTrace(false, "none", "none", "none", 0, 0, 0.0, 0.0);
+        }
+    }
+
     public static void resetRenderOffsetTrace(BlockPos pos) {
         slabbed$tracePos = pos;
         slabbed$lastTrace = RenderOffsetTrace.missing();
@@ -79,6 +96,15 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
 
     public static RenderOffsetTrace snapshotRenderOffsetTrace() {
         return slabbed$lastTrace;
+    }
+
+    public static void resetModelDyOwnerTrace(BlockPos pos) {
+        slabbed$modelDyOwnerTracePos = pos == null ? null : pos.toImmutable();
+        slabbed$modelDyOwnerLastTrace = ModelDyOwnerTrace.missing();
+    }
+
+    public static ModelDyOwnerTrace snapshotModelDyOwnerTrace() {
+        return slabbed$modelDyOwnerLastTrace;
     }
 
     /**
@@ -98,6 +124,21 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
                     dy = 0.0f;
                 }
             }
+        }
+
+        BlockPos modelDyTracePos = slabbed$modelDyOwnerTracePos;
+        if (modelDyTracePos != null && modelDyTracePos.equals(pos)) {
+            ModelDyOwnerTrace prev = slabbed$modelDyOwnerLastTrace;
+            boolean applied = dy != 0.0f;
+            slabbed$modelDyOwnerLastTrace = new ModelDyOwnerTrace(
+                    true,
+                    view.getClass().getName(),
+                    pos.toShortString(),
+                    state.toString(),
+                    prev.emitCalls() + 1,
+                    prev.appliedCalls() + (applied ? 1 : 0),
+                    prev.totalAppliedDy() + (applied ? dy : 0.0),
+                    dy);
         }
 
         if (Boolean.getBoolean("slabbed.render.offset.trace")
