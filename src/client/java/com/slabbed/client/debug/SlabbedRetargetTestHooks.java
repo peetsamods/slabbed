@@ -108,9 +108,14 @@ public final class SlabbedRetargetTestHooks {
         if (hit == null) {
             return null;
         }
-        if (slabHeld && currentHit != null && currentHit.getType() == HitResult.Type.BLOCK
+        if (slabHeld
+                && currentHit instanceof BlockHitResult currentBlockHit
                 && state.getRaycastShape(world, pos).raycast(eye, end, pos) == null) {
-            return null;
+            // Keep slab-held face stability on the same block, but do not
+            // suppress legitimate retargeting to a different lowered owner.
+            if (currentBlockHit.getBlockPos().equals(pos)) {
+                return null;
+            }
         }
         return hit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6 ? hit : null;
     }
