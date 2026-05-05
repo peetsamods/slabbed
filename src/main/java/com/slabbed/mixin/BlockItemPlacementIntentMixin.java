@@ -46,6 +46,20 @@ public abstract class BlockItemPlacementIntentMixin {
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d;
     }
 
+    private static boolean slabbed$isPersistentLoweredBottomSlabCarrierCandidate(World world, BlockPos pos, BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        return SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)
+                && (SlabAnchorAttachment.isAnchored(world, belowPos)
+                || SlabSupport.getYOffset(world, belowPos, below) == -0.5d);
+    }
+
     private static SlabType slabbed$getExpectedLoweredSidePlacementType(BlockState targetState) {
         if (!targetState.contains(SlabBlock.TYPE)) {
             return SlabType.BOTTOM;
@@ -422,15 +436,24 @@ public abstract class BlockItemPlacementIntentMixin {
             ItemPlacementContext context,
             CallbackInfoReturnable<net.minecraft.util.ActionResult> cir
     ) {
-        if (!cir.getReturnValue().isAccepted()
-                || ((BlockItem) (Object) this).getBlock() instanceof SlabBlock
-                || context.getSide().getAxis().isVertical()) {
+        if (!cir.getReturnValue().isAccepted()) {
             return;
         }
 
         World world = context.getWorld();
         BlockPos placePos = context.getBlockPos();
         BlockState placedState = world.getBlockState(placePos);
+        if (((BlockItem) (Object) this).getBlock() instanceof SlabBlock) {
+            if (slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
+                SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, placePos, placedState);
+            }
+            return;
+        }
+
+        if (context.getSide().getAxis().isVertical()) {
+            return;
+        }
+
         if (!SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, placePos, placedState)) {
             return;
         }

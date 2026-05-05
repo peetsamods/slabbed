@@ -2059,6 +2059,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         final BlockPos westFullPos = centerFullPos.west();
         final BlockPos eastFullPos = centerFullPos.east();
         final BlockPos slabAbovePos = centerFullPos.up();
+        final BlockPos underPlacedPos = centerFullPos;
+        final BlockHitResult placeSlabAboveHit = resolveLoweredUpMergeHit(centerFullPos);
+        final Direction underPlaceFace = Direction.EAST;
+        final BlockHitResult underPlaceHit = resolveLoweredSideFaceHit(westFullPos, underPlaceFace, SlabType.BOTTOM);
         System.out.println("[" + proof + "] slabAbovePos=" + slabAbovePos.toShortString());
 
         setupFixture(singleplayer, centerSupportPos, centerFullPos);
@@ -2075,11 +2079,27 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             SlabAnchorAttachment.addAnchor(world, centerFullPos, centerState);
             SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(world, westFullPos, westState, centerFullPos, centerState);
             SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(world, eastFullPos, eastState, centerFullPos, centerState);
+        });
 
-            world.setBlockState(
-                    slabAbovePos,
-                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
-                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final String creationProof = "REAL_PLACED_LOWERED_BOTTOM_SLAB_CREATION_WRITES_CARRIER";
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(centerFullPos.getX() + 0.5d, centerFullPos.getY() + 1.8d, centerFullPos.getZ() + 2.55d),
+                placeSlabAboveHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[" + creationProof + "] client not ready for real slab placement");
+            }
+            ActionResult slabPlace = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeSlabAboveHit);
+            if (!slabPlace.isAccepted()) {
+                throw new RuntimeException("PROOF_GAP: " + creationProof
+                        + " real item placement was rejected: " + slabPlace);
+            }
         });
 
         ctx.waitTick();
@@ -2117,6 +2137,22 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " dy=" + slabBeforeDy
                     + " lowered=" + slabBeforeLowered
                     + " persistentLoweredSlabCarrier=" + slabBeforePersistentCarrier);
+
+            boolean slabCreatedAsBottom = slabBefore.isOf(Blocks.STONE_SLAB)
+                    && slabBefore.contains(SlabBlock.TYPE)
+                    && slabBefore.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+            System.out.println("[" + creationProof + "] slabAbove state=" + slabBefore
+                    + " dy=" + slabBeforeDy
+                    + " modelDy=" + slabBeforeDy
+                    + " outlineDy=" + slabBeforeDy
+                    + " targetDy=" + slabBeforeDy
+                    + " persistentLoweredSlabCarrier=" + slabBeforePersistentCarrier);
+            if (!slabCreatedAsBottom
+                    || !slabBeforePersistentCarrier
+                    || Math.abs(slabBeforeDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("RED_LIVE_REPRO: " + creationProof
+                        + " real placed lowered bottom slab did not become a persistent carrier");
+            }
         });
 
         singleplayer.getServer().runOnServer(server -> {
@@ -2203,6 +2239,89 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if ("PROOF_GAP".equals(classification)) {
                 throw new RuntimeException("PROOF_GAP: " + proof
                         + " neighbor persistence context not stable enough for classification");
+            }
+        });
+
+        final String underPlacementProof = "REAL_PLACED_LOWERED_BOTTOM_SLAB_UNDER_PLACEMENT_DOES_NOT_JUMP";
+        singleplayer.getServer().runOnServer(server -> {
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
+        });
+        movePlayerForFace(ctx, singleplayer, westFullPos, underPlaceFace);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[" + underPlacementProof + "] client not ready for under-placement");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            ActionResult placeUnder = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, underPlaceHit);
+            if (!placeUnder.isAccepted()) {
+                throw new RuntimeException("PROOF_GAP: " + underPlacementProof
+                        + " under-placement click was not accepted: " + placeUnder);
+            }
+        });
+        System.out.println("[" + underPlacementProof + "] action=place stone_slab under persisted slab"
+                + " target=" + westFullPos.toShortString()
+                + " face=" + underPlaceFace
+                + " placedPos=" + underPlacedPos.toShortString());
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + underPlacementProof + "] client world null after under-placement");
+            }
+
+            BlockState survivor = mc.world.getBlockState(slabAbovePos);
+            BlockState placed = mc.world.getBlockState(underPlacedPos);
+
+            boolean survivorIsBottomSlab = survivor.isOf(Blocks.STONE_SLAB)
+                    && survivor.contains(SlabBlock.TYPE)
+                    && survivor.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+            boolean survivorPersistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(mc.world, slabAbovePos, survivor);
+            double survivorDy = SlabSupport.getYOffset(mc.world, slabAbovePos, survivor);
+            double modelDy = survivorDy;
+            double outlineDy = survivorDy;
+            double targetDy = survivorDy;
+            double jumpDelta = survivorDy - -0.5d;
+
+            boolean placedIsSlab = placed.isOf(Blocks.STONE_SLAB) && placed.contains(SlabBlock.TYPE);
+            double placedDy = placedIsSlab ? SlabSupport.getYOffset(mc.world, underPlacedPos, placed) : Double.NaN;
+            boolean placedLegalLoweredLane = placedIsSlab
+                    && placed.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(placedDy + 0.5d) <= EPSILON;
+            boolean placedLegalVanillaLane = placedIsSlab
+                    && placed.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(placedDy) <= EPSILON;
+
+            System.out.println("[" + underPlacementProof + "] survivor state=" + survivor
+                    + " dy=" + survivorDy
+                    + " modelDy=" + modelDy
+                    + " outlineDy=" + outlineDy
+                    + " targetDy=" + targetDy
+                    + " jumpDelta=" + jumpDelta
+                    + " persistentLoweredSlabCarrier=" + survivorPersistentCarrier);
+            System.out.println("[" + underPlacementProof + "] placed state=" + placed
+                    + " dy=" + placedDy
+                    + " legalLoweredLane=" + placedLegalLoweredLane
+                    + " legalVanillaLane=" + placedLegalVanillaLane);
+
+            if (!survivorIsBottomSlab
+                    || !survivorPersistentCarrier
+                    || Math.abs(survivorDy + 0.5d) > EPSILON
+                    || Math.abs(modelDy + 0.5d) > EPSILON
+                    || Math.abs(outlineDy + 0.5d) > EPSILON
+                    || Math.abs(targetDy + 0.5d) > EPSILON
+                    || Math.abs(jumpDelta) > EPSILON) {
+                throw new RuntimeException("RED_LIVE_REPRO: " + underPlacementProof
+                        + " persisted slab jumped or lost lowered carrier after under-placement");
+            }
+            if (!placedLegalLoweredLane && !placedLegalVanillaLane) {
+                throw new RuntimeException("PROOF_GAP: " + underPlacementProof
+                        + " placed slab is not a named lowered or vanilla bottom-lane state");
             }
         });
     }
