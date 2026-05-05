@@ -338,6 +338,17 @@ public final class SlabSupport {
 
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
         if (IN_GET_Y_OFFSET.get()) {
+            if (state.getBlock() instanceof SlabBlock
+                    && state.contains(SlabBlock.TYPE)
+                    && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && isBottomPersistentTracePos(pos)) {
+                System.out.println("[BOTTOM_PERSISTENT] getYOffset early_guard_return pos=" + pos.toShortString()
+                        + " state=" + state
+                        + " slabType=" + state.get(SlabBlock.TYPE)
+                        + " fluidEmpty=" + state.getFluidState().isEmpty()
+                        + " guard=" + IN_GET_Y_OFFSET.get()
+                        + " worldClass=" + world.getClass().getName());
+            }
             return 0.0;
         }
         IN_GET_Y_OFFSET.set(Boolean.TRUE);
@@ -556,6 +567,32 @@ public final class SlabSupport {
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
+            if (state.contains(SlabBlock.TYPE)
+                    && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && isBottomPersistentTracePos(pos)) {
+                boolean persistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
+                boolean nonRecursiveBottomCarrier =
+                        SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
+                boolean branchReached = state.getFluidState().isEmpty() && nonRecursiveBottomCarrier;
+                System.out.println("[BOTTOM_PERSISTENT] getYOffsetInner pos=" + pos.toShortString()
+                        + " state=" + state
+                        + " slabType=" + state.get(SlabBlock.TYPE)
+                        + " fluidEmpty=" + state.getFluidState().isEmpty()
+                        + " worldClass=" + world.getClass().getName()
+                        + " guard=" + IN_GET_Y_OFFSET.get()
+                        + " persistentLoweredSlabCarrier=" + persistentCarrier
+                        + " nonRecursiveBottomCarrier=" + nonRecursiveBottomCarrier
+                        + " branchReached=" + branchReached);
+            }
+            if (state.contains(SlabBlock.TYPE)
+                    && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && state.getFluidState().isEmpty()
+                    && SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
+                if (isBottomPersistentTracePos(pos)) {
+                    System.out.println("[BOTTOM_PERSISTENT] branch=return_-0.5 pos=" + pos.toShortString());
+                }
+                return -0.5;
+            }
             BlockPos belowPos = pos.down();
             BlockState below = world.getBlockState(belowPos);
             Block belowBlock = below.getBlock();
@@ -646,6 +683,10 @@ public final class SlabSupport {
         }
 
         return 0.0;
+    }
+
+    private static boolean isBottomPersistentTracePos(BlockPos pos) {
+        return pos != null && pos.getX() == 0 && pos.getY() == 202 && pos.getZ() == 0;
     }
 
     /**

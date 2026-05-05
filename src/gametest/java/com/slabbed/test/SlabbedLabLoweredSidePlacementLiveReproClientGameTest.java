@@ -128,6 +128,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 .create()) {
             runLoweredDoubleSidePlacementCreatedNormalBottomLaneProofCase(ctx, singleplayer);
         }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runRealPlacedLoweredBottomSlabPersistenceAfterBridgeBreakProofCase(ctx, singleplayer);
+        }
 
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
@@ -2040,6 +2045,164 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if ("RED_LIVE_REPRO".equals(classification)) {
                 throw new RuntimeException("RED_LIVE_REPRO: " + proof
                         + " created normal bottom lane in lowered side-lane context");
+            }
+        });
+    }
+
+    private static void runRealPlacedLoweredBottomSlabPersistenceAfterBridgeBreakProofCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final String proof = "REAL_PLACED_LOWERED_BOTTOM_SLAB_PERSISTENCE_AFTER_BRIDGE_BREAK";
+        final BlockPos centerSupportPos = SUPPORT_POS;
+        final BlockPos centerFullPos = FULL_POS;
+        final BlockPos westFullPos = centerFullPos.west();
+        final BlockPos eastFullPos = centerFullPos.east();
+        final BlockPos slabAbovePos = centerFullPos.up();
+        System.out.println("[" + proof + "] slabAbovePos=" + slabAbovePos.toShortString());
+
+        setupFixture(singleplayer, centerSupportPos, centerFullPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+
+            world.setBlockState(westFullPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(eastFullPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+
+            BlockState centerState = world.getBlockState(centerFullPos);
+            BlockState westState = world.getBlockState(westFullPos);
+            BlockState eastState = world.getBlockState(eastFullPos);
+
+            SlabAnchorAttachment.addAnchor(world, centerFullPos, centerState);
+            SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(world, westFullPos, westState, centerFullPos, centerState);
+            SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(world, eastFullPos, eastState, centerFullPos, centerState);
+
+            world.setBlockState(
+                    slabAbovePos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + proof + "] client world null before break");
+            }
+
+            BlockState centerBefore = mc.world.getBlockState(centerFullPos);
+            BlockState westBefore = mc.world.getBlockState(westFullPos);
+            BlockState eastBefore = mc.world.getBlockState(eastFullPos);
+            BlockState slabBefore = mc.world.getBlockState(slabAbovePos);
+
+            double centerBeforeDy = SlabSupport.getYOffset(mc.world, centerFullPos, centerBefore);
+            double westBeforeDy = SlabSupport.getYOffset(mc.world, westFullPos, westBefore);
+            double eastBeforeDy = SlabSupport.getYOffset(mc.world, eastFullPos, eastBefore);
+            double slabBeforeDy = SlabSupport.getYOffset(mc.world, slabAbovePos, slabBefore);
+
+            boolean centerBeforeAnchored = SlabAnchorAttachment.isAnchored(mc.world, centerFullPos);
+            boolean westBeforeAnchored = SlabAnchorAttachment.isAnchored(mc.world, westFullPos);
+            boolean eastBeforeAnchored = SlabAnchorAttachment.isAnchored(mc.world, eastFullPos);
+            boolean slabBeforeLowered = slabBeforeDy < -EPSILON;
+            boolean slabBeforePersistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(mc.world, slabAbovePos, slabBefore);
+
+            System.out.println("[" + proof + "] centerFull before state=" + centerBefore
+                    + " dy=" + centerBeforeDy + " anchored=" + centerBeforeAnchored);
+            System.out.println("[" + proof + "] westFull before state=" + westBefore
+                    + " dy=" + westBeforeDy + " anchored=" + westBeforeAnchored);
+            System.out.println("[" + proof + "] eastFull before state=" + eastBefore
+                    + " dy=" + eastBeforeDy + " anchored=" + eastBeforeAnchored);
+            System.out.println("[" + proof + "] slabAbove before state=" + slabBefore
+                    + " slabType=" + (slabBefore.contains(SlabBlock.TYPE) ? slabBefore.get(SlabBlock.TYPE) : "none")
+                    + " dy=" + slabBeforeDy
+                    + " lowered=" + slabBeforeLowered
+                    + " persistentLoweredSlabCarrier=" + slabBeforePersistentCarrier);
+        });
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.breakBlock(centerFullPos, false);
+        });
+        System.out.println("[" + proof + "] action=break centerFull");
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + proof + "] client world null after break");
+            }
+
+            BlockState centerAfter = mc.world.getBlockState(centerFullPos);
+            BlockState westAfter = mc.world.getBlockState(westFullPos);
+            BlockState eastAfter = mc.world.getBlockState(eastFullPos);
+            BlockState slabAfter = mc.world.getBlockState(slabAbovePos);
+
+            boolean slabAfterPersistentCarrierBeforeDy = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(mc.world, slabAbovePos, slabAfter);
+            double slabAfterDy = SlabSupport.getYOffset(mc.world, slabAbovePos, slabAfter);
+            boolean slabAfterLowered = slabAfterDy < -EPSILON;
+            boolean slabAfterPersistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(mc.world, slabAbovePos, slabAfter);
+            boolean westAfterAnchored = SlabAnchorAttachment.isAnchored(mc.world, westFullPos);
+            boolean eastAfterAnchored = SlabAnchorAttachment.isAnchored(mc.world, eastFullPos);
+
+            double modelDy = slabAfterDy;
+            double outlineDy = slabAfterDy;
+            double targetDy = slabAfterDy;
+
+            System.out.println("[" + proof + "] centerFull after state=" + centerAfter);
+            System.out.println("[" + proof + "] westFull after state=" + westAfter
+                    + " dy=" + SlabSupport.getYOffset(mc.world, westFullPos, westAfter)
+                    + " anchored=" + westAfterAnchored);
+            System.out.println("[" + proof + "] eastFull after state=" + eastAfter
+                    + " dy=" + SlabSupport.getYOffset(mc.world, eastFullPos, eastAfter)
+                    + " anchored=" + eastAfterAnchored);
+            System.out.println("[" + proof + "] slabAbove after state=" + slabAfter
+                    + " slabType=" + (slabAfter.contains(SlabBlock.TYPE) ? slabAfter.get(SlabBlock.TYPE) : "none")
+                    + " dy=" + slabAfterDy
+                    + " lowered=" + slabAfterLowered
+                    + " persistentLoweredSlabCarrier=" + slabAfterPersistentCarrier);
+            System.out.println("[" + proof + "] slabAbove diagnostics"
+                    + " worldClass=" + mc.world.getClass().getName()
+                    + " fluidEmpty=" + slabAfter.getFluidState().isEmpty()
+                    + " slabType=" + (slabAfter.contains(SlabBlock.TYPE) ? slabAfter.get(SlabBlock.TYPE) : "none")
+                    + " persistentBeforeDy=" + slabAfterPersistentCarrierBeforeDy
+                    + " persistentAfterDy=" + slabAfterPersistentCarrier);
+            System.out.println("[" + proof + "] modelDy=" + modelDy
+                    + " outlineDy=" + outlineDy
+                    + " targetDy=" + targetDy);
+
+            boolean slabBeforeLegal = slabAfter.isOf(Blocks.STONE_SLAB)
+                    && slabAfter.contains(SlabBlock.TYPE)
+                    && slabAfter.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+            boolean slabLegalLowered = slabBeforeLegal
+                    && Math.abs(slabAfterDy + 0.5d) <= EPSILON
+                    && slabAfterLowered;
+            boolean neighborsRemain = westAfter.isOf(Blocks.STONE)
+                    && eastAfter.isOf(Blocks.STONE)
+                    && westAfterAnchored
+                    && eastAfterAnchored;
+
+            String classification;
+            if (slabLegalLowered && slabAfterPersistentCarrier && neighborsRemain) {
+                classification = "GREEN_ALREADY_FIXED";
+            } else if (neighborsRemain) {
+                classification = "RED_LIVE_REPRO";
+            } else {
+                classification = "PROOF_GAP";
+            }
+
+            System.out.println("[" + proof + "] expected legal outcome=slabAbove minecraft:stone_slab[type=bottom] dy=-0.5 lowered=true persistentLoweredSlabCarrier=true");
+            System.out.println("[" + proof + "] classification=" + classification);
+
+            if ("RED_LIVE_REPRO".equals(classification)) {
+                throw new RuntimeException("RED_LIVE_REPRO: " + proof
+                        + " slabAbove failed lowered persistence after center bridge break");
+            }
+            if ("PROOF_GAP".equals(classification)) {
+                throw new RuntimeException("PROOF_GAP: " + proof
+                        + " neighbor persistence context not stable enough for classification");
             }
         });
     }
