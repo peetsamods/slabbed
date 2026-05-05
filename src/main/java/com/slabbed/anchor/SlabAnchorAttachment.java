@@ -292,15 +292,41 @@ public final class SlabAnchorAttachment {
         }
         WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
-            return false;
+            return isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
         }
         LongOpenHashSet set = chunk.getAttached(LOWERED_SLAB_CARRIER_TYPE);
         boolean carrier = set != null && set.contains(pos.asLong());
+        if (!carrier && isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
+            carrier = true;
+        }
         if (TRACE && carrier) {
             Slabbed.LOGGER.info("[ANCHOR] lowered slab carrier query true side={} pos={}",
                     w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return carrier;
+    }
+
+    public static boolean isPersistentLoweredBottomSlabCarrierNonRecursive(
+            BlockView world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
+            return false;
+        }
+        if (world instanceof World w) {
+            WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk != null) {
+                LongOpenHashSet set = chunk.getAttached(LOWERED_SLAB_CARRIER_TYPE);
+                if (set != null && set.contains(pos.asLong())) {
+                    return true;
+                }
+            }
+        } else if (clientLoweredSlabCarrierLookup != null && clientLoweredSlabCarrierLookup.test(pos)) {
+            return true;
+        }
+        return qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlockNonRecursive(world, pos, state)
+                || qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupportNonRecursive(world, pos, state);
     }
 
     // ── qualifier ─────────────────────────────────────────────────────
@@ -367,7 +393,8 @@ public final class SlabAnchorAttachment {
     public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
         return isPersistentLoweredSlabCarrierState(state)
                 && (SlabSupport.isLoweredSideLaneSlabCarrier(world, pos, state)
-                || qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(world, pos, state));
+                || qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(world, pos, state)
+                || qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(world, pos, state));
     }
 
     private static boolean isPersistentLoweredSlabCarrierState(BlockState state) {
@@ -375,6 +402,10 @@ public final class SlabAnchorAttachment {
                 && state.getBlock() instanceof SlabBlock
                 && state.contains(SlabBlock.TYPE)
                 && state.getFluidState().isEmpty();
+    }
+
+    private static boolean isBottomPersistentLoweredSlabCarrierState(BlockState state) {
+        return isPersistentLoweredSlabCarrierState(state) && state.get(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 
     private static boolean qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(
@@ -396,6 +427,97 @@ public final class SlabAnchorAttachment {
             return false;
         }
         return isAnchored(world, belowPos) || SlabSupport.getYOffset(world, belowPos, below) == -0.5;
+    }
+
+    private static boolean qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlockNonRecursive(
+            BlockView world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
+            return false;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
+            return false;
+        }
+        return isAnchored(world, belowPos) || SlabSupport.hasBottomSlabBelow(world, belowPos);
+    }
+
+    private static boolean qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(
+            BlockView world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (world == null || pos == null || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+
+        BlockPos supportY = pos.down();
+        boolean hasLoweredAnchoredBridgeNeighbor = false;
+        for (var dir : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
+            BlockPos neighborPos = supportY.offset(dir);
+            BlockState neighbor = world.getBlockState(neighborPos);
+            if (!isOrdinaryFullBlockAnchorCandidate(world, neighborPos, neighbor)) {
+                continue;
+            }
+            if (!isAnchored(world, neighborPos)) {
+                continue;
+            }
+            if (SlabSupport.getYOffset(world, neighborPos, neighbor) != -0.5d) {
+                continue;
+            }
+            hasLoweredAnchoredBridgeNeighbor = true;
+            break;
+        }
+        if (!hasLoweredAnchoredBridgeNeighbor) {
+            return false;
+        }
+
+        BlockState below = world.getBlockState(supportY);
+        if (isOrdinaryFullBlockAnchorCandidate(world, supportY, below)
+                && (isAnchored(world, supportY) || SlabSupport.getYOffset(world, supportY, below) == -0.5d)) {
+            return true;
+        }
+        return below.isAir();
+    }
+
+    private static boolean qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupportNonRecursive(
+            BlockView world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
+            return false;
+        }
+        BlockPos supportY = pos.down();
+        boolean hasLoweredAnchoredBridgeNeighbor = false;
+        for (var dir : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
+            BlockPos neighborPos = supportY.offset(dir);
+            BlockState neighbor = world.getBlockState(neighborPos);
+            if (!isOrdinaryFullBlockAnchorCandidate(world, neighborPos, neighbor)) {
+                continue;
+            }
+            if (!(isAnchored(world, neighborPos) || SlabSupport.hasBottomSlabBelow(world, neighborPos))) {
+                continue;
+            }
+            hasLoweredAnchoredBridgeNeighbor = true;
+            break;
+        }
+        if (!hasLoweredAnchoredBridgeNeighbor) {
+            return false;
+        }
+        BlockState below = world.getBlockState(supportY);
+        if (isOrdinaryFullBlockAnchorCandidate(world, supportY, below)
+                && (isAnchored(world, supportY) || SlabSupport.hasBottomSlabBelow(world, supportY))) {
+            return true;
+        }
+        return below.isAir();
     }
 
     private static boolean qualifiesAsVerticalChainSupport(BlockView world, BlockPos pos, BlockState state) {
