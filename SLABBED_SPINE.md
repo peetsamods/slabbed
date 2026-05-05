@@ -20,11 +20,12 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current clean HEAD: `435cd1a`
-- Current clean tag: `save/real-lowered-bottom-slab-under-placement-persistence`
+- Current operating base HEAD: `f81202e`
+- Current operating base tag: `save/slabbed-agent-spine-rules`
 - Stale, provenance-confusing tag: `save/real-placed-lowered-bottom-slab-persistence`
 
-The current final truth is `435cd1a` / `save/real-lowered-bottom-slab-under-placement-persistence`.
+The current operating base is `f81202e` / `save/slabbed-agent-spine-rules`.
+The latest proven gameplay savepoint remains `435cd1a` / `save/real-lowered-bottom-slab-under-placement-persistence`.
 
 ## Current tracked tree state
 
