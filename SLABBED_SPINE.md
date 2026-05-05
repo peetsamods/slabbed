@@ -48,6 +48,18 @@ Keep the lowered-bottom slab placement/persistence slice stable and document the
 Latest validated state is the lowered-bottom slab placement persistence savepoint at `435cd1a`.
 Live micro-test result: PASSED. Julia tested the 8:16 PM under-placement setup on clean HEAD `435cd1a`; the legally lowered survivor slab did not jump during under-placement.
 
+Proof-only reconfirmation on HEAD `65d4c0e` / `save/slabbed-spine-current-base`:
+
+- Run command: `./gradlew --no-daemon runClientGameTest --console plain`
+- Result: `BUILD SUCCESSFUL in 1m 46s`
+- Proof case: `REAL_PLACED_LOWERED_BOTTOM_SLAB_UNDER_PLACEMENT_DOES_NOT_JUMP`
+- Survivor slab result: `stone_slab[type=bottom]`, `dy=-0.5`, `modelDy=-0.5`, `outlineDy=-0.5`, `targetDy=-0.5`, `jumpDelta=0.0`
+- Placed slab result: `stone_slab[type=bottom]`, `dy=-0.5`, `legalLoweredLane=true`, `legalVanillaLane=false`
+- Spine-aligned trace showed `dy=-0.5 anchored=true lowered=true` after sync
+- No lowered-slab jump contradiction was found
+- Non-fatal environment noise appeared, including failed user properties fetch and anisotropic filtering warning; do not treat those as Slabbed failures
+- Conclusion: the current saved state still preserves the no-jump lowered-bottom slab behavior around the 8:16 PM under-placement setup
+
 ## Recent relevant savepoints
 
 - `save/real-lowered-bottom-slab-under-placement-persistence`
