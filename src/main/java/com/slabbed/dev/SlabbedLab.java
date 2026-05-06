@@ -2,7 +2,7 @@ package com.slabbed.dev;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
-import com.slabbed.debug.BsFbLiveTrace;
+import com.slabbed.util.SlabbedAuditBridge;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.permission.Permission;
 import net.minecraft.command.permission.PermissionLevel;
@@ -160,13 +160,13 @@ public final class SlabbedLab {
         source.sendFeedback(() -> Text.literal("[slablab] inspect (dev-only). origin=" + origin.toShortString() + " " + details), false);
 
         // BS-FB Live Trace: pair the chat report with server+client log lines for the same fullPos.
-        if (BsFbLiveTrace.ENABLED) {
+        if (SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
             BlockPos supportPos = SlabbedLabFixtures.laneSupportPos(origin, laneName);
             if (supportPos != null) {
                 BlockPos fullPos = supportPos.up();
                 String label = "INSPECT_" + laneName.toUpperCase();
-                BsFbLiveTrace.capture(world, supportPos, fullPos, label);
-                BsFbLiveTrace.captureClient(supportPos, fullPos, label);
+                SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, label);
+                SlabbedAuditBridge.captureClientBsFbLiveTrace(supportPos, fullPos, label);
             }
         }
 

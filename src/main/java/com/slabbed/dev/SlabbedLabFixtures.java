@@ -1,6 +1,6 @@
 package com.slabbed.dev;
 
-import com.slabbed.debug.BsFbLiveTrace;
+import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -227,8 +227,8 @@ public final class SlabbedLabFixtures {
         for (String name : targetLanes.keySet()) {
             BlockPos supportPos = allPositions.get(name);
             BlockPos fullPos = supportPos.up();
-            BsFbLiveTrace.capture(world, supportPos, fullPos, "BEFORE_BREAK_" + name);
-            BsFbLiveTrace.captureClient(supportPos, fullPos, "BEFORE_BREAK_" + name);
+            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, "BEFORE_BREAK_" + name);
+            SlabbedAuditBridge.captureClientBsFbLiveTrace(supportPos, fullPos, "BEFORE_BREAK_" + name);
         }
 
         // Remove support blocks with full neighbor notification — reproduces real support loss.
@@ -243,12 +243,12 @@ public final class SlabbedLabFixtures {
         for (String name : targetLanes.keySet()) {
             BlockPos supportPos = allPositions.get(name);
             BlockPos fullPos = supportPos.up();
-            BsFbLiveTrace.capture(world, supportPos, fullPos, "AFTER_BREAK_" + name);
-            BsFbLiveTrace.captureClient(supportPos, fullPos, "AFTER_BREAK_" + name);
+            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, "AFTER_BREAK_" + name);
+            SlabbedAuditBridge.captureClientBsFbLiveTrace(supportPos, fullPos, "AFTER_BREAK_" + name);
         }
 
         // BS-FB Live Trace: schedule delayed captures (Moments C: 1, 2, 5 ticks after break)
-        if (BsFbLiveTrace.ENABLED) {
+        if (SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
             long currentTick = world.getServer().getTicks();
             int[] delays = new int[] {1, 2, 5};
             for (int d : delays) {
@@ -261,8 +261,8 @@ public final class SlabbedLabFixtures {
                                 BlockPos supportPos = allPositions.get(name);
                                 BlockPos fullPos = supportPos.up();
                                 String label = "DELAY_" + finalDelay + "TICKS_AFTER_BREAK_" + name;
-                                BsFbLiveTrace.capture(world, supportPos, fullPos, label);
-                                BsFbLiveTrace.captureClient(supportPos, fullPos, label);
+                                SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, label);
+                                SlabbedAuditBridge.captureClientBsFbLiveTrace(supportPos, fullPos, label);
                             }
                         }
                     }
@@ -316,11 +316,11 @@ public final class SlabbedLabFixtures {
         for (String name : targetLanes.keySet()) {
             BlockPos supportPos = allPositions.get(name);
             BlockPos fullPos = supportPos.up();
-            BsFbLiveTrace.capture(world, supportPos, fullPos, "AFTER_PLACEMENT_" + name);
+            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, "AFTER_PLACEMENT_" + name);
         }
 
         // BS-FB Live Trace: schedule delayed captures (Moments E: 2-10 ticks after placement)
-        if (BsFbLiveTrace.ENABLED) {
+        if (SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
             long currentTick = world.getServer().getTicks();
             for (int delay = 2; delay <= 10; delay++) {
                 final int finalDelay = delay;
@@ -331,7 +331,7 @@ public final class SlabbedLabFixtures {
                             for (String name : targetLanes.keySet()) {
                                 BlockPos supportPos = allPositions.get(name);
                                 BlockPos fullPos = supportPos.up();
-                                BsFbLiveTrace.capture(world, supportPos, fullPos, "DELAY_" + finalDelay + "TICKS_AFTER_PLACE_" + name);
+                                SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, "DELAY_" + finalDelay + "TICKS_AFTER_PLACE_" + name);
                             }
                         }
                     }

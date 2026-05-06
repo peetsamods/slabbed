@@ -80,7 +80,9 @@ jar {
     // Exclude dev-only and debug-only content from public release jar
     exclude("com/slabbed/dev/**")
     exclude("com/slabbed/debug/**")
+    exclude("com/slabbed/client/debug/**")
     exclude("com/slabbed/mixin/debug/**")
+    exclude("com/slabbed/util/DebugTraceContext.class")
     exclude("com/slabbed/client/GapFillerOverlay.class")
     exclude("com/slabbed/client/ScreenshotCaptureContext*.class")
     exclude("com/slabbed/client/ScreenshotCaptureService*.class")

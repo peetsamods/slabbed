@@ -1,7 +1,6 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.debug.SlabbedInspect;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.BlockEntityProvider;
@@ -177,7 +176,7 @@ public abstract class BlockItemPlacementIntentMixin {
     private static ItemUsageContext slabbed$inspectReturn(
             ItemUsageContext incoming, ItemUsageContext outgoing, String reason
     ) {
-        SlabbedInspect.logIntent(incoming, outgoing, reason);
+        SlabbedAuditBridge.logInspectIntent(incoming, outgoing, reason);
         return outgoing;
     }
 
