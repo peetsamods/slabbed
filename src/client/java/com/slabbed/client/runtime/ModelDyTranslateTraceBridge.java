@@ -1,4 +1,4 @@
-package com.slabbed.client.debug;
+package com.slabbed.client.runtime;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.util.math.BlockPos;

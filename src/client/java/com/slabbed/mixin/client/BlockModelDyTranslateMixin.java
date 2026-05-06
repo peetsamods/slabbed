@@ -1,7 +1,7 @@
 package com.slabbed.mixin.client;
 
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.debug.ModelDyTranslateTraceBridge;
+import com.slabbed.client.runtime.ModelDyTranslateTraceBridge;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.BlockModelRenderer;

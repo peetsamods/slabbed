@@ -62,6 +62,7 @@ Proof-only reconfirmation on HEAD `65d4c0e` / `save/slabbed-spine-current-base`:
 
 ## Recent relevant savepoints
 
+- Pending savepoint: debug helper classpath closure. Packaging/classpath blocker fixed by removing or bridging production/runtime hard-links to excluded debug helpers. `compileJava compileGametestJava`, `runClientGameTest`, `clean build`, release jar leakage scan, `jdeps` hard-reference scan, and source direct-import scan passed. No gameplay behavior was intentionally changed.
 - `save/real-lowered-bottom-slab-under-placement-persistence`
 - `save/real-placed-lowered-bottom-slab-persistence` is historical only and should not be treated as final truth.
 

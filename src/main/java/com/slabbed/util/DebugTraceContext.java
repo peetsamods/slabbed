@@ -1,4 +1,4 @@
-package com.slabbed.debug;
+package com.slabbed.util;
 
 import net.minecraft.item.ItemStack;
 
