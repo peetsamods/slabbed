@@ -2,9 +2,9 @@ package com.slabbed.mixin.client;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.client.debug.SlabbedRetargetTestHooks;
-import com.slabbed.debug.SlabbedInspect;
+import com.slabbed.client.runtime.SlabbedRetargetTestHooks;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.ChainBlock;
@@ -545,7 +545,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
         ItemStack held = client.player.getMainHandStack();
-        SlabbedInspect.logClientTarget(
+        SlabbedAuditBridge.logInspectClientTarget(
                 world,
                 eye,
                 end,
