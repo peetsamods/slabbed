@@ -1,4 +1,4 @@
-package com.slabbed.client.debug;
+package com.slabbed.client.runtime;
 
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;

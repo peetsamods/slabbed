@@ -2,7 +2,7 @@ package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.debug.ModelDyTranslateTraceBridge;
+import com.slabbed.client.runtime.ModelDyTranslateTraceBridge;
 import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;

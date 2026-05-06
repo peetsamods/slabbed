@@ -3,8 +3,10 @@ package com.slabbed.client.debug;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
-import com.slabbed.debug.BsFbLiveTrace;
 import com.slabbed.util.SlabSupport;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
@@ -26,14 +28,32 @@ import net.minecraft.util.shape.VoxelShape;
  * or render behavior changes — logging only.
  */
 public final class BsFbLiveTraceClient {
+    private static final String TRACE_CLASS_NAME = "com.slabbed." + "debug.BsFbLiveTrace";
+
     private BsFbLiveTraceClient() {}
 
     /** Wired from {@code SlabbedClient.onInitializeClient()}. Idempotent. */
     public static void init() {
-        if (!BsFbLiveTrace.ENABLED) return;
-        if (BsFbLiveTrace.clientCaptureHook != null) return;
-        BsFbLiveTrace.clientCaptureHook = BsFbLiveTraceClient::dispatchCapture;
-        Slabbed.LOGGER.info("[BSFB-LIVE-TRACE] client capture hook installed");
+        if (!enabled()) return;
+        try {
+            Class<?> traceClass = Class.forName(TRACE_CLASS_NAME);
+            Field hookField = traceClass.getField("clientCaptureHook");
+            if (hookField.get(null) != null) return;
+            Class<?> hookType = Class.forName(TRACE_CLASS_NAME + "$ClientCaptureHook");
+            Object hook = Proxy.newProxyInstance(
+                    hookType.getClassLoader(),
+                    new Class<?>[]{hookType},
+                    (proxy, method, args) -> {
+                        if ("capture".equals(method.getName()) && args != null && args.length == 3) {
+                            dispatchCapture((BlockPos) args[0], (BlockPos) args[1], (String) args[2]);
+                        }
+                        return null;
+                    });
+            hookField.set(null, hook);
+            Slabbed.LOGGER.info("[BSFB-LIVE-TRACE] client capture hook installed");
+        } catch (ReflectiveOperationException | IllegalArgumentException | LinkageError ignored) {
+            // Debug trace class is dev-only and may be absent from release packaging.
+        }
     }
 
     private static void dispatchCapture(BlockPos supportPos, BlockPos fullPos, String label) {
@@ -46,7 +66,7 @@ public final class BsFbLiveTraceClient {
     private static void doCapture(MinecraftClient mc, BlockPos supportPos, BlockPos fullPos, String label) {
         ClientWorld world = mc.world;
         if (world == null) {
-            Slabbed.LOGGER.info("[BSFB-LIVE-TRACE] CLIENT_VIEW {} tick={} clientWorld=null", label, BsFbLiveTrace.getTick());
+            Slabbed.LOGGER.info("[BSFB-LIVE-TRACE] CLIENT_VIEW {} tick={} clientWorld=null", label, getTick());
             return;
         }
 
@@ -84,7 +104,7 @@ public final class BsFbLiveTraceClient {
 
         StringBuilder sb = new StringBuilder(384);
         sb.append("[BSFB-LIVE-TRACE] CLIENT_VIEW ").append(label)
-          .append(" tick=").append(BsFbLiveTrace.getTick())
+          .append(" tick=").append(getTick())
           .append(" side=CLIENT")
           .append(" | supportPos=").append(supportPos.toShortString())
           .append(" supportState=").append(supportState)
@@ -99,5 +119,21 @@ public final class BsFbLiveTraceClient {
           .append(" | outlineYAtFull=").append(outlineYRange)
           .append(" | fullIsAir=").append(fullState.isAir());
         Slabbed.LOGGER.info(sb.toString());
+    }
+
+    private static boolean enabled() {
+        return Boolean.getBoolean("slabbed.bsfb.live.trace");
+    }
+
+    private static long getTick() {
+        if (!enabled()) return 0L;
+        try {
+            Class<?> traceClass = Class.forName(TRACE_CLASS_NAME);
+            Method method = traceClass.getMethod("getTick");
+            Object value = method.invoke(null);
+            return value instanceof Number number ? number.longValue() : 0L;
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return 0L;
+        }
     }
 }

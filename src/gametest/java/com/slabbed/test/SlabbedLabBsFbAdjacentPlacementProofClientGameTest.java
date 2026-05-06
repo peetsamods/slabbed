@@ -1,7 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.client.debug.SlabbedRetargetTestHooks;
+import com.slabbed.client.runtime.SlabbedRetargetTestHooks;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -117,7 +117,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
 
         waitForPlacementSync(ctx);
         singleplayer.getClientWorld().waitForChunksRender();
-        runMaintainerLiveTraceSideSlabRetargetRed(ctx, singleplayer);
+        runthe maintainerLiveTraceSideSlabRetargetRed(ctx, singleplayer);
 
         // Step 1: verify seeded lowered support slab.
         ctx.runOnClient(mc -> {
@@ -873,11 +873,11 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
         });
     }
 
-    private static void runMaintainerLiveTraceSideSlabRetargetRed(
+    private static void runthe maintainerLiveTraceSideSlabRetargetRed(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
     ) {
-        String proofName = "RED_MAINTAINER_LIVE_TRACE_SLAB_HELD_SIDE_SLAB_RETARGET_STEAL";
+        String proofName = "RED_SLABBED_LIVE_TRACE_SLAB_HELD_SIDE_SLAB_RETARGET_STEAL";
         BlockPos initialPos = new BlockPos(19, -59, 0);
         Direction initialFace = Direction.EAST;
         Vec3d initialHitVec = new Vec3d(19.353d, -58.445d, 0.408d);
@@ -978,7 +978,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
 
             if (retarget != null) {
                 throw new RuntimeException("RED: " + proofName
-                        + " unexpected slab-held retarget from Maintainer trace"
+                        + " unexpected slab-held retarget from the maintainer trace"
                         + " initial=" + describeHit(initialHit)
                         + " final=" + describeHit(retarget)
                         + " sideSlabRetargetFired=true");
