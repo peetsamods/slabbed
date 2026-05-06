@@ -36,6 +36,14 @@ Tracked tree is clean.
 
 Keep the lowered-bottom slab placement/persistence slice stable and document the live operating state without widening scope.
 
+## Current proof note
+
+Visible-face / crosshair placement-intent bug live-tested by Julia after removing UP nearest-edge inference.
+Automation passed: `compileJava compileGametestJava`, `runClientGameTest`, `git diff --check`.
+Julia live retest passed: cursed visible-face / impossible-side placement angle behaved correctly.
+Savepoint target: `save/visible-face-placement-intent-authority`.
+No intentional survival, collision, model, outline, or raycast changes.
+
 ## Non-negotiable invariants
 
 - Preserve the current phase19 branch/HEAD/tag truth.

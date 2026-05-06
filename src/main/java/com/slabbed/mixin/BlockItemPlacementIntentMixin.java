@@ -30,7 +30,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
 
-    private static final double UP_FACE_EDGE_BAND = 0.20d;
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(ItemUsageContext context, BlockPos pos, BlockState state) {
@@ -93,36 +92,6 @@ public abstract class BlockItemPlacementIntentMixin {
                 && SlabSupport.isCompatibleLoweredSlabLane(
                         targetState.get(SlabBlock.TYPE),
                         state.get(SlabBlock.TYPE));
-    }
-
-    private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
-        double localX = hitPos.x - targetPos.getX();
-        double localZ = hitPos.z - targetPos.getZ();
-        if (localX < 0.0d || localX > 1.0d || localZ < 0.0d || localZ > 1.0d) {
-            return null;
-        }
-
-        double distWest = localX;
-        double distEast = 1.0d - localX;
-        double distNorth = localZ;
-        double distSouth = 1.0d - localZ;
-
-        double min = distWest;
-        Direction nearest = Direction.WEST;
-        if (distEast < min) {
-            min = distEast;
-            nearest = Direction.EAST;
-        }
-        if (distNorth < min) {
-            min = distNorth;
-            nearest = Direction.NORTH;
-        }
-        if (distSouth < min) {
-            min = distSouth;
-            nearest = Direction.SOUTH;
-        }
-
-        return min <= UP_FACE_EDGE_BAND ? nearest : null;
     }
 
     private static final Class<?>[] REMAP_ATTEMPT_PARAM_TYPES = new Class<?>[]{
@@ -248,14 +217,7 @@ public abstract class BlockItemPlacementIntentMixin {
         Direction originalSide = context.getSide();
         Vec3d originalHitPos = context.getHitPos();
         Direction effectiveSide = originalSide;
-        boolean inferredUpFaceLoweredSide = false;
-        if (originalSide == Direction.UP) {
-            Direction inferred = slabbed$inferLoweredSideFromUpFaceHit(originalHitPos, context.getBlockPos());
-            if (inferred != null) {
-                effectiveSide = inferred;
-                inferredUpFaceLoweredSide = true;
-            }
-        }
+        String remapMode = originalSide.getAxis().isHorizontal() ? "horizontal_face" : "top_face";
 
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
@@ -264,7 +226,7 @@ public abstract class BlockItemPlacementIntentMixin {
         boolean targetSupportsTopMerge = targetState.getBlock() instanceof SlabBlock
                 && targetState.get(SlabBlock.TYPE) == SlabType.TOP
                 && originalSide == Direction.UP;
-        if (targetSupportsTopMerge && !inferredUpFaceLoweredSide) {
+        if (targetSupportsTopMerge) {
             effectiveSide = Direction.DOWN;
         }
         boolean faceHorizontal = effectiveSide.getAxis().isHorizontal();
@@ -307,7 +269,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     "target_not_solid",
                     null,
                     effectiveSide,
-                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                    remapMode);
             return slabbed$inspectReturn(context, context, "target_not_solid");
         }
         if (targetHasBlockEntity) {
@@ -324,7 +286,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     "target_has_block_entity",
                     null,
                     effectiveSide,
-                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                    remapMode);
             return slabbed$inspectReturn(context, context, "target_has_block_entity");
         }
         if (targetIsCraftingTable) {
@@ -341,7 +303,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     "target_is_crafting_table",
                     null,
                     effectiveSide,
-                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                    remapMode);
             return slabbed$inspectReturn(context, context, "target_is_crafting_table");
         }
         if (yOffset != -0.5d) {
@@ -358,7 +320,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     "y_offset_not_-0.5",
                     null,
                     effectiveSide,
-                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                    remapMode);
             return slabbed$inspectReturn(context, context, "y_offset_not_-0.5");
         }
 
@@ -416,7 +378,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 "none",
                 remappedHitPos,
                 effectiveSide,
-                inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                remapMode);
         BlockHitResult remappedHit = new BlockHitResult(
                 remappedHitPos,
                 effectiveSide,
