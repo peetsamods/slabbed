@@ -3,8 +3,8 @@ package com.slabbed.anchor;
 import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
-import com.slabbed.debug.BsFbLiveTrace;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabbedAuditBridge;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
@@ -152,9 +152,9 @@ public final class SlabAnchorAttachment {
 
     private static void addAnchorUnchecked(World world, BlockPos pos) {
         boolean added = addToAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (added && BsFbLiveTrace.ENABLED) {
+        if (added && SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
             BlockPos supportPos = pos.down();
-            BsFbLiveTrace.capture(world, supportPos, pos, "ANCHOR_ADDED");
+            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
         }
     }
 
@@ -206,9 +206,9 @@ public final class SlabAnchorAttachment {
      */
     public static void removeAnchor(World world, BlockPos pos) {
         boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (removed && BsFbLiveTrace.ENABLED) {
+        if (removed && SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
             BlockPos supportPos = pos.down();
-            BsFbLiveTrace.capture(world, supportPos, pos, "ANCHOR_REMOVED");
+            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_REMOVED");
         }
     }
 

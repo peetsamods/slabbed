@@ -2,7 +2,7 @@ package com.slabbed.mixin.debug;
 
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.debug.DebugTraceContext;
+import com.slabbed.util.DebugTraceContext;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.SideShapeType;
