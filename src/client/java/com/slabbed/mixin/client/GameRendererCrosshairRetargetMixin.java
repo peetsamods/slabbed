@@ -57,11 +57,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
     @Shadow @Final private MinecraftClient client;
     private static final long BETA4_FINAL_TARGET_TRACE_MIN_INTERVAL_NANOS = 1_000_000_000L;
-    private static final int SLABBED_SEAM_KEEP_INITIAL = 0;
-    private static final int SLABBED_SEAM_PRESERVE_ANCHORED = 1;
-    private static final int SLABBED_SEAM_PRESERVE_VISIBLE_SLAB = 2;
-    private static final int SLABBED_SEAM_PRESERVE_ADJACENT = 3;
-    private static final int SLABBED_SEAM_NO_RESCUE = 4;
     private static String slabbed$beta4FinalTargetTraceLastSignature;
     private static long slabbed$beta4FinalTargetTraceLastLogNanos;
 
@@ -85,48 +80,32 @@ public abstract class GameRendererCrosshairRetargetMixin {
                     && initialHit.getSide() == Direction.UP
                     && slabbed$isAnchoredLoweredFullBlock(world, pos, world.getBlockState(pos))) {
                 BlockHitResult anchoredOwner = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
-                BlockHitResult sideOwner = slabbed$retargetLoweredSideSlab(tickProgress, initialHit, true);
-                int seamDecision = slabbed$classifyBeta4SeamOwner(tickProgress, initialTarget, sideOwner);
-                slabbed$traceSlabHeldUpGuardSideOwnerClassification(
-                        tickProgress,
-                        initialTarget,
-                        initialHit,
-                        sideOwner,
-                        seamDecision);
-                if (sideOwner != null
-                        && (seamDecision == SLABBED_SEAM_PRESERVE_VISIBLE_SLAB
-                        || seamDecision == SLABBED_SEAM_PRESERVE_ADJACENT)) {
-                    client.crosshairTarget = sideOwner;
-                    slabbed$traceTargeting(tickProgress, initialTarget, slabbed$seamDecisionTraceName(seamDecision), true);
-                    return;
-                }
                 if (slabbed$isDistinctOwner(initialHit, anchoredOwner)) {
                     client.crosshairTarget = anchoredOwner;
                     slabbed$traceTargeting(
                             tickProgress,
                             initialTarget,
-                            seamDecision == SLABBED_SEAM_PRESERVE_ANCHORED
-                                    ? slabbed$seamDecisionTraceName(seamDecision)
-                                    : "scan-anchored-fb-fired-slab-held",
+                            "scan-anchored-fb-fired-slab-held",
                             false);
+                    return;
+                }
+                BlockHitResult sideOwner = slabbed$traceSlabHeldUpGuardSideOwnerClassification(
+                        tickProgress,
+                        initialTarget,
+                        initialHit);
+                if (sideOwner != null) {
+                    client.crosshairTarget = sideOwner;
+                    slabbed$traceTargeting(tickProgress, initialTarget, "scan-side-slab-fired", true);
                     return;
                 }
                 slabbed$traceTargeting(
                         tickProgress,
                         initialTarget,
-                        seamDecision == SLABBED_SEAM_PRESERVE_ANCHORED
-                                ? slabbed$seamDecisionTraceName(seamDecision)
-                                : "scan-skip-slab-held-anchored-lowered-full-block-up",
+                        "scan-skip-slab-held-anchored-lowered-full-block-up",
                         false);
                 return;
             }
             if (slabbed$isInitialHitOnLoweredSlabFace(initialHit)) {
-                int seamDecision = slabbed$classifyBeta4SeamOwner(tickProgress, initialTarget, initialHit);
-                if (seamDecision == SLABBED_SEAM_PRESERVE_VISIBLE_SLAB
-                        || seamDecision == SLABBED_SEAM_PRESERVE_ADJACENT) {
-                    slabbed$traceTargeting(tickProgress, initialTarget, slabbed$seamDecisionTraceName(seamDecision), false);
-                    return;
-                }
                 BlockHitResult aboveAngleOwner = slabbed$retargetAboveAngleLowerFrontSlabToAnchoredOwner(
                         tickProgress,
                         initialHit);
@@ -183,19 +162,10 @@ public abstract class GameRendererCrosshairRetargetMixin {
         // initial target sits on a farther/underneath block.
         BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
         BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht, slabHeld);
-        int seamDecision = slabHeld
-                ? slabbed$classifyBeta4SeamOwner(tickProgress, initialTarget, loweredSlabHit)
-                : SLABBED_SEAM_KEEP_INITIAL;
-        if (slabHeld
-                && seamDecision == SLABBED_SEAM_PRESERVE_ANCHORED
-                && slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(tickProgress, initialTarget, loweredSlabHit)) {
+        if (slabHeld && slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(tickProgress, initialTarget, loweredSlabHit)) {
             loweredSlabHit = null;
         }
-        BlockHitResult chosen = loweredSlabHit != null
-                && (seamDecision == SLABBED_SEAM_PRESERVE_VISIBLE_SLAB
-                || seamDecision == SLABBED_SEAM_PRESERVE_ADJACENT)
-                ? loweredSlabHit
-                : slabbed$chooseRescue(tickProgress, anchoredHit, loweredSlabHit, slabHeld);
+        BlockHitResult chosen = slabbed$chooseRescue(tickProgress, anchoredHit, loweredSlabHit, slabHeld);
         BlockHitResult loweredChainHit = slabHeld ? null : slabbed$retargetLoweredChainTopSupport(tickProgress, ht);
         if (loweredChainHit != null && slabbed$isCloserOrTied(tickProgress, loweredChainHit, chosen)) {
             chosen = loweredChainHit;
@@ -206,10 +176,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
             String decision;
             if (chosen == loweredChainHit) {
                 decision = "scan-lowered-chain-fired";
-            } else if (seamDecision != SLABBED_SEAM_KEEP_INITIAL
-                    && seamDecision != SLABBED_SEAM_NO_RESCUE
-                    && (sideSlabFired || chosen == anchoredHit)) {
-                decision = slabbed$seamDecisionTraceName(seamDecision);
             } else if (sideSlabFired) {
                 decision = slabHeld
                         ? (anchoredHit != null ? "scan-side-slab-fired-slab-held-tiebreak" : "scan-side-slab-fired")
@@ -357,128 +323,14 @@ public abstract class GameRendererCrosshairRetargetMixin {
         return candidate != null && !candidate.getBlockPos().equals(initialHit.getBlockPos());
     }
 
-    private int slabbed$classifyBeta4SeamOwner(
-            float tickProgress, HitResult initialTarget, BlockHitResult sideSlabCandidate
-    ) {
-        ClientWorld world = client.world;
-        if (world == null) {
-            return SLABBED_SEAM_KEEP_INITIAL;
-        }
-
-        if (initialTarget instanceof BlockHitResult initialHit
-                && initialHit.getType() == HitResult.Type.BLOCK) {
-            BlockPos initialPos = initialHit.getBlockPos();
-            BlockState initialState = world.getBlockState(initialPos);
-            if (slabbed$isBeta4AdjacentVisibleSlabOwner(world, initialHit)) {
-                return SLABBED_SEAM_PRESERVE_ADJACENT;
-            }
-            if (slabbed$isBeta4VisibleUpperLoweredBottomSlabOwner(world, initialHit)) {
-                return SLABBED_SEAM_PRESERVE_VISIBLE_SLAB;
-            }
-            if (initialHit.getSide() == Direction.UP
-                    && slabbed$isAnchoredLoweredFullBlock(world, initialPos, initialState)) {
-                if (slabbed$isBeta4TopInteriorHit(initialHit)) {
-                    return SLABBED_SEAM_PRESERVE_ANCHORED;
-                }
-                if (slabbed$isBeta4AdjacentVisibleSlabOwner(world, sideSlabCandidate)) {
-                    return SLABBED_SEAM_PRESERVE_ADJACENT;
-                }
-                if (slabbed$isBeta4DirectUpperVisibleCandidateForAnchored(world, initialPos, sideSlabCandidate)) {
-                    return SLABBED_SEAM_PRESERVE_VISIBLE_SLAB;
-                }
-                return SLABBED_SEAM_PRESERVE_ANCHORED;
-            }
-        }
-
-        if (slabbed$isBeta4AdjacentVisibleSlabOwner(world, sideSlabCandidate)) {
-            return SLABBED_SEAM_PRESERVE_ADJACENT;
-        }
-        if (slabbed$isBeta4VisibleUpperLoweredBottomSlabOwner(world, sideSlabCandidate)) {
-            return SLABBED_SEAM_PRESERVE_VISIBLE_SLAB;
-        }
-        return initialTarget == null || initialTarget.getType() == HitResult.Type.MISS
-                ? SLABBED_SEAM_NO_RESCUE
-                : SLABBED_SEAM_KEEP_INITIAL;
-    }
-
-    private static boolean slabbed$isBeta4TopInteriorHit(BlockHitResult hit) {
-        BlockPos pos = hit.getBlockPos();
-        Vec3d local = hit.getPos().subtract(pos.getX(), pos.getY(), pos.getZ());
-        return hit.getSide() == Direction.UP
-                && local.x > 0.15d
-                && local.x < 0.85d
-                && local.z > 0.15d
-                && local.z < 0.85d;
-    }
-
-    private static boolean slabbed$isBeta4VisibleUpperLoweredBottomSlabOwner(
-            ClientWorld world, BlockHitResult hit
-    ) {
-        if (world == null || hit == null || hit.getSide() == Direction.DOWN) {
-            return false;
-        }
-        BlockPos pos = hit.getBlockPos();
-        BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
-                || SlabSupport.getYOffset(world, pos, state) != -0.5
-                || !SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
-                || !slabbed$isAnchoredLoweredFullBlock(world, pos.down(), world.getBlockState(pos.down()))) {
-            return false;
-        }
-        double minVisibleY = pos.getY() - 0.5d - 1.0e-6d;
-        double maxVisibleY = pos.getY() + 1.0e-6d;
-        double hitY = hit.getPos().y;
-        return hitY >= minVisibleY && hitY <= maxVisibleY;
-    }
-
-    private static boolean slabbed$isBeta4DirectUpperVisibleCandidateForAnchored(
-            ClientWorld world, BlockPos anchoredOwnerPos, BlockHitResult candidate
-    ) {
-        return candidate != null
-                && candidate.getBlockPos().equals(anchoredOwnerPos.up())
-                && slabbed$isBeta4VisibleUpperLoweredBottomSlabOwner(world, candidate);
-    }
-
-    private static boolean slabbed$isBeta4AdjacentVisibleSlabOwner(
-            ClientWorld world, BlockHitResult hit
-    ) {
-        if (world == null || hit == null || hit.getSide() == Direction.DOWN) {
-            return false;
-        }
-        BlockPos pos = hit.getBlockPos();
-        BlockState state = world.getBlockState(pos);
-        return state.getBlock() instanceof SlabBlock
-                && state.contains(SlabBlock.TYPE)
-                && state.getFluidState().isEmpty()
-                && SlabSupport.getYOffset(world, pos, state) == -0.5
-                && !slabbed$isBeta4VisibleUpperLoweredBottomSlabOwner(world, hit)
-                && slabbed$hasAdjacentAnchoredLoweredFullBlock(world, pos);
-    }
-
-    private static String slabbed$seamDecisionTraceName(int decision) {
-        return switch (decision) {
-            case SLABBED_SEAM_PRESERVE_ANCHORED -> "seamPreserveAnchored";
-            case SLABBED_SEAM_PRESERVE_VISIBLE_SLAB -> "seamPreserveVisibleSlab";
-            case SLABBED_SEAM_PRESERVE_ADJACENT -> "seamPreserveAdjacent";
-            case SLABBED_SEAM_NO_RESCUE -> "seamNoRescue";
-            default -> "seamKeepInitial";
-        };
-    }
-
-    private void slabbed$traceSlabHeldUpGuardSideOwnerClassification(
-            float tickProgress,
-            HitResult initialTarget,
-            BlockHitResult initialHit,
-            BlockHitResult sideOwner,
-            int seamDecision
+    private BlockHitResult slabbed$traceSlabHeldUpGuardSideOwnerClassification(
+            float tickProgress, HitResult initialTarget, BlockHitResult initialHit
     ) {
         ClientWorld world = client.world;
         Entity cam = client.getCameraEntity();
         if (world == null || cam == null) {
             Slabbed.LOGGER.info("[SLAB_HELD_UP_GUARD_SIDE_OWNER_CLASSIFY] classification=unknown reason=no-world-or-camera");
-            return;
+            return null;
         }
 
         BlockPos initialPos = initialHit.getBlockPos();
@@ -492,8 +344,18 @@ public abstract class GameRendererCrosshairRetargetMixin {
         boolean edgeLike = local.x <= 0.15 || local.x >= 0.85 || local.z <= 0.15 || local.z >= 0.85;
         boolean topInterior = topHit && !edgeLike;
 
+        BlockHitResult sideOwner = slabbed$retargetLoweredSideSlab(tickProgress, initialHit, true);
         String candidateReason = sideOwner == null ? "none" : "accepted";
-        String classification = slabbed$seamDecisionTraceName(seamDecision);
+        String classification;
+        if (sideOwner == null) {
+            classification = "noCandidate";
+        } else if (topHit && initialAnchored && initialLowered && initialFullBlock) {
+            classification = "anchoredUpPreserve";
+        } else if (topInterior) {
+            classification = "trueTopPreserve";
+        } else {
+            classification = "sideOwnerWouldWin";
+        }
 
         Vec3d eye = cam.getCameraPosVec(tickProgress);
         double initialDist2 = initialHit.getPos().squaredDistanceTo(eye);
@@ -525,13 +387,11 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" candidateDist2=").append(sideOwner == null ? "NaN" : String.format("%.6f", candidateDist2));
         line.append(" candidateMinusInitialDist2=")
                 .append(sideOwner == null ? "NaN" : String.format("%.6f", candidateDist2 - initialDist2));
-        line.append(" wouldProduceScanSideSlabFired=")
-                .append(sideOwner != null
-                        && (seamDecision == SLABBED_SEAM_PRESERVE_VISIBLE_SLAB
-                        || seamDecision == SLABBED_SEAM_PRESERVE_ADJACENT));
+        line.append(" wouldProduceScanSideSlabFired=").append(sideOwner != null);
         line.append(" classification=").append(classification);
         line.append(" initialTarget=").append(slabbed$formatHit(initialTarget));
         Slabbed.LOGGER.info(line.toString());
+        return "sideOwnerWouldWin".equals(classification) ? sideOwner : null;
     }
 
     private static String slabbed$formatSideOwnerFacts(ClientWorld world, BlockPos pos) {
