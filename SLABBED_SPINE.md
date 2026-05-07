@@ -20,54 +20,42 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current operating base HEAD before savepoint: `571ba89`
-- Current operating base tag before savepoint: `save/slab-held-retarget-parity-improvements`
-- Stale, provenance-confusing tag: `save/real-placed-lowered-bottom-slab-persistence`
+- Current operating base HEAD before savepoint: `b3a09db`
+- Current operating base tag before savepoint: `save/revert-failed-seam-owner-classifier`
+- Reverted failed classifier: `763434e` / `save/beta4-seam-owner-classifier`
+- Stale, provenance-confusing release tag for this issue: `release/0.2.0-beta.4`
 
-The current savepoint target is `save/lowered-slab-face-placement-inheritance`.
+The current savepoint target is `save/beta4-seam-ownership-contract`.
 
 ## Current tracked tree state
 
 Tracked tree is clean.
-`tmp/` may remain intentionally untracked.
+`tmp/` may remain intentionally untracked and must not be staged.
 
 ## Current product goal
 
-Save the live-proven lowered slab face placement, full-block authoring, and post-placement slab-held targeting fix before any fresh issue work.
+Define the live-first beta4 seam ownership contract and next proof plan before any new targeting fix.
 
 ## Current proof note
 
-Julia live result: "Perfect! Save."
+Release remains blocked. The failed shared seam-owner classifier `763434e` was reverted by `b3a09db`; do not upload beta4, do not move `release/0.2.0-beta.4`, and do not call the seam issue fixed.
 
-Live retest confirmed:
+Current beta4 seam proof classes:
 
-- Stone slab placed against lowered slab face joins the lowered lane, with no ghost face.
-- Ordinary full blocks and logs placed against lowered slab face place lowered/aligned.
-- Newly placed full block becomes targetable with normal block held.
-- Newly placed full block also becomes targetable with stone slab held.
-- Slab-held targeting no longer jumps back to the old lowered slab face.
-- Ghost-face / above-placement issue is resolved for this repro.
+- Anchored-UP preservation remains GREEN for centered valid `UP` hits on an anchored lowered full block.
+- Screenshot-intent visible upper owner remains RED and is the current blocker.
+- Adjacent visible target preservation remains GREEN.
+- Air/behind/miss no-rescue boundary is still required if not already covered.
 
-Mechanisms saved:
-
-- Slab placement against visible lowered slab face now authors a non-persistent lowered slab lane: placed slab `dy=-0.5`, `persistentLoweredSlabCarrier=false`, and orphan teardown remains valid.
-- Ordinary full-block placement against a valid non-persistent lowered bottom slab source now authors the placed full block through the established anchored full-block path: source slab remains non-persistent, placed full block `dy=-0.5`, placed full block `anchored=true`.
-- Post-placement slab-held targeting now respects the newly placed anchored lowered full-block owner: slab-held no longer preserves the old lowered slab face before comparing a valid anchored full-block candidate, so final slab-held target can resolve to the newly placed anchored full block.
-- Existing protections preserved: Phase19 true-top proof green, orphan lowered-lane teardown green, saved slab-held retarget parity preserved, no targeting/rescue broadening outside proven branches, and no model/outline/raycast dy authority changes.
-
-Proof markers:
-
-- `LIVE_CLICK_PAIR_BOTTOM_SLAB_LANE_INHERITANCE`
-- `LIVE_CLICK_PAIR_FULL_BLOCK_LANE_INHERITANCE`
-- Orphan teardown still green.
-- Slab-held post-place anchored owner live retest passed.
+Contract note: `docs/beta4-seam-ownership-contract.md`.
 
 ## Non-negotiable invariants
 
 - Preserve the current phase19 branch/HEAD/tag truth.
-- Do not drift into broad goblin chaos by default.
+- Do not drift into broad chaos by default.
 - Do not chase Phase20 or Ultra2 unless a fresh live failure points there.
 - Treat the spine as current context, but verify against Git before edits.
+- Do not upload beta4, move `release/0.2.0-beta.4`, broaden rescue, change `SlabSupport` lane grammar, or add a final Bug Blaster for the current seam issue yet.
 
 ## Latest fixed Bug Blaster
 
@@ -105,7 +93,7 @@ Status: Fixed / saved.
 
 ## Current next action
 
-Stop, or begin only a fresh slice if Julia reports a new distinct issue.
+Next implementation slice should first update the proof harness/checklist to mirror `docs/beta4-seam-ownership-contract.md`, then extract one seam owner classifier/helper. Do not patch `GameRendererCrosshairRetargetMixin.java` inline again before those proof boundaries exist.
 
 ## Suggested live run command
 
