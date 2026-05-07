@@ -50,6 +50,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (Boolean.getBoolean("slabbed.juliaBeta4AdjacentVisibleRedOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runJuliaBeta4AdjacentVisibleTargetRedCase(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.juliaBeta4AboveAngleRedOnly")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -3868,6 +3877,123 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 && SlabSupport.getYOffset(world, expectedOwnerPos, state) == -0.5
                 && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, expectedOwnerPos, state)
                 && SlabAnchorAttachment.isAnchored(world, expectedOwnerPos.down());
+    }
+
+    private static void runJuliaBeta4AdjacentVisibleTargetRedCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(24, 0, 0);
+        final BlockPos anchoredOwnerPos = supportPos.up();
+        final BlockPos visibleUpperSlabOwnerPos = anchoredOwnerPos.up();
+        final BlockPos adjacentVisibleOwnerPos = anchoredOwnerPos.east();
+        final Vec3d eye = new Vec3d(
+                adjacentVisibleOwnerPos.getX() + 2.35d,
+                adjacentVisibleOwnerPos.getY() + 0.25d,
+                adjacentVisibleOwnerPos.getZ() + 0.50d);
+        final Vec3d aimAdjacentEastFace = new Vec3d(
+                adjacentVisibleOwnerPos.getX() + 1.0d,
+                adjacentVisibleOwnerPos.getY() - 0.25d,
+                adjacentVisibleOwnerPos.getZ() + 0.50d);
+
+        setupFixture(singleplayer, supportPos, anchoredOwnerPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState fullState = world.getBlockState(anchoredOwnerPos);
+            SlabAnchorAttachment.addAnchor(world, anchoredOwnerPos, fullState);
+            world.setBlockState(
+                    visibleUpperSlabOwnerPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world,
+                    visibleUpperSlabOwnerPos,
+                    world.getBlockState(visibleUpperSlabOwnerPos));
+            world.setBlockState(
+                    adjacentVisibleOwnerPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncPlayerAim(ctx, singleplayer, eye, aimAdjacentEastFace);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[JULIA_BETA4_ADJACENT_VISIBLE_RED] client not ready");
+            }
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            HitResult finalTarget = mc.crosshairTarget;
+            String anchoredOwner = anchoredOwnerPos.toShortString();
+            String visibleUpperSlabOwner = visibleUpperSlabOwnerPos.toShortString();
+            String adjacentVisibleOwner = adjacentVisibleOwnerPos.toShortString();
+            String vanillaOwner = asOwner(vanilla);
+            String finalOwner = asOwner(finalTarget);
+            String finalType = finalTarget == null ? "null" : finalTarget.getType().toString();
+            boolean adjacentOwnerWon = adjacentVisibleOwner.equals(finalOwner);
+            boolean anchoredOwnerWon = anchoredOwner.equals(finalOwner);
+            boolean visibleUpperOwnerWon = visibleUpperSlabOwner.equals(finalOwner);
+            boolean finalMiss = finalTarget == null || finalTarget.getType() == HitResult.Type.MISS;
+            String classification = adjacentOwnerWon
+                    ? "adjacentVisibleOwnerExpected"
+                    : (anchoredOwnerWon
+                    ? "anchoredOwnerWouldSteal"
+                    : (visibleUpperOwnerWon
+                    ? "visibleUpperSlabOwnerWouldSteal"
+                    : (finalMiss ? "missOrAirNoOwner" : "wrongOwnerWouldWin")));
+            String held = mc.player.getMainHandStack().isEmpty()
+                    ? "empty"
+                    : mc.player.getMainHandStack().getItem().toString();
+
+            String facts = " shape=compact_lowered_stone_with_upper_bottom_slab_and_adjacent_visible_target"
+                    + " held=" + held
+                    + " support=" + supportPos.toShortString()
+                    + " anchoredOwner=" + anchoredOwner
+                    + " visibleUpperSlabOwner=" + visibleUpperSlabOwner
+                    + " adjacentVisibleOwner=" + adjacentVisibleOwner
+                    + " vanillaType=" + vanilla.getType()
+                    + " finalType=" + finalType
+                    + " vanillaOwner=" + vanillaOwner
+                    + " finalOwner=" + finalOwner
+                    + " eye=" + eye
+                    + " aim=" + aimAdjacentEastFace
+                    + " liveEye=" + rayStart
+                    + " look=" + rayDir
+                    + " yaw=" + mc.player.getYaw()
+                    + " pitch=" + mc.player.getPitch()
+                    + " vanillaTarget=" + describeHit(vanilla)
+                    + " finalTarget=" + describeHit(finalTarget)
+                    + " vanillaDist2=" + describeHitDist2(rayStart, vanilla)
+                    + " finalDist2=" + describeHitDist2(rayStart, finalTarget)
+                    + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos)
+                    + " visibleUpperFacts=" + describeOwnerFacts(mc.world, visibleUpperSlabOwnerPos)
+                    + " adjacentVisibleFacts=" + describeOwnerFacts(mc.world, adjacentVisibleOwnerPos)
+                    + " finalFacts=" + describeOwnerFacts(mc.world, blockPos(finalTarget))
+                    + " adjacentOwnerWon=" + adjacentOwnerWon
+                    + " anchoredOwnerWon=" + anchoredOwnerWon
+                    + " visibleUpperOwnerWon=" + visibleUpperOwnerWon
+                    + " finalMiss=" + finalMiss
+                    + " classification=" + classification;
+
+            if (adjacentOwnerWon) {
+                System.out.println("[JULIA_BETA4_ADJACENT_VISIBLE_GREEN]" + facts);
+                return;
+            }
+
+            throw new RuntimeException("[JULIA_BETA4_ADJACENT_VISIBLE_RED]" + facts
+                    + " suspectedFailingLayer=adjacent-visible-owner-not-preserved");
+        });
     }
 
     private static void runScreenshotReproProbe(
