@@ -3636,8 +3636,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     ) {
         final BlockPos supportPos = SUPPORT_POS.add(24, 0, 0);
         final BlockPos expectedOwnerPos = supportPos.up();
-        final BlockPos visibleSlabOwnerPos = expectedOwnerPos.up();
-        final BlockPos lowerFrontOwnerPos = supportPos;
+        final BlockPos lowerFrontOwnerPos = expectedOwnerPos.up();
+        final BlockPos visibleUpperSlabOwnerPos = lowerFrontOwnerPos;
 
         setupFixture(singleplayer, supportPos, expectedOwnerPos);
         singleplayer.getServer().runOnServer(server -> {
@@ -3645,26 +3645,29 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             BlockState fullState = world.getBlockState(expectedOwnerPos);
             SlabAnchorAttachment.addAnchor(world, expectedOwnerPos, fullState);
             world.setBlockState(
-                    visibleSlabOwnerPos,
+                    lowerFrontOwnerPos,
                     Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                     net.minecraft.block.Block.NOTIFY_LISTENERS);
             SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
                     world,
-                    visibleSlabOwnerPos,
-                    world.getBlockState(visibleSlabOwnerPos));
+                    lowerFrontOwnerPos,
+                    world.getBlockState(lowerFrontOwnerPos));
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
         syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
 
         System.setProperty("slabbed.target.trace", "true");
-        runJuliaBeta4AngleTargetingProbe(
+        String firstRed = null;
+        String lowerFrontRed = null;
+
+        String red = runJuliaBeta4AngleTargetingProbe(
                 ctx,
                 singleplayer,
                 "ground_front",
                 supportPos,
                 expectedOwnerPos,
-                visibleSlabOwnerPos,
+                visibleUpperSlabOwnerPos,
                 lowerFrontOwnerPos,
                 new Vec3d(
                         expectedOwnerPos.getX() - 2.35d,
@@ -3675,13 +3678,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         expectedOwnerPos.getY() + 0.500d,
                         expectedOwnerPos.getZ() + 0.616d),
                 true);
-        runJuliaBeta4AngleTargetingProbe(
+        firstRed = firstRed == null ? red : firstRed;
+        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
+
+        red = runJuliaBeta4AngleTargetingProbe(
                 ctx,
                 singleplayer,
                 "live_above_across_pitch_down",
                 supportPos,
                 expectedOwnerPos,
-                visibleSlabOwnerPos,
+                visibleUpperSlabOwnerPos,
                 lowerFrontOwnerPos,
                 new Vec3d(
                         expectedOwnerPos.getX() - 2.285d,
@@ -3690,13 +3696,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 -101.850f,
                 1.950f,
                 false);
-        runJuliaBeta4AngleTargetingProbe(
+        firstRed = firstRed == null ? red : firstRed;
+        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
+
+        red = runJuliaBeta4AngleTargetingProbe(
                 ctx,
                 singleplayer,
                 "live_above_across_pitch_up",
                 supportPos,
                 expectedOwnerPos,
-                visibleSlabOwnerPos,
+                visibleUpperSlabOwnerPos,
                 lowerFrontOwnerPos,
                 new Vec3d(
                         expectedOwnerPos.getX() - 2.285d,
@@ -3705,9 +3714,54 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 -101.850f,
                 -2.550f,
                 false);
+        firstRed = firstRed == null ? red : firstRed;
+        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
+
+        red = runJuliaBeta4AngleTargetingProbe(
+                ctx,
+                singleplayer,
+                "live_above_across_pitch_steep_up",
+                supportPos,
+                expectedOwnerPos,
+                visibleUpperSlabOwnerPos,
+                lowerFrontOwnerPos,
+                new Vec3d(
+                        expectedOwnerPos.getX() - 2.285d,
+                        expectedOwnerPos.getY() + 0.620d,
+                        expectedOwnerPos.getZ() + 0.790d),
+                -101.850f,
+                -9.000f,
+                false);
+        firstRed = firstRed == null ? red : firstRed;
+        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
+
+        red = runJuliaBeta4AngleTargetingProbe(
+                ctx,
+                singleplayer,
+                "live_above_across_yaw_minus99_pitch_up",
+                supportPos,
+                expectedOwnerPos,
+                visibleUpperSlabOwnerPos,
+                lowerFrontOwnerPos,
+                new Vec3d(
+                        expectedOwnerPos.getX() - 2.285d,
+                        expectedOwnerPos.getY() + 0.620d,
+                        expectedOwnerPos.getZ() + 0.790d),
+                -99.450f,
+                -2.550f,
+                false);
+        firstRed = firstRed == null ? red : firstRed;
+        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
+
+        if (lowerFrontRed != null) {
+            throw new RuntimeException(lowerFrontRed);
+        }
+        if (firstRed != null) {
+            throw new RuntimeException(firstRed);
+        }
     }
 
-    private static void runJuliaBeta4AngleTargetingProbe(
+    private static String runJuliaBeta4AngleTargetingProbe(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
             String angle,
@@ -3723,7 +3777,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
         float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
         float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
-        runJuliaBeta4AngleTargetingProbe(
+        return runJuliaBeta4AngleTargetingProbe(
                 ctx,
                 singleplayer,
                 angle,
@@ -3737,7 +3791,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 expectGreen);
     }
 
-    private static void runJuliaBeta4AngleTargetingProbe(
+    private static String runJuliaBeta4AngleTargetingProbe(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
             String angle,
@@ -3751,6 +3805,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             boolean expectGreen
     ) {
         syncPlayerLookFromEye(ctx, singleplayer, eye, yaw, pitch);
+        final String[] redMessage = {null};
 
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
@@ -3769,21 +3824,30 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     mc.player));
             HitResult finalTarget = mc.crosshairTarget;
             String expectedOwner = expectedOwnerPos.toShortString();
-            String visibleOwner = visibleSlabOwnerPos.toShortString();
+            String visibleUpperSlabOwner = visibleSlabOwnerPos.toShortString();
             String lowerFrontOwner = lowerFrontOwnerPos.toShortString();
+            String vanillaOwner = asOwner(vanilla);
             String finalOwner = asOwner(finalTarget);
             String classification = expectedOwner.equals(finalOwner)
                     ? "anchoredUpPreserve"
-                    : (visibleOwner.equals(finalOwner) ? "sideOwnerWouldWin" : "wrongOwnerWouldWin");
+                    : (lowerFrontOwner.equals(finalOwner)
+                    ? "scan-side-slab-fired"
+                    : (visibleUpperSlabOwner.equals(finalOwner) ? "visibleUpperSlabOwnerWouldWin" : "wrongOwnerWouldWin"));
+            String held = mc.player.getMainHandStack().isEmpty()
+                    ? "empty"
+                    : mc.player.getMainHandStack().getItem().toString();
 
             String facts = " shape=compact_lowered_stone_with_upper_double_slab"
                     + " angle=" + angle
-                    + " held=minecraft:stone_slab"
+                    + " held=" + held
                     + " support=" + supportPos.toShortString()
                     + " expectedOwner=" + expectedOwner
-                    + " visibleOwner=" + visibleOwner
+                    + " visibleUpperSlabOwner=" + visibleUpperSlabOwner
                     + " lowerFrontOwner=" + lowerFrontOwner
-                    + " actualOwner=" + finalOwner
+                    + " vanillaType=" + vanilla.getType()
+                    + " finalType=" + finalTarget.getType()
+                    + " vanillaOwner=" + vanillaOwner
+                    + " finalOwner=" + finalOwner
                     + " eye=" + eye
                     + " yaw=" + yaw
                     + " pitch=" + pitch
@@ -3801,20 +3865,30 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
             System.out.println("[JULIA_BETA4_ABOVE_ANGLE]" + facts);
 
-            if (expectGreen && expectedOwner.equals(finalOwner)) {
+            if (lowerFrontOwner.equals(finalOwner)) {
+                redMessage[0] = "[JULIA_BETA4_ABOVE_ANGLE_RED]" + facts
+                        + " suspectedFailingLayer=lower-front-owner-live-targeting"
+                        + " lowerFrontOwnerWon=true"
+                        + " groundAngleExpectedGreen=" + expectGreen;
+                System.out.println(redMessage[0]);
+                return;
+            }
+            if (expectedOwner.equals(finalOwner)) {
                 System.out.println("[JULIA_BETA4_ABOVE_ANGLE_GREEN]" + facts);
                 return;
             }
-            if (!expectGreen && !visibleOwner.equals(finalOwner)) {
-                System.out.println("[JULIA_BETA4_ABOVE_ANGLE_GREEN]" + facts
-                        + " sideSlabOwnerSuppressed=true");
-                return;
-            }
 
-            throw new RuntimeException("[JULIA_BETA4_ABOVE_ANGLE_RED]" + facts
-                    + " suspectedFailingLayer=angle-sensitive-slab-held-retarget-owner-priority"
-                    + " groundAngleExpectedGreen=" + expectGreen);
+            redMessage[0] = "[JULIA_BETA4_ABOVE_ANGLE_RED]" + facts
+                    + " suspectedFailingLayer=unexpected-owner-live-targeting"
+                    + " lowerFrontOwnerWon=false"
+                    + " groundAngleExpectedGreen=" + expectGreen;
+            System.out.println(redMessage[0]);
         });
+        return redMessage[0];
+    }
+
+    private static boolean isLowerFrontRed(String redMessage) {
+        return redMessage != null && redMessage.contains(" lowerFrontOwnerWon=true");
     }
 
     private static void runScreenshotReproProbe(
