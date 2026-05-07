@@ -428,6 +428,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             BlockState sideState = world.getBlockState(sidePos);
             double sideDy = SlabSupport.getYOffset(world, sidePos, sideState);
             visibleUpperSideCandidate = slabbed$isVisibleUpperLoweredSlabOwner(world, sidePos, sideState)
+                    && sideOwner.getSide().getAxis() != Direction.Axis.Y
                     && sideState.contains(SlabBlock.TYPE)
                     && sideState.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && sideDy == -0.5
@@ -440,8 +441,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 && initialAnchored
                 && initialLowered
                 && initialFullBlock
-                && edgeLike
-                && !topInterior
                 && visibleUpperSideCandidate) {
             classification = "visibleUpperSideFaceOwner";
         } else if (topHit && initialAnchored && initialLowered && initialFullBlock) {
