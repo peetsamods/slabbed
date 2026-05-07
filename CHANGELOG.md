@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.2.0-beta.4] — Audited Release Candidate
+
+### Notes
+- Prepared from the audited Phase19 integration savepoint with no gameplay logic changes.
+- Release metadata only; public jar contents remained clean in the beta-readiness audit.
+
 ## [0.2.0-beta.2] — Side-Slab Torch Stability
 
 ### Fixed
