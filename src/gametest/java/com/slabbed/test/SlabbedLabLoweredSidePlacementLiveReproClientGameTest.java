@@ -78,6 +78,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta4SeamVisibleUpperAngleGeneralRedOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta4SeamVisibleUpperAngleGeneralRedCase(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta4SeamGreenProofsOnly")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -85,6 +94,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 runJuliaBeta4StoneSlabTargetingOutlineMismatchRedCase(ctx, singleplayer);
                 runJuliaBeta4AdjacentVisibleTargetRedCase(ctx, singleplayer);
                 runBeta4SeamNoRescueBoundaryCase(ctx, singleplayer);
+                runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, false);
+                runBeta4SeamVisibleUpperSideFaceRedCase(ctx, singleplayer);
+                runBeta4SeamVisibleUpperAnchoredUpStealRedCase(ctx, singleplayer);
             }
             return;
         }
@@ -4285,9 +4297,30 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
     ) {
+        runBeta4SeamVisibleUpperAnchoredUpProofCase(ctx, singleplayer, false);
+    }
+
+    private static void runBeta4SeamVisibleUpperAngleGeneralRedCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        runBeta4SeamVisibleUpperAnchoredUpProofCase(ctx, singleplayer, true);
+    }
+
+    private static void runBeta4SeamVisibleUpperAnchoredUpProofCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            boolean angleGeneral
+    ) {
         final BlockPos supportPos = SUPPORT_POS.add(24, 0, 0);
         final BlockPos anchoredOwnerPos = supportPos.up();
         final BlockPos visibleUpperSlabOwnerPos = anchoredOwnerPos.up();
+        final String redMarker = angleGeneral
+                ? "[BETA4_SEAM_VISIBLE_UPPER_ANGLE_GENERAL_RED]"
+                : "[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_RED]";
+        final String greenMarker = angleGeneral
+                ? "[BETA4_SEAM_VISIBLE_UPPER_ANGLE_GENERAL_GREEN]"
+                : "[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_GREEN]";
 
         setupFixture(singleplayer, supportPos, anchoredOwnerPos);
         singleplayer.getServer().runOnServer(server -> {
@@ -4309,7 +4342,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         System.setProperty("slabbed.target.trace", "true");
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
-                throw new RuntimeException("[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_RED] client not ready");
+                throw new RuntimeException(redMarker + " client not ready");
             }
             mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
 
@@ -4327,26 +4360,38 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     visibleUpperSlabOwnerPos,
                     visibleState);
             if (!sourceTruth) {
-                throw new RuntimeException("[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_RED]"
+                throw new RuntimeException(redMarker
                         + " reason=source-truth-gap"
                         + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos)
                         + " visibleUpperFacts=" + describeOwnerFacts(mc.world, visibleUpperSlabOwnerPos));
             }
 
             String bestFacts = null;
-            double[] eyeY = {1.25d, 1.40d, 1.55d, 1.70d, 1.85d};
-            double[] aimX = {0.02d, 0.05d, 0.08d, 0.12d, 0.15d};
-            double[] aimY = {0.50d, 0.52d, 0.55d, 0.58d, 0.62d};
-            double[] aimZ = {0.50d, 0.08d, 0.92d};
+            double[] eyeX = angleGeneral ? new double[]{-2.72d, -2.50d, -3.00d} : new double[]{-2.50d};
+            double[] eyeY = angleGeneral
+                    ? new double[]{2.78d, 2.60d, 2.95d}
+                    : new double[]{1.25d, 1.40d, 1.55d, 1.70d, 1.85d};
+            double[] eyeZ = angleGeneral ? new double[]{1.85d, 1.50d, 2.10d} : new double[]{0.50d};
+            double[] aimX = angleGeneral
+                    ? new double[]{0.20d, 0.28d, 0.35d, 0.50d}
+                    : new double[]{0.02d, 0.05d, 0.08d, 0.12d, 0.15d};
+            double[] aimY = angleGeneral
+                    ? new double[]{0.50d, 0.52d, 0.55d}
+                    : new double[]{0.50d, 0.52d, 0.55d, 0.58d, 0.62d};
+            double[] aimZ = angleGeneral
+                    ? new double[]{0.40d, 0.54d, 0.65d}
+                    : new double[]{0.50d, 0.08d, 0.92d};
 
-            for (double ey : eyeY) {
-                for (double ax : aimX) {
-                    for (double ay : aimY) {
-                        for (double az : aimZ) {
+            for (double ex : eyeX) {
+                for (double ey : eyeY) {
+                    for (double ez : eyeZ) {
+                        for (double ax : aimX) {
+                            for (double ay : aimY) {
+                                for (double az : aimZ) {
                             Vec3d eye = new Vec3d(
-                                    anchoredOwnerPos.getX() - 2.50d,
+                                    anchoredOwnerPos.getX() + ex,
                                     anchoredOwnerPos.getY() + ey,
-                                    anchoredOwnerPos.getZ() + 0.50d);
+                                    anchoredOwnerPos.getZ() + ez);
                             Vec3d aim = new Vec3d(
                                     anchoredOwnerPos.getX() + ax,
                                     anchoredOwnerPos.getY() + ay,
@@ -4420,7 +4465,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                                     : (finalVisible ? "visibleUpperSideFaceOwner" : "unexpectedOwner");
 
                             String facts = " shape=compact_lowered_stone_with_upper_bottom_slab"
-                                    + " aimRegion=anchored-up-edge-visible-upper-side-candidate"
+                                    + " aimRegion=" + (angleGeneral
+                                    ? "anchored-up-interior-visible-upper-side-candidate"
+                                    : "anchored-up-edge-visible-upper-side-candidate")
                                     + " held=minecraft:stone_slab"
                                     + " expectedOwnerClass=VISIBLE_UPPER_LOWERED_SLAB"
                                     + " actualOwnerClass=" + actualOwnerClass
@@ -4469,25 +4516,27 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                                     + " visibleOwnerWon=" + finalVisible
                                     + " classification=" + classification
                                     + " traceMarker=SLAB_HELD_UP_GUARD_SIDE_OWNER_CLASSIFY";
-                            if (initialBlockUp
+                            boolean targetBranch = initialBlockUp
                                     && candidateVisibleOwner
                                     && candidateLoweredBottomSlab
                                     && candidateCloser
-                                    && edgeLike
-                                    && !topInterior) {
+                                    && (angleGeneral ? (topInterior && !edgeLike) : (edgeLike && !topInterior));
+                            if (targetBranch) {
                                 if (finalVisible) {
-                                    System.out.println("[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_GREEN]" + facts);
+                                    System.out.println(greenMarker + facts);
                                     return;
                                 }
-                                throw new RuntimeException("[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_RED]" + facts);
+                                throw new RuntimeException(redMarker + facts);
                             }
                             bestFacts = facts;
                         }
                     }
                 }
             }
+            }
+            }
 
-            throw new RuntimeException("[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_RED]"
+            throw new RuntimeException(redMarker
                     + " reason=live-branch-not-reproduced"
                     + " lastAttempt=" + bestFacts);
         });
