@@ -20,8 +20,9 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current operating base HEAD: `767f735`
-- Current operating base tag: `save/beta4-live-first-seam-owner-classifier`
+- Current operating base HEAD: `9ed44e3`
+- Current operating base tag: `save/beta4-visible-slab-side-face-miss-fix`
+- Prior live-first classifier base: `767f735` / `save/beta4-live-first-seam-owner-classifier`
 - Reverted failed classifier: `763434e` / `save/beta4-seam-owner-classifier`
 - Stale, provenance-confusing release tag for this issue: `release/0.2.0-beta.4`
 
@@ -38,7 +39,7 @@ Fix the live-proven beta4 side-face visible-upper slab MISS path without broaden
 
 ## Current proof note
 
-Release remains blocked. The failed shared seam-owner classifier `763434e` was reverted by `b3a09db`; the live-first classifier at `767f735` passed harness proof but failed Julia live side-face validation. The side-face MISS fix is harness-green but still needs Julia live retest. Do not upload beta4, do not move `release/0.2.0-beta.4`, and do not call the seam issue fixed.
+Release remains blocked. The failed shared seam-owner classifier `763434e` was reverted by `b3a09db`; the live-first classifier at `767f735` passed harness proof but failed Julia live side-face validation. The side-face MISS fix at `9ed44e3` is automation-green (`[BETA4_SEAM_VISIBLE_UPPER_SIDE_FACE_GREEN]`) but Julia's live retest also failed: live evidence shows the BLOCK/UP anchored-UP preservation path stealing the visible upper lowered slab (2275 `SLAB_HELD_UP_GUARD_SIDE_OWNER_CLASSIFY`, 2267 `classification=anchoredUpPreserve`, 0 `visibleUpperSideFaceOwner`, 0 `miss-no-rescue-candidate`), so the automation-green MISS fix targeted the wrong branch. See `docs/beta4-live-fail-anchored-up-audit.md`. Next RED proof needed: `[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_RED]` (future GREEN). Do not upload beta4, do not move `release/0.2.0-beta.4`, and do not call the seam issue fixed.
 
 Current beta4 seam proof classes:
 
