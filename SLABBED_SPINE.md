@@ -43,6 +43,8 @@ Release remains blocked. The failed shared seam-owner classifier `763434e` was r
 
 Recorder status: gated live retarget recorder added behind `-Dslabbed.beta4LiveRetargetRecorder=true`; it emits `[BETA4_LIVE_RETARGET_RECORDER_START]` and `[BETA4_LIVE_RETARGET_RECORDER]` lines for Julia's live seam capture. This is evidence-only and does not unblock release.
 
+Proof status: gated RED proof `-Dslabbed.beta4SeamVisibleUpperAngleGeneralRedOnly=true` captures the angle-general BLOCK/UP failure where `topInterior=true`, `edgeLike=false`, a closer visible-upper lowered slab candidate exists, and `anchoredUpPreserve` still keeps the anchored owner. This is proof-only and does not unblock release.
+
 Current beta4 seam proof classes:
 
 - Anchored-UP preservation remains GREEN for centered valid `UP` hits on an anchored lowered full block: `[BETA4_ANCHORED_UP_PRESERVE_GREEN]`.
