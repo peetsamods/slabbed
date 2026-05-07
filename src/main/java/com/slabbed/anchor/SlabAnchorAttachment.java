@@ -532,7 +532,7 @@ public final class SlabAnchorAttachment {
             BlockState sourceState
     ) {
         if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)
-                || !SlabSupport.isFullHeightLoweredCarrier(world, sourcePos, sourceState)) {
+                || !qualifiesAsSideAdjacentLoweredFullAnchorSource(world, sourcePos, sourceState)) {
             return false;
         }
         int dx = Math.abs(pos.getX() - sourcePos.getX());
@@ -542,5 +542,15 @@ public final class SlabAnchorAttachment {
             return false;
         }
         return SlabSupport.getYOffset(world, sourcePos, sourceState) == -0.5;
+    }
+
+    private static boolean qualifiesAsSideAdjacentLoweredFullAnchorSource(
+            BlockView world,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        return SlabSupport.isFullHeightLoweredCarrier(world, sourcePos, sourceState)
+                || SlabSupport.isLoweredSideLaneSlabCarrier(world, sourcePos, sourceState)
+                || SlabSupport.isBottomSlabLoweredByCarrierBelow(world, sourcePos, sourceState);
     }
 }
