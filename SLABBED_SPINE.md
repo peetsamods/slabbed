@@ -34,17 +34,17 @@ Tracked tree is clean.
 
 ## Current product goal
 
-Audit and capture Julia's live beta4 side-face visible-upper slab targeting failure. This slice is proof-harness only; do not patch gameplay behavior.
+Fix the live-proven beta4 side-face visible-upper slab MISS path without broadening generic MISS rescue.
 
 ## Current proof note
 
-Release remains blocked. The failed shared seam-owner classifier `763434e` was reverted by `b3a09db`; the live-first classifier at `767f735` passed harness proof but failed Julia live side-face validation. Do not upload beta4, do not move `release/0.2.0-beta.4`, and do not call the seam issue fixed.
+Release remains blocked. The failed shared seam-owner classifier `763434e` was reverted by `b3a09db`; the live-first classifier at `767f735` passed harness proof but failed Julia live side-face validation. The side-face MISS fix is harness-green but still needs Julia live retest. Do not upload beta4, do not move `release/0.2.0-beta.4`, and do not call the seam issue fixed.
 
 Current beta4 seam proof classes:
 
 - Anchored-UP preservation remains GREEN for centered valid `UP` hits on an anchored lowered full block: `[BETA4_ANCHORED_UP_PRESERVE_GREEN]`.
 - Screenshot-intent visible upper owner is GREEN for the top/above harness path only: `[BETA4_SEAM_VISIBLE_UPPER_SLAB_GREEN]`.
-- Live side-face aim on the visible upper lowered slab is RED in the new opt-in proof: `[BETA4_SEAM_VISIBLE_UPPER_SIDE_FACE_RED]`; expected `VISIBLE_UPPER_LOWERED_SLAB`, actual `NO_RESCUE`.
+- Live side-face aim on the visible upper lowered slab is GREEN in the opt-in proof after the MISS-side fix: `[BETA4_SEAM_VISIBLE_UPPER_SIDE_FACE_GREEN]`.
 - Adjacent visible target preservation remains GREEN: `[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]`.
 - Slab-held air/behind/miss no-rescue boundary is GREEN: `[BETA4_SEAM_NO_RESCUE_GREEN]`.
 
