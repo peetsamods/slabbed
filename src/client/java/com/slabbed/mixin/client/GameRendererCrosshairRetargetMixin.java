@@ -56,6 +56,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class GameRendererCrosshairRetargetMixin {
 
     @Shadow @Final private MinecraftClient client;
+    private static final long BETA4_FINAL_TARGET_TRACE_MIN_INTERVAL_NANOS = 1_000_000_000L;
+    private static String slabbed$beta4FinalTargetTraceLastSignature;
+    private static long slabbed$beta4FinalTargetTraceLastLogNanos;
 
     @Inject(method = "updateCrosshairTarget", at = @At("TAIL"))
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
@@ -151,6 +154,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
         // initial target sits on a farther/underneath block.
         BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
         BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht, slabHeld);
+        if (slabHeld && slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(tickProgress, initialTarget, loweredSlabHit)) {
+            loweredSlabHit = null;
+        }
         BlockHitResult chosen = slabbed$chooseRescue(tickProgress, anchoredHit, loweredSlabHit, slabHeld);
         BlockHitResult loweredChainHit = slabHeld ? null : slabbed$retargetLoweredChainTopSupport(tickProgress, ht);
         if (loweredChainHit != null && slabbed$isCloserOrTied(tickProgress, loweredChainHit, chosen)) {
@@ -412,8 +418,15 @@ public abstract class GameRendererCrosshairRetargetMixin {
         boolean loweredSlabFacePreserve = "lowered-slab-face-preserve".equals(exitReason);
 
         BlockHitResult slabHeldCandidate = slabbed$retargetLoweredSideSlab(tickProgress, initialTarget, true);
+        BlockHitResult suppressedAboveAngleCandidate = null;
+        if (slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(tickProgress, initialTarget, slabHeldCandidate)) {
+            suppressedAboveAngleCandidate = slabHeldCandidate;
+            slabHeldCandidate = null;
+        }
         BlockHitResult nonSlabComparisonCandidate = slabbed$retargetLoweredSideSlab(tickProgress, initialTarget, false);
-        BlockHitResult reportCandidate = slabHeldCandidate != null ? slabHeldCandidate : nonSlabComparisonCandidate;
+        BlockHitResult reportCandidate = slabHeldCandidate != null
+                ? slabHeldCandidate
+                : (suppressedAboveAngleCandidate != null ? suppressedAboveAngleCandidate : nonSlabComparisonCandidate);
 
         boolean sameBlockSuppressed = slabHeldCandidate == null
                 && nonSlabComparisonCandidate != null
@@ -425,6 +438,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (slabHeldCandidate != null) {
             candidateReason = "accepted";
             classification = "sideOwnerWouldWin";
+        } else if (suppressedAboveAngleCandidate != null) {
+            candidateReason = "above-angle-anchored-owner-suppress";
+            classification = "suppressedByAboveAngleAnchoredOwner";
         } else if (nonSlabComparisonCandidate != null) {
             candidateReason = sameBlockSuppressed ? "same-block-slab-held-suppress" : "unknown";
             classification = "suppressedBySlabHeld";
@@ -464,6 +480,56 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" classification=").append(classification);
         Slabbed.LOGGER.info(line.toString());
         return "sideOwnerWouldWin".equals(classification) ? slabHeldCandidate : null;
+    }
+
+    private boolean slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(
+            float tickProgress, HitResult initialTarget, BlockHitResult sideSlabCandidate
+    ) {
+        if (sideSlabCandidate == null || sideSlabCandidate.getSide().getAxis() == Direction.Axis.Y) {
+            return false;
+        }
+
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return false;
+        }
+
+        BlockPos slabPos = sideSlabCandidate.getBlockPos();
+        if (initialTarget instanceof BlockHitResult initialBlock
+                && initialBlock.getType() == HitResult.Type.BLOCK
+                && initialBlock.getBlockPos().equals(slabPos)) {
+            return false;
+        }
+
+        BlockState slabState = world.getBlockState(slabPos);
+        if (!(slabState.getBlock() instanceof SlabBlock)
+                || !slabState.contains(SlabBlock.TYPE)
+                || slabState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || SlabSupport.getYOffset(world, slabPos, slabState) != -0.5
+                || !SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, slabPos, slabState)) {
+            return false;
+        }
+
+        BlockPos ownerPos = slabPos.down();
+        if (!slabbed$isAnchoredLoweredFullBlock(world, ownerPos, world.getBlockState(ownerPos))) {
+            return false;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d dir = cam.getRotationVec(tickProgress);
+        if (Math.abs(dir.y) > 0.15d) {
+            return false;
+        }
+
+        VoxelShape outline = slabState.getOutlineShape(world, slabPos, ShapeContext.of(cam));
+        if (outline == null || outline.isEmpty()) {
+            return false;
+        }
+        net.minecraft.util.math.Box bounds = outline.getBoundingBox();
+        double minY = slabPos.getY() + bounds.minY;
+        double maxY = slabPos.getY() + bounds.maxY;
+        return eye.y >= minY - 0.05d && eye.y <= maxY + 0.05d;
     }
 
     private boolean slabbed$isCloserOrTied(float tickProgress, BlockHitResult candidate, BlockHitResult current) {
@@ -768,6 +834,11 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 client.crosshairTarget,
                 anchoredDecision,
                 sideSlabRetargetFired);
+        slabbed$traceBeta4FinalTarget(
+                tickProgress,
+                initialTarget,
+                anchoredDecision,
+                sideSlabRetargetFired);
 
         if (!Boolean.getBoolean("slabbed.target.trace")) {
             return;
@@ -797,6 +868,108 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" sideSlabRetargetFired=").append(sideSlabRetargetFired);
         line.append(" final=").append(slabbed$formatHit(client.crosshairTarget));
         Slabbed.LOGGER.info(line.toString());
+    }
+
+    private void slabbed$traceBeta4FinalTarget(
+            float tickProgress, HitResult initialTarget, String classification, boolean sideSlabRetargetFired
+    ) {
+        if (!Boolean.getBoolean("slabbed.beta4.finalTargetTrace")) {
+            return;
+        }
+
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return;
+        }
+
+        HitResult finalTarget = client.crosshairTarget;
+        if (finalTarget == null) {
+            return;
+        }
+
+        long now = System.nanoTime();
+        String signature = slabbed$beta4FinalTargetSignature(world, finalTarget, classification, sideSlabRetargetFired);
+        if (signature.equals(slabbed$beta4FinalTargetTraceLastSignature)
+                && now - slabbed$beta4FinalTargetTraceLastLogNanos < BETA4_FINAL_TARGET_TRACE_MIN_INTERVAL_NANOS) {
+            return;
+        }
+
+        slabbed$beta4FinalTargetTraceLastSignature = signature;
+        slabbed$beta4FinalTargetTraceLastLogNanos = now;
+
+        ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d look = cam.getRotationVec(tickProgress);
+        StringBuilder line = new StringBuilder(768);
+        line.append("[BETA4_FINAL_TARGET]");
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" cameraPos=").append(slabbed$formatVec(eye));
+        if (client.player != null) {
+            line.append(" playerPos=").append(slabbed$formatVec(new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ())));
+            line.append(" yaw=").append(String.format("%.3f", client.player.getYaw()));
+            line.append(" pitch=").append(String.format("%.3f", client.player.getPitch()));
+        }
+        line.append(" lookVec=").append(slabbed$formatVec(look));
+        line.append(" capturedInitialTarget=").append(slabbed$formatHit(initialTarget));
+        line.append(" finalCrosshairTarget=").append(slabbed$formatHit(finalTarget));
+
+        if (finalTarget instanceof BlockHitResult finalHit) {
+            BlockPos pos = finalHit.getBlockPos();
+            BlockState state = world.getBlockState(pos);
+            double targetDy = SlabSupport.getYOffset(world, pos, state);
+            boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
+            boolean persistentLoweredSlabCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
+            line.append(" targetState=").append(state);
+            line.append(" targetDy=").append(String.format("%.3f", targetDy));
+            line.append(" anchored=").append(anchored);
+            line.append(" persistentLoweredSlabCarrier=").append(persistentLoweredSlabCarrier);
+            line.append(" outlineOwner=").append(pos.toShortString());
+            line.append(" outlineOwnerShape=").append(slabbed$formatOutlineOwnerShape(world, cam, pos, state));
+        } else {
+            line.append(" targetState=none");
+            line.append(" targetDy=NaN");
+            line.append(" anchored=false");
+            line.append(" persistentLoweredSlabCarrier=false");
+            line.append(" outlineOwner=none");
+            line.append(" outlineOwnerShape=none");
+        }
+
+        line.append(" classification=").append(classification);
+        line.append(" sideSlabRetargetFired=").append(sideSlabRetargetFired);
+        Slabbed.LOGGER.info(line.toString());
+    }
+
+    private String slabbed$beta4FinalTargetSignature(
+            ClientWorld world, HitResult finalTarget, String classification, boolean sideSlabRetargetFired
+    ) {
+        StringBuilder signature = new StringBuilder(256);
+        signature.append(finalTarget.getType());
+        signature.append('|').append(classification);
+        signature.append('|').append(sideSlabRetargetFired);
+        if (finalTarget instanceof BlockHitResult finalHit) {
+            BlockPos pos = finalHit.getBlockPos();
+            BlockState state = world.getBlockState(pos);
+            signature.append('|').append(pos.toShortString());
+            signature.append('|').append(finalHit.getSide());
+            signature.append('|').append(state.getBlock());
+            signature.append('|').append(String.format("%.3f", SlabSupport.getYOffset(world, pos, state)));
+            signature.append('|').append(SlabAnchorAttachment.isAnchored(world, pos));
+            signature.append('|').append(SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state));
+        }
+        return signature.toString();
+    }
+
+    private static String slabbed$formatOutlineOwnerShape(ClientWorld world, Entity cam, BlockPos pos, BlockState state) {
+        try {
+            VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+            if (outline == null || outline.isEmpty()) {
+                return "empty";
+            }
+            return "bounds=" + outline.getBoundingBox();
+        } catch (Throwable t) {
+            return "error:" + t.getClass().getSimpleName();
+        }
     }
 
     private static String slabbed$findAnchoredFbCandidate(
