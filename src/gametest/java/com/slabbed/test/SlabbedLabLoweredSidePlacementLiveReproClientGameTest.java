@@ -10,6 +10,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.ActionResult;
@@ -3635,15 +3636,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             TestSingleplayerContext singleplayer
     ) {
         final BlockPos supportPos = SUPPORT_POS.add(24, 0, 0);
-        final BlockPos expectedOwnerPos = supportPos.up();
-        final BlockPos lowerFrontOwnerPos = expectedOwnerPos.up();
-        final BlockPos visibleUpperSlabOwnerPos = lowerFrontOwnerPos;
+        final BlockPos anchoredOwnerPos = supportPos.up();
+        final BlockPos expectedOwnerPos = anchoredOwnerPos.up();
+        final BlockPos lowerFrontOwnerPos = expectedOwnerPos;
+        final BlockPos visibleUpperSlabOwnerPos = expectedOwnerPos;
 
-        setupFixture(singleplayer, supportPos, expectedOwnerPos);
+        setupFixture(singleplayer, supportPos, anchoredOwnerPos);
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
-            BlockState fullState = world.getBlockState(expectedOwnerPos);
-            SlabAnchorAttachment.addAnchor(world, expectedOwnerPos, fullState);
+            BlockState fullState = world.getBlockState(anchoredOwnerPos);
+            SlabAnchorAttachment.addAnchor(world, anchoredOwnerPos, fullState);
             world.setBlockState(
                     lowerFrontOwnerPos,
                     Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
@@ -3666,17 +3668,18 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 singleplayer,
                 "ground_front",
                 supportPos,
+                anchoredOwnerPos,
                 expectedOwnerPos,
                 visibleUpperSlabOwnerPos,
                 lowerFrontOwnerPos,
                 new Vec3d(
-                        expectedOwnerPos.getX() - 2.35d,
-                        expectedOwnerPos.getY() + 1.67d,
-                        expectedOwnerPos.getZ() + 0.62d),
+                        anchoredOwnerPos.getX() - 2.35d,
+                        anchoredOwnerPos.getY() + 1.67d,
+                        anchoredOwnerPos.getZ() + 0.62d),
                 new Vec3d(
-                        expectedOwnerPos.getX() + 0.115d,
-                        expectedOwnerPos.getY() + 0.500d,
-                        expectedOwnerPos.getZ() + 0.616d),
+                        anchoredOwnerPos.getX() + 0.115d,
+                        anchoredOwnerPos.getY() + 0.500d,
+                        anchoredOwnerPos.getZ() + 0.616d),
                 true);
         firstRed = firstRed == null ? red : firstRed;
         lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
@@ -3686,13 +3689,14 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 singleplayer,
                 "live_above_across_pitch_steep_up",
                 supportPos,
+                anchoredOwnerPos,
                 expectedOwnerPos,
                 visibleUpperSlabOwnerPos,
                 lowerFrontOwnerPos,
                 new Vec3d(
-                        expectedOwnerPos.getX() - 2.285d,
-                        expectedOwnerPos.getY() + 0.620d,
-                        expectedOwnerPos.getZ() + 0.790d),
+                        anchoredOwnerPos.getX() - 2.285d,
+                        anchoredOwnerPos.getY() + 0.620d,
+                        anchoredOwnerPos.getZ() + 0.790d),
                 -101.850f,
                 -9.000f,
                 false);
@@ -3712,6 +3716,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             TestSingleplayerContext singleplayer,
             String angle,
             BlockPos supportPos,
+            BlockPos anchoredOwnerPos,
             BlockPos expectedOwnerPos,
             BlockPos visibleSlabOwnerPos,
             BlockPos lowerFrontOwnerPos,
@@ -3728,6 +3733,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 singleplayer,
                 angle,
                 supportPos,
+                anchoredOwnerPos,
                 expectedOwnerPos,
                 visibleSlabOwnerPos,
                 lowerFrontOwnerPos,
@@ -3742,6 +3748,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             TestSingleplayerContext singleplayer,
             String angle,
             BlockPos supportPos,
+            BlockPos anchoredOwnerPos,
             BlockPos expectedOwnerPos,
             BlockPos visibleSlabOwnerPos,
             BlockPos lowerFrontOwnerPos,
@@ -3770,15 +3777,20 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     mc.player));
             HitResult finalTarget = mc.crosshairTarget;
             String expectedOwner = expectedOwnerPos.toShortString();
+            String anchoredOwner = anchoredOwnerPos.toShortString();
             String visibleUpperSlabOwner = visibleSlabOwnerPos.toShortString();
             String lowerFrontOwner = lowerFrontOwnerPos.toShortString();
             String vanillaOwner = asOwner(vanilla);
             String finalOwner = asOwner(finalTarget);
-            String classification = expectedOwner.equals(finalOwner)
+            boolean expectedVisibleOwnerHit = isBeta4ScreenshotVisibleOwnerHit(mc.world, finalTarget, expectedOwnerPos);
+            boolean anchoredOwnerWon = anchoredOwner.equals(finalOwner);
+            String classification = expectedVisibleOwnerHit
+                    ? "visibleUpperSlabOwnerExpected"
+                    : (anchoredOwnerWon
                     ? "anchoredUpPreserve"
                     : (lowerFrontOwner.equals(finalOwner)
                     ? "scan-side-slab-fired"
-                    : (visibleUpperSlabOwner.equals(finalOwner) ? "visibleUpperSlabOwnerWouldWin" : "wrongOwnerWouldWin"));
+                    : (visibleUpperSlabOwner.equals(finalOwner) ? "visibleUpperSlabOwnerWouldWin" : "wrongOwnerWouldWin")));
             String held = mc.player.getMainHandStack().isEmpty()
                     ? "empty"
                     : mc.player.getMainHandStack().getItem().toString();
@@ -3787,6 +3799,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " angle=" + angle
                     + " held=" + held
                     + " support=" + supportPos.toShortString()
+                    + " anchoredOwner=" + anchoredOwner
                     + " expectedOwner=" + expectedOwner
                     + " visibleUpperSlabOwner=" + visibleUpperSlabOwner
                     + " lowerFrontOwner=" + lowerFrontOwner
@@ -3803,30 +3816,34 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " finalTarget=" + describeHit(finalTarget)
                     + " vanillaDist2=" + describeHitDist2(rayStart, vanilla)
                     + " finalDist2=" + describeHitDist2(rayStart, finalTarget)
+                    + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos)
                     + " expectedFacts=" + describeOwnerFacts(mc.world, expectedOwnerPos)
                     + " visibleFacts=" + describeOwnerFacts(mc.world, visibleSlabOwnerPos)
                     + " lowerFrontFacts=" + describeOwnerFacts(mc.world, lowerFrontOwnerPos)
                     + " finalFacts=" + describeOwnerFacts(mc.world, blockPos(finalTarget))
+                    + " expectedVisibleOwnerHit=" + expectedVisibleOwnerHit
+                    + " anchoredOwnerWon=" + anchoredOwnerWon
                     + " classification=" + classification;
 
-            System.out.println("[JULIA_BETA4_ABOVE_ANGLE]" + facts);
+                System.out.println("[JULIA_BETA4_ABOVE_ANGLE]" + facts);
 
-            if (lowerFrontOwner.equals(finalOwner)) {
-                redMessage[0] = "[JULIA_BETA4_ABOVE_ANGLE_RED]" + facts
-                        + " suspectedFailingLayer=lower-front-owner-live-targeting"
-                        + " lowerFrontOwnerWon=true"
+            if (expectedVisibleOwnerHit) {
+                System.out.println("[JULIA_BETA4_SCREENSHOT_INTENT_GREEN]" + facts);
+                return;
+            }
+
+            if (anchoredOwnerWon) {
+                redMessage[0] = "[JULIA_BETA4_SCREENSHOT_INTENT_RED]" + facts
+                        + " suspectedFailingLayer=anchored-owner-preserved-over-visible-owner"
+                        + " anchoredOwnerWon=true"
                         + " groundAngleExpectedGreen=" + expectGreen;
                 System.out.println(redMessage[0]);
                 return;
             }
-            if (expectedOwner.equals(finalOwner)) {
-                System.out.println("[JULIA_BETA4_ABOVE_ANGLE_GREEN]" + facts);
-                return;
-            }
 
-            redMessage[0] = "[JULIA_BETA4_ABOVE_ANGLE_RED]" + facts
+            redMessage[0] = "[JULIA_BETA4_SCREENSHOT_INTENT_RED]" + facts
                     + " suspectedFailingLayer=unexpected-owner-live-targeting"
-                    + " lowerFrontOwnerWon=false"
+                    + " anchoredOwnerWon=false"
                     + " groundAngleExpectedGreen=" + expectGreen;
             System.out.println(redMessage[0]);
         });
@@ -3835,6 +3852,22 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     private static boolean isLowerFrontRed(String redMessage) {
         return redMessage != null && redMessage.contains(" lowerFrontOwnerWon=true");
+    }
+
+    private static boolean isBeta4ScreenshotVisibleOwnerHit(ClientWorld world, HitResult finalTarget, BlockPos expectedOwnerPos) {
+        if (world == null || !(finalTarget instanceof BlockHitResult hit) || !hit.getBlockPos().equals(expectedOwnerPos)) {
+            return false;
+        }
+        if (hit.getSide() == Direction.DOWN) {
+            return false;
+        }
+        BlockState state = world.getBlockState(expectedOwnerPos);
+        return state.getBlock() instanceof SlabBlock
+                && state.contains(SlabBlock.TYPE)
+                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && SlabSupport.getYOffset(world, expectedOwnerPos, state) == -0.5
+                && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, expectedOwnerPos, state)
+                && SlabAnchorAttachment.isAnchored(world, expectedOwnerPos.down());
     }
 
     private static void runScreenshotReproProbe(
