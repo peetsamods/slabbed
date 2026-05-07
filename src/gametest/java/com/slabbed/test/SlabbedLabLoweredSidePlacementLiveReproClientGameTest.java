@@ -49,6 +49,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (Boolean.getBoolean("slabbed.juliaBeta4AboveAngleRedOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.juliaBeta4TargetingRedOnly")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -3621,6 +3630,193 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
     }
 
+    private static void runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(24, 0, 0);
+        final BlockPos expectedOwnerPos = supportPos.up();
+        final BlockPos visibleSlabOwnerPos = expectedOwnerPos.up();
+        final BlockPos lowerFrontOwnerPos = supportPos;
+
+        setupFixture(singleplayer, supportPos, expectedOwnerPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState fullState = world.getBlockState(expectedOwnerPos);
+            SlabAnchorAttachment.addAnchor(world, expectedOwnerPos, fullState);
+            world.setBlockState(
+                    visibleSlabOwnerPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world,
+                    visibleSlabOwnerPos,
+                    world.getBlockState(visibleSlabOwnerPos));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+
+        System.setProperty("slabbed.target.trace", "true");
+        runJuliaBeta4AngleTargetingProbe(
+                ctx,
+                singleplayer,
+                "ground_front",
+                supportPos,
+                expectedOwnerPos,
+                visibleSlabOwnerPos,
+                lowerFrontOwnerPos,
+                new Vec3d(
+                        expectedOwnerPos.getX() - 2.35d,
+                        expectedOwnerPos.getY() + 1.67d,
+                        expectedOwnerPos.getZ() + 0.62d),
+                new Vec3d(
+                        expectedOwnerPos.getX() + 0.115d,
+                        expectedOwnerPos.getY() + 0.500d,
+                        expectedOwnerPos.getZ() + 0.616d),
+                true);
+        runJuliaBeta4AngleTargetingProbe(
+                ctx,
+                singleplayer,
+                "live_above_across_pitch_down",
+                supportPos,
+                expectedOwnerPos,
+                visibleSlabOwnerPos,
+                lowerFrontOwnerPos,
+                new Vec3d(
+                        expectedOwnerPos.getX() - 2.285d,
+                        expectedOwnerPos.getY() + 0.620d,
+                        expectedOwnerPos.getZ() + 0.790d),
+                -101.850f,
+                1.950f,
+                false);
+        runJuliaBeta4AngleTargetingProbe(
+                ctx,
+                singleplayer,
+                "live_above_across_pitch_up",
+                supportPos,
+                expectedOwnerPos,
+                visibleSlabOwnerPos,
+                lowerFrontOwnerPos,
+                new Vec3d(
+                        expectedOwnerPos.getX() - 2.285d,
+                        expectedOwnerPos.getY() + 0.620d,
+                        expectedOwnerPos.getZ() + 0.790d),
+                -101.850f,
+                -2.550f,
+                false);
+    }
+
+    private static void runJuliaBeta4AngleTargetingProbe(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String angle,
+            BlockPos supportPos,
+            BlockPos expectedOwnerPos,
+            BlockPos visibleSlabOwnerPos,
+            BlockPos lowerFrontOwnerPos,
+            Vec3d eye,
+            Vec3d aim,
+            boolean expectGreen
+    ) {
+        Vec3d delta = aim.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        runJuliaBeta4AngleTargetingProbe(
+                ctx,
+                singleplayer,
+                angle,
+                supportPos,
+                expectedOwnerPos,
+                visibleSlabOwnerPos,
+                lowerFrontOwnerPos,
+                eye,
+                yaw,
+                pitch,
+                expectGreen);
+    }
+
+    private static void runJuliaBeta4AngleTargetingProbe(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String angle,
+            BlockPos supportPos,
+            BlockPos expectedOwnerPos,
+            BlockPos visibleSlabOwnerPos,
+            BlockPos lowerFrontOwnerPos,
+            Vec3d eye,
+            float yaw,
+            float pitch,
+            boolean expectGreen
+    ) {
+        syncPlayerLookFromEye(ctx, singleplayer, eye, yaw, pitch);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[JULIA_BETA4_ABOVE_ANGLE_RED] angle=" + angle + " client not ready");
+            }
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            HitResult finalTarget = mc.crosshairTarget;
+            String expectedOwner = expectedOwnerPos.toShortString();
+            String visibleOwner = visibleSlabOwnerPos.toShortString();
+            String lowerFrontOwner = lowerFrontOwnerPos.toShortString();
+            String finalOwner = asOwner(finalTarget);
+            String classification = expectedOwner.equals(finalOwner)
+                    ? "anchoredUpPreserve"
+                    : (visibleOwner.equals(finalOwner) ? "sideOwnerWouldWin" : "wrongOwnerWouldWin");
+
+            String facts = " shape=compact_lowered_stone_with_upper_double_slab"
+                    + " angle=" + angle
+                    + " held=minecraft:stone_slab"
+                    + " support=" + supportPos.toShortString()
+                    + " expectedOwner=" + expectedOwner
+                    + " visibleOwner=" + visibleOwner
+                    + " lowerFrontOwner=" + lowerFrontOwner
+                    + " actualOwner=" + finalOwner
+                    + " eye=" + eye
+                    + " yaw=" + yaw
+                    + " pitch=" + pitch
+                    + " liveEye=" + rayStart
+                    + " look=" + rayDir
+                    + " vanillaTarget=" + describeHit(vanilla)
+                    + " finalTarget=" + describeHit(finalTarget)
+                    + " vanillaDist2=" + describeHitDist2(rayStart, vanilla)
+                    + " finalDist2=" + describeHitDist2(rayStart, finalTarget)
+                    + " expectedFacts=" + describeOwnerFacts(mc.world, expectedOwnerPos)
+                    + " visibleFacts=" + describeOwnerFacts(mc.world, visibleSlabOwnerPos)
+                    + " lowerFrontFacts=" + describeOwnerFacts(mc.world, lowerFrontOwnerPos)
+                    + " finalFacts=" + describeOwnerFacts(mc.world, blockPos(finalTarget))
+                    + " classification=" + classification;
+
+            System.out.println("[JULIA_BETA4_ABOVE_ANGLE]" + facts);
+
+            if (expectGreen && expectedOwner.equals(finalOwner)) {
+                System.out.println("[JULIA_BETA4_ABOVE_ANGLE_GREEN]" + facts);
+                return;
+            }
+            if (!expectGreen && !visibleOwner.equals(finalOwner)) {
+                System.out.println("[JULIA_BETA4_ABOVE_ANGLE_GREEN]" + facts
+                        + " sideSlabOwnerSuppressed=true");
+                return;
+            }
+
+            throw new RuntimeException("[JULIA_BETA4_ABOVE_ANGLE_RED]" + facts
+                    + " suspectedFailingLayer=angle-sensitive-slab-held-retarget-owner-priority"
+                    + " groundAngleExpectedGreen=" + expectGreen);
+        });
+    }
+
     private static void runScreenshotReproProbe(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
@@ -4424,6 +4620,17 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         syncPlayerPosition(ctx, singleplayer, eye.x, feetY, eye.z, yaw, pitch);
     }
 
+    private static void syncPlayerLookFromEye(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Vec3d eye,
+            float yaw,
+            float pitch
+    ) {
+        double feetY = eye.y - 1.62d;
+        syncPlayerPosition(ctx, singleplayer, eye.x, feetY, eye.z, yaw, pitch);
+    }
+
     private static void setLoweredSlabTarget(
             TestSingleplayerContext singleplayer,
             BlockPos targetPos,
@@ -4670,6 +4877,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         return "pos=" + blockHit.getBlockPos().toShortString()
                 + " face=" + blockHit.getSide()
                 + " hit=" + blockHit.getPos();
+    }
+
+    private static String describeHitDist2(Vec3d eye, HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return "NaN";
+        }
+        return String.format("%.6f", blockHit.getPos().squaredDistanceTo(eye));
     }
 
     private static String describeOwnerFacts(net.minecraft.world.BlockView world, BlockPos pos) {
