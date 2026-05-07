@@ -50,6 +50,35 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (Boolean.getBoolean("slabbed.beta4SeamVisibleUpperRedOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, false);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta4SeamGreenProofsOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runJuliaBeta4StoneSlabTargetingOutlineMismatchRedCase(ctx, singleplayer);
+                runJuliaBeta4AdjacentVisibleTargetRedCase(ctx, singleplayer);
+                runBeta4SeamNoRescueBoundaryCase(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta4SeamNoRescueOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta4SeamNoRescueBoundaryCase(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.juliaBeta4AdjacentVisibleRedOnly")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -3586,11 +3615,19 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             String visibleOwner = visibleSlabOwnerPos.toShortString();
             String vanillaOwner = asOwner(vanilla);
             String finalOwner = asOwner(finalTarget);
+            String expectedOwnerClass = "ANCHORED_FULL_BLOCK";
+            String actualOwnerClass = beta4OwnerClass(
+                    finalTarget,
+                    expectedOwnerPos,
+                    visibleSlabOwnerPos,
+                    null);
             boolean slabHeldProtectionPreservedExpected = expectedOwner.equals(finalOwner);
             boolean sideOwnerWouldWin = visibleOwner.equals(finalOwner);
 
             System.out.println("[JULIA_BETA4_TARGETING] shape=compact_lowered_stone_with_upper_double_slab"
                     + " held=minecraft:stone_slab"
+                    + " expectedOwnerClass=" + expectedOwnerClass
+                    + " actualOwnerClass=" + actualOwnerClass
                     + " support=" + supportPos.toShortString()
                     + " expectedOwner=" + expectedOwner
                     + " visibleOwner=" + visibleOwner
@@ -3600,6 +3637,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " dir=" + rayDir
                     + " vanillaTarget=" + describeHit(vanilla)
                     + " finalTarget=" + describeHit(finalTarget)
+                    + " vanillaHitFace=" + describeHitFace(vanilla)
+                    + " finalHitFace=" + describeHitFace(finalTarget)
+                    + " vanillaHitVector=" + describeHitVector(vanilla)
+                    + " finalHitVector=" + describeHitVector(finalTarget)
                     + " expectedFacts=" + describeOwnerFacts(mc.world, expectedOwnerPos)
                     + " visibleFacts=" + describeOwnerFacts(mc.world, visibleSlabOwnerPos)
                     + " finalFacts=" + describeOwnerFacts(mc.world, blockPos(finalTarget))
@@ -3619,6 +3660,17 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " sideOwnerWouldWin=" + sideOwnerWouldWin);
             }
             if (expectedOwner.equals(vanillaOwner) && expectedOwner.equals(finalOwner)) {
+                System.out.println("[BETA4_ANCHORED_UP_PRESERVE_GREEN]"
+                        + " expectedOwnerClass=" + expectedOwnerClass
+                        + " actualOwnerClass=" + actualOwnerClass
+                        + " expectedOwner=" + expectedOwner
+                        + " visibleOwner=" + visibleOwner
+                        + " vanillaTarget=" + describeHit(vanilla)
+                        + " finalTarget=" + describeHit(finalTarget)
+                        + " finalHitFace=" + describeHitFace(finalTarget)
+                        + " finalHitVector=" + describeHitVector(finalTarget)
+                        + " expectedFacts=" + describeOwnerFacts(mc.world, expectedOwnerPos)
+                        + " visibleFacts=" + describeOwnerFacts(mc.world, visibleSlabOwnerPos));
                 System.out.println("[JULIA_BETA4_TARGETING_GREEN]"
                         + " expectedOwner=" + expectedOwner
                         + " visibleOwner=" + visibleOwner
@@ -3643,6 +3695,14 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     private static void runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
+    ) {
+        runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, true);
+    }
+
+    private static void runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            boolean includeGroundControl
     ) {
         final BlockPos supportPos = SUPPORT_POS.add(24, 0, 0);
         final BlockPos anchoredOwnerPos = supportPos.up();
@@ -3672,26 +3732,29 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         String firstRed = null;
         String lowerFrontRed = null;
 
-        String red = runJuliaBeta4AngleTargetingProbe(
-                ctx,
-                singleplayer,
-                "ground_front",
-                supportPos,
-                anchoredOwnerPos,
-                expectedOwnerPos,
-                visibleUpperSlabOwnerPos,
-                lowerFrontOwnerPos,
-                new Vec3d(
-                        anchoredOwnerPos.getX() - 2.35d,
-                        anchoredOwnerPos.getY() + 1.67d,
-                        anchoredOwnerPos.getZ() + 0.62d),
-                new Vec3d(
-                        anchoredOwnerPos.getX() + 0.115d,
-                        anchoredOwnerPos.getY() + 0.500d,
-                        anchoredOwnerPos.getZ() + 0.616d),
-                true);
-        firstRed = firstRed == null ? red : firstRed;
-        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
+        String red;
+        if (includeGroundControl) {
+            red = runJuliaBeta4AngleTargetingProbe(
+                    ctx,
+                    singleplayer,
+                    "ground_front",
+                    supportPos,
+                    anchoredOwnerPos,
+                    expectedOwnerPos,
+                    visibleUpperSlabOwnerPos,
+                    lowerFrontOwnerPos,
+                    new Vec3d(
+                            anchoredOwnerPos.getX() - 2.35d,
+                            anchoredOwnerPos.getY() + 1.67d,
+                            anchoredOwnerPos.getZ() + 0.62d),
+                    new Vec3d(
+                            anchoredOwnerPos.getX() + 0.115d,
+                            anchoredOwnerPos.getY() + 0.500d,
+                            anchoredOwnerPos.getZ() + 0.616d),
+                    true);
+            firstRed = firstRed == null ? red : firstRed;
+            lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
+        }
 
         red = runJuliaBeta4AngleTargetingProbe(
                 ctx,
@@ -3791,6 +3854,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             String lowerFrontOwner = lowerFrontOwnerPos.toShortString();
             String vanillaOwner = asOwner(vanilla);
             String finalOwner = asOwner(finalTarget);
+            String expectedOwnerClass = expectGreen ? "ANCHORED_FULL_BLOCK" : "VISIBLE_UPPER_LOWERED_SLAB";
+            String actualOwnerClass = beta4OwnerClass(
+                    finalTarget,
+                    anchoredOwnerPos,
+                    visibleSlabOwnerPos,
+                    null);
             boolean expectedVisibleOwnerHit = isBeta4ScreenshotVisibleOwnerHit(mc.world, finalTarget, expectedOwnerPos);
             boolean anchoredOwnerWon = anchoredOwner.equals(finalOwner);
             String classification = expectedVisibleOwnerHit
@@ -3803,10 +3872,32 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             String held = mc.player.getMainHandStack().isEmpty()
                     ? "empty"
                     : mc.player.getMainHandStack().getItem().toString();
+            BlockState visibleState = mc.world.getBlockState(visibleSlabOwnerPos);
+            double visibleDy = SlabSupport.getYOffset(mc.world, visibleSlabOwnerPos, visibleState);
+            boolean visiblePersistent = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                    mc.world,
+                    visibleSlabOwnerPos,
+                    visibleState);
+            boolean anchorBelowVisible = SlabAnchorAttachment.isAnchored(mc.world, visibleSlabOwnerPos.down());
+            if (!visibleState.isOf(Blocks.STONE_SLAB)
+                    || !visibleState.contains(SlabBlock.TYPE)
+                    || visibleState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || Math.abs(visibleDy + 0.5d) > EPSILON
+                    || !visiblePersistent
+                    || !anchorBelowVisible) {
+                throw new RuntimeException("[BETA4_SEAM_VISIBLE_UPPER_SLAB_RED]"
+                        + " reason=source-truth-gap"
+                        + " expectedOwnerClass=" + expectedOwnerClass
+                        + " actualOwnerClass=" + actualOwnerClass
+                        + " visibleFacts=" + describeOwnerFacts(mc.world, visibleSlabOwnerPos)
+                        + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos));
+            }
 
             String facts = " shape=compact_lowered_stone_with_upper_double_slab"
                     + " angle=" + angle
                     + " held=" + held
+                    + " expectedOwnerClass=" + expectedOwnerClass
+                    + " actualOwnerClass=" + actualOwnerClass
                     + " support=" + supportPos.toShortString()
                     + " anchoredOwner=" + anchoredOwner
                     + " expectedOwner=" + expectedOwner
@@ -3823,6 +3914,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " look=" + rayDir
                     + " vanillaTarget=" + describeHit(vanilla)
                     + " finalTarget=" + describeHit(finalTarget)
+                    + " vanillaHitFace=" + describeHitFace(vanilla)
+                    + " finalHitFace=" + describeHitFace(finalTarget)
+                    + " vanillaHitVector=" + describeHitVector(vanilla)
+                    + " finalHitVector=" + describeHitVector(finalTarget)
                     + " vanillaDist2=" + describeHitDist2(rayStart, vanilla)
                     + " finalDist2=" + describeHitDist2(rayStart, finalTarget)
                     + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos)
@@ -3836,25 +3931,48 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
                 System.out.println("[JULIA_BETA4_ABOVE_ANGLE]" + facts);
 
+            if (expectGreen && anchoredOwnerWon) {
+                System.out.println("[BETA4_ANCHORED_UP_PRESERVE_GREEN]" + facts);
+                return;
+            }
+
             if (expectedVisibleOwnerHit) {
+                System.out.println("[BETA4_SEAM_VISIBLE_UPPER_SLAB_GREEN]" + facts);
                 System.out.println("[JULIA_BETA4_SCREENSHOT_INTENT_GREEN]" + facts);
                 return;
             }
 
-            if (anchoredOwnerWon) {
-                redMessage[0] = "[JULIA_BETA4_SCREENSHOT_INTENT_RED]" + facts
-                        + " suspectedFailingLayer=anchored-owner-preserved-over-visible-owner"
-                        + " anchoredOwnerWon=true"
-                        + " groundAngleExpectedGreen=" + expectGreen;
+            if (expectGreen) {
+                redMessage[0] = "[BETA4_ANCHORED_UP_PRESERVE_RED]" + facts
+                        + " suspectedFailingLayer=visible-owner-stole-anchored-ground-control"
+                        + " anchoredOwnerWon=false"
+                        + " groundAngleExpectedGreen=true";
                 System.out.println(redMessage[0]);
                 return;
             }
 
-            redMessage[0] = "[JULIA_BETA4_SCREENSHOT_INTENT_RED]" + facts
+            if (anchoredOwnerWon) {
+                redMessage[0] = "[BETA4_SEAM_VISIBLE_UPPER_SLAB_RED]" + facts
+                        + " suspectedFailingLayer=anchored-owner-preserved-over-visible-owner"
+                        + " anchoredOwnerWon=true"
+                        + " groundAngleExpectedGreen=" + expectGreen;
+                System.out.println(redMessage[0]);
+                System.out.println("[JULIA_BETA4_SCREENSHOT_INTENT_RED]" + facts
+                        + " suspectedFailingLayer=anchored-owner-preserved-over-visible-owner"
+                        + " anchoredOwnerWon=true"
+                        + " groundAngleExpectedGreen=" + expectGreen);
+                return;
+            }
+
+            redMessage[0] = "[BETA4_SEAM_VISIBLE_UPPER_SLAB_RED]" + facts
                     + " suspectedFailingLayer=unexpected-owner-live-targeting"
                     + " anchoredOwnerWon=false"
                     + " groundAngleExpectedGreen=" + expectGreen;
             System.out.println(redMessage[0]);
+            System.out.println("[JULIA_BETA4_SCREENSHOT_INTENT_RED]" + facts
+                    + " suspectedFailingLayer=unexpected-owner-live-targeting"
+                    + " anchoredOwnerWon=false"
+                    + " groundAngleExpectedGreen=" + expectGreen);
         });
         return redMessage[0];
     }
@@ -3941,6 +4059,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             String vanillaOwner = asOwner(vanilla);
             String finalOwner = asOwner(finalTarget);
             String finalType = finalTarget == null ? "null" : finalTarget.getType().toString();
+            String expectedOwnerClass = "ADJACENT_VISIBLE_TARGET";
+            String actualOwnerClass = beta4OwnerClass(
+                    finalTarget,
+                    anchoredOwnerPos,
+                    visibleUpperSlabOwnerPos,
+                    adjacentVisibleOwnerPos);
             boolean adjacentOwnerWon = adjacentVisibleOwner.equals(finalOwner);
             boolean anchoredOwnerWon = anchoredOwner.equals(finalOwner);
             boolean visibleUpperOwnerWon = visibleUpperSlabOwner.equals(finalOwner);
@@ -3958,6 +4082,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
             String facts = " shape=compact_lowered_stone_with_upper_bottom_slab_and_adjacent_visible_target"
                     + " held=" + held
+                    + " expectedOwnerClass=" + expectedOwnerClass
+                    + " actualOwnerClass=" + actualOwnerClass
                     + " support=" + supportPos.toShortString()
                     + " anchoredOwner=" + anchoredOwner
                     + " visibleUpperSlabOwner=" + visibleUpperSlabOwner
@@ -3974,6 +4100,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " pitch=" + mc.player.getPitch()
                     + " vanillaTarget=" + describeHit(vanilla)
                     + " finalTarget=" + describeHit(finalTarget)
+                    + " vanillaHitFace=" + describeHitFace(vanilla)
+                    + " finalHitFace=" + describeHitFace(finalTarget)
+                    + " vanillaHitVector=" + describeHitVector(vanilla)
+                    + " finalHitVector=" + describeHitVector(finalTarget)
                     + " vanillaDist2=" + describeHitDist2(rayStart, vanilla)
                     + " finalDist2=" + describeHitDist2(rayStart, finalTarget)
                     + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos)
@@ -3987,12 +4117,138 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " classification=" + classification;
 
             if (adjacentOwnerWon) {
+                System.out.println("[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]" + facts);
                 System.out.println("[JULIA_BETA4_ADJACENT_VISIBLE_GREEN]" + facts);
                 return;
             }
 
             throw new RuntimeException("[JULIA_BETA4_ADJACENT_VISIBLE_RED]" + facts
                     + " suspectedFailingLayer=adjacent-visible-owner-not-preserved");
+        });
+    }
+
+    private static void runBeta4SeamNoRescueBoundaryCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(24, 0, 0);
+        final BlockPos anchoredOwnerPos = supportPos.up();
+        final BlockPos visibleUpperSlabOwnerPos = anchoredOwnerPos.up();
+        final Vec3d eye = new Vec3d(
+                anchoredOwnerPos.getX() - 2.35d,
+                anchoredOwnerPos.getY() + 1.67d,
+                anchoredOwnerPos.getZ() + 0.62d);
+        final Vec3d aimAirAboveSeam = new Vec3d(
+                anchoredOwnerPos.getX() + 0.50d,
+                anchoredOwnerPos.getY() + 2.40d,
+                anchoredOwnerPos.getZ() + 0.50d);
+
+        setupFixture(singleplayer, supportPos, anchoredOwnerPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState fullState = world.getBlockState(anchoredOwnerPos);
+            SlabAnchorAttachment.addAnchor(world, anchoredOwnerPos, fullState);
+            world.setBlockState(
+                    visibleUpperSlabOwnerPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world,
+                    visibleUpperSlabOwnerPos,
+                    world.getBlockState(visibleUpperSlabOwnerPos));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncPlayerAim(ctx, singleplayer, eye, aimAirAboveSeam);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[BETA4_SEAM_NO_RESCUE_RED] client not ready");
+            }
+
+            BlockState visibleState = mc.world.getBlockState(visibleUpperSlabOwnerPos);
+            double visibleDy = SlabSupport.getYOffset(mc.world, visibleUpperSlabOwnerPos, visibleState);
+            boolean visiblePersistent = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                    mc.world,
+                    visibleUpperSlabOwnerPos,
+                    visibleState);
+            boolean anchorBelowVisible = SlabAnchorAttachment.isAnchored(mc.world, visibleUpperSlabOwnerPos.down());
+            if (!visibleState.isOf(Blocks.STONE_SLAB)
+                    || !visibleState.contains(SlabBlock.TYPE)
+                    || visibleState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || Math.abs(visibleDy + 0.5d) > EPSILON
+                    || !visiblePersistent
+                    || !anchorBelowVisible) {
+                throw new RuntimeException("[BETA4_SEAM_NO_RESCUE_RED]"
+                        + " reason=source-truth-gap"
+                        + " expectedOwnerClass=NO_RESCUE"
+                        + " visibleFacts=" + describeOwnerFacts(mc.world, visibleUpperSlabOwnerPos)
+                        + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos));
+            }
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            HitResult finalTarget = mc.crosshairTarget;
+            String vanillaOwner = asOwner(vanilla);
+            String finalOwner = asOwner(finalTarget);
+            String actualOwnerClass = beta4OwnerClass(
+                    finalTarget,
+                    anchoredOwnerPos,
+                    visibleUpperSlabOwnerPos,
+                    null);
+            boolean vanillaMiss = vanilla.getType() != HitResult.Type.BLOCK;
+            boolean finalMiss = finalTarget == null || finalTarget.getType() != HitResult.Type.BLOCK;
+            boolean rewroteInitial = !(vanillaMiss && finalMiss) && !vanillaOwner.equals(finalOwner);
+            boolean stoleSeamOwner = "ANCHORED_FULL_BLOCK".equals(actualOwnerClass)
+                    || "VISIBLE_UPPER_LOWERED_SLAB".equals(actualOwnerClass);
+            String held = mc.player.getMainHandStack().isEmpty()
+                    ? "empty"
+                    : mc.player.getMainHandStack().getItem().toString();
+            String facts = " shape=compact_lowered_stone_with_upper_bottom_slab"
+                    + " held=" + held
+                    + " expectedOwnerClass=NO_RESCUE"
+                    + " actualOwnerClass=" + actualOwnerClass
+                    + " support=" + supportPos.toShortString()
+                    + " anchoredOwner=" + anchoredOwnerPos.toShortString()
+                    + " visibleUpperSlabOwner=" + visibleUpperSlabOwnerPos.toShortString()
+                    + " vanillaOwner=" + vanillaOwner
+                    + " finalOwner=" + finalOwner
+                    + " eye=" + eye
+                    + " aim=" + aimAirAboveSeam
+                    + " liveEye=" + rayStart
+                    + " look=" + rayDir
+                    + " vanillaTarget=" + describeHit(vanilla)
+                    + " finalTarget=" + describeHit(finalTarget)
+                    + " vanillaMiss=" + vanillaMiss
+                    + " finalMiss=" + finalMiss
+                    + " vanillaHitFace=" + describeHitFace(vanilla)
+                    + " finalHitFace=" + describeHitFace(finalTarget)
+                    + " vanillaHitVector=" + describeHitVector(vanilla)
+                    + " finalHitVector=" + describeHitVector(finalTarget)
+                    + " vanillaDist2=" + describeHitDist2(rayStart, vanilla)
+                    + " finalDist2=" + describeHitDist2(rayStart, finalTarget)
+                    + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos)
+                    + " visibleUpperFacts=" + describeOwnerFacts(mc.world, visibleUpperSlabOwnerPos)
+                    + " finalFacts=" + describeOwnerFacts(mc.world, blockPos(finalTarget))
+                    + " rewroteInitial=" + rewroteInitial
+                    + " stoleSeamOwner=" + stoleSeamOwner;
+
+            if (!rewroteInitial && !stoleSeamOwner) {
+                System.out.println("[BETA4_SEAM_NO_RESCUE_GREEN]" + facts);
+                return;
+            }
+
+            throw new RuntimeException("[BETA4_SEAM_NO_RESCUE_RED]" + facts
+                    + " suspectedFailingLayer=miss-or-air-rescued-to-seam-owner");
         });
     }
 
@@ -5056,6 +5312,45 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         return "pos=" + blockHit.getBlockPos().toShortString()
                 + " face=" + blockHit.getSide()
                 + " hit=" + blockHit.getPos();
+    }
+
+    private static String describeHitFace(HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return "MISS";
+        }
+        return blockHit.getSide().toString();
+    }
+
+    private static String describeHitVector(HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return "MISS";
+        }
+        return blockHit.getPos().toString();
+    }
+
+    private static String beta4OwnerClass(
+            HitResult hit,
+            BlockPos anchoredOwnerPos,
+            BlockPos visibleUpperSlabOwnerPos,
+            BlockPos adjacentVisibleOwnerPos
+    ) {
+        if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
+            return "NO_RESCUE";
+        }
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return "NO_RESCUE";
+        }
+        BlockPos pos = blockHit.getBlockPos();
+        if (pos.equals(anchoredOwnerPos)) {
+            return "ANCHORED_FULL_BLOCK";
+        }
+        if (pos.equals(visibleUpperSlabOwnerPos)) {
+            return "VISIBLE_UPPER_LOWERED_SLAB";
+        }
+        if (adjacentVisibleOwnerPos != null && pos.equals(adjacentVisibleOwnerPos)) {
+            return "ADJACENT_VISIBLE_TARGET";
+        }
+        return "KEEP_INITIAL";
     }
 
     private static String describeHitDist2(Vec3d eye, HitResult hit) {

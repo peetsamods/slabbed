@@ -20,12 +20,12 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current operating base HEAD before savepoint: `b3a09db`
-- Current operating base tag before savepoint: `save/revert-failed-seam-owner-classifier`
+- Current operating base HEAD before proof-harness savepoint: `b3e71ff`
+- Current operating base tag before proof-harness savepoint: `save/beta4-seam-ownership-contract`
 - Reverted failed classifier: `763434e` / `save/beta4-seam-owner-classifier`
 - Stale, provenance-confusing release tag for this issue: `release/0.2.0-beta.4`
 
-The current savepoint target is `save/beta4-seam-ownership-contract`.
+The current savepoint target is `save/beta4-seam-ownership-proofs`.
 
 ## Current tracked tree state
 
@@ -34,7 +34,7 @@ Tracked tree is clean.
 
 ## Current product goal
 
-Define the live-first beta4 seam ownership contract and next proof plan before any new targeting fix.
+Align the beta4 seam proof harness with the live-first ownership contract before any new targeting fix.
 
 ## Current proof note
 
@@ -42,10 +42,10 @@ Release remains blocked. The failed shared seam-owner classifier `763434e` was r
 
 Current beta4 seam proof classes:
 
-- Anchored-UP preservation remains GREEN for centered valid `UP` hits on an anchored lowered full block.
-- Screenshot-intent visible upper owner remains RED and is the current blocker.
-- Adjacent visible target preservation remains GREEN.
-- Air/behind/miss no-rescue boundary is still required if not already covered.
+- Anchored-UP preservation remains GREEN for centered valid `UP` hits on an anchored lowered full block: `[BETA4_ANCHORED_UP_PRESERVE_GREEN]`.
+- Screenshot-intent visible upper owner remains opt-in RED and is the current blocker: `[BETA4_SEAM_VISIBLE_UPPER_SLAB_RED]`.
+- Adjacent visible target preservation remains GREEN: `[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]`.
+- Slab-held air/behind/miss no-rescue boundary is GREEN: `[BETA4_SEAM_NO_RESCUE_GREEN]`.
 
 Contract note: `docs/beta4-seam-ownership-contract.md`.
 
@@ -93,7 +93,7 @@ Status: Fixed / saved.
 
 ## Current next action
 
-Next implementation slice should first update the proof harness/checklist to mirror `docs/beta4-seam-ownership-contract.md`, then extract one seam owner classifier/helper. Do not patch `GameRendererCrosshairRetargetMixin.java` inline again before those proof boundaries exist.
+After the proof-harness savepoint, the next implementation slice should extract one seam owner classifier/helper and map its outcomes back to the existing retarget paths. Do not patch `GameRendererCrosshairRetargetMixin.java` inline again before preserving these proof boundaries.
 
 ## Suggested live run command
 
