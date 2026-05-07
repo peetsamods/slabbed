@@ -6,7 +6,8 @@
 - Current tag at that HEAD: `save/beta4-seam-ownership-contract`.
 - Release remains blocked: `0.2.0-beta.4` must not be uploaded, re-tagged, or treated as ready.
 - Failed shared seam-owner classifier `763434e` was reverted by `b3a09db`.
-- This slice aligns proof harness only. No gameplay fix is included here.
+- The proof harness was aligned at `991c1dc` / `save/beta4-seam-ownership-proofs`.
+- This slice adds the first narrow gameplay classifier for beta4 seam ownership. Release still requires Julia live validation before any release decision.
 
 ## Player-Visible Owner Classes
 
@@ -20,7 +21,7 @@
 | Case ID | Player aim description | Held item | Initial/vanilla target shape if known | Intended final owner | Must not steal from | Proof status |
 | --- | --- | --- | --- | --- | --- | --- |
 | A | Centered valid `UP` hit on anchored lowered full block | Slab | Anchored lowered full block, `UP`, interior/valid top | `ANCHORED_FULL_BLOCK` | Visible upper lowered slab / side rescue | GREEN and still trusted for this case only: `[BETA4_ANCHORED_UP_PRESERVE_GREEN]` / previous `[JULIA_BETA4_TARGETING_GREEN]` |
-| B | Screenshot-style above/front seam where the crosshair is visually on the upper lowered slab body | Slab | Vanilla source truth hits the visible upper lowered slab; current final target may still be anchored | `VISIBLE_UPPER_LOWERED_SLAB` | Anchored lowered full block | RED and intentionally expected before the next fix: opt-in `[BETA4_SEAM_VISIBLE_UPPER_SLAB_RED]`, future fixed marker `[BETA4_SEAM_VISIBLE_UPPER_SLAB_GREEN]` |
+| B | Screenshot-style above/front seam where the crosshair is visually on the upper lowered slab body | Slab | Vanilla source truth hits the visible upper lowered slab | `VISIBLE_UPPER_LOWERED_SLAB` | Anchored lowered full block | GREEN in focused proof after the classifier slice: `[BETA4_SEAM_VISIBLE_UPPER_SLAB_GREEN]` |
 | C | Adjacent visible lowered target beside the seam | Slab | Adjacent lowered slab/body is the visible target | `ADJACENT_VISIBLE_TARGET` | Centered anchored owner / visible upper owner | GREEN and still trusted for this boundary: `[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]` / previous `[JULIA_BETA4_ADJACENT_VISIBLE_GREEN]` |
 | D | Air, miss, or behind case with no actual visible lowered-owner hit | Slab or non-slab | `MISS`, air, or non-owner/behind shape | `NO_RESCUE` / `KEEP_INITIAL` | Any inferred anchored, upper, or adjacent owner | GREEN for slab-held air/miss boundary: `[BETA4_SEAM_NO_RESCUE_GREEN]` |
 | E | Same/near seam while holding a non-slab block | Non-slab block | Same visible-owner truth as slab-held path, minus slab placement-intent guards | Same visible owner class as live source truth; usually `KEEP_INITIAL` unless a visible lowered owner is actually hit | Slab-held-only rescue behavior | Missing beta4-specific parity proof. Parity is required for owner identity when the visible owner is real; slab-held may differ only for placement-intent preservation. |
@@ -34,9 +35,9 @@ GREEN and still trusted:
 - Adjacent visible seam proof: `-Dslabbed.juliaBeta4AdjacentVisibleRedOnly=true`, `runJuliaBeta4AdjacentVisibleTargetRedCase(...)`, markers `[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]` and `[JULIA_BETA4_ADJACENT_VISIBLE_GREEN]`. This proves Case C remains protected.
 - No-rescue seam boundary: opt-in green route `slabbed.beta4SeamGreenProofsOnly=true` or `slabbed.beta4SeamNoRescueOnly=true`, marker `[BETA4_SEAM_NO_RESCUE_GREEN]`. This proves Case D for the current slab-held air/miss seam boundary.
 
-RED and intentionally expected:
+Former RED now green in focused proof:
 
-- Screenshot-intent proof: opt-in route `slabbed.beta4SeamVisibleUpperRedOnly=true`, `runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(...)`, markers `[BETA4_SEAM_VISIBLE_UPPER_SLAB_RED]` and `[JULIA_BETA4_SCREENSHOT_INTENT_RED]`. This should fail until the live-first visible upper owner is implemented.
+- Screenshot-intent proof: opt-in route `slabbed.beta4SeamVisibleUpperRedOnly=true`, `runJuliaBeta4AboveAngleTargetingOwnerSplitRedCase(...)`, markers `[BETA4_SEAM_VISIBLE_UPPER_SLAB_GREEN]` and `[JULIA_BETA4_SCREENSHOT_INTENT_GREEN]`. This now proves the visible upper lowered slab owner in the harness; release remains blocked pending Julia live validation.
 
 False-green history / not enough:
 
@@ -53,7 +54,7 @@ Missing proof:
 
 The next implementation slice cannot start by patching gameplay behavior. It must first create or update proofs so they express this contract:
 
-- Screenshot-intent proof expects `VISIBLE_UPPER_LOWERED_SLAB` and remains opt-in RED before the fix.
+- Screenshot-intent proof expects `VISIBLE_UPPER_LOWERED_SLAB` and stays green after the classifier fix.
 - Anchored-UP preservation stays green for `ANCHORED_FULL_BLOCK`.
 - Adjacent visible seam stays green for `ADJACENT_VISIBLE_TARGET`.
 - No-rescue boundary stays green for air/behind/miss with no visible lowered-owner hit.
@@ -63,7 +64,7 @@ The next implementation slice cannot start by patching gameplay behavior. It mus
 
 No Java implementation is included in this note.
 
-The next implementation should extract one seam owner classifier/helper instead of adding another inline one-off guard to `GameRendererCrosshairRetargetMixin.java`. The helper should classify player-visible ownership into conceptual outcomes only:
+The first implementation extracted a local seam owner classifier/helper in `GameRendererCrosshairRetargetMixin.java` instead of adding another inline one-off guard. The helper classifies player-visible ownership into conceptual outcomes:
 
 - `ANCHORED_FULL_BLOCK`
 - `VISIBLE_UPPER_LOWERED_SLAB`

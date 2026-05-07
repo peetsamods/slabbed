@@ -60,6 +60,12 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static String slabbed$beta4FinalTargetTraceLastSignature;
     private static long slabbed$beta4FinalTargetTraceLastLogNanos;
 
+    private static final String SEAM_OWNER_ANCHORED_FULL_BLOCK = "ANCHORED_FULL_BLOCK";
+    private static final String SEAM_OWNER_VISIBLE_UPPER_LOWERED_SLAB = "VISIBLE_UPPER_LOWERED_SLAB";
+    private static final String SEAM_OWNER_ADJACENT_VISIBLE_TARGET = "ADJACENT_VISIBLE_TARGET";
+    private static final String SEAM_OWNER_KEEP_INITIAL = "KEEP_INITIAL";
+    private static final String SEAM_OWNER_NO_RESCUE = "NO_RESCUE";
+
     @Inject(method = "updateCrosshairTarget", at = @At("TAIL"))
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
         HitResult ht = client.crosshairTarget;
@@ -106,6 +112,18 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 return;
             }
             if (slabbed$isInitialHitOnLoweredSlabFace(initialHit)) {
+                String seamOwner = slabbed$classifyLiveFirstSeamOwner(initialHit);
+                if (SEAM_OWNER_VISIBLE_UPPER_LOWERED_SLAB.equals(seamOwner)
+                        || SEAM_OWNER_ADJACENT_VISIBLE_TARGET.equals(seamOwner)) {
+                    client.crosshairTarget = initialHit;
+                    slabbed$traceTargeting(
+                            tickProgress,
+                            initialTarget,
+                            slabbed$seamOwnerDecision(seamOwner),
+                            SEAM_OWNER_ADJACENT_VISIBLE_TARGET.equals(seamOwner));
+                    return;
+                }
+
                 BlockHitResult aboveAngleOwner = slabbed$retargetAboveAngleLowerFrontSlabToAnchoredOwner(
                         tickProgress,
                         initialHit);
@@ -321,6 +339,59 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
     private static boolean slabbed$isDistinctOwner(BlockHitResult initialHit, BlockHitResult candidate) {
         return candidate != null && !candidate.getBlockPos().equals(initialHit.getBlockPos());
+    }
+
+    private String slabbed$classifyLiveFirstSeamOwner(BlockHitResult hit) {
+        if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
+            return SEAM_OWNER_NO_RESCUE;
+        }
+
+        ClientWorld world = client.world;
+        if (world == null) {
+            return SEAM_OWNER_KEEP_INITIAL;
+        }
+
+        BlockPos pos = hit.getBlockPos();
+        BlockState state = world.getBlockState(pos);
+        if (hit.getSide() == Direction.UP && slabbed$isAnchoredLoweredFullBlock(world, pos, state)) {
+            return SEAM_OWNER_ANCHORED_FULL_BLOCK;
+        }
+
+        if (hit.getSide().getAxis() != Direction.Axis.Y
+                && slabbed$isLoweredBottomSlabVisibleOwner(world, pos, state)) {
+            if (slabbed$isVisibleUpperLoweredSlabOwner(world, pos, state)) {
+                return SEAM_OWNER_VISIBLE_UPPER_LOWERED_SLAB;
+            }
+            if (slabbed$hasAdjacentAnchoredLoweredFullBlock(world, pos)) {
+                return SEAM_OWNER_ADJACENT_VISIBLE_TARGET;
+            }
+        }
+
+        return SEAM_OWNER_KEEP_INITIAL;
+    }
+
+    private static boolean slabbed$isLoweredBottomSlabVisibleOwner(ClientWorld world, BlockPos pos, BlockState state) {
+        return state.getBlock() instanceof SlabBlock
+                && state.contains(SlabBlock.TYPE)
+                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && state.getFluidState().isEmpty()
+                && SlabSupport.getYOffset(world, pos, state) == -0.5;
+    }
+
+    private static boolean slabbed$isVisibleUpperLoweredSlabOwner(ClientWorld world, BlockPos pos, BlockState state) {
+        return slabbed$isLoweredBottomSlabVisibleOwner(world, pos, state)
+                && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
+                && slabbed$isAnchoredLoweredFullBlock(world, pos.down(), world.getBlockState(pos.down()));
+    }
+
+    private static String slabbed$seamOwnerDecision(String seamOwner) {
+        return switch (seamOwner) {
+            case SEAM_OWNER_VISIBLE_UPPER_LOWERED_SLAB -> "seam-visible-upper-lowered-slab-owner";
+            case SEAM_OWNER_ADJACENT_VISIBLE_TARGET -> "seam-adjacent-visible-target-owner";
+            case SEAM_OWNER_ANCHORED_FULL_BLOCK -> "seam-anchored-full-block-owner";
+            case SEAM_OWNER_NO_RESCUE -> "seam-no-rescue";
+            default -> "seam-keep-initial";
+        };
     }
 
     private BlockHitResult slabbed$traceSlabHeldUpGuardSideOwnerClassification(

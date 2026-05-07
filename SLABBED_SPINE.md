@@ -20,12 +20,12 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current operating base HEAD before proof-harness savepoint: `b3e71ff`
-- Current operating base tag before proof-harness savepoint: `save/beta4-seam-ownership-contract`
+- Current operating base HEAD before classifier savepoint: `991c1dc`
+- Current operating base tag before classifier savepoint: `save/beta4-seam-ownership-proofs`
 - Reverted failed classifier: `763434e` / `save/beta4-seam-owner-classifier`
 - Stale, provenance-confusing release tag for this issue: `release/0.2.0-beta.4`
 
-The current savepoint target is `save/beta4-seam-ownership-proofs`.
+The current savepoint target is `save/beta4-seam-owner-classifier`.
 
 ## Current tracked tree state
 
@@ -34,7 +34,7 @@ Tracked tree is clean.
 
 ## Current product goal
 
-Align the beta4 seam proof harness with the live-first ownership contract before any new targeting fix.
+Implement the first narrow beta4 seam owner classifier while preserving the proof harness boundaries.
 
 ## Current proof note
 
@@ -43,7 +43,7 @@ Release remains blocked. The failed shared seam-owner classifier `763434e` was r
 Current beta4 seam proof classes:
 
 - Anchored-UP preservation remains GREEN for centered valid `UP` hits on an anchored lowered full block: `[BETA4_ANCHORED_UP_PRESERVE_GREEN]`.
-- Screenshot-intent visible upper owner remains opt-in RED and is the current blocker: `[BETA4_SEAM_VISIBLE_UPPER_SLAB_RED]`.
+- Screenshot-intent visible upper owner is GREEN in the focused proof after the classifier slice: `[BETA4_SEAM_VISIBLE_UPPER_SLAB_GREEN]`.
 - Adjacent visible target preservation remains GREEN: `[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]`.
 - Slab-held air/behind/miss no-rescue boundary is GREEN: `[BETA4_SEAM_NO_RESCUE_GREEN]`.
 
@@ -93,7 +93,7 @@ Status: Fixed / saved.
 
 ## Current next action
 
-After the proof-harness savepoint, the next implementation slice should extract one seam owner classifier/helper and map its outcomes back to the existing retarget paths. Do not patch `GameRendererCrosshairRetargetMixin.java` inline again before preserving these proof boundaries.
+After the classifier savepoint, the next required gate is Julia live validation of the beta4 seam table before any release candidate decision. Do not upload beta4 or move `release/0.2.0-beta.4`.
 
 ## Suggested live run command
 
