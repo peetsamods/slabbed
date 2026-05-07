@@ -2,6 +2,9 @@
 
 ## [0.2.0-beta.4] — Audited Release Candidate
 
+### Release status
+- BLOCKED locally after unreleased real-game testing: live targeting/outline still mismatches in compact lowered stone/slab stacks while holding a stone slab. Do not upload or mark ready until a RED proof, fix, and re-audit pass.
+
 ### Notes
 - Prepared from the audited Phase19 integration savepoint with no gameplay logic changes.
 - Release metadata only; public jar contents remained clean in the beta-readiness audit.
