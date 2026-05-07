@@ -71,26 +71,27 @@ Proof markers:
 
 ## Latest fixed Bug Blaster
 
-Latest validated state is the lowered-bottom slab placement persistence savepoint at `435cd1a`.
-Live micro-test result: PASSED. Julia tested the 8:16 PM under-placement setup on clean HEAD `435cd1a`; the legally lowered survivor slab did not jump during under-placement.
+Title: Slab-held retarget parity improvements
+Invariant: Holding a slab must not globally suppress valid lowered owner targeting. Slab-held protection may preserve true top/slab-placement intent only when no proven same-ray visible owner should win.
+Root cause: Slab-held targeting preserved old lowered slab / UP / MISS paths before comparing a proven visible lowered owner, so `stone_slab` held could suppress the same owner even when normal block-held targeting could reach scan-side-slab-fired or anchored full-block rescue.
+Fix: Added proof-backed `sideOwnerWouldWin` / anchored full-block owner comparisons so slab-held targeting can let the same visible owner win while preserving Phase19 true-top protection.
+Proof: `compileJava`, `compileGametestJava`, and `runClientGameTest` passed; Julia live-tested and confirmed targeting was a lot better / major mismatch fixed before savepoint.
+Savepoint: `571ba89` / `save/slab-held-retarget-parity-improvements`
+Status: Fixed / saved.
 
-Proof-only reconfirmation on HEAD `65d4c0e` / `save/slabbed-spine-current-base`:
-
-- Run command: `./gradlew --no-daemon runClientGameTest --console plain`
-- Result: `BUILD SUCCESSFUL in 1m 46s`
-- Proof case: `REAL_PLACED_LOWERED_BOTTOM_SLAB_UNDER_PLACEMENT_DOES_NOT_JUMP`
-- Survivor slab result: `stone_slab[type=bottom]`, `dy=-0.5`, `modelDy=-0.5`, `outlineDy=-0.5`, `targetDy=-0.5`, `jumpDelta=0.0`
-- Placed slab result: `stone_slab[type=bottom]`, `dy=-0.5`, `legalLoweredLane=true`, `legalVanillaLane=false`
-- Spine-aligned trace showed `dy=-0.5 anchored=true lowered=true` after sync
-- No lowered-slab jump contradiction was found
-- Non-fatal environment noise appeared, including failed user properties fetch and anisotropic filtering warning; do not treat those as Slabbed failures
-- Conclusion: the current saved state still preserves the no-jump lowered-bottom slab behavior around the 8:16 PM under-placement setup
+Title: Lowered slab face placement inheritance
+Invariant: Visible lowered slab face placement must author the placed object into the correct legal lowered state. Placement success is not enough; placed dy/anchor truth, preview/placement agreement, orphan teardown, and live feel must agree.
+Root cause: Targeting correctly selected a visible lowered slab face, but placement authored adjacent blocks in vanilla height. For slabs, placed slab initially became `dy=0.0` / ghost-face mismatch. For ordinary blocks/logs/grass, placement also authored `dy=0.0` until source qualifier was corrected. A false-green proof had made the source slab persistent; live source was non-persistent but legally lowered by a carrier below.
+Fix: Slab placement against lowered slab face now inherits the dynamic lowered lane without making the slab persistent. Ordinary full blocks placed against a legal non-persistent lowered bottom slab source now use the established anchored full-block path. Post-placement slab-held targeting now respects the newly placed anchored full-block owner instead of preserving the old lowered slab face.
+Proof: `LIVE_CLICK_PAIR_BOTTOM_SLAB_LANE_INHERITANCE` green with placed slab `dy=-0.5` and `persistentLoweredSlabCarrier=false`; `LIVE_CLICK_PAIR_FULL_BLOCK_LANE_INHERITANCE` green with source `persistentLoweredSlabCarrier=false`, placed full block `dy=-0.5`, `anchored=true`; `runOrphanedLoweredLaneSupportRemovalCase` green; `runClientGameTest` passed; Julia live-tested and said "Perfect! Save."
+Savepoint: `04744e1` / `save/lowered-slab-face-placement-inheritance`
+Status: Fixed / saved.
 
 ## Recent relevant savepoints
 
+- `save/lowered-slab-face-placement-inheritance` (`04744e1`): current saved state for lowered slab face placement inheritance, full-block lane inheritance, and post-place anchored-owner targeting.
+- `save/slab-held-retarget-parity-improvements` (`571ba89`): prior slab-held retarget parity savepoint, now documented above as the upstream targeting fix.
 - Pending savepoint: debug helper classpath closure. Packaging/classpath blocker fixed by removing or bridging production/runtime hard-links to excluded debug helpers. `compileJava compileGametestJava`, `runClientGameTest`, `clean build`, release jar leakage scan, `jdeps` hard-reference scan, and source direct-import scan passed. No gameplay behavior was intentionally changed.
-- Pending savepoint: `save/lowered-slab-face-placement-inheritance`. Preserves the live-proven lowered slab face placement inheritance, full-block lane inheritance, and slab-held post-place anchored owner targeting.
-- `save/slab-held-retarget-parity-improvements`
 - `save/real-lowered-bottom-slab-under-placement-persistence`
 - `save/real-placed-lowered-bottom-slab-persistence` is historical only and should not be treated as final truth.
 
