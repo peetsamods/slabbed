@@ -45,6 +45,8 @@ Recorder status: gated live retarget recorder added behind `-Dslabbed.beta4LiveR
 
 Proof status: gated RED proof `-Dslabbed.beta4SeamVisibleUpperAngleGeneralRedOnly=true` captures the angle-general BLOCK/UP failure where `topInterior=true`, `edgeLike=false`, a closer visible-upper lowered slab candidate exists, and `anchoredUpPreserve` still keeps the anchored owner. This is proof-only and does not unblock release.
 
+Implementation status: the anchored-UP guard now lets a real, strict-closer visible-upper lowered bottom slab side candidate win without using `topInterior` as a hard veto. Release remains blocked pending Julia live retest.
+
 Current beta4 seam proof classes:
 
 - Anchored-UP preservation remains GREEN for centered valid `UP` hits on an anchored lowered full block: `[BETA4_ANCHORED_UP_PRESERVE_GREEN]`.
