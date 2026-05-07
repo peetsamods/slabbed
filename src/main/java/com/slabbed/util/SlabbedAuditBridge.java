@@ -121,6 +121,25 @@ public final class SlabbedAuditBridge {
                 reason);
     }
 
+    public static void logInspectClickPair(ItemUsageContext context, Identifier itemId) {
+        if (!isInspectEnabled()) {
+            return;
+        }
+        invoke(
+                INSPECT_CLASS_NAME,
+                "logClickPair",
+                new Class<?>[]{ItemUsageContext.class, Identifier.class},
+                context,
+                itemId);
+    }
+
+    public static void clearInspectClickPair() {
+        if (!isInspectEnabled()) {
+            return;
+        }
+        invoke(INSPECT_CLASS_NAME, "clearClickPair", new Class<?>[]{});
+    }
+
     public static void logInspectPlacement(
             String stage,
             World world,

@@ -441,6 +441,25 @@ public final class SlabSupport {
                 && isAdjacentSideSlabLowered(world, pos, state);
     }
 
+    public static boolean isBottomSlabLoweredByCarrierBelow(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null
+                || pos == null
+                || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        boolean backedByLoweredCarrier = below.getBlock() instanceof SlabBlock
+                ? isLoweredDoubleSlabCarrier(world, belowPos, below)
+                : hasLoweredCarrierBelow(world, pos);
+        return backedByLoweredCarrier && getYOffset(world, pos, state) == -0.5d;
+    }
+
     private static boolean isLoweredCarrier(BlockView world, BlockPos pos, BlockState state, int depth) {
         return isLoweredCarrier(world, pos, state, depth, true);
     }
@@ -534,6 +553,11 @@ public final class SlabSupport {
             if (!(cursorState.getBlock() instanceof SlabBlock) || !cursorState.contains(SlabBlock.TYPE)) {
                 continue;
             }
+            if (!cursor.equals(slabPos)
+                    && isCompatibleLoweredSlabLane(slabState, cursorState)
+                    && isLoweredSlabLaneOwnerForSideInheritance(world, cursor, cursorState)) {
+                return true;
+            }
 
             for (Direction dir : Direction.Type.HORIZONTAL) {
                 BlockPos neighborPos = cursor.offset(dir);
@@ -551,6 +575,22 @@ public final class SlabSupport {
             }
         }
         return false;
+    }
+
+    private static boolean isLoweredSlabLaneOwnerForSideInheritance(
+            BlockView world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        return world != null
+                && pos != null
+                && state != null
+                && state.getBlock() instanceof SlabBlock
+                && state.contains(SlabBlock.TYPE)
+                && state.getFluidState().isEmpty()
+                && (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
+                        || hasLoweredSolidSideSupport(world, pos)
+                        || hasLoweredCarrierBelow(world, pos));
     }
 
     private static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
