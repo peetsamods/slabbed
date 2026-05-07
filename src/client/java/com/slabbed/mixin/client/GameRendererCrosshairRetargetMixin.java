@@ -106,6 +106,14 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 return;
             }
             if (slabbed$isInitialHitOnLoweredSlabFace(initialHit)) {
+                BlockHitResult aboveAngleOwner = slabbed$retargetAboveAngleLowerFrontSlabToAnchoredOwner(
+                        tickProgress,
+                        initialHit);
+                if (aboveAngleOwner != null) {
+                    client.crosshairTarget = aboveAngleOwner;
+                    slabbed$traceTargeting(tickProgress, initialTarget, "aboveAngleLowerFrontPreserve", false);
+                    return;
+                }
                 BlockHitResult anchoredOwner = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, initialTarget);
                 BlockHitResult sideOwner = slabbed$traceSlabHeldMissSideRescueClassification(
                         tickProgress,
@@ -485,6 +493,33 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private boolean slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(
             float tickProgress, HitResult initialTarget, BlockHitResult sideSlabCandidate
     ) {
+        if (initialTarget instanceof BlockHitResult initialBlock
+                && initialBlock.getType() == HitResult.Type.BLOCK
+                && sideSlabCandidate != null
+                && initialBlock.getBlockPos().equals(sideSlabCandidate.getBlockPos())) {
+            return false;
+        }
+        return slabbed$isAboveAngleLowerFrontSlabOverAnchoredOwner(tickProgress, sideSlabCandidate, 0.15d);
+    }
+
+    private BlockHitResult slabbed$retargetAboveAngleLowerFrontSlabToAnchoredOwner(
+            float tickProgress, BlockHitResult lowerFrontHit
+    ) {
+        if (!slabbed$isAboveAngleLowerFrontSlabOverAnchoredOwner(tickProgress, lowerFrontHit, 0.20d)) {
+            return null;
+        }
+        BlockPos ownerPos = lowerFrontHit.getBlockPos().down();
+        return new BlockHitResult(
+                lowerFrontHit.getPos(),
+                lowerFrontHit.getSide(),
+                ownerPos,
+                lowerFrontHit.isInsideBlock(),
+                false);
+    }
+
+    private boolean slabbed$isAboveAngleLowerFrontSlabOverAnchoredOwner(
+            float tickProgress, BlockHitResult sideSlabCandidate, double maxAbsVerticalLook
+    ) {
         if (sideSlabCandidate == null || sideSlabCandidate.getSide().getAxis() == Direction.Axis.Y) {
             return false;
         }
@@ -496,12 +531,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
 
         BlockPos slabPos = sideSlabCandidate.getBlockPos();
-        if (initialTarget instanceof BlockHitResult initialBlock
-                && initialBlock.getType() == HitResult.Type.BLOCK
-                && initialBlock.getBlockPos().equals(slabPos)) {
-            return false;
-        }
-
         BlockState slabState = world.getBlockState(slabPos);
         if (!(slabState.getBlock() instanceof SlabBlock)
                 || !slabState.contains(SlabBlock.TYPE)
@@ -518,7 +547,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
         Vec3d eye = cam.getCameraPosVec(tickProgress);
         Vec3d dir = cam.getRotationVec(tickProgress);
-        if (Math.abs(dir.y) > 0.15d) {
+        if (Math.abs(dir.y) > maxAbsVerticalLook) {
             return false;
         }
 

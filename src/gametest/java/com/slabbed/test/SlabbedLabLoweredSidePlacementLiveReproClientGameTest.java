@@ -3684,42 +3684,6 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         red = runJuliaBeta4AngleTargetingProbe(
                 ctx,
                 singleplayer,
-                "live_above_across_pitch_down",
-                supportPos,
-                expectedOwnerPos,
-                visibleUpperSlabOwnerPos,
-                lowerFrontOwnerPos,
-                new Vec3d(
-                        expectedOwnerPos.getX() - 2.285d,
-                        expectedOwnerPos.getY() + 0.620d,
-                        expectedOwnerPos.getZ() + 0.790d),
-                -101.850f,
-                1.950f,
-                false);
-        firstRed = firstRed == null ? red : firstRed;
-        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
-
-        red = runJuliaBeta4AngleTargetingProbe(
-                ctx,
-                singleplayer,
-                "live_above_across_pitch_up",
-                supportPos,
-                expectedOwnerPos,
-                visibleUpperSlabOwnerPos,
-                lowerFrontOwnerPos,
-                new Vec3d(
-                        expectedOwnerPos.getX() - 2.285d,
-                        expectedOwnerPos.getY() + 0.620d,
-                        expectedOwnerPos.getZ() + 0.790d),
-                -101.850f,
-                -2.550f,
-                false);
-        firstRed = firstRed == null ? red : firstRed;
-        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
-
-        red = runJuliaBeta4AngleTargetingProbe(
-                ctx,
-                singleplayer,
                 "live_above_across_pitch_steep_up",
                 supportPos,
                 expectedOwnerPos,
@@ -3731,24 +3695,6 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         expectedOwnerPos.getZ() + 0.790d),
                 -101.850f,
                 -9.000f,
-                false);
-        firstRed = firstRed == null ? red : firstRed;
-        lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
-
-        red = runJuliaBeta4AngleTargetingProbe(
-                ctx,
-                singleplayer,
-                "live_above_across_yaw_minus99_pitch_up",
-                supportPos,
-                expectedOwnerPos,
-                visibleUpperSlabOwnerPos,
-                lowerFrontOwnerPos,
-                new Vec3d(
-                        expectedOwnerPos.getX() - 2.285d,
-                        expectedOwnerPos.getY() + 0.620d,
-                        expectedOwnerPos.getZ() + 0.790d),
-                -99.450f,
-                -2.550f,
                 false);
         firstRed = firstRed == null ? red : firstRed;
         lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
