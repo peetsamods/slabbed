@@ -497,8 +497,18 @@ public abstract class GameRendererCrosshairRetargetMixin {
         boolean loweredSlabFacePreserve = "lowered-slab-face-preserve".equals(exitReason);
 
         BlockHitResult slabHeldCandidate = slabbed$retargetLoweredSideSlab(tickProgress, initialTarget, true);
+        BlockHitResult visibleUpperSideFaceMissCandidate =
+                slabbed$retargetVisibleUpperLoweredSlabSideFaceMiss(tickProgress, initialTarget);
+        if (slabbed$isCloserOrTied(tickProgress, visibleUpperSideFaceMissCandidate, slabHeldCandidate)) {
+            slabHeldCandidate = visibleUpperSideFaceMissCandidate;
+        }
+        boolean visibleUpperSideFaceMissOwner = visibleUpperSideFaceMissCandidate != null
+                && slabHeldCandidate != null
+                && slabHeldCandidate.getBlockPos().equals(visibleUpperSideFaceMissCandidate.getBlockPos())
+                && slabHeldCandidate.getSide().getAxis() != Direction.Axis.Y;
         BlockHitResult suppressedAboveAngleCandidate = null;
-        if (slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(tickProgress, initialTarget, slabHeldCandidate)) {
+        if (!visibleUpperSideFaceMissOwner
+                && slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(tickProgress, initialTarget, slabHeldCandidate)) {
             suppressedAboveAngleCandidate = slabHeldCandidate;
             slabHeldCandidate = null;
         }
@@ -515,8 +525,12 @@ public abstract class GameRendererCrosshairRetargetMixin {
         String candidateReason;
         String classification;
         if (slabHeldCandidate != null) {
-            candidateReason = "accepted";
-            classification = "sideOwnerWouldWin";
+            candidateReason = visibleUpperSideFaceMissOwner
+                    ? "visible-upper-side-face-offset-hit"
+                    : "accepted";
+            classification = visibleUpperSideFaceMissOwner
+                    ? "visibleUpperSideFaceOwner"
+                    : "sideOwnerWouldWin";
         } else if (suppressedAboveAngleCandidate != null) {
             candidateReason = "above-angle-anchored-owner-suppress";
             classification = "suppressedByAboveAngleAnchoredOwner";
@@ -558,7 +572,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" nonSlabWouldProduceScanSideSlabFired=").append(nonSlabComparisonCandidate != null);
         line.append(" classification=").append(classification);
         Slabbed.LOGGER.info(line.toString());
-        return "sideOwnerWouldWin".equals(classification) ? slabHeldCandidate : null;
+        return slabHeldCandidate != null ? slabHeldCandidate : null;
     }
 
     private boolean slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(
@@ -733,6 +747,56 @@ public abstract class GameRendererCrosshairRetargetMixin {
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
         return SlabbedRetargetTestHooks.findLoweredSideSlabRetarget(world, cam, eye, end, currentHit, slabHeld);
+    }
+
+    private BlockHitResult slabbed$retargetVisibleUpperLoweredSlabSideFaceMiss(
+            float tickProgress, HitResult currentHit
+    ) {
+        if (currentHit == null || currentHit.getType() != HitResult.Type.MISS) {
+            return null;
+        }
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return null;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d end = eye.add(cam.getRotationVec(tickProgress).multiply(6.0d));
+        int minX = (int) Math.floor(Math.min(eye.x, end.x)) - 1;
+        int minY = (int) Math.floor(Math.min(eye.y, end.y)) - 1;
+        int minZ = (int) Math.floor(Math.min(eye.z, end.z)) - 1;
+        int maxX = (int) Math.floor(Math.max(eye.x, end.x)) + 1;
+        int maxY = (int) Math.floor(Math.max(eye.y, end.y)) + 1;
+        int maxZ = (int) Math.floor(Math.max(eye.z, end.z)) + 1;
+
+        BlockHitResult best = null;
+        double bestDist2 = Double.POSITIVE_INFINITY;
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    BlockState state = world.getBlockState(pos);
+                    if (!slabbed$isVisibleUpperLoweredSlabOwner(world, pos, state)) {
+                        continue;
+                    }
+                    VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+                    if (outline == null || outline.isEmpty()) {
+                        continue;
+                    }
+                    BlockHitResult hit = outline.raycast(eye, end, pos);
+                    if (hit == null || hit.getSide().getAxis() == Direction.Axis.Y) {
+                        continue;
+                    }
+                    double dist2 = hit.getPos().squaredDistanceTo(eye);
+                    if (dist2 <= 36.0d + 1.0e-6d && dist2 < bestDist2) {
+                        bestDist2 = dist2;
+                        best = new BlockHitResult(hit.getPos(), hit.getSide(), pos, hit.isInsideBlock(), false);
+                    }
+                }
+            }
+        }
+        return best;
     }
 
     private BlockHitResult slabbed$retargetLoweredChainTopSupport(float tickProgress, HitResult currentHit) {
