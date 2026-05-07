@@ -76,6 +76,25 @@ public abstract class GameRendererCrosshairRetargetMixin {
             if (world != null
                     && initialHit.getSide() == Direction.UP
                     && slabbed$isAnchoredLoweredFullBlock(world, pos, world.getBlockState(pos))) {
+                BlockHitResult anchoredOwner = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
+                if (slabbed$isDistinctOwner(initialHit, anchoredOwner)) {
+                    client.crosshairTarget = anchoredOwner;
+                    slabbed$traceTargeting(
+                            tickProgress,
+                            initialTarget,
+                            "scan-anchored-fb-fired-slab-held",
+                            false);
+                    return;
+                }
+                BlockHitResult sideOwner = slabbed$traceSlabHeldUpGuardSideOwnerClassification(
+                        tickProgress,
+                        initialTarget,
+                        initialHit);
+                if (sideOwner != null) {
+                    client.crosshairTarget = sideOwner;
+                    slabbed$traceTargeting(tickProgress, initialTarget, "scan-side-slab-fired", true);
+                    return;
+                }
                 slabbed$traceTargeting(
                         tickProgress,
                         initialTarget,
@@ -84,6 +103,15 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 return;
             }
             if (slabbed$isInitialHitOnLoweredSlabFace(initialHit)) {
+                BlockHitResult sideOwner = slabbed$traceSlabHeldMissSideRescueClassification(
+                        tickProgress,
+                        initialTarget,
+                        "lowered-slab-face-preserve");
+                if (sideOwner != null) {
+                    client.crosshairTarget = sideOwner;
+                    slabbed$traceTargeting(tickProgress, initialTarget, "scan-side-slab-fired", true);
+                    return;
+                }
                 slabbed$traceTargeting(
                         tickProgress,
                         initialTarget,
@@ -134,6 +162,17 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
 
         if (ht.getType() == HitResult.Type.MISS) {
+            if (slabHeld) {
+                BlockHitResult sideOwner = slabbed$traceSlabHeldMissSideRescueClassification(
+                        tickProgress,
+                        initialTarget,
+                        "miss-no-rescue-candidate");
+                if (sideOwner != null) {
+                    client.crosshairTarget = sideOwner;
+                    slabbed$traceTargeting(tickProgress, initialTarget, "scan-side-slab-fired", true);
+                    return;
+                }
+            }
             slabbed$traceTargeting(tickProgress, initialTarget, "scan-no-rescue-candidate", false);
             return;
         }
@@ -252,6 +291,165 @@ public abstract class GameRendererCrosshairRetargetMixin {
             return (slabDist2 <= anchoredDist2 + eps) ? slab : anchored;
         }
         return (anchoredDist2 <= slabDist2 + eps) ? anchored : slab;
+    }
+
+    private static boolean slabbed$isDistinctOwner(BlockHitResult initialHit, BlockHitResult candidate) {
+        return candidate != null && !candidate.getBlockPos().equals(initialHit.getBlockPos());
+    }
+
+    private BlockHitResult slabbed$traceSlabHeldUpGuardSideOwnerClassification(
+            float tickProgress, HitResult initialTarget, BlockHitResult initialHit
+    ) {
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            Slabbed.LOGGER.info("[SLAB_HELD_UP_GUARD_SIDE_OWNER_CLASSIFY] classification=unknown reason=no-world-or-camera");
+            return null;
+        }
+
+        BlockPos initialPos = initialHit.getBlockPos();
+        BlockState initialState = world.getBlockState(initialPos);
+        double initialDy = SlabSupport.getYOffset(world, initialPos, initialState);
+        boolean initialAnchored = SlabAnchorAttachment.isAnchored(world, initialPos);
+        boolean initialLowered = initialDy == -0.5;
+        boolean initialFullBlock = initialState.isSolidBlock(world, initialPos);
+        Vec3d local = initialHit.getPos().subtract(initialPos.getX(), initialPos.getY(), initialPos.getZ());
+        boolean topHit = initialHit.getSide() == Direction.UP;
+        boolean edgeLike = local.x <= 0.15 || local.x >= 0.85 || local.z <= 0.15 || local.z >= 0.85;
+        boolean topInterior = topHit && !edgeLike;
+
+        BlockHitResult sideOwner = slabbed$retargetLoweredSideSlab(tickProgress, initialHit, true);
+        String candidateReason = sideOwner == null ? "none" : "accepted";
+        String classification;
+        if (sideOwner == null) {
+            classification = "noCandidate";
+        } else if (topInterior) {
+            classification = "trueTopPreserve";
+        } else {
+            classification = "sideOwnerWouldWin";
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        double initialDist2 = initialHit.getPos().squaredDistanceTo(eye);
+        double candidateDist2 = sideOwner == null ? Double.NaN : sideOwner.getPos().squaredDistanceTo(eye);
+
+        ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
+        StringBuilder line = new StringBuilder(768);
+        line.append("[SLAB_HELD_UP_GUARD_SIDE_OWNER_CLASSIFY]");
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" heldIsSlab=").append(slabbed$isSlabPlacementIntent());
+        line.append(" initial=").append(slabbed$formatHit(initialHit));
+        line.append(" initialState=").append(initialState);
+        line.append(" initialDy=").append(String.format("%.3f", initialDy));
+        line.append(" initialAnchored=").append(initialAnchored);
+        line.append(" initialLowered=").append(initialLowered);
+        line.append(" initialFullBlock=").append(initialFullBlock);
+        line.append(" localHit=").append(slabbed$formatVec(local));
+        line.append(" topHit=").append(topHit);
+        line.append(" edgeLike=").append(edgeLike);
+        line.append(" topInterior=").append(topInterior);
+        line.append(" sideScanCandidateExists=").append(sideOwner != null);
+        line.append(" sideScanCandidateReason=").append(candidateReason);
+        line.append(" sideScanCandidate=").append(slabbed$formatHit(sideOwner));
+        if (sideOwner != null) {
+            line.append(" sideScanCandidateFacts=")
+                    .append(slabbed$formatSideOwnerFacts(world, sideOwner.getBlockPos()));
+        }
+        line.append(" initialDist2=").append(String.format("%.6f", initialDist2));
+        line.append(" candidateDist2=").append(sideOwner == null ? "NaN" : String.format("%.6f", candidateDist2));
+        line.append(" candidateMinusInitialDist2=")
+                .append(sideOwner == null ? "NaN" : String.format("%.6f", candidateDist2 - initialDist2));
+        line.append(" wouldProduceScanSideSlabFired=").append(sideOwner != null);
+        line.append(" classification=").append(classification);
+        line.append(" initialTarget=").append(slabbed$formatHit(initialTarget));
+        Slabbed.LOGGER.info(line.toString());
+        return "sideOwnerWouldWin".equals(classification) ? sideOwner : null;
+    }
+
+    private static String slabbed$formatSideOwnerFacts(ClientWorld world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
+        boolean lowered = dy == -0.5;
+        String slabType = state.contains(SlabBlock.TYPE) ? state.get(SlabBlock.TYPE).asString() : "none";
+        return "pos=" + pos.toShortString()
+                + " state=" + state
+                + " dy=" + String.format("%.3f", dy)
+                + " slabType=" + slabType
+                + " anchored=" + anchored
+                + " lowered=" + lowered;
+    }
+
+    private BlockHitResult slabbed$traceSlabHeldMissSideRescueClassification(
+            float tickProgress, HitResult initialTarget, String exitReason
+    ) {
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            Slabbed.LOGGER.info("[SLAB_HELD_MISS_SIDE_RESCUE_CLASSIFY] classification=unknown reason=no-world-or-camera");
+            return null;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d dir = cam.getRotationVec(tickProgress);
+        double reach = 6.0;
+        Vec3d end = eye.add(dir.multiply(reach));
+        boolean initialMiss = initialTarget == null || initialTarget.getType() == HitResult.Type.MISS;
+        boolean loweredSlabFacePreserve = "lowered-slab-face-preserve".equals(exitReason);
+
+        BlockHitResult slabHeldCandidate = slabbed$retargetLoweredSideSlab(tickProgress, initialTarget, true);
+        BlockHitResult nonSlabComparisonCandidate = slabbed$retargetLoweredSideSlab(tickProgress, initialTarget, false);
+        BlockHitResult reportCandidate = slabHeldCandidate != null ? slabHeldCandidate : nonSlabComparisonCandidate;
+
+        boolean sameBlockSuppressed = slabHeldCandidate == null
+                && nonSlabComparisonCandidate != null
+                && initialTarget instanceof BlockHitResult initialBlock
+                && initialBlock.getBlockPos().equals(nonSlabComparisonCandidate.getBlockPos());
+
+        String candidateReason;
+        String classification;
+        if (slabHeldCandidate != null) {
+            candidateReason = "accepted";
+            classification = "sideOwnerWouldWin";
+        } else if (nonSlabComparisonCandidate != null) {
+            candidateReason = sameBlockSuppressed ? "same-block-slab-held-suppress" : "unknown";
+            classification = "suppressedBySlabHeld";
+        } else {
+            candidateReason = "no-candidate";
+            classification = initialMiss ? "trueMiss" : "noCandidate";
+        }
+
+        double candidateDist2 = reportCandidate == null ? Double.NaN : reportCandidate.getPos().squaredDistanceTo(eye);
+        ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
+
+        StringBuilder line = new StringBuilder(768);
+        line.append("[SLAB_HELD_MISS_SIDE_RESCUE_CLASSIFY]");
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" heldIsSlab=").append(slabbed$isSlabPlacementIntent());
+        line.append(" initialType=").append(initialTarget == null ? "null" : initialTarget.getType());
+        line.append(" initial=").append(slabbed$formatHit(initialTarget));
+        line.append(" eye=").append(slabbed$formatVec(eye));
+        line.append(" end=").append(slabbed$formatVec(end));
+        line.append(" reach=").append(String.format("%.3f", reach));
+        line.append(" initialMiss=").append(initialMiss);
+        line.append(" exitReason=").append(exitReason);
+        line.append(" slabHeldLoweredSlabFacePreserve=").append(loweredSlabFacePreserve);
+        line.append(" sideScanRun=true");
+        line.append(" sideScanCandidateExists=").append(slabHeldCandidate != null);
+        line.append(" sideScanCandidateReason=").append(candidateReason);
+        line.append(" sideScanCandidate=").append(slabbed$formatHit(reportCandidate));
+        if (reportCandidate != null) {
+            line.append(" sideScanCandidateFacts=")
+                    .append(slabbed$formatSideOwnerFacts(world, reportCandidate.getBlockPos()));
+        }
+        line.append(" candidateDist2=").append(reportCandidate == null ? "NaN" : String.format("%.6f", candidateDist2));
+        line.append(" wouldProduceScanSideSlabFired=").append(slabHeldCandidate != null);
+        line.append(" nonSlabComparisonCandidateExists=").append(nonSlabComparisonCandidate != null);
+        line.append(" nonSlabComparisonCandidate=").append(slabbed$formatHit(nonSlabComparisonCandidate));
+        line.append(" nonSlabWouldProduceScanSideSlabFired=").append(nonSlabComparisonCandidate != null);
+        line.append(" classification=").append(classification);
+        Slabbed.LOGGER.info(line.toString());
+        return "sideOwnerWouldWin".equals(classification) ? slabHeldCandidate : null;
     }
 
     private boolean slabbed$isCloserOrTied(float tickProgress, BlockHitResult candidate, BlockHitResult current) {
