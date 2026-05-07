@@ -4475,6 +4475,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                                     && candidateCloser
                                     && edgeLike
                                     && !topInterior) {
+                                if (finalVisible) {
+                                    System.out.println("[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_GREEN]" + facts);
+                                    return;
+                                }
                                 throw new RuntimeException("[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_RED]" + facts);
                             }
                             bestFacts = facts;

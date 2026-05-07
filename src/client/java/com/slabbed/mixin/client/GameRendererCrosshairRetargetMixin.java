@@ -415,11 +415,33 @@ public abstract class GameRendererCrosshairRetargetMixin {
         boolean edgeLike = local.x <= 0.15 || local.x >= 0.85 || local.z <= 0.15 || local.z >= 0.85;
         boolean topInterior = topHit && !edgeLike;
 
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
         BlockHitResult sideOwner = slabbed$retargetLoweredSideSlab(tickProgress, initialHit, true);
         String candidateReason = sideOwner == null ? "none" : "accepted";
+        double initialDist2 = initialHit.getPos().squaredDistanceTo(eye);
+        double candidateDist2 = sideOwner == null ? Double.NaN : sideOwner.getPos().squaredDistanceTo(eye);
+        boolean visibleUpperSideCandidate = false;
+        if (sideOwner != null) {
+            BlockPos sidePos = sideOwner.getBlockPos();
+            BlockState sideState = world.getBlockState(sidePos);
+            double sideDy = SlabSupport.getYOffset(world, sidePos, sideState);
+            visibleUpperSideCandidate = slabbed$isVisibleUpperLoweredSlabOwner(world, sidePos, sideState)
+                    && sideState.contains(SlabBlock.TYPE)
+                    && sideState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && sideDy == -0.5
+                    && candidateDist2 < initialDist2;
+        }
         String classification;
         if (sideOwner == null) {
             classification = "noCandidate";
+        } else if (topHit
+                && initialAnchored
+                && initialLowered
+                && initialFullBlock
+                && edgeLike
+                && !topInterior
+                && visibleUpperSideCandidate) {
+            classification = "visibleUpperSideFaceOwner";
         } else if (topHit && initialAnchored && initialLowered && initialFullBlock) {
             classification = "anchoredUpPreserve";
         } else if (topInterior) {
@@ -427,10 +449,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
         } else {
             classification = "sideOwnerWouldWin";
         }
-
-        Vec3d eye = cam.getCameraPosVec(tickProgress);
-        double initialDist2 = initialHit.getPos().squaredDistanceTo(eye);
-        double candidateDist2 = sideOwner == null ? Double.NaN : sideOwner.getPos().squaredDistanceTo(eye);
 
         ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
         StringBuilder line = new StringBuilder(768);
@@ -462,7 +480,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" classification=").append(classification);
         line.append(" initialTarget=").append(slabbed$formatHit(initialTarget));
         Slabbed.LOGGER.info(line.toString());
-        return "sideOwnerWouldWin".equals(classification) ? sideOwner : null;
+        return "sideOwnerWouldWin".equals(classification) || "visibleUpperSideFaceOwner".equals(classification)
+                ? sideOwner
+                : null;
     }
 
     private static String slabbed$formatSideOwnerFacts(ClientWorld world, BlockPos pos) {
