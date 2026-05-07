@@ -110,6 +110,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
+            runLiveClickPairBottomSlabLaneInheritanceCase(ctx, singleplayer);
+        }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            runLiveClickPairFullBlockLaneInheritanceCase(ctx, singleplayer);
+        }
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
             runBridgeShapeLowerHalfReproCase(ctx, singleplayer);
         }
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
@@ -1900,6 +1910,165 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (Math.abs(placedDy + 0.5d) > EPSILON) {
                 throw new RuntimeException("expected lowered dy=-0.500 for " + targetType + " target on "
                         + face + " side, found dy=" + placedDy + " state=" + placed);
+            }
+        });
+    }
+
+    private static void runLiveClickPairBottomSlabLaneInheritanceCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final String proof = "LIVE_CLICK_PAIR_BOTTOM_SLAB_LANE_INHERITANCE";
+        final Direction face = Direction.EAST;
+        final BlockPos sourcePos = FULL_POS.east();
+        final BlockPos placePos = sourcePos.offset(face);
+        final BlockHitResult hit = resolveLoweredSideFaceHit(sourcePos, face, SlabType.BOTTOM);
+
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        setLoweredSlabTarget(singleplayer, sourcePos, SlabType.BOTTOM);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState sourceState = world.getBlockState(sourcePos);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, sourcePos, sourceState);
+            world.setBlockState(FULL_POS, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(SUPPORT_POS, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        movePlayerForFace(ctx, singleplayer, sourcePos, face);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[" + proof + "] client not ready");
+            }
+            BlockState source = mc.world.getBlockState(sourcePos);
+            double sourceDy = SlabSupport.getYOffset(mc.world, sourcePos, source);
+            if (!source.isOf(Blocks.STONE_SLAB)
+                    || !source.contains(SlabBlock.TYPE)
+                    || source.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || Math.abs(sourceDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("[" + proof + "] source not lowered bottom slab: state="
+                        + source + " dy=" + sourceDy);
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("[" + proof + "] placement was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + proof + "] client world missing after placement");
+            }
+            BlockState placed = mc.world.getBlockState(placePos);
+            double placedDy = SlabSupport.getYOffset(mc.world, placePos, placed);
+            boolean persistent = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(mc.world, placePos, placed);
+            System.out.println("[" + proof + "] source=" + sourcePos.toShortString()
+                    + " face=" + face.asString()
+                    + " placePos=" + placePos.toShortString()
+                    + " placed=" + placed
+                    + " dy=" + placedDy
+                    + " persistentLoweredSlabCarrier=" + persistent);
+            if (!placed.isOf(Blocks.STONE_SLAB)
+                    || !placed.contains(SlabBlock.TYPE)
+                    || placed.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || Math.abs(placedDy + 0.5d) > EPSILON
+                    || persistent) {
+                throw new RuntimeException("[" + proof + "] placed slab should inherit lowered bottom lane, found state="
+                        + placed + " dy=" + placedDy + " persistent=" + persistent);
+            }
+        });
+    }
+
+    private static void runLiveClickPairFullBlockLaneInheritanceCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final String proof = "LIVE_CLICK_PAIR_FULL_BLOCK_LANE_INHERITANCE";
+        final Direction face = Direction.EAST;
+        final BlockPos sourcePos = FULL_POS.east();
+        final BlockPos sourceBelowPos = sourcePos.down();
+        final BlockPos sourceCarrierPos = sourceBelowPos.down();
+        final BlockPos sourceCarrierSupportPos = sourceCarrierPos.down();
+        final BlockPos placePos = sourcePos.offset(face);
+        final BlockHitResult hit = resolveLoweredSideFaceHit(sourcePos, face, SlabType.BOTTOM);
+
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(FULL_POS, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(SUPPORT_POS, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    sourceCarrierSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(sourceCarrierPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, sourceCarrierPos, world.getBlockState(sourceCarrierPos));
+            world.setBlockState(
+                    sourceBelowPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    sourcePos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 8));
+        movePlayerForFace(ctx, singleplayer, sourcePos, face);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[" + proof + "] client not ready");
+            }
+            BlockState source = mc.world.getBlockState(sourcePos);
+            double sourceDy = SlabSupport.getYOffset(mc.world, sourcePos, source);
+            boolean sourcePersistent = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(mc.world, sourcePos, source);
+            if (!source.isOf(Blocks.STONE_SLAB)
+                    || !source.contains(SlabBlock.TYPE)
+                    || source.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || Math.abs(sourceDy + 0.5d) > EPSILON
+                    || sourcePersistent) {
+                throw new RuntimeException("[" + proof + "] source not non-persistent lowered bottom slab: state="
+                        + source + " dy=" + sourceDy + " persistent=" + sourcePersistent);
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("[" + proof + "] placement was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + proof + "] client world missing after placement");
+            }
+            BlockState placed = mc.world.getBlockState(placePos);
+            double placedDy = SlabSupport.getYOffset(mc.world, placePos, placed);
+            boolean anchored = SlabAnchorAttachment.isAnchored(mc.world, placePos);
+            BlockState source = mc.world.getBlockState(sourcePos);
+            boolean sourcePersistent = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(mc.world, sourcePos, source);
+            System.out.println("[" + proof + "] source=" + sourcePos.toShortString()
+                    + " face=" + face.asString()
+                    + " placePos=" + placePos.toShortString()
+                    + " sourcePersistentLoweredSlabCarrier=" + sourcePersistent
+                    + " placed=" + placed
+                    + " dy=" + placedDy
+                    + " anchored=" + anchored);
+            if (!placed.isOf(Blocks.STONE)
+                    || Math.abs(placedDy + 0.5d) > EPSILON
+                    || !anchored
+                    || sourcePersistent) {
+                throw new RuntimeException("[" + proof + "] placed full block should inherit lowered lane, found state="
+                        + placed + " dy=" + placedDy + " anchored=" + anchored
+                        + " sourcePersistent=" + sourcePersistent);
             }
         });
     }
