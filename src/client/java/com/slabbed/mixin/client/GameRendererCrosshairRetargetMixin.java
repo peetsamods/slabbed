@@ -103,13 +103,25 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 return;
             }
             if (slabbed$isInitialHitOnLoweredSlabFace(initialHit)) {
+                BlockHitResult anchoredOwner = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, initialTarget);
                 BlockHitResult sideOwner = slabbed$traceSlabHeldMissSideRescueClassification(
                         tickProgress,
                         initialTarget,
                         "lowered-slab-face-preserve");
                 if (sideOwner != null) {
+                    BlockHitResult chosenOwner = slabbed$chooseRescue(tickProgress, anchoredOwner, sideOwner, false);
+                    if (chosenOwner == anchoredOwner) {
+                        client.crosshairTarget = anchoredOwner;
+                        slabbed$traceTargeting(tickProgress, initialTarget, "scan-anchored-fb-fired-slab-held", false);
+                        return;
+                    }
                     client.crosshairTarget = sideOwner;
                     slabbed$traceTargeting(tickProgress, initialTarget, "scan-side-slab-fired", true);
+                    return;
+                }
+                if (slabbed$isDistinctOwner(initialHit, anchoredOwner)) {
+                    client.crosshairTarget = anchoredOwner;
+                    slabbed$traceTargeting(tickProgress, initialTarget, "scan-anchored-fb-fired-slab-held", false);
                     return;
                 }
                 slabbed$traceTargeting(

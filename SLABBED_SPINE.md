@@ -20,12 +20,11 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current operating base HEAD: `ec650eb`
-- Current operating base tag: `save/visible-face-placement-intent-authority`
+- Current operating base HEAD before savepoint: `571ba89`
+- Current operating base tag before savepoint: `save/slab-held-retarget-parity-improvements`
 - Stale, provenance-confusing tag: `save/real-placed-lowered-bottom-slab-persistence`
 
-The current operating base is `ec650eb` / `save/visible-face-placement-intent-authority`.
-The current savepoint target is `save/slab-held-retarget-parity-improvements`.
+The current savepoint target is `save/lowered-slab-face-placement-inheritance`.
 
 ## Current tracked tree state
 
@@ -34,15 +33,34 @@ Tracked tree is clean.
 
 ## Current product goal
 
-Preserve the live-proven slab-held retarget parity improvement before any follow-up screenshot issue work.
+Save the live-proven lowered slab face placement, full-block authoring, and post-placement slab-held targeting fix before any fresh issue work.
 
 ## Current proof note
 
-Slab-held anchored-FB parity improved: slab-held targeting can now select the same visible anchored lowered full-block owner as block-held targeting where proven.
-Side-owner parity improved: proven `sideOwnerWouldWin` paths now flow through `scan-side-slab-fired`, including the adjacent-lane initial-MISS rescue family.
-Latest Julia live result: much better overall and worth saving; small residual janks remain and are not part of this savepoint.
-Automation passed before savepoint: `compileJava compileGametestJava`, `runClientGameTest`, `git diff --check`.
-No intentional placement-intent, survival, collision, model, outline, or non-targeting raycast authority changes.
+Julia live result: "Perfect! Save."
+
+Live retest confirmed:
+
+- Stone slab placed against lowered slab face joins the lowered lane, with no ghost face.
+- Ordinary full blocks and logs placed against lowered slab face place lowered/aligned.
+- Newly placed full block becomes targetable with normal block held.
+- Newly placed full block also becomes targetable with stone slab held.
+- Slab-held targeting no longer jumps back to the old lowered slab face.
+- Ghost-face / above-placement issue is resolved for this repro.
+
+Mechanisms saved:
+
+- Slab placement against visible lowered slab face now authors a non-persistent lowered slab lane: placed slab `dy=-0.5`, `persistentLoweredSlabCarrier=false`, and orphan teardown remains valid.
+- Ordinary full-block placement against a valid non-persistent lowered bottom slab source now authors the placed full block through the established anchored full-block path: source slab remains non-persistent, placed full block `dy=-0.5`, placed full block `anchored=true`.
+- Post-placement slab-held targeting now respects the newly placed anchored lowered full-block owner: slab-held no longer preserves the old lowered slab face before comparing a valid anchored full-block candidate, so final slab-held target can resolve to the newly placed anchored full block.
+- Existing protections preserved: Phase19 true-top proof green, orphan lowered-lane teardown green, saved slab-held retarget parity preserved, no targeting/rescue broadening outside proven branches, and no model/outline/raycast dy authority changes.
+
+Proof markers:
+
+- `LIVE_CLICK_PAIR_BOTTOM_SLAB_LANE_INHERITANCE`
+- `LIVE_CLICK_PAIR_FULL_BLOCK_LANE_INHERITANCE`
+- Orphan teardown still green.
+- Slab-held post-place anchored owner live retest passed.
 
 ## Non-negotiable invariants
 
@@ -71,13 +89,14 @@ Proof-only reconfirmation on HEAD `65d4c0e` / `save/slabbed-spine-current-base`:
 ## Recent relevant savepoints
 
 - Pending savepoint: debug helper classpath closure. Packaging/classpath blocker fixed by removing or bridging production/runtime hard-links to excluded debug helpers. `compileJava compileGametestJava`, `runClientGameTest`, `clean build`, release jar leakage scan, `jdeps` hard-reference scan, and source direct-import scan passed. No gameplay behavior was intentionally changed.
-- Pending savepoint: `save/slab-held-retarget-parity-improvements`. Preserves the live-proven targeting improvement while leaving residual screenshot janks for a later narrow slice.
+- Pending savepoint: `save/lowered-slab-face-placement-inheritance`. Preserves the live-proven lowered slab face placement inheritance, full-block lane inheritance, and slab-held post-place anchored owner targeting.
+- `save/slab-held-retarget-parity-improvements`
 - `save/real-lowered-bottom-slab-under-placement-persistence`
 - `save/real-placed-lowered-bottom-slab-persistence` is historical only and should not be treated as final truth.
 
 ## Current next action
 
-Narrow follow-up slice for the remaining screenshot issue after this savepoint.
+Stop, or begin only a fresh slice if Julia reports a new distinct issue.
 
 ## Suggested live run command
 

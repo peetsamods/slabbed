@@ -27,6 +27,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Temporary live diagnostic for slab targeting, placement, dy, and ghost-window investigations.
@@ -38,9 +40,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class SlabbedInspect {
     private SlabbedInspect() {}
 
+    private record TargetSnapshot(HitResult initialTarget, HitResult finalTarget, String decision, boolean sideSlabRetargetFired) {}
+
     public static final boolean ENABLED = Boolean.getBoolean("slabbed.inspect")
             || Boolean.getBoolean("slabbed.b2.live.trace");
     private static final AtomicBoolean SESSION_MARKED = new AtomicBoolean(false);
+    private static final AtomicInteger CLICK_IDS = new AtomicInteger();
+    private static final ThreadLocal<Integer> CURRENT_CLICK = new ThreadLocal<>();
+    private static final AtomicReference<TargetSnapshot> LAST_CLIENT_TARGET = new AtomicReference<>();
 
     private static String lastTargetKey = "";
     private static long lastTargetNanos = 0L;
@@ -59,6 +66,7 @@ public final class SlabbedInspect {
             boolean sideSlabRetargetFired
     ) {
         if (!ENABLED || world == null) return;
+        LAST_CLIENT_TARGET.set(new TargetSnapshot(initialTarget, finalTarget, decision, sideSlabRetargetFired));
         BlockPos targetPos = blockPos(finalTarget);
         String targetKey = hit(finalTarget) + "|" + item(held) + "|" + decision;
         if (!shouldLogTarget(targetKey)) {
@@ -83,6 +91,46 @@ public final class SlabbedInspect {
         }
     }
 
+    public static void logClickPair(ItemUsageContext context, Identifier itemId) {
+        if (!ENABLED || context == null || context.getWorld() == null) return;
+        int click = CLICK_IDS.incrementAndGet();
+        CURRENT_CLICK.set(click);
+
+        World world = context.getWorld();
+        TargetSnapshot target = LAST_CLIENT_TARGET.get();
+        HitResult previewOwner = target == null ? null : target.finalTarget();
+        BlockPos previewOwnerPos = blockPos(previewOwner);
+        BlockPos contextTarget = context.getBlockPos();
+        BlockPos contextPlacePos = placePos(context);
+        boolean previewMatchesTarget = previewOwnerPos != null && previewOwnerPos.equals(contextTarget);
+        boolean previewMatchesPlacement = previewOwnerPos != null && previewOwnerPos.equals(contextPlacePos);
+
+        Slabbed.LOGGER.info("[SLABBED-INSPECT][CLICK_PAIR] click={} side={} item={} heldItem={} "
+                        + "previewOwner={} previewDecision={} previewSideSlabRetargetFired={} "
+                        + "contextTarget={} contextFace={} contextHit={} contextBlock={} contextPlacePos={} contextPlaceBlock={} "
+                        + "previewMatchesTarget={} previewMatchesPlacement={} previewPlacementMismatch={}",
+                click,
+                side(world),
+                itemId == null ? "unknown" : itemId,
+                item(context.getStack()),
+                hit(previewOwner),
+                target == null ? "none" : target.decision(),
+                target != null && target.sideSlabRetargetFired(),
+                pos(contextTarget),
+                context.getSide(),
+                fmt(context.getHitPos()),
+                block(world, contextTarget),
+                pos(contextPlacePos),
+                block(world, contextPlacePos),
+                previewMatchesTarget,
+                previewMatchesPlacement,
+                previewOwnerPos != null && !previewMatchesPlacement);
+    }
+
+    public static void clearClickPair() {
+        CURRENT_CLICK.remove();
+    }
+
     public static void logIntent(ItemUsageContext incoming, ItemUsageContext outgoing, String reason) {
         if (!ENABLED || incoming == null || incoming.getWorld() == null) return;
         World world = incoming.getWorld();
@@ -95,9 +143,10 @@ public final class SlabbedInspect {
                 || incoming.getSide() != outgoing.getSide()
                 || !incoming.getHitPos().equals(outgoing.getHitPos()));
 
-        Slabbed.LOGGER.info("[SLABBED-INSPECT][INTENT] side={} reason={} transformed={} heldItem={} "
+        Slabbed.LOGGER.info("[SLABBED-INSPECT][INTENT] click={} side={} reason={} transformed={} heldItem={} "
                         + "incomingTarget={} incomingFace={} incomingHit={} incomingBlock={} incomingPlacePos={} incomingPlaceBlock={} "
                         + "outgoingTarget={} outgoingFace={} outgoingHit={} outgoingBlock={} outgoingPlacePos={} outgoingPlaceBlock={}",
+                click(),
                 side(world),
                 reason,
                 transformed,
@@ -130,9 +179,10 @@ public final class SlabbedInspect {
             ActionResult result
     ) {
         if (!ENABLED || world == null || ctx == null) return;
-        Slabbed.LOGGER.info("[SLABBED-INSPECT][PLACE_{}] side={} item={} heldItem={} face={} hitPos={} "
+        Slabbed.LOGGER.info("[SLABBED-INSPECT][PLACE_{}] click={} side={} item={} heldItem={} face={} hitPos={} "
                         + "hitBlock={} placePos={} placeBlock={} result={} success={}",
                 stage,
+                click(),
                 side(world),
                 itemId == null ? "unknown" : itemId,
                 item(ctx.getStack()),
@@ -165,8 +215,9 @@ public final class SlabbedInspect {
             BlockPos placePos
     ) {
         if (!ENABLED || world == null) return;
-        Slabbed.LOGGER.info("[SLABBED-INSPECT][PLACE_NO_RETURN] side={} item={} heldItem={} face={} hitPos={} "
+        Slabbed.LOGGER.info("[SLABBED-INSPECT][PLACE_NO_RETURN] click={} side={} item={} heldItem={} face={} hitPos={} "
                         + "hitBlock={} placePos={} placeBlock={} reason=use_on_block_returned_without_place_return",
+                click(),
                 side(world),
                 itemId == null ? "unknown" : itemId,
                 itemId == null ? "unknown" : itemId,
@@ -185,6 +236,11 @@ public final class SlabbedInspect {
             return true;
         }
         return false;
+    }
+
+    private static String click() {
+        Integer click = CURRENT_CLICK.get();
+        return click == null ? "none" : click.toString();
     }
 
     private static void logNearby(World world, String reason, BlockPos targetPos, BlockPos placePos) {

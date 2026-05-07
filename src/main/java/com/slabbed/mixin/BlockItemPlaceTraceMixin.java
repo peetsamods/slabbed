@@ -148,10 +148,12 @@ public abstract class BlockItemPlaceTraceMixin {
         if (context == null || context.getWorld() == null) {
             return;
         }
+        Identifier itemId = Registries.ITEM.getId(self);
+        SlabbedAuditBridge.logInspectClickPair(context, itemId);
         BlockPos placePos = context.getBlockPos().offset(context.getSide());
         SLABBED$INSPECT_USE_TRACE.set(new TraceCtx(
                 context.getWorld().isClient() ? "CLIENT" : "SERVER",
-                Registries.ITEM.getId(self),
+                itemId,
                 context.getSide(),
                 context.getBlockPos(),
                 placePos
@@ -176,6 +178,7 @@ public abstract class BlockItemPlaceTraceMixin {
         } finally {
             SLABBED$INSPECT_USE_TRACE.remove();
             SLABBED$INSPECT_PLACE_CALLED.remove();
+            SlabbedAuditBridge.clearInspectClickPair();
         }
     }
 }
