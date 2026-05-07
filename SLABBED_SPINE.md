@@ -45,6 +45,8 @@ Recorder status: gated live retarget recorder added behind `-Dslabbed.beta4LiveR
 
 Proof status: gated RED proof `-Dslabbed.beta4SeamVisibleUpperAngleGeneralRedOnly=true` captures the angle-general BLOCK/UP failure where `topInterior=true`, `edgeLike=false`, a closer visible-upper lowered slab candidate exists, and `anchoredUpPreserve` still keeps the anchored owner. This is proof-only and does not unblock release.
 
+Proof gap: Julia's stone-held live retarget trace proves `heldIsSlab=false`, initial ordinary stone at `16,-59,-1`, final lowered `stone_slab` at `14,-58,0`, and `sideSlabRetargetFired=true`, but two harness attempts plus one coordinate replay attempt did not produce a faithful saveable RED. See `docs/beta4-stone-held-side-slab-retarget-proof-gap.md`; release remains blocked.
+
 Implementation status: the anchored-UP guard now lets a real, strict-closer visible-upper lowered bottom slab side candidate win without using `topInterior` as a hard veto. Release remains blocked pending Julia live retest.
 
 Current beta4 seam proof classes:
