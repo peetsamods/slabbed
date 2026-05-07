@@ -71,6 +71,14 @@ Proof markers:
 
 ## Latest fixed Bug Blaster
 
+Title: Slab-Held Anchored UP-Hit Rescue Guard
+Invariant: A valid `UP` hit on an anchored lowered full block must keep ownership while holding a slab unless a proven equal-or-closer legal side-placement owner should actually win.
+Root cause: In the first `0.2.0-beta.4` release candidate, slab-held side-slab rescue was too eager. Vanilla targeting correctly hit the anchored lowered stone full block at `24,201,0` face `up`, but Slabbed's slab-held retarget path classified the nearby lowered `DOUBLE` slab at `24,202,0` face `west` as `sideOwnerWouldWin`, stealing the cyan outline/target from the block Julia was actually aiming at. This recreated the live hitbox-targeting bug even though compile, gametest, clean build, jar scan, and `jdeps` had all passed.
+Fix: Narrowed the slab-held anchored-lowered-full-block `UP` branch in `GameRendererCrosshairRetargetMixin.java` so the competing side-slab candidate is classified as `anchoredUpPreserve` instead of `sideOwnerWouldWin`. This preserves valid anchored lowered full-block top ownership and prevents slab-held rescue from jumping the outline to the upper lowered double slab.
+Proof: Added focused gated proof in `SlabbedLabLoweredSidePlacementLiveReproClientGameTest.java` using `-Dslabbed.juliaBeta4TargetingRedOnly=true`. Before the fix, proof emitted `[JULIA_BETA4_TARGETING_RED]`: vanilla target `24,201,0/up`, final target stolen by `24,202,0/west`, `sideOwnerWouldWin=true`. After the fix, proof emitted `[JULIA_BETA4_TARGETING_GREEN]`: final target stayed `24,201,0 face=up`, `classification=anchoredUpPreserve`. `compileJava compileGametestJava`, focused proof, full `runClientGameTest --console plain`, `clean build`, jar contents scan, and `jdeps` hard-reference scan all passed.
+Savepoint: `ad4f78e` / `save/beta4-anchored-up-hit-rescue-guard`; branch pushed yes; tag pushed yes. Release tag `release/0.2.0-beta.4` was corrected from bad commit `c79c5f6` to fixed audited commit `ad4f78e`.
+Status: Fixed.
+
 Title: Slab-held retarget parity improvements
 Invariant: Holding a slab must not globally suppress valid lowered owner targeting. Slab-held protection may preserve true top/slab-placement intent only when no proven same-ray visible owner should win.
 Root cause: Slab-held targeting preserved old lowered slab / UP / MISS paths before comparing a proven visible lowered owner, so `stone_slab` held could suppress the same owner even when normal block-held targeting could reach scan-side-slab-fired or anchored full-block rescue.
