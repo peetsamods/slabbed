@@ -59,6 +59,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static final long BETA4_FINAL_TARGET_TRACE_MIN_INTERVAL_NANOS = 1_000_000_000L;
     private static String slabbed$beta4FinalTargetTraceLastSignature;
     private static long slabbed$beta4FinalTargetTraceLastLogNanos;
+    private static boolean slabbed$beta4LiveRetargetRecorderStartLogged;
 
     private static final String SEAM_OWNER_ANCHORED_FULL_BLOCK = "ANCHORED_FULL_BLOCK";
     private static final String SEAM_OWNER_VISIBLE_UPPER_LOWERED_SLAB = "VISIBLE_UPPER_LOWERED_SLAB";
@@ -68,6 +69,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
     @Inject(method = "updateCrosshairTarget", at = @At("TAIL"))
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
+        slabbed$logBeta4LiveRetargetRecorderStart();
         HitResult ht = client.crosshairTarget;
         if (ht == null) {
             return;
@@ -450,6 +452,23 @@ public abstract class GameRendererCrosshairRetargetMixin {
             classification = "sideOwnerWouldWin";
         }
 
+        BlockHitResult finalTarget = "sideOwnerWouldWin".equals(classification)
+                || "visibleUpperSideFaceOwner".equals(classification)
+                ? sideOwner
+                : initialHit;
+        slabbed$recordBeta4LiveRetarget(
+                tickProgress,
+                initialTarget,
+                finalTarget,
+                "UP_GUARD",
+                classification,
+                sideOwner,
+                candidateReason,
+                edgeLike,
+                topInterior,
+                initialDist2,
+                candidateDist2);
+
         ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
         StringBuilder line = new StringBuilder(768);
         line.append("[SLAB_HELD_UP_GUARD_SIDE_OWNER_CLASSIFY]");
@@ -563,7 +582,23 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
 
         double candidateDist2 = reportCandidate == null ? Double.NaN : reportCandidate.getPos().squaredDistanceTo(eye);
+        double initialDist2 = initialTarget == null || initialTarget.getType() != HitResult.Type.BLOCK
+                ? Double.NaN
+                : initialTarget.getPos().squaredDistanceTo(eye);
         ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
+
+        slabbed$recordBeta4LiveRetarget(
+                tickProgress,
+                initialTarget,
+                slabHeldCandidate != null ? slabHeldCandidate : initialTarget,
+                "MISS_SIDE",
+                classification,
+                reportCandidate,
+                candidateReason,
+                null,
+                null,
+                initialDist2,
+                candidateDist2);
 
         StringBuilder line = new StringBuilder(768);
         line.append("[SLAB_HELD_MISS_SIDE_RESCUE_CLASSIFY]");
@@ -1024,6 +1059,24 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 anchoredDecision,
                 sideSlabRetargetFired);
 
+        if (Boolean.getBoolean("slabbed.beta4LiveRetargetRecorderEveryTick")) {
+            double initialDist2 = initialTarget == null || initialTarget.getType() != HitResult.Type.BLOCK
+                    ? Double.NaN
+                    : initialTarget.getPos().squaredDistanceTo(eye);
+            slabbed$recordBeta4LiveRetarget(
+                    tickProgress,
+                    initialTarget,
+                    client.crosshairTarget,
+                    anchoredDecision,
+                    anchoredDecision,
+                    null,
+                    "not-run",
+                    null,
+                    null,
+                    initialDist2,
+                    Double.NaN);
+        }
+
         if (!Boolean.getBoolean("slabbed.target.trace")) {
             return;
         }
@@ -1052,6 +1105,134 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" sideSlabRetargetFired=").append(sideSlabRetargetFired);
         line.append(" final=").append(slabbed$formatHit(client.crosshairTarget));
         Slabbed.LOGGER.info(line.toString());
+    }
+
+    private static boolean slabbed$beta4LiveRetargetRecorderEnabled() {
+        return Boolean.getBoolean("slabbed.beta4LiveRetargetRecorder");
+    }
+
+    private static void slabbed$logBeta4LiveRetargetRecorderStart() {
+        if (!slabbed$beta4LiveRetargetRecorderEnabled()
+                || slabbed$beta4LiveRetargetRecorderStartLogged) {
+            return;
+        }
+        slabbed$beta4LiveRetargetRecorderStartLogged = true;
+        Slabbed.LOGGER.info("[BETA4_LIVE_RETARGET_RECORDER_START] enabled=true head=e761e67");
+    }
+
+    private void slabbed$recordBeta4LiveRetarget(
+            float tickProgress,
+            HitResult initialTarget,
+            HitResult finalTarget,
+            String path,
+            String classification,
+            BlockHitResult sideScanCandidate,
+            String sideScanCandidateReason,
+            Boolean edgeLike,
+            Boolean topInterior,
+            double initialDist2,
+            double candidateDist2
+    ) {
+        if (!slabbed$beta4LiveRetargetRecorderEnabled()) {
+            return;
+        }
+
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return;
+        }
+
+        ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d look = cam.getRotationVec(tickProgress);
+        double candidateMinusInitialDist2 = Double.isNaN(initialDist2) || Double.isNaN(candidateDist2)
+                ? Double.NaN
+                : candidateDist2 - initialDist2;
+        BlockHitResult initialBlock = initialTarget instanceof BlockHitResult initial ? initial : null;
+        BlockHitResult finalBlock = finalTarget instanceof BlockHitResult finalHit ? finalHit : null;
+        double finalDist2 = finalTarget == null || finalTarget.getType() != HitResult.Type.BLOCK
+                ? Double.NaN
+                : finalTarget.getPos().squaredDistanceTo(eye);
+
+        StringBuilder line = new StringBuilder(1536);
+        line.append("[BETA4_LIVE_RETARGET_RECORDER]");
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" crosshairType=").append(finalTarget == null ? "null" : finalTarget.getType());
+        slabbed$appendHitFields(line, world, initialBlock, "initial");
+        slabbed$appendHitFields(line, world, finalBlock, "final");
+        line.append(" path=").append(path);
+        line.append(" classification=").append(classification);
+        line.append(" sideScanCandidateExists=").append(sideScanCandidate != null);
+        line.append(" sideScanCandidateReason=").append(sideScanCandidateReason);
+        slabbed$appendHitFields(line, world, sideScanCandidate, "candidate");
+        line.append(" initialDist2=").append(slabbed$formatDouble(initialDist2));
+        line.append(" finalDist2=").append(slabbed$formatDouble(finalDist2));
+        line.append(" candidateDist2=").append(slabbed$formatDouble(candidateDist2));
+        line.append(" candidateMinusInitialDist2=").append(slabbed$formatDouble(candidateMinusInitialDist2));
+        line.append(" edgeLike=").append(edgeLike == null ? "unknown" : edgeLike);
+        line.append(" topInterior=").append(topInterior == null ? "unknown" : topInterior);
+        line.append(" eye=").append(slabbed$formatVec(eye));
+        line.append(" look=").append(slabbed$formatVec(look));
+        line.append(" reach=6.000");
+        line.append(" cameraFacing=").append(cam.getHorizontalFacing());
+        line.append(" outlinePos=").append(finalBlock == null ? "none" : finalBlock.getBlockPos().toShortString());
+        line.append(" outlineFace=").append(finalBlock == null ? "none" : finalBlock.getSide());
+        Slabbed.LOGGER.info(line.toString());
+    }
+
+    private static void slabbed$appendHitFields(
+            StringBuilder line, ClientWorld world, BlockHitResult hit, String prefix
+    ) {
+        if (hit == null) {
+            line.append(' ').append(prefix).append("Type=none");
+            line.append(' ').append(prefix).append("Pos=none");
+            line.append(' ').append(prefix).append("Face=none");
+            line.append(' ').append(prefix).append("Hit=none");
+            line.append(' ').append(prefix).append("State=none");
+            line.append(' ').append(prefix).append("Dy=NaN");
+            if ("initial".equals(prefix)) {
+                line.append(" initialAnchored=false");
+                line.append(" initialLowered=false");
+            }
+            line.append(' ').append(prefix).append("OwnerClass=none");
+            return;
+        }
+
+        BlockPos pos = hit.getBlockPos();
+        BlockState state = world.getBlockState(pos);
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
+        boolean lowered = dy == -0.5;
+        line.append(' ').append(prefix).append("Type=").append(hit.getType());
+        line.append(' ').append(prefix).append("Pos=").append(pos.toShortString());
+        line.append(' ').append(prefix).append("Face=").append(hit.getSide());
+        line.append(' ').append(prefix).append("Hit=").append(slabbed$formatVec(hit.getPos()));
+        line.append(' ').append(prefix).append("State=").append(state);
+        line.append(' ').append(prefix).append("Dy=").append(slabbed$formatDouble(dy));
+        if ("initial".equals(prefix)) {
+            line.append(" initialAnchored=").append(anchored);
+            line.append(" initialLowered=").append(lowered);
+        }
+        line.append(' ').append(prefix).append("OwnerClass=")
+                .append(slabbed$ownerClass(world, pos, state));
+    }
+
+    private static String slabbed$ownerClass(ClientWorld world, BlockPos pos, BlockState state) {
+        if (slabbed$isVisibleUpperLoweredSlabOwner(world, pos, state)) {
+            return SEAM_OWNER_VISIBLE_UPPER_LOWERED_SLAB;
+        }
+        if (slabbed$isAnchoredLoweredFullBlock(world, pos, state)) {
+            return SEAM_OWNER_ANCHORED_FULL_BLOCK;
+        }
+        if (slabbed$isLoweredBottomSlabVisibleOwner(world, pos, state)
+                && slabbed$hasAdjacentAnchoredLoweredFullBlock(world, pos)) {
+            return SEAM_OWNER_ADJACENT_VISIBLE_TARGET;
+        }
+        if (state.isAir()) {
+            return "AIR";
+        }
+        return SEAM_OWNER_KEEP_INITIAL;
     }
 
     private void slabbed$traceBeta4FinalTarget(
@@ -1302,5 +1483,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
             return "null";
         }
         return String.format("%.3f,%.3f,%.3f", vec.x, vec.y, vec.z);
+    }
+
+    private static String slabbed$formatDouble(double value) {
+        return Double.isNaN(value) ? "NaN" : String.format("%.6f", value);
     }
 }
