@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -48,6 +49,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (Boolean.getBoolean("slabbed.juliaBeta4TargetingRedOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runJuliaBeta4StoneSlabTargetingOutlineMismatchRedCase(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.dynamicBridgeOnly")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -3506,6 +3516,111 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 setup);
     }
 
+    private static void runJuliaBeta4StoneSlabTargetingOutlineMismatchRedCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(24, 0, 0);
+        final BlockPos expectedOwnerPos = supportPos.up();
+        final BlockPos visibleSlabOwnerPos = expectedOwnerPos.up();
+        final Vec3d eye = new Vec3d(
+                expectedOwnerPos.getX() - 2.35d,
+                expectedOwnerPos.getY() + 1.67d,
+                expectedOwnerPos.getZ() + 0.62d);
+        final Vec3d aimTopFrontEdge = new Vec3d(
+                expectedOwnerPos.getX() + 0.115d,
+                expectedOwnerPos.getY() + 0.500d,
+                expectedOwnerPos.getZ() + 0.616d);
+
+        setupFixture(singleplayer, supportPos, expectedOwnerPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState fullState = world.getBlockState(expectedOwnerPos);
+            SlabAnchorAttachment.addAnchor(world, expectedOwnerPos, fullState);
+            world.setBlockState(
+                    visibleSlabOwnerPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncPlayerAim(ctx, singleplayer, eye, aimTopFrontEdge);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[JULIA_BETA4_TARGETING_RED] client not ready");
+            }
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            HitResult finalTarget = mc.crosshairTarget;
+            String expectedOwner = expectedOwnerPos.toShortString();
+            String visibleOwner = visibleSlabOwnerPos.toShortString();
+            String vanillaOwner = asOwner(vanilla);
+            String finalOwner = asOwner(finalTarget);
+            boolean slabHeldProtectionPreservedExpected = expectedOwner.equals(finalOwner);
+            boolean sideOwnerWouldWin = visibleOwner.equals(finalOwner);
+
+            System.out.println("[JULIA_BETA4_TARGETING] shape=compact_lowered_stone_with_upper_double_slab"
+                    + " held=minecraft:stone_slab"
+                    + " support=" + supportPos.toShortString()
+                    + " expectedOwner=" + expectedOwner
+                    + " visibleOwner=" + visibleOwner
+                    + " eye=" + eye
+                    + " aim=" + aimTopFrontEdge
+                    + " liveEye=" + rayStart
+                    + " dir=" + rayDir
+                    + " vanillaTarget=" + describeHit(vanilla)
+                    + " finalTarget=" + describeHit(finalTarget)
+                    + " expectedFacts=" + describeOwnerFacts(mc.world, expectedOwnerPos)
+                    + " visibleFacts=" + describeOwnerFacts(mc.world, visibleSlabOwnerPos)
+                    + " finalFacts=" + describeOwnerFacts(mc.world, blockPos(finalTarget))
+                    + " slabHeldProtectionPreservedExpected=" + slabHeldProtectionPreservedExpected
+                    + " sideOwnerWouldWin=" + sideOwnerWouldWin);
+
+            if (expectedOwner.equals(vanillaOwner) && !expectedOwner.equals(finalOwner)) {
+                throw new RuntimeException("[JULIA_BETA4_TARGETING_RED]"
+                        + " expectedOwner=" + expectedOwner
+                        + " visibleOwner=" + visibleOwner
+                        + " vanillaTarget=" + describeHit(vanilla)
+                        + " finalTarget=" + describeHit(finalTarget)
+                        + " suspectedFailingLayer=slab-held-retarget-rescue"
+                        + " expectedFacts=" + describeOwnerFacts(mc.world, expectedOwnerPos)
+                        + " finalFacts=" + describeOwnerFacts(mc.world, blockPos(finalTarget))
+                        + " slabHeldProtectionPreservedExpected=false"
+                        + " sideOwnerWouldWin=" + sideOwnerWouldWin);
+            }
+            if (expectedOwner.equals(vanillaOwner) && expectedOwner.equals(finalOwner)) {
+                System.out.println("[JULIA_BETA4_TARGETING_GREEN]"
+                        + " expectedOwner=" + expectedOwner
+                        + " visibleOwner=" + visibleOwner
+                        + " vanillaTarget=" + describeHit(vanilla)
+                        + " finalTarget=" + describeHit(finalTarget)
+                        + " expectedFacts=" + describeOwnerFacts(mc.world, expectedOwnerPos)
+                        + " finalFacts=" + describeOwnerFacts(mc.world, blockPos(finalTarget))
+                        + " slabHeldProtectionPreservedExpected=true"
+                        + " sideOwnerWouldWin=false");
+                return;
+            }
+
+            throw new RuntimeException("[JULIA_BETA4_TARGETING_PROOF_GAP]"
+                    + " expectedOwner=" + expectedOwner
+                    + " visibleOwner=" + visibleOwner
+                    + " vanillaTarget=" + describeHit(vanilla)
+                    + " finalTarget=" + describeHit(finalTarget)
+                    + " note=current reconstructed shape did not prove Julia mismatch");
+        });
+    }
+
     private static void runScreenshotReproProbe(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
@@ -4539,6 +4654,41 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return "MISS";
         }
         return blockHit.getBlockPos().toShortString();
+    }
+
+    private static BlockPos blockPos(HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return null;
+        }
+        return blockHit.getBlockPos();
+    }
+
+    private static String describeHit(HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return "MISS";
+        }
+        return "pos=" + blockHit.getBlockPos().toShortString()
+                + " face=" + blockHit.getSide()
+                + " hit=" + blockHit.getPos();
+    }
+
+    private static String describeOwnerFacts(net.minecraft.world.BlockView world, BlockPos pos) {
+        if (world == null || pos == null) {
+            return "pos=MISS";
+        }
+        BlockState state = world.getBlockState(pos);
+        double targetDy = SlabSupport.getYOffset(world, pos, state);
+        double outlineDy = ClientDy.dyFor(world, pos, state);
+        boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
+        boolean persistent = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
+        String slabType = state.contains(SlabBlock.TYPE) ? state.get(SlabBlock.TYPE).asString() : "none";
+        return "pos=" + pos.toShortString()
+                + " state=" + state
+                + " slabType=" + slabType
+                + " targetDy=" + targetDy
+                + " outlineDy=" + outlineDy
+                + " anchored=" + anchored
+                + " persistentLoweredSlabCarrier=" + persistent;
     }
 
     private static String formatBox(net.minecraft.util.math.Box box) {

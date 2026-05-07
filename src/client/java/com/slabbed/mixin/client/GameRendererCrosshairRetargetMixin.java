@@ -335,6 +335,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
         String classification;
         if (sideOwner == null) {
             classification = "noCandidate";
+        } else if (topHit && initialAnchored && initialLowered && initialFullBlock) {
+            classification = "anchoredUpPreserve";
         } else if (topInterior) {
             classification = "trueTopPreserve";
         } else {
