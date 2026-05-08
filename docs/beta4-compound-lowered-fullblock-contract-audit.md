@@ -277,7 +277,7 @@ above so a design choice between A / B / C / D can be made on evidence.
 | 3 | `SELECT_SLAB_HELD_COMPOUND_BODY` | UNDECIDED | automation-only | Compound block owns unless a legal slab-placement face exists; no redirect to beta4-illegal `dy=-1.0` slab placement. |
 | 4 | `PLACE_STONE_SIDE_LOWER_HALF` | GREEN | live-confirmed-fail | Packet validity is fixed and downstream side-lane authoring now marks the placed ordinary stone with the compound sidecar at `dy=-1.0`. |
 | 5 | `PLACE_STONE_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Same as row 4 for full blocks; no upward/vanilla ghost placement. |
-| 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | RED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no flicker/pop. |
+| 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | GREEN | live-confirmed-fail | Clean reject/pass: side slot stays air immediately and after tick; no `dy=-1.0` or ghost `dy=-0.5` slab lane. |
 | 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no vanilla-height ghost placement. |
 | 8 | `PLACE_BLOCK_ON_TOP` | UNDECIDED | not-yet-live-tested | Place ordinary full block above in same compound lane `dy=-1.0`; do not create `dy=-1.5`. |
 | 9 | `SOURCE_SLAB_BREAK` | GREEN (post-sidecar) | live-confirmed-fail (pre-sidecar) | Persistent compound anchor preserves authored `dy=-1.0`; no silent jump to `dy=-0.5`. Sidecar `COMPOUND_FULL_BLOCK_ANCHOR_TYPE` flipped this from RED to GREEN; live retest pending. |
@@ -318,14 +318,22 @@ the compound source inherits the compound full-block sidecar and stays
 `dy=-1.0`; Row 6 stays RED and Row 7 stays UNDECIDED, so beta4 slab-side
 compound lanes remain illegal.
 
+After the Row 6 clean-reject fix lands:
+`[BETA4_COMPOUND_CONTRACT_MATRIX_RED]` reports `rows=12 red=0 undecided=4 green=7
+notImplemented=1`. Row 6 is GREEN because slab-held lower-half side placement
+on the compound source returns `Pass[]` with `accepted=false`, `cleanReject=true`,
+the side slot air immediately and after tick, and the support still
+`compoundFullBlockAnchor=true` at `dy=-1.0`. This does not legalize a `dy=-1.0`
+slab lane or the upper-half Row 7 path.
+
 ### Rows needing follow-up
 
 - **Row 4** `PLACE_STONE_SIDE_LOWER_HALF`: GREEN after lane authoring; the
   packet/hit-validity bridge accepts the visual lower-half WEST-face hit
   `(8.0, 202.25, 8.5)` and the side slot survives as compound `dy=-1.0`.
-- **Row 6** `PLACE_SLAB_SIDE_LOWER_HALF`: aiming the visual lower half of
-  the compound's EAST face with slab-held reproduces a placement failure
-  matching Julia's live "wrong column / wrong lane" symptom.
+- **Row 6** `PLACE_SLAB_SIDE_LOWER_HALF`: GREEN after clean rejection; aiming
+  the visual lower half of the compound's EAST face with slab-held leaves the
+  side slot air immediately and after tick, with no slab lane authored.
 
 ### Rows formerly RED, now GREEN after sidecar
 

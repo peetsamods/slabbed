@@ -15,6 +15,7 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.registry.Registries;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.function.BooleanBiFunction;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
@@ -44,6 +45,20 @@ public abstract class BlockItemPlacementIntentMixin {
     private static boolean slabbed$isLoweredSlab(BlockState state, World world, BlockPos pos) {
         return state.getBlock() instanceof SlabBlock
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d;
+    }
+
+    private static boolean slabbed$isCompoundLowerHalfSideHit(ItemUsageContext context, BlockPos pos, BlockState state) {
+        if (context.getSide().getAxis().isVertical()
+                || state.getBlock() instanceof SlabBlock
+                || !SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), pos)) {
+            return false;
+        }
+        double yOffset = SlabSupport.getYOffset(context.getWorld(), pos, state);
+        if (Math.abs(yOffset + 1.0d) > LOWERED_VISUAL_BOUNDARY_EPSILON) {
+            return false;
+        }
+        double loweredMidline = pos.getY() + yOffset + 0.5d;
+        return context.getHitPos().y < loweredMidline - LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
     private static boolean slabbed$isPersistentLoweredBottomSlabCarrierCandidate(World world, BlockPos pos, BlockState state) {
@@ -94,6 +109,22 @@ public abstract class BlockItemPlacementIntentMixin {
                 && SlabSupport.isCompatibleLoweredSlabLane(
                         targetState.get(SlabBlock.TYPE),
                         state.get(SlabBlock.TYPE));
+    }
+
+    @Inject(method = "useOnBlock", at = @At("HEAD"), cancellable = true)
+    private void slabbed$rejectCompoundLowerHalfSlabSidePlacement(
+            ItemUsageContext context,
+            CallbackInfoReturnable<ActionResult> cir
+    ) {
+        BlockItem self = (BlockItem) (Object) this;
+        if (!(self.getBlock() instanceof SlabBlock)) {
+            return;
+        }
+        BlockPos targetPos = context.getBlockPos();
+        BlockState targetState = context.getWorld().getBlockState(targetPos);
+        if (slabbed$isCompoundLowerHalfSideHit(context, targetPos, targetState)) {
+            cir.setReturnValue(ActionResult.PASS);
+        }
     }
 
     private static final Class<?>[] REMAP_ATTEMPT_PARAM_TYPES = new Class<?>[]{
