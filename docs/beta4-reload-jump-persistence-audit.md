@@ -59,6 +59,22 @@ Suggested launch properties: `slabbed.beta4ReloadJumpRecorder=true`, `slabbed.be
 
 Follow-up recorder from `c11ee50`: a second default-off recorder now runs behind `slabbed.beta4ModelDyRecorder=true` with optional `slabbed.beta4ModelDyRecorderWatch=x,y,z;x,y,z` and `slabbed.beta4ModelDyRecorderTicks=700`. It emits `[BETA4_MODEL_DY_RECORDER_START]`, `[BETA4_MODEL_DY_RECORDER]`, and `[BETA4_MODEL_DY_RERENDER]` to compare model/render-view dy, client-world source truth, and watched-position rerender timing without changing model dy behavior, anchor persistence, retargeting, or sync scheduling.
 
+## Model-Dy Recorder Finding at f515f5e
+
+Uploaded/live folder: `tmp/beta4-model-dy-recorder-f515f5e`.
+
+Watched stack `14,-57,0` / `14,-58,0` / `14,-59,0` stayed valid in source truth. The ordinary stone blocks stayed `dy=-0.5`, `anchored=true`, and `persistentFullBlockAnchor=true`; the bottom slab stayed `dy=-0.5` with `persistentLoweredSlabCarrier=true`; each watched block reported a valid `sourceMode`.
+
+The model path for watched events used `viewClass=ChunkRendererRegion`, `modelDy=-0.500000`, `viewClientDy=-0.500000`, and `viewSlabSupportDy=-0.500000`. The non-world bridge returned lowered truth where relevant, and `modelDyZeroClientTruthLowered=false`. No `modelDy=0.0` was observed for the watched model events.
+
+`[BETA4_MODEL_DY_RERENDER]` events fired for watched positions, so this capture does not prove that the watched stack lost model dy or missed all rerender scheduling. The current evidence does not prove the watched stack itself jumped.
+
+Coordinate split remains open: the crosshair/center was often `MISS`/air near `16,-59,-1` or nearby air. If Julia still sees a jumped block, the likely next split is that the watched coordinates were not the visually jumped block, the visual block is another nearby coordinate, mesh staleness is outside the watched model-dy events, or the perceived jump is an outline/targeting mismatch rather than the watched model mesh.
+
+Next live capture must identify the exact visually jumped block coordinate. Use the same default-off recorder with a broader watch list around the visible problem:
+
+`14,-57,0;14,-58,0;14,-59,0;14,-59,-1;14,-58,-1;14,-57,-1;16,-59,-1;16,-58,-1;16,-57,-1;15,-59,-1;15,-58,-1;15,-57,-1`
+
 ## Non-Negotiables
 
 - No retarget fix before reload jump is classified.
