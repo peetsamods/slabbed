@@ -2,6 +2,11 @@
 
 Audit-only. No gameplay edits in this slice. Release remains blocked.
 
+Decision cross-reference: `docs/beta4-compound-source-mode-design.md` adopts
+A-prime, explicit authored lane/depth source mode for compound ordinary full
+blocks. Matrix rows below now have intended beta4 outcomes; implementation is
+still blocked behind proof and source-mode work.
+
 ## Current savepoint
 
 - HEAD: `06724fb`
@@ -263,22 +268,22 @@ above so a design choice between A / B / C / D can be made on evidence.
 - Evidence harvest at `effd6ee`:
   `tmp/beta4-compound-contract-matrix-effd6ee/`.
 
-### Row summary (current observed at `effd6ee`)
+### Row summary (observed at `effd6ee`, intended by A-prime)
 
-| Row | Name | Classification | Live status |
-| --- | ---- | -------------- | ----------- |
-| 1 | `SELECT_EMPTY_HAND_COMPOUND_BODY` | GREEN | automation-only |
-| 2 | `SELECT_STONE_HELD_COMPOUND_BODY` | GREEN | automation-only |
-| 3 | `SELECT_SLAB_HELD_COMPOUND_BODY` | UNDECIDED | automation-only |
-| 4 | `PLACE_STONE_SIDE_LOWER_HALF` | RED | live-confirmed-fail |
-| 5 | `PLACE_STONE_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail |
-| 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | RED | live-confirmed-fail |
-| 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail |
-| 8 | `PLACE_BLOCK_ON_TOP` | UNDECIDED | not-yet-live-tested |
-| 9 | `SOURCE_SLAB_BREAK` | RED | live-confirmed-fail |
-| 10 | `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK` | RED | not-yet-live-tested |
-| 11 | `SAVE_RELOAD_AFTER_COMPOUND` | GREEN | live-confirmed-fail |
-| 12 | `CHUNK_UNLOAD_RELOAD_IF_HELPER_EXISTS` | NOT_IMPLEMENTED | not-yet-live-tested |
+| Row | Name | Observed classification | Live status | Intended beta4 outcome |
+| --- | ---- | ----------------------- | ----------- | ---------------------- |
+| 1 | `SELECT_EMPTY_HAND_COMPOUND_BODY` | GREEN | automation-only | Compound block owns selection. |
+| 2 | `SELECT_STONE_HELD_COMPOUND_BODY` | GREEN | automation-only | Compound block owns selection. |
+| 3 | `SELECT_SLAB_HELD_COMPOUND_BODY` | UNDECIDED | automation-only | Compound block owns unless a legal slab-placement face exists; no redirect to beta4-illegal `dy=-1.0` slab placement. |
+| 4 | `PLACE_STONE_SIDE_LOWER_HALF` | RED | live-confirmed-fail | Place ordinary full block in same compound lane `dy=-1.0` if collision/survival valid. |
+| 5 | `PLACE_STONE_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Same as row 4 for full blocks; no upward/vanilla ghost placement. |
+| 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | RED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no flicker/pop. |
+| 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no vanilla-height ghost placement. |
+| 8 | `PLACE_BLOCK_ON_TOP` | UNDECIDED | not-yet-live-tested | Place ordinary full block above in same compound lane `dy=-1.0`; do not create `dy=-1.5`. |
+| 9 | `SOURCE_SLAB_BREAK` | RED | live-confirmed-fail | Persistent compound anchor preserves authored `dy=-1.0`; no silent jump to `dy=-0.5`. |
+| 10 | `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK` | RED | not-yet-live-tested | Same as row 9. |
+| 11 | `SAVE_RELOAD_AFTER_COMPOUND` | GREEN | live-confirmed-fail | Preserve authored `dy=-1.0`; should remain green, with live still final. |
+| 12 | `CHUNK_UNLOAD_RELOAD_IF_HELPER_EXISTS` | NOT_IMPLEMENTED | not-yet-live-tested | Still not implemented in gametest; live remains final. |
 
 Final marker emitted at `effd6ee`:
 `[BETA4_COMPOUND_CONTRACT_MATRIX_RED] rows=12 red=4 undecided=4 green=3 notImplemented=1`.
