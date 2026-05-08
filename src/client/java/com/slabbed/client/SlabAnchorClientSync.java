@@ -65,6 +65,11 @@ public final class SlabAnchorClientSync {
     }
 
     private static void onChunkLoad(net.minecraft.client.world.ClientWorld world, WorldChunk chunk) {
+        logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.ANCHOR_TYPE, null,
+                chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE));
+        logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE, null,
+                chunk.getAttached(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE));
+
         // Register listener for future attachment changes (e.g. live anchor add/remove sync).
         registerRerenderListener(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
@@ -86,6 +91,7 @@ public final class SlabAnchorClientSync {
             if (mc.worldRenderer == null) {
                 return;
             }
+            logReloadJumpSync("attachedSet", chunk, attachmentType, oldSet, newSet);
             scheduleRerendersForSet(mc, oldSet);
             scheduleRerendersForSet(mc, newSet);
         });
@@ -96,6 +102,7 @@ public final class SlabAnchorClientSync {
             AttachmentType<LongOpenHashSet> attachmentType
     ) {
         LongOpenHashSet initial = chunk.getAttached(attachmentType);
+        logReloadJumpSync("initialRerenderCheck", chunk, attachmentType, null, initial);
         if (initial != null && !initial.isEmpty()) {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.worldRenderer != null) {
@@ -119,8 +126,48 @@ public final class SlabAnchorClientSync {
                     Slabbed.LOGGER.info("[ANCHOR] client rerender pos={} reason=attachment_sync_or_chunk_load",
                             mutable.toShortString());
                 }
+                logReloadJumpSyncRerender(mutable, current);
                 mc.worldRenderer.scheduleBlockRerenderIfNeeded(mutable, current, current);
             }
         }
+    }
+
+    private static boolean reloadJumpRecorderEnabled() {
+        return Boolean.getBoolean("slabbed.beta4ReloadJumpRecorder");
+    }
+
+    private static void logReloadJumpSync(
+            String event,
+            WorldChunk chunk,
+            AttachmentType<LongOpenHashSet> attachmentType,
+            LongOpenHashSet oldSet,
+            LongOpenHashSet newSet
+    ) {
+        if (!reloadJumpRecorderEnabled()) {
+            return;
+        }
+
+        String type = attachmentType == SlabAnchorAttachment.ANCHOR_TYPE
+                ? "persistentFullBlockAnchor"
+                : "persistentLoweredSlabCarrier";
+        Slabbed.LOGGER.info(
+                "[BETA4_RELOAD_JUMP_SYNC] event={} type={} chunk={} oldCount={} newCount={} rerenderTriggered={}",
+                event,
+                type,
+                chunk.getPos(),
+                oldSet == null ? 0 : oldSet.size(),
+                newSet == null ? 0 : newSet.size(),
+                newSet != null && !newSet.isEmpty());
+    }
+
+    private static void logReloadJumpSyncRerender(BlockPos pos, BlockState state) {
+        if (!reloadJumpRecorderEnabled()) {
+            return;
+        }
+
+        Slabbed.LOGGER.info(
+                "[BETA4_RELOAD_JUMP_SYNC] event=scheduleBlockRerender pos={} state={} rerenderTriggered=true",
+                pos.toShortString(),
+                state);
     }
 }
