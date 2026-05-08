@@ -75,6 +75,18 @@ Next live capture must identify the exact visually jumped block coordinate. Use 
 
 `14,-57,0;14,-58,0;14,-59,0;14,-59,-1;14,-58,-1;14,-57,-1;16,-59,-1;16,-58,-1;16,-57,-1;15,-59,-1;15,-58,-1;15,-57,-1`
 
+## Broad-Watch Model-Dy Recorder Finding at c10ec20
+
+Uploaded/live folder: `tmp/beta4-model-dy-recorder-c10ec20`.
+
+The broad-watch upload emitted `[BETA4_MODEL_DY_RECORDER]`, `[BETA4_MODEL_DY_RERENDER]`, and `[BETA4_RELOAD_JUMP_RECORDER]`. The model-dy recorder count was low but valid. Watched model events stayed lowered (`modelDy=-0.500000`) and did not show `modelDy=0.000000`; source truth stayed lowered/anchored/carrier-valid for the seam stack and adjacent watched positions where blocks existed.
+
+The model path still included `ChunkRendererRegion`, and the non-world bridge saw lowered truth where logged. Rerender logging existed for the watched area. This upload therefore does not prove source persistence loss, model dy loss, or complete rerender absence.
+
+The remaining split moved to the visual triad surface. Crosshair/center frequently reported `MISS`/air around `16,-58,-2` or nearby air, and `[LOWERED_SIDE_SLAB_COMFORT]` `no-box-intersection` / comfort-miss spam appeared around the seam, including the `14,-58,0` and `14,-58,-1` lowered slab area. Current evidence does not prove whether Julia's visible jump is a mesh jump, an outline/crosshair/selection-box mismatch, or a still-unwatched exact coordinate.
+
+Follow-up recorder from `c10ec20`: a default-off outline/crosshair recorder now runs behind `slabbed.beta4OutlineRecorder=true`, with optional `slabbed.beta4OutlineRecorderWatch=x,y,z;x,y,z` and `slabbed.beta4OutlineRecorderTicks=700`. It emits `[BETA4_OUTLINE_RECORDER_START]` and `[BETA4_OUTLINE_RECORDER]` to compare the current crosshair target, outline shape, raycast shape, client dy, source truth, held item, eye/look/end ray, and watched-position outline/raycast hits without changing selection, retargeting, dy, or render scheduling behavior.
+
 ## Non-Negotiables
 
 - No retarget fix before reload jump is classified.
