@@ -362,7 +362,13 @@ remains blocked.
   authoring needed a recorder-first path.
 - `docs/beta4-seam-ownership-contract.md` — current seam ownership
   contract; not changed by this audit.
+- `docs/beta4-compound-source-mode-design.md` — A-prime decision and the
+  authored-depth sidecar plan; "Authored compound anchor depth RED proof"
+  section captures the row 9/10 structural argument as
+  `[BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_RED]` at `84bbb81`.
 - Live evidence harvest:
   `tmp/beta4-compound-live-fail-contract-audit-06724fb/`.
 - Matrix evidence harvest at `effd6ee`:
   `tmp/beta4-compound-contract-matrix-effd6ee/`.
+- Authored-compound-anchor-depth RED proof evidence at `84bbb81`:
+  `tmp/beta4-authored-compound-anchor-depth-red-84bbb81/`.

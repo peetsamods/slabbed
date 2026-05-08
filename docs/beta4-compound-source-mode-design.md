@@ -86,6 +86,8 @@ stable enough for source removal, neighbor update, save/reload, or live feel.
 ## Implementation Plan
 
 Slice 1: RED proof for authored compound anchor depth storage.
+**Status: captured at `84bbb81`** (`save/beta4-authored-compound-anchor-depth-red-proof`).
+See "Authored compound anchor depth RED proof" below.
 
 Slice 2: implement richer anchor/source representation.
 
@@ -117,3 +119,86 @@ Do not merge PR #8 directly.
 - No `dy=-1` slab lane in beta4.
 - No deeper dy recursion below `-1`.
 - No more local predicates without source-mode design.
+
+## Authored compound anchor depth RED proof
+
+Marker: `[BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_RED]`. Future GREEN marker:
+`[BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_GREEN]`.
+
+File:
+`src/gametest/java/com/slabbed/test/SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest.java`.
+
+Property: `-Dslabbed.beta4AuthoredCompoundAnchorDepthRedOnly=true`. The
+proof is a no-op when the property is not set; default
+`runClientGameTest` is unaffected.
+
+The proof seeds the matrix row 9/10 fixture (vanilla bottom slab
+`BASE_FULL_SUPPORT`, anchored ordinary `BASE_FULL`,
+`persistentLoweredBottomSlabCarrier` `LOWERED_BOTTOM_SLAB`, authored
+compound ordinary `COMPOUND` at `dy=-1.0`). It captures pre/post snapshots
+around an explicit source-slab removal plus
+`world.updateNeighborsAlways` pulse. Captured at `84bbb81`:
+
+- `phase=preSourceRemoval`:
+  - `placedDy=-1.000`
+  - `placedPersistentFullBlockAnchor=true`
+  - `sourceDy=-0.500`
+  - `sourcePersistentLoweredSlabCarrier=true`
+  - `expectedAuthoredDy=-1.000`
+- `phase=postSourceRemoval`:
+  - `placedPersistentFullBlockAnchor=true`
+  - `actualDy=-0.500`
+  - `expectedAuthoredDy=-1.000`
+  - `authoredDepthMissing=true`
+  - `currentAnchorCanExposeDepth=false`
+  - `classification=RED`
+
+Structural facts confirmed by the proof:
+
+- `SlabAnchorAttachment.ANCHOR_TYPE` is
+  `AttachmentType<LongOpenHashSet>` — a packed-position set with no
+  per-position payload.
+- A reflective probe of `SlabAnchorAttachment` for any public method
+  whose name contains `dy`, `depth`, or `lane` and which returns
+  `double`/`Double` returns `none`.
+- Therefore `currentAnchorCanExposeDepth=false` is a compile-time/structural
+  invariant of the current attachment surface, not a runtime accident.
+
+This is the "authored compound lane depth cannot be encoded by a boolean"
+contract from the audit, made executable. The proof intentionally throws
+an `AssertionError` carrying the RED marker so the opt-in run exits
+non-zero and cannot be silently ignored. The default
+`runClientGameTest` batch is verified to remain `BUILD SUCCESSFUL`
+(no gameplay behavior change).
+
+Evidence harvest at `84bbb81`:
+`tmp/beta4-authored-compound-anchor-depth-red-84bbb81/`.
+
+## Recommended next implementation slice
+
+Add a sidecar attachment, **not** a replacement of `ANCHOR_TYPE`:
+
+- New attachment, e.g. `COMPOUND_FULL_BLOCK_ANCHOR_TYPE`, mapping packed
+  `BlockPos` to a small payload that records the authored compound lane
+  depth (initially: `authoredDy=-1.0`, optional `sourceKind`,
+  `survivalPolicy`).
+- Authored at the same call site that today calls
+  `SlabAnchorAttachment.addAnchor` for compound ordinary full blocks
+  (`SlabSupport.getYOffsetInner` compound branch + `Block.onPlaced`
+  recorder, per `docs/beta4-compound-lowered-fullblock-height.md`).
+- Read by `SlabSupport.getYOffsetInner` *before* falling back to the
+  per-column re-derivation, so the compound lane survives source slab
+  removal, neighbor update, save/reload, and chunk reload.
+- Cleared together with `removeAnchor` on legitimate break / replace.
+
+Why a sidecar rather than replacing `ANCHOR_TYPE`:
+
+- Preserves the existing `LongOpenHashSet` boolean anchor semantics for
+  ordinary `dy=-0.5` anchors (no behavior change for non-compound rows).
+- Keeps the change additive and reversible.
+- Lets the matrix RED rows 9/10 close one at a time on top of an
+  unchanged boolean anchor, instead of forcing a cross-cutting rewrite.
+
+Do not implement the sidecar in this slice. Release remains blocked on
+the slice 2 sidecar implementation, slice 3 source-slab-break fix,
+slice 4–5 placement rows, and slice 6 Julia live retest.
