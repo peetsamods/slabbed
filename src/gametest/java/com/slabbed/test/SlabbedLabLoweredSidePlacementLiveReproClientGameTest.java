@@ -21,6 +21,7 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
 
 /**
@@ -51,6 +52,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (Boolean.getBoolean("slabbed.beta4OutlineHitRaycastMissRedOnly")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta4OutlineHitRaycastMissRedCase(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta4SeamVisibleUpperRedOnly")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -5433,6 +5443,119 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " actual=" + crosshairOwner
                     + " vanilla=" + vanillaOwner
                     + " outline=" + outlineOwner);
+        });
+    }
+
+    private static void runBeta4OutlineHitRaycastMissRedCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = new BlockPos(14, -58, 0);
+        final BlockPos expectedOwnerPos = new BlockPos(14, -57, 0);
+        final Vec3d liveEye = new Vec3d(12.165d, -56.960d, 1.750d);
+        final Vec3d liveLook = new Vec3d(0.826d, -0.067d, -0.559d);
+        final Vec3d liveEnd = liveEye.add(liveLook.multiply(6.0d));
+
+        setupFixture(singleplayer, supportPos, expectedOwnerPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState fullState = world.getBlockState(expectedOwnerPos);
+            SlabAnchorAttachment.addAnchor(world, expectedOwnerPos, fullState);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, ItemStack.EMPTY);
+        syncPlayerAim(ctx, singleplayer, liveEye, liveEnd);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
+                throw new RuntimeException("[BETA4_OUTLINE_HIT_RAYCAST_MISS_RED] client not ready");
+            }
+
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
+            HitResult finalTarget = mc.crosshairTarget;
+            BlockState expectedState = mc.world.getBlockState(expectedOwnerPos);
+            double sourceDy = SlabSupport.getYOffset(mc.world, expectedOwnerPos, expectedState);
+            double clientDy = ClientDy.dyFor(mc.world, expectedOwnerPos, expectedState);
+            boolean anchored = SlabAnchorAttachment.isAnchored(mc.world, expectedOwnerPos);
+            boolean persistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                    mc.world, expectedOwnerPos, expectedState);
+            VoxelShape outlineShape = expectedState.getOutlineShape(mc.world, expectedOwnerPos);
+            VoxelShape raycastShape = expectedState.getRaycastShape(mc.world, expectedOwnerPos);
+            BlockHitResult outlineHit = outlineShape.raycast(rayStart, rayEnd, expectedOwnerPos);
+            BlockHitResult raycastHit = raycastShape.raycast(rayStart, rayEnd, expectedOwnerPos);
+            BlockHitResult vanilla = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+
+            String expectedOwner = expectedOwnerPos.toShortString();
+            String actualOwner = asOwner(finalTarget);
+            String vanillaOwner = asOwner(vanilla);
+            String outlineOwner = outlineHit == null ? "MISS" : outlineHit.getBlockPos().toShortString();
+            String raycastOwner = raycastHit == null ? "MISS" : raycastHit.getBlockPos().toShortString();
+            String sourceMode = persistentCarrier
+                    ? "persistentLoweredSlabCarrier"
+                    : (Math.abs(sourceDy + 0.5d) <= EPSILON ? "dynamicLoweredOrAnchored" : "normal");
+            String outlineBox = outlineShape.isEmpty() ? "empty" : formatBox(outlineShape.getBoundingBox());
+            String raycastBox = raycastShape.isEmpty() ? "empty" : formatBox(raycastShape.getBoundingBox());
+            String targetType = finalTarget == null ? "null" : finalTarget.getType().toString();
+            boolean targetIsMiss = finalTarget == null || finalTarget.getType() == HitResult.Type.MISS;
+
+            String facts = " expectedOwner=" + expectedOwner
+                    + " actualOwner=" + actualOwner
+                    + " vanillaOwner=" + vanillaOwner
+                    + " outlineOwner=" + outlineOwner
+                    + " raycastOwner=" + raycastOwner
+                    + " expectedState=" + expectedState
+                    + " dy=" + sourceDy
+                    + " clientDy=" + clientDy
+                    + " modelDy=not_accessible"
+                    + " anchored=" + anchored
+                    + " persistentFullBlockAnchor=" + (anchored && expectedState.isOf(Blocks.STONE))
+                    + " persistentLoweredSlabCarrier=" + persistentCarrier
+                    + " sourceMode=" + sourceMode
+                    + " outlineShape=" + outlineBox
+                    + " outlineHit=" + (outlineHit != null)
+                    + " outlineHitDesc=" + describeHit(outlineHit)
+                    + " raycastShape=" + raycastBox
+                    + " raycastShapeEmpty=" + raycastShape.isEmpty()
+                    + " raycastHit=" + (raycastHit != null)
+                    + " raycastHitDesc=" + describeHit(raycastHit)
+                    + " crosshairTargetType=" + targetType
+                    + " targetIsMiss=" + targetIsMiss
+                    + " eye=" + liveEye
+                    + " look=" + liveLook
+                    + " requestedEnd=" + liveEnd
+                    + " rayStart=" + rayStart
+                    + " rayDir=" + rayDir
+                    + " rayEnd=" + rayEnd
+                    + " ownerClass=ANCHORED_FULL_BLOCK"
+                    + " expectedOwnerClass=ANCHORED_FULL_BLOCK"
+                    + " actualOwnerClass=" + (targetIsMiss ? "MISS" : beta4OwnerClass(
+                    finalTarget, expectedOwnerPos, null, null));
+
+            boolean raycastShapeRed = expectedState.isOf(Blocks.STONE)
+                    && Math.abs(sourceDy + 0.5d) <= EPSILON
+                    && Math.abs(clientDy + 0.5d) <= EPSILON
+                    && anchored
+                    && expectedOwner.equals(outlineOwner)
+                    && raycastHit == null
+                    && (raycastShape.isEmpty() || !expectedOwner.equals(raycastOwner));
+            if (raycastShapeRed) {
+                String classifiedFacts = " classification=RAYCAST_SHAPE_RED"
+                        + " crosshairMissReproduced=" + targetIsMiss
+                        + facts;
+                System.out.println("[BETA4_OUTLINE_HIT_RAYCAST_MISS_RED]" + classifiedFacts);
+                throw new RuntimeException("[BETA4_OUTLINE_HIT_RAYCAST_MISS_RED]" + classifiedFacts);
+            }
+
+            System.out.println("[BETA4_OUTLINE_HIT_RAYCAST_MISS] calibration_mismatch" + facts);
         });
     }
 
