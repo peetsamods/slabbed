@@ -15,7 +15,8 @@
       "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest",
       "com.slabbed.test.SlabbedLabRenderRegionLoweredCarrierBridgeClientGameTest",
       "com.slabbed.test.SlabbedLabModelDySingleOwnerAuditClientGameTest",
-      "com.slabbed.test.SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest"
+      "com.slabbed.test.SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest",
+      "com.slabbed.test.SlabbedLabBeta4CompoundContractMatrixClientGameTest"
     ]
   },
   "depends": {
