@@ -541,7 +541,7 @@ public final class SlabAnchorAttachment {
         if (dy != 0 || dx + dz != 1) {
             return false;
         }
-        return SlabSupport.getYOffset(world, sourcePos, sourceState) == -0.5;
+        return SlabSupport.getYOffset(world, sourcePos, sourceState) < 0.0d;
     }
 
     private static boolean qualifiesAsSideAdjacentLoweredFullAnchorSource(
