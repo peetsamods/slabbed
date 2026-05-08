@@ -1145,6 +1145,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
         ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
         Vec3d eye = cam.getCameraPosVec(tickProgress);
         Vec3d look = cam.getRotationVec(tickProgress);
+        double reach = 6.0d;
+        Vec3d end = eye.add(look.multiply(reach));
         double candidateMinusInitialDist2 = Double.isNaN(initialDist2) || Double.isNaN(candidateDist2)
                 ? Double.NaN
                 : candidateDist2 - initialDist2;
@@ -1173,11 +1175,191 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" topInterior=").append(topInterior == null ? "unknown" : topInterior);
         line.append(" eye=").append(slabbed$formatVec(eye));
         line.append(" look=").append(slabbed$formatVec(look));
+        if (client.player != null) {
+            line.append(" yaw=").append(String.format("%.3f", client.player.getYaw()));
+            line.append(" pitch=").append(String.format("%.3f", client.player.getPitch()));
+        }
+        line.append(" start=").append(slabbed$formatVec(eye));
+        line.append(" end=").append(slabbed$formatVec(end));
         line.append(" reach=6.000");
         line.append(" cameraFacing=").append(cam.getHorizontalFacing());
         line.append(" outlinePos=").append(finalBlock == null ? "none" : finalBlock.getBlockPos().toShortString());
         line.append(" outlineFace=").append(finalBlock == null ? "none" : finalBlock.getSide());
         Slabbed.LOGGER.info(line.toString());
+        slabbed$recordBeta4SourceTruth(
+                world,
+                cam,
+                eye,
+                look,
+                end,
+                held,
+                initialTarget,
+                finalTarget,
+                path,
+                classification,
+                sideScanCandidate,
+                sideScanCandidateReason,
+                initialDist2,
+                candidateDist2,
+                candidateMinusInitialDist2);
+    }
+
+    private void slabbed$recordBeta4SourceTruth(
+            ClientWorld world,
+            Entity cam,
+            Vec3d eye,
+            Vec3d look,
+            Vec3d end,
+            ItemStack held,
+            HitResult initialTarget,
+            HitResult finalTarget,
+            String path,
+            String classification,
+            BlockHitResult sideScanCandidate,
+            String sideScanCandidateReason,
+            double initialDist2,
+            double candidateDist2,
+            double candidateMinusInitialDist2
+    ) {
+        BlockHitResult initialBlock = initialTarget instanceof BlockHitResult initial ? initial : null;
+        BlockHitResult finalBlock = finalTarget instanceof BlockHitResult finalHit ? finalHit : null;
+        double vanillaDist2 = initialTarget == null || initialTarget.getType() != HitResult.Type.BLOCK
+                ? Double.POSITIVE_INFINITY
+                : initialTarget.getPos().squaredDistanceTo(eye);
+        String fbCandidate = slabbed$findAnchoredFbCandidate(world, cam, eye, end, vanillaDist2);
+        String sideSlabCandidate = slabbed$findLoweredSlabCandidate(world, cam, eye, end, vanillaDist2);
+
+        StringBuilder line = new StringBuilder(4096);
+        line.append("[BETA4_LIVE_RETARGET_SOURCE_TRUTH]");
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" heldIsSlab=").append(slabbed$isSlabPlacementIntent());
+        line.append(" path=").append(path);
+        line.append(" classification=").append(classification);
+        line.append(" sideSlabRetargetFired=").append(finalBlock != null
+                && sideScanCandidate != null
+                && finalBlock.getBlockPos().equals(sideScanCandidate.getBlockPos()));
+        line.append(" anchoredFbDecision=").append(path);
+        line.append(" sideScanCandidateReason=").append(sideScanCandidateReason);
+        line.append(" fbCandidateSummary=").append(fbCandidate == null ? "none" : fbCandidate);
+        line.append(" sideSlabCandidateSummary=").append(sideSlabCandidate == null ? "none" : sideSlabCandidate);
+        line.append(" crosshairTargetBefore=").append(slabbed$formatHit(initialTarget));
+        line.append(" crosshairTargetAfter=").append(slabbed$formatHit(finalTarget));
+        line.append(" eye=").append(slabbed$formatVec(eye));
+        line.append(" look=").append(slabbed$formatVec(look));
+        if (client.player != null) {
+            line.append(" yaw=").append(String.format("%.3f", client.player.getYaw()));
+            line.append(" pitch=").append(String.format("%.3f", client.player.getPitch()));
+        }
+        line.append(" start=").append(slabbed$formatVec(eye));
+        line.append(" end=").append(slabbed$formatVec(end));
+        line.append(" reach=6.000");
+        slabbed$appendReplayChecks(line, world, cam, eye, end, initialBlock, "initial");
+        slabbed$appendReplayChecks(line, world, cam, eye, end, finalBlock, "final");
+        slabbed$appendReplayChecks(line, world, cam, eye, end, sideScanCandidate, "candidate");
+        line.append(" initialDist2=").append(slabbed$formatDouble(initialDist2));
+        line.append(" candidateDist2=").append(slabbed$formatDouble(candidateDist2));
+        line.append(" candidateMinusInitialDist2=").append(slabbed$formatDouble(candidateMinusInitialDist2));
+        slabbed$appendSourceTruth(line, world, initialBlock == null ? null : initialBlock.getBlockPos(), "initial");
+        slabbed$appendSourceTruth(line, world, finalBlock == null ? null : finalBlock.getBlockPos(), "final");
+        slabbed$appendSourceTruth(line, world, sideScanCandidate == null ? null : sideScanCandidate.getBlockPos(), "candidate");
+        Slabbed.LOGGER.info(line.toString());
+    }
+
+    private static void slabbed$appendReplayChecks(
+            StringBuilder line,
+            ClientWorld world,
+            Entity cam,
+            Vec3d eye,
+            Vec3d end,
+            BlockHitResult hit,
+            String prefix
+    ) {
+        line.append(' ').append(prefix).append("HitVec=").append(hit == null ? "none" : slabbed$formatVec(hit.getPos()));
+        if (hit == null) {
+            line.append(' ').append(prefix).append("OutlineHit=none");
+            line.append(' ').append(prefix).append("RaycastHit=none");
+            return;
+        }
+        BlockPos pos = hit.getBlockPos();
+        BlockState state = world.getBlockState(pos);
+        line.append(' ').append(prefix).append("OutlineHit=")
+                .append(slabbed$shapeHit(world, cam, eye, end, pos, state, true));
+        line.append(' ').append(prefix).append("RaycastHit=")
+                .append(slabbed$shapeHit(world, cam, eye, end, pos, state, false));
+    }
+
+    private static String slabbed$shapeHit(
+            ClientWorld world,
+            Entity cam,
+            Vec3d eye,
+            Vec3d end,
+            BlockPos pos,
+            BlockState state,
+            boolean outline
+    ) {
+        try {
+            VoxelShape shape = outline
+                    ? state.getOutlineShape(world, pos, ShapeContext.of(cam))
+                    : state.getRaycastShape(world, pos);
+            if (shape == null || shape.isEmpty()) {
+                return "miss(empty)";
+            }
+            BlockHitResult hit = shape.raycast(eye, end, pos);
+            return hit == null ? "miss" : slabbed$formatHit(hit);
+        } catch (Throwable t) {
+            return "error:" + t.getClass().getSimpleName();
+        }
+    }
+
+    private static void slabbed$appendSourceTruth(
+            StringBuilder line,
+            ClientWorld world,
+            BlockPos pos,
+            String prefix
+    ) {
+        line.append(' ').append(prefix).append("SourceTruth=");
+        if (pos == null) {
+            line.append("none");
+            return;
+        }
+        slabbed$appendBlockTruth(line, world, pos, "self");
+        slabbed$appendBlockTruth(line, world, pos.down(), "below");
+        slabbed$appendBlockTruth(line, world, pos.up(), "above");
+        slabbed$appendBlockTruth(line, world, pos.north(), "northNeighbor");
+        slabbed$appendBlockTruth(line, world, pos.south(), "southNeighbor");
+        slabbed$appendBlockTruth(line, world, pos.east(), "eastNeighbor");
+        slabbed$appendBlockTruth(line, world, pos.west(), "westNeighbor");
+    }
+
+    private static void slabbed$appendBlockTruth(
+            StringBuilder line,
+            ClientWorld world,
+            BlockPos pos,
+            String label
+    ) {
+        BlockState state = world.getBlockState(pos);
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
+        boolean persistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
+        boolean bottomCarrier = SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
+        boolean lowered = Math.abs(dy + 0.5d) <= 1.0e-6;
+        boolean slab = state.getBlock() instanceof SlabBlock;
+        String slabType = state.contains(SlabBlock.TYPE) ? state.get(SlabBlock.TYPE).asString() : "none";
+        String sourceMode = persistentCarrier
+                ? "persistentLoweredSlabCarrier"
+                : (lowered ? "dynamicLoweredOrAnchored" : "normal");
+        line.append(' ').append(label).append("={pos=").append(pos.toShortString())
+                .append(" state=").append(state)
+                .append(" dy=").append(slabbed$formatDouble(dy))
+                .append(" anchored=").append(anchored)
+                .append(" persistentFullBlockAnchor=").append(anchored && !slab)
+                .append(" persistentLoweredSlabCarrier=").append(persistentCarrier)
+                .append(" persistentLoweredBottomSlabCarrier=").append(bottomCarrier)
+                .append(" lowered=").append(lowered)
+                .append(" slabType=").append(slabType)
+                .append(" solid=").append(state.isSolidBlock(world, pos))
+                .append(" sourceMode=").append(sourceMode)
+                .append('}');
     }
 
     private static void slabbed$appendHitFields(
