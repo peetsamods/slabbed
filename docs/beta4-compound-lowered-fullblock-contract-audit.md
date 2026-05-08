@@ -1,0 +1,254 @@
+# Beta4 Compound Lowered Full Block Contract Audit
+
+Audit-only. No gameplay edits in this slice. Release remains blocked.
+
+## Current savepoint
+
+- HEAD: `06724fb`
+- Tag: `save/beta4-compound-placement-popoff-fix`
+- Branch: `integrate/phase19-into-side-slab-top-support`
+
+## Live result
+
+Total fail. Not release-saveable.
+
+Julia live retest at `06724fb` (evidence harvested in
+`tmp/beta4-compound-live-fail-contract-audit-06724fb/`) shows the compound
+state is recognized in isolation but is not legal across the broader
+placement / survival / support-removal surface.
+
+### Player symptoms (live)
+
+- Aiming at the **bottom half** of the compound `dy=-1.0` full block while
+  attempting side placement: flicker / pop-off after the queued tick.
+- Aiming at the **top half** of the same compound full block: placement
+  goes upward into the wrong column / wrong dy lane.
+- **Breaking the lower source slab** under the compound full block: the
+  compound full block jumps upward (collapses to `dy=-0.5` or vanilla
+  `dy=0`).
+- Slab placement adjacent to the compound full block: same flicker / wrong
+  column behavior.
+- Live feel: not release-saveable.
+
+## What automation proved at `06724fb`
+
+The recent fix stack contributed real, narrow GREEN proofs:
+
+- `[BETA4_COMPOUND_LOWERED_FULL_BLOCK_COLLAPSE_GREEN]` — compound `dy=-1.0`
+  is preserved through the anchor finalization for the seeded triad
+  (`9bf3bdc`).
+- `[BETA4_COMPOUND_LOWERED_FULL_BLOCK_TRIAD_*]` — outline / raycast / model
+  shape parity for the compound `dy=-1.0` cell.
+- `[BETA4_COMPOUND_PLACEMENT_POPOFF_GREEN]` — a single side-adjacent
+  placement against the seeded compound source survives the queued tick in
+  the lowered lane (`6e0bd10` / `06724fb`).
+
+These are valid proofs of three isolated slices. They do not prove a full
+contract.
+
+## Why automation is insufficient
+
+Automation seeds a perfectly legal triad in a fixed orientation and tests
+one face / one half / one neighbor at a time. Live play exposes:
+
+1. **Half / face grammar gap**. The compound `dy=-1.0` outline visually
+   spans world cells `y=-58` (bottom half) and `y=-57` (top half). The
+   block exists at `y=-57`. Side hits at `y=-58` vs `y=-57` are completely
+   different placement targets, and the compound state has no documented
+   rule for which column / dy lane each half should produce.
+2. **Source-truth not self-describing**. Live evidence
+   (`run_logs_latest_log.extract.txt` lines around tick 36127–36128 in
+   `tmp/beta4-live-retest-06724fb`) shows the compound block as
+   `state=Block{minecraft:stone} dy=-1.000000 anchored=true
+   persistentFullBlockAnchor=true sourceMode=normal`, with `dy=-1.0`
+   re-derived each lookup from the slab below
+   (`pos=14,-58,0 ... persistentLoweredSlabCarrier=true`). The boolean
+   `persistentFullBlockAnchor` cannot tell apart "I am a `dy=-0.5` anchor"
+   from "I am a `dy=-1.0` anchor over a lowered carrier slab". The depth
+   is not stored, it is recomputed.
+3. **Per-column lane, not per-row lane**. Compound `dy=-1.0` only exists
+   for a column that has a `persistentLoweredSlabCarrier` directly below.
+   Lateral placement into an adjacent column with empty space below
+   cannot legally inherit `dy=-1.0` because no support source exists in
+   that column.
+4. **Source-removal recompute hazard**. `SlabSupport.getYOffsetInner`
+   re-runs `isAdjacentSideSlabLowered(world, pos.down(), belowSlab)` on
+   every query. Breaking / replacing the slab below makes the compound
+   query fail and the dy collapses to `-0.5` (anchor branch) or `0`
+   (vanilla). This is the live "jump" Julia observes.
+5. **Neighbor-update / `canPlaceAt` recompute hazard**. The same
+   recompute is what `getStateForNeighborUpdate` and `canPlaceAt` rely
+   on. Any neighbor change that breaks the predicate signal flips the
+   compound block out of the `dy=-1.0` lane.
+
+The current 06724fb state has no single contract that names what should
+happen for each face × half × support-removal × reload combination.
+
+## Legal-state decision table
+
+Decision required for each row before any further implementation. Status
+columns:
+
+- **Current observed**: what the live build at `06724fb` does.
+- **Intended**: TBD by design owner.
+- **Required source truth**: what the state law must store / derive to
+  guarantee that intended outcome.
+- **Proof status**: which automation case (if any) covers this.
+
+| # | Player action | Current observed | Intended | Required state / source truth | Proof status |
+| - | ------------- | ---------------- | -------- | ----------------------------- | ------------ |
+| 1 | Select / look at compound `dy=-1.0` block | Outline + raycast at `dy=-1.0` for the seeded triad | (decide) | Triad shape parity | TRIAD_GREEN at `06724fb`, only seeded fixture |
+| 2 | Place ordinary stone on TOP of compound | (mostly intercepted by intent mixin; not in primary failure surface) | (decide) | Top-of-compound = next compound `dy=-1.0`? Vanilla `dy=0`? | No live proof |
+| 3 | Place full block on SIDE LOWER HALF (hit `y=-58` band of the compound) | Flicker / pop-off | (decide: place at compound column `dy=-1.0`? at adjacent column `dy=-1.0`? at adjacent column `dy=-0.5`? vanilla?) | Half→column mapping rule; compound depth in adjacent column requires its own slab carrier | Seeded GREEN only for one face / one column |
+| 4 | Place full block on SIDE UPPER HALF (hit `y=-57` band of the compound) | Upward placement / wrong dy | (decide) | Half→column mapping rule | None |
+| 5 | Place slab on SIDE LOWER HALF | Flicker / wrong column | (decide: lowered bottom carrier? lowered top? double? vanilla?) | Slab grammar against compound side | None |
+| 6 | Place slab on SIDE UPPER HALF | Wrong column / wrong half | (decide) | Slab grammar against compound side | None |
+| 7 | Break compound block itself | (decide if it should drop normal item, drop nothing, leave anchor ghost) | (decide) | Anchor cleanup contract | Existing `removeAnchor` paths, not validated for compound |
+| 8 | Break the lower source slab (the `persistentLoweredSlabCarrier` directly under the compound) | Compound block jumps up to `dy=-0.5` or vanilla `dy=0` | (decide A / B / C below) | If A: compound must self-describe its depth; if B: re-normalize rule; if C: explicit pop with item drop | None |
+| 9 | Neighbor update on a side neighbor without breaking the source slab | (compound stays for now; not directly observed) | Compound stays at `dy=-1.0` | `getStateForNeighborUpdate` must not call into the compound recompute when the column source is unchanged | None |
+| 10 | Save / reload / chunk reload of the compound column | `BETA4_RELOAD_JUMP_SYNC` events fire with `oldCount=0 newCount=0`; compound dy depends on slab carrier still being persisted | Compound stays at `dy=-1.0` | Either both blocks rehydrate from disk before the recompute, or the compound block stores its own depth | Reload jump sync is RECORDER ONLY, no GREEN |
+| 11 | Chunk unload then reload only the compound column without the slab column loaded | (untested; possible mismatch window) | (decide) | Cross-chunk source-truth ordering | None |
+| 12 | Live triad: source slab broken then re-placed quickly | (untested) | (decide) | Compound recovery rule | None |
+
+Cases 3, 4, 5, 6, 8 are the live failures Julia reproduced. Cases 9–12 are
+not yet observed but follow from the same source-truth ambiguity.
+
+## Is `dy=-1.0` viable?
+
+**Risky / undecided.** It is viable as a per-column visual height **only
+when** every system that reads dy understands "compound depth comes from
+the column source slab right below". Today that is true for
+`getYOffsetInner` (centrally fixed), torch/non-anchor compound, and
+outline/raycast/model parity for the seeded triad.
+
+It is **not yet viable** as a horizontally extensible lane:
+
+- Lateral side placement assumes the new block can also be `dy=-1.0`. That
+  only holds if the new block's column also has a
+  `persistentLoweredSlabCarrier` directly below. Otherwise the new block
+  must fall back to `dy=-0.5` (lowered single carrier) or `dy=0` (vanilla),
+  and the half→column mapping for the click must be defined.
+- Source-removal collapses dy because the depth is recomputed, not stored.
+  The current `persistentFullBlockAnchor` boolean cannot encode "this
+  anchor was authored at depth `-1.0` over a lowered carrier and must
+  not silently re-normalize to `-0.5`".
+- Save / reload survival of `dy=-1.0` is only correct when the slab below
+  rehydrates before any block in the compound column is asked for its
+  offset. Cross-chunk ordering is not proven.
+
+The `dy=-1.0` value itself is fine. The viability gap is in the **state
+law** that places, supports, and persists it.
+
+## Anchor representation risk
+
+`SlabAnchorAttachment.isAnchored` is a boolean stored per-position. The
+current code derives the depth from this boolean plus a live query against
+the block below:
+
+- `getYOffsetInner` anchor branch (lines around 651, 674–680 in
+  `src/main/java/com/slabbed/util/SlabSupport.java`) returns `-1.0` only
+  when `isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world,
+  belowPos, belowSlab)` evaluates true on every call.
+- The "non-anchor" compound branch (lines 691–696) does the same.
+- `sourceMode=` strings in the live recorder logs (e.g.
+  `sourceMode=dynamicLoweredOrAnchored`, `sourceMode=normal`,
+  `sourceMode=persistentLoweredSlabCarrier`) are derived labels, not stored
+  attachments.
+
+**Risk**: a single boolean cannot encode the difference between an anchor
+authored at `dy=-0.5` over a vanilla / dynamic lowered source and an
+anchor authored at `dy=-1.0` over a lowered bottom-slab carrier. Any time
+the source-below predicate flips (slab broken, slab replaced, chunk loaded
+out of order, neighbor update triggers a re-derivation), the depth flips
+with it.
+
+**Richer representation options** (not implemented, design only):
+
+- Add a `compoundDepth` byte / enum to `SlabAnchorAttachment` per anchor
+  pos, so an anchor authored at `dy=-1.0` is stored as
+  `compoundDepth=COMPOUND_LOWERED` and not re-derived from neighbors.
+- Or replace the boolean with a `sourceMode` enum
+  (`NORMAL_ANCHOR | LOWERED_CARRIER | COMPOUND_LOWERED_OVER_CARRIER`) and
+  let `getYOffsetInner` switch on it without querying the block below.
+- Either approach must define explicit rules for what happens when the
+  recorded source is invalidated (case 8 in the table). Persistent
+  storage by itself does not decide whether the compound should jump,
+  pop, re-normalize, or persist.
+
+This is exactly what the doctrine warns against fixing with one more
+boolean: the next implementation must commit to a richer representation
+**only after** the decision table above is filled in.
+
+## Which proofs prove a slice but not the live contract
+
+- `[BETA4_COMPOUND_LOWERED_FULL_BLOCK_COLLAPSE_GREEN]`: proves the seeded
+  triad keeps `dy=-1.0` after `Block.onPlaced` syncs the anchor. Does
+  not exercise side placement, support removal, neighbor update, or
+  reload.
+- `[BETA4_COMPOUND_LOWERED_FULL_BLOCK_TRIAD_*]`: proves outline / raycast
+  / model shape for the seeded triad cell only.
+- `[BETA4_COMPOUND_PLACEMENT_POPOFF_GREEN]`: proves one side-adjacent
+  placement against one face of the seeded compound source survives one
+  queued tick. Does not exercise both halves, both face axes, slab-held
+  adjacency, support-removal, or save/reload.
+- `[BETA4_RELOAD_JUMP_RECORDER]` / `[BETA4_OUTLINE_RECORDER]` /
+  `[BETA4_PLACEMENT_AUTHOR_RECORDER]`: recorder-only, not proofs.
+
+No proof exists for: side lower-half × side upper-half × slab-held ×
+ordinary-held × source-slab-break × neighbor-update × save/reload as a
+matrix.
+
+## Recommended next slice
+
+**A. Add a comprehensive RED proof matrix for compound `dy=-1.0` faces /
+halves / support removal, before any further implementation.**
+
+Rationale: every prior slice in the recent stack was a single-case fix
+followed by a single-case GREEN. The doctrine states a Slabbed state
+must be named **and** proven across placement, collision, survival,
+neighbor update, reload, triad, and live feel. The compound `dy=-1.0`
+state is named but the proof matrix is empty for at least seven of the
+twelve decision-table cases.
+
+The matrix must enumerate, with a RED-only opt-in proof per case:
+
+- side LOWER half × N/E/S/W × ordinary-held vs slab-held
+- side UPPER half × N/E/S/W × ordinary-held vs slab-held
+- TOP-face × ordinary-held vs slab-held
+- break source slab below × neighbor update × `getStateForNeighborUpdate`
+  recompute
+- save / reload / chunk reload (cross-column ordering)
+- compound block broken first × source slab broken first
+
+Only after that matrix exists and Julia signs off on the **intended**
+column for each case can the team responsibly choose between B (richer
+anchor / source mode) and C (revert / narrow `dy=-1.0`). A blind jump to
+B risks coding around the wrong cases; a blind jump to C loses a feature
+Julia may want.
+
+## Non-negotiables
+
+- No release prep until the matrix is filled, the decisions are made,
+  and Julia live-confirms the matrix.
+- No retarget / rescue workarounds to compensate for state-law gaps.
+- No broad solidity / shape lies. Compound `dy=-1.0` must remain a named,
+  documented state.
+- No more single-case patches until the contract decision table above
+  has explicit "Intended" answers from the design owner.
+- Julia live retest remains the final gate. Automation GREEN does not
+  unblock release.
+- `release/0.2.0-beta.4` stays where it is. Do not move, delete, or
+  reassign.
+
+## Cross-references
+
+- `docs/beta4-compound-lowered-fullblock-height.md` — height fix,
+  collapse / placement-popoff proofs.
+- `docs/beta4-reload-jump-persistence-audit.md` — prior reload jump
+  classifier work.
+- `docs/beta4-live-placement-authoring-proof-gap.md` — why placement
+  authoring needed a recorder-first path.
+- `docs/beta4-seam-ownership-contract.md` — current seam ownership
+  contract; not changed by this audit.
+- Live evidence harvest:
+  `tmp/beta4-compound-live-fail-contract-audit-06724fb/`.
