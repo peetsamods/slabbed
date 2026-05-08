@@ -47,6 +47,16 @@ Observed local result from `build/run/clientGameTest/logs/latest.log`:
 
 Exact missing mechanism: the clean singleplayer save/close/open path near the harness spawn does not reproduce the live block jump. The next RED must use either Julia's actual live world/reload path or a more faithful chunk unload/reload path that exercises the same already-built live seam topology and render-view timing. If server/client world facts stay green while live visuals jump, the likely missing bucket is render-view lookup or initial chunk-render timing rather than saved attachment persistence.
 
+Follow-up recorder from `e82abfb`: a default-off live recorder was added behind `slabbed.beta4ReloadJumpRecorder=true` to capture the suspected post-join/chunk-render timing path without changing persistence, dy authority, retargeting, or render behavior.
+
+Recorder markers:
+
+- `[BETA4_RELOAD_JUMP_RECORDER_START]` prints the enabled state, source head, tick budget, radius, and world.
+- `[BETA4_RELOAD_JUMP_RECORDER]` prints one compact sample per client world tick while the tick budget remains. It records player/camera/look, crosshair/outline target, client dy, `persistentFullBlockAnchor`, `persistentLoweredSlabCarrier`, `persistentLoweredBottomSlabCarrier`, support topology around the current crosshair target or player block, and optional configured watch positions.
+- `[BETA4_RELOAD_JUMP_SYNC]` prints client chunk-load, attachment-update, initial-rerender-check, and scheduled-rerender timing for the anchor and lowered-slab-carrier attachment mirrors.
+
+Suggested launch properties: `slabbed.beta4ReloadJumpRecorder=true`, `slabbed.beta4ReloadJumpRecorderTicks=500`, and `slabbed.beta4ReloadJumpRecorderRadius=6`. Optional absolute watch positions can be supplied with `slabbed.beta4ReloadJumpRecorderWatch=x,y,z;x,y,z`, but the default route follows the current crosshair target so Julia can stand near the live seam and look at the visually jumped block.
+
 ## Non-Negotiables
 
 - No retarget fix before reload jump is classified.

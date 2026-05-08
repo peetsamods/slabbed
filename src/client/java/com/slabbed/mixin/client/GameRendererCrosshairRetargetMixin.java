@@ -60,6 +60,10 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static String slabbed$beta4FinalTargetTraceLastSignature;
     private static long slabbed$beta4FinalTargetTraceLastLogNanos;
     private static boolean slabbed$beta4LiveRetargetRecorderStartLogged;
+    private static boolean slabbed$beta4ReloadJumpRecorderStartLogged;
+    private static ClientWorld slabbed$beta4ReloadJumpRecorderWorld;
+    private static int slabbed$beta4ReloadJumpRecorderTicksRemaining;
+    private static long slabbed$beta4ReloadJumpRecorderLastWorldTick = Long.MIN_VALUE;
 
     private static final String SEAM_OWNER_ANCHORED_FULL_BLOCK = "ANCHORED_FULL_BLOCK";
     private static final String SEAM_OWNER_VISIBLE_UPPER_LOWERED_SLAB = "VISIBLE_UPPER_LOWERED_SLAB";
@@ -70,6 +74,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
     @Inject(method = "updateCrosshairTarget", at = @At("TAIL"))
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
         slabbed$logBeta4LiveRetargetRecorderStart();
+        slabbed$recordBeta4ReloadJumpRecorder(tickProgress);
         HitResult ht = client.crosshairTarget;
         if (ht == null) {
             return;
@@ -1117,6 +1122,131 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
         slabbed$beta4LiveRetargetRecorderStartLogged = true;
         Slabbed.LOGGER.info("[BETA4_LIVE_RETARGET_RECORDER_START] enabled=true head=e761e67");
+    }
+
+    private static boolean slabbed$beta4ReloadJumpRecorderEnabled() {
+        return Boolean.getBoolean("slabbed.beta4ReloadJumpRecorder");
+    }
+
+    private void slabbed$recordBeta4ReloadJumpRecorder(float tickProgress) {
+        if (!slabbed$beta4ReloadJumpRecorderEnabled()) {
+            return;
+        }
+
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return;
+        }
+
+        if (world != slabbed$beta4ReloadJumpRecorderWorld) {
+            slabbed$beta4ReloadJumpRecorderWorld = world;
+            slabbed$beta4ReloadJumpRecorderTicksRemaining =
+                    slabbed$intProperty("slabbed.beta4ReloadJumpRecorderTicks", 400);
+            slabbed$beta4ReloadJumpRecorderLastWorldTick = Long.MIN_VALUE;
+            slabbed$beta4ReloadJumpRecorderStartLogged = false;
+        }
+
+        int radius = slabbed$intProperty("slabbed.beta4ReloadJumpRecorderRadius", 6);
+        if (!slabbed$beta4ReloadJumpRecorderStartLogged) {
+            slabbed$beta4ReloadJumpRecorderStartLogged = true;
+            Slabbed.LOGGER.info(
+                    "[BETA4_RELOAD_JUMP_RECORDER_START] enabled=true head=e82abfb ticks={} radius={} world={}",
+                    slabbed$beta4ReloadJumpRecorderTicksRemaining,
+                    radius,
+                    world.getRegistryKey().getValue());
+        }
+
+        if (slabbed$beta4ReloadJumpRecorderTicksRemaining <= 0) {
+            return;
+        }
+
+        long worldTick = world.getTime();
+        if (worldTick == slabbed$beta4ReloadJumpRecorderLastWorldTick) {
+            return;
+        }
+        slabbed$beta4ReloadJumpRecorderLastWorldTick = worldTick;
+        slabbed$beta4ReloadJumpRecorderTicksRemaining--;
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d look = cam.getRotationVec(tickProgress);
+        HitResult target = client.crosshairTarget;
+        BlockHitResult blockTarget = target instanceof BlockHitResult blockHit ? blockHit : null;
+        BlockPos center = blockTarget == null
+                ? (client.player == null ? BlockPos.ofFloored(eye) : client.player.getBlockPos())
+                : blockTarget.getBlockPos();
+
+        StringBuilder line = new StringBuilder(4096);
+        line.append("[BETA4_RELOAD_JUMP_RECORDER]");
+        line.append(" tick=").append(worldTick);
+        line.append(" ticksRemaining=").append(slabbed$beta4ReloadJumpRecorderTicksRemaining);
+        line.append(" worldPresent=true");
+        line.append(" world=").append(world.getRegistryKey().getValue());
+        line.append(" playerPos=").append(client.player == null
+                ? "none"
+                : slabbed$formatVec(new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ())));
+        line.append(" eye=").append(slabbed$formatVec(eye));
+        line.append(" look=").append(slabbed$formatVec(look));
+        if (client.player != null) {
+            line.append(" yaw=").append(String.format("%.3f", client.player.getYaw()));
+            line.append(" pitch=").append(String.format("%.3f", client.player.getPitch()));
+        }
+        line.append(" crosshairType=").append(target == null ? "null" : target.getType());
+        line.append(" outlinePos=").append(blockTarget == null ? "none" : blockTarget.getBlockPos().toShortString());
+        line.append(" outlineFace=").append(blockTarget == null ? "none" : blockTarget.getSide());
+        line.append(" centerMode=").append(blockTarget == null ? "playerBlock" : "crosshair");
+        line.append(" centerPos=").append(center.toShortString());
+        line.append(" radius=").append(radius);
+        slabbed$appendSourceTruth(line, world, center, "center");
+        slabbed$appendConfiguredReloadJumpWatch(line, world);
+        Slabbed.LOGGER.info(line.toString());
+    }
+
+    private static int slabbed$intProperty(String name, int fallback) {
+        String raw = System.getProperty(name);
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Math.max(0, Integer.parseInt(raw.trim()));
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static void slabbed$appendConfiguredReloadJumpWatch(StringBuilder line, ClientWorld world) {
+        String raw = System.getProperty("slabbed.beta4ReloadJumpRecorderWatch", "");
+        if (raw.isBlank()) {
+            line.append(" configuredWatch=none");
+            return;
+        }
+
+        String[] entries = raw.split(";");
+        int index = 0;
+        for (String entry : entries) {
+            BlockPos pos = slabbed$parseBlockPos(entry);
+            if (pos == null) {
+                line.append(" watch").append(index).append("=invalid(").append(entry.trim()).append(')');
+            } else {
+                slabbed$appendSourceTruth(line, world, pos, "watch" + index);
+            }
+            index++;
+        }
+    }
+
+    private static BlockPos slabbed$parseBlockPos(String raw) {
+        String[] parts = raw.trim().split(",");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            return new BlockPos(
+                    Integer.parseInt(parts[0].trim()),
+                    Integer.parseInt(parts[1].trim()),
+                    Integer.parseInt(parts[2].trim()));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private void slabbed$recordBeta4LiveRetarget(
