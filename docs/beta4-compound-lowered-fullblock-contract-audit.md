@@ -280,13 +280,26 @@ above so a design choice between A / B / C / D can be made on evidence.
 | 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | RED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no flicker/pop. |
 | 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no vanilla-height ghost placement. |
 | 8 | `PLACE_BLOCK_ON_TOP` | UNDECIDED | not-yet-live-tested | Place ordinary full block above in same compound lane `dy=-1.0`; do not create `dy=-1.5`. |
-| 9 | `SOURCE_SLAB_BREAK` | RED | live-confirmed-fail | Persistent compound anchor preserves authored `dy=-1.0`; no silent jump to `dy=-0.5`. |
-| 10 | `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK` | RED | not-yet-live-tested | Same as row 9. |
+| 9 | `SOURCE_SLAB_BREAK` | GREEN (post-sidecar) | live-confirmed-fail (pre-sidecar) | Persistent compound anchor preserves authored `dy=-1.0`; no silent jump to `dy=-0.5`. Sidecar `COMPOUND_FULL_BLOCK_ANCHOR_TYPE` flipped this from RED to GREEN; live retest pending. |
+| 10 | `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK` | GREEN (post-sidecar) | not-yet-live-tested | Same as row 9. Sidecar flipped this from RED to GREEN; live retest pending. |
 | 11 | `SAVE_RELOAD_AFTER_COMPOUND` | GREEN | live-confirmed-fail | Preserve authored `dy=-1.0`; should remain green, with live still final. |
 | 12 | `CHUNK_UNLOAD_RELOAD_IF_HELPER_EXISTS` | NOT_IMPLEMENTED | not-yet-live-tested | Still not implemented in gametest; live remains final. |
 
 Final marker emitted at `effd6ee`:
 `[BETA4_COMPOUND_CONTRACT_MATRIX_RED] rows=12 red=4 undecided=4 green=3 notImplemented=1`.
+
+After the beta4 compound full-block anchor sidecar
+(`COMPOUND_FULL_BLOCK_ANCHOR_TYPE` on `SlabAnchorAttachment`) lands:
+`[BETA4_COMPOUND_CONTRACT_MATRIX_RED] rows=12 red=2 undecided=4 green=5 notImplemented=1`.
+Rows 9 (`SOURCE_SLAB_BREAK`) and 10 (`NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK`)
+flipped from RED to GREEN; the row classifiers in
+`SlabbedLabBeta4CompoundContractMatrixClientGameTest` were updated to
+emit GREEN when post-break compound `dy` stays at `-1.0` (per A-prime in
+`docs/beta4-compound-source-mode-design.md`). Rows 4/6 stay RED
+(side-half placement is the next slice). Rows 3/5/7/8 stay UNDECIDED
+pending Julia intent. Row 11 stays GREEN (automation only, live still
+final). Row 12 stays NOT_IMPLEMENTED. Live retest remains the final
+gate; the matrix flip is automation-only evidence.
 
 ### Rows classified RED
 
@@ -296,15 +309,19 @@ Final marker emitted at `effd6ee`:
 - **Row 6** `PLACE_SLAB_SIDE_LOWER_HALF`: aiming the visual lower half of
   the compound's EAST face with slab-held reproduces a placement failure
   matching Julia's live "wrong column / wrong lane" symptom.
-- **Row 9** `SOURCE_SLAB_BREAK`: breaking the lower
-  `persistentLoweredBottomSlabCarrier` collapses the compound block from
-  `dy=-1.0` to `dy=-0.5` on the next tick. This is the live "jump"
-  Julia documented and proves the source-truth recompute hazard
-  (audit row 8).
-- **Row 10** `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK`: an explicit
-  `world.updateNeighborsAlways(LOWERED_BOTTOM_SLAB, AIR, null)` after
-  the break does not recover the compound `dy=-1.0`. It collapses to
-  `dy=-0.5` and stays there.
+
+### Rows formerly RED, now GREEN after sidecar
+
+- **Row 9** `SOURCE_SLAB_BREAK`: with the
+  `COMPOUND_FULL_BLOCK_ANCHOR_TYPE` sidecar, breaking the lower
+  `persistentLoweredBottomSlabCarrier` no longer collapses the compound
+  block. Authored `dy=-1.0` is preserved; the matrix classifies GREEN
+  (`post-break` compound `dy=-1.0`). Live retest still pending.
+- **Row 10** `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK`: the explicit
+  `world.updateNeighborsAlways` pulse after source-break also no longer
+  collapses the compound block; the sidecar fast-path in
+  `SlabSupport.getYOffsetInner` returns `dy=-1.0` directly. Matrix
+  classifies GREEN. Live retest still pending.
 
 ### Rows classified UNDECIDED
 

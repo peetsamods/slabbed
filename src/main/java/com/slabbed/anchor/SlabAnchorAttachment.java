@@ -55,10 +55,13 @@ public final class SlabAnchorAttachment {
      */
     public static Predicate<BlockPos> clientAnchorLookup = null;
     public static Predicate<BlockPos> clientLoweredSlabCarrierLookup = null;
+    public static Predicate<BlockPos> clientCompoundFullBlockAnchorLookup = null;
 
     private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
             Identifier.of(Slabbed.MOD_ID, "lowered_slab_carriers");
+    private static final Identifier COMPOUND_FULL_BLOCK_ANCHOR_ID =
+            Identifier.of(Slabbed.MOD_ID, "compound_full_block_anchors");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -101,6 +104,21 @@ public final class SlabAnchorAttachment {
                     .persistent(SET_CODEC)
                     .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
             );
+    /**
+     * Beta4 sidecar attachment that records authored compound ordinary full-block
+     * anchors at lane {@code dy=-1.0}. Additive to {@link #ANCHOR_TYPE}: a position
+     * may be in both (compound block also has the ordinary anchor), and the sidecar
+     * preserves authored depth across source slab removal so {@code getYOffsetInner}
+     * can return {@code dy=-1.0} without re-deriving from the now-missing slab below.
+     *
+     * <p>Beta4-narrow: compound only, no slab lane grammar, no recursion below
+     * {@code -1.0}. See {@code docs/beta4-compound-source-mode-design.md}.
+     */
+    public static final AttachmentType<LongOpenHashSet> COMPOUND_FULL_BLOCK_ANCHOR_TYPE =
+            AttachmentRegistry.<LongOpenHashSet>create(COMPOUND_FULL_BLOCK_ANCHOR_ID, builder -> builder
+                    .persistent(SET_CODEC)
+                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
 
     /**
      * Triggers static-init class loading. Call once from the mod entrypoint so the
@@ -108,7 +126,9 @@ public final class SlabAnchorAttachment {
      */
     public static void register() {
         // Touch the class so the static field initializes and registers with Fabric.
-        if (ANCHOR_TYPE == null || LOWERED_SLAB_CARRIER_TYPE == null) {
+        if (ANCHOR_TYPE == null
+                || LOWERED_SLAB_CARRIER_TYPE == null
+                || COMPOUND_FULL_BLOCK_ANCHOR_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
     }
@@ -156,6 +176,35 @@ public final class SlabAnchorAttachment {
             BlockPos supportPos = pos.down();
             SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
         }
+        // Beta4 sidecar: if the position currently satisfies the compound full-block
+        // condition (anchored ordinary full block above a lowered bottom slab carrier),
+        // also record the authored dy=-1.0 lane so it survives source slab removal.
+        BlockState state = world.getBlockState(pos);
+        if (qualifiesForCompoundFullBlockAnchor(world, pos, state)) {
+            addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
+        }
+    }
+
+    /**
+     * Records a beta4 compound full-block anchor at {@code pos}. Server-side only.
+     * Idempotent; no-op if {@code pos} does not satisfy
+     * {@link #qualifiesForCompoundFullBlockAnchor}.
+     */
+    public static void addCompoundFullBlockAnchor(World world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClient()) {
+            return;
+        }
+        if (!qualifiesForCompoundFullBlockAnchor(world, pos, state)) {
+            return;
+        }
+        addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
+    }
+
+    /**
+     * Clears any beta4 compound full-block anchor at {@code pos}. Server-side only.
+     */
+    public static void removeCompoundFullBlockAnchor(World world, BlockPos pos) {
+        removeFromAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
     }
 
     public static void updatePersistentLoweredSlabCarrier(World world, BlockPos pos, BlockState state) {
@@ -210,6 +259,9 @@ public final class SlabAnchorAttachment {
             BlockPos supportPos = pos.down();
             SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_REMOVED");
         }
+        // Beta4 sidecar travels with the ordinary anchor: when the compound block
+        // itself is broken/replaced, clear the authored compound truth too.
+        removeFromAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
     }
 
     public static void removePersistentLoweredSlabCarrier(World world, BlockPos pos) {
@@ -281,6 +333,37 @@ public final class SlabAnchorAttachment {
                     w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return anchored;
+    }
+
+    /**
+     * Returns true if {@code pos} carries a beta4 sidecar compound full-block anchor.
+     *
+     * <p>Independent of {@link #isAnchored}: a pos may be anchored without being a
+     * compound anchor (ordinary {@code dy=-0.5}). This sidecar is the authored truth
+     * for {@code dy=-1.0} compound lane and survives source slab removal.
+     *
+     * <p>Mirrors the {@link #isAnchored} dispatch: server World, client World, and
+     * non-World render views via {@link #clientCompoundFullBlockAnchorLookup}.
+     */
+    public static boolean isCompoundFullBlockAnchor(BlockView world, BlockPos pos) {
+        if (pos == null) {
+            return false;
+        }
+        if (!(world instanceof World w)) {
+            return clientCompoundFullBlockAnchorLookup != null
+                    && clientCompoundFullBlockAnchorLookup.test(pos);
+        }
+        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return false;
+        }
+        LongOpenHashSet set = chunk.getAttached(COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+        boolean compound = set != null && set.contains(pos.asLong());
+        if (TRACE && compound) {
+            Slabbed.LOGGER.info("[ANCHOR] compound_full_block query true side={} pos={}",
+                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+        }
+        return compound;
     }
 
     public static boolean isPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
@@ -388,6 +471,33 @@ public final class SlabAnchorAttachment {
 
     public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {
         return qualifiesForAnchor(world, pos, state) && SlabSupport.hasBottomSlabBelow(world, pos);
+    }
+
+    /**
+     * Beta4 sidecar predicate: the position is a legal compound ordinary full-block
+     * authoring at lane {@code dy=-1.0}, i.e. it is a normal anchor candidate
+     * (ordinary full block) AND the slab directly below is the lowered compound
+     * source slab (a bottom slab classified by
+     * {@link SlabSupport#isLoweredCompoundSourceSlab}).
+     *
+     * <p>Excludes ordinary {@code dy=-0.5} anchors over a vanilla bottom slab,
+     * slab blocks, non-full blocks, beds, double-blocks, etc. — exactly the
+     * scope listed in the beta4 source-mode design.
+     */
+    public static boolean qualifiesForCompoundFullBlockAnchor(
+            BlockView world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)) {
+            return false;
+        }
+        if (world == null || pos == null) {
+            return false;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState belowSlab = world.getBlockState(belowPos);
+        return SlabSupport.isLoweredCompoundSourceSlab(world, belowPos, belowSlab);
     }
 
     public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
