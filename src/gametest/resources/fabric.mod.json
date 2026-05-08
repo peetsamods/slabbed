@@ -14,7 +14,8 @@
       "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest",
       "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest",
       "com.slabbed.test.SlabbedLabRenderRegionLoweredCarrierBridgeClientGameTest",
-      "com.slabbed.test.SlabbedLabModelDySingleOwnerAuditClientGameTest"
+      "com.slabbed.test.SlabbedLabModelDySingleOwnerAuditClientGameTest",
+      "com.slabbed.test.SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest"
     ]
   },
   "depends": {

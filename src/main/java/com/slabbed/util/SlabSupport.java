@@ -660,6 +660,25 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            // Compound Lowered Full Block on Lowered Bottom Slab Carrier
+            // (named legal state). When the bottom slab directly below is itself
+            // in the lowered lane (persistent lowered slab carrier or
+            // adjacent-side-slab lowered, dy=-0.5), the anchored FB on top of it
+            // must drop an additional -0.5 to align with the slab's visual top
+            // surface, for a total of -1.0. Without this branch the generic
+            // anchor return -0.5 below collapses the freshly placed compound
+            // case (live evidence: BETA4_PLACEMENT_AUTHOR_RECORDER at 9bf3bdc).
+            // See docs/beta4-compound-lowered-fullblock-height.md.
+            BlockPos belowPos = pos.down();
+            BlockState belowSlab = world.getBlockState(belowPos);
+            if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, belowPos, belowSlab)) {
+                if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
+                    String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                    Slabbed.LOGGER.info("[ANCHOR] compound dy applied side={} pos={} state={} dy=-1.0 belowSlabPos={} belowSlabState={}",
+                            side, pos.toShortString(), state, belowPos.toShortString(), belowSlab);
+                }
+                return -1.0;
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
