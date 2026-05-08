@@ -87,6 +87,16 @@ The remaining split moved to the visual triad surface. Crosshair/center frequent
 
 Follow-up recorder from `c10ec20`: a default-off outline/crosshair recorder now runs behind `slabbed.beta4OutlineRecorder=true`, with optional `slabbed.beta4OutlineRecorderWatch=x,y,z;x,y,z` and `slabbed.beta4OutlineRecorderTicks=700`. It emits `[BETA4_OUTLINE_RECORDER_START]` and `[BETA4_OUTLINE_RECORDER]` to compare the current crosshair target, outline shape, raycast shape, client dy, source truth, held item, eye/look/end ray, and watched-position outline/raycast hits without changing selection, retargeting, dy, or render scheduling behavior.
 
+## Outline-Hit Raycast-Shape RED Proof at 4c8fe43
+
+Opt-in proof property: `slabbed.beta4OutlineHitRaycastMissRedOnly`.
+
+The live outline recorder had already shown the watched lowered stone at `14,-57,0` with valid source truth (`dy=-0.5`, `clientDy=-0.5`, `sourceMode=dynamicLoweredOrAnchored`, `ownerClass=ANCHORED_FULL_BLOCK`), a lowered outline shape, `outlineHit=true`, an empty raycast shape, and live `crosshairTargetType=MISS` / `targetIsMiss=true`.
+
+The saved RED proof reproduces the smallest stable split without changing gameplay behavior: source/client dy are lowered, the expected owner is `Block{minecraft:stone}` at `14,-57,0`, the outline shape is lowered and hittable, but the raycast shape for the same block is empty and `raycastHit=false`. The proof emits `[BETA4_OUTLINE_HIT_RAYCAST_MISS_RED] classification=RAYCAST_SHAPE_RED`.
+
+Harness caveat: the client-gametest route did not reproduce the final live crosshair MISS after Slabbed retargeting; it logs `crosshairMissReproduced=false`, `crosshairTargetType=BLOCK`, and `actualOwner=14,-57,0`. This is still a faithful RED for the raycast-shape half of the visual triad split, not a GREEN and not a behavior fix. The future fix gate remains `[BETA4_OUTLINE_HIT_RAYCAST_MISS_GREEN]`.
+
 ## Non-Negotiables
 
 - No retarget fix before reload jump is classified.
