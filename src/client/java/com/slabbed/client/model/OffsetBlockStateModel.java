@@ -2,6 +2,7 @@ package com.slabbed.client.model;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
+import com.slabbed.client.runtime.ModelDyTranslateTraceBridge;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
@@ -125,6 +126,7 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
                 }
             }
         }
+        ModelDyTranslateTraceBridge.recordBeta4ModelDy("fabricEmitQuads", view, pos, state, dy);
 
         BlockPos modelDyTracePos = slabbed$modelDyOwnerTracePos;
         if (modelDyTracePos != null && modelDyTracePos.equals(pos)) {

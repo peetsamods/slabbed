@@ -136,6 +136,10 @@ public final class SlabAnchorClientSync {
         return Boolean.getBoolean("slabbed.beta4ReloadJumpRecorder");
     }
 
+    private static boolean modelDyRecorderEnabled() {
+        return Boolean.getBoolean("slabbed.beta4ModelDyRecorder");
+    }
+
     private static void logReloadJumpSync(
             String event,
             WorldChunk chunk,
@@ -144,6 +148,10 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet newSet
     ) {
         if (!reloadJumpRecorderEnabled()) {
+            String type = attachmentType == SlabAnchorAttachment.ANCHOR_TYPE
+                    ? "persistentFullBlockAnchor"
+                    : "persistentLoweredSlabCarrier";
+            logModelDyRerenderEvent(event, type, chunk, oldSet, newSet);
             return;
         }
 
@@ -158,10 +166,12 @@ public final class SlabAnchorClientSync {
                 oldSet == null ? 0 : oldSet.size(),
                 newSet == null ? 0 : newSet.size(),
                 newSet != null && !newSet.isEmpty());
+        logModelDyRerenderEvent(event, type, chunk, oldSet, newSet);
     }
 
     private static void logReloadJumpSyncRerender(BlockPos pos, BlockState state) {
         if (!reloadJumpRecorderEnabled()) {
+            logModelDyRerenderBlock(pos, state);
             return;
         }
 
@@ -169,5 +179,93 @@ public final class SlabAnchorClientSync {
                 "[BETA4_RELOAD_JUMP_SYNC] event=scheduleBlockRerender pos={} state={} rerenderTriggered=true",
                 pos.toShortString(),
                 state);
+        logModelDyRerenderBlock(pos, state);
+    }
+
+    private static void logModelDyRerenderEvent(
+            String event,
+            String type,
+            WorldChunk chunk,
+            LongOpenHashSet oldSet,
+            LongOpenHashSet newSet
+    ) {
+        if (!modelDyRecorderEnabled()) {
+            return;
+        }
+        Slabbed.LOGGER.info(
+                "[BETA4_MODEL_DY_RERENDER] event={} type={} chunk={} oldCount={} newCount={} rerenderTriggered={} watchedInsideChunk={}",
+                event,
+                type,
+                chunk.getPos(),
+                oldSet == null ? 0 : oldSet.size(),
+                newSet == null ? 0 : newSet.size(),
+                newSet != null && !newSet.isEmpty(),
+                watchedPositionsInsideChunk(chunk));
+    }
+
+    private static void logModelDyRerenderBlock(BlockPos pos, BlockState state) {
+        if (!modelDyRecorderEnabled()) {
+            return;
+        }
+        Slabbed.LOGGER.info(
+                "[BETA4_MODEL_DY_RERENDER] event=scheduleBlockRerender chunk={},{} pos={} state={} rerenderTriggered=true watchedMatch={}",
+                pos.getX() >> 4,
+                pos.getZ() >> 4,
+                pos.toShortString(),
+                state,
+                watchedPositionsMatching(pos));
+    }
+
+    private static String watchedPositionsInsideChunk(WorldChunk chunk) {
+        String raw = System.getProperty("slabbed.beta4ModelDyRecorderWatch", "");
+        if (raw.isBlank()) {
+            return "none";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (String entry : raw.split(";")) {
+            BlockPos pos = parseWatchedPos(entry);
+            if (pos != null
+                    && (pos.getX() >> 4) == chunk.getPos().x
+                    && (pos.getZ() >> 4) == chunk.getPos().z) {
+                if (!builder.isEmpty()) {
+                    builder.append('|');
+                }
+                builder.append(pos.toShortString());
+            }
+        }
+        return builder.isEmpty() ? "none" : builder.toString();
+    }
+
+    private static String watchedPositionsMatching(BlockPos rerenderPos) {
+        String raw = System.getProperty("slabbed.beta4ModelDyRecorderWatch", "");
+        if (raw.isBlank()) {
+            return "none";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (String entry : raw.split(";")) {
+            BlockPos pos = parseWatchedPos(entry);
+            if (rerenderPos.equals(pos)) {
+                if (!builder.isEmpty()) {
+                    builder.append('|');
+                }
+                builder.append(pos.toShortString());
+            }
+        }
+        return builder.isEmpty() ? "none" : builder.toString();
+    }
+
+    private static BlockPos parseWatchedPos(String raw) {
+        String[] parts = raw.trim().split(",");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            return new BlockPos(
+                    Integer.parseInt(parts[0].trim()),
+                    Integer.parseInt(parts[1].trim()),
+                    Integer.parseInt(parts[2].trim()));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 }

@@ -57,6 +57,8 @@ Recorder markers:
 
 Suggested launch properties: `slabbed.beta4ReloadJumpRecorder=true`, `slabbed.beta4ReloadJumpRecorderTicks=500`, and `slabbed.beta4ReloadJumpRecorderRadius=6`. Optional absolute watch positions can be supplied with `slabbed.beta4ReloadJumpRecorderWatch=x,y,z;x,y,z`, but the default route follows the current crosshair target so Julia can stand near the live seam and look at the visually jumped block.
 
+Follow-up recorder from `c11ee50`: a second default-off recorder now runs behind `slabbed.beta4ModelDyRecorder=true` with optional `slabbed.beta4ModelDyRecorderWatch=x,y,z;x,y,z` and `slabbed.beta4ModelDyRecorderTicks=700`. It emits `[BETA4_MODEL_DY_RECORDER_START]`, `[BETA4_MODEL_DY_RECORDER]`, and `[BETA4_MODEL_DY_RERENDER]` to compare model/render-view dy, client-world source truth, and watched-position rerender timing without changing model dy behavior, anchor persistence, retargeting, or sync scheduling.
+
 ## Non-Negotiables
 
 - No retarget fix before reload jump is classified.
