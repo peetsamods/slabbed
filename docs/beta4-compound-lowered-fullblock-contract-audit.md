@@ -240,6 +240,113 @@ Julia may want.
 - `release/0.2.0-beta.4` stays where it is. Do not move, delete, or
   reassign.
 
+## Matrix proof status (added at `effd6ee`)
+
+A comprehensive opt-in RED proof matrix for the compound `dy=-1.0` lane is
+now available. It does not implement gameplay fixes; it enumerates the
+current observable behavior of the canonical compound topology
+(`STONE` over a `persistentLoweredBottomSlabCarrier` over an anchored
+`STONE` over a vanilla bottom slab) across the legal-state decision table
+above so a design choice between A / B / C / D can be made on evidence.
+
+- File: `src/gametest/java/com/slabbed/test/SlabbedLabBeta4CompoundContractMatrixClientGameTest.java`
+- Property: `-Dslabbed.beta4CompoundContractMatrixRedOnly=true`
+- Per-row marker: `[BETA4_COMPOUND_CONTRACT_MATRIX] row=<NN_NAME> ...`
+- Final markers:
+  - `[BETA4_COMPOUND_CONTRACT_MATRIX_RED]` — at least one row is RED,
+    UNDECIDED, or NOT_IMPLEMENTED. Expected current state.
+  - `[BETA4_COMPOUND_CONTRACT_MATRIX_GREEN]` — every row GREEN. Do not
+    emit until the design table is filled in and every row is decided
+    plus implemented.
+- Matrix is a no-op when the property is not set. Default
+  `runClientGameTest` is unaffected.
+- Evidence harvest at `effd6ee`:
+  `tmp/beta4-compound-contract-matrix-effd6ee/`.
+
+### Row summary (current observed at `effd6ee`)
+
+| Row | Name | Classification | Live status |
+| --- | ---- | -------------- | ----------- |
+| 1 | `SELECT_EMPTY_HAND_COMPOUND_BODY` | GREEN | automation-only |
+| 2 | `SELECT_STONE_HELD_COMPOUND_BODY` | GREEN | automation-only |
+| 3 | `SELECT_SLAB_HELD_COMPOUND_BODY` | UNDECIDED | automation-only |
+| 4 | `PLACE_STONE_SIDE_LOWER_HALF` | RED | live-confirmed-fail |
+| 5 | `PLACE_STONE_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail |
+| 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | RED | live-confirmed-fail |
+| 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail |
+| 8 | `PLACE_BLOCK_ON_TOP` | UNDECIDED | not-yet-live-tested |
+| 9 | `SOURCE_SLAB_BREAK` | RED | live-confirmed-fail |
+| 10 | `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK` | RED | not-yet-live-tested |
+| 11 | `SAVE_RELOAD_AFTER_COMPOUND` | GREEN | live-confirmed-fail |
+| 12 | `CHUNK_UNLOAD_RELOAD_IF_HELPER_EXISTS` | NOT_IMPLEMENTED | not-yet-live-tested |
+
+Final marker emitted at `effd6ee`:
+`[BETA4_COMPOUND_CONTRACT_MATRIX_RED] rows=12 red=4 undecided=4 green=3 notImplemented=1`.
+
+### Rows classified RED
+
+- **Row 4** `PLACE_STONE_SIDE_LOWER_HALF`: aiming the visual lower half
+  of the compound's WEST face with stone-held reproduces a placement
+  failure mode matching Julia's live "flicker / pop-off" symptom.
+- **Row 6** `PLACE_SLAB_SIDE_LOWER_HALF`: aiming the visual lower half of
+  the compound's EAST face with slab-held reproduces a placement failure
+  matching Julia's live "wrong column / wrong lane" symptom.
+- **Row 9** `SOURCE_SLAB_BREAK`: breaking the lower
+  `persistentLoweredBottomSlabCarrier` collapses the compound block from
+  `dy=-1.0` to `dy=-0.5` on the next tick. This is the live "jump"
+  Julia documented and proves the source-truth recompute hazard
+  (audit row 8).
+- **Row 10** `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK`: an explicit
+  `world.updateNeighborsAlways(LOWERED_BOTTOM_SLAB, AIR, null)` after
+  the break does not recover the compound `dy=-1.0`. It collapses to
+  `dy=-0.5` and stays there.
+
+### Rows classified UNDECIDED
+
+- **Row 3** `SELECT_SLAB_HELD_COMPOUND_BODY`: slab-held selection intent
+  for the compound body is not formally decided (audit row 1
+  "(decide)").
+- **Row 5** `PLACE_STONE_SIDE_UPPER_HALF`: placement landed somewhere
+  observable but the intended outcome (compound lateral / vanilla / pop)
+  is not formally decided (audit row 4).
+- **Row 7** `PLACE_SLAB_SIDE_UPPER_HALF`: same as row 5 for slab grammar
+  (audit row 6).
+- **Row 8** `PLACE_BLOCK_ON_TOP`: top-of-compound placement intent is
+  not formally decided (audit row 2).
+
+### Rows classified GREEN
+
+- **Row 1** `SELECT_EMPTY_HAND_COMPOUND_BODY`: outline / raycast /
+  selected target all own the compound BlockPos (matches the existing
+  `BETA4_COMPOUND_LOWERED_FULL_BLOCK_TRIAD` proof).
+- **Row 2** `SELECT_STONE_HELD_COMPOUND_BODY`: same triad ownership while
+  holding `minecraft:stone`. The slab-held retarget guard does not
+  engage for non-slab held items.
+- **Row 11** `SAVE_RELOAD_AFTER_COMPOUND`: in this clean automation
+  harness, `TestSingleplayerContext.getWorldSave().open()` reload
+  preserves both the compound `dy=-1.0` and the carrier slab's
+  `persistentLoweredBottomSlabCarrier` truth. **This is automation-only
+  evidence**; Julia's live observation of compound jumping after reload
+  remains live-confirmed-fail. The matrix records the harness disagreement
+  rather than declaring the issue resolved. The audit row 10 hazard
+  ("compound dy depends on slab carrier still being persisted") is not
+  closed by this row alone.
+
+### Rows NOT_IMPLEMENTED
+
+- **Row 12** `CHUNK_UNLOAD_RELOAD_IF_HELPER_EXISTS`: the current Fabric
+  client gametest API (`fabric-client-gametest-api-v1` `4.3.5`) does not
+  expose a chunk-only unload/reload primitive. `ChainSurvivalReproTest`
+  documents the same caveat. Recorded as helper-absent.
+
+## Recommendation
+
+Do not implement gameplay fixes until Julia decides the intended outcome
+for each UNDECIDED row (3, 5, 7, 8) and the design owner picks among
+A / B / C / D for the RED rows (4, 6, 9, 10). The matrix is the contract
+surface; it is the input to the design decision, not the output. Release
+remains blocked.
+
 ## Cross-references
 
 - `docs/beta4-compound-lowered-fullblock-height.md` — height fix,
@@ -252,3 +359,5 @@ Julia may want.
   contract; not changed by this audit.
 - Live evidence harvest:
   `tmp/beta4-compound-live-fail-contract-audit-06724fb/`.
+- Matrix evidence harvest at `effd6ee`:
+  `tmp/beta4-compound-contract-matrix-effd6ee/`.
