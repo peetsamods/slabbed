@@ -312,6 +312,10 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             String observed = "attemptedItem=" + attemptedItem
                     + " immediate={" + safe(immediate[0]) + "}"
                     + " after={" + safe(after[0]) + "}";
+            if ("06_PLACE_SLAB_SIDE_LOWER_HALF".equals(rowName)
+                    && "minecraft:stone_slab".equals(attemptedItem)) {
+                observed += " cleanReject=" + isRow6CleanReject(observed);
+            }
 
             // Classification: live-confirmed-fail row. RED if the placement
             // popped/disappeared, fired in vanilla/wrong-dy lane, or got
@@ -519,6 +523,12 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
     // ------------------------------------------------------------------
 
     private static Cls classifyPlacement(String rowName, String observed, String attemptedItem) {
+        if ("06_PLACE_SLAB_SIDE_LOWER_HALF".equals(rowName)
+                && "minecraft:stone_slab".equals(attemptedItem)
+                && isRow6CleanReject(observed)) {
+            return Cls.GREEN;
+        }
+
         // RED indicators (match Julia's documented live failure modes):
         //   - placed slot is air after tick (pop-off / placement vanished)
         //   - placed at COMPOUND.up() instead of the side neighbor (upward
@@ -550,6 +560,28 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
         return Cls.UNDECIDED;
     }
 
+    private static boolean isRow6CleanReject(String observed) {
+        String slotBefore = scopedLabelSection(observed, "immediate={", "slotBefore", "slotImmediate");
+        String slotImmediate = scopedLabelSectionUntil(observed, "immediate={", "slotImmediate", "} after={");
+        String supportAfter = scopedLabelSection(observed, "phase=server-after-tick", "supportAfter", "slotAfter");
+        String slotAfter = scopedLabelSection(observed, "phase=server-after-tick", "slotAfter", "slotAboveCompound");
+        String slotAboveCompound = scopedLabelSection(observed, "phase=server-after-tick", "slotAboveCompound", "sourceAfter");
+        Double supportDy = extractDy(observed, "server-after-tick", "supportAfter");
+        return observed.contains("accepted=false")
+                && containsAir(slotBefore)
+                && containsAir(slotImmediate)
+                && containsAir(slotAfter)
+                && containsAir(slotAboveCompound)
+                && supportAfter != null
+                && supportAfter.contains("compoundFullBlockAnchor=true")
+                && supportDy != null
+                && Math.abs(supportDy + 1.0d) <= EPSILON;
+    }
+
+    private static boolean containsAir(String section) {
+        return section != null && section.contains("state=Block{minecraft:air}");
+    }
+
     /**
      * Returns the substring describing a single labelled block within a
      * given phase, bounded by the next labelled block. Returns
@@ -568,6 +600,15 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             return braceEnd < 0 ? observed.substring(labelIdx) : observed.substring(labelIdx, braceEnd);
         }
         return observed.substring(labelIdx, nextIdx);
+    }
+
+    private static String scopedLabelSectionUntil(String observed, String phaseMarker, String label, String endMarker) {
+        int phaseIdx = observed.indexOf(phaseMarker);
+        if (phaseIdx < 0) return null;
+        int labelIdx = observed.indexOf(label + " pos=", phaseIdx);
+        if (labelIdx < 0) return null;
+        int endIdx = observed.indexOf(endMarker, labelIdx);
+        return endIdx < 0 ? observed.substring(labelIdx) : observed.substring(labelIdx, endIdx);
     }
 
     private static Cls classifySourceBreak(String observed) {

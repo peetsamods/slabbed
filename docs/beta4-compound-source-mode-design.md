@@ -49,7 +49,10 @@ Row 5 `PLACE_STONE_SIDE_UPPER_HALF`:
 Same as row 4 for full blocks. No upward/vanilla ghost placement.
 
 Row 6 `PLACE_SLAB_SIDE_LOWER_HALF`:
-Reject cleanly for beta4 or keep compound full block selected; no flicker/pop.
+GREEN after clean rejection. Slab-held lower-half side click on an authored
+compound full block returns pass with no side-slot mutation: immediate and
+after-tick side slot stay air, the compound full block stays authored at
+`dy=-1.0`, and no beta4 `dy=-1.0` or ghost `dy=-0.5` slab lane is created.
 
 Row 7 `PLACE_SLAB_SIDE_UPPER_HALF`:
 Reject cleanly for beta4 or keep compound full block selected; no vanilla-height
