@@ -151,3 +151,14 @@ legalizes placement from an existing legal compound lowered full block.
   rules, raycast/outline/model behavior all stay unchanged.
 - Release remains blocked pending Julia live retest of the freshly placed
   ordinary block on a lowered bottom slab carrier.
+
+## Live retest at 06724fb
+
+Julia's live retest at `06724fb` / `save/beta4-compound-placement-popoff-fix`
+**failed** across side placement (bottom half flicker / pop-off, top half
+upward placement), source-slab break (upward jump), and overall live feel.
+The compound stack is automation-green but live-failed. No further
+single-case patch is permitted until the contract decision table is filled
+in. See `docs/beta4-compound-lowered-fullblock-contract-audit.md` for the
+legal-state decision table, anchor representation risk, and recommended
+next slice.
