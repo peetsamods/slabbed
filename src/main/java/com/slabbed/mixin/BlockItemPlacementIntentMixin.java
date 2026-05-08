@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.util.Beta4PlacementAuthorRecorder;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.BlockEntityProvider;
@@ -13,6 +14,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemUsageContext;
+import net.minecraft.registry.Registries;
 import net.minecraft.util.function.BooleanBiFunction;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
@@ -397,30 +399,81 @@ public abstract class BlockItemPlacementIntentMixin {
             ItemPlacementContext context,
             CallbackInfoReturnable<net.minecraft.util.ActionResult> cir
     ) {
+        BlockItem self = (BlockItem) (Object) this;
+        boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
         if (!cir.getReturnValue().isAccepted()) {
+            Beta4PlacementAuthorRecorder.recordPlace(
+                    "finalization-return",
+                    Registries.ITEM.getId(self),
+                    heldIsSlab,
+                    context,
+                    cir.getReturnValue(),
+                    "anchorFinalization=skipped_result_not_accepted");
             return;
         }
 
         World world = context.getWorld();
         BlockPos placePos = context.getBlockPos();
         BlockState placedState = world.getBlockState(placePos);
-        if (((BlockItem) (Object) this).getBlock() instanceof SlabBlock) {
+        if (heldIsSlab) {
             if (slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
                 SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, placePos, placedState);
+                Beta4PlacementAuthorRecorder.recordPlace(
+                        "finalization-return",
+                        Registries.ITEM.getId(self),
+                        true,
+                        context,
+                        cir.getReturnValue(),
+                        "anchorFinalization=ran_update_persistent_lowered_slab_carrier carrierAfter="
+                                + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, placedState));
+            } else {
+                Beta4PlacementAuthorRecorder.recordPlace(
+                        "finalization-return",
+                        Registries.ITEM.getId(self),
+                        true,
+                        context,
+                        cir.getReturnValue(),
+                        "anchorFinalization=skipped_slab_not_persistent_carrier_candidate");
             }
             return;
         }
 
         if (context.getSide().getAxis().isVertical()) {
+            Beta4PlacementAuthorRecorder.recordPlace(
+                    "finalization-return",
+                    Registries.ITEM.getId(self),
+                    false,
+                    context,
+                    cir.getReturnValue(),
+                    "anchorFinalization=skipped_vertical_face");
             return;
         }
 
         if (!SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, placePos, placedState)) {
+            Beta4PlacementAuthorRecorder.recordPlace(
+                    "finalization-return",
+                    Registries.ITEM.getId(self),
+                    false,
+                    context,
+                    cir.getReturnValue(),
+                    "anchorFinalization=skipped_not_ordinary_full_block_anchor_candidate");
             return;
         }
 
         BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
         BlockState sourceState = world.getBlockState(sourcePos);
+        boolean anchorBefore = SlabAnchorAttachment.isAnchored(world, placePos);
         SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(world, placePos, placedState, sourcePos, sourceState);
+        Beta4PlacementAuthorRecorder.recordPlace(
+                "finalization-return",
+                Registries.ITEM.getId(self),
+                false,
+                context,
+                cir.getReturnValue(),
+                "anchorFinalization=ran_side_adjacent_lowered_full_anchor anchorBefore="
+                        + anchorBefore
+                        + " anchorAfter=" + SlabAnchorAttachment.isAnchored(world, placePos)
+                        + " sourcePos=" + sourcePos.toShortString()
+                        + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
     }
 }
