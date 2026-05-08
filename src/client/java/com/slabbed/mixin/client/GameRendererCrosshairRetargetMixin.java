@@ -1014,12 +1014,15 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (!slabbed$isAnchoredLoweredFullBlock(world, pos, state)) {
             return null;
         }
-        VoxelShape shape = state.getOutlineShape(world, pos, ShapeContext.of(cam));
-        BlockHitResult hit = shape.raycast(eye, end, pos);
-        if (hit == null) {
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        VoxelShape raycast = state.getRaycastShape(world, pos);
+        BlockHitResult outlineHit = outline.raycast(eye, end, pos);
+        BlockHitResult raycastHit = raycast.raycast(eye, end, pos);
+        if (outlineHit == null || raycastHit == null) {
             return null;
         }
-        return hit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6 ? hit : null;
+        return raycastHit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6
+                ? raycastHit : null;
     }
 
     private static boolean slabbed$isAnchoredLoweredFullBlock(ClientWorld world, BlockPos pos, BlockState state) {
@@ -1036,7 +1039,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
 
         return SlabAnchorAttachment.isAnchored(world, pos)
-                && SlabSupport.getYOffset(world, pos, state) == -0.5;
+                && SlabSupport.getYOffset(world, pos, state) < 0.0;
     }
 
     private void slabbed$traceTargeting(

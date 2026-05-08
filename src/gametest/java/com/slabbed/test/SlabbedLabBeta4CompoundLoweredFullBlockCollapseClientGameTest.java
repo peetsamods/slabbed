@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -10,7 +11,16 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.entity.Entity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
 /**
@@ -56,8 +66,11 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
         implements FabricClientGameTest {
 
     private static final String PROOF = "BETA4_COMPOUND_LOWERED_FULL_BLOCK_COLLAPSE";
+    private static final String TRIAD_PROOF = "BETA4_COMPOUND_LOWERED_FULL_BLOCK_TRIAD";
     private static final String OPT_IN_PROPERTY =
             "slabbed.beta4CompoundLoweredFullBlockCollapseRedOnly";
+    private static final String TRIAD_OPT_IN_PROPERTY =
+            "slabbed.beta4CompoundLoweredFullBlockTriadRedOnly";
     private static final double EPSILON = 1.0e-6d;
 
     private static final BlockPos BASE_FULL_SUPPORT = new BlockPos(8, 200, 8);
@@ -67,17 +80,19 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
-        if (!Boolean.getBoolean(OPT_IN_PROPERTY)) {
+        boolean collapseProof = Boolean.getBoolean(OPT_IN_PROPERTY);
+        boolean triadProof = Boolean.getBoolean(TRIAD_OPT_IN_PROPERTY);
+        if (!collapseProof && !triadProof) {
             return;
         }
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            runProof(ctx, singleplayer);
+            runProof(ctx, singleplayer, triadProof);
         }
     }
 
-    private static void runProof(ClientGameTestContext ctx, TestSingleplayerContext singleplayer) {
+    private static void runProof(ClientGameTestContext ctx, TestSingleplayerContext singleplayer, boolean triadProof) {
         singleplayer.getServer().runOnServer(server -> {
             World world = server.getOverworld();
             clearArea(world);
@@ -125,6 +140,17 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
             }
             assertCompound(mc.world, "client-stable");
         });
+        if (triadProof) {
+            syncHeldMainHand(ctx, singleplayer, ItemStack.EMPTY);
+            syncPlayerPosition(ctx, singleplayer);
+            ctx.runOnClient(mc -> {
+                if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                    throw new RuntimeException("PROOF_GAP: " + TRIAD_PROOF + " client not ready");
+                }
+                mc.gameRenderer.updateCrosshairTarget(0.0f);
+                assertCompoundTriad(mc.world, mc.player, mc.crosshairTarget);
+            });
+        }
     }
 
     private static void assertCompound(World world, String phase) {
@@ -202,6 +228,193 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
                     + " placedState=" + placedFull
                     + " sourcePersistentLoweredBottomSlabCarrier=" + carrierBottom);
         }
+    }
+
+    private static void assertCompoundTriad(World world, Entity player, HitResult selectedTarget) {
+        BlockState sourceSlab = world.getBlockState(LOWERED_BOTTOM_SLAB);
+        BlockState placedFull = world.getBlockState(PLACED_FULL);
+        double sourceDy = SlabSupport.getYOffset(world, LOWERED_BOTTOM_SLAB, sourceSlab);
+        double placedDy = SlabSupport.getYOffset(world, PLACED_FULL, placedFull);
+        double modelDy = ClientDy.dyFor(world, PLACED_FULL, placedFull);
+        boolean sourceCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                world, LOWERED_BOTTOM_SLAB, sourceSlab);
+        boolean sourceBottomCarrier = SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(
+                world, LOWERED_BOTTOM_SLAB, sourceSlab);
+        boolean placedAnchor = SlabAnchorAttachment.isAnchored(world, PLACED_FULL);
+        boolean persistentFullBlockAnchor = placedAnchor
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, PLACED_FULL, placedFull);
+
+        Vec3d rayStart = player.getCameraPosVec(0.0f);
+        Vec3d rayEnd = rayStart.add(player.getRotationVec(0.0f).multiply(6.0d));
+        VoxelShape outlineShape = placedFull.getOutlineShape(world, PLACED_FULL);
+        VoxelShape raycastShape = placedFull.getRaycastShape(world, PLACED_FULL);
+        BlockHitResult outlineHit = outlineShape.raycast(rayStart, rayEnd, PLACED_FULL);
+        BlockHitResult raycastHit = raycastShape.raycast(rayStart, rayEnd, PLACED_FULL);
+        HitResult vanillaOutlineTarget = world.raycast(new RaycastContext(
+                rayStart,
+                rayEnd,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                player));
+
+        String expectedOwner = PLACED_FULL.toShortString();
+        String outlineOwner = ownerOf(outlineHit);
+        String raycastOwner = ownerOf(raycastHit);
+        String vanillaOutlineOwner = ownerOf(vanillaOutlineTarget);
+        String selectedOwner = ownerOf(selectedTarget);
+        Box outlineBox = outlineShape.isEmpty() ? null : outlineShape.getBoundingBox();
+        Box raycastBox = raycastShape.isEmpty() ? null : raycastShape.getBoundingBox();
+        boolean outlineShifted = matchesBox(outlineBox, 0.0d, -1.0d, 0.0d, 1.0d, 0.0d, 1.0d);
+        boolean raycastShifted = matchesBox(raycastBox, 0.0d, -1.0d, 0.0d, 1.0d, 0.0d, 1.0d);
+        boolean outlineHitOwner = expectedOwner.equals(outlineOwner);
+        boolean raycastHitOwner = expectedOwner.equals(raycastOwner);
+        boolean selectedOwnerMatches = expectedOwner.equals(selectedOwner);
+        boolean legalCompound = placedFull.isOf(Blocks.STONE)
+                && Math.abs(sourceDy + 0.5d) <= EPSILON
+                && sourceCarrier
+                && sourceBottomCarrier
+                && Math.abs(placedDy + 1.0d) <= EPSILON
+                && Math.abs(modelDy + 1.0d) <= EPSILON
+                && persistentFullBlockAnchor;
+
+        String facts = " sourceSlabPos=" + LOWERED_BOTTOM_SLAB.toShortString()
+                + " sourceSlabState=" + sourceSlab
+                + " sourceDy=" + sourceDy
+                + " sourcePersistentLoweredSlabCarrier=" + sourceCarrier
+                + " sourcePersistentLoweredBottomSlabCarrier=" + sourceBottomCarrier
+                + " placedPos=" + PLACED_FULL.toShortString()
+                + " placedState=" + placedFull
+                + " placedDy=" + placedDy
+                + " modelDy=" + modelDy
+                + " persistentFullBlockAnchor=" + persistentFullBlockAnchor
+                + " expectedDy=-1.0"
+                + " outlineShape=" + formatBox(outlineBox)
+                + " outlineShiftedDyMinusOne=" + outlineShifted
+                + " outlineHit=" + (outlineHit != null)
+                + " outlineHitDesc=" + describeHit(outlineHit)
+                + " outlineOwner=" + outlineOwner
+                + " raycastShape=" + formatBox(raycastBox)
+                + " raycastShapeEmpty=" + raycastShape.isEmpty()
+                + " raycastShiftedDyMinusOne=" + raycastShifted
+                + " raycastHit=" + (raycastHit != null)
+                + " raycastHitDesc=" + describeHit(raycastHit)
+                + " raycastOwner=" + raycastOwner
+                + " selectedOwner=" + selectedOwner
+                + " selectedOwnerExpected=" + expectedOwner
+                + " selectedOwnerMatches=" + selectedOwnerMatches
+                + " selectedTargetType=" + (selectedTarget == null ? "null" : selectedTarget.getType())
+                + " vanillaOutlineOwner=" + vanillaOutlineOwner
+                + " vanillaOutlineHitType=" + (vanillaOutlineTarget == null ? "null" : vanillaOutlineTarget.getType())
+                + " rayStart=" + rayStart
+                + " rayEnd=" + rayEnd;
+
+        if (legalCompound && outlineShifted && outlineHitOwner
+                && (!raycastShifted || !raycastHitOwner || raycastShape.isEmpty()
+                || !selectedOwnerMatches)) {
+            String classifiedFacts = " classification=TRIAD_RED" + facts;
+            System.out.println("[" + TRIAD_PROOF + "_RED]" + classifiedFacts);
+            throw new RuntimeException("[" + TRIAD_PROOF + "_RED]" + classifiedFacts);
+        }
+
+        if (legalCompound && outlineShifted && raycastShifted
+                && outlineHitOwner && raycastHitOwner && selectedOwnerMatches) {
+            System.out.println("[" + TRIAD_PROOF + "_GREEN]"
+                    + " classification=TRIAD_GREEN" + facts);
+            return;
+        }
+
+        throw new RuntimeException("PROOF_GAP: " + TRIAD_PROOF + facts
+                + " legalCompound=" + legalCompound
+                + " outlineShifted=" + outlineShifted
+                + " raycastShifted=" + raycastShifted
+                + " outlineHitOwner=" + outlineHitOwner
+                + " raycastHitOwner=" + raycastHitOwner
+                + " selectedOwnerMatches=" + selectedOwnerMatches);
+    }
+
+    private static String ownerOf(HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit) || hit.getType() == HitResult.Type.MISS) {
+            return "MISS";
+        }
+        return blockHit.getBlockPos().toShortString();
+    }
+
+    private static String describeHit(BlockHitResult hit) {
+        if (hit == null) {
+            return "MISS";
+        }
+        return hit.getBlockPos().toShortString() + "/" + hit.getSide().asString()
+                + "@" + hit.getPos();
+    }
+
+    private static String formatBox(Box box) {
+        if (box == null) {
+            return "empty";
+        }
+        return "min=(" + box.minX + "," + box.minY + "," + box.minZ + ")"
+                + ",max=(" + box.maxX + "," + box.maxY + "," + box.maxZ + ")";
+    }
+
+    private static boolean matchesBox(
+            Box box,
+            double minX,
+            double minY,
+            double minZ,
+            double maxX,
+            double maxY,
+            double maxZ
+    ) {
+        return box != null
+                && Math.abs(box.minX - minX) <= EPSILON
+                && Math.abs(box.minY - minY) <= EPSILON
+                && Math.abs(box.minZ - minZ) <= EPSILON
+                && Math.abs(box.maxX - maxX) <= EPSILON
+                && Math.abs(box.maxY - maxY) <= EPSILON
+                && Math.abs(box.maxZ - maxZ) <= EPSILON;
+    }
+
+    private static void syncPlayerPosition(ClientGameTestContext ctx, TestSingleplayerContext singleplayer) {
+        double x = PLACED_FULL.getX() - 1.25d;
+        double y = PLACED_FULL.getY() - 2.12d;
+        double z = PLACED_FULL.getZ() + 0.5d;
+        float yaw = -90.0f;
+        float pitch = 0.0f;
+        singleplayer.getServer().runOnServer(server -> {
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                return;
+            }
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(x, y, z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+        });
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.refreshPositionAndAngles(x, y, z, yaw, pitch);
+                mc.player.setVelocity(Vec3d.ZERO);
+            }
+        });
+        ctx.waitTick();
+    }
+
+    private static void syncHeldMainHand(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            ItemStack stack
+    ) {
+        ItemStack held = stack == null ? ItemStack.EMPTY : stack.copy();
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                server.getPlayerManager().getPlayerList().get(0).setStackInHand(Hand.MAIN_HAND, held.copy());
+            }
+        });
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.setStackInHand(Hand.MAIN_HAND, held.copy());
+            }
+        });
+        ctx.waitTick();
     }
 
     private static void clearArea(World world) {

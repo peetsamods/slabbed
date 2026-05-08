@@ -93,7 +93,7 @@ public abstract class SlabSupportStateMixin {
             double yOff,
             VoxelShape nativeRaycast
     ) {
-        if (yOff != -0.5d || nativeRaycast == null || !nativeRaycast.isEmpty()) {
+        if (yOff >= 0.0d || nativeRaycast == null || !nativeRaycast.isEmpty()) {
             return false;
         }
         if (SlabSupport.isSupportingSlab(state) || SlabSupport.isThinTopLayer(state)) {
