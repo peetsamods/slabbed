@@ -40,9 +40,10 @@ Should place ordinary full block in same compound lane `dy=-1.0` if collision
 and survival are valid. Packet/hit-validity bridge is implemented for the
 compound full-block visual bounds (`BlockPos 8,203,8`, hit `y=202.25`): vanilla
 server validation now reaches placement finalization instead of rejecting the
-packet as too far from the native block. Current downstream status: the side
-slot survives as ordinary anchored `dy=-0.5`, so row 4 is `UNDECIDED` rather
-than complete compound-lane authoring.
+packet as too far from the native block. Downstream lane authoring is now
+implemented for ordinary full blocks: the side slot is authored with
+`COMPOUND_FULL_BLOCK_ANCHOR_TYPE`, survives as `dy=-1.0`, and row 4 is GREEN.
+This does not legalize slab side placement or any beta4 `dy=-1.0` slab lane.
 
 Row 5 `PLACE_STONE_SIDE_UPPER_HALF`:
 Same as row 4 for full blocks. No upward/vanilla ghost placement.
