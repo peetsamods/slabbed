@@ -23,7 +23,13 @@ Why no approximate proof was kept:
 - The live trace proves the player-facing bug, but it does not fully specify the source topology needed to recreate the exact lowered, non-fake slab truth in automation.
 - Committing a RED marker that stops on source-truth or branch mismatch would be a false proof.
 
-Required recorder improvement before another proof attempt:
+Recorder improvement added after this gap:
+
+- `-Dslabbed.beta4LiveRetargetRecorder=true` now emits `[BETA4_LIVE_RETARGET_SOURCE_TRUTH]` alongside `[BETA4_LIVE_RETARGET_RECORDER]`.
+- The supplemental line records replay fields, candidate summaries, crosshair before/after, outline/raycast hit checks, and source topology for initial/final/candidate positions and their below/above/cardinal neighbors.
+- This remains recorder/debug output only; it does not prove the bug by itself and does not change targeting behavior.
+
+Required live capture before another proof attempt:
 
 - Emit the full replay tuple in one line: eye, look, yaw, pitch, ray start/end, initial hit vec, final hit vec, crosshair target, outline target, held item, initial/final/candidate positions, and every candidate raycast/outline hit or miss result.
 - Emit source-truth facts for initial, final, candidate, and target-neighbor blocks: state, dy, anchored, lowered, `persistentLoweredSlabCarrier`, slab type, solid/full-cube flags, and relevant support/source positions.
