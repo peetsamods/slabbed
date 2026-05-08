@@ -60,6 +60,18 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
             return set != null && set.contains(pos.asLong());
         };
+        SlabAnchorAttachment.clientCompoundFullBlockAnchorLookup = pos -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc == null || mc.world == null) {
+                return false;
+            }
+            WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk == null) {
+                return false;
+            }
+            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
 
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
@@ -69,10 +81,13 @@ public final class SlabAnchorClientSync {
                 chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE, null,
                 chunk.getAttached(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE));
+        logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE, null,
+                chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE));
 
         // Register listener for future attachment changes (e.g. live anchor add/remove sync).
         registerRerenderListener(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
 
         // Also handle any attachment value already present at chunk-load time.
         // This covers the case where the chunk attachment sync packet arrived before
@@ -80,6 +95,7 @@ public final class SlabAnchorClientSync {
         // fires but the attachment is already populated.
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
     }
 
     private static void registerRerenderListener(
@@ -136,6 +152,19 @@ public final class SlabAnchorClientSync {
         return Boolean.getBoolean("slabbed.beta4ReloadJumpRecorder");
     }
 
+    private static String labelForAttachment(AttachmentType<LongOpenHashSet> attachmentType) {
+        if (attachmentType == SlabAnchorAttachment.ANCHOR_TYPE) {
+            return "persistentFullBlockAnchor";
+        }
+        if (attachmentType == SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE) {
+            return "persistentLoweredSlabCarrier";
+        }
+        if (attachmentType == SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE) {
+            return "compoundFullBlockAnchor";
+        }
+        return "unknownAttachment";
+    }
+
     private static boolean modelDyRecorderEnabled() {
         return Boolean.getBoolean("slabbed.beta4ModelDyRecorder");
     }
@@ -147,17 +176,12 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet oldSet,
             LongOpenHashSet newSet
     ) {
+        String type = labelForAttachment(attachmentType);
         if (!reloadJumpRecorderEnabled()) {
-            String type = attachmentType == SlabAnchorAttachment.ANCHOR_TYPE
-                    ? "persistentFullBlockAnchor"
-                    : "persistentLoweredSlabCarrier";
             logModelDyRerenderEvent(event, type, chunk, oldSet, newSet);
             return;
         }
 
-        String type = attachmentType == SlabAnchorAttachment.ANCHOR_TYPE
-                ? "persistentFullBlockAnchor"
-                : "persistentLoweredSlabCarrier";
         Slabbed.LOGGER.info(
                 "[BETA4_RELOAD_JUMP_SYNC] event={} type={} chunk={} oldCount={} newCount={} rerenderTriggered={}",
                 event,

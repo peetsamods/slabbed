@@ -441,6 +441,21 @@ public final class SlabSupport {
                 && isAdjacentSideSlabLowered(world, pos, state);
     }
 
+    /**
+     * Beta4 compound-source predicate: the position is a bottom slab that is itself
+     * lowered (persistent lowered slab carrier or adjacent-side-slab lowered), so an
+     * ordinary full block placed directly above it is authored at compound lane
+     * {@code dy=-1.0}. Mirrors the inline check inside the anchored compound branch
+     * of {@link #getYOffsetInner}; exposed publicly so
+     * {@link com.slabbed.anchor.SlabAnchorAttachment#qualifiesForCompoundFullBlockAnchor}
+     * can decide sidecar authoring without duplicating the logic.
+     */
+    public static boolean isLoweredCompoundSourceSlab(BlockView world, BlockPos pos, BlockState state) {
+        return state != null
+                && isBottomSlab(state)
+                && isAdjacentSideSlabLowered(world, pos, state);
+    }
+
     public static boolean isBottomSlabLoweredByCarrierBelow(BlockView world, BlockPos pos, BlockState state) {
         if (world == null
                 || pos == null
@@ -660,6 +675,18 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            // Beta4 sidecar: authored compound full-block anchor preserves dy=-1.0
+            // even after the source slab below is removed. Sidecar truth wins over
+            // the live below-slab predicate so source removal cannot silently
+            // renormalize the authored compound lane.
+            if (com.slabbed.anchor.SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)) {
+                if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
+                    String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                    Slabbed.LOGGER.info("[ANCHOR] compound sidecar dy applied side={} pos={} state={} dy=-1.0",
+                            side, pos.toShortString(), state);
+                }
+                return -1.0;
+            }
             // Compound Lowered Full Block on Lowered Bottom Slab Carrier
             // (named legal state). When the bottom slab directly below is itself
             // in the lowered lane (persistent lowered slab carrier or
