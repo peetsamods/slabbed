@@ -305,7 +305,13 @@ gate; the matrix flip is automation-only evidence.
 
 - **Row 4** `PLACE_STONE_SIDE_LOWER_HALF`: aiming the visual lower half
   of the compound's WEST face with stone-held reproduces a placement
-  failure mode matching Julia's live "flicker / pop-off" symptom.
+  failure mode matching Julia's live "flicker / pop-off" symptom. The
+  mechanism is now classified as packet/hit-validity rejection before
+  server-side placement finalization: the lower-half side hit
+  `(8.0, 202.25, 8.5)` targets native block `BlockPos{x=8, y=203, z=8}`,
+  and vanilla rejects the `UseItemOnPacket` as too far away from that hit
+  block. Row 4 stays RED; next implementation is a narrow server hit-validity
+  bridge for compound full-block visual bounds.
 - **Row 6** `PLACE_SLAB_SIDE_LOWER_HALF`: aiming the visual lower half of
   the compound's EAST face with slab-held reproduces a placement failure
   matching Julia's live "wrong column / wrong lane" symptom.

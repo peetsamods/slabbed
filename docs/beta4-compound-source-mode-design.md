@@ -37,7 +37,12 @@ Compound block owns unless a legal slab-placement face exists. Since the
 
 Row 4 `PLACE_STONE_SIDE_LOWER_HALF`:
 Should place ordinary full block in same compound lane `dy=-1.0` if collision
-and survival are valid.
+and survival are valid. Current blocker: the client sends the visual lower-half
+side hit for the compound block (`BlockPos 8,203,8`, hit `y=202.25`), and vanilla
+server packet validation rejects it as too far from the native block before
+`BlockItemPlacementIntentMixin` finalization can run. The next implementation
+slice is therefore a narrow packet/hit-validity bridge for compound full-block
+visual bounds, not anchor authoring or placement inheritance.
 
 Row 5 `PLACE_STONE_SIDE_UPPER_HALF`:
 Same as row 4 for full blocks. No upward/vanilla ghost placement.
