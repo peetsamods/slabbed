@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
+import com.slabbed.util.Beta4PlacementAuthorRecorder;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.Block;
@@ -46,6 +47,15 @@ public abstract class BlockItemPlaceTraceMixin {
         BlockPos hitPos = placePos.offset(face.getOpposite());
         String side = world.isClient() ? "CLIENT" : "SERVER";
         Identifier itemId = Registries.ITEM.getId(self);
+        boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
+
+        Beta4PlacementAuthorRecorder.recordPlace(
+                "place-head",
+                itemId,
+                heldIsSlab,
+                ctx,
+                null,
+                "anchorFinalization=not_yet_returned");
 
         if (SlabbedAuditBridge.isInspectEnabled()) {
             SLABBED$INSPECT_TRACE.set(new TraceCtx(side, itemId, face, hitPos, placePos));
@@ -102,6 +112,25 @@ public abstract class BlockItemPlaceTraceMixin {
             }
         }
 
+        BlockItem recorderSelf = (BlockItem) (Object) this;
+        if (slabbed$isTracedBlock(recorderSelf.getBlock())) {
+            Identifier itemId = Registries.ITEM.getId(recorderSelf);
+            boolean heldIsSlab = recorderSelf.getBlock() instanceof SlabBlock;
+            Beta4PlacementAuthorRecorder.recordPlace(
+                    "place-return",
+                    itemId,
+                    heldIsSlab,
+                    ctx,
+                    cir.getReturnValue(),
+                    "anchorFinalization=deferred_to_finalization_mixin");
+            Beta4PlacementAuthorRecorder.recordAfterTick(
+                    itemId,
+                    heldIsSlab,
+                    ctx,
+                    cir.getReturnValue(),
+                    "anchorFinalization=after_tick_observation");
+        }
+
         TraceCtx trace = SLABBED$TRACE.get();
         if (trace == null) {
             return;
@@ -136,19 +165,21 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "useOnBlock", at = @At("HEAD"))
     private void slabbed$traceUseOnBlockHead(ItemUsageContext context, CallbackInfoReturnable<ActionResult> cir) {
-        if (!SlabbedAuditBridge.isInspectEnabled()) {
-            return;
-        }
-
         BlockItem self = (BlockItem) (Object) this;
         if (!slabbed$isTracedBlock(self.getBlock())) {
             return;
         }
-        SLABBED$INSPECT_PLACE_CALLED.remove();
         if (context == null || context.getWorld() == null) {
             return;
         }
         Identifier itemId = Registries.ITEM.getId(self);
+        Beta4PlacementAuthorRecorder.recordUseHead(itemId, self.getBlock() instanceof SlabBlock, context);
+
+        if (!SlabbedAuditBridge.isInspectEnabled()) {
+            return;
+        }
+
+        SLABBED$INSPECT_PLACE_CALLED.remove();
         SlabbedAuditBridge.logInspectClickPair(context, itemId);
         BlockPos placePos = context.getBlockPos().offset(context.getSide());
         SLABBED$INSPECT_USE_TRACE.set(new TraceCtx(
