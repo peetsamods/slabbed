@@ -798,19 +798,26 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
 
     private static void printRow4HitValidity(Row row) {
         String suffix = row.classification == Cls.RED ? "_RED" : "_GREEN";
+        String reason = row.classification == Cls.RED
+                ? "server_hit_location_too_far_from_native_block"
+                : "server_hit_validity_bridge_accepted_compound_visual_hit";
+        String finalizationServer = row.classification == Cls.RED
+                ? "not_observed_packet_rejected_before_finalization"
+                : "observed_after_packet_acceptance";
         System.out.println("[" + ROW4_HIT_VALIDITY + suffix + "]"
                 + " row=" + row.name
                 + " classification=" + row.classification
-                + " reason=server_hit_location_too_far_from_native_block"
+                + " reason=" + reason
                 + " supportCompoundPos=8,203,8"
                 + " supportDy=-1.000"
                 + " supportCompoundFullBlockAnchor=true"
                 + " heldItem=minecraft:stone"
                 + " clickedFace=west"
+                + " bridgeRule=compound_full_block_dy_minus_1_horizontal_visual_bounds_non_slab_full_block_item"
                 + " visualLowerHalfHitY=202.250"
                 + " hitYFormula=blockY_minus_0_75"
                 + " serverHitBlock=8,203,8"
-                + " finalizationServer=not_observed_packet_rejected_before_finalization"
+                + " finalizationServer=" + finalizationServer
                 + " observed=" + row.observed
                 + " liveStatus=" + row.liveStatus);
     }
