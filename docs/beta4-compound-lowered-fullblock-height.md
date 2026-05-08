@@ -106,6 +106,43 @@ If post-finalization stable dy is `-0.5`, the proof emits
 fix it emits `[BETA4_COMPOUND_LOWERED_FULL_BLOCK_COLLAPSE_GREEN]` and
 passes.
 
+## Placement-from-compound support proof
+
+Julia's `6e0bd10` retest proved the compound dy=-1.0 full block was
+selectable and hitbox-correct, but adjacent block/slab placement against it
+was not yet legal. The placement attempt flickered because the compound
+source qualified for targeting and placement, but the adjacent placement
+authority still recognized only dy=-0.5 lowered full-block sources.
+
+Opt-in property: `slabbed.beta4CompoundPlacementPopoffRedOnly`.
+
+Markers:
+
+- `[BETA4_COMPOUND_PLACEMENT_POPOFF_RED]`
+- `[BETA4_COMPOUND_PLACEMENT_POPOFF_GREEN]`
+
+The RED proof uses the same legal compound stack as the collapse proof:
+source support `Block{minecraft:stone}` at dy=-1.0 with
+`persistentFullBlockAnchor=true` and source mode `dynamicLoweredOrAnchored`.
+Before the fix, ordinary stone placed off the west side landed at
+`SIDE_PLACED_FULL` as vanilla dy=0.0 with no full-block anchor. That proved
+the failure was placement/survival authority, not retarget, owner rescue,
+model, outline, or raycast behavior.
+
+The fix keeps the central authority narrow: side-adjacent lowered full-block
+support now accepts ordinary full-block sources with negative lowered dy,
+instead of only exact dy=-0.5. It does not make all dy<0 blocks globally
+solid and does not change retarget/rescue behavior. The GREEN proof verifies
+ordinary stone and a stone slab placed off the compound support both survive
+the queued tick in the lowered lane.
+
+## Open support-removal question
+
+Julia also observed that breaking the lower source slab can make the compound
+full block jump upward. That remains a separate survival/support-removal
+question. This slice does not change support-removal behavior; it only
+legalizes placement from an existing legal compound lowered full block.
+
 ## Non-negotiables
 
 - Named legal state, not a fake dy.

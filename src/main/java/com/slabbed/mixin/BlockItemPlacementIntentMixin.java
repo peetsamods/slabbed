@@ -38,7 +38,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return state.isSolidBlock(context.getWorld(), pos)
                 && !(state.getBlock() instanceof BlockEntityProvider)
                 && !(state.getBlock() instanceof CraftingTableBlock)
-                && SlabSupport.getYOffset(context.getWorld(), pos, state) == -0.5d;
+                && SlabSupport.getYOffset(context.getWorld(), pos, state) < 0.0d;
     }
 
     private static boolean slabbed$isLoweredSlab(BlockState state, World world, BlockPos pos) {
@@ -57,7 +57,7 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState below = world.getBlockState(belowPos);
         return SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)
                 && (SlabAnchorAttachment.isAnchored(world, belowPos)
-                || SlabSupport.getYOffset(world, belowPos, below) == -0.5d);
+                || SlabSupport.getYOffset(world, belowPos, below) < 0.0d);
     }
 
     private static SlabType slabbed$getExpectedLoweredSidePlacementType(BlockState targetState) {
@@ -255,7 +255,7 @@ public abstract class BlockItemPlacementIntentMixin {
         boolean ordinaryLoweredFullBlockGuard = targetIsSolid
                 && !targetHasBlockEntity
                 && !targetIsCraftingTable
-                && yOffset == -0.5d;
+                && yOffset < 0.0d;
 
         if (!targetIsSolid && !targetIsLoweredSlab) {
             slabbed$recordRemapAttempt(
@@ -308,7 +308,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     remapMode);
             return slabbed$inspectReturn(context, context, "target_is_crafting_table");
         }
-        if (yOffset != -0.5d) {
+        if (yOffset >= 0.0d) {
             slabbed$recordRemapAttempt(
                     context,
                     true,
@@ -319,11 +319,11 @@ public abstract class BlockItemPlacementIntentMixin {
                     yOffset,
                     ordinaryLoweredFullBlockGuard,
                     false,
-                    "y_offset_not_-0.5",
+                    "y_offset_not_negative",
                     null,
                     effectiveSide,
                     remapMode);
-            return slabbed$inspectReturn(context, context, "y_offset_not_-0.5");
+            return slabbed$inspectReturn(context, context, "y_offset_not_negative");
         }
 
         BlockPos abovePos = targetPos.up();
@@ -356,10 +356,11 @@ public abstract class BlockItemPlacementIntentMixin {
             }
             remappedY = slabbed$placementYForType(targetPos, expectedType);
         } else {
-            double loweredVisualUpperBoundary = targetPos.getY() + 0.5d;
+            double loweredVisualMidline = targetPos.getY() + yOffset + 0.5d;
+            double loweredVisualUpperBoundary = targetPos.getY() + yOffset + 1.0d;
             boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
                     <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-            boolean upperHalfIntent = originalHitPos.y >= targetPos.getY() && !exactLoweredVisualBoundary;
+            boolean upperHalfIntent = originalHitPos.y >= loweredVisualMidline && !exactLoweredVisualBoundary;
             expectedType = upperHalfIntent ? SlabType.TOP : SlabType.BOTTOM;
             remappedY = slabbed$placementYForType(targetPos, expectedType);
         }

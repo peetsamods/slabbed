@@ -13,11 +13,14 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
@@ -67,66 +70,43 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
 
     private static final String PROOF = "BETA4_COMPOUND_LOWERED_FULL_BLOCK_COLLAPSE";
     private static final String TRIAD_PROOF = "BETA4_COMPOUND_LOWERED_FULL_BLOCK_TRIAD";
+    private static final String PLACEMENT_PROOF = "BETA4_COMPOUND_PLACEMENT_POPOFF";
     private static final String OPT_IN_PROPERTY =
             "slabbed.beta4CompoundLoweredFullBlockCollapseRedOnly";
     private static final String TRIAD_OPT_IN_PROPERTY =
             "slabbed.beta4CompoundLoweredFullBlockTriadRedOnly";
+    private static final String PLACEMENT_OPT_IN_PROPERTY =
+            "slabbed.beta4CompoundPlacementPopoffRedOnly";
     private static final double EPSILON = 1.0e-6d;
 
     private static final BlockPos BASE_FULL_SUPPORT = new BlockPos(8, 200, 8);
     private static final BlockPos BASE_FULL = BASE_FULL_SUPPORT.up();
     private static final BlockPos LOWERED_BOTTOM_SLAB = BASE_FULL.up();
     private static final BlockPos PLACED_FULL = LOWERED_BOTTOM_SLAB.up();
+    private static final BlockPos SIDE_PLACED_FULL = PLACED_FULL.west();
+    private static final BlockPos SIDE_PLACED_SLAB = PLACED_FULL.east();
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
         boolean collapseProof = Boolean.getBoolean(OPT_IN_PROPERTY);
         boolean triadProof = Boolean.getBoolean(TRIAD_OPT_IN_PROPERTY);
-        if (!collapseProof && !triadProof) {
+        boolean placementProof = Boolean.getBoolean(PLACEMENT_OPT_IN_PROPERTY);
+        if (!collapseProof && !triadProof && !placementProof) {
             return;
         }
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            runProof(ctx, singleplayer, triadProof);
+            if (placementProof) {
+                runPlacementPopoffProof(ctx, singleplayer);
+            } else {
+                runProof(ctx, singleplayer, triadProof);
+            }
         }
     }
 
     private static void runProof(ClientGameTestContext ctx, TestSingleplayerContext singleplayer, boolean triadProof) {
-        singleplayer.getServer().runOnServer(server -> {
-            World world = server.getOverworld();
-            clearArea(world);
-
-            // Seed a legal anchored lowered full block under a lowered bottom
-            // slab carrier so the slab carrier qualifies as a real
-            // persistentLoweredBottomSlabCarrier rather than a synthetic
-            // attachment-only fixture.
-            world.setBlockState(
-                    BASE_FULL_SUPPORT,
-                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
-                    Block.NOTIFY_LISTENERS);
-            world.setBlockState(BASE_FULL, Blocks.STONE.getDefaultState(),
-                    Block.NOTIFY_LISTENERS);
-            SlabAnchorAttachment.addAnchor(world, BASE_FULL,
-                    world.getBlockState(BASE_FULL));
-
-            world.setBlockState(
-                    LOWERED_BOTTOM_SLAB,
-                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
-                    Block.NOTIFY_LISTENERS);
-            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, LOWERED_BOTTOM_SLAB,
-                    world.getBlockState(LOWERED_BOTTOM_SLAB));
-
-            // Mirror the live placement flow: setBlockState then addAnchor in
-            // the same way BlockOnPlacedAnchorMixin runs at Block.onPlaced
-            // HEAD inside BlockItem.place. This is the exact authoring path
-            // that turned dy=-1.0 (place-return) into dy=-0.5 (after-tick) in
-            // the live recorder run.
-            world.setBlockState(PLACED_FULL, Blocks.STONE.getDefaultState(),
-                    Block.NOTIFY_LISTENERS);
-            SlabAnchorAttachment.addAnchor(world, PLACED_FULL,
-                    world.getBlockState(PLACED_FULL));
-        });
+        singleplayer.getServer().runOnServer(server -> seedLegalCompound(server.getOverworld()));
 
         for (int i = 0; i < 5; i++) {
             ctx.waitTick();
@@ -151,6 +131,180 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
                 assertCompoundTriad(mc.world, mc.player, mc.crosshairTarget);
             });
         }
+    }
+
+    private static void runPlacementPopoffProof(ClientGameTestContext ctx, TestSingleplayerContext singleplayer) {
+        singleplayer.getServer().runOnServer(server -> seedLegalCompound(server.getOverworld()));
+        for (int i = 0; i < 5; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncPlayerPosition(ctx, singleplayer);
+
+        BlockHitResult stoneHit = new BlockHitResult(
+                new Vec3d(PLACED_FULL.getX(), PLACED_FULL.getY() - 0.25d, PLACED_FULL.getZ() + 0.5d),
+                Direction.WEST,
+                PLACED_FULL,
+                false);
+        String stoneImmediate = attemptPlacement(
+                ctx,
+                singleplayer,
+                new ItemStack(Items.STONE, 8),
+                stoneHit,
+                SIDE_PLACED_FULL,
+                "minecraft:stone");
+        for (int i = 0; i < 3; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+        final String[] stoneAfter = new String[1];
+        singleplayer.getServer().runOnServer(server -> stoneAfter[0] = assertSideFullPlacement(
+                server.getOverworld(), "server-after-tick", stoneImmediate));
+
+        BlockHitResult slabHit = new BlockHitResult(
+                new Vec3d(PLACED_FULL.getX() + 1.0d, PLACED_FULL.getY() - 0.25d, PLACED_FULL.getZ() + 0.5d),
+                Direction.EAST,
+                PLACED_FULL,
+                false);
+        String slabImmediate = attemptPlacement(
+                ctx,
+                singleplayer,
+                new ItemStack(Items.STONE_SLAB, 8),
+                slabHit,
+                SIDE_PLACED_SLAB,
+                "minecraft:stone_slab");
+        for (int i = 0; i < 3; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+        final String[] slabAfter = new String[1];
+        singleplayer.getServer().runOnServer(server -> slabAfter[0] = assertSideSlabPlacement(
+                server.getOverworld(), "server-after-tick", slabImmediate));
+
+        System.out.println("[" + PLACEMENT_PROOF + "_GREEN]"
+                + " classification=PLACEMENT_SURVIVED"
+                + " stoneAfter={" + stoneAfter[0] + "}"
+                + " slabAfter={" + slabAfter[0] + "}");
+    }
+
+    private static void seedLegalCompound(World world) {
+        clearArea(world);
+
+        // Seed a legal anchored lowered full block under a lowered bottom
+        // slab carrier so the slab carrier qualifies as a real
+        // persistentLoweredBottomSlabCarrier rather than a synthetic
+        // attachment-only fixture.
+        world.setBlockState(
+                BASE_FULL_SUPPORT,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(BASE_FULL, Blocks.STONE.getDefaultState(),
+                Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(world, BASE_FULL,
+                world.getBlockState(BASE_FULL));
+
+        world.setBlockState(
+                LOWERED_BOTTOM_SLAB,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, LOWERED_BOTTOM_SLAB,
+                world.getBlockState(LOWERED_BOTTOM_SLAB));
+
+        // Mirror the live placement flow: setBlockState then addAnchor in
+        // the same way BlockOnPlacedAnchorMixin runs at Block.onPlaced
+        // HEAD inside BlockItem.place. This is the exact authoring path
+        // that turned dy=-1.0 (place-return) into dy=-0.5 (after-tick) in
+        // the live recorder run.
+        world.setBlockState(PLACED_FULL, Blocks.STONE.getDefaultState(),
+                Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(world, PLACED_FULL,
+                world.getBlockState(PLACED_FULL));
+    }
+
+    private static String attemptPlacement(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            ItemStack held,
+            BlockHitResult hit,
+            BlockPos placePos,
+            String attemptedItem
+    ) {
+        syncHeldMainHand(ctx, singleplayer, held);
+        final String[] facts = new String[1];
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("PROOF_GAP: " + PLACEMENT_PROOF + " client not ready");
+            }
+            BlockState support = mc.world.getBlockState(PLACED_FULL);
+            double supportDy = SlabSupport.getYOffset(mc.world, PLACED_FULL, support);
+            boolean supportAnchor = SlabAnchorAttachment.isAnchored(mc.world, PLACED_FULL);
+            if (!support.isOf(Blocks.STONE) || Math.abs(supportDy + 1.0d) > EPSILON || !supportAnchor) {
+                throw new RuntimeException("PROOF_GAP: " + PLACEMENT_PROOF
+                        + " support compound not legal before placement support="
+                        + describeBlock(mc.world, PLACED_FULL, support));
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            BlockState immediate = mc.world.getBlockState(placePos);
+            facts[0] = "attemptedItem=" + attemptedItem
+                    + " clickedFace=" + hit.getSide().asString()
+                    + " hitVec=" + hit.getPos()
+                    + " support=" + describeBlock(mc.world, PLACED_FULL, support)
+                    + " result=" + result
+                    + " placedImmediate=" + describeBlock(mc.world, placePos, immediate);
+            System.out.println("[" + PLACEMENT_PROOF + "_OBSERVE]"
+                    + " phase=client-immediate " + facts[0]);
+            if (!result.isAccepted()) {
+                String redFacts = "classification=PLACEMENT_REJECTED " + facts[0];
+                System.out.println("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
+                throw new RuntimeException("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
+            }
+        });
+        return facts[0];
+    }
+
+    private static String assertSideFullPlacement(World world, String phase, String immediateFacts) {
+        BlockState support = world.getBlockState(PLACED_FULL);
+        BlockState placed = world.getBlockState(SIDE_PLACED_FULL);
+        double placedDy = SlabSupport.getYOffset(world, SIDE_PLACED_FULL, placed);
+        boolean placedAnchor = SlabAnchorAttachment.isAnchored(world, SIDE_PLACED_FULL);
+        String facts = "phase=" + phase
+                + " attemptedItem=minecraft:stone"
+                + " support=" + describeBlock(world, PLACED_FULL, support)
+                + " placedAfter=" + describeBlock(world, SIDE_PLACED_FULL, placed)
+                + " placedAnchored=" + placedAnchor
+                + " survivalPredicate=" + placed.canPlaceAt(world, SIDE_PLACED_FULL)
+                + " expectedState=stone"
+                + " expectedLowered=true"
+                + " immediate={" + immediateFacts + "}";
+        if (!placed.isOf(Blocks.STONE) || placedDy >= 0.0d || !placedAnchor) {
+            String redFacts = "classification=STONE_SIDE_PLACEMENT_POPPED_OR_UNLOWERED " + facts;
+            System.out.println("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
+            throw new RuntimeException("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
+        }
+        return facts;
+    }
+
+    private static String assertSideSlabPlacement(World world, String phase, String immediateFacts) {
+        BlockState support = world.getBlockState(PLACED_FULL);
+        BlockState placed = world.getBlockState(SIDE_PLACED_SLAB);
+        double placedDy = SlabSupport.getYOffset(world, SIDE_PLACED_SLAB, placed);
+        SlabType placedType = placed.contains(SlabBlock.TYPE) ? placed.get(SlabBlock.TYPE) : null;
+        String facts = "phase=" + phase
+                + " attemptedItem=minecraft:stone_slab"
+                + " support=" + describeBlock(world, PLACED_FULL, support)
+                + " placedAfter=" + describeBlock(world, SIDE_PLACED_SLAB, placed)
+                + " expectedState=stone_slab[type=top]"
+                + " expectedDy=-0.5"
+                + " survivalPredicate=" + placed.canPlaceAt(world, SIDE_PLACED_SLAB)
+                + " immediate={" + immediateFacts + "}";
+        if (!placed.isOf(Blocks.STONE_SLAB)
+                || placedType != SlabType.TOP
+                || Math.abs(placedDy + 0.5d) > EPSILON) {
+            String redFacts = "classification=SLAB_SIDE_PLACEMENT_POPPED_OR_WRONG_LANE " + facts;
+            System.out.println("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
+            throw new RuntimeException("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
+        }
+        return facts;
     }
 
     private static void assertCompound(World world, String phase) {
@@ -337,6 +491,28 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
             return "MISS";
         }
         return blockHit.getBlockPos().toShortString();
+    }
+
+    private static String describeBlock(World world, BlockPos pos, BlockState state) {
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
+        boolean persistentFullBlockAnchor = anchored
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state);
+        boolean persistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
+        boolean persistentBottomCarrier =
+                SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
+        String slabType = state.contains(SlabBlock.TYPE) ? state.get(SlabBlock.TYPE).asString() : "none";
+        String sourceMode = persistentCarrier
+                ? "persistentLoweredSlabCarrier"
+                : (dy < 0.0d ? "dynamicLoweredOrAnchored" : "normal");
+        return "pos=" + pos.toShortString()
+                + " state=" + state
+                + " dy=" + dy
+                + " persistentFullBlockAnchor=" + persistentFullBlockAnchor
+                + " persistentLoweredSlabCarrier=" + persistentCarrier
+                + " persistentLoweredBottomSlabCarrier=" + persistentBottomCarrier
+                + " slabType=" + slabType
+                + " sourceMode=" + sourceMode;
     }
 
     private static String describeHit(BlockHitResult hit) {
