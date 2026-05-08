@@ -275,7 +275,7 @@ above so a design choice between A / B / C / D can be made on evidence.
 | 1 | `SELECT_EMPTY_HAND_COMPOUND_BODY` | GREEN | automation-only | Compound block owns selection. |
 | 2 | `SELECT_STONE_HELD_COMPOUND_BODY` | GREEN | automation-only | Compound block owns selection. |
 | 3 | `SELECT_SLAB_HELD_COMPOUND_BODY` | UNDECIDED | automation-only | Compound block owns unless a legal slab-placement face exists; no redirect to beta4-illegal `dy=-1.0` slab placement. |
-| 4 | `PLACE_STONE_SIDE_LOWER_HALF` | UNDECIDED | live-confirmed-fail | Packet validity is fixed; downstream placement currently survives as ordinary anchored `dy=-0.5`, not compound `dy=-1.0`. |
+| 4 | `PLACE_STONE_SIDE_LOWER_HALF` | GREEN | live-confirmed-fail | Packet validity is fixed and downstream side-lane authoring now marks the placed ordinary stone with the compound sidecar at `dy=-1.0`. |
 | 5 | `PLACE_STONE_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Same as row 4 for full blocks; no upward/vanilla ghost placement. |
 | 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | RED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no flicker/pop. |
 | 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no vanilla-height ghost placement. |
@@ -311,13 +311,18 @@ server placement and the side slot survives, but it lands as ordinary anchored
 `dy=-0.5`; downstream Row 4 finalization/authoring is not complete. Row 6 stays
 RED, so the beta4-illegal slab-side `dy=-1.0` lane was not legalized.
 
+After the Row 4 lane-authoring fix lands:
+`[BETA4_COMPOUND_CONTRACT_MATRIX_RED]` reports `rows=12 red=1 undecided=4 green=6
+notImplemented=1`. Row 4 is GREEN because ordinary stone side placement from
+the compound source inherits the compound full-block sidecar and stays
+`dy=-1.0`; Row 6 stays RED and Row 7 stays UNDECIDED, so beta4 slab-side
+compound lanes remain illegal.
+
 ### Rows needing follow-up
 
-- **Row 4** `PLACE_STONE_SIDE_LOWER_HALF`: the packet/hit-validity bridge
-  accepts the visual lower-half WEST-face hit `(8.0, 202.25, 8.5)` on native
-  block `BlockPos{x=8, y=203, z=8}` and server placement finalization is now
-  observed. The remaining downstream issue is authoring/finalization: the side
-  slot survives as ordinary anchored `dy=-0.5`, not compound `dy=-1.0`.
+- **Row 4** `PLACE_STONE_SIDE_LOWER_HALF`: GREEN after lane authoring; the
+  packet/hit-validity bridge accepts the visual lower-half WEST-face hit
+  `(8.0, 202.25, 8.5)` and the side slot survives as compound `dy=-1.0`.
 - **Row 6** `PLACE_SLAB_SIDE_LOWER_HALF`: aiming the visual lower half of
   the compound's EAST face with slab-held reproduces a placement failure
   matching Julia's live "wrong column / wrong lane" symptom.

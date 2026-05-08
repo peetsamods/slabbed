@@ -123,7 +123,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             rows.add(rowPlacement(ctx, sp, "04_PLACE_STONE_SIDE_LOWER_HALF",
                     new ItemStack(Items.STONE, 8), Direction.WEST, SIDE_WEST,
                     /* upperHalf */ false, /* attemptedItem */ "minecraft:stone",
-                    /* expectedNote */ "UNDECIDED_intent_julia_live_fail_flicker_or_popoff"));
+                    /* expectedNote */ "compound_lane_dy_minus_1_side_authoring"));
             rows.add(rowPlacement(ctx, sp, "05_PLACE_STONE_SIDE_UPPER_HALF",
                     new ItemStack(Items.STONE, 8), Direction.WEST, SIDE_WEST,
                     true, "minecraft:stone",
@@ -315,11 +315,10 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
 
             // Classification: live-confirmed-fail row. RED if the placement
             // popped/disappeared, fired in vanilla/wrong-dy lane, or got
-            // rerouted upward (slotAbove filled) since those are exactly
-            // the live failure modes Julia documented. UNDECIDED if the
-            // placement landed in compound lane (dy=-1.0 anchored) since
-            // the intended outcome for that case is not formally decided.
-            Cls cls = classifyPlacement(observed, attemptedItem);
+            // rerouted upward (slotAbove filled). Row 4's A-prime contract is
+            // now decided: ordinary stone side placement from a compound full
+            // block source must land in the compound dy=-1.0 sidecar lane.
+            Cls cls = classifyPlacement(rowName, observed, attemptedItem);
             return new Row(rowName, expected, observed, cls, "live-confirmed-fail");
         } catch (Throwable t) {
             return new Row(rowName, expected, "exception=" + safeMessage(t), Cls.RED, "live-confirmed-fail");
@@ -519,7 +518,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
     // Classification helpers
     // ------------------------------------------------------------------
 
-    private static Cls classifyPlacement(String observed, String attemptedItem) {
+    private static Cls classifyPlacement(String rowName, String observed, String attemptedItem) {
         // RED indicators (match Julia's documented live failure modes):
         //   - placed slot is air after tick (pop-off / placement vanished)
         //   - placed at COMPOUND.up() instead of the side neighbor (upward
@@ -534,6 +533,17 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
         boolean rejected = observed.contains("accepted=false");
         if (popOff || upwardWrong || rejected) {
             return Cls.RED;
+        }
+        if ("04_PLACE_STONE_SIDE_LOWER_HALF".equals(rowName)
+                && "minecraft:stone".equals(attemptedItem)) {
+            Double slotDy = extractDy(observed, "server-after-tick", "slotAfter");
+            boolean compoundLane = slotAfter != null
+                    && slotAfter.contains("state=Block{minecraft:stone}")
+                    && slotAfter.contains("persistentFullBlockAnchor=true")
+                    && slotAfter.contains("compoundFullBlockAnchor=true")
+                    && slotDy != null
+                    && Math.abs(slotDy + 1.0d) <= EPSILON;
+            return compoundLane ? Cls.GREEN : Cls.UNDECIDED;
         }
         // Otherwise (placement landed somewhere) intent for this row is
         // formally undecided; do not classify as GREEN.
@@ -682,6 +692,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
         boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
         boolean persistentFullBlockAnchor = anchored
                 && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state);
+        boolean compoundFullBlockAnchor = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos);
         boolean persistentCarrier =
                 SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
         boolean persistentBottomCarrier =
@@ -705,6 +716,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
                 + " dy=" + dy
                 + " modelDy=" + modelDy
                 + " persistentFullBlockAnchor=" + persistentFullBlockAnchor
+                + " compoundFullBlockAnchor=" + compoundFullBlockAnchor
                 + " persistentLoweredSlabCarrier=" + persistentCarrier
                 + " persistentLoweredBottomSlabCarrier=" + persistentBottomCarrier
                 + " slabType=" + slabType

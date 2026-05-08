@@ -168,6 +168,9 @@ public final class SlabAnchorAttachment {
             return;
         }
         addAnchorUnchecked(world, pos);
+        if (qualifiesForSideAdjacentCompoundFullAnchor(world, pos, state, sourcePos, sourceState)) {
+            addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
+        }
     }
 
     private static void addAnchorUnchecked(World world, BlockPos pos) {
@@ -652,6 +655,32 @@ public final class SlabAnchorAttachment {
             return false;
         }
         return SlabSupport.getYOffset(world, sourcePos, sourceState) < 0.0d;
+    }
+
+    private static boolean qualifiesForSideAdjacentCompoundFullAnchor(
+            BlockView world,
+            BlockPos pos,
+            BlockState state,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (world == null || pos == null || sourcePos == null) {
+            return false;
+        }
+        if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)
+                || !isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)) {
+            return false;
+        }
+        if (!isCompoundFullBlockAnchor(world, sourcePos)) {
+            return false;
+        }
+        if (SlabSupport.getYOffset(world, sourcePos, sourceState) != -1.0d) {
+            return false;
+        }
+        int dx = Math.abs(pos.getX() - sourcePos.getX());
+        int dy = Math.abs(pos.getY() - sourcePos.getY());
+        int dz = Math.abs(pos.getZ() - sourcePos.getZ());
+        return dy == 0 && dx + dz == 1;
     }
 
     private static boolean qualifiesAsSideAdjacentLoweredFullAnchorSource(
