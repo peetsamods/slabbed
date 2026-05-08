@@ -20,8 +20,8 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current operating base HEAD: `9ed44e3`
-- Current operating base tag: `save/beta4-visible-slab-side-face-miss-fix`
+- Current operating base HEAD: `e787bf1`
+- Current operating base tag: `save/beta4-live-retarget-source-recorder`
 - Prior live-first classifier base: `767f735` / `save/beta4-live-first-seam-owner-classifier`
 - Reverted failed classifier: `763434e` / `save/beta4-seam-owner-classifier`
 - Stale, provenance-confusing release tag for this issue: `release/0.2.0-beta.4`
@@ -35,7 +35,7 @@ Tracked tree is clean.
 
 ## Current product goal
 
-Fix the live-proven beta4 side-face visible-upper slab MISS path without broadening generic MISS rescue.
+Classify beta4 reload/chunk-jump persistence before any further retarget or owner-rule work.
 
 ## Current proof note
 
@@ -43,11 +43,13 @@ Release remains blocked. The failed shared seam-owner classifier `763434e` was r
 
 Recorder status: gated live retarget recorder added behind `-Dslabbed.beta4LiveRetargetRecorder=true`; it emits `[BETA4_LIVE_RETARGET_RECORDER_START]`, `[BETA4_LIVE_RETARGET_RECORDER]`, and `[BETA4_LIVE_RETARGET_SOURCE_TRUTH]` lines for Julia's live seam capture. This is evidence-only and does not unblock release.
 
+Reload persistence blocker: Julia observed that an ordinary lowered block/log jumps up to vanilla height after load back in or chunk reload. Current local evidence proves pre-save source truth for ordinary `minecraft:stone` full-block anchors and the lowered bottom slab carrier, but there is no post-reload dy/attachment proof yet. See `docs/beta4-reload-jump-persistence-audit.md`. Required next gate: faithful `[BETA4_RELOAD_JUMP_PERSISTENCE_RED]` before any retarget fix, rescue broadening, or beta4 release prep.
+
 Proof status: gated RED proof `-Dslabbed.beta4SeamVisibleUpperAngleGeneralRedOnly=true` captures the angle-general BLOCK/UP failure where `topInterior=true`, `edgeLike=false`, a closer visible-upper lowered slab candidate exists, and `anchoredUpPreserve` still keeps the anchored owner. This is proof-only and does not unblock release.
 
 Proof gap: Julia's stone-held live retarget trace proves `heldIsSlab=false`, initial ordinary stone at `16,-59,-1`, final lowered `stone_slab` at `14,-58,0`, and `sideSlabRetargetFired=true`, but two harness attempts plus one coordinate replay attempt did not produce a faithful saveable RED. See `docs/beta4-stone-held-side-slab-retarget-proof-gap.md`; release remains blocked.
 
-Implementation status: the anchored-UP guard now lets a real, strict-closer visible-upper lowered bottom slab side candidate win without using `topInterior` as a hard veto. Release remains blocked pending Julia live retest.
+Implementation status: retarget and owner-rule work is paused until reload/chunk-jump persistence is classified. Release remains blocked.
 
 Current beta4 seam proof classes:
 
