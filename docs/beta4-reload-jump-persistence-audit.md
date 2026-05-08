@@ -97,6 +97,12 @@ The saved RED proof reproduces the smallest stable split without changing gamepl
 
 Harness caveat: the client-gametest route did not reproduce the final live crosshair MISS after Slabbed retargeting; it logs `crosshairMissReproduced=false`, `crosshairTargetType=BLOCK`, and `actualOwner=14,-57,0`. This is still a faithful RED for the raycast-shape half of the visual triad split, not a GREEN and not a behavior fix. The future fix gate remains `[BETA4_OUTLINE_HIT_RAYCAST_MISS_GREEN]`.
 
+## Outline/Raycast Shape Parity Fix
+
+The raycast-shape layer now matches the lowered outline for legal anchored ordinary full blocks whose native raycast shape is empty. The fix is limited to `dy=-0.5`, anchored, non-slab, non-thin-top-layer blocks: it uses the full-cube basis already represented by the lowered outline and then applies the same dy offset. It does not change retargeting, owner classification, persistence, model dy, placement, slab lane grammar, carpets, or torch comfort behavior.
+
+The opt-in proof now emits `[BETA4_OUTLINE_HIT_RAYCAST_MISS_GREEN] classification=RAYCAST_SHAPE_GREEN` for `Block{minecraft:stone}` at `14,-57,0`: source/client dy remain `-0.5`, outline and raycast bounds both resolve to `min=(0,-0.5,0), max=(1,0.5,1)`, `outlineHit=true`, `raycastHit=true`, and both owners are `14,-57,0`. The harness still logs `crosshairMissReproduced=false`, so Julia live retest remains required before treating the visible bug as fixed.
+
 ## Non-Negotiables
 
 - No retarget fix before reload jump is classified.

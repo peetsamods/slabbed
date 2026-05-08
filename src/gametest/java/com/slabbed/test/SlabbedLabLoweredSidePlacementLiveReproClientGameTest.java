@@ -5555,7 +5555,23 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[BETA4_OUTLINE_HIT_RAYCAST_MISS_RED]" + classifiedFacts);
             }
 
-            System.out.println("[BETA4_OUTLINE_HIT_RAYCAST_MISS] calibration_mismatch" + facts);
+            boolean raycastShapeGreen = expectedState.isOf(Blocks.STONE)
+                    && Math.abs(sourceDy + 0.5d) <= EPSILON
+                    && Math.abs(clientDy + 0.5d) <= EPSILON
+                    && anchored
+                    && expectedOwner.equals(outlineOwner)
+                    && expectedOwner.equals(raycastOwner)
+                    && !raycastShape.isEmpty()
+                    && raycastHit != null;
+            if (raycastShapeGreen) {
+                System.out.println("[BETA4_OUTLINE_HIT_RAYCAST_MISS_GREEN]"
+                        + " classification=RAYCAST_SHAPE_GREEN"
+                        + " crosshairMissReproduced=" + targetIsMiss
+                        + facts);
+                return;
+            }
+
+            throw new RuntimeException("[BETA4_OUTLINE_HIT_RAYCAST_MISS] calibration_mismatch" + facts);
         });
     }
 
