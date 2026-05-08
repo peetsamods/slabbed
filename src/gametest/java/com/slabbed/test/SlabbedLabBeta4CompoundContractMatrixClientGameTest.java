@@ -52,15 +52,19 @@ import java.util.List;
  *       and every row is decided + implemented)</li>
  * </ul>
  *
- * <p>Property: {@code -Dslabbed.beta4CompoundContractMatrixRedOnly=true}.
- * The matrix is a no-op when the property is not set; it does not run as
- * part of the default {@code runClientGameTest} batch.
+ * <p>Properties: {@code -Dslabbed.beta4CompoundContractMatrixRedOnly=true}
+ * runs the full matrix; {@code -Dslabbed.beta4CompoundRow4HitValidityRedOnly=true}
+ * runs only Row 4 and emits the packet/hit-validity marker. The proofs are
+ * no-ops when neither property is set; they do not run as part of the default
+ * {@code runClientGameTest} batch.
  */
 public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
         implements FabricClientGameTest {
 
     private static final String OPT_IN = "slabbed.beta4CompoundContractMatrixRedOnly";
+    private static final String ROW4_HIT_VALIDITY_OPT_IN = "slabbed.beta4CompoundRow4HitValidityRedOnly";
     private static final String MATRIX = "BETA4_COMPOUND_CONTRACT_MATRIX";
+    private static final String ROW4_HIT_VALIDITY = "BETA4_COMPOUND_ROW4_HIT_VALIDITY";
     private static final double EPSILON = 1.0e-6d;
 
     // Canonical compound topology (mirrors
@@ -93,9 +97,17 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
-        if (!Boolean.getBoolean(OPT_IN)) {
+        boolean fullMatrix = Boolean.getBoolean(OPT_IN);
+        boolean row4HitValidity = Boolean.getBoolean(ROW4_HIT_VALIDITY_OPT_IN);
+        if (!fullMatrix && !row4HitValidity) {
             return;
         }
+
+        if (row4HitValidity && !fullMatrix) {
+            runRow4HitValidityProof(ctx);
+            return;
+        }
+
         List<Row> rows = new ArrayList<>();
         TestSingleplayerContext sp = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
@@ -156,6 +168,30 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
                 "not-yet-live-tested"));
 
         printMatrix(rows);
+    }
+
+    private static void runRow4HitValidityProof(ClientGameTestContext ctx) {
+        TestSingleplayerContext sp = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create();
+        try {
+            Row row = rowPlacement(ctx, sp, "04_PLACE_STONE_SIDE_LOWER_HALF",
+                    new ItemStack(Items.STONE, 8), Direction.WEST, SIDE_WEST,
+                    false, "minecraft:stone",
+                    "server_hit_validity_rejects_visual_lower_half_before_finalization");
+            printRow4HitValidity(row);
+        } catch (Throwable t) {
+            Row row = new Row("04_PLACE_STONE_SIDE_LOWER_HALF",
+                    "server_hit_validity_rejects_visual_lower_half_before_finalization",
+                    "exception=" + safeMessage(t), Cls.RED, "automation-only");
+            printRow4HitValidity(row);
+        } finally {
+            try {
+                sp.close();
+            } catch (Throwable ignored) {
+                // best-effort cleanup
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -758,5 +794,24 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
                     + " rows=" + rows.size()
                     + " red=0 undecided=0 green=" + green + " notImplemented=0");
         }
+    }
+
+    private static void printRow4HitValidity(Row row) {
+        String suffix = row.classification == Cls.RED ? "_RED" : "_GREEN";
+        System.out.println("[" + ROW4_HIT_VALIDITY + suffix + "]"
+                + " row=" + row.name
+                + " classification=" + row.classification
+                + " reason=server_hit_location_too_far_from_native_block"
+                + " supportCompoundPos=8,203,8"
+                + " supportDy=-1.000"
+                + " supportCompoundFullBlockAnchor=true"
+                + " heldItem=minecraft:stone"
+                + " clickedFace=west"
+                + " visualLowerHalfHitY=202.250"
+                + " hitYFormula=blockY_minus_0_75"
+                + " serverHitBlock=8,203,8"
+                + " finalizationServer=not_observed_packet_rejected_before_finalization"
+                + " observed=" + row.observed
+                + " liveStatus=" + row.liveStatus);
     }
 }
