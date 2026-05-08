@@ -2,6 +2,7 @@ package com.slabbed.mixin.client;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.client.ClientDy;
 import com.slabbed.client.runtime.SlabbedRetargetTestHooks;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
@@ -18,6 +19,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
@@ -64,6 +66,10 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static ClientWorld slabbed$beta4ReloadJumpRecorderWorld;
     private static int slabbed$beta4ReloadJumpRecorderTicksRemaining;
     private static long slabbed$beta4ReloadJumpRecorderLastWorldTick = Long.MIN_VALUE;
+    private static boolean slabbed$beta4OutlineRecorderStartLogged;
+    private static ClientWorld slabbed$beta4OutlineRecorderWorld;
+    private static int slabbed$beta4OutlineRecorderTicksRemaining;
+    private static long slabbed$beta4OutlineRecorderLastWorldTick = Long.MIN_VALUE;
 
     private static final String SEAM_OWNER_ANCHORED_FULL_BLOCK = "ANCHORED_FULL_BLOCK";
     private static final String SEAM_OWNER_VISIBLE_UPPER_LOWERED_SLAB = "VISIBLE_UPPER_LOWERED_SLAB";
@@ -75,6 +81,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
         slabbed$logBeta4LiveRetargetRecorderStart();
         slabbed$recordBeta4ReloadJumpRecorder(tickProgress);
+        slabbed$recordBeta4OutlineRecorder(tickProgress);
         HitResult ht = client.crosshairTarget;
         if (ht == null) {
             return;
@@ -1202,6 +1209,86 @@ public abstract class GameRendererCrosshairRetargetMixin {
         Slabbed.LOGGER.info(line.toString());
     }
 
+    private void slabbed$recordBeta4OutlineRecorder(float tickProgress) {
+        if (!Boolean.getBoolean("slabbed.beta4OutlineRecorder")) {
+            return;
+        }
+
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return;
+        }
+
+        if (world != slabbed$beta4OutlineRecorderWorld) {
+            slabbed$beta4OutlineRecorderWorld = world;
+            slabbed$beta4OutlineRecorderTicksRemaining =
+                    slabbed$intProperty("slabbed.beta4OutlineRecorderTicks", 700);
+            slabbed$beta4OutlineRecorderLastWorldTick = Long.MIN_VALUE;
+            slabbed$beta4OutlineRecorderStartLogged = false;
+        }
+
+        if (!slabbed$beta4OutlineRecorderStartLogged) {
+            slabbed$beta4OutlineRecorderStartLogged = true;
+            Slabbed.LOGGER.info(
+                    "[BETA4_OUTLINE_RECORDER_START] enabled=true ticks={} world={} watch={}",
+                    slabbed$beta4OutlineRecorderTicksRemaining,
+                    world.getRegistryKey().getValue(),
+                    System.getProperty("slabbed.beta4OutlineRecorderWatch", ""));
+        }
+
+        if (slabbed$beta4OutlineRecorderTicksRemaining <= 0) {
+            return;
+        }
+
+        long worldTick = world.getTime();
+        if (worldTick == slabbed$beta4OutlineRecorderLastWorldTick) {
+            return;
+        }
+        slabbed$beta4OutlineRecorderLastWorldTick = worldTick;
+        slabbed$beta4OutlineRecorderTicksRemaining--;
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d look = cam.getRotationVec(tickProgress);
+        Vec3d end = eye.add(look.multiply(6.0d));
+        HitResult target = client.crosshairTarget;
+        BlockHitResult blockTarget = target instanceof BlockHitResult blockHit ? blockHit : null;
+        BlockPos targetPos = blockTarget == null ? null : blockTarget.getBlockPos();
+        BlockState targetState = targetPos == null ? null : world.getBlockState(targetPos);
+
+        StringBuilder line = new StringBuilder(4096);
+        line.append("[BETA4_OUTLINE_RECORDER]");
+        line.append(" tick=").append(worldTick);
+        line.append(" ticksRemaining=").append(slabbed$beta4OutlineRecorderTicksRemaining);
+        line.append(" world=").append(world.getRegistryKey().getValue());
+        line.append(" eye=").append(slabbed$formatVec(eye));
+        line.append(" look=").append(slabbed$formatVec(look));
+        line.append(" end=").append(slabbed$formatVec(end));
+        line.append(" heldItem=").append(client.player == null ? "none" : client.player.getMainHandStack().getItem());
+        line.append(" crosshairTargetType=").append(target == null ? "null" : target.getType());
+        line.append(" targetIsMiss=").append(target == null || target.getType() == HitResult.Type.MISS);
+        line.append(" targetPos=").append(targetPos == null ? "none" : targetPos.toShortString());
+        line.append(" targetFace=").append(blockTarget == null ? "none" : blockTarget.getSide());
+        line.append(" targetHit=").append(blockTarget == null ? "none" : slabbed$formatVec(blockTarget.getPos()));
+        line.append(" targetState=").append(targetState == null ? "none" : targetState);
+        line.append(" targetIsAir=").append(targetState == null || targetState.isAir());
+        if (targetPos == null || targetState == null) {
+            line.append(" targetDy=NaN targetClientDy=NaN targetOutlineShape=none targetOutlineHit=none");
+            line.append(" targetRaycastShape=none targetRaycastHit=none targetOwnerClass=none");
+        } else {
+            line.append(" targetDy=").append(slabbed$formatDouble(SlabSupport.getYOffset(world, targetPos, targetState)));
+            line.append(" targetClientDy=").append(slabbed$formatDouble(ClientDy.dyFor(world, targetPos, targetState)));
+            line.append(" targetOutlineShape=").append(slabbed$shapeBounds(world, cam, targetPos, targetState, true));
+            line.append(" targetOutlineHit=").append(slabbed$shapeHit(world, cam, eye, end, targetPos, targetState, true));
+            line.append(" targetRaycastShape=").append(slabbed$shapeBounds(world, cam, targetPos, targetState, false));
+            line.append(" targetRaycastHit=").append(slabbed$shapeHit(world, cam, eye, end, targetPos, targetState, false));
+            line.append(" targetOwnerClass=").append(slabbed$ownerClass(world, targetPos, targetState));
+            slabbed$appendSourceTruth(line, world, targetPos, "target");
+        }
+        slabbed$appendConfiguredOutlineWatch(line, world, cam, eye, end);
+        Slabbed.LOGGER.info(line.toString());
+    }
+
     private static int slabbed$intProperty(String name, int fallback) {
         String raw = System.getProperty(name);
         if (raw == null || raw.isBlank()) {
@@ -1211,6 +1298,43 @@ public abstract class GameRendererCrosshairRetargetMixin {
             return Math.max(0, Integer.parseInt(raw.trim()));
         } catch (NumberFormatException ignored) {
             return fallback;
+        }
+    }
+
+    private static void slabbed$appendConfiguredOutlineWatch(
+            StringBuilder line,
+            ClientWorld world,
+            Entity cam,
+            Vec3d eye,
+            Vec3d end
+    ) {
+        String raw = System.getProperty("slabbed.beta4OutlineRecorderWatch", "");
+        if (raw.isBlank()) {
+            line.append(" outlineWatch=none");
+            return;
+        }
+
+        String[] entries = raw.split(";");
+        int index = 0;
+        for (String entry : entries) {
+            BlockPos pos = slabbed$parseBlockPos(entry);
+            if (pos == null) {
+                line.append(" outlineWatch").append(index).append("=invalid(").append(entry.trim()).append(')');
+            } else {
+                BlockState state = world.getBlockState(pos);
+                line.append(" outlineWatch").append(index).append("={pos=").append(pos.toShortString());
+                line.append(" state=").append(state);
+                line.append(" dy=").append(slabbed$formatDouble(SlabSupport.getYOffset(world, pos, state)));
+                line.append(" clientDy=").append(slabbed$formatDouble(ClientDy.dyFor(world, pos, state)));
+                line.append(" sourceMode=").append(slabbed$sourceMode(world, pos, state));
+                line.append(" outlineShape=").append(slabbed$shapeBounds(world, cam, pos, state, true));
+                line.append(" outlineHit=").append(slabbed$shapeHit(world, cam, eye, end, pos, state, true));
+                line.append(" raycastShape=").append(slabbed$shapeBounds(world, cam, pos, state, false));
+                line.append(" raycastHit=").append(slabbed$shapeHit(world, cam, eye, end, pos, state, false));
+                line.append(" ownerClass=").append(slabbed$ownerClass(world, pos, state));
+                line.append('}');
+            }
+            index++;
         }
     }
 
@@ -1439,6 +1563,41 @@ public abstract class GameRendererCrosshairRetargetMixin {
         } catch (Throwable t) {
             return "error:" + t.getClass().getSimpleName();
         }
+    }
+
+    private static String slabbed$shapeBounds(
+            ClientWorld world,
+            Entity cam,
+            BlockPos pos,
+            BlockState state,
+            boolean outline
+    ) {
+        try {
+            VoxelShape shape = outline
+                    ? state.getOutlineShape(world, pos, ShapeContext.of(cam))
+                    : state.getRaycastShape(world, pos);
+            if (shape == null || shape.isEmpty()) {
+                return "empty";
+            }
+            Box box = shape.getBoundingBox();
+            return "min=("
+                    + slabbed$formatDouble(box.minX) + ','
+                    + slabbed$formatDouble(box.minY) + ','
+                    + slabbed$formatDouble(box.minZ) + "),max=("
+                    + slabbed$formatDouble(box.maxX) + ','
+                    + slabbed$formatDouble(box.maxY) + ','
+                    + slabbed$formatDouble(box.maxZ) + ')';
+        } catch (Throwable t) {
+            return "error:" + t.getClass().getSimpleName();
+        }
+    }
+
+    private static String slabbed$sourceMode(ClientWorld world, BlockPos pos, BlockState state) {
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        boolean persistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
+        return persistentCarrier
+                ? "persistentLoweredSlabCarrier"
+                : (Math.abs(dy + 0.5d) <= 1.0e-6 ? "dynamicLoweredOrAnchored" : "normal");
     }
 
     private static void slabbed$appendSourceTruth(
