@@ -1,5 +1,6 @@
 package com.slabbed.mixin;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
@@ -85,6 +86,22 @@ public abstract class SlabSupportStateMixin {
         return block instanceof TorchBlock && !(block instanceof WallTorchBlock);
     }
 
+    private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
+            BlockView world,
+            BlockPos pos,
+            BlockState state,
+            double yOff,
+            VoxelShape nativeRaycast
+    ) {
+        if (yOff != -0.5d || nativeRaycast == null || !nativeRaycast.isEmpty()) {
+            return false;
+        }
+        if (SlabSupport.isSupportingSlab(state) || SlabSupport.isThinTopLayer(state)) {
+            return false;
+        }
+        return SlabAnchorAttachment.isAnchored(world, pos);
+    }
+
     /**
      * Builds the torch comfort overlay in {@code slabPos}'s voxel frame, or returns
      * {@code null} if the block above {@code slabPos} is not a lowered floor torch.
@@ -155,6 +172,8 @@ public abstract class SlabSupportStateMixin {
             VoxelShape shape = cir.getReturnValue();
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
+            } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
+                shape = VoxelShapes.fullCube();
             }
             cir.setReturnValue(shape.offset(0.0, yOff, 0.0));
         }
