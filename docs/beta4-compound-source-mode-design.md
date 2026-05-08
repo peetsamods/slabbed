@@ -37,12 +37,12 @@ Compound block owns unless a legal slab-placement face exists. Since the
 
 Row 4 `PLACE_STONE_SIDE_LOWER_HALF`:
 Should place ordinary full block in same compound lane `dy=-1.0` if collision
-and survival are valid. Current blocker: the client sends the visual lower-half
-side hit for the compound block (`BlockPos 8,203,8`, hit `y=202.25`), and vanilla
-server packet validation rejects it as too far from the native block before
-`BlockItemPlacementIntentMixin` finalization can run. The next implementation
-slice is therefore a narrow packet/hit-validity bridge for compound full-block
-visual bounds, not anchor authoring or placement inheritance.
+and survival are valid. Packet/hit-validity bridge is implemented for the
+compound full-block visual bounds (`BlockPos 8,203,8`, hit `y=202.25`): vanilla
+server validation now reaches placement finalization instead of rejecting the
+packet as too far from the native block. Current downstream status: the side
+slot survives as ordinary anchored `dy=-0.5`, so row 4 is `UNDECIDED` rather
+than complete compound-lane authoring.
 
 Row 5 `PLACE_STONE_SIDE_UPPER_HALF`:
 Same as row 4 for full blocks. No upward/vanilla ghost placement.
@@ -258,9 +258,8 @@ Proof status:
   `[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]`,
   `[BETA4_SEAM_NO_RESCUE_GREEN]`).
 
-Release remains blocked: matrix rows 4/6 (side-half placement) and
-rows 3/5/7/8 (undecided intent) are unchanged, and Julia live retest is
-still the final gate.
+Release remains blocked: matrix row 6 remains RED, rows 3/4/5/7/8 remain
+UNDECIDED, and Julia live retest is still the final gate.
 
 ## Recommended next implementation slice (historical)
 

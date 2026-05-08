@@ -275,7 +275,7 @@ above so a design choice between A / B / C / D can be made on evidence.
 | 1 | `SELECT_EMPTY_HAND_COMPOUND_BODY` | GREEN | automation-only | Compound block owns selection. |
 | 2 | `SELECT_STONE_HELD_COMPOUND_BODY` | GREEN | automation-only | Compound block owns selection. |
 | 3 | `SELECT_SLAB_HELD_COMPOUND_BODY` | UNDECIDED | automation-only | Compound block owns unless a legal slab-placement face exists; no redirect to beta4-illegal `dy=-1.0` slab placement. |
-| 4 | `PLACE_STONE_SIDE_LOWER_HALF` | RED | live-confirmed-fail | Place ordinary full block in same compound lane `dy=-1.0` if collision/survival valid. |
+| 4 | `PLACE_STONE_SIDE_LOWER_HALF` | UNDECIDED | live-confirmed-fail | Packet validity is fixed; downstream placement currently survives as ordinary anchored `dy=-0.5`, not compound `dy=-1.0`. |
 | 5 | `PLACE_STONE_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Same as row 4 for full blocks; no upward/vanilla ghost placement. |
 | 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | RED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no flicker/pop. |
 | 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no vanilla-height ghost placement. |
@@ -301,17 +301,23 @@ pending Julia intent. Row 11 stays GREEN (automation only, live still
 final). Row 12 stays NOT_IMPLEMENTED. Live retest remains the final
 gate; the matrix flip is automation-only evidence.
 
-### Rows classified RED
+After the Row 4 packet/hit-validity bridge lands:
+`[BETA4_COMPOUND_ROW4_HIT_VALIDITY_GREEN]` emits with
+`reason=server_hit_validity_bridge_accepted_compound_visual_hit` and
+`finalizationServer=observed_after_packet_acceptance`. The full matrix now
+reports `[BETA4_COMPOUND_CONTRACT_MATRIX_RED] rows=12 red=1 undecided=5 green=5
+notImplemented=1`. Row 4 moved from RED to UNDECIDED because the packet reaches
+server placement and the side slot survives, but it lands as ordinary anchored
+`dy=-0.5`; downstream Row 4 finalization/authoring is not complete. Row 6 stays
+RED, so the beta4-illegal slab-side `dy=-1.0` lane was not legalized.
 
-- **Row 4** `PLACE_STONE_SIDE_LOWER_HALF`: aiming the visual lower half
-  of the compound's WEST face with stone-held reproduces a placement
-  failure mode matching Julia's live "flicker / pop-off" symptom. The
-  mechanism is now classified as packet/hit-validity rejection before
-  server-side placement finalization: the lower-half side hit
-  `(8.0, 202.25, 8.5)` targets native block `BlockPos{x=8, y=203, z=8}`,
-  and vanilla rejects the `UseItemOnPacket` as too far away from that hit
-  block. Row 4 stays RED; next implementation is a narrow server hit-validity
-  bridge for compound full-block visual bounds.
+### Rows needing follow-up
+
+- **Row 4** `PLACE_STONE_SIDE_LOWER_HALF`: the packet/hit-validity bridge
+  accepts the visual lower-half WEST-face hit `(8.0, 202.25, 8.5)` on native
+  block `BlockPos{x=8, y=203, z=8}` and server placement finalization is now
+  observed. The remaining downstream issue is authoring/finalization: the side
+  slot survives as ordinary anchored `dy=-0.5`, not compound `dy=-1.0`.
 - **Row 6** `PLACE_SLAB_SIDE_LOWER_HALF`: aiming the visual lower half of
   the compound's EAST face with slab-held reproduces a placement failure
   matching Julia's live "wrong column / wrong lane" symptom.

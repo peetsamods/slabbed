@@ -14,6 +14,7 @@
     "RedstoneWireBlockMixin",
     "BlockItemPlaceTraceMixin",
     "BlockItemPlacementIntentMixin",
+    "ServerInteractBlockHitToleranceMixin",
     "BlockOnPlacedAnchorMixin",
     "BlockOnStateReplacedAnchorMixin"
   ],
