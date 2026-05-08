@@ -35,7 +35,17 @@ Suggested marker: `[BETA4_RELOAD_JUMP_PERSISTENCE_RED]`
 
 The proof must establish the ordinary full block and lowered bottom slab carrier legally, not by faking dy. It must print the block pos/state, pre and post dy, pre and post `persistentFullBlockAnchor`, pre and post `persistentLoweredSlabCarrier`, support topology, and source mode before and after reload. It should fail RED if an ordinary persistent full-block anchor or persistent lowered slab carrier has `dy=0.0` after reload when the legal expectation is `dy=-0.5`.
 
-No proof was added in this slice because the local evidence did not expose an existing helper that faithfully reproduces Julia's save/load or chunk-reload path.
+Follow-up proof attempt from `7647501`: an opt-in client-gametest save/close/open route was tried locally with property `slabbed.beta4ReloadJumpRedOnly`, but it did not reproduce Julia's jump. The temporary proof created legal source truth at `tracked=14, 201, 0` and `carrier=14, 202, 0`, then used `TestWorldSave.open()` after an explicit server save and world close.
+
+Observed local result from `build/run/clientGameTest/logs/latest.log`:
+
+- Pre-reload server and client tracked stone: `dy=-0.5`, `persistentFullBlockAnchor=true`, `sourceMode=dynamicLoweredOrAnchored`.
+- Pre-reload server and client carrier bottom slab: `dy=-0.5`, `persistentLoweredSlabCarrier=true`, `persistentLoweredBottomSlabCarrier=true`, `sourceMode=persistentLoweredSlabCarrier`.
+- Post-reload server and client tracked stone: `dy=-0.5`, `persistentFullBlockAnchor=true`.
+- Post-reload server and client carrier bottom slab: `dy=-0.5`, `persistentLoweredSlabCarrier=true`, `persistentLoweredBottomSlabCarrier=true`.
+- Classification was `GREEN_STILL_LOWERED_AFTER_RELOAD`, so no accepted `[BETA4_RELOAD_JUMP_PERSISTENCE_RED]` exists from this route.
+
+Exact missing mechanism: the clean singleplayer save/close/open path near the harness spawn does not reproduce the live block jump. The next RED must use either Julia's actual live world/reload path or a more faithful chunk unload/reload path that exercises the same already-built live seam topology and render-view timing. If server/client world facts stay green while live visuals jump, the likely missing bucket is render-view lookup or initial chunk-render timing rather than saved attachment persistence.
 
 ## Non-Negotiables
 
