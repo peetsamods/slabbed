@@ -18,18 +18,20 @@ import net.minecraft.world.World;
 import java.lang.reflect.Method;
 
 /**
- * Focused opt-in RED proof: the current boolean
- * {@code persistentFullBlockAnchor} representation cannot preserve the
- * authored compound lane depth ({@code dy=-1.0}) once the source slab
- * carrier below the compound block is removed.
+ * Focused opt-in proof for authored compound full-block anchor depth.
+ * Originally captured the RED state where the boolean
+ * {@code persistentFullBlockAnchor} representation could not preserve
+ * authored compound lane depth ({@code dy=-1.0}) across source slab
+ * removal. With the beta4 sidecar
+ * ({@code SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE}) wired in,
+ * the same fixture now classifies GREEN: the sidecar carries authored
+ * {@code dy=-1.0} independently of the slab below.
  *
  * <p>This proof is intentionally narrower than
  * {@link SlabbedLabBeta4CompoundContractMatrixClientGameTest}: it isolates
- * the authored-depth gap so the contract matrix's row 9
+ * the authored-depth contract so the contract matrix's row 9
  * ({@code SOURCE_SLAB_BREAK}) becomes a structural argument, not just an
- * observation. It does not implement the
- * {@code COMPOUND_FULL_BLOCK_ANCHOR_TYPE} sidecar attachment recommended in
- * {@code docs/beta4-compound-source-mode-design.md}.
+ * observation. It does not assert any other matrix row.
  *
  * <p>Topology mirrors the matrix row 9/10 fixture
  * ({@code BASE_FULL_SUPPORT} bottom slab, {@code BASE_FULL} anchored stone,
@@ -41,16 +43,15 @@ import java.lang.reflect.Method;
  *   <li>{@code [BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_RED]} — emitted when
  *       the boolean {@code persistentFullBlockAnchor} remains true after
  *       source removal but the authored {@code dy=-1.0} cannot be
- *       recovered (current state).</li>
- *   <li>{@code [BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_GREEN]} — future
- *       marker, emitted only when a richer authored-depth representation
- *       (sidecar {@code COMPOUND_FULL_BLOCK_ANCHOR_TYPE}) preserves
- *       {@code dy=-1.0} across source removal. Do not emit until
- *       implemented.</li>
+ *       recovered (pre-sidecar state, regression detector).</li>
+ *   <li>{@code [BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_GREEN]} — emitted when
+ *       the sidecar {@code COMPOUND_FULL_BLOCK_ANCHOR_TYPE} preserves
+ *       authored {@code dy=-1.0} across source removal. Current expected
+ *       state with the beta4 sidecar wired in.</li>
  *   <li>{@code [BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_PROOF_INVALIDATED]}
- *       — emitted if the post-removal compound dy unexpectedly stays at
- *       {@code -1.0} without a sidecar attachment. Stops the proof and
- *       requires investigation.</li>
+ *       — emitted if the boolean anchor was lost together with the source
+ *       slab, or if dy was preserved without sidecar truth. Either case
+ *       breaks the proof premise and demands investigation.</li>
  * </ul>
  *
  * <p>Property: {@code -Dslabbed.beta4AuthoredCompoundAnchorDepthRedOnly=true}.
@@ -84,9 +85,16 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
             // surface. ANCHOR_TYPE is a LongOpenHashSet of packed positions
             // with no per-position value; there is no public helper that
             // returns an authored dy or lane depth for a given anchored
-            // pos. This is the underlying reason the proof is RED.
+            // pos. This was the underlying reason the proof was RED.
             String anchorTypeShape = describeAnchorTypeShape();
             String anchorDepthApiProbe = probeForAuthoredDepthApi();
+            // Beta4 sidecar surface: if a sidecar compound full-block
+            // anchor attachment is present on SlabAnchorAttachment and
+            // exposes an isCompoundFullBlockAnchor query, the authored
+            // compound lane can be encoded independently of the boolean
+            // anchor. This is what flips the proof to GREEN.
+            String sidecarShape = describeCompoundSidecarShape();
+            boolean sidecarCanExposeCompoundLane = probeForSidecarCompoundQuery();
 
             // Phase 1: build legal compound state and capture pre-removal
             // truth (authored dy=-1.0, anchored, persistent carrier).
@@ -97,6 +105,7 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
             // pretend RED.
             double preCompoundDy = readDy(sp, COMPOUND);
             boolean prePersistentFullBlockAnchor = readPersistentFullBlockAnchor(sp, COMPOUND);
+            boolean preCompoundFullBlockAnchor = readCompoundFullBlockAnchor(sp, COMPOUND);
             double preSourceDy = readDy(sp, LOWERED_BOTTOM_SLAB);
             boolean preSourceCarrier = readPersistentLoweredSlabCarrier(sp, LOWERED_BOTTOM_SLAB);
             if (Math.abs(preCompoundDy - EXPECTED_AUTHORED_DY) > EPSILON
@@ -121,19 +130,22 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
             double postCompoundDy = readDy(sp, COMPOUND);
             boolean postPersistentFullBlockAnchor = readPersistentFullBlockAnchor(sp, COMPOUND);
             boolean postIsAnchored = readIsAnchored(sp, COMPOUND);
+            boolean postCompoundFullBlockAnchor = readCompoundFullBlockAnchor(sp, COMPOUND);
             boolean authoredDepthMissing = Math.abs(postCompoundDy - EXPECTED_AUTHORED_DY) > EPSILON;
 
-            // The current ANCHOR_TYPE (LongOpenHashSet of packed positions)
-            // structurally cannot expose authored depth. There is no
-            // public method on SlabAnchorAttachment that returns a dy/lane
-            // value. Confirmed both at compile-time (only boolean
-            // isAnchored) and at runtime via reflection probe.
+            // The original ANCHOR_TYPE (LongOpenHashSet of packed positions)
+            // structurally cannot expose authored depth. The reflective
+            // probe still confirms no double-returning depth/lane method
+            // on the boolean anchor surface; sidecar capability is tracked
+            // separately via probeForSidecarCompoundQuery.
             boolean currentAnchorCanExposeDepth = false;
 
-            // Print required RED facts.
+            // Print fact line.
             System.out.println("[" + MARKER + "_FACTS]"
                     + " anchorTypeShape=" + anchorTypeShape
                     + " anchorDepthApiProbe=" + anchorDepthApiProbe
+                    + " sidecarShape=" + sidecarShape
+                    + " sidecarCanExposeCompoundLane=" + sidecarCanExposeCompoundLane
                     + " expectedAuthoredDy=" + format(EXPECTED_AUTHORED_DY)
                     + " currentAnchorCanExposeDepth=" + currentAnchorCanExposeDepth);
             System.out.println("[" + MARKER + "_PHASE] " + preLine);
@@ -143,32 +155,58 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
                     + " postCompoundDy=" + format(postCompoundDy)
                     + " prePersistentFullBlockAnchor=" + prePersistentFullBlockAnchor
                     + " postPersistentFullBlockAnchor=" + postPersistentFullBlockAnchor
+                    + " preCompoundFullBlockAnchor=" + preCompoundFullBlockAnchor
+                    + " postCompoundFullBlockAnchor=" + postCompoundFullBlockAnchor
                     + " postIsAnchored=" + postIsAnchored
                     + " expectedAuthoredDy=" + format(EXPECTED_AUTHORED_DY)
                     + " authoredDepthMissing=" + authoredDepthMissing
-                    + " currentAnchorCanExposeDepth=" + currentAnchorCanExposeDepth);
+                    + " currentAnchorCanExposeDepth=" + currentAnchorCanExposeDepth
+                    + " sidecarCanExposeCompoundLane=" + sidecarCanExposeCompoundLane);
 
-            // Classification.
-            if (postPersistentFullBlockAnchor && authoredDepthMissing) {
-                System.out.println("[" + MARKER + "_RED]"
+            // GREEN classification: sidecar preserved authored compound
+            // depth across source slab removal.
+            boolean authoredDepthPreserved = !authoredDepthMissing;
+            if (authoredDepthPreserved && postCompoundFullBlockAnchor && sidecarCanExposeCompoundLane) {
+                System.out.println("[" + MARKER + "_GREEN]"
                         + " phase=preSourceRemoval"
                         + " placedDy=" + format(preCompoundDy)
                         + " placedPersistentFullBlockAnchor=" + prePersistentFullBlockAnchor
+                        + " placedCompoundFullBlockAnchor=" + preCompoundFullBlockAnchor
                         + " sourceDy=" + format(preSourceDy)
                         + " sourcePersistentLoweredSlabCarrier=" + preSourceCarrier
                         + " expectedAuthoredDy=" + format(EXPECTED_AUTHORED_DY)
                         + " | phase=postSourceRemoval"
                         + " placedPersistentFullBlockAnchor=" + postPersistentFullBlockAnchor
+                        + " placedCompoundFullBlockAnchor=" + postCompoundFullBlockAnchor
+                        + " actualDy=" + format(postCompoundDy)
+                        + " expectedAuthoredDy=" + format(EXPECTED_AUTHORED_DY)
+                        + " sidecarCanExposeCompoundLane=" + sidecarCanExposeCompoundLane
+                        + " classification=GREEN");
+                return;
+            }
+
+            // RED: anchor preserved but authored depth lost (no sidecar
+            // truth survived). Original RED facts.
+            if (postPersistentFullBlockAnchor && authoredDepthMissing) {
+                System.out.println("[" + MARKER + "_RED]"
+                        + " phase=preSourceRemoval"
+                        + " placedDy=" + format(preCompoundDy)
+                        + " placedPersistentFullBlockAnchor=" + prePersistentFullBlockAnchor
+                        + " placedCompoundFullBlockAnchor=" + preCompoundFullBlockAnchor
+                        + " sourceDy=" + format(preSourceDy)
+                        + " sourcePersistentLoweredSlabCarrier=" + preSourceCarrier
+                        + " expectedAuthoredDy=" + format(EXPECTED_AUTHORED_DY)
+                        + " | phase=postSourceRemoval"
+                        + " placedPersistentFullBlockAnchor=" + postPersistentFullBlockAnchor
+                        + " placedCompoundFullBlockAnchor=" + postCompoundFullBlockAnchor
                         + " actualDy=" + format(postCompoundDy)
                         + " expectedAuthoredDy=" + format(EXPECTED_AUTHORED_DY)
                         + " authoredDepthMissing=" + authoredDepthMissing
                         + " currentAnchorCanExposeDepth=" + currentAnchorCanExposeDepth
+                        + " sidecarCanExposeCompoundLane=" + sidecarCanExposeCompoundLane
                         + " classification=RED");
-                // Intentionally fail the gametest so the opt-in run is
-                // visibly RED. Default runClientGameTest does not set the
-                // opt-in property and so does not run this body.
                 throw new AssertionError(
-                        "[" + MARKER + "_RED] boolean persistentFullBlockAnchor preserved "
+                        "[" + MARKER + "_RED] persistentFullBlockAnchor preserved "
                                 + "but authored compound dy=-1.0 lost (postDy="
                                 + format(postCompoundDy) + ").");
             }
@@ -188,17 +226,20 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
                                 + postPersistentFullBlockAnchor);
             }
 
-            // Anchor still true and authored dy preserved without a
-            // sidecar. Stop and report; the structural premise is wrong.
+            // Anchor preserved AND dy preserved but no compound sidecar
+            // present — should not happen if sidecar is the only authored
+            // truth carrier. Surface as PROOF_INVALIDATED.
             System.out.println("[" + MARKER + "_PROOF_INVALIDATED]"
                     + " reason=authored_dy_preserved_without_sidecar"
                     + " postCompoundDy=" + format(postCompoundDy)
                     + " expectedAuthoredDy=" + format(EXPECTED_AUTHORED_DY)
+                    + " postCompoundFullBlockAnchor=" + postCompoundFullBlockAnchor
+                    + " sidecarCanExposeCompoundLane=" + sidecarCanExposeCompoundLane
                     + " currentAnchorCanExposeDepth=" + currentAnchorCanExposeDepth);
             throw new AssertionError(
                     "[" + MARKER + "_PROOF_INVALIDATED] authored compound dy=-1.0 was preserved "
-                            + "after source removal without a sidecar attachment; investigate "
-                            + "before claiming RED.");
+                            + "after source removal without a compound sidecar attachment; "
+                            + "investigate before classifying.");
         } finally {
             try {
                 sp.close();
@@ -314,6 +355,14 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
         return v[0];
     }
 
+    private static boolean readCompoundFullBlockAnchor(TestSingleplayerContext sp, BlockPos pos) {
+        final boolean[] v = new boolean[1];
+        sp.getServer().runOnServer(server -> {
+            v[0] = SlabAnchorAttachment.isCompoundFullBlockAnchor(server.getOverworld(), pos);
+        });
+        return v[0];
+    }
+
     private static boolean readPersistentLoweredSlabCarrier(TestSingleplayerContext sp, BlockPos pos) {
         final boolean[] v = new boolean[1];
         sp.getServer().runOnServer(server -> {
@@ -329,6 +378,7 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
         boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
         boolean persistentFullBlockAnchor = anchored
                 && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state);
+        boolean compoundFullBlockAnchor = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos);
         boolean persistentCarrier =
                 SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
         boolean persistentBottomCarrier =
@@ -338,6 +388,7 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
                 + " state=" + state
                 + " dy=" + format(dy)
                 + " persistentFullBlockAnchor=" + persistentFullBlockAnchor
+                + " compoundFullBlockAnchor=" + compoundFullBlockAnchor
                 + " persistentLoweredSlabCarrier=" + persistentCarrier
                 + " persistentLoweredBottomSlabCarrier=" + persistentBottomCarrier
                 + " slabType=" + slabType;
@@ -354,6 +405,54 @@ public final class SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest
      * {@link SlabAnchorAttachment#ANCHOR_TYPE} ensures the proof would
      * fail to compile if the public attachment shape changes.
      */
+    /**
+     * Describes the beta4 compound sidecar attachment if present.
+     * Returns {@code AttachmentType<LongOpenHashSet>:...sidecar} when the
+     * sidecar is wired in, or {@code none} when absent (RED-era state).
+     */
+    private static String describeCompoundSidecarShape() {
+        try {
+            java.lang.reflect.Field f = SlabAnchorAttachment.class.getField("COMPOUND_FULL_BLOCK_ANCHOR_TYPE");
+            Object v = f.get(null);
+            if (v == null) {
+                return "none";
+            }
+            return "AttachmentType<LongOpenHashSet>:" + v.getClass().getSimpleName() + ":sidecar";
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            return "none";
+        }
+    }
+
+    /**
+     * Probe for the public sidecar compound query
+     * {@code isCompoundFullBlockAnchor(BlockView, BlockPos)} on
+     * {@link SlabAnchorAttachment}. Returns true if the API exists; the
+     * GREEN classification requires this to be true together with
+     * {@code postCompoundFullBlockAnchor}.
+     */
+    private static boolean probeForSidecarCompoundQuery() {
+        for (Method m : SlabAnchorAttachment.class.getDeclaredMethods()) {
+            if (!m.getName().equals("isCompoundFullBlockAnchor")) {
+                continue;
+            }
+            if (m.getReturnType() != boolean.class) {
+                continue;
+            }
+            Class<?>[] params = m.getParameterTypes();
+            if (params.length != 2) {
+                continue;
+            }
+            if (!params[0].getName().equals("net.minecraft.world.BlockView")) {
+                continue;
+            }
+            if (!params[1].getName().equals("net.minecraft.util.math.BlockPos")) {
+                continue;
+            }
+            return true;
+        }
+        return false;
+    }
+
     private static String describeAnchorTypeShape() {
         AttachmentType<LongOpenHashSet> anchorType = SlabAnchorAttachment.ANCHOR_TYPE;
         String typeName = anchorType == null

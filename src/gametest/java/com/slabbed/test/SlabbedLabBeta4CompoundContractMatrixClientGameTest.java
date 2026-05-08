@@ -525,30 +525,29 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
     }
 
     private static Cls classifySourceBreak(String observed) {
-        // Julia live observation: compound jumps up to dy=-0.5 or dy=0
-        // after the lower source slab is broken. RED if the post snapshot
-        // shows compound dy != -1.0; UNDECIDED if compound still reports
-        // dy=-1.0 (intent for post-break behavior is not yet decided).
+        // A-prime intent (docs/beta4-compound-source-mode-design.md): the
+        // persistent compound anchor preserves authored dy=-1.0 across
+        // source slab removal. GREEN iff post-break compound stays at
+        // dy=-1.0; RED if it collapses (Julia's live "jump" symptom).
         Double postDy = extractDy(observed, "post-break", "compound");
         if (postDy == null) {
             return Cls.UNDECIDED;
         }
         if (Math.abs(postDy + 1.0d) <= EPSILON) {
-            return Cls.UNDECIDED;
+            return Cls.GREEN;
         }
         return Cls.RED;
     }
 
     private static Cls classifyNeighborUpdateAfterBreak(String observed) {
-        // Post-break + neighbor-update intent is formally undecided (audit
-        // row 8). Anything other than dy=-1.0 matches Julia's live-jump
-        // symptom and is RED.
+        // Same intent as row 9: post-break + neighbor-update must keep
+        // authored compound dy=-1.0 (sidecar). RED if it collapses.
         Double postDy = extractDy(observed, "post-break-and-neighbor-update", "compound");
         if (postDy == null) {
             return Cls.UNDECIDED;
         }
         if (Math.abs(postDy + 1.0d) <= EPSILON) {
-            return Cls.UNDECIDED;
+            return Cls.GREEN;
         }
         return Cls.RED;
     }

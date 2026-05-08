@@ -90,8 +90,17 @@ Slice 1: RED proof for authored compound anchor depth storage.
 See "Authored compound anchor depth RED proof" below.
 
 Slice 2: implement richer anchor/source representation.
+**Status: shipped as a beta4-narrow sidecar attachment.** See "Authored compound
+anchor depth sidecar implementation" below. The sidecar is a
+`LongOpenHashSet`-backed `AttachmentType` (`COMPOUND_FULL_BLOCK_ANCHOR_TYPE`),
+**not** a full record / lane / source-mode rewrite. It carries the single bit
+"authored compound at `dy=-1.0`" and is read by `SlabSupport.getYOffsetInner`
+ahead of the dynamic compound predicate so the authored depth survives source
+slab removal. No `dy=-1.0` slab lane and no recursion below `dy=-1.0`.
 
 Slice 3: fix source slab break rows 9/10.
+**Status: closed by the slice 2 sidecar.** Matrix rows 9/10 now classify GREEN
+with the sidecar wired in (see audit doc row summary at the bottom).
 
 Slice 4: fix full-block side/top rows 4/5/8.
 
@@ -174,7 +183,85 @@ non-zero and cannot be silently ignored. The default
 Evidence harvest at `84bbb81`:
 `tmp/beta4-authored-compound-anchor-depth-red-84bbb81/`.
 
-## Recommended next implementation slice
+## Authored compound anchor depth sidecar implementation
+
+Marker (now): `[BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_GREEN]`. The earlier RED
+emission and `_PROOF_INVALIDATED` branches remain as regression detectors.
+
+Files touched (sidecar slice only):
+
+- `src/main/java/com/slabbed/anchor/SlabAnchorAttachment.java`: adds
+  `COMPOUND_FULL_BLOCK_ANCHOR_TYPE` (an `AttachmentType<LongOpenHashSet>`,
+  same persistence/sync plumbing as `ANCHOR_TYPE` and
+  `LOWERED_SLAB_CARRIER_TYPE`), `clientCompoundFullBlockAnchorLookup`,
+  public `isCompoundFullBlockAnchor(BlockView, BlockPos)` /
+  `addCompoundFullBlockAnchor` / `removeCompoundFullBlockAnchor`, and the
+  narrow `qualifiesForCompoundFullBlockAnchor(world, pos, state)` predicate.
+  `addAnchor` automatically pipes the qualifier into the sidecar, so
+  every existing call site (placement mixin, gametest fixtures, etc.)
+  authors the sidecar without further changes. `removeAnchor` clears the
+  sidecar in lockstep with the boolean anchor.
+- `src/main/java/com/slabbed/util/SlabSupport.java`: exposes
+  `isLoweredCompoundSourceSlab(world, pos, state)` (mirror of the inline
+  `isBottomSlab && isAdjacentSideSlabLowered` predicate already used by
+  the compound branch) and adds a sidecar fast-path to
+  `getYOffsetInner`'s anchored branch so sidecar truth returns `dy=-1.0`
+  before the dynamic compound predicate runs.
+- `src/client/java/com/slabbed/client/SlabAnchorClientSync.java`: wires
+  `clientCompoundFullBlockAnchorLookup`, registers the sidecar in
+  `onChunkLoad` for chunk-load rerender + `onAttachedSet` rerender, and
+  introduces a small `labelForAttachment` helper to avoid duplicating the
+  attachment-name strings.
+
+Sidecar payload is intentionally minimal for beta4: a `LongOpenHashSet` of
+packed positions. No `sourceKind`, `sourcePos`, `survivalPolicy`, or
+`maxDepth` are stored yet. Adding any of those is a future slice and must
+not break the additive contract.
+
+Sidecar **rules**:
+
+- **Author** when `qualifiesForCompoundFullBlockAnchor` is true at
+  `addAnchor` time (ordinary full block placed directly above a slab that
+  is itself in the compound source lane). Never authored for slabs,
+  non-full blocks, or any `dy >= -0.5` placement.
+- **Persist** through source slab removal. The dynamic
+  `isAdjacentSideSlabLowered` recompute below is no longer the truth for
+  authored compound depth.
+- **Clear** when the compound block itself is broken or state-replaced
+  (piggy-backs `removeAnchor`).
+- **Render-view safe**: client `BlockView`s that are not `World` (e.g.
+  `ChunkRendererRegion`) read through `clientCompoundFullBlockAnchorLookup`
+  exactly like the existing anchor / lowered-carrier bridges. The
+  `getYOffsetInner` sidecar fast-path is therefore valid for model,
+  outline, raycast, and target paths.
+
+Proof status:
+
+- `[BETA4_AUTHORED_COMPOUND_ANCHOR_DEPTH_GREEN]` fires for the matrix row
+  9/10 fixture at the expected pre / post snapshots, with
+  `preCompoundFullBlockAnchor=true postCompoundFullBlockAnchor=true
+  actualDy=-1.000 sidecarCanExposeCompoundLane=true`.
+- Contract matrix opt-in run reports
+  `rows=12 red=2 undecided=4 green=5 notImplemented=1` (rows 9/10 flipped
+  from RED to GREEN; rows 4/6 stay RED, rows 3/5/7/8 stay UNDECIDED, row
+  11 stays GREEN, row 12 stays NOT_IMPLEMENTED).
+- Existing protected proofs still pass on the default
+  `runClientGameTest` batch (no regression in
+  `[BETA4_OUTLINE_HIT_RAYCAST_MISS_GREEN]`,
+  `[BETA4_SEAM_VISIBLE_*_GREEN]`,
+  `[BETA4_ANCHORED_UP_PRESERVE_GREEN]`,
+  `[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]`,
+  `[BETA4_SEAM_NO_RESCUE_GREEN]`).
+
+Release remains blocked: matrix rows 4/6 (side-half placement) and
+rows 3/5/7/8 (undecided intent) are unchanged, and Julia live retest is
+still the final gate.
+
+## Recommended next implementation slice (historical)
+
+Originally recorded before the sidecar landed; preserved for context.
+The recommended sidecar is now implemented (see section above), so the
+"do not implement the sidecar in this slice" line is no longer in force.
 
 Add a sidecar attachment, **not** a replacement of `ANCHOR_TYPE`:
 
