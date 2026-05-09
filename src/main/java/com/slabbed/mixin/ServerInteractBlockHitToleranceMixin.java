@@ -6,6 +6,7 @@ import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.SlabType;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -28,6 +29,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class ServerInteractBlockHitToleranceMixin {
     private static final double COMPOUND_DY = -1.0d;
     private static final double EPSILON = 1.0e-6d;
+    private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
 
     @Shadow @Final public ServerPlayerEntity player;
 
@@ -38,6 +40,9 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     )
     private Vec3d slabbed$compoundFullBlockVisualCenter(Vec3i blockPos, PlayerInteractBlockC2SPacket packet) {
         Vec3d center = Vec3d.ofCenter(blockPos);
+        if (blockPos instanceof BlockPos pos && player != null && packet != null) {
+            slabbed$logRepeatMergeTolerance(pos, packet, center);
+        }
         if (!(blockPos instanceof BlockPos pos)
                 || player == null
                 || packet == null
@@ -45,6 +50,69 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return center;
         }
         return center.add(0.0d, COMPOUND_DY, 0.0d);
+    }
+
+    private void slabbed$logRepeatMergeTolerance(BlockPos pos, PlayerInteractBlockC2SPacket packet, Vec3d center) {
+        if (!Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN)) {
+            return;
+        }
+        ServerWorld world = player.getEntityWorld();
+        BlockHitResult hit = packet.getBlockHitResult();
+        BlockState state = world == null ? null : world.getBlockState(pos);
+        ItemStack heldStack = player.getStackInHand(packet.getHand());
+        boolean legalLoweredSameCellMerge = slabbed$isLoweredSameCellBottomSlabMergeDiagnostic(
+                world,
+                pos,
+                state,
+                hit,
+                heldStack);
+        Slabbed.LOGGER.info(
+                "[JULIA_BETA4_REPEAT_SEAM_SERVER_TOLERANCE] packetBlockPos={} state={} dy={} face={} hitVec={} heldItem={} legalLoweredSameCellMerge={} action={} centerBefore={} centerAfter={} reason={}",
+                pos.toShortString(),
+                state,
+                state == null ? "null" : SlabSupport.getYOffset(world, pos, state),
+                hit == null ? "null" : hit.getSide(),
+                hit == null ? "null" : hit.getPos(),
+                heldStack == null ? "null" : Registries.ITEM.getId(heldStack.getItem()),
+                legalLoweredSameCellMerge,
+                "leave_packet_unchanged",
+                center,
+                center,
+                legalLoweredSameCellMerge ? "diagnostic_candidate_not_rewritten" : "not_lowered_same_cell_merge");
+    }
+
+    private static boolean slabbed$isLoweredSameCellBottomSlabMergeDiagnostic(
+            ServerWorld world,
+            BlockPos pos,
+            BlockState state,
+            BlockHitResult hit,
+            ItemStack heldStack
+    ) {
+        if (world == null
+                || pos == null
+                || state == null
+                || hit == null
+                || !pos.equals(hit.getBlockPos())
+                || hit.getSide() != Direction.UP
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.getFluidState().isEmpty()
+                || Math.abs(SlabSupport.getYOffset(world, pos, state) + 0.5d) > EPSILON
+                || heldStack == null
+                || !(heldStack.getItem() instanceof BlockItem blockItem)
+                || !(blockItem.getBlock() instanceof SlabBlock)
+                || !state.isOf(blockItem.getBlock())) {
+            return false;
+        }
+        Vec3d hitPos = hit.getPos();
+        return hitPos != null
+                && hitPos.x >= pos.getX() - EPSILON
+                && hitPos.x <= pos.getX() + 1.0d + EPSILON
+                && hitPos.y >= pos.getY() - 0.5d - EPSILON
+                && hitPos.y <= pos.getY() + EPSILON
+                && hitPos.z >= pos.getZ() - EPSILON
+                && hitPos.z <= pos.getZ() + 1.0d + EPSILON;
     }
 
     private boolean slabbed$isLegalCompoundFullBlockVisualHit(BlockPos pos, PlayerInteractBlockC2SPacket packet) {

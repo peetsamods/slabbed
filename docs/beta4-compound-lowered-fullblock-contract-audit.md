@@ -150,6 +150,33 @@ delta, not by occlusion. Latest summary:
 `[JULIA_BETA4_LIVE_GOBLIN_CORRIDOR_SUMMARY] lowerCorridor=FOUND lowerAfterFirstCorridor=FOUND sequenceLowerResult=RED repeatPlacement=RED topFace=RED ghost=true wrongDelta=true releaseBlockers=lowerAfterFirst,repeatPlacement,topFace`.
 Release remains blocked.
 
+### Repeat Merge Server Seam Audit
+
+Diagnostic-only markers added behind `-Dslabbed.beta4RepeatMergeTrace=true`:
+
+- `[JULIA_BETA4_REPEAT_SEAM_START]`
+- `[JULIA_BETA4_REPEAT_SEAM_CLIENT_BEFORE]`
+- `[JULIA_BETA4_REPEAT_SEAM_CLIENT_PREDICT]`
+- `[JULIA_BETA4_REPEAT_SEAM_CLIENT_RESULT]`
+- `[JULIA_BETA4_REPEAT_SEAM_SERVER_TOLERANCE]`
+- `[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]`
+- `[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]`
+- `[JULIA_BETA4_REPEAT_SEAM_SERVER_TICK]`
+- `[JULIA_BETA4_REPEAT_SEAM_CLIENT_TICK]`
+- `[JULIA_BETA4_REPEAT_SEAM_SUMMARY]`
+
+Current classification: `SERVER_TOLERANCE_REJECT`.
+
+The repeat target before click is `39,203,8` as
+`stone_slab[type=bottom] dy=-0.5` on face `UP`. The client predicts and briefly
+authors `stone_slab[type=double] dy=-0.5`, and the client action returns
+`Success`. Server-side tolerance sees `legalLoweredSameCellMerge=true` but leaves
+the native packet center unchanged; no durable server `DOUBLE` follows. Server
+and client ticks 1, 5, and 20 all report the target still as
+`stone_slab[type=bottom] dy=-0.5`. Client prediction is not server/final proof.
+No gameplay implementation is included; `repeatPlacement=RED`, `topFace=RED`,
+and release remains blocked.
+
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
 `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`,
