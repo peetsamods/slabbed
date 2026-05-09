@@ -102,6 +102,18 @@ set:
 `[JULIA_BETA4_LIVE_GOBLIN_AIM_UPPER_REAL_TARGET]`,
 `[JULIA_BETA4_LIVE_GOBLIN_AIM_TOP_REAL_TARGET]`,
 `[JULIA_BETA4_LIVE_GOBLIN_AIM_PARITY_FAIL]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_DIAG_START]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_LOWER_DIAG]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_UPPER_DIAG]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_TOP_DIAG]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_FIRST_DIAG]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_LOWER_AFTER_FIRST_DIAG]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_TOP_DIAG]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_HARNESS_AIM_FAIL]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_OWNER_FAIL]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_OCCLUSION_EXPECTED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_STATE_MISMATCH]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SUMMARY]`,
 `[JULIA_BETA4_LIVE_GOBLIN_DELTA_SCAN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SEQUENCE_FIRST_SIDE]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SEQUENCE_LOWER_AFTER_FIRST]`,
@@ -110,6 +122,17 @@ set:
 `[JULIA_BETA4_LIVE_GOBLIN_PARITY_SUMMARY]`. Latest manual/live mismatch remains:
 manual lower-half routes to upper/top, first upper side accepts one slab, repeat
 rejects, top-face ghosts/wrongs; release remains blocked.
+
+Latest targeting classification: the first targeting diagnostic pass proved a
+gametest harness bug, not gameplay behavior, because the camera eye/visible
+local point did not match the intended ray. The gametest-only harness fix pins
+the player pose, uses the intended side eye, and computes side/top points in
+dy-adjusted visible local coordinates. The rerun classifies upper side, sequence
+first, top face, and sequence top as `TARGET_OK`; lower-after-first is
+`OCCLUSION_EXPECTED` because the first placed side slab is physically closer
+than the intended lower-side owner point. Summary:
+`[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SUMMARY] lower=OCCLUSION_EXPECTED upper=TARGET_OK top=TARGET_OK sequenceFirst=TARGET_OK sequenceLowerAfterFirst=OCCLUSION_EXPECTED sequenceTop=TARGET_OK harnessAimFailures=0 ownerFailures=0 occlusionCases=2 nextAction=choosePlayerRealisticAimPoint`.
+No owner/retarget failure is proven by this run, and release remains blocked.
 
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
