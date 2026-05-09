@@ -41,6 +41,31 @@ ghost/skip slab path. The proof markers for this split are
 `[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]`, and
 `[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_FAIL]`.
 
+Automated canonical live-shape goblin harness marker set:
+`[JULIA_BETA4_LIVE_GOBLIN_START]`,
+`[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_FAIL]`,
+`[JULIA_BETA4_LIVE_GOBLIN_BASELINE]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_A_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_B_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_UPPER_A_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_UPPER_B_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TOP_FACE_GHOST_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_BREAK_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_BREAK_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_HITBOX_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_HITBOX_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]`, and
+`[JULIA_BETA4_LIVE_GOBLIN_DONE]`. Decision use: this harness replaces manual
+recreation as the canonical diagnostic for Julia's live shape; it does not
+approve release by itself. Any summary with `lowerA`, `lowerB`, or `topFace`
+not GREEN keeps release blocked unless Julia explicitly defers that blocker.
+
+Gating note: the harness is opt-in only and is routed from the already-registered
+`SlabbedLabLoweredSidePlacementLiveReproClientGameTest` path when
+`-Dslabbed.beta4LiveShapeGoblin=true` is present. Default `runClientGameTest`
+must not execute the goblin proof.
+
 ## Current savepoint
 
 - HEAD: `06724fb`

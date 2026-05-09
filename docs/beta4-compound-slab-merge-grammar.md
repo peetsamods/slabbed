@@ -137,6 +137,23 @@ Screenshot-shape proof markers added by `-Dslabbed.beta4LiveScreenshotShapeRed=t
 - `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]`
 - `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]`
 
+## Automated canonical live-shape goblin harness
+
+The opt-in client gametest `-Dslabbed.beta4LiveShapeGoblin=true` automates the live checks Julia has been doing manually. It is diagnostic only, is not registered as a default client gametest entrypoint, and does not change placement, retarget, support, or release behavior. The exact gated route is:
+
+`JAVA_TOOL_OPTIONS="-Dslabbed.beta4LiveShapeGoblin=true -Dfabric.client.gametest.disableNetworkSynchronizer=true" ./gradlew --no-daemon runClientGameTest --console plain`
+
+The harness builds and proves this exact canonical structure before any click:
+
+- Layer A: two bottom `stone_slab[type=bottom]` supports.
+- Layer B: two ordinary full stone blocks bridging over those supports.
+- Layer C: two `stone_slab[type=bottom]` slabs on top of the bridge.
+- Layer D: one ordinary full stone block on top of one Layer C slab.
+
+After `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`, it tests lower-half side angle A/B, upper-half side angle A/B, top-face slab click, support-break behavior, and hitbox/owner facts. The final `[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]` reports `structure`, `lowerA`, `lowerB`, `upperA`, `upperB`, `topFace`, `supportBreak`, `hitbox`, `ghost`, `jump`, `wrongOwner`, and `releaseBlockers`.
+
+The beta4 law remains unchanged: slab `dy=-1.0` lanes are illegal, and any successful slab side result must normalize into the existing legal `dy=-0.5` lowered slab grammar or a vanilla legal slab state.
+
 ## Screenshot side-shape discriminator audit
 
 Audit status at `08cb004`: no safe screenshot-only discriminator has been
