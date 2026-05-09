@@ -80,6 +80,30 @@ public abstract class BlockItemPlacementIntentMixin {
                 || SlabSupport.getYOffset(world, belowPos, below) < 0.0d);
     }
 
+    private static boolean slabbed$isCompoundVisibleOwnerTopSlabResult(
+            ItemPlacementContext context,
+            BlockPos placePos,
+            BlockState placedState
+    ) {
+        if (context.getSide() != Direction.UP
+                || !(placedState.getBlock() instanceof SlabBlock)
+                || !placedState.contains(SlabBlock.TYPE)
+                || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+            return false;
+        }
+        BlockPos sourcePos = placePos.down();
+        BlockState sourceState = context.getWorld().getBlockState(sourcePos);
+        SlabSupport.CompoundSlabRemapDecision decision = SlabSupport.findLegalCompoundSlabRemap(
+                context.getWorld(),
+                sourcePos,
+                sourceState,
+                Direction.UP,
+                context.getHitPos());
+        return decision.legal()
+                && "COMPOUND_VISIBLE_OWNER_TOP_SLAB".equals(decision.reason())
+                && placePos.equals(decision.candidatePlacementPos());
+    }
+
     private static SlabType slabbed$getExpectedLoweredSidePlacementType(BlockState targetState) {
         if (!targetState.contains(SlabBlock.TYPE)) {
             return SlabType.BOTTOM;
@@ -143,6 +167,15 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
         if (slabbed$isCompoundTopHit(context, targetPos, targetState)) {
+            SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
+                    context.getWorld(),
+                    targetPos,
+                    targetState,
+                    context.getSide(),
+                    context.getHitPos());
+            if (remapDecision.legal()) {
+                return;
+            }
             cir.setReturnValue(ActionResult.PASS);
             return;
         }
@@ -555,7 +588,28 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos placePos = context.getBlockPos();
         BlockState placedState = world.getBlockState(placePos);
         if (heldIsSlab) {
-            if (slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
+            if (slabbed$isCompoundVisibleOwnerTopSlabResult(context, placePos, placedState)) {
+                RuntimeDiagnostics.recordPlace(
+                        "finalization-return",
+                        Registries.ITEM.getId(self),
+                        true,
+                        context,
+                        cir.getReturnValue(),
+                        "anchorFinalization=skipped_compound_visible_owner_top_slab");
+                RuntimeDiagnostics.recordCompoundFinalization(
+                        "finalization-return",
+                        Registries.ITEM.getId(self),
+                        true,
+                        context,
+                        cir.getReturnValue(),
+                        "skipped_compound_visible_owner_top_slab",
+                        placePos.down(),
+                        SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
+                        SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
+                        SlabAnchorAttachment.isAnchored(world, placePos),
+                        SlabAnchorAttachment.isAnchored(world, placePos),
+                        "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
+            } else if (slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
                 boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
                 boolean persistentBefore = SlabAnchorAttachment.isAnchored(world, placePos);
                 SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, placePos, placedState);

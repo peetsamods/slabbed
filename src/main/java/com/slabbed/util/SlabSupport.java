@@ -406,14 +406,32 @@ public final class SlabSupport {
         if (world == null || sourcePos == null || sourceState == null || intendedDirection == null) {
             return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "missing_context");
         }
-        if (intendedDirection.getAxis().isVertical()) {
-            return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "direction_not_horizontal");
-        }
         if (sourceState.getBlock() instanceof SlabBlock
                 || !SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
                 || !SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos)
                 || Math.abs(getYOffset(world, sourcePos, sourceState) + 1.0d) > 1.0e-6d) {
             return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "source_not_compound_full_block_dy_-1");
+        }
+        if (intendedDirection == Direction.UP) {
+            BlockPos candidatePlacementPos = sourcePos.up();
+            BlockState candidateState = world.getBlockState(candidatePlacementPos);
+            if (!candidateState.isAir()) {
+                return CompoundSlabRemapDecision.rejected(
+                        sourcePos,
+                        sourcePos,
+                        candidatePlacementPos,
+                        "compound_visible_owner_top_candidate_not_air");
+            }
+            return new CompoundSlabRemapDecision(
+                    true,
+                    sourcePos,
+                    sourcePos,
+                    candidatePlacementPos,
+                    SlabType.BOTTOM,
+                    "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
+        }
+        if (intendedDirection.getAxis().isVertical()) {
+            return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "direction_not_horizontal");
         }
 
         int legalLaneCount = 0;
@@ -688,6 +706,23 @@ public final class SlabSupport {
         return isLoweredCarrier(world, belowPos, world.getBlockState(belowPos), MAX_CHAIN_DEPTH);
     }
 
+    private static boolean isCompoundVisibleOwnerTopSlab(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null
+                || pos == null
+                || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        BlockPos sourcePos = pos.down();
+        BlockState sourceState = world.getBlockState(sourcePos);
+        return !(sourceState.getBlock() instanceof SlabBlock)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos)
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState);
+    }
+
     private static boolean hasLoweredSlabLaneSupport(BlockView world, BlockPos slabPos, BlockState slabState) {
         if (!(slabState.getBlock() instanceof SlabBlock) || !slabState.contains(SlabBlock.TYPE)) {
             return false;
@@ -744,6 +779,7 @@ public final class SlabSupport {
                 && state.getBlock() instanceof SlabBlock
                 && state.contains(SlabBlock.TYPE)
                 && state.getFluidState().isEmpty()
+                && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
                         || hasLoweredSolidSideSupport(world, pos)
                         || hasLoweredCarrierBelow(world, pos));
@@ -796,7 +832,8 @@ public final class SlabSupport {
                 if (isLoweredDoubleSlabCarrier(world, belowPos, below)) {
                     return -0.5;
                 }
-            } else if (hasLoweredCarrierBelow(world, pos)) {
+            } else if (!isCompoundVisibleOwnerTopSlab(world, pos, state)
+                    && hasLoweredCarrierBelow(world, pos)) {
                 return -0.5;
             }
             // Adjacent-side-slab alignment: a slab placed at the side of a
@@ -804,7 +841,8 @@ public final class SlabSupport {
             // raycast align with the neighbor. Use hasBottomSlabBelow directly: calling
             // getYOffset here would be short-circuited to 0.0 by the IN_GET_Y_OFFSET recursion
             // guard since this code runs inside getYOffsetInner.
-            if (isAdjacentSideSlabLowered(world, pos, state)) {
+            if (!isCompoundVisibleOwnerTopSlab(world, pos, state)
+                    && isAdjacentSideSlabLowered(world, pos, state)) {
                 return -0.5;
             }
         }

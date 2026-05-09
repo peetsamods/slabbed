@@ -61,6 +61,26 @@ supportPresent.topFace=RED supportMissing.side=GREEN supportMissing.topFace=RED
 hitbox=RED ghost=false jump=false wrongOwner=true
 releaseBlockers=topFace,supportMissingTopFace`. Release remains blocked.
 
+Compound visible-owner top slab fix: `COMPOUND_VISIBLE_OWNER_TOP_SLAB` is now the
+named legal result for held-slab UP clicks on the persistent visible compound
+owner. It authors the exact candidate `source.up()` as
+`stone_slab[type=bottom]`, final `dy=0.0`, and
+`persistentLoweredSlabCarrier=false`. The remaining RED was not placement
+routing; the packet reached the intended candidate, but
+`SlabSupport.getYOffsetInner(...)`'s bottom-slab dynamic branch treated a bottom
+slab directly above an anchored compound full block as a lowered continuation via
+`hasLoweredCarrierBelow(world, pos)` and returned `dy=-0.5`. The fix uses the
+existing durable compound full-block source sidecar to exclude only this named
+top-face result from dynamic lowered classification and persistent lowered
+carrier fallback. Latest corrected goblin summary: `structure=GREEN
+fixtureTruth=GREEN supportPresent.upperSide=GREEN supportPresent.lowerSide=GREEN
+supportPresent.topFace=GREEN supportMissing.side=GREEN
+supportMissing.topFace=GREEN hitbox=RED ghost=false jump=false wrongOwner=true
+releaseBlockers=none`. Side placement remains GREEN, fixtureTruth remains
+GREEN, and no beta4 `dy=-1.0` slab lane or `dy<-1.0` lane is legalized. Release
+is ready for Julia manual live retest but remains blocked until Julia passes or
+waives that live retest.
+
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
 `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`,
@@ -458,7 +478,7 @@ screenshot side-shape without changing placement behavior:
 | --- | --- | --- | --- | --- | --- | --- |
 | Rows 1/2 compound below-lane side slab placement | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | GREEN; immediate side slab at `dy=-0.5` |
 | Internal Row 3 legal remap | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | legal bottom slab, `dy=-0.5` | `1` | continuation beyond horizontal lane | author lowered slab; GREEN |
-| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | lower/upper side slab GREEN; top-face ghost remains RED/PENDING |
+| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell for side, `source.up()` for top | lower/upper side slab GREEN; top-face GREEN as `COMPOUND_VISIBLE_OWNER_TOP_SLAB` at `dy=0.0` |
 
 The audit rejects "lowered bottom slab directly below the source" as a safe
 predicate: it is shared by Julia's screenshot side-shape and Row 1 no-legal-lane
