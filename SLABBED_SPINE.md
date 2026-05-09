@@ -20,8 +20,8 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current operating base HEAD: `e787bf1`
-- Current operating base tag: `save/beta4-live-retarget-source-recorder`
+- Current operating base HEAD before Row 3 remap slice: `64b37d5`
+- Current operating base tag before Row 3 remap slice: `save/beta4-compound-slab-remap-source-truth`
 - Prior live-first classifier base: `767f735` / `save/beta4-live-first-seam-owner-classifier`
 - Reverted failed classifier: `763434e` / `save/beta4-seam-owner-classifier`
 - Stale, provenance-confusing release tag for this issue: `release/0.2.0-beta.4`
@@ -42,11 +42,20 @@ Current Beta 4 status:
 - release gates passed
 - release confidence paused after Julia live feel review
 - issue: compound slab placement UX is too restrictive
-- current WIP: compound slab merge harness source-truth audit
-- next slice: Row 3 gameplay remains unproven until a later implementation slice turns the corrected RED green
-- release remains blocked by product-feel concern, not build failure
+- current WIP: compound slab Row 3 legal remap implemented/proven
+- next slice: Row 4/5 decision or Julia live acceptance
+- release remains blocked pending Row 4/5 decision or Julia live acceptance, not build failure
 - candidate note only: `Compound Slab Clean Rejection vs Merge Grammar — candidate/product-law unresolved.`
 - failed Row 3 WIP patch preserved under `tmp/beta4-compound-slab-harness-audit-7c45fc0/failed-row3-wip-full.patch`
+
+Row 3 savepoint summary: slab-held side-clicks on a proven compound `dy=-1.0`
+ordinary full-block source now safe-reject when no legal lowered slab lane
+exists, and remap only when exactly one adjacent legal `dy=-0.5` slab lane
+exists in the intended continuation direction. Focused proof emits
+`[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]` with source `0,201,0`
+remaining ordinary stone at `dy=-1.0`, legal lane `1,201,0` at `dy=-0.5`, and
+candidate `2,201,0` authored as `stone_slab[type=bottom]` at `dy=-0.5`. No
+beta4 `dy=-1.0` slab lane is legalized. No final Bug Blaster yet.
 
 ## Current proof note
 

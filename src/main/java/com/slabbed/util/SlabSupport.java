@@ -377,6 +377,94 @@ public final class SlabSupport {
                 || incomingType == SlabType.DOUBLE;
     }
 
+    public record CompoundSlabRemapDecision(
+            boolean legal,
+            BlockPos sourcePos,
+            BlockPos legalLanePos,
+            BlockPos candidatePlacementPos,
+            SlabType resultType,
+            String reason
+    ) {
+        private static CompoundSlabRemapDecision rejected(
+                BlockPos sourcePos,
+                BlockPos legalLanePos,
+                BlockPos candidatePlacementPos,
+                String reason
+        ) {
+            return new CompoundSlabRemapDecision(false, sourcePos, legalLanePos, candidatePlacementPos, null, reason);
+        }
+    }
+
+    public static CompoundSlabRemapDecision findLegalCompoundSlabRemap(
+            BlockView world,
+            BlockPos sourcePos,
+            BlockState sourceState,
+            Direction intendedDirection
+    ) {
+        if (world == null || sourcePos == null || sourceState == null || intendedDirection == null) {
+            return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "missing_context");
+        }
+        if (intendedDirection.getAxis().isVertical()) {
+            return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "direction_not_horizontal");
+        }
+        if (sourceState.getBlock() instanceof SlabBlock
+                || !SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
+                || !SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos)
+                || Math.abs(getYOffset(world, sourcePos, sourceState) + 1.0d) > 1.0e-6d) {
+            return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "source_not_compound_full_block_dy_-1");
+        }
+
+        int legalLaneCount = 0;
+        BlockPos legalLanePos = null;
+        BlockState legalLaneState = null;
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos lanePos = sourcePos.offset(direction);
+            BlockState laneState = world.getBlockState(lanePos);
+            if (isLegalCompoundRemapLane(world, lanePos, laneState)) {
+                legalLaneCount++;
+                legalLanePos = lanePos;
+                legalLaneState = laneState;
+            }
+        }
+
+        BlockPos intendedLanePos = sourcePos.offset(intendedDirection);
+        if (legalLaneCount != 1 || !intendedLanePos.equals(legalLanePos)) {
+            return CompoundSlabRemapDecision.rejected(
+                    sourcePos,
+                    legalLanePos,
+                    legalLanePos == null ? null : legalLanePos.offset(intendedDirection),
+                    "legal_lane_count_" + legalLaneCount + "_or_not_in_intended_direction");
+        }
+
+        BlockPos candidatePlacementPos = legalLanePos.offset(intendedDirection);
+        BlockState candidateState = world.getBlockState(candidatePlacementPos);
+        if (!candidateState.isAir()) {
+            return CompoundSlabRemapDecision.rejected(
+                    sourcePos,
+                    legalLanePos,
+                    candidatePlacementPos,
+                    "candidate_not_air");
+        }
+
+        return new CompoundSlabRemapDecision(
+                true,
+                sourcePos,
+                legalLanePos,
+                candidatePlacementPos,
+                legalLaneState.get(SlabBlock.TYPE),
+                "legal_lowered_slab_lane_remap");
+    }
+
+    private static boolean isLegalCompoundRemapLane(BlockView world, BlockPos lanePos, BlockState laneState) {
+        return laneState != null
+                && laneState.getBlock() instanceof SlabBlock
+                && laneState.contains(SlabBlock.TYPE)
+                && laneState.get(SlabBlock.TYPE) != SlabType.DOUBLE
+                && laneState.getFluidState().isEmpty()
+                && Math.abs(getYOffset(world, lanePos, laneState) + 0.5d) <= 1.0e-6d
+                && isLoweredSideLaneSlabCarrier(world, lanePos, laneState);
+    }
+
     private static boolean isCompatibleLoweredSlabLane(BlockState a, BlockState b) {
         if (!a.contains(SlabBlock.TYPE) || !b.contains(SlabBlock.TYPE)) {
             return false;
