@@ -42,8 +42,8 @@ Current Beta 4 status:
 - release gates passed
 - release confidence paused after Julia live feel review
 - issue: compound slab placement UX is too restrictive
-- current WIP: internal compound slab proof Row 3 legal remap implemented/proven, but Julia screenshot shape is RED/pending
-- next slice: fix Julia screenshot-shape live failure, then retest manual live feel
+- current WIP: screenshot side-shape semantic discriminator audit; no gameplay implementation in this slice
+- next slice: if a new discriminator is found, implement side-shape fix using that named predicate; if not, product decision required: accept Rows 1/2 placement too, or keep rejection and defer screenshot shape
 - release remains blocked pending Julia manual live-feel acceptance or explicit waiver; internal Row 3 automated/focused proof passed, but it does not cover Julia's in-world sign-labeled screenshot topology
 - candidate note only: `Compound Slab Clean Rejection vs Merge Grammar — candidate/product-law unresolved.`
 - failed Row 3 WIP patch preserved under `tmp/beta4-compound-slab-harness-audit-7c45fc0/failed-row3-wip-full.patch`
@@ -58,6 +58,8 @@ candidate `2,201,0` authored as `stone_slab[type=bottom]` at `dy=-0.5`. No
 beta4 `dy=-1.0` slab lane is legalized. No final Bug Blaster yet.
 
 Julia screenshot-shape live failure at `fae6d25`: manual live test rejected the current release feel. The internal proof-row name `ROW3` is not Julia's in-world sign label `ROW 3`; the automated Row 3 proof covers a narrow artificial same-Y remap topology, while Julia's screenshot/log shape targets the upper visible full-block area with a lowered slab directly below it. Gated proof `-Dslabbed.beta4LiveScreenshotShapeRed=true` added a screenshot-shape RED for side-slab placement and top-face ghost/skip behavior with markers `[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_RED]` and `[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`. Rows 4/5 may now be release-blocking if the screenshot top-face ghost proves the Row 5 top-click gap. Release remains blocked.
+
+Screenshot side-shape discriminator audit at `08cb004`: diagnostic-only markers now compare `[JULIA_BETA4_NO_LEGAL_LANE_DISCRIMINATOR]`, `[JULIA_BETA4_INTERNAL_ROW3_DISCRIMINATOR]`, and `[JULIA_BETA4_LIVE_SCREENSHOT_DISCRIMINATOR]`. Current finding: "lowered bottom slab directly below the clicked compound source" is not a safe discriminator because Row 1 and Julia's screenshot side shape both have source `dy=-1.0`, below source `stone_slab[type=bottom]` at `dy=-0.5`, lower/side-band horizontal slab click, no horizontal legal lane, and an immediate side candidate air. The existing safe Row 3 discriminator remains exactly one horizontal legal `dy=-0.5` slab lane in the intended direction, with placement continuing beyond it; that preserves Rows 1/2 but does not allow the screenshot shape. Release remains blocked.
 
 ## Current proof note
 

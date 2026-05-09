@@ -109,6 +109,45 @@ Screenshot-shape proof markers added by `-Dslabbed.beta4LiveScreenshotShapeRed=t
 - `[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`
 - `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]`
 
+## Screenshot side-shape discriminator audit
+
+Audit status at `08cb004`: no safe screenshot-only discriminator has been
+found in the current placement facts. The tempting rule "a lowered bottom slab
+exists directly below the clicked compound source" is insufficient because Row
+1 of the no-legal-lane proof has the same semantic shape as Julia's side-slab
+screenshot case: an ordinary compound full-block source at `dy=-1.0`, a lowered
+bottom slab directly below it at `dy=-0.5`, a lower/side-band horizontal slab
+click, and an immediate side candidate that is air.
+
+The only proven implementation predicate that preserves Rows 1/2 is still the
+existing Row 3 horizontal-lane rule: exactly one legal `dy=-0.5` slab lane must
+already exist horizontally adjacent to the clicked source in the intended
+direction, and placement continues beyond that lane. Julia's screenshot side
+shape does not currently satisfy that rule, so implementing it safely requires
+either a new semantic fact not present in Rows 1/2 or a product decision to
+change Rows 1/2 semantics.
+
+| Case | Clicked source | Face / band | Below source | Horizontal lane in clicked direction | Current helper `legalLaneCount` | Candidate relation | Candidate has horizontal `dy=-0.5` lane neighbor | Source has vertical below `dy=-0.5` support only | Expected behavior | Current behavior |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Rows 1/2 no-legal-lane safe reject | ordinary stone compound full block, `dy=-1.0` | horizontal side; Row 1 lower band, Row 2 upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | preserve/reject cleanly, no slab authored | GREEN safe reject |
+| Internal artificial Row 3 legal remap | ordinary stone compound full block, `dy=-1.0` | horizontal side; lower band | bottom `stone_slab`, `dy=-0.5` | existing legal bottom `stone_slab`, `dy=-0.5` | `1` | continuation cell beyond existing lane | yes | no, because horizontal lane exists | author `stone_slab[type=bottom]` at `dy=-0.5` | GREEN legal remap |
+| Julia screenshot side-shape RED | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; lower/below-source band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | desired: author legal lowered side slab | RED/pass/no slab authored |
+
+Discriminator candidates evaluated:
+
+| Candidate | Distinguishes screenshot from Rows 1/2 | Preserves artificial Row 3 | Risks broadening slabs | Recommended implementation predicate |
+| --- | --- | --- | --- | --- |
+| A. Existing horizontal lane neighbor required | no; it rejects screenshot and Rows 1/2, accepts Row 3 | yes | no | yes, but already implemented and does not solve screenshot |
+| B. Visible side-band click required | no; Row 1 and screenshot both use the lower side band | yes | yes if used alone | no |
+| C. Upper full-block stack source required | no; Rows 1/2 and screenshot both use a compound source above a lowered bottom slab carrier | yes | yes if used alone | no |
+| D. Candidate position relation | no; screenshot and Rows 1/2 both target the immediate side cell if below-lane-only were accepted | yes | yes if used alone | no |
+| E. Existing visible lane ownership | no proven screenshot-only owner exists; Row 3 has a horizontal visible lane, screenshot and Rows 1/2 do not | yes | no if defined as Row 3's horizontal lane | no for screenshot |
+
+Conclusion: below-lane-only is rejected as unsafe. If the screenshot side shape
+must place a slab, the next slice needs either a new proven semantic input that
+is absent from Rows 1/2, or an explicit product-law change that accepts the same
+placement surface Rows 1/2 currently preserve/reject.
+
 ## Implementation slices after design
 
 1. Add focused RED proofs only.
