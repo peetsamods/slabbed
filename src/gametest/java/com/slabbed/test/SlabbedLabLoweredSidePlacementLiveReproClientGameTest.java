@@ -3326,6 +3326,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     ) {
         setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
         seedCompoundFullBlock(singleplayer, compoundPos);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        assertCompoundSlabHarnessTopology(ctx, rowName, compoundPos, adjacentLanePos, face, hit, false);
         movePlayerForFace(ctx, singleplayer, compoundPos, face);
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.interactionManager == null || mc.world == null) {
@@ -3342,6 +3345,23 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + rowName + "] client world missing after compound no-legal-lane proof");
+            }
+            BlockState adjacent = mc.world.getBlockState(adjacentLanePos);
+            if (!adjacent.isAir()) {
+                throw new RuntimeException("[" + rowName + "] no-legal-lane case must not author a slab at "
+                        + adjacentLanePos.toShortString() + ", found " + adjacent
+                        + " dy=" + SlabSupport.getYOffset(mc.world, adjacentLanePos, adjacent));
+            }
+            BlockState compound = mc.world.getBlockState(compoundPos);
+            double compoundDy = SlabSupport.getYOffset(mc.world, compoundPos, compound);
+            if (Math.abs(compoundDy + 1.0d) > EPSILON) {
+                throw new RuntimeException("[" + rowName + "] compound owner must remain dy=-1.000, found dy="
+                        + compoundDy + " state=" + compound);
+            }
+        });
     }
 
     private static void runCompoundSlabAdjacentLaneCase(
@@ -3353,25 +3373,62 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             Direction face,
             BlockHitResult hit
     ) {
+        final BlockPos placedLanePos = adjacentLanePos.offset(face);
         setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
         seedCompoundFullBlock(singleplayer, compoundPos);
         setLoweredSlabTarget(singleplayer, adjacentLanePos, SlabType.BOTTOM);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        assertCompoundSlabHarnessTopology(ctx, rowName, compoundPos, adjacentLanePos, face, hit, true);
         movePlayerForFace(ctx, singleplayer, compoundPos, face);
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.interactionManager == null || mc.world == null) {
                 throw new RuntimeException("[" + rowName + "] client not ready for compound legal-remap proof");
             }
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]"
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_RED]"
                     + " row=" + rowName
+                    + " phase=post-click"
                     + " result=" + result
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
-                    + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
-                    + " current=reject_or_owner_preserve"
-                    + " future=remap_into_existing_dy_-0.5_lane");
+                    + " adjacentLegalLane=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                    + " candidate=" + describeOwnerFacts(mc.world, placedLanePos)
+                    + " reason=legal_dy_-0.5_lane_existed_but_current_behavior_did_not_remap");
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + rowName + "] client world missing after compound legal-remap proof");
+            }
+            BlockState compound = mc.world.getBlockState(compoundPos);
+            double compoundDy = SlabSupport.getYOffset(mc.world, compoundPos, compound);
+            if (Math.abs(compoundDy + 1.0d) > EPSILON) {
+                throw new RuntimeException("[" + rowName + "] compound source must remain dy=-1.000, found dy="
+                        + compoundDy + " state=" + compound);
+            }
+            BlockState adjacent = mc.world.getBlockState(adjacentLanePos);
+            double adjacentDy = SlabSupport.getYOffset(mc.world, adjacentLanePos, adjacent);
+            if (!adjacent.isOf(Blocks.STONE_SLAB)
+                    || !adjacent.contains(SlabBlock.TYPE)
+                    || Math.abs(adjacentDy + 0.5d) > EPSILON) {
+                throw new RuntimeException("[" + rowName + "] adjacent legal lane must remain dy=-0.500, found "
+                        + adjacent + " dy=" + adjacentDy);
+            }
+            BlockState placed = mc.world.getBlockState(placedLanePos);
+            double placedDy = SlabSupport.getYOffset(mc.world, placedLanePos, placed);
+            if (!placed.isAir()) {
+                failCompoundSlabHarness(rowName, "legal-remap RED must leave candidate absent at "
+                        + placedLanePos.toShortString() + ", found " + placed + " dy=" + placedDy);
+            }
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_RED]"
+                    + " row=" + rowName
+                    + " phase=after-tick"
+                    + " compound=" + describeOwnerFacts(mc.world, compoundPos)
+                    + " adjacentLegalLane=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                    + " candidate=" + describeOwnerFacts(mc.world, placedLanePos)
+                    + " result=red_current_reject_or_no_authoring_with_legal_lane_available");
+        });
     }
 
     private static void runCompoundSlabMergePendingNote(
@@ -3454,14 +3511,125 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
     }
 
+    private static void assertCompoundSlabHarnessTopology(
+            ClientGameTestContext ctx,
+            String rowName,
+            BlockPos compoundPos,
+            BlockPos adjacentLanePos,
+            Direction face,
+            BlockHitResult hit,
+            boolean expectLegalLane
+    ) {
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null) {
+                failCompoundSlabHarness(rowName, "client world/player missing before placement assertions");
+            }
+            BlockState sourceState = mc.world.getBlockState(compoundPos);
+            double sourceDy = SlabSupport.getYOffset(mc.world, compoundPos, sourceState);
+            boolean compoundFullBlockAnchor = SlabAnchorAttachment.isCompoundFullBlockAnchor(mc.world, compoundPos);
+            if (!sourceState.isOf(Blocks.STONE) || sourceState.contains(SlabBlock.TYPE)) {
+                failCompoundSlabHarness(rowName, "source must be ordinary full block at "
+                        + compoundPos.toShortString() + ", found " + sourceState);
+            }
+            if (Math.abs(sourceDy + 1.0d) > EPSILON) {
+                failCompoundSlabHarness(rowName, "source must resolve to dy=-1.000 at "
+                        + compoundPos.toShortString() + ", found dy=" + sourceDy
+                        + " facts=" + describeOwnerFacts(mc.world, compoundPos));
+            }
+            if (!compoundFullBlockAnchor) {
+                failCompoundSlabHarness(rowName, "source missing compound full-block anchor at "
+                        + compoundPos.toShortString() + " facts=" + describeOwnerFacts(mc.world, compoundPos));
+            }
+            if (!hit.getBlockPos().equals(compoundPos)) {
+                failCompoundSlabHarness(rowName, "slab-held click must target compound source "
+                        + compoundPos.toShortString() + ", hit target was " + hit.getBlockPos().toShortString());
+            }
+            ItemStack held = mc.player.getStackInHand(Hand.MAIN_HAND);
+            if (!held.isOf(Items.STONE_SLAB)) {
+                failCompoundSlabHarness(rowName, "held item must be stone slab before placement, found " + held);
+            }
+
+            int legalLaneCount = 0;
+            for (Direction candidateFace : Direction.Type.HORIZONTAL) {
+                BlockPos lanePos = compoundPos.offset(candidateFace);
+                if (isLegalLoweredSlabLane(mc.world, lanePos)) {
+                    legalLaneCount++;
+                }
+            }
+            boolean adjacentLegalLane = isLegalLoweredSlabLane(mc.world, adjacentLanePos);
+            if (expectLegalLane) {
+                if (legalLaneCount != 1 || !adjacentLegalLane) {
+                    failCompoundSlabHarness(rowName, "expected exactly one legal dy=-0.500 lane in remap direction "
+                            + face.asString() + ", count=" + legalLaneCount
+                            + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos));
+                }
+                System.out.println("[JULIA_BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]"
+                        + " row=" + rowName
+                        + " source=" + describeOwnerFacts(mc.world, compoundPos)
+                        + " clickTarget=" + hit.getBlockPos().toShortString()
+                        + " adjacentLegalLane=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                        + " legalLaneCount=" + legalLaneCount);
+            } else {
+                if (legalLaneCount != 0) {
+                    failCompoundSlabHarness(rowName, "expected no legal dy=-0.500 adjacent slab lane, count="
+                            + legalLaneCount + " intendedDirection=" + face.asString()
+                            + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos));
+                }
+                System.out.println("[JULIA_BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]"
+                        + " row=" + rowName
+                        + " source=" + describeOwnerFacts(mc.world, compoundPos)
+                        + " clickTarget=" + hit.getBlockPos().toShortString()
+                        + " legalLaneCount=" + legalLaneCount);
+                System.out.println("[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]"
+                        + " row=" + rowName
+                        + " phase=pre-click"
+                        + " source=" + describeOwnerFacts(mc.world, compoundPos)
+                        + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                        + " legalLaneCount=0");
+            }
+        });
+    }
+
+    private static boolean isLegalLoweredSlabLane(net.minecraft.world.BlockView world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        return state.isOf(Blocks.STONE_SLAB)
+                && state.contains(SlabBlock.TYPE)
+                && Math.abs(SlabSupport.getYOffset(world, pos, state) + 0.5d) <= EPSILON;
+    }
+
+    private static void failCompoundSlabHarness(String rowName, String reason) {
+        System.out.println("[JULIA_BETA4_COMPOUND_SLAB_HARNESS_FAIL]"
+                + " row=" + rowName
+                + " reason=" + reason);
+        throw new RuntimeException("[" + rowName + "] compound slab harness topology invalid: " + reason);
+    }
+
     private static void seedCompoundFullBlock(
             TestSingleplayerContext singleplayer,
             BlockPos compoundPos
     ) {
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
+            BlockPos baseSupportPos = compoundPos.down(3);
+            BlockPos loweredCarrierPos = compoundPos.down(2);
+            BlockPos compoundSourcePos = compoundPos.down();
+            world.setBlockState(
+                    baseSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(loweredCarrierPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, loweredCarrierPos, world.getBlockState(loweredCarrierPos));
+            world.setBlockState(
+                    compoundSourcePos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world,
+                    compoundSourcePos,
+                    world.getBlockState(compoundSourcePos));
             world.setBlockState(compoundPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
             SlabAnchorAttachment.addAnchor(world, compoundPos, world.getBlockState(compoundPos));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(world, compoundPos, world.getBlockState(compoundPos));
         });
     }
 
@@ -6101,6 +6269,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         double targetDy = SlabSupport.getYOffset(world, pos, state);
         double outlineDy = ClientDy.dyFor(world, pos, state);
         boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
+        boolean compoundFullBlockAnchor = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos);
         boolean persistent = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
         String slabType = state.contains(SlabBlock.TYPE) ? state.get(SlabBlock.TYPE).asString() : "none";
         return "pos=" + pos.toShortString()
@@ -6109,6 +6278,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " targetDy=" + targetDy
                 + " outlineDy=" + outlineDy
                 + " anchored=" + anchored
+                + " compoundFullBlockAnchor=" + compoundFullBlockAnchor
                 + " persistentLoweredSlabCarrier=" + persistent;
     }
 

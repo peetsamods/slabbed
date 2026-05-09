@@ -350,6 +350,12 @@ and emits `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`,
 current clean-reject behavior explicit while documenting that a legal `dy=-0.5`
 remap path is still product-feel work, not a generalized rescue/retarget fix.
 
+Harness audit note: Row 3 proof must start from proven compound dy=-1.0 ordinary
+full-block source; dy=-0.5 source hits are invalid for this row. The corrected
+focused harness proves `compoundFullBlockAnchor=true`, clicked source
+`dy=-1.0`, and exactly one adjacent legal `dy=-0.5` remap lane before emitting
+the Row 3 RED marker.
+
 ### Compound matrix closure
 
 - **Row 3** `SELECT_SLAB_HELD_COMPOUND_BODY`: GREEN; slab-held selection keeps

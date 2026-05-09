@@ -80,11 +80,20 @@ These proof rows now exist in the focused RED harness slice:
 - Row 5: TODO.
 - Row 6: TODO.
 
+Harness/source-truth repair note:
+
+- The failed Row 3 implementation attempt exposed a proof topology gap: Row 1 could report against an authored `dy=-0.5` lowered slab at the side lane instead of proving the clicked source was the compound ordinary full block.
+- This slice repairs the harness only. Before any slab click/remap assertion, Rows 1-3 now prove the clicked source is ordinary stone, `compoundFullBlockAnchor=true`, and `dy=-1.0`.
+- Rows 1-2 require zero neighboring legal `dy=-0.5` slab lanes. Row 3 requires exactly one legal adjacent `dy=-0.5` slab lane in the intended remap direction, while the candidate result remains absent under current behavior.
+- Row 3 remains RED: the legal remap opportunity is present, but gameplay implementation is intentionally not continued here.
+
 Current proof markers emitted by the gated gametest slice:
 
 - `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`
-- `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]`
+- `[JULIA_BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]`
+- `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_RED]`
 - `[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`
+- `[JULIA_BETA4_COMPOUND_SLAB_HARNESS_FAIL]`
 
 These are proof notes only. They do not claim a gameplay implementation exists.
 

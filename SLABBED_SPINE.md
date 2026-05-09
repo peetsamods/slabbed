@@ -42,10 +42,11 @@ Current Beta 4 status:
 - release gates passed
 - release confidence paused after Julia live feel review
 - issue: compound slab placement UX is too restrictive
-- current WIP: compound slab merge/remap RED proof coverage
-- next slice: implementation only for the first RED row that has a named legal outcome
+- current WIP: compound slab merge harness source-truth audit
+- next slice: Row 3 gameplay remains unproven until a later implementation slice turns the corrected RED green
 - release remains blocked by product-feel concern, not build failure
 - candidate note only: `Compound Slab Clean Rejection vs Merge Grammar — candidate/product-law unresolved.`
+- failed Row 3 WIP patch preserved under `tmp/beta4-compound-slab-harness-audit-7c45fc0/failed-row3-wip-full.patch`
 
 ## Current proof note
 
