@@ -173,6 +173,23 @@ public final class SlabAnchorAttachment {
         }
     }
 
+    public static void addTopOfCompoundFullAnchor(
+            World world,
+            BlockPos pos,
+            BlockState state,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (world == null) {
+            return;
+        }
+        if (!qualifiesForTopOfCompoundFullAnchor(world, pos, state, sourcePos, sourceState)) {
+            return;
+        }
+        addAnchorUnchecked(world, pos);
+        addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
+    }
+
     private static void addAnchorUnchecked(World world, BlockPos pos) {
         boolean added = addToAttachment(world, pos, ANCHOR_TYPE, "anchor");
         if (added && SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
@@ -501,6 +518,32 @@ public final class SlabAnchorAttachment {
         BlockPos belowPos = pos.down();
         BlockState belowSlab = world.getBlockState(belowPos);
         return SlabSupport.isLoweredCompoundSourceSlab(world, belowPos, belowSlab);
+    }
+
+    private static boolean qualifiesForTopOfCompoundFullAnchor(
+            BlockView world,
+            BlockPos pos,
+            BlockState state,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)) {
+            return false;
+        }
+        if (world == null || pos == null || sourcePos == null || sourceState == null) {
+            return false;
+        }
+        if (!sourcePos.equals(pos.down())) {
+            return false;
+        }
+        if (sourceState.getBlock() instanceof SlabBlock) {
+            return false;
+        }
+        if (!isCompoundFullBlockAnchor(world, sourcePos)) {
+            return false;
+        }
+        double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
+        return Math.abs(sourceDy + 1.0d) <= 1.0e-6d;
     }
 
     public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
