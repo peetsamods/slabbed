@@ -42,7 +42,8 @@ Current Beta 4 status:
 - release gates passed
 - release confidence paused after Julia live feel review
 - issue: compound slab placement UX is too restrictive
-- next slice: RED proofs for compound slab merge/remap grammar
+- current WIP: compound slab merge/remap RED proof coverage
+- next slice: implementation only for the first RED row that has a named legal outcome
 - release remains blocked by product-feel concern, not build failure
 - candidate note only: `Compound Slab Clean Rejection vs Merge Grammar — candidate/product-law unresolved.`
 

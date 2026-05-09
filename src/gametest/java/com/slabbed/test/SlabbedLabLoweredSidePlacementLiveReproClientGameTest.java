@@ -156,6 +156,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta4CompoundSlabMergeRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta4CompoundSlabMergeRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         // Expand coverage for legal lowered slab targets and explicit merge semantics.
         for (Direction face : FACES_TO_TEST) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
@@ -3283,6 +3292,176 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " targetDy=" + targetDy + " behindSecondDy=" + behindSecondDy
                     + " behindAfterFirst=" + behindAfterFirst.get(SlabBlock.TYPE)
                     + " behindAfterSecond=" + behindAfterSecond.get(SlabBlock.TYPE));
+        });
+    }
+
+    private static void runBeta4CompoundSlabMergeRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos compoundPos = FULL_POS;
+        final BlockPos adjacentLanePos = compoundPos.offset(face);
+        final BlockHitResult lowerHalfHit = resolveLoweredFaceHit(compoundPos, face, -0.25d);
+        final BlockHitResult upperHalfHit = resolveLoweredFaceHit(compoundPos, face, 0.25d);
+        final BlockHitResult topHit = resolveLoweredUpMergeHit(compoundPos);
+
+        runCompoundSlabNoLegalLaneCase(ctx, singleplayer, "ROW1", "lower-half", compoundPos, adjacentLanePos, face, lowerHalfHit);
+        runCompoundSlabNoLegalLaneCase(ctx, singleplayer, "ROW2", "upper-half", compoundPos, adjacentLanePos, face, upperHalfHit);
+        runCompoundSlabAdjacentLaneCase(ctx, singleplayer, "ROW3", compoundPos, adjacentLanePos, face, lowerHalfHit);
+        runCompoundSlabMergePendingNote(ctx, singleplayer, "ROW4", compoundPos, adjacentLanePos, face);
+        runCompoundSlabTopClickCase(ctx, singleplayer, "ROW5", compoundPos, adjacentLanePos, face, topHit);
+        runCompoundSlabSanityNote(ctx, singleplayer, "ROW6", compoundPos, adjacentLanePos);
+    }
+
+    private static void runCompoundSlabNoLegalLaneCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String rowName,
+            String halfLabel,
+            BlockPos compoundPos,
+            BlockPos adjacentLanePos,
+            Direction face,
+            BlockHitResult hit
+    ) {
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        seedCompoundFullBlock(singleplayer, compoundPos);
+        movePlayerForFace(ctx, singleplayer, compoundPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[" + rowName + "] client not ready for compound no-legal-lane proof");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]"
+                    + " row=" + rowName
+                    + " half=" + halfLabel
+                    + " result=" + result
+                    + " compound=" + describeOwnerFacts(mc.world, compoundPos)
+                    + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                    + " future=preserve_compound_or_reject_cleanly");
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+    }
+
+    private static void runCompoundSlabAdjacentLaneCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String rowName,
+            BlockPos compoundPos,
+            BlockPos adjacentLanePos,
+            Direction face,
+            BlockHitResult hit
+    ) {
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        seedCompoundFullBlock(singleplayer, compoundPos);
+        setLoweredSlabTarget(singleplayer, adjacentLanePos, SlabType.BOTTOM);
+        movePlayerForFace(ctx, singleplayer, compoundPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[" + rowName + "] client not ready for compound legal-remap proof");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]"
+                    + " row=" + rowName
+                    + " result=" + result
+                    + " compound=" + describeOwnerFacts(mc.world, compoundPos)
+                    + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                    + " current=reject_or_owner_preserve"
+                    + " future=remap_into_existing_dy_-0.5_lane");
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+    }
+
+    private static void runCompoundSlabMergePendingNote(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String rowName,
+            BlockPos compoundPos,
+            BlockPos adjacentLanePos,
+            Direction face
+    ) {
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        seedCompoundFullBlock(singleplayer, compoundPos);
+        setLoweredSlabTarget(singleplayer, adjacentLanePos, SlabType.BOTTOM);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + rowName + "] client world missing for merge pending note");
+            }
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]"
+                    + " row=" + rowName
+                    + " face=" + face.asString()
+                    + " compound=" + describeOwnerFacts(mc.world, compoundPos)
+                    + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                    + " current=compound_boundary_merge_not_yet_proven"
+                    + " future=second_click_merges_BOTTOM_TOP_to_DOUBLE_dy_-0.5");
+        });
+    }
+
+    private static void runCompoundSlabTopClickCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String rowName,
+            BlockPos compoundPos,
+            BlockPos adjacentLanePos,
+            Direction face,
+            BlockHitResult hit
+    ) {
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        seedCompoundFullBlock(singleplayer, compoundPos);
+        movePlayerForUp(ctx, singleplayer, compoundPos);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[" + rowName + "] client not ready for compound top-click note");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]"
+                    + " row=" + rowName
+                    + " half=top"
+                    + " face=" + face.asString()
+                    + " result=" + result
+                    + " compound=" + describeOwnerFacts(mc.world, compoundPos)
+                    + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                    + " current=preserve_or_reject_cleanly"
+                    + " future=normalize_into_named_legal_vanilla_or_lowered_result");
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+    }
+
+    private static void runCompoundSlabSanityNote(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String rowName,
+            BlockPos compoundPos,
+            BlockPos adjacentLanePos
+    ) {
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[" + rowName + "] client world missing for compound sanity note");
+            }
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]"
+                    + " row=" + rowName
+                    + " sanity=no_ghost_flicker_after_tick"
+                    + " compound=" + describeOwnerFacts(mc.world, compoundPos)
+                    + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                    + " todo=source_break_reload_rejoin_not_proven_here");
+        });
+    }
+
+    private static void seedCompoundFullBlock(
+            TestSingleplayerContext singleplayer,
+            BlockPos compoundPos
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(compoundPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, compoundPos, world.getBlockState(compoundPos));
         });
     }
 
