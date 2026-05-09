@@ -13,6 +13,12 @@ slab merge/remap grammar lives in
 `docs/beta4-compound-slab-merge-grammar.md`. This audit remains a design/proof
 record; it does not mark implementation complete.
 
+Update at `fae6d25`: Julia's screenshot-shape manual live test found an
+uncovered topology after the internal compound slab Row 3 proof went GREEN.
+The internal proof row covers a narrow artificial same-Y remap path; it does
+not cover Julia's in-world sign-labeled upper full-block shape with a lowered
+slab directly below. Manual live acceptance is not claimed.
+
 ## Current savepoint
 
 - HEAD: `06724fb`
@@ -123,6 +129,11 @@ columns:
 
 Cases 3, 4, 5, 6, 8 are the live failures Julia reproduced. Cases 9–12 are
 not yet observed but follow from the same source-truth ambiguity.
+
+The later screenshot-shape failure at `fae6d25` keeps this audit release
+blocking: slab side placement off the visible upper full-block area and the
+top-face skip/ghost path now require explicit RED/GREEN coverage before manual
+live acceptance can be claimed.
 
 ## Is `dy=-1.0` viable?
 
