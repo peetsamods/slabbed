@@ -470,6 +470,23 @@ public final class SlabSupport {
                     "COMPOUND_BELOW_LANE_SIDE_SLAB");
         }
 
+        if (legalLaneCount == 0 && isPersistentVisibleCompoundOwner(world, sourcePos, sourceState)) {
+            if (!candidateState.isAir()) {
+                return CompoundSlabRemapDecision.rejected(
+                        sourcePos,
+                        sourcePos,
+                        candidatePlacementPos,
+                        "persistent_visible_owner_candidate_not_air");
+            }
+            return new CompoundSlabRemapDecision(
+                    true,
+                    sourcePos,
+                    sourcePos,
+                    candidatePlacementPos,
+                    compoundBelowLaneResultType(sourcePos, hitPos),
+                    "COMPOUND_SUPPORT_MISSING_VISIBLE_OWNER_SIDE_SLAB");
+        }
+
         return CompoundSlabRemapDecision.rejected(
                 sourcePos,
                 legalLanePos,
@@ -482,6 +499,13 @@ public final class SlabSupport {
             return SlabType.TOP;
         }
         return SlabType.BOTTOM;
+    }
+
+    private static boolean isPersistentVisibleCompoundOwner(BlockView world, BlockPos pos, BlockState state) {
+        return SlabAnchorAttachment.isAnchored(world, pos)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state)
+                && Math.abs(getYOffset(world, pos, state) + 1.0d) <= 1.0e-6d;
     }
 
     private static boolean isLegalCompoundRemapLane(BlockView world, BlockPos lanePos, BlockState laneState) {
