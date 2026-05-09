@@ -342,6 +342,14 @@ Row 12 remains NOT_IMPLEMENTED because the chunk-only unload/reload helper is
 still unavailable in the current client gametest API. This closure does not
 legalize any beta4 `dy=-1.0` slab lane or any `dy<-1.0` recursion.
 
+The focused compound slab merge/remap proof slice now lives in
+`src/gametest/java/com/slabbed/test/SlabbedLabLoweredSidePlacementLiveReproClientGameTest.java`
+and emits `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`,
+`[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]`, and
+`[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`. Those markers keep the
+current clean-reject behavior explicit while documenting that a legal `dy=-0.5`
+remap path is still product-feel work, not a generalized rescue/retarget fix.
+
 ### Compound matrix closure
 
 - **Row 3** `SELECT_SLAB_HELD_COMPOUND_BODY`: GREEN; slab-held selection keeps

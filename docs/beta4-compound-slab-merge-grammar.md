@@ -69,6 +69,25 @@ Beta 4 does not allow:
 | 9 | triad: model/outline/raycast | shape/owner disagreement may remain | model, outline, and raycast agree on the legal result | model-only or outline-only false-green |
 | 10 | held slab selection preserves compound owner when no legal slab result exists | selection may drift toward a fake slab lane | keep compound owner until a legal slab result exists | retarget-created slab legality |
 
+## Proof status
+
+These proof rows now exist in the focused RED harness slice:
+
+- Row 1: GREEN-safe-reject.
+- Row 2: GREEN-safe-reject.
+- Row 3: RED.
+- Row 4: TODO.
+- Row 5: TODO.
+- Row 6: TODO.
+
+Current proof markers emitted by the gated gametest slice:
+
+- `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`
+- `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]`
+- `[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`
+
+These are proof notes only. They do not claim a gameplay implementation exists.
+
 ## Implementation slices after design
 
 1. Add focused RED proofs only.
