@@ -12,6 +12,7 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
@@ -39,6 +40,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     private static final BlockPos TOP_SLAB_A = BRIDGE_FULL_A.up();
     private static final BlockPos TOP_SLAB_B = BRIDGE_FULL_B.up();
     private static final BlockPos UPPER_FULL = TOP_SLAB_A.up();
+    private static final SlabType CANONICAL_TOP_SLAB_TYPE = SlabType.BOTTOM;
 
     private static final Direction ANGLE_A_FACE = Direction.WEST;
     private static final Direction ANGLE_B_FACE = Direction.EAST;
@@ -58,19 +60,21 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 .create()) {
             Verdicts verdicts = new Verdicts();
             if (!proveFreshStructure(ctx, singleplayer)) {
-                System.out.println("[JULIA_BETA4_LIVE_GOBLIN_DONE] status=STRUCTURE_FAIL");
+                System.out.println("[JULIA_BETA4_LIVE_GOBLIN_DONE] status=STRUCTURE_INVALID");
                 return;
             }
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_BASELINE]"
-                    + " lowerA=PENDING lowerB=PENDING upperA=PENDING upperB=PENDING"
-                    + " topFace=PENDING supportBreak=PENDING hitbox=PENDING");
+                    + " supportPresent.upperSide=PENDING supportPresent.lowerSide=PENDING"
+                    + " supportPresent.topFace=PENDING supportMissing.side=PENDING"
+                    + " supportMissing.topFace=PENDING hitbox=PENDING");
 
-            verdicts.lowerA = runSideCase(ctx, singleplayer, verdicts, "SIDE_LOWER_A", ANGLE_A_FACE, -0.75d, SlabType.BOTTOM);
-            verdicts.lowerB = runSideCase(ctx, singleplayer, verdicts, "SIDE_LOWER_B", ANGLE_B_FACE, -0.75d, SlabType.BOTTOM);
-            verdicts.upperA = runSideCase(ctx, singleplayer, verdicts, "SIDE_UPPER_A", ANGLE_A_FACE, 0.25d, SlabType.TOP);
-            verdicts.upperB = runSideCase(ctx, singleplayer, verdicts, "SIDE_UPPER_B", ANGLE_B_FACE, 0.25d, SlabType.TOP);
-            verdicts.topFace = runTopFaceCase(ctx, singleplayer, verdicts);
-            verdicts.supportBreak = runSupportBreakCase(ctx, singleplayer, verdicts);
+            verdicts.supportPresentLowerSide = runSideCase(
+                    ctx, singleplayer, verdicts, "SUPPORT_PRESENT_SIDE_LOWER", ANGLE_A_FACE, -0.75d, SlabType.BOTTOM);
+            verdicts.supportPresentUpperSide = runSideCase(
+                    ctx, singleplayer, verdicts, "SUPPORT_PRESENT_SIDE_UPPER", ANGLE_A_FACE, 0.25d, SlabType.TOP);
+            verdicts.supportPresentTopFace = runTopFaceCase(ctx, singleplayer, verdicts, "SUPPORT_PRESENT_TOP_FACE", false);
+            verdicts.supportMissingSide = runSupportMissingSideCase(ctx, singleplayer, verdicts);
+            verdicts.supportMissingTopFace = runTopFaceCase(ctx, singleplayer, verdicts, "SUPPORT_MISSING_TOP_FACE", true);
 
             verdicts.hitbox = verdicts.wrongOwner || verdicts.miss ? "RED" : "GREEN";
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_HITBOX_" + verdicts.hitbox + "]"
@@ -81,12 +85,12 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             String releaseBlockers = releaseBlockers(verdicts);
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]"
                     + " structure=GREEN"
-                    + " lowerA=" + verdicts.lowerA
-                    + " lowerB=" + verdicts.lowerB
-                    + " upperA=" + verdicts.upperA
-                    + " upperB=" + verdicts.upperB
-                    + " topFace=" + verdicts.topFace
-                    + " supportBreak=" + verdicts.supportBreak
+                    + " fixtureTruth=GREEN"
+                    + " supportPresent.upperSide=" + verdicts.supportPresentUpperSide
+                    + " supportPresent.lowerSide=" + verdicts.supportPresentLowerSide
+                    + " supportPresent.topFace=" + verdicts.supportPresentTopFace
+                    + " supportMissing.side=" + verdicts.supportMissingSide
+                    + " supportMissing.topFace=" + verdicts.supportMissingTopFace
                     + " hitbox=" + verdicts.hitbox
                     + " ghost=" + verdicts.ghost
                     + " jump=" + verdicts.jump
@@ -102,11 +106,14 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         final boolean[] green = {false};
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                System.out.println("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_FAIL] reason=client_world_missing");
+                System.out.println("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] reason=client_world_missing");
                 return;
             }
             green[0] = emitStructureProof(mc.world);
         });
+        if (!green[0]) {
+            throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] reason=fixture_truth_not_proven");
+        }
         return green[0];
     }
 
@@ -131,7 +138,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         syncAim(ctx, singleplayer, eyeFor(face), hit.getPos());
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_FAIL] case="
+                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
                         + caseName + " reason=client_not_ready");
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
@@ -159,7 +166,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         waitForClient(ctx, singleplayer, 2);
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_FAIL] case="
+                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
                         + caseName + " reason=client_world_missing_after_click");
             }
             BlockState after = mc.world.getBlockState(candidate);
@@ -185,8 +192,17 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         return verdict[0];
     }
 
-    private static String runTopFaceCase(ClientGameTestContext ctx, TestSingleplayerContext singleplayer, Verdicts verdicts) {
+    private static String runTopFaceCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Verdicts verdicts,
+            String caseName,
+            boolean removeSupport
+    ) {
         seedCanonicalStructure(singleplayer);
+        if (removeSupport) {
+            removeSupportUnderUpperFullBlock(singleplayer);
+        }
         waitForClient(ctx, singleplayer, 5);
         final BlockPos expectedTop = UPPER_FULL.up();
         final BlockPos skippedTop = UPPER_FULL.up(2);
@@ -198,13 +214,14 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 UPPER_FULL.getZ() + 2.6d), hit.getPos());
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_FAIL] case=TOP_FACE reason=client_not_ready");
+                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
+                        + caseName + " reason=client_not_ready");
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             ActionResult action = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TRACE]"
-                    + " case=TOP_FACE"
+                    + " case=" + caseName
                     + " phase=click"
                     + " expectedOwner=" + UPPER_FULL.toShortString()
                     + " actualTarget=" + describeHit(beforeTarget)
@@ -220,7 +237,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         waitForClient(ctx, singleplayer, 2);
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_FAIL] case=TOP_FACE reason=client_world_missing_after_click");
+                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
+                        + caseName + " reason=client_world_missing_after_click");
             }
             BlockState actual = mc.world.getBlockState(expectedTop);
             BlockState skipped = mc.world.getBlockState(skippedTop);
@@ -232,90 +250,116 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     && actual.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && Math.abs(actualDy) <= EPSILON;
             boolean ghostOrSkip = actual.isOf(Blocks.STONE_SLAB) || skipped.isOf(Blocks.STONE_SLAB);
+            boolean upperFullStillPresent = source.isOf(Blocks.STONE);
             boolean cleanRejectPreserve = !ghostOrSkip
                     && source.isOf(Blocks.STONE)
                     && Math.abs(sourceDy + 1.0d) <= EPSILON;
-            verdict[0] = (legalTop || cleanRejectPreserve) ? "GREEN" : "RED";
+            verdict[0] = legalTop ? "GREEN" : "RED";
             verdicts.ghost |= !legalTop && ghostOrSkip;
             verdicts.observedCases++;
-            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TOP_FACE_GHOST_" + verdict[0] + "]"
-                    + " expected=clean_reject_preserve_or_stone_slab[type=bottom] dy=0.0"
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_" + caseName + "_" + verdict[0] + "]"
+                    + " expected=stone_slab[type=bottom] dy=0.0"
+                    + " supportRemoved=" + removeSupport
+                    + " missingUnderSlabVariantTested=" + removeSupport
                     + " topCandidate=" + describeBlock(mc.world, expectedTop)
                     + " skippedCandidate=" + describeBlock(mc.world, skippedTop)
                     + " ghostOrSkipSlabAppeared=" + ghostOrSkip
                     + " cleanRejectPreserve=" + cleanRejectPreserve
+                    + " upperFullStillPresent=" + upperFullStillPresent
+                    + " missingUnderSlabVariantSupportPos=" + TOP_SLAB_A.toShortString()
                     + " source=" + describeBlock(mc.world, UPPER_FULL));
         });
         return verdict[0];
     }
 
-    private static String runSupportBreakCase(ClientGameTestContext ctx, TestSingleplayerContext singleplayer, Verdicts verdicts) {
+    private static String runSupportMissingSideCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Verdicts verdicts
+    ) {
         seedCanonicalStructure(singleplayer);
+        removeSupportUnderUpperFullBlock(singleplayer);
         waitForClient(ctx, singleplayer, 5);
         final BlockPos sideCandidate = UPPER_FULL.offset(ANGLE_A_FACE);
         final BlockHitResult upperHit = faceHit(UPPER_FULL, ANGLE_A_FACE, 0.25d);
+        final String caseName = "SUPPORT_MISSING_SIDE";
+        final String[] verdict = {"RED"};
+        final boolean[] miss = {false};
+        final boolean[] wrongOwner = {false};
+
         syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
         syncAim(ctx, singleplayer, eyeFor(ANGLE_A_FACE), upperHit.getPos());
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_BREAK_RED] reason=client_not_ready_before_side_place");
+                throw new RuntimeException("[JULIA_BETA4_LIVE_GOBLIN_" + caseName
+                        + "_RED] reason=client_not_ready_before_side_place");
             }
-            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHit);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult beforeTarget = mc.crosshairTarget;
+            miss[0] = beforeTarget == null || beforeTarget.getType() == HitResult.Type.MISS;
+            wrongOwner[0] = owner(beforeTarget) != null && !UPPER_FULL.equals(owner(beforeTarget));
+            BlockState supportBefore = mc.world.getBlockState(TOP_SLAB_A);
+            BlockState upperBefore = mc.world.getBlockState(UPPER_FULL);
+            BlockState candidateBefore = mc.world.getBlockState(sideCandidate);
+            ActionResult action = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHit);
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TRACE]"
+                    + " case=" + caseName
+                    + " phase=click"
+                    + " expectedOwner=" + UPPER_FULL.toShortString()
+                    + " actualTarget=" + describeHit(beforeTarget)
+                    + " face=" + upperHit.getSide().asString()
+                    + " supportRemoved=true"
+                    + " missingUnderSlabVariantTested=true"
+                    + " missingUnderSlabVariantSupportPos=" + TOP_SLAB_A.toShortString()
+                    + " sourceDy=" + dy(mc.world, UPPER_FULL, upperBefore)
+                    + " candidateDy=" + dy(mc.world, sideCandidate, candidateBefore)
+                    + " targetMiss=" + miss[0]
+                    + " targetJumped=" + wrongOwner[0]
+                    + " hitY=" + upperHit.getPos().y
+                    + " hitBand=" + hitBand(upperHit)
+                    + " result=" + action
+                    + " removedSupport=" + describeBlock(mc.world, TOP_SLAB_A, supportBefore)
+                    + " source=" + describeBlock(mc.world, UPPER_FULL, upperBefore)
+                    + " candidateBefore=" + describeBlock(mc.world, sideCandidate, candidateBefore));
         });
-        waitForClient(ctx, singleplayer, 3);
-
-        final String[] verdict = {"GREEN"};
-        singleplayer.getServer().runOnServer(server -> {
-            World world = server.getOverworld();
-            BlockState upperBefore = world.getBlockState(UPPER_FULL);
-            BlockState bridgeABefore = world.getBlockState(BRIDGE_FULL_A);
-            BlockState bridgeBBefore = world.getBlockState(BRIDGE_FULL_B);
-            BlockState topABefore = world.getBlockState(TOP_SLAB_A);
-            BlockState topBBefore = world.getBlockState(TOP_SLAB_B);
-            BlockState sideBefore = world.getBlockState(sideCandidate);
-            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_BREAK_GREEN]"
-                    + " phase=before_break"
-                    + " breakPos=" + TOP_SLAB_A.toShortString()
-                    + " upperFullBlock=" + describeBlock(world, UPPER_FULL, upperBefore)
-                    + " bridgeFullBlockA=" + describeBlock(world, BRIDGE_FULL_A, bridgeABefore)
-                    + " bridgeFullBlockB=" + describeBlock(world, BRIDGE_FULL_B, bridgeBBefore)
-                    + " topSlabA=" + describeBlock(world, TOP_SLAB_A, topABefore)
-                    + " topSlabB=" + describeBlock(world, TOP_SLAB_B, topBBefore)
-                    + " sideSlab=" + describeBlock(world, sideCandidate, sideBefore));
-            SlabAnchorAttachment.removePersistentLoweredSlabCarrier(world, TOP_SLAB_A);
-            world.breakBlock(TOP_SLAB_A, false);
-            world.updateNeighborsAlways(TOP_SLAB_A, Blocks.AIR, null);
-        });
-        waitForClient(ctx, singleplayer, 5);
+        waitForClient(ctx, singleplayer, 2);
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
                 verdict[0] = "RED";
-                System.out.println("[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_BREAK_RED] reason=client_world_missing_after_break");
+                System.out.println("[JULIA_BETA4_LIVE_GOBLIN_" + caseName
+                        + "_RED] reason=client_world_missing_after_click");
                 return;
             }
             BlockState upperAfter = mc.world.getBlockState(UPPER_FULL);
-            BlockState bridgeAAfter = mc.world.getBlockState(BRIDGE_FULL_A);
-            BlockState bridgeBAfter = mc.world.getBlockState(BRIDGE_FULL_B);
-            BlockState topAAfter = mc.world.getBlockState(TOP_SLAB_A);
-            BlockState topBAfter = mc.world.getBlockState(TOP_SLAB_B);
+            BlockState supportAfter = mc.world.getBlockState(TOP_SLAB_A);
             BlockState sideAfter = mc.world.getBlockState(sideCandidate);
-            boolean jump = (upperAfter.isOf(Blocks.STONE) && Math.abs(dy(mc.world, UPPER_FULL, upperAfter) + 1.0d) > EPSILON)
-                    || (bridgeAAfter.isOf(Blocks.STONE) && Math.abs(dy(mc.world, BRIDGE_FULL_A, bridgeAAfter) + 0.5d) > EPSILON)
-                    || (bridgeBAfter.isOf(Blocks.STONE) && Math.abs(dy(mc.world, BRIDGE_FULL_B, bridgeBAfter) + 0.5d) > EPSILON)
-                    || (sideAfter.isOf(Blocks.STONE_SLAB) && Math.abs(dy(mc.world, sideCandidate, sideAfter) + 0.5d) > EPSILON);
-            verdict[0] = jump ? "RED" : "GREEN";
+            double sideDy = dy(mc.world, sideCandidate, sideAfter);
+            boolean legal = sideAfter.isOf(Blocks.STONE_SLAB)
+                    && sideAfter.contains(SlabBlock.TYPE)
+                    && sideAfter.get(SlabBlock.TYPE) == SlabType.TOP
+                    && Math.abs(sideDy + 0.5d) <= EPSILON;
+            boolean upperFullStillPresent = upperAfter.isOf(Blocks.STONE);
+            boolean jump = upperFullStillPresent && Math.abs(dy(mc.world, UPPER_FULL, upperAfter) + 1.0d) > EPSILON;
+            boolean ghost = !legal && sideAfter.isOf(Blocks.STONE_SLAB);
+            verdict[0] = legal ? "GREEN" : "RED";
             verdicts.jump |= jump;
+            verdicts.ghost |= ghost;
+            verdicts.miss |= miss[0];
+            verdicts.wrongOwner |= wrongOwner[0];
             verdicts.observedCases++;
-            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_BREAK_" + verdict[0] + "]"
-                    + " phase=after_break"
-                    + " breakPos=" + TOP_SLAB_A.toShortString()
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_" + caseName + "_" + verdict[0] + "]"
+                    + " expected=stone_slab[type=top] dy=-0.5"
+                    + " supportRemoved=true"
+                    + " missingUnderSlabVariantTested=true"
+                    + " missingUnderSlabVariantSupportPos=" + TOP_SLAB_A.toShortString()
                     + " jump=" + jump
+                    + " upperFullStillPresent=" + upperFullStillPresent
+                    + " targetMiss=" + miss[0]
+                    + " wrongOwner=" + wrongOwner[0]
+                    + " ghost=" + ghost
                     + " upperFullBlock=" + describeBlock(mc.world, UPPER_FULL, upperAfter)
-                    + " bridgeFullBlockA=" + describeBlock(mc.world, BRIDGE_FULL_A, bridgeAAfter)
-                    + " bridgeFullBlockB=" + describeBlock(mc.world, BRIDGE_FULL_B, bridgeBAfter)
-                    + " topSlabA=" + describeBlock(mc.world, TOP_SLAB_A, topAAfter)
-                    + " topSlabB=" + describeBlock(mc.world, TOP_SLAB_B, topBAfter)
-                    + " sideSlab=" + describeBlock(mc.world, sideCandidate, sideAfter));
+                    + " removedSupport=" + describeBlock(mc.world, TOP_SLAB_A, supportAfter)
+                    + " sideCandidate=" + describeBlock(mc.world, sideCandidate, sideAfter));
         });
         return verdict[0];
     }
@@ -334,9 +378,9 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             world.setBlockState(BRIDGE_FULL_B, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
             SlabAnchorAttachment.addAnchor(world, BRIDGE_FULL_B, world.getBlockState(BRIDGE_FULL_B));
 
-            world.setBlockState(TOP_SLAB_A, bottomSlab(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(TOP_SLAB_A, topSlab(), Block.NOTIFY_LISTENERS);
             SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, TOP_SLAB_A, world.getBlockState(TOP_SLAB_A));
-            world.setBlockState(TOP_SLAB_B, bottomSlab(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(TOP_SLAB_B, topSlab(), Block.NOTIFY_LISTENERS);
             SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, TOP_SLAB_B, world.getBlockState(TOP_SLAB_B));
 
             world.setBlockState(UPPER_FULL, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -350,19 +394,38 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         });
     }
 
+    private static void removeSupportUnderUpperFullBlock(TestSingleplayerContext singleplayer) {
+        singleplayer.getServer().runOnServer(server -> {
+            World world = server.getOverworld();
+            SlabAnchorAttachment.removePersistentLoweredSlabCarrier(world, TOP_SLAB_A);
+            world.breakBlock(TOP_SLAB_A, false);
+            world.updateNeighborsAlways(TOP_SLAB_A, Blocks.AIR, null);
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_MISSING_SETUP]"
+                    + " missingUnderSlabVariantTested=true"
+                    + " missingUnderSlabVariantSupportPos=" + TOP_SLAB_A.toShortString()
+                    + " removedSupport=" + describeBlock(world, TOP_SLAB_A)
+                    + " upperFullBlock=" + describeBlock(world, UPPER_FULL)
+                    + " bridgeFullBlockA=" + describeBlock(world, BRIDGE_FULL_A)
+                    + " bridgeFullBlockB=" + describeBlock(world, BRIDGE_FULL_B));
+        });
+    }
+
     private static boolean emitStructureProof(net.minecraft.world.BlockView world) {
         boolean bottomA = isBottomSlab(world, BOTTOM_SLAB_A);
         boolean bottomB = isBottomSlab(world, BOTTOM_SLAB_B);
         boolean bridgeA = isStoneDy(world, BRIDGE_FULL_A, -0.5d);
         boolean bridgeB = isStoneDy(world, BRIDGE_FULL_B, -0.5d);
-        boolean topA = isBottomSlab(world, TOP_SLAB_A) && isDy(world, TOP_SLAB_A, -0.5d);
-        boolean topB = isBottomSlab(world, TOP_SLAB_B) && isDy(world, TOP_SLAB_B, -0.5d);
+        boolean topA = isExpectedSlab(world, TOP_SLAB_A, CANONICAL_TOP_SLAB_TYPE) && isDy(world, TOP_SLAB_A, -0.5d);
+        boolean topB = isExpectedSlab(world, TOP_SLAB_B, CANONICAL_TOP_SLAB_TYPE) && isDy(world, TOP_SLAB_B, -0.5d);
         boolean upper = isStoneDy(world, UPPER_FULL, -1.0d)
                 && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, UPPER_FULL);
+        boolean missingVariantNamed = TOP_SLAB_A.equals(UPPER_FULL.down());
         String marker = bottomA && bottomB && bridgeA && bridgeB && topA && topB && upper
+                && missingVariantNamed
                 ? "[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]"
-                : "[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_FAIL]";
+                : "[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID]";
         System.out.println(marker
+                + " fixtureTruth=" + (marker.endsWith("GREEN]") ? "GREEN" : "RED")
                 + " bottomSlabA=" + describeBlock(world, BOTTOM_SLAB_A)
                 + " bottomSlabB=" + describeBlock(world, BOTTOM_SLAB_B)
                 + " bridgeFullBlockA=" + describeBlock(world, BRIDGE_FULL_A)
@@ -372,11 +435,14 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " upperFullBlock=" + describeBlock(world, UPPER_FULL)
                 + " upperFullBlockCompound=" + SlabAnchorAttachment.isCompoundFullBlockAnchor(world, UPPER_FULL)
                 + " upperFullBlockAnchored=" + SlabAnchorAttachment.isAnchored(world, UPPER_FULL)
+                + " upperFullBlockLowered=" + isDy(world, UPPER_FULL, -1.0d)
                 + " lowerHalfSideCandidate=" + UPPER_FULL.offset(ANGLE_A_FACE).toShortString()
-                + " upperHalfSideCandidate=" + UPPER_FULL.offset(ANGLE_B_FACE).toShortString()
+                + " upperHalfSideCandidate=" + UPPER_FULL.offset(ANGLE_A_FACE).toShortString()
                 + " topFaceCandidate=" + UPPER_FULL.up().toShortString()
-                + " supportBreakPositions=" + TOP_SLAB_A.toShortString() + "," + BOTTOM_SLAB_A.toShortString());
-        return bottomA && bottomB && bridgeA && bridgeB && topA && topB && upper;
+                + " missingUnderSlabVariantSupportPos=" + TOP_SLAB_A.toShortString()
+                + " missingUnderSlabVariantTested=true"
+                + " invalidReasons=" + invalidReasons(bottomA, bottomB, bridgeA, bridgeB, topA, topB, upper, missingVariantNamed));
+        return bottomA && bottomB && bridgeA && bridgeB && topA && topB && upper && missingVariantNamed;
     }
 
     private static void clearArea(World world) {
@@ -386,6 +452,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     BlockPos pos = new BlockPos(x, y, z);
                     SlabAnchorAttachment.removeAnchor(world, pos);
                     SlabAnchorAttachment.removePersistentLoweredSlabCarrier(world, pos);
+                    SlabAnchorAttachment.removeCompoundFullBlockAnchor(world, pos);
                     world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
                 }
             }
@@ -400,6 +467,10 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
     private static BlockState bottomSlab() {
         return Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+    }
+
+    private static BlockState topSlab() {
+        return Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, CANONICAL_TOP_SLAB_TYPE);
     }
 
     private static void waitForClient(ClientGameTestContext ctx, TestSingleplayerContext singleplayer, int ticks) {
@@ -509,6 +580,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     private static String describeBlock(net.minecraft.world.BlockView world, BlockPos pos, BlockState state) {
         return "pos=" + pos.toShortString()
                 + " state=" + state
+                + " blockId=" + Registries.BLOCK.getId(state.getBlock())
                 + " dy=" + dy(world, pos, state)
                 + " slabType=" + (state.contains(SlabBlock.TYPE) ? state.get(SlabBlock.TYPE).asString() : "none")
                 + " anchored=" + SlabAnchorAttachment.isAnchored(world, pos)
@@ -521,10 +593,14 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     }
 
     private static boolean isBottomSlab(net.minecraft.world.BlockView world, BlockPos pos) {
+        return isExpectedSlab(world, pos, SlabType.BOTTOM);
+    }
+
+    private static boolean isExpectedSlab(net.minecraft.world.BlockView world, BlockPos pos, SlabType expectedType) {
         BlockState state = world.getBlockState(pos);
         return state.isOf(Blocks.STONE_SLAB)
                 && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+                && state.get(SlabBlock.TYPE) == expectedType;
     }
 
     private static boolean isStoneDy(net.minecraft.world.BlockView world, BlockPos pos, double expectedDy) {
@@ -538,22 +614,56 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
     private static String releaseBlockers(Verdicts verdicts) {
         String blockers = "";
-        if (!"GREEN".equals(verdicts.lowerA) || !"GREEN".equals(verdicts.lowerB)) {
+        if (!"GREEN".equals(verdicts.supportPresentLowerSide)) {
             blockers = "lowerSide";
         }
-        if (!"GREEN".equals(verdicts.topFace)) {
+        if (!"GREEN".equals(verdicts.supportPresentTopFace)) {
             blockers = blockers.isEmpty() ? "topFace" : blockers + ",topFace";
+        }
+        if (!"GREEN".equals(verdicts.supportMissingSide)) {
+            blockers = blockers.isEmpty() ? "supportMissingSide" : blockers + ",supportMissingSide";
+        }
+        if (!"GREEN".equals(verdicts.supportMissingTopFace)) {
+            blockers = blockers.isEmpty() ? "supportMissingTopFace" : blockers + ",supportMissingTopFace";
         }
         return blockers.isEmpty() ? "none" : blockers;
     }
 
+    private static String invalidReasons(
+            boolean bottomA,
+            boolean bottomB,
+            boolean bridgeA,
+            boolean bridgeB,
+            boolean topA,
+            boolean topB,
+            boolean upper,
+            boolean missingVariantNamed
+    ) {
+        String reasons = "";
+        reasons = appendReason(reasons, bottomA, "bottomSlabA");
+        reasons = appendReason(reasons, bottomB, "bottomSlabB");
+        reasons = appendReason(reasons, bridgeA, "bridgeFullBlockA");
+        reasons = appendReason(reasons, bridgeB, "bridgeFullBlockB");
+        reasons = appendReason(reasons, topA, "topSlabA");
+        reasons = appendReason(reasons, topB, "topSlabB");
+        reasons = appendReason(reasons, upper, "upperFullBlock");
+        reasons = appendReason(reasons, missingVariantNamed, "missingUnderSlabVariant");
+        return reasons.isEmpty() ? "none" : reasons;
+    }
+
+    private static String appendReason(String reasons, boolean ok, String reason) {
+        if (ok) {
+            return reasons;
+        }
+        return reasons.isEmpty() ? reason : reasons + "," + reason;
+    }
+
     private static final class Verdicts {
-        String lowerA = "PENDING";
-        String lowerB = "PENDING";
-        String upperA = "PENDING";
-        String upperB = "PENDING";
-        String topFace = "PENDING";
-        String supportBreak = "PENDING";
+        String supportPresentLowerSide = "PENDING";
+        String supportPresentUpperSide = "PENDING";
+        String supportPresentTopFace = "PENDING";
+        String supportMissingSide = "PENDING";
+        String supportMissingTopFace = "PENDING";
         String hitbox = "PENDING";
         boolean ghost;
         boolean jump;
