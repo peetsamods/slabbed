@@ -176,9 +176,14 @@ Server-side tolerance now marks the packet as that legal class, the server direc
 finalization marker reports `setBlockStateDurable=YES`, and server/client ticks
 1, 5, and 20 all report `stone_slab[type=double] dy=-0.5`.
 
-`repeatPlacement=GREEN` and `sequenceLowerResult=GREEN`; `topFace=RED` remains
-the live release blocker. Client prediction is still not server/final proof, and
-the `dy=-1.0` slab lane remains illegal.
+`repeatPlacement=GREEN` and `sequenceLowerResult=GREEN`; the remaining top-face
+blocker is now GREEN in the canonical real-crosshair goblin sequence. The top
+step targets the visible compound owner `UP` face, places exactly at
+`source.up()` as `stone_slab[type=bottom] dy=0.0`, keeps
+`persistentLoweredSlabCarrier=false`, and reports `ghost=false`,
+`wrongDelta=false`, and `releaseBlockers=none`. Client prediction is still not
+server/final proof, the `dy=-1.0` slab lane remains illegal, and release remains
+blocked until Julia manual live retest passes.
 
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
@@ -590,8 +595,8 @@ predicate: it is shared by Julia's screenshot side-shape and Row 1 no-legal-lane
 safe rejection. Product law now intentionally accepts that shared surface rather
 than trying to keep Rows 1/2 rejected while allowing the screenshot shape. The
 existing horizontal legal-lane continuation used by Row 3 remains a separate
-GREEN artificial proof. The top-face ghost/skip path remains a separate
-RED/PENDING issue. No full manual live acceptance is claimed.
+GREEN artificial proof. The top-face path is now proven as
+`COMPOUND_VISIBLE_OWNER_TOP_SLAB`; no full manual live acceptance is claimed.
 
 ### Compound matrix closure
 
