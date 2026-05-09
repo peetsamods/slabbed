@@ -37,6 +37,7 @@ import net.minecraft.block.enums.SlabType;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.WorldView;
 
@@ -399,7 +400,8 @@ public final class SlabSupport {
             BlockView world,
             BlockPos sourcePos,
             BlockState sourceState,
-            Direction intendedDirection
+            Direction intendedDirection,
+            Vec3d hitPos
     ) {
         if (world == null || sourcePos == null || sourceState == null || intendedDirection == null) {
             return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "missing_context");
@@ -428,31 +430,58 @@ public final class SlabSupport {
         }
 
         BlockPos intendedLanePos = sourcePos.offset(intendedDirection);
-        if (legalLaneCount != 1 || !intendedLanePos.equals(legalLanePos)) {
-            return CompoundSlabRemapDecision.rejected(
-                    sourcePos,
-                    legalLanePos,
-                    legalLanePos == null ? null : legalLanePos.offset(intendedDirection),
-                    "legal_lane_count_" + legalLaneCount + "_or_not_in_intended_direction");
-        }
+        if (legalLaneCount == 1 && intendedLanePos.equals(legalLanePos)) {
+            BlockPos candidatePlacementPos = legalLanePos.offset(intendedDirection);
+            BlockState candidateState = world.getBlockState(candidatePlacementPos);
+            if (!candidateState.isAir()) {
+                return CompoundSlabRemapDecision.rejected(
+                        sourcePos,
+                        legalLanePos,
+                        candidatePlacementPos,
+                        "candidate_not_air");
+            }
 
-        BlockPos candidatePlacementPos = legalLanePos.offset(intendedDirection);
-        BlockState candidateState = world.getBlockState(candidatePlacementPos);
-        if (!candidateState.isAir()) {
-            return CompoundSlabRemapDecision.rejected(
+            return new CompoundSlabRemapDecision(
+                    true,
                     sourcePos,
                     legalLanePos,
                     candidatePlacementPos,
-                    "candidate_not_air");
+                    legalLaneState.get(SlabBlock.TYPE),
+                    "COMPOUND_HORIZONTAL_CONTINUATION_LANE");
         }
 
-        return new CompoundSlabRemapDecision(
-                true,
+        BlockState belowSourceState = world.getBlockState(sourcePos.down());
+        BlockPos candidatePlacementPos = intendedLanePos;
+        BlockState candidateState = world.getBlockState(candidatePlacementPos);
+        if (legalLaneCount == 0 && isLegalCompoundRemapLane(world, sourcePos.down(), belowSourceState)) {
+            if (!candidateState.isAir()) {
+                return CompoundSlabRemapDecision.rejected(
+                        sourcePos,
+                        sourcePos,
+                        candidatePlacementPos,
+                        "below_lane_candidate_not_air");
+            }
+            return new CompoundSlabRemapDecision(
+                    true,
+                    sourcePos,
+                    sourcePos,
+                    candidatePlacementPos,
+                    compoundBelowLaneResultType(sourcePos, hitPos),
+                    "COMPOUND_BELOW_LANE_SIDE_SLAB");
+        }
+
+        return CompoundSlabRemapDecision.rejected(
                 sourcePos,
                 legalLanePos,
-                candidatePlacementPos,
-                legalLaneState.get(SlabBlock.TYPE),
-                "legal_lowered_slab_lane_remap");
+                legalLanePos == null ? intendedLanePos : legalLanePos.offset(intendedDirection),
+                "legal_lane_count_" + legalLaneCount + "_or_not_in_intended_direction");
+    }
+
+    private static SlabType compoundBelowLaneResultType(BlockPos sourcePos, Vec3d hitPos) {
+        if (sourcePos != null && hitPos != null && hitPos.y >= sourcePos.getY()) {
+            return SlabType.TOP;
+        }
+        return SlabType.BOTTOM;
     }
 
     private static boolean isLegalCompoundRemapLane(BlockView world, BlockPos lanePos, BlockState laneState) {

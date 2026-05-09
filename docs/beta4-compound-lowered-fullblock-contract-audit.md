@@ -25,8 +25,10 @@ screenshot side-shape and Rows 1/2 are equivalent under current facts
 `legalLaneCount=0`, `sourceBelowOnlyLoweredLane=true`). Rows 1/2 are no longer
 safe-reject/pass cases. They are promoted into the named legal class
 **compound below-lane side slab placement**: expected legal side placement at
-`dy=-0.5` through existing lowered slab grammar, currently RED/PENDING until
-implementation. This does not legalize any `dy=-1.0` slab lane.
+`dy=-0.5` through existing lowered slab grammar. Implemented/proven at
+`save/beta4-compound-below-lane-side-slab-fix`: Rows 1/2 author the immediate
+side candidate at `dy=-0.5`, and the screenshot side-shape side proof emits
+GREEN. This does not legalize any `dy=-1.0` slab lane.
 
 ## Current savepoint
 
@@ -383,11 +385,12 @@ Harness audit note: Row 3 proof must start from proven compound dy=-1.0 ordinary
 full-block source; dy=-0.5 source hits are invalid for this row. The corrected
 focused harness proves `compoundFullBlockAnchor=true`, clicked source
 `dy=-1.0`, and exactly one adjacent legal `dy=-0.5` remap lane before emitting
-the Row 3 GREEN marker. Rows 1/2 still require `legalLaneCount=0`, but their
-direct below-lane support now makes them expected legal `dy=-0.5` side
-placements; the old preserve/reject behavior is RED/PENDING implementation.
-The Row 3 implementation remaps only into the continuation cell beyond the one
-existing legal lowered slab lane and keeps beta4 `dy=-1.0` slab lanes illegal.
+the Row 3 GREEN marker. Rows 1/2 still require `legalLaneCount=0`; their
+direct below-lane support now makes them implemented/proven legal `dy=-0.5`
+side placements. Row 1 authors `stone_slab[type=bottom]`; Row 2 authors
+`stone_slab[type=top]`. The Row 3 implementation remaps only into the
+continuation cell beyond the one existing legal lowered slab lane and keeps
+beta4 `dy=-1.0` slab lanes illegal.
 
 Screenshot side-shape discriminator audit at `08cb004`: diagnostic-only harness
 markers now compare Rows 1/2, the internal artificial Row 3, and Julia's
@@ -398,9 +401,9 @@ screenshot side-shape without changing placement behavior:
 
 | Case | Clicked source / dy | Below source | Horizontal lane | Helper lane count | Candidate relation | Expected / current |
 | --- | --- | --- | --- | --- | --- | --- |
-| Rows 1/2 compound below-lane side slab placement | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | expected legal `dy=-0.5` side slab; RED/PENDING |
+| Rows 1/2 compound below-lane side slab placement | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | GREEN; immediate side slab at `dy=-0.5` |
 | Internal Row 3 legal remap | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | legal bottom slab, `dy=-0.5` | `1` | continuation beyond horizontal lane | author lowered slab; GREEN |
-| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | desired placement; current RED/pass |
+| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | side slab GREEN; top-face ghost remains RED/PENDING |
 
 The audit rejects "lowered bottom slab directly below the source" as a safe
 predicate: it is shared by Julia's screenshot side-shape and Row 1 no-legal-lane

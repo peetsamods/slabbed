@@ -137,7 +137,8 @@ public abstract class BlockItemPlacementIntentMixin {
                     context.getWorld(),
                     targetPos,
                     targetState,
-                    context.getSide());
+                    context.getSide(),
+                    context.getHitPos());
             if (remapDecision.legal()) {
                 return;
             }
@@ -277,7 +278,8 @@ public abstract class BlockItemPlacementIntentMixin {
                     context.getWorld(),
                     targetPos,
                     targetState,
-                    originalSide);
+                    originalSide,
+                    originalHitPos);
             if (!remapDecision.legal()) {
                 slabbed$recordRemapAttempt(
                         context,
