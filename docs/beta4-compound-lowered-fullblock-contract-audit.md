@@ -375,6 +375,25 @@ the compound source with no authored slab when no legal lowered slab lane exists
 The Row 3 implementation remaps only into the continuation cell beyond the one
 existing legal lowered slab lane and keeps beta4 `dy=-1.0` slab lanes illegal.
 
+Screenshot side-shape discriminator audit at `08cb004`: diagnostic-only harness
+markers now compare Rows 1/2, the internal artificial Row 3, and Julia's
+screenshot side-shape without changing placement behavior:
+`[JULIA_BETA4_NO_LEGAL_LANE_DISCRIMINATOR]`,
+`[JULIA_BETA4_INTERNAL_ROW3_DISCRIMINATOR]`, and
+`[JULIA_BETA4_LIVE_SCREENSHOT_DISCRIMINATOR]`.
+
+| Case | Clicked source / dy | Below source | Horizontal lane | Helper lane count | Candidate relation | Expected / current |
+| --- | --- | --- | --- | --- | --- | --- |
+| Rows 1/2 no-legal-lane | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | reject/preserve; GREEN |
+| Internal Row 3 legal remap | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | legal bottom slab, `dy=-0.5` | `1` | continuation beyond horizontal lane | author lowered slab; GREEN |
+| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | desired placement; current RED/pass |
+
+The audit rejects "lowered bottom slab directly below the source" as a safe
+predicate: it is shared by Julia's screenshot side-shape and Row 1 no-legal-lane
+safe rejection. The currently safe discriminator is the existing horizontal
+legal-lane continuation used by Row 3, but that discriminator does not allow the
+screenshot shape. No full manual live acceptance is claimed.
+
 ### Compound matrix closure
 
 - **Row 3** `SELECT_SLAB_HELD_COMPOUND_BODY`: GREEN; slab-held selection keeps
