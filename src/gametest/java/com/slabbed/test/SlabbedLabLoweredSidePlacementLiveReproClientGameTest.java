@@ -3571,13 +3571,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     adjacentLanePos,
                     false);
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            System.out.println("[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]"
+            System.out.println("[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_ATTEMPT]"
                     + " row=" + rowName
                     + " half=" + halfLabel
                     + " result=" + result
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
                     + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
-                    + " current=legacy_preserve_or_reject"
+                    + " classification=COMPOUND_BELOW_LANE_SIDE_SLAB"
                     + " expected=legal_side_slab_dy_-0.5"
                     + " reason=product_law_promoted_below_lane_class");
         });
@@ -3587,18 +3587,32 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.world == null) {
                 throw new RuntimeException("[" + rowName + "] client world missing after compound no-legal-lane proof");
             }
-            BlockState adjacent = mc.world.getBlockState(adjacentLanePos);
-            if (!adjacent.isAir()) {
-                throw new RuntimeException("[" + rowName + "] no-legal-lane case must not author a slab at "
-                        + adjacentLanePos.toShortString() + ", found " + adjacent
-                        + " dy=" + SlabSupport.getYOffset(mc.world, adjacentLanePos, adjacent));
-            }
             BlockState compound = mc.world.getBlockState(compoundPos);
             double compoundDy = SlabSupport.getYOffset(mc.world, compoundPos, compound);
             if (Math.abs(compoundDy + 1.0d) > EPSILON) {
                 throw new RuntimeException("[" + rowName + "] compound owner must remain dy=-1.000, found dy="
                         + compoundDy + " state=" + compound);
             }
+            SlabType expectedType = "upper-half".equals(halfLabel) ? SlabType.TOP : SlabType.BOTTOM;
+            BlockState adjacent = mc.world.getBlockState(adjacentLanePos);
+            double adjacentDy = SlabSupport.getYOffset(mc.world, adjacentLanePos, adjacent);
+            if (!adjacent.isOf(Blocks.STONE_SLAB)
+                    || !adjacent.contains(SlabBlock.TYPE)
+                    || adjacent.get(SlabBlock.TYPE) != expectedType
+                    || Math.abs(adjacentDy + 0.5d) > EPSILON) {
+                failCompoundSlabHarness(rowName, "compound below-lane side slab GREEN must author "
+                        + expectedType + " stone_slab dy=-0.500 at "
+                        + adjacentLanePos.toShortString() + ", found " + adjacent + " dy=" + adjacentDy);
+            }
+            System.out.println("[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_GREEN]"
+                    + " row=" + rowName
+                    + " half=" + halfLabel
+                    + " classification=COMPOUND_BELOW_LANE_SIDE_SLAB"
+                    + " compound=" + describeOwnerFacts(mc.world, compoundPos)
+                    + " candidate=" + describeOwnerFacts(mc.world, adjacentLanePos)
+                    + " illegalDyMinusOneSlab=false"
+                    + " illegalDyBelowMinusOne=false"
+                    + " illegalDyZeroSlab=false");
         });
     }
 

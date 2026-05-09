@@ -93,10 +93,11 @@ Rows 1/2 and Julia's screenshot side-shape are now intentionally unified as the 
 
 These proof rows now exist in the focused harness slice:
 
-- Row 1: RED/PENDING for compound below-lane side slab placement; old safe-reject GREEN is superseded.
-- Row 2: RED/PENDING for compound below-lane side slab placement; old safe-reject GREEN is superseded.
+- Row 1: GREEN-implemented/proven for compound below-lane side slab placement; lower-half side click authors `stone_slab[type=bottom]` at `dy=-0.5`.
+- Row 2: GREEN-implemented/proven for compound below-lane side slab placement; upper-half side click authors `stone_slab[type=top]` at `dy=-0.5`.
 - Internal proof Row 3: GREEN-implemented/proven for the narrow artificial same-Y remap topology; automated/focused proof passed and runtime/live-launch logs emitted GREEN.
-- Julia screenshot shape: RED/pending fix; manual live verdict rejected the release feel because the in-world sign-labeled upper full-block topology still cannot place a slab off the side and top-face placement can skip/ghost.
+- Julia screenshot side-shape side slab: GREEN-implemented/proven; the side candidate becomes `stone_slab[type=bottom]` at `dy=-0.5`.
+- Julia screenshot top-face ghost/skip: still RED/PENDING and separate from the side-face below-lane law.
 - Row 4: TODO.
 - Row 5: TODO, and may now be release-blocking if the Julia screenshot top-face ghost/skip path proves this top-click gap.
 - Row 6: TODO.
@@ -105,13 +106,14 @@ Harness/source-truth repair note:
 
 - The failed Row 3 implementation attempt exposed a proof topology gap: Row 1 could report against an authored `dy=-0.5` lowered slab at the side lane instead of proving the clicked source was the compound ordinary full block.
 - Before any slab click/remap assertion, Rows 1-3 now prove the clicked source is ordinary stone, `compoundFullBlockAnchor=true`, and `dy=-1.0`.
-- Rows 1-2 require zero neighboring horizontal legal `dy=-0.5` slab lanes, but their legal lowered support directly below the compound source now makes them expected compound below-lane side slab placements. They are expected RED/PENDING until implementation.
+- Rows 1-2 require zero neighboring horizontal legal `dy=-0.5` slab lanes, and their legal lowered support directly below the compound source now remaps the immediate side candidate into the existing `dy=-0.5` lowered slab grammar.
 - Row 3 requires exactly one legal adjacent `dy=-0.5` slab lane in the intended remap direction. The implemented path now remaps to the continuation cell beyond that lane and authors a legal lowered slab lane at `dy=-0.5`.
-- The Row 3 implementation keeps the clicked source as ordinary stone at compound `dy=-1.0` and does not legalize slab type + `dy=-1.0`.
+- The Row 1/2 and Row 3 implementations keep the clicked source as ordinary stone at compound `dy=-1.0` and do not legalize slab type + `dy=-1.0`.
 
 Current proof markers emitted by the gated gametest slice:
 
 - `[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]`
+- `[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_GREEN]`
 - `[JULIA_BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]`
 - `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]`
 - `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]`
@@ -127,7 +129,8 @@ Rows 4-6 remain pending/TODO in this focused grammar note. Row 4 DOUBLE merge an
 Screenshot-shape proof markers added by `-Dslabbed.beta4LiveScreenshotShapeRed=true`:
 
 - `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]`
-- `[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_RED]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_GREEN]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`
 - `[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`
 - `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]`
 
