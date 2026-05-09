@@ -1,9 +1,8 @@
 package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
-import com.slabbed.util.Beta4PlacementAuthorRecorder;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedAuditBridge;
+import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
@@ -49,7 +48,7 @@ public abstract class BlockItemPlaceTraceMixin {
         Identifier itemId = Registries.ITEM.getId(self);
         boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
 
-        Beta4PlacementAuthorRecorder.recordPlace(
+        RuntimeDiagnostics.recordPlace(
                 "place-head",
                 itemId,
                 heldIsSlab,
@@ -57,15 +56,15 @@ public abstract class BlockItemPlaceTraceMixin {
                 null,
                 "anchorFinalization=not_yet_returned");
 
-        if (SlabbedAuditBridge.isInspectEnabled()) {
+        if (RuntimeDiagnostics.isInspectEnabled()) {
             SLABBED$INSPECT_TRACE.set(new TraceCtx(side, itemId, face, hitPos, placePos));
             SLABBED$INSPECT_PLACE_CALLED.set(Boolean.TRUE);
-            SlabbedAuditBridge.logInspectPlacement("HEAD", world, itemId, ctx, hitPos, placePos, null);
+            RuntimeDiagnostics.logInspectPlacement("HEAD", world, itemId, ctx, hitPos, placePos, null);
         }
 
-        if (!SlabbedAuditBridge.isEnabled()) return;
+        if (!RuntimeDiagnostics.isEnabled()) return;
 
-        SlabbedAuditBridge.invoke(
+        RuntimeDiagnostics.invoke(
                 "recordPlacementContext",
                 new Class<?>[]{ItemPlacementContext.class},
                 ctx);
@@ -98,7 +97,7 @@ public abstract class BlockItemPlaceTraceMixin {
             try {
                 BlockItem self = (BlockItem) (Object) this;
                 if (slabbed$isTracedBlock(self.getBlock())) {
-                    SlabbedAuditBridge.logInspectPlacement(
+                    RuntimeDiagnostics.logInspectPlacement(
                             "RETURN",
                             ctx.getWorld(),
                             inspectTrace.itemId(),
@@ -116,14 +115,14 @@ public abstract class BlockItemPlaceTraceMixin {
         if (slabbed$isTracedBlock(recorderSelf.getBlock())) {
             Identifier itemId = Registries.ITEM.getId(recorderSelf);
             boolean heldIsSlab = recorderSelf.getBlock() instanceof SlabBlock;
-            Beta4PlacementAuthorRecorder.recordPlace(
+            RuntimeDiagnostics.recordPlace(
                     "place-return",
                     itemId,
                     heldIsSlab,
                     ctx,
                     cir.getReturnValue(),
                     "anchorFinalization=deferred_to_finalization_mixin");
-            Beta4PlacementAuthorRecorder.recordAfterTick(
+            RuntimeDiagnostics.recordAfterTick(
                     itemId,
                     heldIsSlab,
                     ctx,
@@ -154,7 +153,7 @@ public abstract class BlockItemPlaceTraceMixin {
                     placeState,
                     dyPlace,
                     cir.getReturnValue());
-            SlabbedAuditBridge.invoke(
+            RuntimeDiagnostics.invoke(
                     "recordPlacementResult",
                     new Class<?>[]{ItemPlacementContext.class, ActionResult.class},
                     ctx, cir.getReturnValue());
@@ -173,14 +172,14 @@ public abstract class BlockItemPlaceTraceMixin {
             return;
         }
         Identifier itemId = Registries.ITEM.getId(self);
-        Beta4PlacementAuthorRecorder.recordUseHead(itemId, self.getBlock() instanceof SlabBlock, context);
+        RuntimeDiagnostics.recordUseHead(itemId, self.getBlock() instanceof SlabBlock, context);
 
-        if (!SlabbedAuditBridge.isInspectEnabled()) {
+        if (!RuntimeDiagnostics.isInspectEnabled()) {
             return;
         }
 
         SLABBED$INSPECT_PLACE_CALLED.remove();
-        SlabbedAuditBridge.logInspectClickPair(context, itemId);
+        RuntimeDiagnostics.logInspectClickPair(context, itemId);
         BlockPos placePos = context.getBlockPos().offset(context.getSide());
         SLABBED$INSPECT_USE_TRACE.set(new TraceCtx(
                 context.getWorld().isClient() ? "CLIENT" : "SERVER",
@@ -193,7 +192,7 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "useOnBlock", at = @At("RETURN"))
     private void slabbed$traceUseOnBlockReturn(ItemUsageContext context, CallbackInfoReturnable<ActionResult> cir) {
-        if (!SlabbedAuditBridge.isInspectEnabled()) {
+        if (!RuntimeDiagnostics.isInspectEnabled()) {
             return;
         }
 
@@ -204,12 +203,12 @@ public abstract class BlockItemPlaceTraceMixin {
                     && trace.itemId() != null
                     && context != null
                     && context.getWorld() != null) {
-                SlabbedAuditBridge.logInspectPlacementNoReturn(context.getWorld(), trace.itemId(), trace.face(), trace.hitPos(), trace.placePos());
+                RuntimeDiagnostics.logInspectPlacementNoReturn(context.getWorld(), trace.itemId(), trace.face(), trace.hitPos(), trace.placePos());
             }
         } finally {
             SLABBED$INSPECT_USE_TRACE.remove();
             SLABBED$INSPECT_PLACE_CALLED.remove();
-            SlabbedAuditBridge.clearInspectClickPair();
+            RuntimeDiagnostics.clearInspectClickPair();
         }
     }
 }
