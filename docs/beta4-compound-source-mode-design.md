@@ -34,6 +34,7 @@ Not legal for beta4:
 Row 3 `SELECT_SLAB_HELD_COMPOUND_BODY`:
 Compound block owns unless a legal slab-placement face exists. Since the
 `dy=-1.0` slab lane is not beta4-legal, do not redirect to slab placement.
+GREEN: slab-held selection stays on the compound full block.
 
 Row 4 `PLACE_STONE_SIDE_LOWER_HALF`:
 Should place ordinary full block in same compound lane `dy=-1.0` if collision
@@ -46,7 +47,9 @@ implemented for ordinary full blocks: the side slot is authored with
 This does not legalize slab side placement or any beta4 `dy=-1.0` slab lane.
 
 Row 5 `PLACE_STONE_SIDE_UPPER_HALF`:
-Same as row 4 for full blocks. No upward/vanilla ghost placement.
+Same as row 4 for full blocks. GREEN: the side slot is ordinary stone,
+authored with `COMPOUND_FULL_BLOCK_ANCHOR_TYPE`, and remains at `dy=-1.0`.
+No upward/vanilla ghost placement.
 
 Row 6 `PLACE_SLAB_SIDE_LOWER_HALF`:
 GREEN after clean rejection. Slab-held lower-half side click on an authored
@@ -55,12 +58,15 @@ after-tick side slot stay air, the compound full block stays authored at
 `dy=-1.0`, and no beta4 `dy=-1.0` or ghost `dy=-0.5` slab lane is created.
 
 Row 7 `PLACE_SLAB_SIDE_UPPER_HALF`:
-Reject cleanly for beta4 or keep compound full block selected; no vanilla-height
-ghost placement.
+GREEN after clean rejection. Slab-held upper-half side click on an authored
+compound full block returns pass with no side-slot mutation: immediate and
+after-tick side slot stay air, the compound full block stays authored at
+`dy=-1.0`, and no beta4 `dy=-1.0` or ghost `dy=-0.5` slab lane is created.
 
 Row 8 `PLACE_BLOCK_ON_TOP`:
-Place ordinary full block above in same compound lane `dy=-1.0`; do not create
-`dy=-1.5`.
+GREEN after top-of-compound authoring. Ordinary full block placed above the
+compound full block is authored in the same compound lane at `dy=-1.0` with
+`compoundFullBlockAnchor=true`. No `dy=-1.5` recursion is created.
 
 Row 9 `SOURCE_SLAB_BREAK`:
 Persistent compound anchor preserves authored `dy=-1.0`. No silent jump to

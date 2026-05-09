@@ -274,12 +274,12 @@ above so a design choice between A / B / C / D can be made on evidence.
 | --- | ---- | ----------------------- | ----------- | ---------------------- |
 | 1 | `SELECT_EMPTY_HAND_COMPOUND_BODY` | GREEN | automation-only | Compound block owns selection. |
 | 2 | `SELECT_STONE_HELD_COMPOUND_BODY` | GREEN | automation-only | Compound block owns selection. |
-| 3 | `SELECT_SLAB_HELD_COMPOUND_BODY` | UNDECIDED | automation-only | Compound block owns unless a legal slab-placement face exists; no redirect to beta4-illegal `dy=-1.0` slab placement. |
+| 3 | `SELECT_SLAB_HELD_COMPOUND_BODY` | GREEN | automation-only | Compound block owns unless a legal slab-placement face exists; no redirect to beta4-illegal `dy=-1.0` slab placement. |
 | 4 | `PLACE_STONE_SIDE_LOWER_HALF` | GREEN | live-confirmed-fail | Packet validity is fixed and downstream side-lane authoring now marks the placed ordinary stone with the compound sidecar at `dy=-1.0`. |
-| 5 | `PLACE_STONE_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Same as row 4 for full blocks; no upward/vanilla ghost placement. |
+| 5 | `PLACE_STONE_SIDE_UPPER_HALF` | GREEN | live-confirmed-fail | Same as row 4 for full blocks; side slot is ordinary stone with compound sidecar at `dy=-1.0`; no upward/vanilla ghost placement. |
 | 6 | `PLACE_SLAB_SIDE_LOWER_HALF` | GREEN | live-confirmed-fail | Clean reject/pass: side slot stays air immediately and after tick; no `dy=-1.0` or ghost `dy=-0.5` slab lane. |
-| 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | UNDECIDED | live-confirmed-fail | Reject cleanly or keep compound full block selected; no vanilla-height ghost placement. |
-| 8 | `PLACE_BLOCK_ON_TOP` | UNDECIDED | not-yet-live-tested | Place ordinary full block above in same compound lane `dy=-1.0`; do not create `dy=-1.5`. |
+| 7 | `PLACE_SLAB_SIDE_UPPER_HALF` | GREEN | live-confirmed-fail | Clean reject/pass: side slot stays air immediately and after tick; no `dy=-1.0` or ghost `dy=-0.5` slab lane. |
+| 8 | `PLACE_BLOCK_ON_TOP` | GREEN | not-yet-live-tested | Place ordinary full block above in same compound lane `dy=-1.0`; do not create `dy=-1.5`. |
 | 9 | `SOURCE_SLAB_BREAK` | GREEN (post-sidecar) | live-confirmed-fail (pre-sidecar) | Persistent compound anchor preserves authored `dy=-1.0`; no silent jump to `dy=-0.5`. Sidecar `COMPOUND_FULL_BLOCK_ANCHOR_TYPE` flipped this from RED to GREEN; live retest pending. |
 | 10 | `NEIGHBOR_UPDATE_AFTER_SOURCE_BREAK` | GREEN (post-sidecar) | not-yet-live-tested | Same as row 9. Sidecar flipped this from RED to GREEN; live retest pending. |
 | 11 | `SAVE_RELOAD_AFTER_COMPOUND` | GREEN | live-confirmed-fail | Preserve authored `dy=-1.0`; should remain green, with live still final. |
@@ -326,14 +326,34 @@ the side slot air immediately and after tick, and the support still
 `compoundFullBlockAnchor=true` at `dy=-1.0`. This does not legalize a `dy=-1.0`
 slab lane or the upper-half Row 7 path.
 
-### Rows needing follow-up
+After the compound matrix closure lands:
+`[BETA4_COMPOUND_CONTRACT_MATRIX_RED]` reports `rows=12 red=0 undecided=0 green=11
+notImplemented=1`. Rows 3/5/7/8 are GREEN under A-prime: slab-held selection
+keeps the compound owner, upper-half ordinary stone side placement stays in the
+compound `dy=-1.0` lane, slab-held upper-half side placement cleanly rejects, and
+top-of-compound ordinary stone placement is authored in the same `dy=-1.0` lane.
+Row 12 remains NOT_IMPLEMENTED because the chunk-only unload/reload helper is
+still unavailable in the current client gametest API. This closure does not
+legalize any beta4 `dy=-1.0` slab lane or any `dy<-1.0` recursion.
 
+### Compound matrix closure
+
+- **Row 3** `SELECT_SLAB_HELD_COMPOUND_BODY`: GREEN; slab-held selection keeps
+  the compound full block selected because there is no legal beta4 slab lane.
 - **Row 4** `PLACE_STONE_SIDE_LOWER_HALF`: GREEN after lane authoring; the
   packet/hit-validity bridge accepts the visual lower-half WEST-face hit
   `(8.0, 202.25, 8.5)` and the side slot survives as compound `dy=-1.0`.
+- **Row 5** `PLACE_STONE_SIDE_UPPER_HALF`: GREEN; the upper-half WEST-face
+  ordinary stone placement uses the same compound sidecar lane at `dy=-1.0`.
 - **Row 6** `PLACE_SLAB_SIDE_LOWER_HALF`: GREEN after clean rejection; aiming
   the visual lower half of the compound's EAST face with slab-held leaves the
   side slot air immediately and after tick, with no slab lane authored.
+- **Row 7** `PLACE_SLAB_SIDE_UPPER_HALF`: GREEN after clean rejection; aiming
+  the visual upper half of the compound's EAST face with slab-held also leaves
+  the side slot air immediately and after tick, with no slab lane authored.
+- **Row 8** `PLACE_BLOCK_ON_TOP`: GREEN after top-of-compound authoring; the
+  top ordinary stone stays in the compound sidecar lane at `dy=-1.0`, with no
+  `dy=-1.5`.
 
 ### Rows formerly RED, now GREEN after sidecar
 
@@ -350,16 +370,8 @@ slab lane or the upper-half Row 7 path.
 
 ### Rows classified UNDECIDED
 
-- **Row 3** `SELECT_SLAB_HELD_COMPOUND_BODY`: slab-held selection intent
-  for the compound body is not formally decided (audit row 1
-  "(decide)").
-- **Row 5** `PLACE_STONE_SIDE_UPPER_HALF`: placement landed somewhere
-  observable but the intended outcome (compound lateral / vanilla / pop)
-  is not formally decided (audit row 4).
-- **Row 7** `PLACE_SLAB_SIDE_UPPER_HALF`: same as row 5 for slab grammar
-  (audit row 6).
-- **Row 8** `PLACE_BLOCK_ON_TOP`: top-of-compound placement intent is
-  not formally decided (audit row 2).
+None after compound matrix closure. Row 12 remains NOT_IMPLEMENTED, not
+UNDECIDED.
 
 ### Rows classified GREEN
 
