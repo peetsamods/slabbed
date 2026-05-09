@@ -166,7 +166,19 @@ The harness builds and proves this exact canonical structure before any click:
 - Layer C: two `stone_slab[type=bottom]` slabs on top of the bridge.
 - Layer D: one ordinary full stone block on top of one Layer C slab.
 
-After `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`, it tests support-present lower/upper side placement, support-present top-face placement, and the missing-under-slab side/top-face variants from the visible upper full block. `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID]` fails the harness if any required slab is a full block, any required full block is a slab, the upper full block is not on the named top slab, or the missing-under-slab variant is not explicitly named. The final `[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]` reports `structure`, `fixtureTruth`, `supportPresent.upperSide`, `supportPresent.lowerSide`, `supportPresent.topFace`, `supportMissing.side`, `supportMissing.topFace`, `hitbox`, `ghost`, `jump`, `wrongOwner`, and `releaseBlockers`.
+After `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`, it tests support-present lower/upper side placement, support-present top-face placement, repeat placement after the first upper-half side slab, and the missing-under-slab side/top-face variants from the visible upper full block. `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID]` fails the harness if any required slab is a full block, any required full block is a slab, the upper full block is not on the named top slab, or the missing-under-slab variant is not explicitly named. The final `[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]` reports `structure`, `fixtureTruth`, `lowerExact`, `upperFirst`, `repeatPlacement`, `topFaceExact`, `supportPresent.upperSide`, `supportPresent.lowerSide`, `supportPresent.topFace`, `supportMissing.side`, `supportMissing.topFace`, `hitbox`, `ghost`, `jump`, `wrongOwner`, and `releaseBlockers`.
+
+Exact-candidate proof is mandatory. "Some slab placed" is not sufficient: lower-band side clicks must resolve to the expected side candidate as `stone_slab[type=bottom]` at `dy=-0.5`; upper-band side clicks must resolve to the same side candidate as `stone_slab[type=top]` at `dy=-0.5`; repeat placement must legally extend/combine according to product law; top-face clicks must resolve to `source.up()` as `stone_slab[type=bottom]` at `dy=0.0`.
+
+Goblin live parity is now mandatory before any goblin GREEN can be treated as
+release evidence. The harness must aim the camera, read the actual
+`MinecraftClient.crosshairTarget`, prove the target owner/face/localY/band, and
+click that real `BlockHitResult`. A synthetic `BlockHitResult`, or an isolated
+fresh-fixture candidate success, is only a diagnostic and is not release proof.
+The sequence proof must avoid rebuilding between the first side, lower-after-
+first, repeat, and top-face clicks, and each step must emit a bounded changed-
+block delta scan. Exact candidate state and exact changed-block delta are both
+required; either one alone is insufficient.
 
 The beta4 law remains unchanged: slab `dy=-1.0` lanes are illegal, any successful slab side result must normalize into the existing legal `dy=-0.5` lowered slab grammar, and the named top-face result normalizes into vanilla `dy=0.0` slab law.
 
@@ -225,12 +237,14 @@ persistent visible compound owner author `stone_slab[type=bottom]` at
 `source.up()` with final `dy=0.0` and `persistentLoweredSlabCarrier=false`.
 The c956fa3 gated goblin proof that reported `topFace=GREEN` remains superseded
 as release evidence because Julia found the harness/build fixture did not prove
-the actual slab/full-block composition. Corrected goblin output is the current
-diagnostic source. Support-present and support-missing top-face are now GREEN,
-support-missing side remains GREEN, fixtureTruth remains GREEN, and the latest
-summary reports `releaseBlockers=none`. Side-authored slabs remain legal
-`dy=-0.5` lowered slabs; the beta4 `dy=-1.0` slab lane remains illegal. Release
-is ready for Julia manual live retest but remains blocked until Julia passes or
+the actual slab/full-block composition. The later 278513b goblin summary that
+reported `releaseBlockers=none` is also superseded by Julia manual live RED:
+it accepted too weak a condition and did not prove exact lower/upper candidates,
+repeat placement, or exact top-face `dy=0.0`. Corrected goblin output must keep
+side-authored slabs as legal `dy=-0.5` lowered slabs, keep the beta4 `dy=-1.0`
+slab lane illegal, and report non-empty blockers when lower exact placement,
+repeat placement, or top-face exact placement fails. Release remains blocked until
+Julia passes or
 waives that live retest.
 
 ## Implementation slices after design

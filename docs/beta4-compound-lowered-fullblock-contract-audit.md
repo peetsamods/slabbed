@@ -81,6 +81,36 @@ GREEN, and no beta4 `dy=-1.0` slab lane or `dy<-1.0` lane is legalized. Release
 is ready for Julia manual live retest but remains blocked until Julia passes or
 waives that live retest.
 
+Manual live false-green audit after `278513b`: Julia's live run invalidates the
+`releaseBlockers=none` summary above as too weak. The harness must prove exact
+candidate position, slab half/type, repeated placement/extension after the first
+side slab, and exact top-face `source.up()` / `stone_slab[type=bottom]` /
+`dy=0.0`. Manual live observed lower-half aim producing the upper/top result,
+only one accepted top-half slab, repeat placement rejection, and a top-face
+floating/ghost/wrong result. New explicit markers are
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_WRONG_RESULT_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_UPPER_FIRST_GREEN]` / `_RED`,
+`[JULIA_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]` / `_GREEN`, and
+`[JULIA_BETA4_LIVE_GOBLIN_TOP_FACE_WRONG_RESULT_RED]`. Release remains blocked.
+
+Goblin live-parity scout replaces the dirty exact-candidate WIP as the current
+proof direction. The WIP used synthetic `BlockHitResult` interactions and fresh
+fixture resets, so its lower/top GREEN markers are not release proof. New marker
+set:
+`[JULIA_BETA4_LIVE_GOBLIN_PARITY_START]`,
+`[JULIA_BETA4_LIVE_GOBLIN_AIM_LOWER_REAL_TARGET]`,
+`[JULIA_BETA4_LIVE_GOBLIN_AIM_UPPER_REAL_TARGET]`,
+`[JULIA_BETA4_LIVE_GOBLIN_AIM_TOP_REAL_TARGET]`,
+`[JULIA_BETA4_LIVE_GOBLIN_AIM_PARITY_FAIL]`,
+`[JULIA_BETA4_LIVE_GOBLIN_DELTA_SCAN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SEQUENCE_FIRST_SIDE]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SEQUENCE_LOWER_AFTER_FIRST]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SEQUENCE_REPEAT]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SEQUENCE_TOP_FACE]`, and
+`[JULIA_BETA4_LIVE_GOBLIN_PARITY_SUMMARY]`. Latest manual/live mismatch remains:
+manual lower-half routes to upper/top, first upper side accepts one slab, repeat
+rejects, top-face ghosts/wrongs; release remains blocked.
+
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
 `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`,
@@ -91,14 +121,20 @@ Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_PRESENT_TOP_FACE_RED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_MISSING_SIDE_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_MISSING_TOP_FACE_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_WRONG_RESULT_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_UPPER_FIRST_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_UPPER_FIRST_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TOP_FACE_WRONG_RESULT_RED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_HITBOX_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_HITBOX_RED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]`, and
 `[JULIA_BETA4_LIVE_GOBLIN_DONE]`. Decision use: this harness replaces manual
 recreation as the canonical diagnostic for Julia's live shape; it does not
-approve release by itself. Any summary with `supportPresent.topFace`,
-`supportMissing.side`, or `supportMissing.topFace` not GREEN keeps release
-blocked unless Julia explicitly defers that blocker.
+approve release by itself. Any summary with `lowerExact`, `repeatPlacement`,
+`topFaceExact`, `supportMissing.side`, or `supportMissing.topFace` not GREEN
+keeps release blocked unless Julia explicitly defers that blocker.
 
 Gating note: the harness is opt-in only and is routed from the already-registered
 `SlabbedLabLoweredSidePlacementLiveReproClientGameTest` path when
