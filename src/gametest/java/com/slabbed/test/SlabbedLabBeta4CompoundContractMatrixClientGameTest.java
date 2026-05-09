@@ -119,7 +119,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             rows.add(rowSelect(ctx, sp, "02_SELECT_STONE_HELD_COMPOUND_BODY",
                     new ItemStack(Items.STONE, 8), "compound_owns_outline_raycast_selected", false));
             rows.add(rowSelect(ctx, sp, "03_SELECT_SLAB_HELD_COMPOUND_BODY",
-                    new ItemStack(Items.STONE_SLAB, 8), "UNDECIDED_slab_held_retarget_intent_not_decided", true));
+                    new ItemStack(Items.STONE_SLAB, 8), "compound_owns_selection_no_beta4_slab_lane", false));
             rows.add(rowPlacement(ctx, sp, "04_PLACE_STONE_SIDE_LOWER_HALF",
                     new ItemStack(Items.STONE, 8), Direction.WEST, SIDE_WEST,
                     /* upperHalf */ false, /* attemptedItem */ "minecraft:stone",
@@ -127,7 +127,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             rows.add(rowPlacement(ctx, sp, "05_PLACE_STONE_SIDE_UPPER_HALF",
                     new ItemStack(Items.STONE, 8), Direction.WEST, SIDE_WEST,
                     true, "minecraft:stone",
-                    "UNDECIDED_intent_julia_live_fail_upward_or_wrong_dy"));
+                    "compound_lane_dy_minus_1_side_authoring"));
             rows.add(rowPlacement(ctx, sp, "06_PLACE_SLAB_SIDE_LOWER_HALF",
                     new ItemStack(Items.STONE_SLAB, 8), Direction.EAST, SIDE_EAST,
                     false, "minecraft:stone_slab",
@@ -135,7 +135,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             rows.add(rowPlacement(ctx, sp, "07_PLACE_SLAB_SIDE_UPPER_HALF",
                     new ItemStack(Items.STONE_SLAB, 8), Direction.EAST, SIDE_EAST,
                     true, "minecraft:stone_slab",
-                    "UNDECIDED_intent_julia_live_fail_wrong_column_or_lane"));
+                    "clean_reject_no_beta4_slab_side_lane"));
             rows.add(rowTopPlacement(ctx, sp));
             rows.add(rowSourceSlabBreak(ctx, sp));
             rows.add(rowNeighborUpdateAfterSourceBreak(ctx, sp));
@@ -312,9 +312,10 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             String observed = "attemptedItem=" + attemptedItem
                     + " immediate={" + safe(immediate[0]) + "}"
                     + " after={" + safe(after[0]) + "}";
-            if ("06_PLACE_SLAB_SIDE_LOWER_HALF".equals(rowName)
+            if (("06_PLACE_SLAB_SIDE_LOWER_HALF".equals(rowName)
+                    || "07_PLACE_SLAB_SIDE_UPPER_HALF".equals(rowName))
                     && "minecraft:stone_slab".equals(attemptedItem)) {
-                observed += " cleanReject=" + isRow6CleanReject(observed);
+                observed += " cleanReject=" + isCleanCompoundSlabSideReject(observed);
             }
 
             // Classification: live-confirmed-fail row. RED if the placement
@@ -331,7 +332,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
 
     private static Row rowTopPlacement(ClientGameTestContext ctx, TestSingleplayerContext sp) {
         String rowName = "08_PLACE_BLOCK_ON_TOP";
-        String expected = "UNDECIDED_intent_top_of_compound_dy_unspecified";
+        String expected = "compound_lane_dy_minus_1_top_authoring_no_recursion";
         try {
             reseed(ctx, sp);
             syncPlayerPosition(ctx, sp);
@@ -375,7 +376,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             String observed = "attemptedItem=minecraft:stone"
                     + " immediate={" + safe(immediate[0]) + "}"
                     + " after={" + safe(after[0]) + "}";
-            return new Row(rowName, expected, observed, Cls.UNDECIDED, "not-yet-live-tested");
+            return new Row(rowName, expected, observed, classifyTopPlacement(observed), "not-yet-live-tested");
         } catch (Throwable t) {
             return new Row(rowName, expected, "exception=" + safeMessage(t),
                     Cls.RED, "not-yet-live-tested");
@@ -523,9 +524,10 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
     // ------------------------------------------------------------------
 
     private static Cls classifyPlacement(String rowName, String observed, String attemptedItem) {
-        if ("06_PLACE_SLAB_SIDE_LOWER_HALF".equals(rowName)
+        if (("06_PLACE_SLAB_SIDE_LOWER_HALF".equals(rowName)
+                || "07_PLACE_SLAB_SIDE_UPPER_HALF".equals(rowName))
                 && "minecraft:stone_slab".equals(attemptedItem)
-                && isRow6CleanReject(observed)) {
+                && isCleanCompoundSlabSideReject(observed)) {
             return Cls.GREEN;
         }
 
@@ -544,7 +546,8 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
         if (popOff || upwardWrong || rejected) {
             return Cls.RED;
         }
-        if ("04_PLACE_STONE_SIDE_LOWER_HALF".equals(rowName)
+        if (("04_PLACE_STONE_SIDE_LOWER_HALF".equals(rowName)
+                || "05_PLACE_STONE_SIDE_UPPER_HALF".equals(rowName))
                 && "minecraft:stone".equals(attemptedItem)) {
             Double slotDy = extractDy(observed, "server-after-tick", "slotAfter");
             boolean compoundLane = slotAfter != null
@@ -560,7 +563,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
         return Cls.UNDECIDED;
     }
 
-    private static boolean isRow6CleanReject(String observed) {
+    private static boolean isCleanCompoundSlabSideReject(String observed) {
         String slotBefore = scopedLabelSection(observed, "immediate={", "slotBefore", "slotImmediate");
         String slotImmediate = scopedLabelSectionUntil(observed, "immediate={", "slotImmediate", "} after={");
         String supportAfter = scopedLabelSection(observed, "phase=server-after-tick", "supportAfter", "slotAfter");
@@ -576,6 +579,22 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
                 && supportAfter.contains("compoundFullBlockAnchor=true")
                 && supportDy != null
                 && Math.abs(supportDy + 1.0d) <= EPSILON;
+    }
+
+    private static Cls classifyTopPlacement(String observed) {
+        Double slotDy = extractDy(observed, "server-after-tick", "slotAfter");
+        String slotAfterPrefix = "slotAfter pos=" + TOP_PLACE.toShortString();
+        if (!observed.contains(slotAfterPrefix)
+                || observed.contains(slotAfterPrefix + " state=Block{minecraft:air}")) {
+            return Cls.RED;
+        }
+        boolean compoundLane = observed.contains(slotAfterPrefix + " state=Block{minecraft:stone}")
+                && observed.contains(slotAfterPrefix + " state=Block{minecraft:stone} dy=-1.0")
+                && observed.contains("slotAfter pos=" + TOP_PLACE.toShortString()
+                        + " state=Block{minecraft:stone} dy=-1.0 modelDy=-1.0 persistentFullBlockAnchor=true compoundFullBlockAnchor=true")
+                && slotDy != null
+                && Math.abs(slotDy + 1.0d) <= EPSILON;
+        return compoundLane ? Cls.GREEN : Cls.RED;
     }
 
     private static boolean containsAir(String section) {
