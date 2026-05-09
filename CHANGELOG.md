@@ -1,13 +1,20 @@
 ## [Unreleased]
 
-## [0.2.0-beta.4] — Audited Release Candidate
+## [0.2.0-beta.4] — Slabbed 0.2.0 Beta 4 / Beta 4
 
-### Release status
-- BLOCKED locally after unreleased real-game testing: live targeting/outline still mismatches in compact lowered stone/slab stacks while holding a stone slab. Do not upload or mark ready until a RED proof, fix, and re-audit pass.
+### Highlights
+- Compound lowered full-block lane support.
+- Ordinary full blocks can persist/use the authored compound lane at `dy=-1.0`.
+- Full-block side/top placements from compound full blocks preserve the compound lane.
+- Source/support changes no longer silently jump the compound full block.
+- Slab placement from compound lowered full blocks cleanly rejects for this beta instead of flickering or creating ghost slabs.
+- Release jar artifact hard-reference cleanup completed.
 
-### Notes
-- Prepared from the audited Phase19 integration savepoint with no gameplay logic changes.
-- Release metadata only; public jar contents remained clean in the beta-readiness audit.
+### Known limitation
+"Compound lowered full-block lanes support ordinary full-block placement and persistence. Slab placement from compound lowered full blocks is intentionally rejected in this beta while deeper compound slab-lane grammar is designed."
+
+### Credit
+Special thanks to Steve (@steve6472) for the extensive PR investigation into hitbox selection, ghost rendering, slab placement edge cases, and bounded slabbed-depth behavior. The PR was not merged directly, but it helped shape the Beta 4 compound-lane decisions and release guardrails. PR: https://github.com/joolbits/slabbed/pull/8
 
 ## [0.2.0-beta.2] — Side-Slab Torch Stability
 
