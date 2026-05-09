@@ -390,6 +390,9 @@ public final class SlabAnchorAttachment {
         if (!isPersistentLoweredSlabCarrierState(state) || pos == null) {
             return false;
         }
+        if (isCompoundVisibleOwnerTopSlab(world, pos, state)) {
+            return false;
+        }
         if (!(world instanceof World w)) {
             return clientLoweredSlabCarrierLookup != null && clientLoweredSlabCarrierLookup.test(pos);
         }
@@ -415,6 +418,9 @@ public final class SlabAnchorAttachment {
             BlockState state
     ) {
         if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
+            return false;
+        }
+        if (isCompoundVisibleOwnerTopSlab(world, pos, state)) {
             return false;
         }
         if (world instanceof World w) {
@@ -548,9 +554,20 @@ public final class SlabAnchorAttachment {
 
     public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
         return isPersistentLoweredSlabCarrierState(state)
+                && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && (SlabSupport.isLoweredSideLaneSlabCarrier(world, pos, state)
                 || qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(world, pos, state)
                 || qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(world, pos, state));
+    }
+
+    private static boolean isCompoundVisibleOwnerTopSlab(BlockView world, BlockPos pos, BlockState state) {
+        if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
+            return false;
+        }
+        BlockPos sourcePos = pos.down();
+        BlockState sourceState = world.getBlockState(sourcePos);
+        return isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
+                && isCompoundFullBlockAnchor(world, sourcePos);
     }
 
     private static boolean isPersistentLoweredSlabCarrierState(BlockState state) {

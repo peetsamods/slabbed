@@ -46,7 +46,7 @@ Beta 4 does not allow:
 | slab side-click on persistent visible compound owner after direct below support is missing | remap the immediate side candidate into the existing lowered slab grammar at `dy=-0.5` only while the source remains anchored, compound, visible, and `dy=-1.0` |
 | slab side-click where existing legal `dy=-0.5` lowered slab lane can be continued | remap into that `dy=-0.5` legal lane |
 | second slab click against compatible lowered slab | merge `BOTTOM`/`TOP` into `DOUBLE` `dy=-0.5` when proof-covered |
-| slab top-click on compound full block | clean reject/preserve unless a named legal vanilla or lowered slab state is later defined |
+| slab top-click on persistent visible compound owner | author `COMPOUND_VISIBLE_OWNER_TOP_SLAB`: candidate `source.up()`, `stone_slab[type=bottom]`, `dy=0.0`, `persistentLoweredSlabCarrier=false` |
 | source/support break | no jump, no ghost, no silent renormalization |
 | reload/rejoin | legal states survive; illegal/unproven states must not appear |
 
@@ -59,6 +59,19 @@ If a compound `dy=-1.0` ordinary full-block source has a legal lowered slab lane
 If that direct below support is later missing, the same side placement law may still apply only for a persistent visible compound owner: the clicked source itself must remain an anchored ordinary full block, carry the compound full-block sidecar, and still report `dy=-1.0`. This legal class is `COMPOUND_SUPPORT_MISSING_VISIBLE_OWNER_SIDE_SLAB`; it does not make unsupported air a source and does not allow slab authoring from a missing or non-compound owner.
 
 This is allowed because the result is not a compound slab lane. It is a remap into existing lowered slab grammar at `dy=-0.5`.
+
+## Product decision: compound visible owner top slab placement
+
+If a held-slab click hits the UP face of a persistent visible compound owner, the legal result is named `COMPOUND_VISIBLE_OWNER_TOP_SLAB`. The source must remain an anchored ordinary full block carrying the compound full-block sidecar, and the candidate is exactly `source.up()`.
+
+The authored candidate is vanilla-height slab law, not lowered side-lane law:
+
+- final state: `stone_slab[type=bottom]`
+- final dy: `0.0`
+- `persistentLoweredSlabCarrier=false`
+- durable distinguisher: the source below carries existing persisted/synced compound full-block owner truth; no new slab lane marker is required
+
+The dynamic dy path that previously broke this law was `SlabSupport.getYOffsetInner(...)`'s bottom-slab lowered branch through `hasLoweredCarrierBelow(world, pos)`: a bottom slab directly above an anchored compound full block was being treated as a lowered carrier continuation and resolved to `dy=-0.5`. `COMPOUND_VISIBLE_OWNER_TOP_SLAB` is now narrowly excluded from that branch by checking the durable source-owner sidecar, while side placements continue to use the existing `dy=-0.5` lowered slab grammar.
 
 The forbidden results remain unchanged:
 
@@ -85,7 +98,7 @@ Rows 1/2 and Julia's screenshot side-shape are now intentionally unified as the 
 | 2 | slab upper-half side click on compound full block with legal lowered slab support directly below and no horizontal lane | currently preserves/rejects and authors no slab | author the immediate side candidate as legal lowered slab grammar at `dy=-0.5` | any `dy=-1.0` slab, `dy<-1.0`, `dy=0` lowered-lane fallback, or hidden retarget workaround |
 | 3 | slab side click when adjacent legal `dy=-0.5` lowered slab lane exists | still rejects or misroutes until grammar exists | remap into the adjacent legal lowered lane | `dy=0` fallback or compound lane invention |
 | 4 | second slab click merging `BOTTOM`/`TOP` -> `DOUBLE` `dy=-0.5` | merge path not yet proven | merge into `DOUBLE` `dy=-0.5` only when proof-covered | `DOUBLE` at `dy=-1.0` or silent recursion |
-| 5 | slab top click on compound full block | top-face ghost/skip was possible on the live shape | clean reject/preserve; no authored slab unless a named legal vanilla or lowered state is later defined | freeform slab at `dy=-1.0`, `dy<-1.0`, or `dy=-0.5` top-face ghost |
+| 5 | slab top click on persistent visible compound owner | top-face ghost/skip was possible on the live shape | author `COMPOUND_VISIBLE_OWNER_TOP_SLAB` at `source.up()`, `stone_slab[type=bottom]`, `dy=0.0`, `persistentLoweredSlabCarrier=false` | freeform slab at `dy=-1.0`, `dy<-1.0`, or `dy=-0.5` top-face ghost |
 | 6 | no ghost/flicker after tick | visible instability or mismatch may remain | stable post-tick result with no ghost/flicker | visual success that only exists for one frame |
 | 7 | source/support break | jump or collapse risk remains | no jump, no ghost, no silent renormalization | survival only because of delayed rescue |
 | 8 | reload/rejoin | illegal or unproven state may reappear | only legal states survive reload/rejoin | save/load hiding an illegal slab lane |
@@ -155,7 +168,7 @@ The harness builds and proves this exact canonical structure before any click:
 
 After `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`, it tests support-present lower/upper side placement, support-present top-face placement, and the missing-under-slab side/top-face variants from the visible upper full block. `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID]` fails the harness if any required slab is a full block, any required full block is a slab, the upper full block is not on the named top slab, or the missing-under-slab variant is not explicitly named. The final `[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]` reports `structure`, `fixtureTruth`, `supportPresent.upperSide`, `supportPresent.lowerSide`, `supportPresent.topFace`, `supportMissing.side`, `supportMissing.topFace`, `hitbox`, `ghost`, `jump`, `wrongOwner`, and `releaseBlockers`.
 
-The beta4 law remains unchanged: slab `dy=-1.0` lanes are illegal, and any successful slab side result must normalize into the existing legal `dy=-0.5` lowered slab grammar or a vanilla legal slab state.
+The beta4 law remains unchanged: slab `dy=-1.0` lanes are illegal, any successful slab side result must normalize into the existing legal `dy=-0.5` lowered slab grammar, and the named top-face result normalizes into vanilla `dy=0.0` slab law.
 
 ## Screenshot side-shape discriminator audit
 
@@ -206,16 +219,19 @@ those bands separate instead of treating side placement as one status.
 Canonical live-shape lower-side and top-face correction: the lower-half A/B side
 route uses the same compound below-lane side slab grammar and survives server
 packet hit validation when `SlabSupport.findLegalCompoundSlabRemap(...)`
-classifies the held-slab click as a legal remap. The top-face route has no named
-legal slab result, so held-slab `UP` clicks on the compound source cleanly
-return `Pass[]`, author no top/skipped slab, and preserve the compound source.
-The c956fa3 gated goblin proof that reported `topFace=GREEN` is superseded as
-release evidence because Julia found the harness/build fixture did not prove the
-actual slab/full-block composition. Corrected goblin output must be treated as
-the current diagnostic source. Support-missing side placement is now GREEN via
-the persistent visible compound-owner side class, while top-face and
-support-missing top-face remain RED. Side-authored slabs remain legal `dy=-0.5`
-lowered slabs; the beta4 `dy=-1.0` slab lane remains illegal.
+classifies the held-slab click as a legal remap. The top-face route is now the
+named `COMPOUND_VISIBLE_OWNER_TOP_SLAB` result: held-slab `UP` clicks on the
+persistent visible compound owner author `stone_slab[type=bottom]` at
+`source.up()` with final `dy=0.0` and `persistentLoweredSlabCarrier=false`.
+The c956fa3 gated goblin proof that reported `topFace=GREEN` remains superseded
+as release evidence because Julia found the harness/build fixture did not prove
+the actual slab/full-block composition. Corrected goblin output is the current
+diagnostic source. Support-present and support-missing top-face are now GREEN,
+support-missing side remains GREEN, fixtureTruth remains GREEN, and the latest
+summary reports `releaseBlockers=none`. Side-authored slabs remain legal
+`dy=-0.5` lowered slabs; the beta4 `dy=-1.0` slab lane remains illegal. Release
+is ready for Julia manual live retest but remains blocked until Julia passes or
+waives that live retest.
 
 ## Implementation slices after design
 

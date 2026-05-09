@@ -3363,12 +3363,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
         System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]"
-                + " classification=UNEXPECTED_GREEN"
-                + " reason=screenshot_shape_no_longer_reproduces_manual_failure");
+                + " classification=FIXED_GREEN"
+                + " reason=screenshot_shape_top_face_and_side_bands_green");
         System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
-                + " classification=UNEXPECTED_GREEN"
-                + " reason=screenshot_shape_no_longer_reproduces_manual_failure");
-        throw new RuntimeException("Julia beta4 live screenshot shape unexpectedly went green; do not save as RED proof");
+                + " classification=FIXED_GREEN"
+                + " reason=screenshot_shape_top_face_and_side_bands_green");
     }
 
     private static void runBeta4LiveScreenshotSideSlabBandCase(
