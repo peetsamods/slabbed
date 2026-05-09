@@ -6,6 +6,8 @@ Beta 4 gates passed, but the live/product feel is paused.
 
 The compound ordinary full-block lane at `dy=-1.0` is proven and useful. Slab-held attempts currently reject cleanly by design, which is safe but now feels too restrictive for a mod called Slabbed. The question is not "can we place a slab somehow?" but "what legal stable state should slab placement normalize into?"
 
+Terminology note: `Row 3` in this document means the internal proof-row name in the focused gametest harness. It does not refer to Julia's in-world sign labels `ROW 1` / `ROW 2` / `ROW 3` / `ROW 4` from the manual screenshot.
+
 ## Contract sentence
 
 Compound slab placement should resolve into the nearest legal stable slab result.
@@ -75,9 +77,10 @@ These proof rows now exist in the focused harness slice:
 
 - Row 1: GREEN-safe-reject.
 - Row 2: GREEN-safe-reject.
-- Row 3: GREEN-implemented/proven; automated/focused proof passed and runtime/live-launch logs emitted GREEN; Julia manual live-feel test pending.
+- Internal proof Row 3: GREEN-implemented/proven for the narrow artificial same-Y remap topology; automated/focused proof passed and runtime/live-launch logs emitted GREEN.
+- Julia screenshot shape: RED/pending fix; manual live verdict rejected the release feel because the in-world sign-labeled upper full-block topology still cannot place a slab off the side and top-face placement can skip/ghost.
 - Row 4: TODO.
-- Row 5: TODO.
+- Row 5: TODO, and may now be release-blocking if the Julia screenshot top-face ghost/skip path proves this top-click gap.
 - Row 6: TODO.
 
 Harness/source-truth repair note:
@@ -97,7 +100,14 @@ Current proof markers emitted by the gated gametest slice:
 - `[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`
 - `[JULIA_BETA4_COMPOUND_SLAB_HARNESS_FAIL]`
 
-Rows 4-6 remain pending/TODO in this focused grammar note. Row 4 DOUBLE merge and Row 5 top-click are not implemented by the Row 3 remap slice and remain pending for later beta4 work, but they are not blocking the Row 3 automated/focused proof that passed here; final decision still awaits Julia manual live-feel test.
+Rows 4-6 remain pending/TODO in this focused grammar note. Row 4 DOUBLE merge and Row 5 top-click are not implemented by the internal Row 3 remap slice. Julia's screenshot-shape RED is now a separate required proof/fix path, not a contradiction of the internal Row 3 GREEN.
+
+Screenshot-shape proof markers added by `-Dslabbed.beta4LiveScreenshotShapeRed=true`:
+
+- `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_RED]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]`
 
 ## Implementation slices after design
 
@@ -128,4 +138,4 @@ Do not implement this enum in this slice; document only.
 
 Beta 4 artifact/gates may be technically ready.
 
-Public release confidence remains paused because live slab feel is not accepted. Do not move the release tag until Julia explicitly approves.
+Public release confidence remains paused because live slab feel is RED, not accepted. Do not move the release tag until Julia explicitly approves.

@@ -165,6 +165,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta4LiveScreenshotShapeRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta4LiveScreenshotShapeRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         // Expand coverage for legal lowered slab targets and explicit merge semantics.
         for (Direction face : FACES_TO_TEST) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
@@ -3314,6 +3323,213 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         runCompoundSlabSanityNote(ctx, singleplayer, "ROW6", compoundPos, adjacentLanePos);
     }
 
+    private static void runBeta4LiveScreenshotShapeRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        StringBuilder redSummary = new StringBuilder();
+        runBeta4LiveScreenshotSideSlabRedCase(ctx, singleplayer, redSummary);
+        runBeta4LiveScreenshotTopFaceGhostRedCase(ctx, singleplayer, redSummary);
+        if (redSummary.length() > 0) {
+            String summary = redSummary.toString();
+            System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]"
+                    + " classification=RED"
+                    + " summary=" + summary.replace('\n', '|'));
+            throw new RuntimeException("Julia beta4 live screenshot shape RED: " + summary);
+        }
+        System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
+                + " classification=UNEXPECTED_GREEN"
+                + " reason=screenshot_shape_no_longer_reproduces_manual_failure");
+        throw new RuntimeException("Julia beta4 live screenshot shape unexpectedly went green; do not save as RED proof");
+    }
+
+    private static void runBeta4LiveScreenshotSideSlabRedCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            StringBuilder redSummary
+    ) {
+        final String proof = "side-slab";
+        final Direction face = Direction.WEST;
+        final BlockPos clickedTopFullPos = FULL_POS.add(24, 2, 0);
+        final BlockPos loweredLaneBelowTop = clickedTopFullPos.down();
+        final BlockPos lowerFullBlock = clickedTopFullPos.down(2);
+        final BlockPos expectedSideSlabPos = clickedTopFullPos.offset(face);
+        final BlockHitResult sideHit = resolveLoweredFaceHit(clickedTopFullPos, face, -0.25d);
+        final String[] resultText = {"not-run"};
+
+        seedBeta4LiveScreenshotShape(singleplayer, clickedTopFullPos);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        movePlayerForFace(ctx, singleplayer, clickedTopFullPos, face);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
+                        + proof + " reason=client_not_ready");
+            }
+            assertBeta4LiveScreenshotSourceTruth(
+                    mc.world,
+                    proof,
+                    clickedTopFullPos,
+                    loweredLaneBelowTop,
+                    lowerFullBlock,
+                    expectedSideSlabPos,
+                    sideHit);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, sideHit);
+            resultText[0] = result.toString();
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
+                        + proof + " reason=client_world_missing_after_click");
+            }
+            BlockState actual = mc.world.getBlockState(expectedSideSlabPos);
+            double actualDy = SlabSupport.getYOffset(mc.world, expectedSideSlabPos, actual);
+            boolean expectedLegalSideSlab = actual.isOf(Blocks.STONE_SLAB)
+                    && actual.contains(SlabBlock.TYPE)
+                    && actual.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(actualDy + 0.5d) <= EPSILON;
+            if (!expectedLegalSideSlab) {
+                String reason = "case=" + proof
+                        + " result=" + resultText[0]
+                        + " expected=stone_slab[type=bottom] dy=-0.5 at "
+                        + expectedSideSlabPos.toShortString()
+                        + " actual=" + describeOwnerFacts(mc.world, expectedSideSlabPos)
+                        + " clicked=" + describeOwnerFacts(mc.world, clickedTopFullPos)
+                        + " loweredLaneBelowTop=" + describeOwnerFacts(mc.world, loweredLaneBelowTop);
+                System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_RED] " + reason);
+                redSummary.append(reason).append('\n');
+            } else {
+                System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_GREEN]"
+                        + " result=" + resultText[0]
+                        + " actual=" + describeOwnerFacts(mc.world, expectedSideSlabPos));
+            }
+        });
+    }
+
+    private static void runBeta4LiveScreenshotTopFaceGhostRedCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            StringBuilder redSummary
+    ) {
+        final String proof = "top-face-ghost";
+        final BlockPos clickedTopFullPos = FULL_POS.add(36, 2, 0);
+        final BlockPos loweredLaneBelowTop = clickedTopFullPos.down();
+        final BlockPos lowerFullBlock = clickedTopFullPos.down(2);
+        final BlockPos expectedTopSlabPos = clickedTopFullPos.up();
+        final BlockPos skippedTopSlabPos = clickedTopFullPos.up(2);
+        final BlockHitResult topHit = resolveLoweredUpMergeHit(clickedTopFullPos);
+        final String[] resultText = {"not-run"};
+
+        seedBeta4LiveScreenshotShape(singleplayer, clickedTopFullPos);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        movePlayerForUp(ctx, singleplayer, clickedTopFullPos);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
+                        + proof + " reason=client_not_ready");
+            }
+            assertBeta4LiveScreenshotSourceTruth(
+                    mc.world,
+                    proof,
+                    clickedTopFullPos,
+                    loweredLaneBelowTop,
+                    lowerFullBlock,
+                    expectedTopSlabPos,
+                    topHit);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, topHit);
+            resultText[0] = result.toString();
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new RuntimeException("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
+                        + proof + " reason=client_world_missing_after_click");
+            }
+            BlockState actual = mc.world.getBlockState(expectedTopSlabPos);
+            double actualDy = SlabSupport.getYOffset(mc.world, expectedTopSlabPos, actual);
+            BlockState skipped = mc.world.getBlockState(skippedTopSlabPos);
+            boolean expectedLegalTopSlab = actual.isOf(Blocks.STONE_SLAB)
+                    && actual.contains(SlabBlock.TYPE)
+                    && actual.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(actualDy) <= EPSILON;
+            if (!expectedLegalTopSlab) {
+                String reason = "case=" + proof
+                        + " result=" + resultText[0]
+                        + " expected=stone_slab[type=bottom] dy=0.0 at "
+                        + expectedTopSlabPos.toShortString()
+                        + " actual=" + describeOwnerFacts(mc.world, expectedTopSlabPos)
+                        + " skippedCandidate=" + describeOwnerFacts(mc.world, skippedTopSlabPos)
+                        + " clicked=" + describeOwnerFacts(mc.world, clickedTopFullPos)
+                        + " loweredLaneBelowTop=" + describeOwnerFacts(mc.world, loweredLaneBelowTop);
+                System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED] " + reason);
+                redSummary.append(reason).append('\n');
+            } else {
+                System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_GREEN]"
+                        + " result=" + resultText[0]
+                        + " actual=" + describeOwnerFacts(mc.world, expectedTopSlabPos));
+            }
+        });
+    }
+
+    private static void assertBeta4LiveScreenshotSourceTruth(
+            net.minecraft.world.BlockView world,
+            String proof,
+            BlockPos clickedTopFullPos,
+            BlockPos loweredLaneBelowTop,
+            BlockPos lowerFullBlock,
+            BlockPos candidatePlacementPos,
+            BlockHitResult hit
+    ) {
+        BlockState clicked = world.getBlockState(clickedTopFullPos);
+        double clickedDy = SlabSupport.getYOffset(world, clickedTopFullPos, clicked);
+        BlockState loweredLane = world.getBlockState(loweredLaneBelowTop);
+        double loweredLaneDy = SlabSupport.getYOffset(world, loweredLaneBelowTop, loweredLane);
+        BlockState lowerFull = world.getBlockState(lowerFullBlock);
+        double lowerFullDy = SlabSupport.getYOffset(world, lowerFullBlock, lowerFull);
+        boolean clickedCompound = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, clickedTopFullPos);
+        boolean loweredLaneCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                world,
+                loweredLaneBelowTop,
+                loweredLane);
+        int legalHorizontalLoweredLanes = countLegalLoweredSlabLanes(world, clickedTopFullPos);
+        System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
+                + " case=" + proof
+                + " clickedBlockId=" + clicked.getBlock()
+                + " clickedPos=" + clickedTopFullPos.toShortString()
+                + " face=" + hit.getSide().asString()
+                + " hitVec=" + hit.getPos()
+                + " clickedDy=" + clickedDy
+                + " clickedAnchored=" + SlabAnchorAttachment.isAnchored(world, clickedTopFullPos)
+                + " clickedCompoundFullBlockAnchor=" + clickedCompound
+                + " loweredLaneBelowTop=" + describeOwnerFacts(world, loweredLaneBelowTop)
+                + " lowerFullBlock=" + describeOwnerFacts(world, lowerFullBlock)
+                + " legalHorizontalLoweredLaneCount=" + legalHorizontalLoweredLanes
+                + " candidatePlacementPos=" + candidatePlacementPos.toShortString()
+                + " candidateBefore=" + describeOwnerFacts(world, candidatePlacementPos));
+        if (!clicked.isOf(Blocks.STONE)
+                || clicked.contains(SlabBlock.TYPE)
+                || Math.abs(clickedDy + 1.0d) > EPSILON
+                || !clickedCompound
+                || !loweredLane.isOf(Blocks.STONE_SLAB)
+                || !loweredLane.contains(SlabBlock.TYPE)
+                || loweredLane.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || Math.abs(loweredLaneDy + 0.5d) > EPSILON
+                || !loweredLaneCarrier
+                || !lowerFull.isOf(Blocks.STONE)
+                || Math.abs(lowerFullDy + 0.5d) > EPSILON) {
+            throw new RuntimeException("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]"
+                    + " case=" + proof
+                    + " reason=source_truth_invalid"
+                    + " clicked=" + describeOwnerFacts(world, clickedTopFullPos)
+                    + " loweredLaneBelowTop=" + describeOwnerFacts(world, loweredLaneBelowTop)
+                    + " lowerFullBlock=" + describeOwnerFacts(world, lowerFullBlock));
+        }
+    }
+
     private static void runCompoundSlabNoLegalLaneCase(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
@@ -3602,6 +3818,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 && Math.abs(SlabSupport.getYOffset(world, pos, state) + 0.5d) <= EPSILON;
     }
 
+    private static int countLegalLoweredSlabLanes(net.minecraft.world.BlockView world, BlockPos sourcePos) {
+        int legalLaneCount = 0;
+        for (Direction candidateFace : Direction.Type.HORIZONTAL) {
+            if (isLegalLoweredSlabLane(world, sourcePos.offset(candidateFace))) {
+                legalLaneCount++;
+            }
+        }
+        return legalLaneCount;
+    }
+
     private static void failCompoundSlabHarness(String rowName, String reason) {
         System.out.println("[JULIA_BETA4_COMPOUND_SLAB_HARNESS_FAIL]"
                 + " row=" + rowName
@@ -3635,6 +3861,53 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             world.setBlockState(compoundPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
             SlabAnchorAttachment.addAnchor(world, compoundPos, world.getBlockState(compoundPos));
             SlabAnchorAttachment.addCompoundFullBlockAnchor(world, compoundPos, world.getBlockState(compoundPos));
+        });
+    }
+
+    private static void seedBeta4LiveScreenshotShape(
+            TestSingleplayerContext singleplayer,
+            BlockPos clickedTopFullPos
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = clickedTopFullPos.getX() - 2; x <= clickedTopFullPos.getX() + 2; x++) {
+                for (int z = clickedTopFullPos.getZ() - 2; z <= clickedTopFullPos.getZ() + 2; z++) {
+                    for (int y = clickedTopFullPos.getY() - 4; y <= clickedTopFullPos.getY() + 3; y++) {
+                        world.setBlockState(
+                                new BlockPos(x, y, z),
+                                Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+
+            BlockPos baseSupportPos = clickedTopFullPos.down(3);
+            BlockPos lowerFullBlock = clickedTopFullPos.down(2);
+            BlockPos loweredLaneBelowTop = clickedTopFullPos.down();
+            world.setBlockState(
+                    baseSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(lowerFullBlock, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, lowerFullBlock, world.getBlockState(lowerFullBlock));
+            world.setBlockState(
+                    loweredLaneBelowTop,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world,
+                    loweredLaneBelowTop,
+                    world.getBlockState(loweredLaneBelowTop));
+            world.setBlockState(clickedTopFullPos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, clickedTopFullPos, world.getBlockState(clickedTopFullPos));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(world, clickedTopFullPos, world.getBlockState(clickedTopFullPos));
+
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer player missing during live screenshot shape setup");
+            }
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(Items.STONE_SLAB, 8));
         });
     }
 
