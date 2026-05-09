@@ -189,6 +189,16 @@ not release proof. The current lower-after-first sequence point is classified
 choose a different player-realistic lower-side angle before that route can
 diagnose gameplay behavior.
 
+The corridor scout requirement makes that explicit: lower-half proof must first
+scan plausible player eye positions around the canonical structure and select a
+real `TARGET_OK` crosshair corridor. If every player-realistic corridor is
+occluded, the result is `NO_CORRIDOR` and not gameplay proof unless beta4 product
+law intentionally adds comfort placement for occluded lower bands. Latest scout:
+both the unmutated lower route and the sequence lower-after-first route found
+real corridors; the sequence lower click still wrong-deltaed after a real
+crosshair hit, so the remaining RED is no longer explained by the old occluded
+ray.
+
 The beta4 law remains unchanged: slab `dy=-1.0` lanes are illegal, any successful slab side result must normalize into the existing legal `dy=-0.5` lowered slab grammar, and the named top-face result normalizes into vanilla `dy=0.0` slab law.
 
 ## Screenshot side-shape discriminator audit
