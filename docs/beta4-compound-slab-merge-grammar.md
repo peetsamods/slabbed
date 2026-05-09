@@ -177,7 +177,7 @@ change Rows 1/2 semantics.
 | Rows 1/2 compound below-lane side slab placement | ordinary stone compound full block, `dy=-1.0` | horizontal side; Row 1 lower band, Row 2 upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | author legal lowered side slab at `dy=-0.5` | RED/PENDING; old safe reject superseded |
 | Internal artificial Row 3 legal remap | ordinary stone compound full block, `dy=-1.0` | horizontal side; lower band | bottom `stone_slab`, `dy=-0.5` | existing legal bottom `stone_slab`, `dy=-0.5` | `1` | continuation cell beyond existing lane | yes | no, because horizontal lane exists | author `stone_slab[type=bottom]` at `dy=-0.5` | GREEN legal remap |
 | Julia screenshot upper-half side-shape | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | author legal lowered side slab at `dy=-0.5` | GREEN after `6d0d525` live retest/proof split |
-| Julia screenshot lower-half side-shape RED | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; lower/below-source band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | author legal lowered side slab at `dy=-0.5` | RED/flicker/fail/no legal slab authored |
+| Julia screenshot lower-half side-shape | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; lower/below-source band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | author legal lowered side slab at `dy=-0.5` | GREEN via held-slab legal-remap hit-validity bridge |
 
 Discriminator candidates evaluated:
 
@@ -199,6 +199,14 @@ Julia live retest correction at `6d0d525`: the old screenshot side-shape status
 was too coarse. Upper-half side placement is GREEN, lower-half side placement
 is RED, and top-face ghost/skip remains RED. The proof now keeps those bands
 separate instead of treating side placement as one status.
+
+Canonical live-shape lower-side correction: the lower-half A/B side route now
+uses the same compound below-lane side slab grammar and survives server packet
+hit validation when `SlabSupport.findLegalCompoundSlabRemap(...)` classifies
+the held-slab click as a legal remap. The latest gated goblin proof reports
+`lowerA=GREEN lowerB=GREEN upperA=GREEN upperB=GREEN topFace=RED
+supportBreak=GREEN releaseBlockers=topFace`. The authored slab is still the
+legal `dy=-0.5` lowered slab; the beta4 `dy=-1.0` slab lane remains illegal.
 
 ## Implementation slices after design
 

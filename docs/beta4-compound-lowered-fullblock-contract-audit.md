@@ -41,11 +41,23 @@ ghost/skip slab path. The proof markers for this split are
 `[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]`, and
 `[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_FAIL]`.
 
+Canonical lower-side fix result: lower-half side A/B now place legal lowered
+bottom slabs at `dy=-0.5` from the canonical live-shape structure. The failure
+layer was server packet hit validation after client placement remap, not
+crosshair targeting and not slab remap classification. The narrow bridge accepts
+held-slab packets only when the existing legal compound slab remap predicate is
+true; it does not legalize any beta4 `dy=-1.0` slab lane or `dy<-1.0` lane.
+Latest gated summary: `structure=GREEN lowerA=GREEN lowerB=GREEN upperA=GREEN
+upperB=GREEN topFace=RED supportBreak=GREEN hitbox=RED ghost=true jump=false
+wrongOwner=true releaseBlockers=topFace`. Release remains blocked by topFace.
+
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
 `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_FAIL]`,
 `[JULIA_BETA4_LIVE_GOBLIN_BASELINE]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_A_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_B_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_A_RED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_B_RED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SIDE_UPPER_A_GREEN]`,
@@ -439,7 +451,7 @@ screenshot side-shape without changing placement behavior:
 | --- | --- | --- | --- | --- | --- | --- |
 | Rows 1/2 compound below-lane side slab placement | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | GREEN; immediate side slab at `dy=-0.5` |
 | Internal Row 3 legal remap | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | legal bottom slab, `dy=-0.5` | `1` | continuation beyond horizontal lane | author lowered slab; GREEN |
-| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | side slab GREEN; top-face ghost remains RED/PENDING |
+| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | lower/upper side slab GREEN; top-face ghost remains RED/PENDING |
 
 The audit rejects "lowered bottom slab directly below the source" as a safe
 predicate: it is shared by Julia's screenshot side-shape and Row 1 no-legal-lane
