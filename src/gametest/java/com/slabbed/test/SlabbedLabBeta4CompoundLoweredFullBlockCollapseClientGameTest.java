@@ -178,11 +178,11 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
         }
         singleplayer.getClientWorld().waitForChunksRender();
         final String[] slabAfter = new String[1];
-        singleplayer.getServer().runOnServer(server -> slabAfter[0] = assertSideSlabPlacement(
+        singleplayer.getServer().runOnServer(server -> slabAfter[0] = assertSideSlabCleanReject(
                 server.getOverworld(), "server-after-tick", slabImmediate));
 
         System.out.println("[" + PLACEMENT_PROOF + "_GREEN]"
-                + " classification=PLACEMENT_SURVIVED"
+                + " classification=FULL_BLOCK_SURVIVED_AND_SLAB_CLEAN_REJECTED"
                 + " stoneAfter={" + stoneAfter[0] + "}"
                 + " slabAfter={" + slabAfter[0] + "}");
     }
@@ -253,7 +253,7 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
                     + " placedImmediate=" + describeBlock(mc.world, placePos, immediate);
             System.out.println("[" + PLACEMENT_PROOF + "_OBSERVE]"
                     + " phase=client-immediate " + facts[0]);
-            if (!result.isAccepted()) {
+            if (!result.isAccepted() && !"minecraft:stone_slab".equals(attemptedItem)) {
                 String redFacts = "classification=PLACEMENT_REJECTED " + facts[0];
                 System.out.println("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
                 throw new RuntimeException("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
@@ -284,23 +284,20 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
         return facts;
     }
 
-    private static String assertSideSlabPlacement(World world, String phase, String immediateFacts) {
+    private static String assertSideSlabCleanReject(World world, String phase, String immediateFacts) {
         BlockState support = world.getBlockState(PLACED_FULL);
         BlockState placed = world.getBlockState(SIDE_PLACED_SLAB);
         double placedDy = SlabSupport.getYOffset(world, SIDE_PLACED_SLAB, placed);
-        SlabType placedType = placed.contains(SlabBlock.TYPE) ? placed.get(SlabBlock.TYPE) : null;
         String facts = "phase=" + phase
                 + " attemptedItem=minecraft:stone_slab"
                 + " support=" + describeBlock(world, PLACED_FULL, support)
                 + " placedAfter=" + describeBlock(world, SIDE_PLACED_SLAB, placed)
-                + " expectedState=stone_slab[type=top]"
-                + " expectedDy=-0.5"
+                + " expectedState=air"
+                + " expectedCleanReject=true"
                 + " survivalPredicate=" + placed.canPlaceAt(world, SIDE_PLACED_SLAB)
                 + " immediate={" + immediateFacts + "}";
-        if (!placed.isOf(Blocks.STONE_SLAB)
-                || placedType != SlabType.TOP
-                || Math.abs(placedDy + 0.5d) > EPSILON) {
-            String redFacts = "classification=SLAB_SIDE_PLACEMENT_POPPED_OR_WRONG_LANE " + facts;
+        if (!placed.isAir() || Math.abs(placedDy) > EPSILON || !immediateFacts.contains("result=Pass[]")) {
+            String redFacts = "classification=SLAB_SIDE_PLACEMENT_NOT_CLEANLY_REJECTED " + facts;
             System.out.println("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
             throw new RuntimeException("[" + PLACEMENT_PROOF + "_RED] " + redFacts);
         }

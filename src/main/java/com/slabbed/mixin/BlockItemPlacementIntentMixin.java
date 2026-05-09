@@ -47,18 +47,14 @@ public abstract class BlockItemPlacementIntentMixin {
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d;
     }
 
-    private static boolean slabbed$isCompoundLowerHalfSideHit(ItemUsageContext context, BlockPos pos, BlockState state) {
+    private static boolean slabbed$isCompoundSideHit(ItemUsageContext context, BlockPos pos, BlockState state) {
         if (context.getSide().getAxis().isVertical()
                 || state.getBlock() instanceof SlabBlock
                 || !SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), pos)) {
             return false;
         }
         double yOffset = SlabSupport.getYOffset(context.getWorld(), pos, state);
-        if (Math.abs(yOffset + 1.0d) > LOWERED_VISUAL_BOUNDARY_EPSILON) {
-            return false;
-        }
-        double loweredMidline = pos.getY() + yOffset + 0.5d;
-        return context.getHitPos().y < loweredMidline - LOWERED_VISUAL_BOUNDARY_EPSILON;
+        return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
     private static boolean slabbed$isPersistentLoweredBottomSlabCarrierCandidate(World world, BlockPos pos, BlockState state) {
@@ -112,7 +108,7 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     @Inject(method = "useOnBlock", at = @At("HEAD"), cancellable = true)
-    private void slabbed$rejectCompoundLowerHalfSlabSidePlacement(
+    private void slabbed$rejectCompoundSlabSidePlacement(
             ItemUsageContext context,
             CallbackInfoReturnable<ActionResult> cir
     ) {
@@ -122,7 +118,7 @@ public abstract class BlockItemPlacementIntentMixin {
         }
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
-        if (slabbed$isCompoundLowerHalfSideHit(context, targetPos, targetState)) {
+        if (slabbed$isCompoundSideHit(context, targetPos, targetState)) {
             cir.setReturnValue(ActionResult.PASS);
         }
     }
@@ -468,6 +464,30 @@ public abstract class BlockItemPlacementIntentMixin {
                         "anchorFinalization=skipped_slab_not_persistent_carrier_candidate");
             }
             return;
+        }
+
+        if (context.getSide() == Direction.UP) {
+            BlockPos sourcePos = placePos.down();
+            BlockState sourceState = world.getBlockState(sourcePos);
+            boolean anchorBefore = SlabAnchorAttachment.isAnchored(world, placePos);
+            SlabAnchorAttachment.addTopOfCompoundFullAnchor(world, placePos, placedState, sourcePos, sourceState);
+            boolean anchorAfter = SlabAnchorAttachment.isAnchored(world, placePos);
+            boolean compoundAnchorAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
+            if (compoundAnchorAfter) {
+                Beta4PlacementAuthorRecorder.recordPlace(
+                        "finalization-return",
+                        Registries.ITEM.getId(self),
+                        false,
+                        context,
+                        cir.getReturnValue(),
+                        "anchorFinalization=ran_top_of_compound_full_anchor anchorBefore="
+                                + anchorBefore
+                                + " anchorAfter=" + anchorAfter
+                                + " compoundAnchorAfter=" + compoundAnchorAfter
+                                + " sourcePos=" + sourcePos.toShortString()
+                                + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
+                return;
+            }
         }
 
         if (context.getSide().getAxis().isVertical()) {
