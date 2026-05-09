@@ -179,7 +179,7 @@ Repeat merge seam finding:
 - Exact result: compatible lowered same-cell slab `BOTTOM`/`TOP` at `dy=-0.5` merges into `DOUBLE` at `dy=-0.5`.
 - The traced canonical result is `stone_slab[type=bottom] dy=-0.5 -> stone_slab[type=double] dy=-0.5`, with `setBlockState=YES` and server/client ticks 1, 5, and 20 staying `DOUBLE`.
 - Client prediction is still not proof by itself; the release-relevant proof is the durable server final state.
-- `dy=-1.0` slab lane remains illegal. Release remains blocked on top-face proof and Julia live retest.
+- `dy=-1.0` slab lane remains illegal. Top-face proof is now GREEN; release remains blocked on Julia live retest.
 
 Goblin live parity is now mandatory before any goblin GREEN can be treated as
 release evidence. The harness must aim the camera, read the actual
@@ -195,10 +195,9 @@ Targeting parity is also a precondition for placement proof. Before placement,
 the diagnostic must show the camera ray is actually aimed at the intended
 visible owner, face, and dy-adjusted local band. Mismatched aim, an invalid
 visible-local hit point, or a physically occluded point is harness evidence only,
-not release proof. The current lower-after-first sequence point is classified
-`OCCLUSION_EXPECTED` after the first side slab is placed, so the harness must
-choose a different player-realistic lower-side angle before that route can
-diagnose gameplay behavior.
+not release proof. The lower-after-first sequence now uses a named player-
+realistic corridor, and the top-face step uses a separate top-face eye so the
+real crosshair proves the visible compound owner `UP` face before placement.
 
 The corridor scout requirement makes that explicit: lower-half proof must first
 scan plausible player eye positions around the canonical structure and select a
@@ -273,9 +272,12 @@ it accepted too weak a condition and did not prove exact lower/upper candidates,
 repeat placement, or exact top-face `dy=0.0`. Corrected goblin output must keep
 side-authored slabs as legal `dy=-0.5` lowered slabs, keep the beta4 `dy=-1.0`
 slab lane illegal, and report non-empty blockers when lower exact placement,
-repeat placement, or top-face exact placement fails. Release remains blocked until
-Julia passes or
-waives that live retest.
+repeat placement, or top-face exact placement fails. The final top-face proof
+uses real crosshair targeting on the visible owner `UP` face and lands exactly
+at `source.up()` as `stone_slab[type=bottom] dy=0.0` with
+`persistentLoweredSlabCarrier=false`; repeat merge remains
+`stone_slab[type=bottom] dy=-0.5 -> stone_slab[type=double] dy=-0.5`.
+Release remains blocked until Julia passes or waives that live retest.
 
 ## Implementation slices after design
 
