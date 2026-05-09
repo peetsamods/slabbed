@@ -43,6 +43,7 @@ Beta 4 does not allow:
 | full block side-click on compound full block | keep current legal compound full-block behavior, `dy=-1.0` |
 | full block top-click on compound full block | same compound lane `dy=-1.0`, not `dy=-1.5` |
 | slab side-click on compound full block whose legal lowered slab lane/support is directly below the source | remap the immediate side candidate into the existing lowered slab grammar at `dy=-0.5`; do not create `dy=-1.0` slab |
+| slab side-click on persistent visible compound owner after direct below support is missing | remap the immediate side candidate into the existing lowered slab grammar at `dy=-0.5` only while the source remains anchored, compound, visible, and `dy=-1.0` |
 | slab side-click where existing legal `dy=-0.5` lowered slab lane can be continued | remap into that `dy=-0.5` legal lane |
 | second slab click against compatible lowered slab | merge `BOTTOM`/`TOP` into `DOUBLE` `dy=-0.5` when proof-covered |
 | slab top-click on compound full block | clean reject/preserve unless a named legal vanilla or lowered slab state is later defined |
@@ -54,6 +55,8 @@ Beta 4 does not allow:
 The discriminator audit proved that below-lane-only is unsafe as a screenshot-only discriminator: Julia's screenshot side-shape and Rows 1/2 have the same placement facts available to current authority. The product contract therefore promotes that whole class into a named legal placement instead of trying to split it with a nonexistent discriminator.
 
 If a compound `dy=-1.0` ordinary full-block source has a legal lowered slab lane/support directly below it, a held-slab side click may author the immediate side candidate into the existing legal `dy=-0.5` lowered slab grammar. The candidate side slab may become `BOTTOM` or `TOP` at `dy=-0.5` according to that existing lowered slab grammar.
+
+If that direct below support is later missing, the same side placement law may still apply only for a persistent visible compound owner: the clicked source itself must remain an anchored ordinary full block, carry the compound full-block sidecar, and still report `dy=-1.0`. This legal class is `COMPOUND_SUPPORT_MISSING_VISIBLE_OWNER_SIDE_SLAB`; it does not make unsupported air a source and does not allow slab authoring from a missing or non-compound owner.
 
 This is allowed because the result is not a compound slab lane. It is a remap into existing lowered slab grammar at `dy=-0.5`.
 
@@ -209,9 +212,10 @@ return `Pass[]`, author no top/skipped slab, and preserve the compound source.
 The c956fa3 gated goblin proof that reported `topFace=GREEN` is superseded as
 release evidence because Julia found the harness/build fixture did not prove the
 actual slab/full-block composition. Corrected goblin output must be treated as
-the current diagnostic source, and release remains blocked while top-face and
-missing-under-slab live behavior are RED. Side-authored slabs remain legal
-`dy=-0.5` lowered slabs; the beta4 `dy=-1.0` slab lane remains illegal.
+the current diagnostic source. Support-missing side placement is now GREEN via
+the persistent visible compound-owner side class, while top-face and
+support-missing top-face remain RED. Side-authored slabs remain legal `dy=-0.5`
+lowered slabs; the beta4 `dy=-1.0` slab lane remains illegal.
 
 ## Implementation slices after design
 
