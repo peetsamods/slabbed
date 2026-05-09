@@ -45,7 +45,7 @@ Beta 4 does not allow:
 | slab side-click on compound full block whose legal lowered slab lane/support is directly below the source | remap the immediate side candidate into the existing lowered slab grammar at `dy=-0.5`; do not create `dy=-1.0` slab |
 | slab side-click where existing legal `dy=-0.5` lowered slab lane can be continued | remap into that `dy=-0.5` legal lane |
 | second slab click against compatible lowered slab | merge `BOTTOM`/`TOP` into `DOUBLE` `dy=-0.5` when proof-covered |
-| slab top-click on compound full block | only complete if it normalizes into named legal vanilla or lowered slab state; otherwise preserve/reject |
+| slab top-click on compound full block | clean reject/preserve unless a named legal vanilla or lowered slab state is later defined |
 | source/support break | no jump, no ghost, no silent renormalization |
 | reload/rejoin | legal states survive; illegal/unproven states must not appear |
 
@@ -82,7 +82,7 @@ Rows 1/2 and Julia's screenshot side-shape are now intentionally unified as the 
 | 2 | slab upper-half side click on compound full block with legal lowered slab support directly below and no horizontal lane | currently preserves/rejects and authors no slab | author the immediate side candidate as legal lowered slab grammar at `dy=-0.5` | any `dy=-1.0` slab, `dy<-1.0`, `dy=0` lowered-lane fallback, or hidden retarget workaround |
 | 3 | slab side click when adjacent legal `dy=-0.5` lowered slab lane exists | still rejects or misroutes until grammar exists | remap into the adjacent legal lowered lane | `dy=0` fallback or compound lane invention |
 | 4 | second slab click merging `BOTTOM`/`TOP` -> `DOUBLE` `dy=-0.5` | merge path not yet proven | merge into `DOUBLE` `dy=-0.5` only when proof-covered | `DOUBLE` at `dy=-1.0` or silent recursion |
-| 5 | slab top click on compound full block | current clean rejection feels too strict | normalize only into legal vanilla or lowered slab state, otherwise preserve/reject | freeform slab at `dy=-1.0` |
+| 5 | slab top click on compound full block | top-face ghost/skip was possible on the live shape | clean reject/preserve; no authored slab unless a named legal vanilla or lowered state is later defined | freeform slab at `dy=-1.0`, `dy<-1.0`, or `dy=-0.5` top-face ghost |
 | 6 | no ghost/flicker after tick | visible instability or mismatch may remain | stable post-tick result with no ghost/flicker | visual success that only exists for one frame |
 | 7 | source/support break | jump or collapse risk remains | no jump, no ghost, no silent renormalization | survival only because of delayed rescue |
 | 8 | reload/rejoin | illegal or unproven state may reappear | only legal states survive reload/rejoin | save/load hiding an illegal slab lane |
@@ -98,9 +98,9 @@ These proof rows now exist in the focused harness slice:
 - Internal proof Row 3: GREEN-implemented/proven for the narrow artificial same-Y remap topology; automated/focused proof passed and runtime/live-launch logs emitted GREEN.
 - Julia screenshot side-shape upper-half side slab: GREEN/proven after Julia's `6d0d525` live retest; the side candidate becomes `stone_slab[type=top]` at `dy=-0.5`.
 - Julia screenshot side-shape lower-half side slab: RED after Julia's `6d0d525` live retest; lower-band side click flickers/fails or does not author the expected legal `stone_slab[type=bottom]` at `dy=-0.5`.
-- Julia screenshot top-face ghost/skip: still RED and separate from the side-face below-lane law.
+- Julia screenshot/goblin top-face ghost/skip: GREEN by clean reject/preserve; no top/skipped slab is authored, and the compound source stays at `dy=-1.0`.
 - Row 4: TODO.
-- Row 5: TODO, and may now be release-blocking if the Julia screenshot top-face ghost/skip path proves this top-click gap.
+- Row 5: GREEN for clean reject/preserve on the canonical live-shape top-face path; no legal authored top-face slab result is defined.
 - Row 6: TODO.
 
 Harness/source-truth repair note:
@@ -197,16 +197,19 @@ at `dy=-0.5`; the `dy=-1.0` slab lane remains illegal.
 
 Julia live retest correction at `6d0d525`: the old screenshot side-shape status
 was too coarse. Upper-half side placement is GREEN, lower-half side placement
-is RED, and top-face ghost/skip remains RED. The proof now keeps those bands
-separate instead of treating side placement as one status.
+was RED at that point, and top-face ghost/skip was RED. The proof now keeps
+those bands separate instead of treating side placement as one status.
 
-Canonical live-shape lower-side correction: the lower-half A/B side route now
-uses the same compound below-lane side slab grammar and survives server packet
-hit validation when `SlabSupport.findLegalCompoundSlabRemap(...)` classifies
-the held-slab click as a legal remap. The latest gated goblin proof reports
-`lowerA=GREEN lowerB=GREEN upperA=GREEN upperB=GREEN topFace=RED
-supportBreak=GREEN releaseBlockers=topFace`. The authored slab is still the
-legal `dy=-0.5` lowered slab; the beta4 `dy=-1.0` slab lane remains illegal.
+Canonical live-shape lower-side and top-face correction: the lower-half A/B side
+route uses the same compound below-lane side slab grammar and survives server
+packet hit validation when `SlabSupport.findLegalCompoundSlabRemap(...)`
+classifies the held-slab click as a legal remap. The top-face route has no named
+legal slab result, so held-slab `UP` clicks on the compound source cleanly
+return `Pass[]`, author no top/skipped slab, and preserve the compound source.
+The latest gated goblin proof reports `lowerA=GREEN lowerB=GREEN
+upperA=GREEN upperB=GREEN topFace=GREEN supportBreak=GREEN ghost=false
+releaseBlockers=none`. Side-authored slabs remain legal `dy=-0.5` lowered
+slabs; the beta4 `dy=-1.0` slab lane remains illegal.
 
 ## Implementation slices after design
 

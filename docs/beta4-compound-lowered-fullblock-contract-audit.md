@@ -47,9 +47,18 @@ layer was server packet hit validation after client placement remap, not
 crosshair targeting and not slab remap classification. The narrow bridge accepts
 held-slab packets only when the existing legal compound slab remap predicate is
 true; it does not legalize any beta4 `dy=-1.0` slab lane or `dy<-1.0` lane.
+
+Canonical top-face fix result: top-face held-slab `UP` clicks on the compound
+upper full block now cleanly reject/preserve because no named legal top-face
+slab result exists. The placement returns `Pass[]`, no top or skipped slab is
+authored, the source remains compound `dy=-1.0`, and
+`[JULIA_BETA4_LIVE_GOBLIN_TOP_FACE_GHOST_GREEN]` proves `ghost=false`.
 Latest gated summary: `structure=GREEN lowerA=GREEN lowerB=GREEN upperA=GREEN
-upperB=GREEN topFace=RED supportBreak=GREEN hitbox=RED ghost=true jump=false
-wrongOwner=true releaseBlockers=topFace`. Release remains blocked by topFace.
+upperB=GREEN topFace=GREEN supportBreak=GREEN hitbox=RED ghost=false jump=false
+wrongOwner=true releaseBlockers=none`. Hitbox/wrongOwner remain diagnostic from
+existing upper-side targeting observations, not release-blocking in this gated
+summary. Release is ready for Julia manual live retest; do not approve release
+from automation alone unless Julia explicitly waives that gate.
 
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
@@ -62,6 +71,7 @@ Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_SIDE_LOWER_B_RED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SIDE_UPPER_A_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SIDE_UPPER_B_GREEN]`,
+`[JULIA_BETA4_LIVE_GOBLIN_TOP_FACE_GHOST_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_TOP_FACE_GHOST_RED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_BREAK_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_BREAK_RED]`,

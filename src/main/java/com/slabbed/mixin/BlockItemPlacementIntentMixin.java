@@ -56,6 +56,16 @@ public abstract class BlockItemPlacementIntentMixin {
         return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
+    private static boolean slabbed$isCompoundTopHit(ItemUsageContext context, BlockPos pos, BlockState state) {
+        if (context.getSide() != Direction.UP
+                || state.getBlock() instanceof SlabBlock
+                || !SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), pos)) {
+            return false;
+        }
+        double yOffset = SlabSupport.getYOffset(context.getWorld(), pos, state);
+        return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+    }
+
     private static boolean slabbed$isPersistentLoweredBottomSlabCarrierCandidate(World world, BlockPos pos, BlockState state) {
         if (!(state.getBlock() instanceof SlabBlock)
                 || !state.contains(SlabBlock.TYPE)
@@ -132,6 +142,10 @@ public abstract class BlockItemPlacementIntentMixin {
         }
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
+        if (slabbed$isCompoundTopHit(context, targetPos, targetState)) {
+            cir.setReturnValue(ActionResult.PASS);
+            return;
+        }
         if (slabbed$isCompoundSideHit(context, targetPos, targetState)) {
             SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
                     context.getWorld(),
