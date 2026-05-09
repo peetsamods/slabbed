@@ -43,12 +43,12 @@ Current Beta 4 status:
 - release confidence paused after Julia live feel review
 - issue: compound slab placement UX is too restrictive
 - current WIP: compound slab Row 3 legal remap implemented/proven
-- next slice: Row 4/5 decision or Julia live acceptance
-- release remains blocked pending final release audit; Row 3 live accepted at `742a839`, while Rows 4/5 remain pending but not release-blocking unless Julia later says otherwise
+- next slice: Row 4/5 decision or Julia manual live-feel test
+- release remains blocked pending Julia manual live-feel acceptance or explicit waiver; Row 3 automated/focused proof passed and runtime/live-launch logs emitted GREEN
 - candidate note only: `Compound Slab Clean Rejection vs Merge Grammar — candidate/product-law unresolved.`
 - failed Row 3 WIP patch preserved under `tmp/beta4-compound-slab-harness-audit-7c45fc0/failed-row3-wip-full.patch`
 
-Row 3 savepoint summary: slab-held side-clicks on a proven compound `dy=-1.0`; live accepted at `742a839` with evidence in `tmp/beta4-compound-slab-row3-live-742a839/`
+Row 3 savepoint summary: slab-held side-clicks on a proven compound `dy=-1.0`; automated/focused proof passed and runtime/live-launch logs emitted GREEN with evidence in `tmp/beta4-compound-slab-row3-live-742a839/`; Julia manual live-feel test pending
 ordinary full-block source now safe-reject when no legal lowered slab lane
 exists, and remap only when exactly one adjacent legal `dy=-0.5` slab lane
 exists in the intended continuation direction. Focused proof emits

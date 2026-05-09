@@ -349,10 +349,11 @@ and emits `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`,
 `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]`, and
 `[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`. Those markers keep the
 safe no-lane rejection explicit while proving that the Row 3 legal `dy=-0.5`
-remap path now exists. Live acceptance at `742a839` is recorded in
+remap path now exists. The row-3 proof record is in
 `tmp/beta4-compound-slab-row3-live-742a839/`; Rows 4 and 5 remain pending for
-later beta4 work and are not treated as blockers by this live Row 3 verdict.
-This is not a generalized rescue/retarget fix.
+later beta4 work and are not treated as blockers by this automated/focused
+proof, but Julia manual live-feel test is still pending. This is not a
+generalized rescue/retarget fix.
 
 Harness audit note: Row 3 proof must start from proven compound dy=-1.0 ordinary
 full-block source; dy=-0.5 source hits are invalid for this row. The corrected
