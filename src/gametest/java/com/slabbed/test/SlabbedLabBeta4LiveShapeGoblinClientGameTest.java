@@ -339,16 +339,22 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 boolean serverFinalDouble = serverFinal[0].contains("stone_slab")
                         && serverFinal[0].contains("type=double")
                         && serverFinal[0].contains("dy=-0.5");
-                String seam = clientFinalDouble || serverFinalDouble
-                        ? "UNKNOWN"
+                String seam = clientFinalDouble && serverFinalDouble
+                        ? "FIXED_GREEN"
                         : "SERVER_TOLERANCE_REJECT";
                 System.out.println("[JULIA_BETA4_REPEAT_SEAM_SUMMARY]"
                         + " clientPredict=DOUBLE"
-                        + " serverTolerance=LEGAL_CANDIDATE_NOT_REWRITTEN"
-                        + " placementContext=CLIENT_ONLY_FACE_NOT_HORIZONTAL"
+                        + " serverTolerance=" + (serverFinalDouble
+                                ? "LOWERED_SAME_CELL_SLAB_MERGE"
+                                : "LEGAL_CANDIDATE_NOT_REWRITTEN")
+                        + " placementContext=" + (serverFinalDouble
+                                ? "SERVER_FINALIZATION_REACHED"
+                                : "CLIENT_ONLY_FACE_NOT_HORIZONTAL")
                         + " setBlockState=" + (serverFinalDouble ? "YES" : "NO")
                         + " serverFinal=" + serverFinal[0]
+                        + " serverFinalDy=" + (serverFinalDouble ? "-0.5" : "not_double")
                         + " clientFinal=" + describeBlock(mc.world, expectedChangedPos, clientFinalState)
+                        + " clientFinalDy=" + dy(mc.world, expectedChangedPos, clientFinalState)
                         + " seam=" + seam);
             }
         });
@@ -367,8 +373,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             String expectedChangedState
     ) {
         System.out.println("[JULIA_BETA4_REPEAT_SEAM_START]"
-                + " mode=diagnostic_only"
-                + " gameplayChange=false"
+                + " mode=finalization_fix"
+                + " gameplayChange=true"
                 + " target=" + expectedChangedPos.toShortString()
                 + " expected=" + expectedChangedState);
         System.out.println("[JULIA_BETA4_REPEAT_SEAM_CLIENT_BEFORE]"

@@ -150,9 +150,9 @@ delta, not by occlusion. Latest summary:
 `[JULIA_BETA4_LIVE_GOBLIN_CORRIDOR_SUMMARY] lowerCorridor=FOUND lowerAfterFirstCorridor=FOUND sequenceLowerResult=RED repeatPlacement=RED topFace=RED ghost=true wrongDelta=true releaseBlockers=lowerAfterFirst,repeatPlacement,topFace`.
 Release remains blocked.
 
-### Repeat Merge Server Seam Audit
+### Repeat Merge Server Seam Audit And Fix
 
-Diagnostic-only markers added behind `-Dslabbed.beta4RepeatMergeTrace=true`:
+Trace markers behind `-Dslabbed.beta4RepeatMergeTrace=true`:
 
 - `[JULIA_BETA4_REPEAT_SEAM_START]`
 - `[JULIA_BETA4_REPEAT_SEAM_CLIENT_BEFORE]`
@@ -165,17 +165,20 @@ Diagnostic-only markers added behind `-Dslabbed.beta4RepeatMergeTrace=true`:
 - `[JULIA_BETA4_REPEAT_SEAM_CLIENT_TICK]`
 - `[JULIA_BETA4_REPEAT_SEAM_SUMMARY]`
 
-Current classification: `SERVER_TOLERANCE_REJECT`.
+Fixed classification: `FIXED_GREEN`.
 
 The repeat target before click is `39,203,8` as
-`stone_slab[type=bottom] dy=-0.5` on face `UP`. The client predicts and briefly
-authors `stone_slab[type=double] dy=-0.5`, and the client action returns
-`Success`. Server-side tolerance sees `legalLoweredSameCellMerge=true` but leaves
-the native packet center unchanged; no durable server `DOUBLE` follows. Server
-and client ticks 1, 5, and 20 all report the target still as
-`stone_slab[type=bottom] dy=-0.5`. Client prediction is not server/final proof.
-No gameplay implementation is included; `repeatPlacement=RED`, `topFace=RED`,
-and release remains blocked.
+`stone_slab[type=bottom] dy=-0.5` on face `UP`. The legal repeat result is named
+`LOWERED_SAME_CELL_SLAB_MERGE`: a held matching slab against an existing lowered
+side-lane slab at exactly `dy=-0.5` finalizes
+`stone_slab[type=bottom] dy=-0.5 -> stone_slab[type=double] dy=-0.5`.
+Server-side tolerance now marks the packet as that legal class, the server direct
+finalization marker reports `setBlockStateDurable=YES`, and server/client ticks
+1, 5, and 20 all report `stone_slab[type=double] dy=-0.5`.
+
+`repeatPlacement=GREEN` and `sequenceLowerResult=GREEN`; `topFace=RED` remains
+the live release blocker. Client prediction is still not server/final proof, and
+the `dy=-1.0` slab lane remains illegal.
 
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,

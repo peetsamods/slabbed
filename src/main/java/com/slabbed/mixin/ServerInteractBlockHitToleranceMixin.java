@@ -4,6 +4,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
@@ -23,7 +24,9 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerPlayNetworkHandler.class)
 public abstract class ServerInteractBlockHitToleranceMixin {
@@ -33,6 +36,63 @@ public abstract class ServerInteractBlockHitToleranceMixin {
 
     @Shadow @Final public ServerPlayerEntity player;
 
+    @Inject(
+            method = "onPlayerInteractBlock",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/server/network/ServerPlayerEntity;updateLastActionTime()V"),
+            cancellable = true
+    )
+    private void slabbed$finalizeLoweredSameCellSlabMerge(
+            PlayerInteractBlockC2SPacket packet,
+            CallbackInfo ci
+    ) {
+        if (player == null || packet == null) {
+            return;
+        }
+        BlockHitResult hit = packet.getBlockHitResult();
+        if (hit == null) {
+            return;
+        }
+        BlockPos pos = hit.getBlockPos();
+        Vec3d validationCenter = slabbed$loweredSameCellSlabMergeValidationCenter(pos, packet);
+        if (validationCenter == null) {
+            return;
+        }
+
+        ServerWorld world = player.getEntityWorld();
+        BlockState state = world.getBlockState(pos);
+        BlockState mergedState = state.with(SlabBlock.TYPE, SlabType.DOUBLE);
+        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
+                + " phase=server-direct-finalization"
+                + " side=SERVER"
+                + " incomingPos=" + pos.toShortString()
+                + " incomingFace=" + hit.getSide().asString()
+                + " incomingHit=" + hit.getPos()
+                + " incomingState=" + state
+                + " incomingDy=" + SlabSupport.getYOffset(world, pos, state)
+                + " heldItem=" + Registries.ITEM.getId(player.getStackInHand(packet.getHand()).getItem())
+                + " decision=LOWERED_SAME_CELL_SLAB_MERGE");
+        double beforeDy = SlabSupport.getYOffset(world, pos, state);
+        boolean changed = world.setBlockState(pos, mergedState, Block.NOTIFY_ALL);
+        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
+                + " phase=server-direct-finalization"
+                + " side=SERVER"
+                + " target=" + pos.toShortString()
+                + " beforeState=" + state
+                + " beforeDy=" + beforeDy
+                + " afterState=" + world.getBlockState(pos)
+                + " afterDy=" + SlabSupport.getYOffset(world, pos, world.getBlockState(pos))
+                + " setBlockStateDurable=" + (changed ? "YES" : "NO"));
+        if (!changed) {
+            return;
+        }
+        if (!player.isInCreativeMode()) {
+            player.getStackInHand(packet.getHand()).decrementUnlessCreative(1, player);
+        }
+        player.swingHand(packet.getHand(), true);
+        ci.cancel();
+    }
+
     @Redirect(
             method = "onPlayerInteractBlock",
             at = @At(value = "INVOKE",
@@ -40,8 +100,13 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     )
     private Vec3d slabbed$compoundFullBlockVisualCenter(Vec3i blockPos, PlayerInteractBlockC2SPacket packet) {
         Vec3d center = Vec3d.ofCenter(blockPos);
+        Vec3d loweredSameCellSlabMergeCenter = null;
         if (blockPos instanceof BlockPos pos && player != null && packet != null) {
-            slabbed$logRepeatMergeTolerance(pos, packet, center);
+            loweredSameCellSlabMergeCenter = slabbed$loweredSameCellSlabMergeValidationCenter(pos, packet);
+            slabbed$logRepeatMergeTolerance(pos, packet, center, loweredSameCellSlabMergeCenter);
+        }
+        if (loweredSameCellSlabMergeCenter != null) {
+            return loweredSameCellSlabMergeCenter;
         }
         if (!(blockPos instanceof BlockPos pos)
                 || player == null
@@ -52,7 +117,12 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         return center.add(0.0d, COMPOUND_DY, 0.0d);
     }
 
-    private void slabbed$logRepeatMergeTolerance(BlockPos pos, PlayerInteractBlockC2SPacket packet, Vec3d center) {
+    private void slabbed$logRepeatMergeTolerance(
+            BlockPos pos,
+            PlayerInteractBlockC2SPacket packet,
+            Vec3d center,
+            Vec3d loweredSameCellSlabMergeCenter
+    ) {
         if (!Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN)) {
             return;
         }
@@ -60,12 +130,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         BlockHitResult hit = packet.getBlockHitResult();
         BlockState state = world == null ? null : world.getBlockState(pos);
         ItemStack heldStack = player.getStackInHand(packet.getHand());
-        boolean legalLoweredSameCellMerge = slabbed$isLoweredSameCellBottomSlabMergeDiagnostic(
-                world,
-                pos,
-                state,
-                hit,
-                heldStack);
+        boolean legalLoweredSameCellMerge = loweredSameCellSlabMergeCenter != null;
         Slabbed.LOGGER.info(
                 "[JULIA_BETA4_REPEAT_SEAM_SERVER_TOLERANCE] packetBlockPos={} state={} dy={} face={} hitVec={} heldItem={} legalLoweredSameCellMerge={} action={} centerBefore={} centerAfter={} reason={}",
                 pos.toShortString(),
@@ -75,44 +140,56 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                 hit == null ? "null" : hit.getPos(),
                 heldStack == null ? "null" : Registries.ITEM.getId(heldStack.getItem()),
                 legalLoweredSameCellMerge,
-                "leave_packet_unchanged",
+                legalLoweredSameCellMerge ? "rewrite_to_lowered_same_cell_slab_merge_hit" : "leave_packet_unchanged",
                 center,
-                center,
-                legalLoweredSameCellMerge ? "diagnostic_candidate_not_rewritten" : "not_lowered_same_cell_merge");
+                legalLoweredSameCellMerge ? loweredSameCellSlabMergeCenter : center,
+                legalLoweredSameCellMerge ? "LOWERED_SAME_CELL_SLAB_MERGE" : "not_lowered_same_cell_merge");
     }
 
-    private static boolean slabbed$isLoweredSameCellBottomSlabMergeDiagnostic(
-            ServerWorld world,
+    private Vec3d slabbed$loweredSameCellSlabMergeValidationCenter(
             BlockPos pos,
-            BlockState state,
-            BlockHitResult hit,
-            ItemStack heldStack
+            PlayerInteractBlockC2SPacket packet
     ) {
+        ServerWorld world = player.getEntityWorld();
+        BlockHitResult hit = packet.getBlockHitResult();
+        BlockState state = world == null ? null : world.getBlockState(pos);
+        ItemStack heldStack = player.getStackInHand(packet.getHand());
         if (world == null
                 || pos == null
                 || state == null
                 || hit == null
                 || !pos.equals(hit.getBlockPos())
-                || hit.getSide() != Direction.UP
                 || !(state.getBlock() instanceof SlabBlock)
                 || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || state.get(SlabBlock.TYPE) == SlabType.DOUBLE
                 || !state.getFluidState().isEmpty()
                 || Math.abs(SlabSupport.getYOffset(world, pos, state) + 0.5d) > EPSILON
+                || !SlabSupport.isLoweredSideLaneSlabCarrier(world, pos, state)
                 || heldStack == null
                 || !(heldStack.getItem() instanceof BlockItem blockItem)
                 || !(blockItem.getBlock() instanceof SlabBlock)
                 || !state.isOf(blockItem.getBlock())) {
-            return false;
+            return null;
+        }
+        SlabType targetType = state.get(SlabBlock.TYPE);
+        if ((targetType == SlabType.BOTTOM && hit.getSide() != Direction.UP)
+                || (targetType == SlabType.TOP && hit.getSide() != Direction.DOWN)) {
+            return null;
         }
         Vec3d hitPos = hit.getPos();
-        return hitPos != null
-                && hitPos.x >= pos.getX() - EPSILON
-                && hitPos.x <= pos.getX() + 1.0d + EPSILON
-                && hitPos.y >= pos.getY() - 0.5d - EPSILON
-                && hitPos.y <= pos.getY() + EPSILON
-                && hitPos.z >= pos.getZ() - EPSILON
-                && hitPos.z <= pos.getZ() + 1.0d + EPSILON;
+        if (hitPos == null
+                || hitPos.x < pos.getX() - EPSILON
+                || hitPos.x > pos.getX() + 1.0d + EPSILON
+                || hitPos.z < pos.getZ() - EPSILON
+                || hitPos.z > pos.getZ() + 1.0d + EPSILON) {
+            return null;
+        }
+        double visualMinY = targetType == SlabType.BOTTOM ? pos.getY() - 0.5d : pos.getY();
+        double visualMaxY = targetType == SlabType.BOTTOM ? pos.getY() : pos.getY() + 0.5d;
+        if (hitPos.y < visualMinY - EPSILON || hitPos.y > visualMaxY + EPSILON) {
+            return null;
+        }
+        return hitPos;
     }
 
     private boolean slabbed$isLegalCompoundFullBlockVisualHit(BlockPos pos, PlayerInteractBlockC2SPacket packet) {
