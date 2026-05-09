@@ -37,6 +37,15 @@ Tracked tree is clean.
 
 Classify beta4 reload/chunk-jump persistence before any further retarget or owner-rule work.
 
+Current Beta 4 status:
+
+- release gates passed
+- release confidence paused after Julia live feel review
+- issue: compound slab placement UX is too restrictive
+- next slice: RED proofs for compound slab merge/remap grammar
+- release remains blocked by product-feel concern, not build failure
+- candidate note only: `Compound Slab Clean Rejection vs Merge Grammar — candidate/product-law unresolved.`
+
 ## Current proof note
 
 Release remains blocked. The failed shared seam-owner classifier `763434e` was reverted by `b3a09db`; the live-first classifier at `767f735` passed harness proof but failed Julia live side-face validation. The side-face MISS fix at `9ed44e3` is automation-green (`[BETA4_SEAM_VISIBLE_UPPER_SIDE_FACE_GREEN]`) but Julia's live retest also failed: live evidence shows the BLOCK/UP anchored-UP preservation path stealing the visible upper lowered slab (2275 `SLAB_HELD_UP_GUARD_SIDE_OWNER_CLASSIFY`, 2267 `classification=anchoredUpPreserve`, 0 `visibleUpperSideFaceOwner`, 0 `miss-no-rescue-candidate`), so the automation-green MISS fix targeted the wrong branch. See `docs/beta4-live-fail-anchored-up-audit.md`. Next RED proof needed: `[BETA4_SEAM_VISIBLE_UPPER_ANCHORED_UP_STEAL_RED]` (future GREEN). Do not upload beta4, do not move `release/0.2.0-beta.4`, and do not call the seam issue fixed.
