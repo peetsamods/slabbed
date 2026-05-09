@@ -75,7 +75,7 @@ These proof rows now exist in the focused harness slice:
 
 - Row 1: GREEN-safe-reject.
 - Row 2: GREEN-safe-reject.
-- Row 3: GREEN-implemented/proven.
+- Row 3: GREEN-implemented/proven; live accepted at `742a839` with evidence in `tmp/beta4-compound-slab-row3-live-742a839/`.
 - Row 4: TODO.
 - Row 5: TODO.
 - Row 6: TODO.
@@ -97,7 +97,7 @@ Current proof markers emitted by the gated gametest slice:
 - `[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`
 - `[JULIA_BETA4_COMPOUND_SLAB_HARNESS_FAIL]`
 
-Rows 4-6 remain pending/TODO in this focused grammar note. Row 4 DOUBLE merge and Row 5 top-click are not implemented by the Row 3 remap slice.
+Rows 4-6 remain pending/TODO in this focused grammar note. Row 4 DOUBLE merge and Row 5 top-click are not implemented by the Row 3 remap slice and remain pending for later beta4 work, but they are not blocking the Row 3 live acceptance recorded here.
 
 ## Implementation slices after design
 
