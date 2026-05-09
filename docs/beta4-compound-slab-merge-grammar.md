@@ -98,7 +98,7 @@ These proof rows now exist in the focused harness slice:
 - Internal proof Row 3: GREEN-implemented/proven for the narrow artificial same-Y remap topology; automated/focused proof passed and runtime/live-launch logs emitted GREEN.
 - Julia screenshot side-shape upper-half side slab: GREEN/proven after Julia's `6d0d525` live retest; the side candidate becomes `stone_slab[type=top]` at `dy=-0.5`.
 - Julia screenshot side-shape lower-half side slab: RED after Julia's `6d0d525` live retest; lower-band side click flickers/fails or does not author the expected legal `stone_slab[type=bottom]` at `dy=-0.5`.
-- Julia screenshot/goblin top-face ghost/skip: GREEN by clean reject/preserve; no top/skipped slab is authored, and the compound source stays at `dy=-1.0`.
+- Julia screenshot/goblin top-face: RED after Julia's c956fa3 live retest; the prior automated clean-reject/preserve GREEN is superseded because the fixture did not prove the actual slab/full-block live structure.
 - Row 4: TODO.
 - Row 5: GREEN for clean reject/preserve on the canonical live-shape top-face path; no legal authored top-face slab result is defined.
 - Row 6: TODO.
@@ -150,7 +150,7 @@ The harness builds and proves this exact canonical structure before any click:
 - Layer C: two `stone_slab[type=bottom]` slabs on top of the bridge.
 - Layer D: one ordinary full stone block on top of one Layer C slab.
 
-After `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`, it tests lower-half side angle A/B, upper-half side angle A/B, top-face slab click, support-break behavior, and hitbox/owner facts. The final `[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]` reports `structure`, `lowerA`, `lowerB`, `upperA`, `upperB`, `topFace`, `supportBreak`, `hitbox`, `ghost`, `jump`, `wrongOwner`, and `releaseBlockers`.
+After `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`, it tests support-present lower/upper side placement, support-present top-face placement, and the missing-under-slab side/top-face variants from the visible upper full block. `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID]` fails the harness if any required slab is a full block, any required full block is a slab, the upper full block is not on the named top slab, or the missing-under-slab variant is not explicitly named. The final `[JULIA_BETA4_LIVE_GOBLIN_SUMMARY]` reports `structure`, `fixtureTruth`, `supportPresent.upperSide`, `supportPresent.lowerSide`, `supportPresent.topFace`, `supportMissing.side`, `supportMissing.topFace`, `hitbox`, `ghost`, `jump`, `wrongOwner`, and `releaseBlockers`.
 
 The beta4 law remains unchanged: slab `dy=-1.0` lanes are illegal, and any successful slab side result must normalize into the existing legal `dy=-0.5` lowered slab grammar or a vanilla legal slab state.
 
@@ -206,10 +206,12 @@ packet hit validation when `SlabSupport.findLegalCompoundSlabRemap(...)`
 classifies the held-slab click as a legal remap. The top-face route has no named
 legal slab result, so held-slab `UP` clicks on the compound source cleanly
 return `Pass[]`, author no top/skipped slab, and preserve the compound source.
-The latest gated goblin proof reports `lowerA=GREEN lowerB=GREEN
-upperA=GREEN upperB=GREEN topFace=GREEN supportBreak=GREEN ghost=false
-releaseBlockers=none`. Side-authored slabs remain legal `dy=-0.5` lowered
-slabs; the beta4 `dy=-1.0` slab lane remains illegal.
+The c956fa3 gated goblin proof that reported `topFace=GREEN` is superseded as
+release evidence because Julia found the harness/build fixture did not prove the
+actual slab/full-block composition. Corrected goblin output must be treated as
+the current diagnostic source, and release remains blocked while top-face and
+missing-under-slab live behavior are RED. Side-authored slabs remain legal
+`dy=-0.5` lowered slabs; the beta4 `dy=-1.0` slab lane remains illegal.
 
 ## Implementation slices after design
 
