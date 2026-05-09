@@ -96,8 +96,9 @@ These proof rows now exist in the focused harness slice:
 - Row 1: GREEN-implemented/proven for compound below-lane side slab placement; lower-half side click authors `stone_slab[type=bottom]` at `dy=-0.5`.
 - Row 2: GREEN-implemented/proven for compound below-lane side slab placement; upper-half side click authors `stone_slab[type=top]` at `dy=-0.5`.
 - Internal proof Row 3: GREEN-implemented/proven for the narrow artificial same-Y remap topology; automated/focused proof passed and runtime/live-launch logs emitted GREEN.
-- Julia screenshot side-shape side slab: GREEN-implemented/proven; the side candidate becomes `stone_slab[type=bottom]` at `dy=-0.5`.
-- Julia screenshot top-face ghost/skip: still RED/PENDING and separate from the side-face below-lane law.
+- Julia screenshot side-shape upper-half side slab: GREEN/proven after Julia's `6d0d525` live retest; the side candidate becomes `stone_slab[type=top]` at `dy=-0.5`.
+- Julia screenshot side-shape lower-half side slab: RED after Julia's `6d0d525` live retest; lower-band side click flickers/fails or does not author the expected legal `stone_slab[type=bottom]` at `dy=-0.5`.
+- Julia screenshot top-face ghost/skip: still RED and separate from the side-face below-lane law.
 - Row 4: TODO.
 - Row 5: TODO, and may now be release-blocking if the Julia screenshot top-face ghost/skip path proves this top-click gap.
 - Row 6: TODO.
@@ -128,10 +129,12 @@ Rows 4-6 remain pending/TODO in this focused grammar note. Row 4 DOUBLE merge an
 
 Screenshot-shape proof markers added by `-Dslabbed.beta4LiveScreenshotShapeRed=true`:
 
+- `[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_UPPER_GREEN]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_LOWER_RED]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]`
+- `[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_FAIL]`
 - `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]`
-- `[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_GREEN]`
-- `[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`
-- `[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`
 - `[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]`
 
 ## Screenshot side-shape discriminator audit
@@ -156,7 +159,8 @@ change Rows 1/2 semantics.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Rows 1/2 compound below-lane side slab placement | ordinary stone compound full block, `dy=-1.0` | horizontal side; Row 1 lower band, Row 2 upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | author legal lowered side slab at `dy=-0.5` | RED/PENDING; old safe reject superseded |
 | Internal artificial Row 3 legal remap | ordinary stone compound full block, `dy=-1.0` | horizontal side; lower band | bottom `stone_slab`, `dy=-0.5` | existing legal bottom `stone_slab`, `dy=-0.5` | `1` | continuation cell beyond existing lane | yes | no, because horizontal lane exists | author `stone_slab[type=bottom]` at `dy=-0.5` | GREEN legal remap |
-| Julia screenshot side-shape RED | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; lower/below-source band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | desired: author legal lowered side slab | RED/pass/no slab authored |
+| Julia screenshot upper-half side-shape | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | author legal lowered side slab at `dy=-0.5` | GREEN after `6d0d525` live retest/proof split |
+| Julia screenshot lower-half side-shape RED | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; lower/below-source band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | author legal lowered side slab at `dy=-0.5` | RED/flicker/fail/no legal slab authored |
 
 Discriminator candidates evaluated:
 
@@ -173,6 +177,11 @@ product-law class. The screenshot side-shape and Rows 1/2 are the same legal
 placement surface now: compound below-lane side slab placement. The future
 implementation must remap that surface into existing legal lowered slab grammar
 at `dy=-0.5`; the `dy=-1.0` slab lane remains illegal.
+
+Julia live retest correction at `6d0d525`: the old screenshot side-shape status
+was too coarse. Upper-half side placement is GREEN, lower-half side placement
+is RED, and top-face ghost/skip remains RED. The proof now keeps those bands
+separate instead of treating side placement as one status.
 
 ## Implementation slices after design
 

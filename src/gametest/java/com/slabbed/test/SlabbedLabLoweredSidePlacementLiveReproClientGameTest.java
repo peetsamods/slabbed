@@ -3328,33 +3328,59 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             TestSingleplayerContext singleplayer
     ) {
         StringBuilder redSummary = new StringBuilder();
-        runBeta4LiveScreenshotSideSlabRedCase(ctx, singleplayer, redSummary);
+        runBeta4LiveScreenshotSideSlabBandCase(
+                ctx,
+                singleplayer,
+                redSummary,
+                "side-upper-half",
+                FULL_POS.add(24, 2, 0),
+                0.25d,
+                SlabType.TOP,
+                true);
+        runBeta4LiveScreenshotSideSlabBandCase(
+                ctx,
+                singleplayer,
+                redSummary,
+                "side-lower-half",
+                FULL_POS.add(30, 2, 0),
+                -0.75d,
+                SlabType.BOTTOM,
+                false);
         runBeta4LiveScreenshotTopFaceGhostRedCase(ctx, singleplayer, redSummary);
         if (redSummary.length() > 0) {
             String summary = redSummary.toString();
+            System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]"
+                    + " classification=EXPECTED_RED_AUDIT"
+                    + " summary=" + summary.replace('\n', '|'));
             System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
                     + " classification=EXPECTED_RED_AUDIT"
                     + " summary=" + summary.replace('\n', '|'));
             return;
         }
+        System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]"
+                + " classification=UNEXPECTED_GREEN"
+                + " reason=screenshot_shape_no_longer_reproduces_manual_failure");
         System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
                 + " classification=UNEXPECTED_GREEN"
                 + " reason=screenshot_shape_no_longer_reproduces_manual_failure");
         throw new RuntimeException("Julia beta4 live screenshot shape unexpectedly went green; do not save as RED proof");
     }
 
-    private static void runBeta4LiveScreenshotSideSlabRedCase(
+    private static void runBeta4LiveScreenshotSideSlabBandCase(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
-            StringBuilder redSummary
+            StringBuilder redSummary,
+            String proof,
+            BlockPos clickedTopFullPos,
+            double hitYOffset,
+            SlabType expectedType,
+            boolean requireGreen
     ) {
-        final String proof = "side-slab";
         final Direction face = Direction.WEST;
-        final BlockPos clickedTopFullPos = FULL_POS.add(24, 2, 0);
         final BlockPos loweredLaneBelowTop = clickedTopFullPos.down();
         final BlockPos lowerFullBlock = clickedTopFullPos.down(2);
         final BlockPos expectedSideSlabPos = clickedTopFullPos.offset(face);
-        final BlockHitResult sideHit = resolveLoweredFaceHit(clickedTopFullPos, face, -0.25d);
+        final BlockHitResult sideHit = resolveLoweredFaceHit(clickedTopFullPos, face, hitYOffset);
         final String[] resultText = {"not-run"};
 
         seedBeta4LiveScreenshotShape(singleplayer, clickedTopFullPos);
@@ -3398,21 +3424,43 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             double actualDy = SlabSupport.getYOffset(mc.world, expectedSideSlabPos, actual);
             boolean expectedLegalSideSlab = actual.isOf(Blocks.STONE_SLAB)
                     && actual.contains(SlabBlock.TYPE)
-                    && actual.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && actual.get(SlabBlock.TYPE) == expectedType
                     && Math.abs(actualDy + 0.5d) <= EPSILON;
+            String resultWasPass = Boolean.toString(resultText[0].contains("Pass["));
             if (!expectedLegalSideSlab) {
                 String reason = "case=" + proof
                         + " result=" + resultText[0]
-                        + " expected=stone_slab[type=bottom] dy=-0.5 at "
+                        + " resultWasPass=" + resultWasPass
+                        + " sourceFace=" + face.asString()
+                        + " hitY=" + sideHit.getPos().y
+                        + " hitBand=" + beta4LiveScreenshotHitBand(clickedTopFullPos, sideHit)
+                        + " lowerHalfCandidatePos=" + expectedSideSlabPos.toShortString()
+                        + " upperHalfCandidatePos=" + expectedSideSlabPos.toShortString()
+                        + " expected=stone_slab[type=" + expectedType.asString() + "] dy=-0.5 at "
                         + expectedSideSlabPos.toShortString()
                         + " actual=" + describeOwnerFacts(mc.world, expectedSideSlabPos)
+                        + " actualDy=" + actualDy
                         + " clicked=" + describeOwnerFacts(mc.world, clickedTopFullPos)
                         + " loweredLaneBelowTop=" + describeOwnerFacts(mc.world, loweredLaneBelowTop);
-                System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_RED] " + reason);
+                if (requireGreen) {
+                    System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_FAIL] " + reason);
+                    throw new RuntimeException("Julia beta4 live screenshot upper side band did not stay GREEN");
+                }
+                System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_LOWER_RED] " + reason);
                 redSummary.append(reason).append('\n');
             } else {
-                System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_SLAB_GREEN]"
+                String marker = requireGreen
+                        ? "[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_UPPER_GREEN]"
+                        : "[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_LOWER_GREEN]";
+                System.out.println(marker
                         + " result=" + resultText[0]
+                        + " resultWasPass=" + resultWasPass
+                        + " sourceFace=" + face.asString()
+                        + " hitY=" + sideHit.getPos().y
+                        + " hitBand=" + beta4LiveScreenshotHitBand(clickedTopFullPos, sideHit)
+                        + " lowerHalfCandidatePos=" + expectedSideSlabPos.toShortString()
+                        + " upperHalfCandidatePos=" + expectedSideSlabPos.toShortString()
+                        + " expected=stone_slab[type=" + expectedType.asString() + "] dy=-0.5"
                         + " actual=" + describeOwnerFacts(mc.world, expectedSideSlabPos));
             }
         });
@@ -3466,12 +3514,20 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     && actual.contains(SlabBlock.TYPE)
                     && actual.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && Math.abs(actualDy) <= EPSILON;
+            boolean ghostOrSkipSlabAppeared = actual.isOf(Blocks.STONE_SLAB) || skipped.isOf(Blocks.STONE_SLAB);
+            String resultWasPass = Boolean.toString(resultText[0].contains("Pass["));
             if (!expectedLegalTopSlab) {
                 String reason = "case=" + proof
                         + " result=" + resultText[0]
+                        + " resultWasPass=" + resultWasPass
+                        + " sourceFace=" + topHit.getSide().asString()
+                        + " hitY=" + topHit.getPos().y
+                        + " hitBand=" + beta4LiveScreenshotHitBand(clickedTopFullPos, topHit)
+                        + " ghostOrSkipSlabAppeared=" + ghostOrSkipSlabAppeared
                         + " expected=stone_slab[type=bottom] dy=0.0 at "
                         + expectedTopSlabPos.toShortString()
                         + " actual=" + describeOwnerFacts(mc.world, expectedTopSlabPos)
+                        + " actualDy=" + actualDy
                         + " skippedCandidate=" + describeOwnerFacts(mc.world, skippedTopSlabPos)
                         + " clicked=" + describeOwnerFacts(mc.world, clickedTopFullPos)
                         + " loweredLaneBelowTop=" + describeOwnerFacts(mc.world, loweredLaneBelowTop);
@@ -3480,9 +3536,27 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             } else {
                 System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_GREEN]"
                         + " result=" + resultText[0]
+                        + " resultWasPass=" + resultWasPass
+                        + " sourceFace=" + topHit.getSide().asString()
+                        + " hitY=" + topHit.getPos().y
+                        + " hitBand=" + beta4LiveScreenshotHitBand(clickedTopFullPos, topHit)
+                        + " ghostOrSkipSlabAppeared=" + ghostOrSkipSlabAppeared
                         + " actual=" + describeOwnerFacts(mc.world, expectedTopSlabPos));
             }
         });
+    }
+
+    private static String beta4LiveScreenshotHitBand(BlockPos sourcePos, BlockHitResult hit) {
+        if (hit.getSide() == Direction.UP) {
+            return "top_face";
+        }
+        if (hit.getPos().y < sourcePos.getY() - 0.5d) {
+            return "lower_compound_visible_half";
+        }
+        if (hit.getPos().y < sourcePos.getY()) {
+            return "upper_compound_visible_half";
+        }
+        return hit.getPos().y < sourcePos.getY() + 0.5d ? "lower_source_half" : "upper_source_half";
     }
 
     private static void assertBeta4LiveScreenshotSourceTruth(

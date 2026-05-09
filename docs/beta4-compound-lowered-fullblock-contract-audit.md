@@ -30,6 +30,17 @@ safe-reject/pass cases. They are promoted into the named legal class
 side candidate at `dy=-0.5`, and the screenshot side-shape side proof emits
 GREEN. This does not legalize any `dy=-1.0` slab lane.
 
+Live band-split correction after `6d0d525`: Julia's no-jump live retest showed
+the previous screenshot side-shape proof was too coarse. Upper-half side click
+is GREEN, lower-half side click is RED because it flickers/fails or does not
+author the expected legal `dy=-0.5` slab, and top-face click still creates the
+ghost/skip slab path. The proof markers for this split are
+`[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_UPPER_GREEN]`,
+`[JULIA_BETA4_LIVE_SCREENSHOT_SIDE_LOWER_RED]`,
+`[JULIA_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED]`,
+`[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]`, and
+`[JULIA_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_FAIL]`.
+
 ## Current savepoint
 
 - HEAD: `06724fb`
