@@ -199,7 +199,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             String expectedChangedState
     ) {
         return runRealCrosshairClick(ctx, singleplayer, step, expectedBand, expectedFace, aimPoint,
-                eyeFor(expectedFace == Direction.UP ? ANGLE_A_FACE : expectedFace), aimMarker,
+                expectedFace == Direction.UP ? topFaceEye() : eyeFor(expectedFace), aimMarker,
                 expectedChangedPos, expectedChangedState);
     }
 
@@ -1032,6 +1032,10 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         double y = UPPER_FULL.getY() + 1.2d;
         double z = UPPER_FULL.getZ() + 0.5d + face.getOffsetZ() * 2.6d;
         return new Vec3d(x, y, z);
+    }
+
+    private static Vec3d topFaceEye() {
+        return new Vec3d(UPPER_FULL.getX() + 0.5d, UPPER_FULL.getY() + 2.4d, UPPER_FULL.getZ() + 2.6d);
     }
 
     private static BlockHitResult faceHit(BlockPos targetPos, Direction face, double yOffset) {
