@@ -95,6 +95,9 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " expectedOwnerDy=" + EXPECTED_UPPER_FULL_DY
                     + " localCoordBasis=visualDyAdjusted"
                     + " rawLocalOutside01ExplainedBy=compound_owner_dy_when_visualLocalWithin01");
+            AimCorridor lowerCorridor = scanAimCorridors(
+                    ctx, singleplayer, "lower", ANGLE_A_FACE, 0.25d);
+            verdicts.lowerCorridor = lowerCorridor.found() ? "FOUND" : "NONE";
             RealClickResult firstSide = runRealCrosshairClick(
                     ctx, singleplayer, "FIRST_SIDE", "UPPER", ANGLE_A_FACE,
                     visibleSideHitPoint(UPPER_FULL, ANGLE_A_FACE, 0.75d, EXPECTED_UPPER_FULL_DY),
@@ -106,11 +109,17 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             verdicts.sequenceFirstTargeting = firstSide.targetingClassification;
             verdicts.absorb(firstSide);
 
-            RealClickResult lowerAfterFirst = runRealCrosshairClick(
-                    ctx, singleplayer, "LOWER_AFTER_FIRST", "LOWER", ANGLE_A_FACE,
-                    visibleSideHitPoint(UPPER_FULL, ANGLE_A_FACE, 0.25d, EXPECTED_UPPER_FULL_DY),
-                    "JULIA_BETA4_LIVE_GOBLIN_AIM_LOWER_REAL_TARGET",
-                    UPPER_FULL.offset(ANGLE_A_FACE), "stone_slab[type=bottom] dy=-0.5");
+            AimCorridor lowerAfterFirstCorridor = scanAimCorridors(
+                    ctx, singleplayer, "sequenceLowerAfterFirst", ANGLE_A_FACE, 0.25d);
+            verdicts.lowerAfterFirstCorridor = lowerAfterFirstCorridor.found() ? "FOUND" : "NONE";
+            RealClickResult lowerAfterFirst = lowerAfterFirstCorridor.found()
+                    ? runRealCrosshairClick(
+                            ctx, singleplayer, "LOWER_AFTER_FIRST", "LOWER", ANGLE_A_FACE,
+                            lowerAfterFirstCorridor.hit,
+                            lowerAfterFirstCorridor.eye,
+                            "JULIA_BETA4_LIVE_GOBLIN_AIM_LOWER_REAL_TARGET",
+                            UPPER_FULL.offset(ANGLE_A_FACE), "stone_slab[type=bottom] dy=-0.5")
+                    : noCorridorClick("LOWER_AFTER_FIRST", lowerAfterFirstCorridor);
             verdicts.lowerAimParity = lowerAfterFirst.aimParity;
             verdicts.lowerAfterFirst = lowerAfterFirst.result;
             verdicts.lowerTargeting = lowerAfterFirst.targetingClassification;
@@ -163,6 +172,15 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " ownerFailures=" + verdicts.countTargeting("OWNER_FAIL")
                     + " occlusionCases=" + verdicts.countTargeting("OCCLUSION_EXPECTED")
                     + " nextAction=" + verdicts.nextTargetingAction());
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_CORRIDOR_SUMMARY]"
+                    + " lowerCorridor=" + verdicts.lowerCorridor
+                    + " lowerAfterFirstCorridor=" + verdicts.lowerAfterFirstCorridor
+                    + " sequenceLowerResult=" + verdicts.lowerAfterFirst
+                    + " repeatPlacement=" + verdicts.repeatPlacement
+                    + " topFace=" + verdicts.topFace
+                    + " ghost=" + verdicts.ghost
+                    + " wrongDelta=" + verdicts.wrongDelta
+                    + " releaseBlockers=" + releaseBlockers);
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_DONE] status=OK");
         }
     }
@@ -178,9 +196,26 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             BlockPos expectedChangedPos,
             String expectedChangedState
     ) {
-        syncAim(ctx, singleplayer, eyeFor(expectedFace == Direction.UP ? ANGLE_A_FACE : expectedFace), aimPoint);
+        return runRealCrosshairClick(ctx, singleplayer, step, expectedBand, expectedFace, aimPoint,
+                eyeFor(expectedFace == Direction.UP ? ANGLE_A_FACE : expectedFace), aimMarker,
+                expectedChangedPos, expectedChangedState);
+    }
+
+    private static RealClickResult runRealCrosshairClick(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String step,
+            String expectedBand,
+            Direction expectedFace,
+            Vec3d aimPoint,
+            Vec3d eye,
+            String aimMarker,
+            BlockPos expectedChangedPos,
+            String expectedChangedState
+    ) {
+        syncAim(ctx, singleplayer, eye, aimPoint);
         waitForClient(ctx, singleplayer, 4);
-        syncAim(ctx, singleplayer, eyeFor(expectedFace == Direction.UP ? ANGLE_A_FACE : expectedFace), aimPoint);
+        syncAim(ctx, singleplayer, eye, aimPoint);
 
         final Map<BlockPos, BlockFact>[] before = new Map[] {Map.of()};
         final RealClickResult[] click = {new RealClickResult(step)};
@@ -267,6 +302,21 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " " + delta.describe);
         });
         return click[0];
+    }
+
+    private static RealClickResult noCorridorClick(String step, AimCorridor corridor) {
+        RealClickResult result = new RealClickResult(step);
+        result.aimParity = "NO_CORRIDOR";
+        result.result = "NO_CORRIDOR";
+        result.action = "NOT_RUN";
+        result.targetingClassification = "NO_CORRIDOR";
+        System.out.println("[JULIA_BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
+                + " step=" + step
+                + " result=NO_CORRIDOR"
+                + " selected=false"
+                + " testedCandidates=" + corridor.testedCandidates
+                + " reason=no_player_realistic_lower_corridor_after_first_side");
+        return result;
     }
 
     private static String parityReason(boolean realBlock, boolean targetOwner, boolean faceOk, boolean bandOk) {
@@ -900,6 +950,175 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 targetPos.getZ() + 0.5d);
     }
 
+    private static AimCorridor scanAimCorridors(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String caseName,
+            Direction face,
+            double visualLocalY
+    ) {
+        AimCandidate[] candidates = corridorCandidates(face, visualLocalY);
+        System.out.println("[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_START]"
+                + " caseName=" + caseName
+                + " intendedOwnerPos=" + UPPER_FULL.toShortString()
+                + " intendedFace=" + face.asString()
+                + " intendedVisualLocalY=" + visualLocalY
+                + " candidateCount=" + candidates.length
+                + " playerRealistic=true");
+        AimCorridor selected = null;
+        int tested = 0;
+        for (int i = 0; i < candidates.length; i++) {
+            AimCandidate candidate = candidates[i];
+            syncAim(ctx, singleplayer, candidate.eye, candidate.hit);
+            waitForClient(ctx, singleplayer, 2);
+            syncAim(ctx, singleplayer, candidate.eye, candidate.hit);
+            final AimCorridor[] result = {AimCorridor.none(caseName, tested + 1)};
+            final int index = i;
+            ctx.runOnClient(mc -> {
+                if (mc.player == null || mc.world == null) {
+                    result[0] = AimCorridor.none(caseName, index + 1);
+                    System.out.println("[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_CANDIDATE]"
+                            + " caseName=" + caseName
+                            + " cameraIndex=" + index
+                            + " cameraName=" + candidate.name
+                            + " eye=" + fmtVec(candidate.eye)
+                            + " intendedOwnerPos=" + UPPER_FULL.toShortString()
+                            + " intendedFace=" + face.asString()
+                            + " intendedLocalHit=" + fmtVec(candidate.hit)
+                            + " actualTarget=MISS"
+                            + " actualFace=none"
+                            + " actualLocalHit=NaN,NaN,NaN"
+                            + " classification=UNKNOWN"
+                            + " occluder=none"
+                            + " reason=client_missing");
+                    return;
+                }
+                mc.gameRenderer.updateCrosshairTarget(0.0f);
+                HitResult target = mc.crosshairTarget;
+                AimFacts facts = AimFacts.from(mc.world, target);
+                TargetingDiagnostic diagnostic = TargetingDiagnostic.from(mc.world, mc.player, UPPER_FULL,
+                        face, "LOWER", candidate.hit, facts, target);
+                String occluder = "none";
+                if ("OCCLUSION_EXPECTED".equals(diagnostic.classification) && facts.pos != null) {
+                    occluder = describeBlock(mc.world, facts.pos);
+                }
+                System.out.println("[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_CANDIDATE]"
+                        + " caseName=" + caseName
+                        + " cameraIndex=" + index
+                        + " cameraName=" + candidate.name
+                        + " eye=" + fmtVec(candidate.eye)
+                        + " intendedOwnerPos=" + UPPER_FULL.toShortString()
+                        + " intendedFace=" + face.asString()
+                        + " intendedLocalHit=" + fmtVec(candidate.hit)
+                        + " actualTarget=" + facts.describe()
+                        + " actualFace=" + (facts.face == null ? "none" : facts.face.asString())
+                        + " actualLocalHit=" + facts.localX + "," + facts.localY + "," + facts.localZ
+                        + " actualVisualLocalY=" + facts.visualLocalY
+                        + " classification=" + diagnostic.classification
+                        + " occluder=" + occluder
+                        + " " + diagnostic.describe());
+                result[0] = new AimCorridor(caseName, candidate.name, candidate.eye, candidate.hit,
+                        diagnostic.classification, diagnostic.reason, facts, occluder, index + 1);
+            });
+            tested = i + 1;
+            if (result[0].found()) {
+                selected = result[0];
+                break;
+            }
+        }
+        if (selected != null) {
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_SELECTED]"
+                    + " caseName=" + caseName
+                    + " cameraName=" + selected.cameraName
+                    + " eye=" + fmtVec(selected.eye)
+                    + " intendedOwnerPos=" + UPPER_FULL.toShortString()
+                    + " intendedFace=" + face.asString()
+                    + " intendedLocalHit=" + fmtVec(selected.hit)
+                    + " classification=" + selected.classification
+                    + " testedCandidates=" + tested);
+            if (caseName.startsWith("sequence")) {
+                System.out.println("[JULIA_BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
+                        + " step=LOWER_AFTER_FIRST"
+                        + " result=CORRIDOR_SELECTED"
+                        + " cameraName=" + selected.cameraName
+                        + " eye=" + fmtVec(selected.eye)
+                        + " intendedHit=" + fmtVec(selected.hit));
+            }
+            return selected.withTested(tested);
+        }
+        System.out.println("[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_NONE]"
+                + " caseName=" + caseName
+                + " intendedOwnerPos=" + UPPER_FULL.toShortString()
+                + " intendedFace=" + face.asString()
+                + " intendedVisualLocalY=" + visualLocalY
+                + " testedCandidates=" + tested
+                + " marker=NO_PLAYER_REALISTIC_LOWER_CORRIDOR");
+        if (caseName.startsWith("sequence")) {
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
+                    + " step=LOWER_AFTER_FIRST"
+                    + " result=NO_CORRIDOR"
+                    + " testedCandidates=" + tested
+                    + " reason=no_player_realistic_lower_corridor_after_first_side");
+        }
+        return AimCorridor.none(caseName, tested);
+    }
+
+    private static AimCandidate[] corridorCandidates(Direction face, double visualLocalY) {
+        return new AimCandidate[] {
+                aimCandidate("same_side_straight", face, visualLocalY, 2.6d, 1.20d, 0.50d),
+                aimCandidate("same_side_low", face, visualLocalY, 2.6d, 0.70d, 0.50d),
+                aimCandidate("same_side_slight_left", face, visualLocalY, 2.6d, 1.00d, 0.20d),
+                aimCandidate("same_side_slight_right", face, visualLocalY, 2.6d, 1.00d, 0.80d),
+                aimCandidate("same_side_above", face, visualLocalY, 2.6d, 1.55d, 0.50d),
+                aimCandidate("same_side_below", face, visualLocalY, 2.6d, 0.45d, 0.50d),
+                aimCandidate("near_corner_left", face, visualLocalY, 2.35d, 1.00d, 0.05d),
+                aimCandidate("near_corner_right", face, visualLocalY, 2.35d, 1.00d, 0.95d),
+                aimCandidate("wide_left", face, visualLocalY, 3.2d, 1.15d, -0.35d),
+                aimCandidate("wide_right", face, visualLocalY, 3.2d, 1.15d, 1.35d)
+        };
+    }
+
+    private static AimCandidate aimCandidate(
+            String name,
+            Direction face,
+            double visualLocalY,
+            double distance,
+            double eyeVisualY,
+            double faceLocalZ
+    ) {
+        Vec3d hit = visibleSideHitPointWithLocalZ(UPPER_FULL, face, visualLocalY,
+                EXPECTED_UPPER_FULL_DY, faceLocalZ);
+        double baseY = UPPER_FULL.getY() + EXPECTED_UPPER_FULL_DY + eyeVisualY;
+        double x = UPPER_FULL.getX() + 0.5d + face.getOffsetX() * distance;
+        double z = UPPER_FULL.getZ() + 0.5d + face.getOffsetZ() * distance;
+        if (face.getAxis() == Direction.Axis.X) {
+            z = UPPER_FULL.getZ() + faceLocalZ;
+        } else {
+            x = UPPER_FULL.getX() + faceLocalZ;
+        }
+        return new AimCandidate(name, new Vec3d(x, baseY, z), hit);
+    }
+
+    private static Vec3d visibleSideHitPointWithLocalZ(
+            BlockPos targetPos,
+            Direction face,
+            double visualLocalY,
+            double ownerDy,
+            double faceLocalZ
+    ) {
+        return switch (face) {
+            case NORTH -> new Vec3d(targetPos.getX() + faceLocalZ, targetPos.getY() + ownerDy + visualLocalY,
+                    targetPos.getZ());
+            case SOUTH -> new Vec3d(targetPos.getX() + faceLocalZ, targetPos.getY() + ownerDy + visualLocalY,
+                    targetPos.getZ() + 1.0d);
+            case EAST -> new Vec3d(targetPos.getX() + 1.0d, targetPos.getY() + ownerDy + visualLocalY,
+                    targetPos.getZ() + faceLocalZ);
+            case WEST -> new Vec3d(targetPos.getX(), targetPos.getY() + ownerDy + visualLocalY,
+                    targetPos.getZ() + faceLocalZ);
+            default -> throw new IllegalArgumentException("unsupported side face " + face);
+        };
+    }
+
     private static void emitTargetingDiagnostic(String step, String expectedBand, TargetingDiagnostic diagnostic) {
         String markers = switch (expectedBand) {
             case "LOWER" -> "[JULIA_BETA4_LIVE_GOBLIN_TARGETING_LOWER_DIAG]";
@@ -1127,6 +1346,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         String sequenceFirstTargeting = "NOT_RUN";
         String sequenceLowerAfterFirstTargeting = "NOT_RUN";
         String sequenceTopTargeting = "NOT_RUN";
+        String lowerCorridor = "NOT_RUN";
+        String lowerAfterFirstCorridor = "NOT_RUN";
         boolean ghost;
         boolean wrongDelta;
         boolean wrongOwner;
@@ -1180,6 +1401,65 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
         RealClickResult(String step) {
             this.step = step;
+        }
+    }
+
+    private static final class AimCandidate {
+        final String name;
+        final Vec3d eye;
+        final Vec3d hit;
+
+        private AimCandidate(String name, Vec3d eye, Vec3d hit) {
+            this.name = name;
+            this.eye = eye;
+            this.hit = hit;
+        }
+    }
+
+    private static final class AimCorridor {
+        final String caseName;
+        final String cameraName;
+        final Vec3d eye;
+        final Vec3d hit;
+        final String classification;
+        final String reason;
+        final AimFacts facts;
+        final String occluder;
+        final int testedCandidates;
+
+        private AimCorridor(
+                String caseName,
+                String cameraName,
+                Vec3d eye,
+                Vec3d hit,
+                String classification,
+                String reason,
+                AimFacts facts,
+                String occluder,
+                int testedCandidates
+        ) {
+            this.caseName = caseName;
+            this.cameraName = cameraName;
+            this.eye = eye;
+            this.hit = hit;
+            this.classification = classification;
+            this.reason = reason;
+            this.facts = facts;
+            this.occluder = occluder;
+            this.testedCandidates = testedCandidates;
+        }
+
+        static AimCorridor none(String caseName, int testedCandidates) {
+            return new AimCorridor(caseName, "none", null, null, "NO_CORRIDOR",
+                    "no_player_realistic_lower_corridor", null, "none", testedCandidates);
+        }
+
+        boolean found() {
+            return "TARGET_OK".equals(classification);
+        }
+
+        AimCorridor withTested(int tested) {
+            return new AimCorridor(caseName, cameraName, eye, hit, classification, reason, facts, occluder, tested);
         }
     }
 

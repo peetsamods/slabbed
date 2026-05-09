@@ -114,6 +114,12 @@ set:
 `[JULIA_BETA4_LIVE_GOBLIN_TARGETING_OCCLUSION_EXPECTED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_STATE_MISMATCH]`,
 `[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SUMMARY]`,
+`[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_START]`,
+`[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_CANDIDATE]`,
+`[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_SELECTED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_NONE]`,
+`[JULIA_BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]`,
+`[JULIA_BETA4_LIVE_GOBLIN_CORRIDOR_SUMMARY]`,
 `[JULIA_BETA4_LIVE_GOBLIN_DELTA_SCAN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SEQUENCE_FIRST_SIDE]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SEQUENCE_LOWER_AFTER_FIRST]`,
@@ -133,6 +139,16 @@ first, top face, and sequence top as `TARGET_OK`; lower-after-first is
 than the intended lower-side owner point. Summary:
 `[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SUMMARY] lower=OCCLUSION_EXPECTED upper=TARGET_OK top=TARGET_OK sequenceFirst=TARGET_OK sequenceLowerAfterFirst=OCCLUSION_EXPECTED sequenceTop=TARGET_OK harnessAimFailures=0 ownerFailures=0 occlusionCases=2 nextAction=choosePlayerRealisticAimPoint`.
 No owner/retarget failure is proven by this run, and release remains blocked.
+
+Latest corridor scout: lower-half player-realistic scanning is now part of the
+goblin proof. The clean lower case selected `same_side_straight` at
+`eye=(37.9,203.2,8.5)`. After the first upper side slab, the sequence selected
+`same_side_low` at `eye=(37.9,202.7,8.5)`, with real crosshair target
+`pos=40,203,8 face=west` and visual local Y around `0.25`. The subsequent
+lower-after-first click changed unexpected `38,203,8`, so it remains RED by
+delta, not by occlusion. Latest summary:
+`[JULIA_BETA4_LIVE_GOBLIN_CORRIDOR_SUMMARY] lowerCorridor=FOUND lowerAfterFirstCorridor=FOUND sequenceLowerResult=RED repeatPlacement=RED topFace=RED ghost=true wrongDelta=true releaseBlockers=lowerAfterFirst,repeatPlacement,topFace`.
+Release remains blocked.
 
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
