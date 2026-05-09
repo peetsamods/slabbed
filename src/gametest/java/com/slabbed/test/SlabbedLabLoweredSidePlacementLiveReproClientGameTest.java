@@ -3571,13 +3571,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     adjacentLanePos,
                     false);
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]"
+            System.out.println("[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]"
                     + " row=" + rowName
                     + " half=" + halfLabel
                     + " result=" + result
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
                     + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
-                    + " future=preserve_compound_or_reject_cleanly");
+                    + " current=legacy_preserve_or_reject"
+                    + " expected=legal_side_slab_dy_-0.5"
+                    + " reason=product_law_promoted_below_lane_class");
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
@@ -3753,12 +3755,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.world == null) {
                 throw new RuntimeException("[" + rowName + "] client world missing for compound sanity note");
             }
-            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]"
+            System.out.println("[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]"
                     + " row=" + rowName
                     + " sanity=no_ghost_flicker_after_tick"
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
                     + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
-                    + " todo=source_break_reload_rejoin_not_proven_here");
+                    + " expected=legal_side_slab_dy_-0.5"
+                    + " todo=implementation_pending");
         });
     }
 
@@ -3831,12 +3834,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " source=" + describeOwnerFacts(mc.world, compoundPos)
                         + " clickTarget=" + hit.getBlockPos().toShortString()
                         + " legalLaneCount=" + legalLaneCount);
-                System.out.println("[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]"
+                System.out.println("[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]"
                         + " row=" + rowName
                         + " phase=pre-click"
                         + " source=" + describeOwnerFacts(mc.world, compoundPos)
                         + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
-                        + " legalLaneCount=0");
+                        + " legalLaneCount=0"
+                        + " expected=legal_side_slab_dy_-0.5");
             }
         });
     }

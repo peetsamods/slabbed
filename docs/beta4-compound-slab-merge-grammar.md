@@ -42,12 +42,30 @@ Beta 4 does not allow:
 | --- | --- |
 | full block side-click on compound full block | keep current legal compound full-block behavior, `dy=-1.0` |
 | full block top-click on compound full block | same compound lane `dy=-1.0`, not `dy=-1.5` |
-| slab side-click on compound full block with no legal lowered slab lane nearby | preserve compound owner or cleanly reject; do not create `dy=-1.0` slab |
+| slab side-click on compound full block whose legal lowered slab lane/support is directly below the source | remap the immediate side candidate into the existing lowered slab grammar at `dy=-0.5`; do not create `dy=-1.0` slab |
 | slab side-click where existing legal `dy=-0.5` lowered slab lane can be continued | remap into that `dy=-0.5` legal lane |
 | second slab click against compatible lowered slab | merge `BOTTOM`/`TOP` into `DOUBLE` `dy=-0.5` when proof-covered |
 | slab top-click on compound full block | only complete if it normalizes into named legal vanilla or lowered slab state; otherwise preserve/reject |
 | source/support break | no jump, no ghost, no silent renormalization |
 | reload/rejoin | legal states survive; illegal/unproven states must not appear |
+
+## Product decision: compound below-lane side slab placement
+
+The discriminator audit proved that below-lane-only is unsafe as a screenshot-only discriminator: Julia's screenshot side-shape and Rows 1/2 have the same placement facts available to current authority. The product contract therefore promotes that whole class into a named legal placement instead of trying to split it with a nonexistent discriminator.
+
+If a compound `dy=-1.0` ordinary full-block source has a legal lowered slab lane/support directly below it, a held-slab side click may author the immediate side candidate into the existing legal `dy=-0.5` lowered slab grammar. The candidate side slab may become `BOTTOM` or `TOP` at `dy=-0.5` according to that existing lowered slab grammar.
+
+This is allowed because the result is not a compound slab lane. It is a remap into existing lowered slab grammar at `dy=-0.5`.
+
+The forbidden results remain unchanged:
+
+- no slab state at `dy=-1.0`
+- no slab state at `dy<-1.0`
+- no `dy=0` slab from a lowered-lane interaction
+- no rescue/retarget workaround
+- no broad solidity lie
+
+Rows 1/2 and Julia's screenshot side-shape are now intentionally unified as the same legal class: compound below-lane side slab placement. Rows 1/2 are expected RED/PENDING until implementation; their previous safe-reject GREEN status is superseded by this product decision.
 
 ## Owner/targeting policy
 
@@ -60,8 +78,8 @@ Beta 4 does not allow:
 
 | # | Proof row | Expected initial RED behavior | Intended GREEN result | Forbidden false-green |
 | --- | --- | --- | --- | --- |
-| 1 | slab lower-half side click on compound full block with no neighboring legal slab lane | clean rejection or owner preservation only; no slab lane appears | preserve compound owner or reject cleanly without new slab state | any `dy=-1.0` slab or rescue-created slab lane |
-| 2 | slab upper-half side click on compound full block with no neighboring legal slab lane | same restrictive behavior as row 1 | preserve compound owner or reject cleanly without new slab state | any `dy=-1.0` slab or hidden retarget workaround |
+| 1 | slab lower-half side click on compound full block with legal lowered slab support directly below and no horizontal lane | currently preserves/rejects and authors no slab | author the immediate side candidate as legal lowered slab grammar at `dy=-0.5` | any `dy=-1.0` slab, `dy<-1.0`, `dy=0` lowered-lane fallback, or rescue-created slab lane |
+| 2 | slab upper-half side click on compound full block with legal lowered slab support directly below and no horizontal lane | currently preserves/rejects and authors no slab | author the immediate side candidate as legal lowered slab grammar at `dy=-0.5` | any `dy=-1.0` slab, `dy<-1.0`, `dy=0` lowered-lane fallback, or hidden retarget workaround |
 | 3 | slab side click when adjacent legal `dy=-0.5` lowered slab lane exists | still rejects or misroutes until grammar exists | remap into the adjacent legal lowered lane | `dy=0` fallback or compound lane invention |
 | 4 | second slab click merging `BOTTOM`/`TOP` -> `DOUBLE` `dy=-0.5` | merge path not yet proven | merge into `DOUBLE` `dy=-0.5` only when proof-covered | `DOUBLE` at `dy=-1.0` or silent recursion |
 | 5 | slab top click on compound full block | current clean rejection feels too strict | normalize only into legal vanilla or lowered slab state, otherwise preserve/reject | freeform slab at `dy=-1.0` |
@@ -75,8 +93,8 @@ Beta 4 does not allow:
 
 These proof rows now exist in the focused harness slice:
 
-- Row 1: GREEN-safe-reject.
-- Row 2: GREEN-safe-reject.
+- Row 1: RED/PENDING for compound below-lane side slab placement; old safe-reject GREEN is superseded.
+- Row 2: RED/PENDING for compound below-lane side slab placement; old safe-reject GREEN is superseded.
 - Internal proof Row 3: GREEN-implemented/proven for the narrow artificial same-Y remap topology; automated/focused proof passed and runtime/live-launch logs emitted GREEN.
 - Julia screenshot shape: RED/pending fix; manual live verdict rejected the release feel because the in-world sign-labeled upper full-block topology still cannot place a slab off the side and top-face placement can skip/ghost.
 - Row 4: TODO.
@@ -87,18 +105,22 @@ Harness/source-truth repair note:
 
 - The failed Row 3 implementation attempt exposed a proof topology gap: Row 1 could report against an authored `dy=-0.5` lowered slab at the side lane instead of proving the clicked source was the compound ordinary full block.
 - Before any slab click/remap assertion, Rows 1-3 now prove the clicked source is ordinary stone, `compoundFullBlockAnchor=true`, and `dy=-1.0`.
-- Rows 1-2 require zero neighboring legal `dy=-0.5` slab lanes and still safe-reject/preserve the compound source.
+- Rows 1-2 require zero neighboring horizontal legal `dy=-0.5` slab lanes, but their legal lowered support directly below the compound source now makes them expected compound below-lane side slab placements. They are expected RED/PENDING until implementation.
 - Row 3 requires exactly one legal adjacent `dy=-0.5` slab lane in the intended remap direction. The implemented path now remaps to the continuation cell beyond that lane and authors a legal lowered slab lane at `dy=-0.5`.
 - The Row 3 implementation keeps the clicked source as ordinary stone at compound `dy=-1.0` and does not legalize slab type + `dy=-1.0`.
 
 Current proof markers emitted by the gated gametest slice:
 
-- `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`
+- `[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]`
 - `[JULIA_BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]`
 - `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]`
 - `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]`
 - `[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`
 - `[JULIA_BETA4_COMPOUND_SLAB_HARNESS_FAIL]`
+
+Superseded history marker: `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`
+used to describe Rows 1/2 as release-safe rejection. It no longer implies
+release-safe behavior for that class.
 
 Rows 4-6 remain pending/TODO in this focused grammar note. Row 4 DOUBLE merge and Row 5 top-click are not implemented by the internal Row 3 remap slice. Julia's screenshot-shape RED is now a separate required proof/fix path, not a contradiction of the internal Row 3 GREEN.
 
@@ -129,7 +151,7 @@ change Rows 1/2 semantics.
 
 | Case | Clicked source | Face / band | Below source | Horizontal lane in clicked direction | Current helper `legalLaneCount` | Candidate relation | Candidate has horizontal `dy=-0.5` lane neighbor | Source has vertical below `dy=-0.5` support only | Expected behavior | Current behavior |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Rows 1/2 no-legal-lane safe reject | ordinary stone compound full block, `dy=-1.0` | horizontal side; Row 1 lower band, Row 2 upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | preserve/reject cleanly, no slab authored | GREEN safe reject |
+| Rows 1/2 compound below-lane side slab placement | ordinary stone compound full block, `dy=-1.0` | horizontal side; Row 1 lower band, Row 2 upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | author legal lowered side slab at `dy=-0.5` | RED/PENDING; old safe reject superseded |
 | Internal artificial Row 3 legal remap | ordinary stone compound full block, `dy=-1.0` | horizontal side; lower band | bottom `stone_slab`, `dy=-0.5` | existing legal bottom `stone_slab`, `dy=-0.5` | `1` | continuation cell beyond existing lane | yes | no, because horizontal lane exists | author `stone_slab[type=bottom]` at `dy=-0.5` | GREEN legal remap |
 | Julia screenshot side-shape RED | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; lower/below-source band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | desired: author legal lowered side slab | RED/pass/no slab authored |
 
@@ -143,20 +165,21 @@ Discriminator candidates evaluated:
 | D. Candidate position relation | no; screenshot and Rows 1/2 both target the immediate side cell if below-lane-only were accepted | yes | yes if used alone | no |
 | E. Existing visible lane ownership | no proven screenshot-only owner exists; Row 3 has a horizontal visible lane, screenshot and Rows 1/2 do not | yes | no if defined as Row 3's horizontal lane | no for screenshot |
 
-Conclusion: below-lane-only is rejected as unsafe. If the screenshot side shape
-must place a slab, the next slice needs either a new proven semantic input that
-is absent from Rows 1/2, or an explicit product-law change that accepts the same
-placement surface Rows 1/2 currently preserve/reject.
+Conclusion: below-lane-only is rejected as a discriminator but promoted as a
+product-law class. The screenshot side-shape and Rows 1/2 are the same legal
+placement surface now: compound below-lane side slab placement. The future
+implementation must remap that surface into existing legal lowered slab grammar
+at `dy=-0.5`; the `dy=-1.0` slab lane remains illegal.
 
 ## Implementation slices after design
 
-1. Add focused RED proofs only.
-2. Add authority-level classifier for compound slab merge/remap result.
+1. Add/rename focused RED/PENDING proof markers for compound below-lane side slab placement.
+2. Add authority-level classifier for compound below-lane slab remap result.
 3. Remap only into existing legal `dy=-0.5` lowered slab grammar.
 4. Preserve/reject when no legal stable slab result exists.
 5. Add merge completion into `DOUBLE` `dy=-0.5`.
 6. Triad and survival proof.
-7. Julia live goblin pass.
+7. Julia live retest.
 8. commit/tag/push only after one live-confirmed win.
 
 ## Authority placement

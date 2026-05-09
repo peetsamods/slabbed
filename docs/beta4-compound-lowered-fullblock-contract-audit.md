@@ -19,6 +19,15 @@ The internal proof row covers a narrow artificial same-Y remap path; it does
 not cover Julia's in-world sign-labeled upper full-block shape with a lowered
 slab directly below. Manual live acceptance is not claimed.
 
+Product-law correction at `d96ba01`: the discriminator audit proved Julia's
+screenshot side-shape and Rows 1/2 are equivalent under current facts
+(`sourceDy=-1.0`, `belowDy=-0.5`, immediate side candidate air,
+`legalLaneCount=0`, `sourceBelowOnlyLoweredLane=true`). Rows 1/2 are no longer
+safe-reject/pass cases. They are promoted into the named legal class
+**compound below-lane side slab placement**: expected legal side placement at
+`dy=-0.5` through existing lowered slab grammar, currently RED/PENDING until
+implementation. This does not legalize any `dy=-1.0` slab lane.
+
 ## Current savepoint
 
 - HEAD: `06724fb`
@@ -355,23 +364,28 @@ legalize any beta4 `dy=-1.0` slab lane or any `dy<-1.0` recursion.
 
 The focused compound slab merge/remap proof slice now lives in
 `src/gametest/java/com/slabbed/test/SlabbedLabLoweredSidePlacementLiveReproClientGameTest.java`
-and emits `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`,
+and emits `[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]`,
 `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]`,
 `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]`, and
 `[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`. Those markers keep the
-safe no-lane rejection explicit while proving that the Row 3 legal `dy=-0.5`
-remap path now exists. The row-3 proof record is in
+old no-lane rejection as superseded/pending while proving that the artificial
+Row 3 legal `dy=-0.5` remap path already exists. The row-3 proof record is in
 `tmp/beta4-compound-slab-row3-live-742a839/`; Rows 4 and 5 remain pending for
 later beta4 work and are not treated as blockers by this automated/focused
 proof, but Julia manual live-feel test is still pending. This is not a
 generalized rescue/retarget fix.
 
+Superseded history marker: `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`
+used to mark Rows 1/2 as safe rejection. It no longer implies release-safe
+behavior after the compound below-lane product decision.
+
 Harness audit note: Row 3 proof must start from proven compound dy=-1.0 ordinary
 full-block source; dy=-0.5 source hits are invalid for this row. The corrected
 focused harness proves `compoundFullBlockAnchor=true`, clicked source
 `dy=-1.0`, and exactly one adjacent legal `dy=-0.5` remap lane before emitting
-the Row 3 GREEN marker. Rows 1/2 still require `legalLaneCount=0` and preserve
-the compound source with no authored slab when no legal lowered slab lane exists.
+the Row 3 GREEN marker. Rows 1/2 still require `legalLaneCount=0`, but their
+direct below-lane support now makes them expected legal `dy=-0.5` side
+placements; the old preserve/reject behavior is RED/PENDING implementation.
 The Row 3 implementation remaps only into the continuation cell beyond the one
 existing legal lowered slab lane and keeps beta4 `dy=-1.0` slab lanes illegal.
 
@@ -384,15 +398,17 @@ screenshot side-shape without changing placement behavior:
 
 | Case | Clicked source / dy | Below source | Horizontal lane | Helper lane count | Candidate relation | Expected / current |
 | --- | --- | --- | --- | --- | --- | --- |
-| Rows 1/2 no-legal-lane | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | reject/preserve; GREEN |
+| Rows 1/2 compound below-lane side slab placement | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | expected legal `dy=-0.5` side slab; RED/PENDING |
 | Internal Row 3 legal remap | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | legal bottom slab, `dy=-0.5` | `1` | continuation beyond horizontal lane | author lowered slab; GREEN |
 | Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | desired placement; current RED/pass |
 
 The audit rejects "lowered bottom slab directly below the source" as a safe
 predicate: it is shared by Julia's screenshot side-shape and Row 1 no-legal-lane
-safe rejection. The currently safe discriminator is the existing horizontal
-legal-lane continuation used by Row 3, but that discriminator does not allow the
-screenshot shape. No full manual live acceptance is claimed.
+safe rejection. Product law now intentionally accepts that shared surface rather
+than trying to keep Rows 1/2 rejected while allowing the screenshot shape. The
+existing horizontal legal-lane continuation used by Row 3 remains a separate
+GREEN artificial proof. The top-face ghost/skip path remains a separate
+RED/PENDING issue. No full manual live acceptance is claimed.
 
 ### Compound matrix closure
 
