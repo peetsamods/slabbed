@@ -88,6 +88,8 @@ jar {
     exclude("com/slabbed/client/ScreenshotCaptureService*.class")
     exclude("com/slabbed/client/CaptureProfile.class")
     exclude("com/slabbed/util/SlabbedDebug.class")
+    exclude("com/slabbed/util/Beta4PlacementAuthorRecorder.class")
+    exclude("com/slabbed/util/SlabbedAuditBridge.class")
     exclude("slabbed.debug.mixins.json")
 }
 

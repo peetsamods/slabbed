@@ -1,9 +1,8 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.util.Beta4PlacementAuthorRecorder;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedAuditBridge;
+import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
@@ -153,7 +152,7 @@ public abstract class BlockItemPlacementIntentMixin {
             Vec3d remappedHitPos,
             Direction effectiveSide,
             String hitDescriptor) {
-        SlabbedAuditBridge.invoke(
+        RuntimeDiagnostics.invoke(
                 "recordRemapAttempt",
                 REMAP_ATTEMPT_PARAM_TYPES,
                 context,
@@ -174,7 +173,7 @@ public abstract class BlockItemPlacementIntentMixin {
     private static ItemUsageContext slabbed$inspectReturn(
             ItemUsageContext incoming, ItemUsageContext outgoing, String reason
     ) {
-        SlabbedAuditBridge.logInspectIntent(incoming, outgoing, reason);
+        RuntimeDiagnostics.logInspectIntent(incoming, outgoing, reason);
         return outgoing;
     }
 
@@ -430,14 +429,14 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockItem self = (BlockItem) (Object) this;
         boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
         if (!cir.getReturnValue().isAccepted()) {
-            Beta4PlacementAuthorRecorder.recordPlace(
+            RuntimeDiagnostics.recordPlace(
                     "finalization-return",
                     Registries.ITEM.getId(self),
                     heldIsSlab,
                     context,
                     cir.getReturnValue(),
                     "anchorFinalization=skipped_result_not_accepted");
-            Beta4PlacementAuthorRecorder.recordCompoundFinalization(
+            RuntimeDiagnostics.recordCompoundFinalization(
                     "finalization-return",
                     Registries.ITEM.getId(self),
                     heldIsSlab,
@@ -463,7 +462,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, placePos, placedState);
                 boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
                 boolean persistentAfter = SlabAnchorAttachment.isAnchored(world, placePos);
-                Beta4PlacementAuthorRecorder.recordPlace(
+                RuntimeDiagnostics.recordPlace(
                         "finalization-return",
                         Registries.ITEM.getId(self),
                         true,
@@ -471,7 +470,7 @@ public abstract class BlockItemPlacementIntentMixin {
                         cir.getReturnValue(),
                         "anchorFinalization=ran_update_persistent_lowered_slab_carrier carrierAfter="
                                 + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, placedState));
-                Beta4PlacementAuthorRecorder.recordCompoundFinalization(
+                RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
                         Registries.ITEM.getId(self),
                         true,
@@ -485,14 +484,14 @@ public abstract class BlockItemPlacementIntentMixin {
                         persistentAfter,
                         "held_slab_persistent_bottom_carrier_candidate");
             } else {
-                Beta4PlacementAuthorRecorder.recordPlace(
+                RuntimeDiagnostics.recordPlace(
                         "finalization-return",
                         Registries.ITEM.getId(self),
                         true,
                         context,
                         cir.getReturnValue(),
                         "anchorFinalization=skipped_slab_not_persistent_carrier_candidate");
-                Beta4PlacementAuthorRecorder.recordCompoundFinalization(
+                RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
                         Registries.ITEM.getId(self),
                         true,
@@ -518,7 +517,7 @@ public abstract class BlockItemPlacementIntentMixin {
             boolean anchorAfter = SlabAnchorAttachment.isAnchored(world, placePos);
             boolean compoundAnchorAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
             if (compoundAnchorAfter) {
-                Beta4PlacementAuthorRecorder.recordPlace(
+                RuntimeDiagnostics.recordPlace(
                         "finalization-return",
                         Registries.ITEM.getId(self),
                         false,
@@ -530,7 +529,7 @@ public abstract class BlockItemPlacementIntentMixin {
                                 + " compoundAnchorAfter=" + compoundAnchorAfter
                                 + " sourcePos=" + sourcePos.toShortString()
                                 + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
-                Beta4PlacementAuthorRecorder.recordCompoundFinalization(
+                RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
                         Registries.ITEM.getId(self),
                         false,
@@ -548,14 +547,14 @@ public abstract class BlockItemPlacementIntentMixin {
         }
 
         if (context.getSide().getAxis().isVertical()) {
-            Beta4PlacementAuthorRecorder.recordPlace(
+            RuntimeDiagnostics.recordPlace(
                     "finalization-return",
                     Registries.ITEM.getId(self),
                     false,
                     context,
                     cir.getReturnValue(),
                     "anchorFinalization=skipped_vertical_face");
-            Beta4PlacementAuthorRecorder.recordCompoundFinalization(
+            RuntimeDiagnostics.recordCompoundFinalization(
                     "finalization-return",
                     Registries.ITEM.getId(self),
                     false,
@@ -572,14 +571,14 @@ public abstract class BlockItemPlacementIntentMixin {
         }
 
         if (!SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, placePos, placedState)) {
-            Beta4PlacementAuthorRecorder.recordPlace(
+            RuntimeDiagnostics.recordPlace(
                     "finalization-return",
                     Registries.ITEM.getId(self),
                     false,
                     context,
                     cir.getReturnValue(),
                     "anchorFinalization=skipped_not_ordinary_full_block_anchor_candidate");
-            Beta4PlacementAuthorRecorder.recordCompoundFinalization(
+            RuntimeDiagnostics.recordCompoundFinalization(
                     "finalization-return",
                     Registries.ITEM.getId(self),
                     false,
@@ -602,7 +601,7 @@ public abstract class BlockItemPlacementIntentMixin {
         SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(world, placePos, placedState, sourcePos, sourceState);
         boolean anchorAfter = SlabAnchorAttachment.isAnchored(world, placePos);
         boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
-        Beta4PlacementAuthorRecorder.recordPlace(
+        RuntimeDiagnostics.recordPlace(
                 "finalization-return",
                 Registries.ITEM.getId(self),
                 false,
@@ -613,7 +612,7 @@ public abstract class BlockItemPlacementIntentMixin {
                         + " anchorAfter=" + anchorAfter
                         + " sourcePos=" + sourcePos.toShortString()
                         + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
-        Beta4PlacementAuthorRecorder.recordCompoundFinalization(
+        RuntimeDiagnostics.recordCompoundFinalization(
                 "finalization-return",
                 Registries.ITEM.getId(self),
                 false,

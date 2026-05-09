@@ -2,7 +2,7 @@ package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.util.Beta4PlacementAuthorRecorder;
+import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.SlabBlock;
@@ -121,7 +121,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             boolean bridgeAccepted,
             String rejectionReason
     ) {
-        if (!Beta4PlacementAuthorRecorder.compoundLivePathEnabled()) {
+        if (!RuntimeDiagnostics.compoundLivePathEnabled()) {
             return;
         }
         BlockState state = world == null || pos == null ? null : world.getBlockState(pos);
