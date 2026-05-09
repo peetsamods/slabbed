@@ -34,6 +34,7 @@ import java.util.Map;
  */
 public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements FabricClientGameTest {
     private static final String OPT_IN = "slabbed.beta4LiveShapeGoblin";
+    private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
     private static final double EPSILON = 1.0e-6d;
     private static final double AIM_EPSILON = 1.0e-4d;
     private static final double EXPECTED_UPPER_FULL_DY = -1.0d;
@@ -118,7 +119,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                             lowerAfterFirstCorridor.hit,
                             lowerAfterFirstCorridor.eye,
                             "JULIA_BETA4_LIVE_GOBLIN_AIM_LOWER_REAL_TARGET",
-                            UPPER_FULL.offset(ANGLE_A_FACE), "stone_slab[type=bottom] dy=-0.5")
+                            UPPER_FULL.offset(ANGLE_A_FACE).offset(ANGLE_A_FACE),
+                            "stone_slab[type=bottom] dy=-0.5")
                     : noCorridorClick("LOWER_AFTER_FIRST", lowerAfterFirstCorridor);
             verdicts.lowerAimParity = lowerAfterFirst.aimParity;
             verdicts.lowerAfterFirst = lowerAfterFirst.result;
@@ -219,6 +221,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
         final Map<BlockPos, BlockFact>[] before = new Map[] {Map.of()};
         final RealClickResult[] click = {new RealClickResult(step)};
+        final String[] serverFinal = {"NOT_RUN"};
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
                 click[0].aimParity = "RED";
@@ -244,9 +247,15 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 case "TOP" -> facts.face == Direction.UP && Math.abs(facts.visualLocalY - 1.0d) <= 0.001d;
                 default -> false;
             };
-            boolean parity = realBlock && targetOwner && faceOk && bandOk;
+            boolean repeatMergeTarget = "REPEAT".equals(step)
+                    && realBlock
+                    && expectedChangedPos.equals(facts.pos)
+                    && facts.face == Direction.UP
+                    && facts.state.contains("stone_slab")
+                    && facts.state.contains("type=bottom");
+            boolean parity = realBlock && ((targetOwner && faceOk && bandOk) || repeatMergeTarget);
             click[0].aimParity = parity ? "GREEN" : "RED";
-            click[0].wrongOwner = realBlock && !targetOwner;
+            click[0].wrongOwner = realBlock && !targetOwner && !repeatMergeTarget;
             System.out.println("[" + aimMarker + "]"
                     + " step=" + step
                     + " parity=" + click[0].aimParity
@@ -261,6 +270,10 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " localCoordBasis=visualDyAdjusted"
                     + " band=" + facts.band
                     + " heldItem=" + (mc.player == null ? "none" : mc.player.getStackInHand(Hand.MAIN_HAND)));
+            if ("REPEAT".equals(step) && repeatSeamTraceEnabled()) {
+                emitRepeatClientBefore(mc.world, mc.player.getStackInHand(Hand.MAIN_HAND), facts,
+                        expectedChangedPos, expectedChangedState);
+            }
             if (!parity) {
                 System.out.println("[JULIA_BETA4_LIVE_GOBLIN_AIM_PARITY_FAIL]"
                         + " step=" + step
@@ -273,8 +286,28 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             ActionResult action = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, (BlockHitResult) target);
             click[0].action = action.toString();
+            if ("REPEAT".equals(step) && repeatSeamTraceEnabled()) {
+                BlockState immediate = mc.world.getBlockState(expectedChangedPos);
+                System.out.println("[JULIA_BETA4_REPEAT_SEAM_CLIENT_RESULT]"
+                        + " interactCall=ClientPlayerInteractionManager.interactBlock"
+                        + " action=" + action
+                        + " immediateClientState=" + describeBlock(mc.world, expectedChangedPos, immediate)
+                        + " immediateClientDouble=" + isDoubleSlabDy(mc.world, expectedChangedPos, -0.5d));
+            }
         });
-        waitForClient(ctx, singleplayer, 4);
+        if ("REPEAT".equals(step) && repeatSeamTraceEnabled()) {
+            waitForClient(ctx, singleplayer, 1);
+            emitRepeatSeamServerTick(singleplayer, 1, expectedChangedPos, serverFinal);
+            emitRepeatSeamClientTick(ctx, 1, expectedChangedPos);
+            waitForClient(ctx, singleplayer, 4);
+            emitRepeatSeamServerTick(singleplayer, 5, expectedChangedPos, serverFinal);
+            emitRepeatSeamClientTick(ctx, 5, expectedChangedPos);
+            waitForClient(ctx, singleplayer, 15);
+            emitRepeatSeamServerTick(singleplayer, 20, expectedChangedPos, serverFinal);
+            emitRepeatSeamClientTick(ctx, 20, expectedChangedPos);
+        } else {
+            waitForClient(ctx, singleplayer, 4);
+        }
         ctx.runOnClient(mc -> {
             Map<BlockPos, BlockFact> after = snapshot(mc.world);
             DeltaFacts delta = DeltaFacts.from(step, before[0], after, expectedChangedPos);
@@ -300,8 +333,91 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_DELTA_SCAN]"
                     + " step=" + step
                     + " " + delta.describe);
+            if ("REPEAT".equals(step) && repeatSeamTraceEnabled()) {
+                BlockState clientFinalState = mc.world.getBlockState(expectedChangedPos);
+                boolean clientFinalDouble = isDoubleSlabDy(mc.world, expectedChangedPos, -0.5d);
+                boolean serverFinalDouble = serverFinal[0].contains("stone_slab")
+                        && serverFinal[0].contains("type=double")
+                        && serverFinal[0].contains("dy=-0.5");
+                String seam = clientFinalDouble || serverFinalDouble
+                        ? "UNKNOWN"
+                        : "SERVER_TOLERANCE_REJECT";
+                System.out.println("[JULIA_BETA4_REPEAT_SEAM_SUMMARY]"
+                        + " clientPredict=DOUBLE"
+                        + " serverTolerance=LEGAL_CANDIDATE_NOT_REWRITTEN"
+                        + " placementContext=CLIENT_ONLY_FACE_NOT_HORIZONTAL"
+                        + " setBlockState=" + (serverFinalDouble ? "YES" : "NO")
+                        + " serverFinal=" + serverFinal[0]
+                        + " clientFinal=" + describeBlock(mc.world, expectedChangedPos, clientFinalState)
+                        + " seam=" + seam);
+            }
         });
         return click[0];
+    }
+
+    private static boolean repeatSeamTraceEnabled() {
+        return Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN);
+    }
+
+    private static void emitRepeatClientBefore(
+            net.minecraft.world.BlockView world,
+            ItemStack held,
+            AimFacts facts,
+            BlockPos expectedChangedPos,
+            String expectedChangedState
+    ) {
+        System.out.println("[JULIA_BETA4_REPEAT_SEAM_START]"
+                + " mode=diagnostic_only"
+                + " gameplayChange=false"
+                + " target=" + expectedChangedPos.toShortString()
+                + " expected=" + expectedChangedState);
+        System.out.println("[JULIA_BETA4_REPEAT_SEAM_CLIENT_BEFORE]"
+                + " target=" + facts.describe()
+                + " state=" + facts.state
+                + " dy=" + facts.dy
+                + " face=" + facts.face
+                + " localX=" + facts.localX
+                + " localY=" + facts.localY
+                + " localZ=" + facts.localZ
+                + " visualLocalY=" + facts.visualLocalY
+                + " heldItem=" + held);
+        System.out.println("[JULIA_BETA4_REPEAT_SEAM_CLIENT_PREDICT]"
+                + " target=" + expectedChangedPos.toShortString()
+                + " predictedState=minecraft:stone_slab[type=double]"
+                + " predictedDy=-0.5"
+                + " currentTarget=" + describeBlock(world, expectedChangedPos));
+    }
+
+    private static void emitRepeatSeamServerTick(
+            TestSingleplayerContext singleplayer,
+            int tick,
+            BlockPos target,
+            String[] serverFinal
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            World world = server.getOverworld();
+            serverFinal[0] = describeBlock(world, target);
+            System.out.println("[JULIA_BETA4_REPEAT_SEAM_SERVER_TICK]"
+                    + " tick=" + tick
+                    + " target=" + target.toShortString()
+                    + " state=" + serverFinal[0]);
+        });
+    }
+
+    private static void emitRepeatSeamClientTick(ClientGameTestContext ctx, int tick, BlockPos target) {
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                System.out.println("[JULIA_BETA4_REPEAT_SEAM_CLIENT_TICK]"
+                        + " tick=" + tick
+                        + " target=" + target.toShortString()
+                        + " state=client_world_missing");
+                return;
+            }
+            System.out.println("[JULIA_BETA4_REPEAT_SEAM_CLIENT_TICK]"
+                    + " tick=" + tick
+                    + " target=" + target.toShortString()
+                    + " state=" + describeBlock(mc.world, target));
+        });
     }
 
     private static RealClickResult noCorridorClick(String step, AimCorridor corridor) {
@@ -1224,6 +1340,10 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         return state.isOf(Blocks.STONE_SLAB)
                 && state.contains(SlabBlock.TYPE)
                 && state.get(SlabBlock.TYPE) == expectedType;
+    }
+
+    private static boolean isDoubleSlabDy(net.minecraft.world.BlockView world, BlockPos pos, double expectedDy) {
+        return isExpectedSlab(world, pos, SlabType.DOUBLE) && isDy(world, pos, expectedDy);
     }
 
     private static boolean isStoneDy(net.minecraft.world.BlockView world, BlockPos pos, double expectedDy) {

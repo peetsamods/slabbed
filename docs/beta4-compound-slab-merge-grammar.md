@@ -170,6 +170,14 @@ After `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]`, it tests support-present lowe
 
 Exact-candidate proof is mandatory. "Some slab placed" is not sufficient: lower-band side clicks must resolve to the expected side candidate as `stone_slab[type=bottom]` at `dy=-0.5`; upper-band side clicks must resolve to the same side candidate as `stone_slab[type=top]` at `dy=-0.5`; repeat placement must legally extend/combine according to product law; top-face clicks must resolve to `source.up()` as `stone_slab[type=bottom]` at `dy=0.0`.
 
+Repeat merge seam finding:
+
+- Diagnostic-only trace property: `-Dslabbed.beta4RepeatMergeTrace=true`.
+- Markers: `[JULIA_BETA4_REPEAT_SEAM_START]`, `[JULIA_BETA4_REPEAT_SEAM_CLIENT_BEFORE]`, `[JULIA_BETA4_REPEAT_SEAM_CLIENT_PREDICT]`, `[JULIA_BETA4_REPEAT_SEAM_CLIENT_RESULT]`, `[JULIA_BETA4_REPEAT_SEAM_SERVER_TOLERANCE]`, `[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]`, `[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]`, `[JULIA_BETA4_REPEAT_SEAM_SERVER_TICK]`, `[JULIA_BETA4_REPEAT_SEAM_CLIENT_TICK]`, and `[JULIA_BETA4_REPEAT_SEAM_SUMMARY]`.
+- Current classification: `SERVER_TOLERANCE_REJECT`.
+- The client predicts `stone_slab[type=double] dy=-0.5` and returns `Success`, but that is not proof of a durable server merge. The server sees a legal lowered same-cell merge candidate, leaves the packet center unchanged, and the target remains `stone_slab[type=bottom] dy=-0.5` on both server and client at ticks 1, 5, and 20.
+- Release remains blocked on repeat placement and top-face proof. No gameplay fix is included in this audit.
+
 Goblin live parity is now mandatory before any goblin GREEN can be treated as
 release evidence. The harness must aim the camera, read the actual
 `MinecraftClient.crosshairTarget`, prove the target owner/face/localY/band, and

@@ -33,6 +33,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BlockItemPlacementIntentMixin {
 
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
+    private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(ItemUsageContext context, BlockPos pos, BlockState state) {
         return state.isSolidBlock(context.getWorld(), pos)
@@ -161,6 +162,7 @@ public abstract class BlockItemPlacementIntentMixin {
             CallbackInfoReturnable<ActionResult> cir
     ) {
         BlockItem self = (BlockItem) (Object) this;
+        slabbed$traceRepeatPlacementContext("useOnBlock-head", context, context, "head");
         if (!(self.getBlock() instanceof SlabBlock)) {
             return;
         }
@@ -239,6 +241,79 @@ public abstract class BlockItemPlacementIntentMixin {
                 remappedHitPos,
                 effectiveSide,
                 hitDescriptor);
+    }
+
+    private static boolean slabbed$repeatSeamTraceEnabled() {
+        return Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN);
+    }
+
+    private static void slabbed$traceRepeatPlacementContext(
+            String phase,
+            ItemUsageContext incoming,
+            ItemUsageContext outgoing,
+            String decision
+    ) {
+        if (!slabbed$repeatSeamTraceEnabled() || incoming == null || incoming.getWorld() == null) {
+            return;
+        }
+        World world = incoming.getWorld();
+        BlockPos incomingPos = incoming.getBlockPos();
+        BlockState incomingState = world.getBlockState(incomingPos);
+        BlockPos outgoingPos = outgoing == null ? incomingPos : outgoing.getBlockPos();
+        World outgoingWorld = outgoing == null ? world : outgoing.getWorld();
+        BlockState outgoingState = outgoingWorld.getBlockState(outgoingPos);
+        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
+                + " phase=" + phase
+                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
+                + " incomingPos=" + incomingPos.toShortString()
+                + " incomingFace=" + incoming.getSide()
+                + " incomingHit=" + incoming.getHitPos()
+                + " incomingState=" + incomingState
+                + " incomingDy=" + SlabSupport.getYOffset(world, incomingPos, incomingState)
+                + " outgoingPos=" + outgoingPos.toShortString()
+                + " outgoingFace=" + (outgoing == null ? "null" : outgoing.getSide())
+                + " outgoingHit=" + (outgoing == null ? "null" : outgoing.getHitPos())
+                + " outgoingState=" + outgoingState
+                + " outgoingDy=" + SlabSupport.getYOffset(outgoingWorld, outgoingPos, outgoingState)
+                + " heldItem=" + Registries.ITEM.getId(incoming.getStack().getItem())
+                + " decision=" + decision);
+        if (phase.contains("exit")) {
+            System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
+                    + " phase=" + phase
+                    + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
+                    + " incomingPos=" + incomingPos.toShortString()
+                    + " outgoingPos=" + outgoingPos.toShortString()
+                    + " decision=" + decision);
+        }
+    }
+
+    private static void slabbed$traceRepeatFinalization(
+            ItemPlacementContext context,
+            ActionResult result,
+            BlockState placedState
+    ) {
+        if (!slabbed$repeatSeamTraceEnabled() || context == null || context.getWorld() == null) {
+            return;
+        }
+        World world = context.getWorld();
+        BlockPos placePos = context.getBlockPos();
+        boolean durableDouble = placedState.getBlock() instanceof SlabBlock
+                && placedState.contains(SlabBlock.TYPE)
+                && placedState.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                && Math.abs(SlabSupport.getYOffset(world, placePos, placedState) + 0.5d)
+                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
+                + " phase=finalization-return"
+                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
+                + " result=" + result
+                + " accepted=" + (result != null && result.isAccepted())
+                + " placePos=" + placePos.toShortString()
+                + " face=" + context.getSide()
+                + " hit=" + context.getHitPos()
+                + " placedState=" + placedState
+                + " placedDy=" + SlabSupport.getYOffset(world, placePos, placedState)
+                + " durableDouble=" + durableDouble
+                + " setBlockStateDurable=" + (durableDouble ? "YES" : "NO_OR_NOT_DOUBLE"));
     }
 
     private static ItemUsageContext slabbed$inspectReturn(
@@ -320,6 +395,9 @@ public abstract class BlockItemPlacementIntentMixin {
 
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
+        slabbed$traceRepeatPlacementContext("placement-context", context, context,
+                "initial targetState=" + targetState
+                        + " targetDy=" + SlabSupport.getYOffset(context.getWorld(), targetPos, targetState));
         if (slabbed$isCompoundSideHit(context, targetPos, targetState)) {
             SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
                     context.getWorld(),
@@ -405,6 +483,8 @@ public abstract class BlockItemPlacementIntentMixin {
                     null,
                     null,
                     "none");
+            slabbed$traceRepeatPlacementContext("placement-exit", context, context,
+                    "exit=face_not_horizontal targetSupportsTopMerge=" + targetSupportsTopMerge);
             return slabbed$inspectReturn(context, context, "face_not_horizontal");
         }
         boolean targetHasBlockEntity = targetState.getBlock() instanceof BlockEntityProvider;
@@ -550,6 +630,8 @@ public abstract class BlockItemPlacementIntentMixin {
 
         ItemUsageContext remappedContext = new ItemUsageContext(context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit) {
         };
+        slabbed$traceRepeatPlacementContext("placement-exit", context, remappedContext,
+                "exit=remapped expectedType=" + expectedType + " remappedY=" + remappedY);
         return slabbed$inspectReturn(context, remappedContext, "remapped");
     }
 
@@ -587,6 +669,7 @@ public abstract class BlockItemPlacementIntentMixin {
         World world = context.getWorld();
         BlockPos placePos = context.getBlockPos();
         BlockState placedState = world.getBlockState(placePos);
+        slabbed$traceRepeatFinalization(context, cir.getReturnValue(), placedState);
         if (heldIsSlab) {
             if (slabbed$isCompoundVisibleOwnerTopSlabResult(context, placePos, placedState)) {
                 RuntimeDiagnostics.recordPlace(
