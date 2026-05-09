@@ -3386,14 +3386,14 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[" + rowName + "] client not ready for compound legal-remap proof");
             }
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_RED]"
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]"
                     + " row=" + rowName
                     + " phase=post-click"
                     + " result=" + result
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
                     + " adjacentLegalLane=" + describeOwnerFacts(mc.world, adjacentLanePos)
                     + " candidate=" + describeOwnerFacts(mc.world, placedLanePos)
-                    + " reason=legal_dy_-0.5_lane_existed_but_current_behavior_did_not_remap");
+                    + " reason=awaiting_after_tick_legal_lane_remap_assertion");
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
@@ -3417,17 +3417,22 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             }
             BlockState placed = mc.world.getBlockState(placedLanePos);
             double placedDy = SlabSupport.getYOffset(mc.world, placedLanePos, placed);
-            if (!placed.isAir()) {
-                failCompoundSlabHarness(rowName, "legal-remap RED must leave candidate absent at "
+            if (!placed.isOf(Blocks.STONE_SLAB)
+                    || !placed.contains(SlabBlock.TYPE)
+                    || placed.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || Math.abs(placedDy + 0.5d) > EPSILON) {
+                failCompoundSlabHarness(rowName, "legal-remap GREEN must author BOTTOM stone_slab dy=-0.500 at "
                         + placedLanePos.toShortString() + ", found " + placed + " dy=" + placedDy);
             }
-            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_RED]"
+            System.out.println("[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]"
                     + " row=" + rowName
                     + " phase=after-tick"
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
                     + " adjacentLegalLane=" + describeOwnerFacts(mc.world, adjacentLanePos)
                     + " candidate=" + describeOwnerFacts(mc.world, placedLanePos)
-                    + " result=red_current_reject_or_no_authoring_with_legal_lane_available");
+                    + " result=remapped_to_existing_legal_lowered_slab_lane_continuation"
+                    + " illegalDyMinusOneSlab=false"
+                    + " illegalDyZeroSlab=false");
         });
     }
 

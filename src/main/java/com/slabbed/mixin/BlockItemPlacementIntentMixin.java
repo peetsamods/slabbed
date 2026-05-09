@@ -90,6 +90,21 @@ public abstract class BlockItemPlacementIntentMixin {
         return targetPos.getY() + (expectedType == SlabType.BOTTOM ? 0.499d : 0.501d);
     }
 
+    private static Vec3d slabbed$hitPosOnFace(BlockPos targetPos, Direction side, Vec3d originalHitPos, double y) {
+        double x = originalHitPos.x;
+        double z = originalHitPos.z;
+        if (side == Direction.EAST) {
+            x = targetPos.getX() + 1.0d;
+        } else if (side == Direction.WEST) {
+            x = targetPos.getX();
+        } else if (side == Direction.SOUTH) {
+            z = targetPos.getZ() + 1.0d;
+        } else if (side == Direction.NORTH) {
+            z = targetPos.getZ();
+        }
+        return new Vec3d(x, y, z);
+    }
+
     private static boolean slabbed$isLoweredSlabFacePlacement(ItemPlacementContext context, BlockState state) {
         if (!(state.getBlock() instanceof SlabBlock)
                 || context.getSide().getAxis().isVertical()) {
@@ -118,6 +133,14 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
         if (slabbed$isCompoundSideHit(context, targetPos, targetState)) {
+            SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
+                    context.getWorld(),
+                    targetPos,
+                    targetState,
+                    context.getSide());
+            if (remapDecision.legal()) {
+                return;
+            }
             cir.setReturnValue(ActionResult.PASS);
         }
     }
@@ -249,6 +272,66 @@ public abstract class BlockItemPlacementIntentMixin {
 
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
+        if (slabbed$isCompoundSideHit(context, targetPos, targetState)) {
+            SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
+                    context.getWorld(),
+                    targetPos,
+                    targetState,
+                    originalSide);
+            if (!remapDecision.legal()) {
+                slabbed$recordRemapAttempt(
+                        context,
+                        true,
+                        originalSide.getAxis().isHorizontal(),
+                        targetState.isSolidBlock(context.getWorld(), targetPos),
+                        targetState.getBlock() instanceof BlockEntityProvider,
+                        targetState.getBlock() instanceof CraftingTableBlock,
+                        SlabSupport.getYOffset(context.getWorld(), targetPos, targetState),
+                        true,
+                        false,
+                        remapDecision.reason(),
+                        null,
+                        originalSide,
+                        "compound_slab_remap");
+                return slabbed$inspectReturn(context, context, remapDecision.reason());
+            }
+
+            double remappedY = slabbed$placementYForType(remapDecision.legalLanePos(), remapDecision.resultType());
+            Vec3d remappedHitPos = slabbed$hitPosOnFace(
+                    remapDecision.legalLanePos(),
+                    originalSide,
+                    originalHitPos,
+                    remappedY);
+            slabbed$recordRemapAttempt(
+                    context,
+                    true,
+                    true,
+                    true,
+                    false,
+                    false,
+                    SlabSupport.getYOffset(context.getWorld(), targetPos, targetState),
+                    true,
+                    true,
+                    remapDecision.reason(),
+                    remappedHitPos,
+                    originalSide,
+                    "compound_slab_remap");
+            BlockHitResult remappedHit = new BlockHitResult(
+                    remappedHitPos,
+                    originalSide,
+                    remapDecision.legalLanePos(),
+                    context.hitsInsideBlock(),
+                    false
+            );
+            ItemUsageContext remappedContext = new ItemUsageContext(
+                    context.getWorld(),
+                    context.getPlayer(),
+                    context.getHand(),
+                    context.getStack(),
+                    remappedHit) {
+            };
+            return slabbed$inspectReturn(context, remappedContext, "compound_slab_legal_lane_remap");
+        }
         boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
         boolean targetIsLoweredSlab = slabbed$isLoweredSlab(targetState, context.getWorld(), targetPos);
         boolean targetSupportsTopMerge = targetState.getBlock() instanceof SlabBlock

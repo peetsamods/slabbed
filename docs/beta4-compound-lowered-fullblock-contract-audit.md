@@ -345,16 +345,20 @@ legalize any beta4 `dy=-1.0` slab lane or any `dy<-1.0` recursion.
 The focused compound slab merge/remap proof slice now lives in
 `src/gametest/java/com/slabbed/test/SlabbedLabLoweredSidePlacementLiveReproClientGameTest.java`
 and emits `[JULIA_BETA4_COMPOUND_SLAB_NO_LEGAL_LANE_GREEN]`,
+`[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]`,
 `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]`, and
 `[JULIA_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]`. Those markers keep the
-current clean-reject behavior explicit while documenting that a legal `dy=-0.5`
-remap path is still product-feel work, not a generalized rescue/retarget fix.
+safe no-lane rejection explicit while proving that the Row 3 legal `dy=-0.5`
+remap path now exists. This is not a generalized rescue/retarget fix.
 
 Harness audit note: Row 3 proof must start from proven compound dy=-1.0 ordinary
 full-block source; dy=-0.5 source hits are invalid for this row. The corrected
 focused harness proves `compoundFullBlockAnchor=true`, clicked source
 `dy=-1.0`, and exactly one adjacent legal `dy=-0.5` remap lane before emitting
-the Row 3 RED marker.
+the Row 3 GREEN marker. Rows 1/2 still require `legalLaneCount=0` and preserve
+the compound source with no authored slab when no legal lowered slab lane exists.
+The Row 3 implementation remaps only into the continuation cell beyond the one
+existing legal lowered slab lane and keeps beta4 `dy=-1.0` slab lanes illegal.
 
 ### Compound matrix closure
 
