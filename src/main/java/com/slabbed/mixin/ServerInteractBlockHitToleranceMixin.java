@@ -56,11 +56,6 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return false;
         }
         Direction face = hit.getSide();
-        if (face == Direction.UP || face == Direction.DOWN) {
-            slabbed$logHitValidityBridge(world, pos, hit, player.getStackInHand(packet.getHand()), false, false,
-                    slabbed$isInsideCompoundVisualBounds(pos, hit.getPos()), false, "face_vertical");
-            return false;
-        }
         BlockState state = world.getBlockState(pos);
         if (!slabbed$isOrdinaryFullBlock(world, pos, state)) {
             slabbed$logHitValidityBridge(world, pos, hit, player.getStackInHand(packet.getHand()), false, false,
@@ -80,6 +75,11 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         ItemStack heldStack = player.getStackInHand(packet.getHand());
         boolean heldOrdinaryFullBlock = slabbed$isHeldOrdinaryFullBlock(world, pos, heldStack);
         boolean heldLegalCompoundSlabRemap = slabbed$isHeldLegalCompoundSlabRemap(world, pos, state, hit, heldStack);
+        if ((face == Direction.UP || face == Direction.DOWN) && !heldLegalCompoundSlabRemap) {
+            slabbed$logHitValidityBridge(world, pos, hit, heldStack, true, true,
+                    slabbed$isInsideCompoundVisualBounds(pos, hit.getPos()), false, "face_vertical");
+            return false;
+        }
         if (!heldOrdinaryFullBlock && !heldLegalCompoundSlabRemap) {
             slabbed$logHitValidityBridge(world, pos, hit, heldStack, true, true,
                     slabbed$isInsideCompoundVisualBounds(pos, hit.getPos()), false,
