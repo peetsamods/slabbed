@@ -3,9 +3,9 @@ package com.slabbed.mixin.client;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.runtime.SlabbedRetargetTestHooks;
+import com.slabbed.client.runtime.LoweredSideSlabRetargeter;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedAuditBridge;
+import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.ChainBlock;
@@ -812,7 +812,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         Vec3d dir = cam.getRotationVec(tickProgress);
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
-        return SlabbedRetargetTestHooks.findLoweredSideSlabRetarget(world, cam, eye, end, currentHit, slabHeld);
+        return LoweredSideSlabRetargeter.findLoweredSideSlabRetarget(world, cam, eye, end, currentHit, slabHeld);
     }
 
     private BlockHitResult slabbed$retargetVisibleUpperLoweredSlabSideFaceMiss(
@@ -1056,7 +1056,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
         ItemStack held = client.player.getMainHandStack();
-        SlabbedAuditBridge.logInspectClientTarget(
+        RuntimeDiagnostics.logInspectClientTarget(
                 world,
                 eye,
                 end,

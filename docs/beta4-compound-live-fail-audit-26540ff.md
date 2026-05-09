@@ -1,5 +1,11 @@
 # Beta4 Compound Live Failure Audit at 26540ff
 
+## Superseded by live-pass recorder audit
+
+The old live-failure classification in this document is superseded by the follow-up `3cef02c` live recorder pass, documented in `docs/beta4-compound-live-pass-audit-26540ff.md`.
+
+The follow-up pass live-tested the same beta4 compound contract as PASS: Julia reported "Everything worked" and confirmed slab placement rejected cleanly with no flash. That clean slab rejection is intended A-prime beta4 behavior, not a failure. The `26540ff` matrix closure remains the automation baseline, while `3cef02c` is the recorder-pass evidence head.
+
 ## Live report from Julia
 
 Julia retested `26540ff` and reported the same beta4 live failures:
