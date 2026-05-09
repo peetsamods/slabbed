@@ -78,7 +78,9 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return false;
         }
         ItemStack heldStack = player.getStackInHand(packet.getHand());
-        if (!slabbed$isHeldOrdinaryFullBlock(world, pos, heldStack)) {
+        boolean heldOrdinaryFullBlock = slabbed$isHeldOrdinaryFullBlock(world, pos, heldStack);
+        boolean heldLegalCompoundSlabRemap = slabbed$isHeldLegalCompoundSlabRemap(world, pos, state, hit, heldStack);
+        if (!heldOrdinaryFullBlock && !heldLegalCompoundSlabRemap) {
             slabbed$logHitValidityBridge(world, pos, hit, heldStack, true, true,
                     slabbed$isInsideCompoundVisualBounds(pos, hit.getPos()), false,
                     slabbed$heldRejectionReason(heldStack));
@@ -156,6 +158,21 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return false;
         }
         return slabbed$isOrdinaryFullBlock(world, pos, blockItem.getBlock().getDefaultState());
+    }
+
+    private static boolean slabbed$isHeldLegalCompoundSlabRemap(
+            ServerWorld world,
+            BlockPos pos,
+            BlockState state,
+            BlockHitResult hit,
+            ItemStack stack
+    ) {
+        if (!(stack.getItem() instanceof BlockItem blockItem)
+                || !(blockItem.getBlock() instanceof SlabBlock)
+                || hit == null) {
+            return false;
+        }
+        return SlabSupport.findLegalCompoundSlabRemap(world, pos, state, hit.getSide(), hit.getPos()).legal();
     }
 
     private static boolean slabbed$isOrdinaryFullBlock(ServerWorld world, BlockPos pos, BlockState state) {
