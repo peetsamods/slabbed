@@ -224,20 +224,26 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             BlockState actual = mc.world.getBlockState(expectedTop);
             BlockState skipped = mc.world.getBlockState(skippedTop);
+            BlockState source = mc.world.getBlockState(UPPER_FULL);
             double actualDy = dy(mc.world, expectedTop, actual);
+            double sourceDy = dy(mc.world, UPPER_FULL, source);
             boolean legalTop = actual.isOf(Blocks.STONE_SLAB)
                     && actual.contains(SlabBlock.TYPE)
                     && actual.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && Math.abs(actualDy) <= EPSILON;
             boolean ghostOrSkip = actual.isOf(Blocks.STONE_SLAB) || skipped.isOf(Blocks.STONE_SLAB);
-            verdict[0] = legalTop ? "GREEN" : "RED";
+            boolean cleanRejectPreserve = !ghostOrSkip
+                    && source.isOf(Blocks.STONE)
+                    && Math.abs(sourceDy + 1.0d) <= EPSILON;
+            verdict[0] = (legalTop || cleanRejectPreserve) ? "GREEN" : "RED";
             verdicts.ghost |= !legalTop && ghostOrSkip;
             verdicts.observedCases++;
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TOP_FACE_GHOST_" + verdict[0] + "]"
-                    + " expected=stone_slab[type=bottom] dy=0.0"
+                    + " expected=clean_reject_preserve_or_stone_slab[type=bottom] dy=0.0"
                     + " topCandidate=" + describeBlock(mc.world, expectedTop)
                     + " skippedCandidate=" + describeBlock(mc.world, skippedTop)
                     + " ghostOrSkipSlabAppeared=" + ghostOrSkip
+                    + " cleanRejectPreserve=" + cleanRejectPreserve
                     + " source=" + describeBlock(mc.world, UPPER_FULL));
         });
         return verdict[0];
