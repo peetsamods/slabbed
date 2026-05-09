@@ -174,6 +174,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta4LiveShapeGoblin")) {
+            new SlabbedLabBeta4LiveShapeGoblinClientGameTest().runTest(ctx);
+            return;
+        }
+
         // Expand coverage for legal lowered slab targets and explicit merge semantics.
         for (Direction face : FACES_TO_TEST) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
