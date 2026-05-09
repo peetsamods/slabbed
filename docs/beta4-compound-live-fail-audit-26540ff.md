@@ -91,3 +91,40 @@ Exact next slice recommendation:
 Add a targeted live recorder rerun configuration or one recorder-only patch that logs explicit watch positions and fields for `compoundFullBlockAnchor`, `clickedPos`, `clickedFace`, `hitVec`, `finalPlacedPos`, `placedDy`, server hit-validity bridge decision, finalization branch, source position, and post-break source relation for `14,-57,0`, `13,-57,0`, `14,-58,0`, `14,-59,0`, and adjacent side slots. Keep it recorder-only; no gameplay fix, no guard, no release prep.
 
 Release remains blocked.
+
+## Recorder gap closure at 146f368
+
+Follow-up recorder-only patch: `debug: add beta4 compound live path recorder`.
+
+Default-off properties:
+
+- `slabbed.beta4PlacementAuthorRecorder=true`
+- `slabbed.beta4CompoundLivePathRecorder=true`
+
+New marker families:
+
+- `[BETA4_COMPOUND_LIVE_PATH]`
+- `[BETA4_COMPOUND_HIT_VALIDITY_BRIDGE]`
+- `[BETA4_COMPOUND_FINALIZATION_PATH]`
+
+Fields now available for live placement attempts:
+
+- held item and `heldIsSlab`
+- `clickedPos`, `clickedState`, `clickedFace`, `hitVec`, and native block pos
+- target `dy`, `persistentFullBlockAnchor`, `compoundFullBlockAnchor`, `persistentLoweredSlabCarrier`, `persistentLoweredBottomSlabCarrier`, and `sourceMode`
+- `placePos`, `finalPlacedPos`, `finalPlacedState`, final placed `dy`, final placed compound/persistent/lowered-carrier state, and final placed `sourceMode`
+- finalization branch, including side-adjacent compound/full-anchor, top-of-compound, slab-side rejection, vertical-face skip, non-candidate skip, and result-not-accepted skip
+- source/support position and facts for finalization
+- sidecar/persistent anchor before-after booleans and whether a compound sidecar was added
+- queued after-tick observations through the existing placement-author after-tick path
+
+Fields now available for the server hit-validity bridge:
+
+- held item, `heldIsSlab`, block pos, packet block pos, block state, `dy`, `compoundFullBlockAnchor`, face, and hit vector
+- visual-bound check, ordinary full-block target check, ordinary full-block held check
+- `bridgeAccepted=true/false`
+- rejection reason such as `not_compound_anchor`, `dy_not_minus_one`, `face_vertical`, `held_item_slab`, `held_item_not_full_block`, `hit_outside_visual_bounds`, or `wrong_block_pos_or_missing_hit`
+
+No gameplay fix is implemented by this recorder patch. It does not change placement finalization, packet validity acceptance, sidecar semantics, retargeting, model, outline, or raycast behavior.
+
+Release remains blocked. Next step is Julia's live recorder run against the exact failing setup, then a log pull into `tmp/beta4-compound-live-path-recorder-<newHEAD>/`.
