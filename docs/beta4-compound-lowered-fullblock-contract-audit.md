@@ -7,6 +7,12 @@ A-prime, explicit authored lane/depth source mode for compound ordinary full
 blocks. Matrix rows below now have intended beta4 outcomes; implementation is
 still blocked behind proof and source-mode work.
 
+The earlier slab reject rows were technically intentional and safe, but Julia's
+live review shows that safety alone is not enough for product feel. The new
+slab merge/remap grammar lives in
+`docs/beta4-compound-slab-merge-grammar.md`. This audit remains a design/proof
+record; it does not mark implementation complete.
+
 ## Current savepoint
 
 - HEAD: `06724fb`

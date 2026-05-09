@@ -10,6 +10,10 @@ does not generalize compound depth to slabs or recursive lowered lanes. The
 compound block must know that it was authored as a compound full block, instead
 of re-deriving that fact only from the current source slab below it.
 
+For the slab-held UX contract, see `docs/beta4-compound-slab-merge-grammar.md`.
+The A-prime full-block compound lane remains valid, but slab placement now
+needs a separate merge/remap grammar before public promotion.
+
 ## Beta4 Scope
 
 Legal:
