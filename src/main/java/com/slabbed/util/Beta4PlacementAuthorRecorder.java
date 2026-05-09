@@ -27,8 +27,12 @@ public final class Beta4PlacementAuthorRecorder {
         return Boolean.getBoolean("slabbed.beta4PlacementAuthorRecorder");
     }
 
+    public static boolean compoundLivePathEnabled() {
+        return enabled() || Boolean.getBoolean("slabbed.beta4CompoundLivePathRecorder");
+    }
+
     public static void recordUseHead(Identifier blockItemId, boolean heldIsSlab, ItemUsageContext context) {
-        if (!enabled() || context == null || context.getWorld() == null) {
+        if (!compoundLivePathEnabled() || context == null || context.getWorld() == null) {
             return;
         }
         World world = context.getWorld();
@@ -59,7 +63,7 @@ public final class Beta4PlacementAuthorRecorder {
             ActionResult result,
             String finalization
     ) {
-        if (!enabled() || context == null || context.getWorld() == null) {
+        if (!compoundLivePathEnabled() || context == null || context.getWorld() == null) {
             return;
         }
         World world = context.getWorld();
@@ -89,7 +93,7 @@ public final class Beta4PlacementAuthorRecorder {
             ActionResult result,
             String finalization
     ) {
-        if (!enabled() || context == null || context.getWorld() == null || context.getWorld().isClient()) {
+        if (!compoundLivePathEnabled() || context == null || context.getWorld() == null || context.getWorld().isClient()) {
             return;
         }
         World world = context.getWorld();
@@ -119,15 +123,74 @@ public final class Beta4PlacementAuthorRecorder {
     }
 
     public static void logStartIfNeeded(World world) {
-        if (!enabled() || startLogged) {
+        if (!compoundLivePathEnabled() || startLogged) {
             return;
         }
         startLogged = true;
         Slabbed.LOGGER.info(
-                "[BETA4_PLACEMENT_AUTHOR_RECORDER_START] enabled=true ticks={} watch={} world={}",
+                "[BETA4_PLACEMENT_AUTHOR_RECORDER_START] enabled={} compoundLivePathEnabled={} ticks={} watch={} world={}",
+                enabled(),
+                compoundLivePathEnabled(),
                 intProperty("slabbed.beta4PlacementAuthorRecorderTicks", 200),
                 System.getProperty("slabbed.beta4PlacementAuthorRecorderWatch", ""),
                 world == null ? "null" : world.getRegistryKey().getValue());
+    }
+
+    public static void recordCompoundFinalization(
+            String phase,
+            Identifier blockItemId,
+            boolean heldIsSlab,
+            ItemPlacementContext context,
+            ActionResult result,
+            String branch,
+            BlockPos sourcePos,
+            boolean compoundSidecarBefore,
+            boolean compoundSidecarAfter,
+            boolean persistentAnchorBefore,
+            boolean persistentAnchorAfter,
+            String reason
+    ) {
+        if (!compoundLivePathEnabled() || context == null || context.getWorld() == null) {
+            return;
+        }
+        World world = context.getWorld();
+        logStartIfNeeded(world);
+        BlockPos finalPlacedPos = context.getBlockPos();
+        Direction clickedFace = context.getSide();
+        BlockPos clickedPos = finalPlacedPos.offset(clickedFace.getOpposite());
+        BlockState finalPlacedState = world.getBlockState(finalPlacedPos);
+        Slabbed.LOGGER.info(
+                "[BETA4_COMPOUND_FINALIZATION_PATH] phase={} side={} serverFinalizationRan={} heldItem={} heldIsSlab={} clickedPos={} clickedState={} clickedFace={} hitVec={} nativeBlockPos={} placePos={} finalPlacedPos={} finalPlacedState={} placementResult={} finalPlacedDy={} finalPlacedPersistentFullBlockAnchor={} finalPlacedCompoundFullBlockAnchor={} finalPlacedPersistentLoweredSlabCarrier={} finalPlacedSourceMode={} branch={} compoundSidecarBefore={} compoundSidecarAfter={} compoundSidecarAdded={} persistentAnchorBefore={} persistentAnchorAfter={} sourcePos={} sourceFacts={} supportBelowFacts={} aboveFacts={} reason={}",
+                phase,
+                world.isClient() ? "CLIENT" : "SERVER",
+                !world.isClient(),
+                blockItemId,
+                heldIsSlab,
+                shortPos(clickedPos),
+                world.getBlockState(clickedPos),
+                clickedFace,
+                formatVec(context.getHitPos()),
+                shortPos(clickedPos),
+                shortPos(finalPlacedPos),
+                shortPos(finalPlacedPos),
+                finalPlacedState,
+                result,
+                SlabSupport.getYOffset(world, finalPlacedPos, finalPlacedState),
+                persistentFullBlockAnchor(world, finalPlacedPos, finalPlacedState),
+                compoundFullBlockAnchor(world, finalPlacedPos),
+                SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, finalPlacedPos, finalPlacedState),
+                sourceMode(world, finalPlacedPos, finalPlacedState),
+                branch,
+                compoundSidecarBefore,
+                compoundSidecarAfter,
+                !compoundSidecarBefore && compoundSidecarAfter,
+                persistentAnchorBefore,
+                persistentAnchorAfter,
+                shortPos(sourcePos),
+                facts(world, sourcePos),
+                facts(world, finalPlacedPos.down()),
+                facts(world, finalPlacedPos.up()),
+                reason);
     }
 
     private static void record(
@@ -207,6 +270,45 @@ public final class Beta4PlacementAuthorRecorder {
                 facts(world, finalPlacedPos.east()),
                 facts(world, finalPlacedPos.west()),
                 watchFacts(world));
+        if (compoundLivePathEnabled()) {
+            Slabbed.LOGGER.info(
+                    "[BETA4_COMPOUND_LIVE_PATH] phase={} side={} heldItem={} heldIsSlab={} clickedPos={} clickedState={} clickedFace={} hitVec={} nativeBlockPos={} targetDy={} targetPersistentFullBlockAnchor={} targetCompoundFullBlockAnchor={} targetPersistentLoweredSlabCarrier={} targetPersistentLoweredBottomSlabCarrier={} targetSourceMode={} placePos={} finalPlacedPos={} finalPlacedState={} placementResult={} finalPlacedDy={} finalPlacedPersistentFullBlockAnchor={} finalPlacedCompoundFullBlockAnchor={} finalPlacedPersistentLoweredSlabCarrier={} finalPlacedSourceMode={} afterOneTickQueued={} {} clickedFacts={} finalPlacedFacts={} sourceBelowFacts={} aboveFacts={} north={} south={} east={} west={} watch={}",
+                    phase,
+                    world.isClient() ? "CLIENT" : "SERVER",
+                    blockItemId,
+                    heldIsSlab,
+                    shortPos(clickedPos),
+                    world.getBlockState(clickedPos),
+                    clickedFace,
+                    formatVec(hitVec),
+                    shortPos(clickedPos),
+                    SlabSupport.getYOffset(world, clickedPos, world.getBlockState(clickedPos)),
+                    persistentFullBlockAnchor(world, clickedPos, world.getBlockState(clickedPos)),
+                    compoundFullBlockAnchor(world, clickedPos),
+                    SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, clickedPos, world.getBlockState(clickedPos)),
+                    SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, clickedPos, world.getBlockState(clickedPos)),
+                    sourceMode(world, clickedPos, world.getBlockState(clickedPos)),
+                    shortPos(vanillaPlacePos),
+                    shortPos(finalPlacedPos),
+                    placedState,
+                    result,
+                    SlabSupport.getYOffset(world, finalPlacedPos, placedState),
+                    persistentFullBlockAnchor(world, finalPlacedPos, placedState),
+                    compoundFullBlockAnchor(world, finalPlacedPos),
+                    SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, finalPlacedPos, placedState),
+                    sourceMode(world, finalPlacedPos, placedState),
+                    "BETA4_PLACEMENT_AUTHOR_AFTER_TICK".equals(marker),
+                    finalization == null ? "anchorFinalization=unknown" : finalization,
+                    facts(world, clickedPos),
+                    facts(world, finalPlacedPos),
+                    facts(world, finalPlacedPos.down()),
+                    facts(world, finalPlacedPos.up()),
+                    facts(world, finalPlacedPos.north()),
+                    facts(world, finalPlacedPos.south()),
+                    facts(world, finalPlacedPos.east()),
+                    facts(world, finalPlacedPos.west()),
+                    watchFacts(world));
+        }
     }
 
     private static String playerFacts(PlayerEntity player) {
@@ -227,6 +329,7 @@ public final class Beta4PlacementAuthorRecorder {
                 + " state=" + state
                 + " dy=" + SlabSupport.getYOffset(world, pos, state)
                 + " persistentFullBlockAnchor=" + persistentFullBlockAnchor(world, pos, state)
+                + " compoundFullBlockAnchor=" + compoundFullBlockAnchor(world, pos)
                 + " persistentLoweredSlabCarrier=" + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
                 + " persistentLoweredBottomSlabCarrier="
                 + SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)
@@ -272,6 +375,10 @@ public final class Beta4PlacementAuthorRecorder {
     private static boolean persistentFullBlockAnchor(World world, BlockPos pos, BlockState state) {
         return SlabAnchorAttachment.isAnchored(world, pos)
                 && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state);
+    }
+
+    private static boolean compoundFullBlockAnchor(World world, BlockPos pos) {
+        return world != null && pos != null && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos);
     }
 
     private static String sourceMode(World world, BlockPos pos, BlockState state) {
