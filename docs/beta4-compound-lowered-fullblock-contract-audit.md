@@ -52,9 +52,14 @@ Goblin fixture correction at `c956fa3`: Julia's manual live observation
 supersedes the prior automated top-face GREEN. The old harness summary was not
 release-valid because the fixture/build shape did not prove the required
 composition: two bottom slabs, full-block bridge, two top slabs, and an upper
-full block on one top slab. Manual live at c956fa3 remains RED for top-face
-placement and for side placement when the support slab under the visible upper
-full block is missing. Release remains blocked.
+full block on one top slab. The corrected support-missing side proof is now
+GREEN when the upper full block remains visible, persistent, compound, and
+`dy=-1.0`; it authors the side candidate as `stone_slab[type=top]` at
+`dy=-0.5`. Corrected summary: `structure=GREEN fixtureTruth=GREEN
+supportPresent.upperSide=GREEN supportPresent.lowerSide=GREEN
+supportPresent.topFace=RED supportMissing.side=GREEN supportMissing.topFace=RED
+hitbox=RED ghost=false jump=false wrongOwner=true
+releaseBlockers=topFace,supportMissingTopFace`. Release remains blocked.
 
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
@@ -62,9 +67,9 @@ Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID]`,
 `[JULIA_BETA4_LIVE_GOBLIN_BASELINE]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_PRESENT_SIDE_UPPER_GREEN]`,
-`[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_PRESENT_SIDE_LOWER_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_PRESENT_SIDE_LOWER_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_PRESENT_TOP_FACE_RED]`,
-`[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_MISSING_SIDE_RED]`,
+`[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_MISSING_SIDE_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_SUPPORT_MISSING_TOP_FACE_RED]`,
 `[JULIA_BETA4_LIVE_GOBLIN_HITBOX_GREEN]`,
 `[JULIA_BETA4_LIVE_GOBLIN_HITBOX_RED]`,
