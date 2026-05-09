@@ -15,10 +15,10 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 
-public final class SlabbedRetargetTestHooks {
+public final class LoweredSideSlabRetargeter {
     private static final double COMFORT_MISS_THRESHOLD = 0.05d;
 
-    private SlabbedRetargetTestHooks() {
+    private LoweredSideSlabRetargeter() {
     }
 
     public static BlockHitResult findLoweredSideSlabRetarget(

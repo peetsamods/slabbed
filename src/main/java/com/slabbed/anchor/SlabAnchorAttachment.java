@@ -4,7 +4,7 @@ import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedAuditBridge;
+import com.slabbed.util.RuntimeDiagnostics;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
@@ -192,9 +192,9 @@ public final class SlabAnchorAttachment {
 
     private static void addAnchorUnchecked(World world, BlockPos pos) {
         boolean added = addToAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (added && SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
+        if (added && RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
             BlockPos supportPos = pos.down();
-            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
+            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
         }
         // Beta4 sidecar: if the position currently satisfies the compound full-block
         // condition (anchored ordinary full block above a lowered bottom slab carrier),
@@ -275,9 +275,9 @@ public final class SlabAnchorAttachment {
      */
     public static void removeAnchor(World world, BlockPos pos) {
         boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (removed && SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
+        if (removed && RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
             BlockPos supportPos = pos.down();
-            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_REMOVED");
+            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_REMOVED");
         }
         // Beta4 sidecar travels with the ordinary anchor: when the compound block
         // itself is broken/replaced, clear the authored compound truth too.
