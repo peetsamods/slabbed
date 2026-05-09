@@ -35,6 +35,9 @@ import java.util.Map;
 public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements FabricClientGameTest {
     private static final String OPT_IN = "slabbed.beta4LiveShapeGoblin";
     private static final double EPSILON = 1.0e-6d;
+    private static final double AIM_EPSILON = 1.0e-4d;
+    private static final double EXPECTED_UPPER_FULL_DY = -1.0d;
+    private static final double LOOK_ANGLE_TOLERANCE_DEGREES = 0.75d;
 
     private static final BlockPos BOTTOM_SLAB_A = new BlockPos(40, 200, 8);
     private static final BlockPos BOTTOM_SLAB_B = BOTTOM_SLAB_A.east();
@@ -85,27 +88,38 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
 
             syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 16));
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TARGETING_DIAG_START]"
+                    + " realCrosshair=true"
+                    + " syntheticUsed=false"
+                    + " intendedOwner=" + UPPER_FULL.toShortString()
+                    + " expectedOwnerDy=" + EXPECTED_UPPER_FULL_DY
+                    + " localCoordBasis=visualDyAdjusted"
+                    + " rawLocalOutside01ExplainedBy=compound_owner_dy_when_visualLocalWithin01");
             RealClickResult firstSide = runRealCrosshairClick(
                     ctx, singleplayer, "FIRST_SIDE", "UPPER", ANGLE_A_FACE,
-                    faceHit(UPPER_FULL, ANGLE_A_FACE, 0.25d).getPos(),
+                    visibleSideHitPoint(UPPER_FULL, ANGLE_A_FACE, 0.75d, EXPECTED_UPPER_FULL_DY),
                     "JULIA_BETA4_LIVE_GOBLIN_AIM_UPPER_REAL_TARGET",
                     UPPER_FULL.offset(ANGLE_A_FACE), "stone_slab[type=top] dy=-0.5");
             verdicts.upperAimParity = firstSide.aimParity;
             verdicts.firstSide = firstSide.result;
+            verdicts.upperTargeting = firstSide.targetingClassification;
+            verdicts.sequenceFirstTargeting = firstSide.targetingClassification;
             verdicts.absorb(firstSide);
 
             RealClickResult lowerAfterFirst = runRealCrosshairClick(
                     ctx, singleplayer, "LOWER_AFTER_FIRST", "LOWER", ANGLE_A_FACE,
-                    faceHit(UPPER_FULL, ANGLE_A_FACE, -0.75d).getPos(),
+                    visibleSideHitPoint(UPPER_FULL, ANGLE_A_FACE, 0.25d, EXPECTED_UPPER_FULL_DY),
                     "JULIA_BETA4_LIVE_GOBLIN_AIM_LOWER_REAL_TARGET",
                     UPPER_FULL.offset(ANGLE_A_FACE), "stone_slab[type=bottom] dy=-0.5");
             verdicts.lowerAimParity = lowerAfterFirst.aimParity;
             verdicts.lowerAfterFirst = lowerAfterFirst.result;
+            verdicts.lowerTargeting = lowerAfterFirst.targetingClassification;
+            verdicts.sequenceLowerAfterFirstTargeting = lowerAfterFirst.targetingClassification;
             verdicts.absorb(lowerAfterFirst);
 
             RealClickResult repeat = runRealCrosshairClick(
                     ctx, singleplayer, "REPEAT", "UPPER", ANGLE_A_FACE,
-                    faceHit(UPPER_FULL, ANGLE_A_FACE, 0.25d).getPos(),
+                    visibleSideHitPoint(UPPER_FULL, ANGLE_A_FACE, 0.75d, EXPECTED_UPPER_FULL_DY),
                     "JULIA_BETA4_LIVE_GOBLIN_AIM_UPPER_REAL_TARGET",
                     UPPER_FULL.offset(ANGLE_A_FACE), "stone_slab[type=double] dy=-0.5");
             verdicts.repeatPlacement = repeat.result;
@@ -113,11 +127,13 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
             RealClickResult topFace = runRealCrosshairClick(
                     ctx, singleplayer, "TOP_FACE", "TOP", Direction.UP,
-                    upHit(UPPER_FULL).getPos(),
+                    visibleTopHitPoint(UPPER_FULL, EXPECTED_UPPER_FULL_DY),
                     "JULIA_BETA4_LIVE_GOBLIN_AIM_TOP_REAL_TARGET",
                     UPPER_FULL.up(), "stone_slab[type=bottom] dy=0.0");
             verdicts.topAimParity = topFace.aimParity;
             verdicts.topFace = topFace.result;
+            verdicts.topTargeting = topFace.targetingClassification;
+            verdicts.sequenceTopTargeting = topFace.targetingClassification;
             verdicts.absorb(topFace);
 
             String releaseBlockers = parityReleaseBlockers(verdicts);
@@ -136,6 +152,17 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " wrongDelta=" + verdicts.wrongDelta
                     + " wrongOwner=" + verdicts.wrongOwner
                     + " releaseBlockers=" + releaseBlockers);
+            System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SUMMARY]"
+                    + " lower=" + verdicts.lowerTargeting
+                    + " upper=" + verdicts.upperTargeting
+                    + " top=" + verdicts.topTargeting
+                    + " sequenceFirst=" + verdicts.sequenceFirstTargeting
+                    + " sequenceLowerAfterFirst=" + verdicts.sequenceLowerAfterFirstTargeting
+                    + " sequenceTop=" + verdicts.sequenceTopTargeting
+                    + " harnessAimFailures=" + verdicts.countTargeting("HARNESS_AIM_FAIL")
+                    + " ownerFailures=" + verdicts.countTargeting("OWNER_FAIL")
+                    + " occlusionCases=" + verdicts.countTargeting("OCCLUSION_EXPECTED")
+                    + " nextAction=" + verdicts.nextTargetingAction());
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_DONE] status=OK");
         }
     }
@@ -153,6 +180,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     ) {
         syncAim(ctx, singleplayer, eyeFor(expectedFace == Direction.UP ? ANGLE_A_FACE : expectedFace), aimPoint);
         waitForClient(ctx, singleplayer, 4);
+        syncAim(ctx, singleplayer, eyeFor(expectedFace == Direction.UP ? ANGLE_A_FACE : expectedFace), aimPoint);
 
         final Map<BlockPos, BlockFact>[] before = new Map[] {Map.of()};
         final RealClickResult[] click = {new RealClickResult(step)};
@@ -168,15 +196,17 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             HitResult target = mc.crosshairTarget;
             AimFacts facts = AimFacts.from(mc.world, target);
+            TargetingDiagnostic diagnostic = TargetingDiagnostic.from(mc.world, mc.player, UPPER_FULL,
+                    expectedFace, expectedBand, aimPoint, facts, target);
+            click[0].targetingClassification = diagnostic.classification;
+            emitTargetingDiagnostic(step, expectedBand, diagnostic);
             boolean realBlock = target instanceof BlockHitResult;
             boolean targetOwner = UPPER_FULL.equals(facts.pos);
-            boolean faceOk = expectedFace == Direction.UP
-                    ? facts.face == Direction.UP
-                    : facts.face != null && facts.face.getAxis().isHorizontal();
+            boolean faceOk = facts.face == expectedFace;
             boolean bandOk = switch (expectedBand) {
-                case "LOWER" -> facts.localY < 0.5d;
-                case "UPPER" -> facts.localY >= 0.5d;
-                case "TOP" -> facts.face == Direction.UP && Math.abs(facts.localY - 1.0d) <= 0.001d;
+                case "LOWER" -> facts.visualLocalY >= -AIM_EPSILON && facts.visualLocalY < 0.5d;
+                case "UPPER" -> facts.visualLocalY >= 0.5d && facts.visualLocalY <= 1.0d + AIM_EPSILON;
+                case "TOP" -> facts.face == Direction.UP && Math.abs(facts.visualLocalY - 1.0d) <= 0.001d;
                 default -> false;
             };
             boolean parity = realBlock && targetOwner && faceOk && bandOk;
@@ -192,6 +222,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " localX=" + facts.localX
                     + " localY=" + facts.localY
                     + " localZ=" + facts.localZ
+                    + " visualLocalY=" + facts.visualLocalY
+                    + " localCoordBasis=visualDyAdjusted"
                     + " band=" + facts.band
                     + " heldItem=" + (mc.player == null ? "none" : mc.player.getStackInHand(Hand.MAIN_HAND)));
             if (!parity) {
@@ -800,26 +832,33 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         singleplayer.getServer().runOnServer(server -> {
             if (!server.getPlayerManager().getPlayerList().isEmpty()) {
                 var player = server.getPlayerManager().getPlayerList().get(0);
-                player.setPosition(eye.x, feetY, eye.z);
-                player.setYaw(yaw);
-                player.setPitch(pitch);
+                player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+                player.setVelocity(Vec3d.ZERO);
             }
         });
         ctx.waitTick();
         ctx.runOnClient(mc -> {
             if (mc.player != null) {
                 mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+                mc.player.setVelocity(Vec3d.ZERO);
                 mc.player.setYaw(yaw);
                 mc.player.setPitch(pitch);
             }
         });
         ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+                mc.player.setVelocity(Vec3d.ZERO);
+            }
+        });
     }
 
     private static Vec3d eyeFor(Direction face) {
-        double x = UPPER_FULL.getX() + 0.5d - face.getOffsetX() * 2.6d;
+        double x = UPPER_FULL.getX() + 0.5d + face.getOffsetX() * 2.6d;
         double y = UPPER_FULL.getY() + 1.2d;
-        double z = UPPER_FULL.getZ() + 0.5d - face.getOffsetZ() * 2.6d;
+        double z = UPPER_FULL.getZ() + 0.5d + face.getOffsetZ() * 2.6d;
         return new Vec3d(x, y, z);
     }
 
@@ -840,6 +879,55 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     private static BlockHitResult upHit(BlockPos targetPos) {
         return new BlockHitResult(new Vec3d(targetPos.getX() + 0.5d, targetPos.getY() + 1.0d,
                 targetPos.getZ() + 0.5d), Direction.UP, targetPos, false, false);
+    }
+
+    private static Vec3d visibleSideHitPoint(BlockPos targetPos, Direction face, double visualLocalY, double ownerDy) {
+        return switch (face) {
+            case NORTH -> new Vec3d(targetPos.getX() + 0.5d, targetPos.getY() + ownerDy + visualLocalY,
+                    targetPos.getZ());
+            case SOUTH -> new Vec3d(targetPos.getX() + 0.5d, targetPos.getY() + ownerDy + visualLocalY,
+                    targetPos.getZ() + 1.0d);
+            case EAST -> new Vec3d(targetPos.getX() + 1.0d, targetPos.getY() + ownerDy + visualLocalY,
+                    targetPos.getZ() + 0.5d);
+            case WEST -> new Vec3d(targetPos.getX(), targetPos.getY() + ownerDy + visualLocalY,
+                    targetPos.getZ() + 0.5d);
+            default -> throw new IllegalArgumentException("unsupported side face " + face);
+        };
+    }
+
+    private static Vec3d visibleTopHitPoint(BlockPos targetPos, double ownerDy) {
+        return new Vec3d(targetPos.getX() + 0.5d, targetPos.getY() + ownerDy + 1.0d,
+                targetPos.getZ() + 0.5d);
+    }
+
+    private static void emitTargetingDiagnostic(String step, String expectedBand, TargetingDiagnostic diagnostic) {
+        String markers = switch (expectedBand) {
+            case "LOWER" -> "[JULIA_BETA4_LIVE_GOBLIN_TARGETING_LOWER_DIAG]";
+            case "UPPER" -> "[JULIA_BETA4_LIVE_GOBLIN_TARGETING_UPPER_DIAG]";
+            case "TOP" -> "[JULIA_BETA4_LIVE_GOBLIN_TARGETING_TOP_DIAG]";
+            default -> "[JULIA_BETA4_LIVE_GOBLIN_TARGETING_DIAG]";
+        };
+        markers = switch (step) {
+            case "FIRST_SIDE" -> markers + "\n[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_FIRST_DIAG]";
+            case "LOWER_AFTER_FIRST" -> markers + "\n[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_LOWER_AFTER_FIRST_DIAG]";
+            case "TOP_FACE" -> markers + "\n[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_TOP_DIAG]";
+            default -> markers;
+        };
+        for (String marker : markers.split("\n")) {
+            System.out.println(marker + " step=" + step + " " + diagnostic.describe());
+        }
+        switch (diagnostic.classification) {
+            case "HARNESS_AIM_FAIL" -> System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TARGETING_HARNESS_AIM_FAIL]"
+                    + " step=" + step + " reason=" + diagnostic.reason);
+            case "OWNER_FAIL" -> System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TARGETING_OWNER_FAIL]"
+                    + " step=" + step + " reason=" + diagnostic.reason);
+            case "OCCLUSION_EXPECTED" -> System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TARGETING_OCCLUSION_EXPECTED]"
+                    + " step=" + step + " reason=" + diagnostic.reason);
+            case "SEQUENCE_STATE_MISMATCH" -> System.out.println("[JULIA_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_STATE_MISMATCH]"
+                    + " step=" + step + " reason=" + diagnostic.reason);
+            default -> {
+            }
+        }
     }
 
     private static String hitBand(BlockHitResult hit) {
@@ -986,6 +1074,27 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         return reasons.isEmpty() ? reason : reasons + "," + reason;
     }
 
+    private static boolean within01(double value) {
+        return value >= -AIM_EPSILON && value <= 1.0d + AIM_EPSILON;
+    }
+
+    private static Vec3d safeNormalize(Vec3d vec) {
+        return vec.lengthSquared() <= EPSILON ? new Vec3d(0.0d, 0.0d, 0.0d) : vec.normalize();
+    }
+
+    private static double angularDifferenceDegrees(Vec3d expected, Vec3d actual) {
+        double dot = expected.dotProduct(actual);
+        double clamped = Math.max(-1.0d, Math.min(1.0d, dot));
+        return Math.toDegrees(Math.acos(clamped));
+    }
+
+    private static String fmtVec(Vec3d vec) {
+        if (vec == null) {
+            return "null";
+        }
+        return "(" + vec.x + "," + vec.y + "," + vec.z + ")";
+    }
+
     private static final class Verdicts {
         String supportPresentLowerSide = "PENDING";
         String supportPresentUpperSide = "PENDING";
@@ -1012,6 +1121,12 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         String lowerAfterFirst = "NOT_RUN";
         String repeatPlacement = "NOT_RUN";
         String topFace = "NOT_RUN";
+        String lowerTargeting = "NOT_RUN";
+        String upperTargeting = "NOT_RUN";
+        String topTargeting = "NOT_RUN";
+        String sequenceFirstTargeting = "NOT_RUN";
+        String sequenceLowerAfterFirstTargeting = "NOT_RUN";
+        String sequenceTopTargeting = "NOT_RUN";
         boolean ghost;
         boolean wrongDelta;
         boolean wrongOwner;
@@ -1021,6 +1136,36 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             wrongDelta |= result.wrongDelta;
             wrongOwner |= result.wrongOwner;
         }
+
+        int countTargeting(String classification) {
+            int count = 0;
+            count += classification.equals(lowerTargeting) ? 1 : 0;
+            count += classification.equals(upperTargeting) ? 1 : 0;
+            count += classification.equals(topTargeting) ? 1 : 0;
+            count += classification.equals(sequenceFirstTargeting) ? 1 : 0;
+            count += classification.equals(sequenceLowerAfterFirstTargeting) ? 1 : 0;
+            count += classification.equals(sequenceTopTargeting) ? 1 : 0;
+            return count;
+        }
+
+        String nextTargetingAction() {
+            if (countTargeting("HARNESS_AIM_FAIL") > 0) {
+                return "fixHarnessAim";
+            }
+            if (countTargeting("OCCLUSION_EXPECTED") > 0) {
+                return "choosePlayerRealisticAimPoint";
+            }
+            if (countTargeting("OWNER_FAIL") > 0) {
+                return "fixOwnerRetargetLayer";
+            }
+            if (countTargeting("SEQUENCE_STATE_MISMATCH") > 0) {
+                return "fixSequenceFixtureState";
+            }
+            if (countTargeting("UNKNOWN") > 0) {
+                return "auditMissingTargetingData";
+            }
+            return "targetingParityClear";
+        }
     }
 
     private static final class RealClickResult {
@@ -1028,6 +1173,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         String aimParity = "NOT_RUN";
         String result = "NOT_RUN";
         String action = "NOT_RUN";
+        String targetingClassification = "NOT_RUN";
         boolean ghost;
         boolean wrongDelta;
         boolean wrongOwner;
@@ -1046,6 +1192,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         final double localX;
         final double localY;
         final double localZ;
+        final double visualLocalY;
         final String band;
 
         private AimFacts(
@@ -1057,6 +1204,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 double localX,
                 double localY,
                 double localZ,
+                double visualLocalY,
                 String band
         ) {
             this.pos = pos;
@@ -1067,13 +1215,14 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             this.localX = localX;
             this.localY = localY;
             this.localZ = localZ;
+            this.visualLocalY = visualLocalY;
             this.band = band;
         }
 
         static AimFacts from(net.minecraft.world.BlockView world, HitResult target) {
             if (!(target instanceof BlockHitResult blockHit) || world == null) {
                 return new AimFacts(null, null, null, "MISS", 0.0d,
-                        Double.NaN, Double.NaN, Double.NaN, "MISS");
+                        Double.NaN, Double.NaN, Double.NaN, Double.NaN, "MISS");
             }
             BlockPos pos = blockHit.getBlockPos();
             Vec3d hit = blockHit.getPos();
@@ -1081,11 +1230,13 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             double localX = hit.x - pos.getX();
             double localY = hit.y - pos.getY();
             double localZ = hit.z - pos.getZ();
+            double dy = dy(world, pos, state);
+            double visualLocalY = localY - dy;
             String band = blockHit.getSide() == Direction.UP
                     ? "TOP"
-                    : (localY < 0.5d ? "LOWER" : "UPPER");
-            return new AimFacts(pos, blockHit.getSide(), hit, state.toString(), dy(world, pos, state),
-                    localX, localY, localZ, band);
+                    : (visualLocalY < 0.5d ? "LOWER" : "UPPER");
+            return new AimFacts(pos, blockHit.getSide(), hit, state.toString(), dy,
+                    localX, localY, localZ, visualLocalY, band);
         }
 
         String describe() {
@@ -1095,6 +1246,126 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             return "pos=" + pos.toShortString()
                     + " face=" + face.asString()
                     + " hit=" + hit;
+        }
+    }
+
+    private static final class TargetingDiagnostic {
+        final String classification;
+        final String reason;
+        final String details;
+
+        private TargetingDiagnostic(String classification, String reason, String details) {
+            this.classification = classification;
+            this.reason = reason;
+            this.details = details;
+        }
+
+        static TargetingDiagnostic from(
+                net.minecraft.world.BlockView world,
+                net.minecraft.client.network.ClientPlayerEntity player,
+                BlockPos intendedOwner,
+                Direction intendedFace,
+                String expectedBand,
+                Vec3d intendedWorldHit,
+                AimFacts actual,
+                HitResult rawTarget
+        ) {
+            if (world == null || player == null) {
+                return new TargetingDiagnostic("UNKNOWN", "client_missing",
+                        "intendedOwnerPos=" + intendedOwner.toShortString());
+            }
+            BlockState intendedState = world.getBlockState(intendedOwner);
+            double intendedOwnerDy = dy(world, intendedOwner, intendedState);
+            double intendedLocalX = intendedWorldHit.x - intendedOwner.getX();
+            double intendedLocalY = intendedWorldHit.y - intendedOwner.getY();
+            double intendedLocalZ = intendedWorldHit.z - intendedOwner.getZ();
+            double intendedVisualLocalY = intendedLocalY - intendedOwnerDy;
+            Vec3d eye = player.getCameraPosVec(1.0f);
+            Vec3d expectedDirection = safeNormalize(intendedWorldHit.subtract(eye));
+            Vec3d actualLook = safeNormalize(player.getRotationVec(1.0f));
+            double vectorDiff = expectedDirection.subtract(actualLook).length();
+            double angularDiff = angularDifferenceDegrees(expectedDirection, actualLook);
+            boolean aimedCorrectly = angularDiff <= LOOK_ANGLE_TOLERANCE_DEGREES;
+            boolean intendedLocalWithin = within01(intendedLocalX)
+                    && within01(intendedVisualLocalY)
+                    && within01(intendedLocalZ);
+            boolean sequenceStateOk = intendedState.isOf(Blocks.STONE)
+                    && Math.abs(intendedOwnerDy - EXPECTED_UPPER_FULL_DY) <= 0.001d
+                    && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, intendedOwner);
+            boolean realCrosshairTarget = rawTarget instanceof BlockHitResult;
+            boolean targetEqualsOwner = intendedOwner.equals(actual.pos);
+            boolean faceEquals = actual.face == intendedFace;
+            boolean actualLocalWithin = within01(actual.localX)
+                    && within01(actual.visualLocalY)
+                    && within01(actual.localZ);
+            boolean bandEquals = switch (expectedBand) {
+                case "LOWER" -> actual.visualLocalY >= -AIM_EPSILON && actual.visualLocalY < 0.5d;
+                case "UPPER" -> actual.visualLocalY >= 0.5d && actual.visualLocalY <= 1.0d + AIM_EPSILON;
+                case "TOP" -> actual.face == Direction.UP && Math.abs(actual.visualLocalY - 1.0d) <= 0.001d;
+                default -> false;
+            };
+            double actualHitDistance = actual.hit == null ? Double.NaN : eye.distanceTo(actual.hit);
+            double intendedHitDistance = eye.distanceTo(intendedWorldHit);
+            boolean closerVisibleBlock = realCrosshairTarget
+                    && !targetEqualsOwner
+                    && actualHitDistance + 0.001d < intendedHitDistance;
+
+            String classification;
+            String reason;
+            if (!sequenceStateOk) {
+                classification = "SEQUENCE_STATE_MISMATCH";
+                reason = "intended_owner_state_or_dy_changed";
+            } else if (!intendedLocalWithin || !aimedCorrectly) {
+                classification = "HARNESS_AIM_FAIL";
+                reason = !intendedLocalWithin ? "intended_visual_local_outside_0_1" : "camera_look_not_on_intended_hit";
+            } else if (closerVisibleBlock) {
+                classification = "OCCLUSION_EXPECTED";
+                reason = "closer_visible_block_intersects_before_intended_owner";
+            } else if (!realCrosshairTarget || !targetEqualsOwner || !faceEquals || !actualLocalWithin || !bandEquals) {
+                classification = "OWNER_FAIL";
+                reason = "real_crosshair_target_mismatch";
+            } else {
+                classification = "TARGET_OK";
+                reason = "real_crosshair_matches_intended_owner_face_band";
+            }
+
+            String details = "classification=" + classification
+                    + " reason=" + reason
+                    + " intendedOwnerPos=" + intendedOwner.toShortString()
+                    + " intendedOwnerState=" + intendedState
+                    + " intendedOwnerDy=" + intendedOwnerDy
+                    + " intendedFace=" + intendedFace.asString()
+                    + " intendedLocalX=" + intendedLocalX
+                    + " intendedLocalY=" + intendedLocalY
+                    + " intendedVisualLocalY=" + intendedVisualLocalY
+                    + " intendedLocalZ=" + intendedLocalZ
+                    + " intendedWorldHit=" + fmtVec(intendedWorldHit)
+                    + " cameraEye=" + fmtVec(eye)
+                    + " cameraYaw=" + player.getYaw()
+                    + " cameraPitch=" + player.getPitch()
+                    + " expectedRayDirection=" + fmtVec(expectedDirection)
+                    + " actualLookDirection=" + fmtVec(actualLook)
+                    + " vectorDifference=" + vectorDiff
+                    + " angularDifferenceDegrees=" + angularDiff
+                    + " actualCrosshairTarget=" + actual.describe()
+                    + " actualState=" + actual.state
+                    + " actualLocalX=" + actual.localX
+                    + " actualLocalY=" + actual.localY
+                    + " actualVisualLocalY=" + actual.visualLocalY
+                    + " actualLocalZ=" + actual.localZ
+                    + " actualTargetDy=" + actual.dy
+                    + " actualTargetEqualsIntendedOwner=" + targetEqualsOwner
+                    + " actualFaceEqualsIntended=" + faceEquals
+                    + " rawLocalYWithin01=" + within01(actual.localY)
+                    + " visualLocalCoordsWithin01=" + actualLocalWithin
+                    + " realCrosshairTarget=" + realCrosshairTarget
+                    + " localCoordBasis=visualDyAdjusted"
+                    + " rawLocalOutside01Explanation=valid_only_when_visualLocalWithin01_and_ownerDy_nonzero";
+            return new TargetingDiagnostic(classification, reason, details);
+        }
+
+        String describe() {
+            return details;
         }
     }
 

@@ -180,6 +180,15 @@ first, repeat, and top-face clicks, and each step must emit a bounded changed-
 block delta scan. Exact candidate state and exact changed-block delta are both
 required; either one alone is insufficient.
 
+Targeting parity is also a precondition for placement proof. Before placement,
+the diagnostic must show the camera ray is actually aimed at the intended
+visible owner, face, and dy-adjusted local band. Mismatched aim, an invalid
+visible-local hit point, or a physically occluded point is harness evidence only,
+not release proof. The current lower-after-first sequence point is classified
+`OCCLUSION_EXPECTED` after the first side slab is placed, so the harness must
+choose a different player-realistic lower-side angle before that route can
+diagnose gameplay behavior.
+
 The beta4 law remains unchanged: slab `dy=-1.0` lanes are illegal, any successful slab side result must normalize into the existing legal `dy=-0.5` lowered slab grammar, and the named top-face result normalizes into vanilla `dy=0.0` slab law.
 
 ## Screenshot side-shape discriminator audit
