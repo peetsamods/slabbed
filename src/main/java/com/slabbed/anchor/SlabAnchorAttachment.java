@@ -69,6 +69,8 @@ public final class SlabAnchorAttachment {
             Identifier.of(Slabbed.MOD_ID, "compound_visible_side_upper_slabs");
     private static final Identifier COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_ID =
             Identifier.of(Slabbed.MOD_ID, "compound_visible_side_double_slabs");
+    private static final Identifier COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID =
+            Identifier.of(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -141,6 +143,11 @@ public final class SlabAnchorAttachment {
                     .persistent(SET_CODEC)
                     .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
             );
+    public static final AttachmentType<LongOpenHashSet> COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE =
+            AttachmentRegistry.<LongOpenHashSet>create(COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID, builder -> builder
+                    .persistent(SET_CODEC)
+                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
 
     /**
      * Triggers static-init class loading. Call once from the mod entrypoint so the
@@ -153,7 +160,8 @@ public final class SlabAnchorAttachment {
                 || COMPOUND_FULL_BLOCK_ANCHOR_TYPE == null
                 || COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE == null
                 || COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE == null
-                || COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE == null) {
+                || COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE == null
+                || COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
     }
@@ -307,6 +315,23 @@ public final class SlabAnchorAttachment {
                 "compound_visible_side_double_slab");
     }
 
+    public static void addCompoundVisibleOwnerTopSlab(
+            World world,
+            BlockPos pos,
+            BlockState state,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (world == null || world.isClient()) {
+            return;
+        }
+        if (!qualifiesForCompoundVisibleOwnerTopSlab(world, pos, state, sourcePos, sourceState)) {
+            return;
+        }
+        addToAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
+                "compound_visible_owner_top_slab");
+    }
+
     public static void updatePersistentLoweredSlabCarrier(World world, BlockPos pos, BlockState state) {
         if (world == null || world.isClient()) {
             return;
@@ -368,6 +393,8 @@ public final class SlabAnchorAttachment {
                 "compound_visible_side_upper_slab");
         removeFromAttachment(world, pos, COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE,
                 "compound_visible_side_double_slab");
+        removeFromAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
+                "compound_visible_owner_top_slab");
     }
 
     public static void removePersistentLoweredSlabCarrier(World world, BlockPos pos) {
@@ -527,6 +554,26 @@ public final class SlabAnchorAttachment {
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_double_slab query true side={} pos={}",
+                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+        }
+        return marked;
+    }
+
+    public static boolean isCompoundVisibleOwnerTopSlab(BlockView world, BlockPos pos, BlockState state) {
+        if (!isCompoundVisibleOwnerTopSlabState(state) || pos == null) {
+            return false;
+        }
+        if (!(world instanceof World w)) {
+            return false;
+        }
+        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return false;
+        }
+        LongOpenHashSet set = chunk.getAttached(COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        boolean marked = set != null && set.contains(pos.asLong());
+        if (TRACE && marked) {
+            Slabbed.LOGGER.info("[ANCHOR] compound_visible_owner_top_slab query true side={} pos={}",
                     w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return marked;
@@ -790,14 +837,29 @@ public final class SlabAnchorAttachment {
                 || qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(world, pos, state));
     }
 
-    private static boolean isCompoundVisibleOwnerTopSlab(BlockView world, BlockPos pos, BlockState state) {
-        if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
+    private static boolean qualifiesForCompoundVisibleOwnerTopSlab(
+            BlockView world,
+            BlockPos pos,
+            BlockState state,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (!isCompoundVisibleOwnerTopSlabState(state)
+                || world == null
+                || pos == null
+                || sourcePos == null
+                || sourceState == null) {
             return false;
         }
-        BlockPos sourcePos = pos.down();
-        BlockState sourceState = world.getBlockState(sourcePos);
-        return isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                && isCompoundFullBlockAnchor(world, sourcePos);
+        if (!pos.equals(sourcePos.up())) {
+            return false;
+        }
+        if (!isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
+                || !isCompoundFullBlockAnchor(world, sourcePos)) {
+            return false;
+        }
+        double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
+        return Math.abs(sourceDy + 1.0d) <= 1.0e-6d;
     }
 
     private static boolean isPersistentLoweredSlabCarrierState(BlockState state) {
@@ -828,6 +890,14 @@ public final class SlabAnchorAttachment {
                 && state.isOf(Blocks.STONE_SLAB)
                 && state.contains(SlabBlock.TYPE)
                 && state.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                && state.getFluidState().isEmpty();
+    }
+
+    private static boolean isCompoundVisibleOwnerTopSlabState(BlockState state) {
+        return state != null
+                && state.isOf(Blocks.STONE_SLAB)
+                && state.contains(SlabBlock.TYPE)
+                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
                 && state.getFluidState().isEmpty();
     }
 

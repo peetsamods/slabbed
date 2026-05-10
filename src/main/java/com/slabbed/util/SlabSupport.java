@@ -823,20 +823,7 @@ public final class SlabSupport {
     }
 
     private static boolean isCompoundVisibleOwnerTopSlab(BlockView world, BlockPos pos, BlockState state) {
-        if (world == null
-                || pos == null
-                || state == null
-                || !(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
-                || !state.getFluidState().isEmpty()) {
-            return false;
-        }
-        BlockPos sourcePos = pos.down();
-        BlockState sourceState = world.getBlockState(sourcePos);
-        return !(sourceState.getBlock() instanceof SlabBlock)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos)
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState);
+        return SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
     }
 
     private static boolean hasLoweredSlabLaneSupport(BlockView world, BlockPos slabPos, BlockState slabState) {
@@ -922,6 +909,9 @@ public final class SlabSupport {
                 return -1.0;
             }
             if (SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)) {
+                return -1.0;
+            }
+            if (SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
                 return -1.0;
             }
             if (state.contains(SlabBlock.TYPE)
