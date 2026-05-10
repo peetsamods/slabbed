@@ -24,6 +24,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
@@ -252,6 +253,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " top=" + results.top
                     + " supportMissing=" + results.supportMissing
                     + " triad=" + results.triad
+                    + " modelAuthority=" + results.modelAuthority
                     + " reload=" + results.reload
                     + " releaseBlockers=" + compoundVisibleReleaseBlockers(results));
         } finally {
@@ -651,12 +653,13 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
         String verdict;
         String missingSurface;
-        if (!fixture.green() || !proof[0].dy || !proof[0].outline || !proof[0].target) {
+        results.modelAuthority = proof[0].model ? "GREEN" : "RED";
+        if (!fixture.green() || !proof[0].dy || !proof[0].outline || !proof[0].target || !proof[0].model) {
             verdict = "RED";
-            missingSurface = proof[0].missingSurfaces("model");
+            missingSurface = proof[0].missingSurfaces("manualVisual");
         } else {
             verdict = "PARTIAL";
-            missingSurface = proof[0].missingSurfaces("model");
+            missingSurface = proof[0].missingSurfaces("manualVisual");
         }
         String provenSurfaces = proof[0].provenSurfaces();
         System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_" + verdict + "]"
@@ -671,16 +674,15 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " outline=" + proof[0].outline
                 + " raycast=" + proof[0].raycast
                 + " target=" + proof[0].target
-                + " model=false"
+                + " modelAuthority=" + proof[0].model
                 + " expectedModelDy=-1.0"
-                + " actualModelDy=not_available_in_this_harness"
-                + " proofMethod=noModelHarness"
-                + " modelSurface=PENDING"
+                + " proofMethod=renderRegionStyleBlockViewBridge"
+                + " modelSurface=AUTHORITY_" + (proof[0].model ? "GREEN" : "RED")
                 + " missingSurface=" + missingSurface
                 + " provenSurfaces=" + provenSurfaces
                 + " detail=\"" + proof[0].detail + "\""
                 + " reason=" + ("PARTIAL".equals(verdict)
-                ? "dy_outline_raycast_target_proven_model_path_not_available_in_this_harness"
+                ? "dy_outline_raycast_target_model_authority_proven_manual_visual_still_required"
                 : "one_or_more_direct_surfaces_failed"));
         return verdict;
     }
@@ -780,8 +782,13 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     }
 
     private static String compoundVisibleReleaseBlockers(CompoundVisibleSlabLaneResults results) {
+        if ("GREEN".equals(results.reload)
+                && "PARTIAL".equals(results.triad)
+                && "GREEN".equals(results.modelAuthority)) {
+            return "JuliaLiveRetest";
+        }
         if ("GREEN".equals(results.reload) && "PARTIAL".equals(results.triad)) {
-            return "model/manualVisual,JuliaLiveRetest";
+            return "modelAuthority/manualVisual,JuliaLiveRetest";
         }
         if ("RED".equals(results.reload)) {
             return "reload,model/manualVisual,JuliaLiveRetest";
@@ -902,11 +909,23 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         TriadSurface upper = proveTriadSurface(world, entity, "upper", fixture.upperPos, SlabType.TOP);
         TriadSurface merge = proveTriadSurface(world, entity, "merge", fixture.mergePos, SlabType.DOUBLE);
         TriadSurface top = proveTriadSurface(world, entity, "top", fixture.topPos, SlabType.BOTTOM);
+        boolean modelAuthority = lower.model && upper.model && merge.model && top.model;
+        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_"
+                + (modelAuthority ? "GREEN" : "RED") + "]"
+                + " expectedModelDy=-1.0"
+                + " lower modelDy=" + lower.modelDy
+                + " upper modelDy=" + upper.modelDy
+                + " double modelDy=" + merge.modelDy
+                + " top modelDy=" + top.modelDy
+                + " proofMethod=renderRegionStyleBlockViewBridge"
+                + " renderViewNonWorld=true"
+                + " missingSurface=manualVisual");
         return new TriadProof(
                 lower.dy && upper.dy && merge.dy && top.dy,
                 lower.outline && upper.outline && merge.outline && top.outline,
                 lower.raycast && upper.raycast && merge.raycast && top.raycast,
                 lower.target && upper.target && merge.target && top.target,
+                modelAuthority,
                 lower.detail + "|" + upper.detail + "|" + merge.detail + "|" + top.detail);
     }
 
@@ -920,7 +939,11 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         BlockState state = world.getBlockState(pos);
         boolean dyOk = isSlabDy(world, pos, expectedType, -1.0d);
         boolean markerTruth = isExpectedCompoundVisibleMarker(world, name, pos, state);
+        BlockView modelView = renderRegionStyleView(world);
+        boolean markerTruthModelView = isExpectedCompoundVisibleMarker(modelView, name, pos, state);
         double actualDy = dy(world, pos, state);
+        double modelDy = SlabSupport.getYOffset(modelView, pos, state);
+        boolean modelOk = markerTruthModelView && Math.abs(modelDy + 1.0d) <= EPSILON;
         VoxelShape outlineShape = state.getOutlineShape(world, pos, ShapeContext.absent());
         VoxelShape raycastShape = state.getRaycastShape(world, pos);
         double expectedOutlineMinY = expectedType == SlabType.TOP ? -0.5d : -1.0d;
@@ -959,6 +982,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " state=" + state
                 + " marker=" + markerName
                 + " markerTruth=" + markerTruth
+                + " markerTruthModelView=" + markerTruthModelView
                 + " slabSupportDy=" + actualDy
                 + " clientDy=" + actualDy
                 + " expectedDy=-1.0"
@@ -976,29 +1000,32 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 ? dy(world, ownerTarget.getBlockPos(), world.getBlockState(ownerTarget.getBlockPos()))
                 : "MISS")
                 + " expectedModelDy=-1.0"
-                + " actualModelDy=not_available_in_this_harness"
-                + " proofMethod=noModelHarness"
-                + " modelSurface=PENDING"
+                + " actualModelDy=" + modelDy
+                + " proofMethod=renderRegionStyleBlockViewBridge"
+                + " modelSurface=AUTHORITY_" + (modelOk ? "GREEN" : "RED")
                 + " surfaces=dy:" + dyOk
                 + ",outline:" + outlineOk
                 + ",raycast:" + raycastOk
                 + ",target:" + targetOk
-                + ",model:false"
-                + " verdict=" + (caseGreen ? "GREEN_EXCEPT_MODEL" : "RED"));
-        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_PENDING]"
+                + ",modelAuthority:" + modelOk
+                + " verdict=" + (caseGreen && modelOk ? "GREEN_EXCEPT_MANUAL_VISUAL" : "RED"));
+        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_CASE]"
                 + " caseName=" + name
                 + " pos=" + pos.toShortString()
                 + " state=" + state
                 + " marker=" + markerName
                 + " markerTruth=" + markerTruth
+                + " markerTruthModelView=" + markerTruthModelView
                 + " expectedModelDy=-1.0"
-                + " actualModelDy=not_available_in_this_harness"
-                + " proofMethod=noModelHarness"
-                + " modelSurface=PENDING");
-        return new TriadSurface(dyOk, outlineOk, raycastOk, targetOk,
+                + " actualModelDy=" + modelDy
+                + " proofMethod=renderRegionStyleBlockViewBridge"
+                + " modelSurface=AUTHORITY_" + (modelOk ? "GREEN" : "RED"));
+        return new TriadSurface(dyOk, outlineOk, raycastOk, targetOk, modelOk, modelDy,
                 name + "{block=" + describeBlock(world, pos, state)
                         + " marker=" + markerName
                         + " markerTruth=" + markerTruth
+                        + " markerTruthModelView=" + markerTruthModelView
+                        + " modelDy=" + modelDy
                         + " outlineMinY=" + (outlineShape.isEmpty() ? "empty" : outlineShape.getBoundingBox().minY)
                         + " directRaycastShapeMinY="
                         + (raycastShape.isEmpty() ? "empty" : raycastShape.getBoundingBox().minY)
@@ -2481,6 +2508,35 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         return Math.abs(SlabSupport.getYOffset(world, pos, world.getBlockState(pos)) - expectedDy) <= EPSILON;
     }
 
+    private static BlockView renderRegionStyleView(World world) {
+        return new BlockView() {
+            @Override
+            public net.minecraft.block.entity.BlockEntity getBlockEntity(BlockPos pos) {
+                return world.getBlockEntity(pos);
+            }
+
+            @Override
+            public BlockState getBlockState(BlockPos pos) {
+                return world.getBlockState(pos);
+            }
+
+            @Override
+            public net.minecraft.fluid.FluidState getFluidState(BlockPos pos) {
+                return world.getFluidState(pos);
+            }
+
+            @Override
+            public int getHeight() {
+                return world.getHeight();
+            }
+
+            @Override
+            public int getBottomY() {
+                return world.getBottomY();
+            }
+        };
+    }
+
     private static String releaseBlockers(Verdicts verdicts) {
         String blockers = "";
         if (!"GREEN".equals(verdicts.lowerExact)) {
@@ -2642,6 +2698,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         String top = "PENDING";
         String supportMissing = "PENDING";
         String triad = "PENDING";
+        String modelAuthority = "PENDING";
         String reload = "PENDING";
     }
 
@@ -2796,22 +2853,24 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         final boolean outline;
         final boolean raycast;
         final boolean target;
+        final boolean model;
         final String detail;
 
-        TriadProof(boolean dy, boolean outline, boolean raycast, boolean target, String detail) {
+        TriadProof(boolean dy, boolean outline, boolean raycast, boolean target, boolean model, String detail) {
             this.dy = dy;
             this.outline = outline;
             this.raycast = raycast;
             this.target = target;
+            this.model = model;
             this.detail = detail;
         }
 
         static TriadProof notRun() {
-            return new TriadProof(false, false, false, false, "not_run");
+            return new TriadProof(false, false, false, false, false, "not_run");
         }
 
         static TriadProof red(String reason) {
-            return new TriadProof(false, false, false, false, reason);
+            return new TriadProof(false, false, false, false, false, reason);
         }
 
         String missingSurfaces(String alwaysMissing) {
@@ -2827,6 +2886,9 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             if (!target) {
                 missing += ",target";
+            }
+            if (!model) {
+                missing += ",modelAuthority";
             }
             return missing;
         }
@@ -2845,6 +2907,9 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             if (target) {
                 proven = proven.isEmpty() ? "target" : proven + ",target";
             }
+            if (model) {
+                proven = proven.isEmpty() ? "modelAuthority" : proven + ",modelAuthority";
+            }
             return proven.isEmpty() ? "none" : proven;
         }
     }
@@ -2854,13 +2919,18 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         final boolean outline;
         final boolean raycast;
         final boolean target;
+        final boolean model;
+        final double modelDy;
         final String detail;
 
-        TriadSurface(boolean dy, boolean outline, boolean raycast, boolean target, String detail) {
+        TriadSurface(boolean dy, boolean outline, boolean raycast, boolean target,
+                     boolean model, double modelDy, String detail) {
             this.dy = dy;
             this.outline = outline;
             this.raycast = raycast;
             this.target = target;
+            this.model = model;
+            this.modelDy = modelDy;
             this.detail = detail;
         }
     }

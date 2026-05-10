@@ -61,15 +61,23 @@ public final class SlabAnchorClientSync {
             return set != null && set.contains(pos.asLong());
         };
         SlabAnchorAttachment.clientCompoundFullBlockAnchorLookup = pos -> {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc == null || mc.world == null) {
-                return false;
-            }
-            WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-            if (chunk == null) {
-                return false;
-            }
-            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
+        SlabAnchorAttachment.clientCompoundVisibleSideLowerSlabLookup = pos -> {
+            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
+        SlabAnchorAttachment.clientCompoundVisibleSideUpperSlabLookup = pos -> {
+            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
+        SlabAnchorAttachment.clientCompoundVisibleSideDoubleSlabLookup = pos -> {
+            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
+        SlabAnchorAttachment.clientCompoundVisibleOwnerTopSlabLookup = pos -> {
+            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
             return set != null && set.contains(pos.asLong());
         };
 
@@ -83,11 +91,23 @@ public final class SlabAnchorClientSync {
                 chunk.getAttached(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE, null,
                 chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE));
+        logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE, null,
+                chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE));
+        logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE, null,
+                chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE));
+        logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE, null,
+                chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE));
+        logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE, null,
+                chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE));
 
         // Register listener for future attachment changes (e.g. live anchor add/remove sync).
         registerRerenderListener(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
+        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
+        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
+        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
 
         // Also handle any attachment value already present at chunk-load time.
         // This covers the case where the chunk attachment sync packet arrived before
@@ -96,6 +116,22 @@ public final class SlabAnchorClientSync {
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+    }
+
+    private static LongOpenHashSet clientAttachmentSet(
+            BlockPos pos,
+            AttachmentType<LongOpenHashSet> attachmentType
+    ) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null || mc.world == null || pos == null) {
+            return null;
+        }
+        WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        return chunk == null ? null : chunk.getAttached(attachmentType);
     }
 
     private static void registerRerenderListener(
@@ -161,6 +197,18 @@ public final class SlabAnchorClientSync {
         }
         if (attachmentType == SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE) {
             return "compoundFullBlockAnchor";
+        }
+        if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE) {
+            return "compoundVisibleSideLowerSlab";
+        }
+        if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE) {
+            return "compoundVisibleSideUpperSlab";
+        }
+        if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE) {
+            return "compoundVisibleSideDoubleSlab";
+        }
+        if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE) {
+            return "compoundVisibleOwnerTopSlab";
         }
         return "unknownAttachment";
     }

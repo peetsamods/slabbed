@@ -196,19 +196,19 @@ The run must first emit
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]`. The expected current
 summary is `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN
 lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PARTIAL
-reload=GREEN releaseBlockers=model/manualVisual,JuliaLiveRetest`. Any unmarked
-`dy=-0.5` or `dy=0.0` slab result is logged as observed state, not accepted as
-green.
+modelAuthority=GREEN reload=GREEN releaseBlockers=JuliaLiveRetest` once model
+dy authority is proven. Any unmarked `dy=-0.5` or `dy=0.0` slab result is
+logged as observed state, not accepted as green.
 
 Latest triad proof outcome:
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]` now records lower, upper,
 merge, and top separately. All four named states prove marker/type truth,
-`dy=-1.0`, shifted outline bounds, and direct outline-shape ownership at the
-visible body. The raw `ShapeType.OUTLINE` raycast/target surface is still RED
-for lower, upper, and merge because it targets neighboring visible/support
-cells instead of the named shifted slab positions; top is the only raw
-raycast/target GREEN case. Model is not directly probed by this harness, so the
-triad cannot be called green.
+`dy=-1.0`, shifted outline bounds, owner raycast/target ownership, and model dy
+authority at the visible body. The model authority proof uses the same
+`SlabSupport.getYOffset(...)` path as `OffsetBlockStateModel.emitQuads(...)`
+through a render-region-style non-`World` `BlockView`, so model, outline, and
+raycast share the same marker source. It is still not a Julia manual visual
+claim, so the triad remains `PARTIAL` until visual alignment is confirmed.
 
 Latest lower/upper/double proof result:
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_GREEN]` reports the candidate at
@@ -236,13 +236,15 @@ jump/pop. The lower side bottom, upper side top, side double, and owner-top
 bottom states must still resolve to `dy=-1.0`, and no checked state may report
 `dy<-1.0`.
 
-Triad is `PARTIAL`, not release-green: the harness proves dy, outline minY, and
-outline target ownership for the four named states. It does not directly prove
-the model path, and the direct slab raycast shapes are empty in this harness, so
-the marker includes `missingSurface=model,raycast`. The live triad harness now
-logs `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_PENDING]` with
-`expectedModelDy=-1.0`, `actualModelDy=not_available_in_this_harness`, and
-`proofMethod=noModelHarness` for each named state. Reload is now `GREEN` through
+Triad is `PARTIAL`, not release-green: the harness proves dy, outline minY,
+owner target/raycast ownership, and model authority for the four named states,
+but Julia's manual visual retest is still required. The live triad harness now
+logs `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_GREEN]` with
+lower, upper, double, and top `modelDy=-1.0` and
+`proofMethod=renderRegionStyleBlockViewBridge`; per-state
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_CASE]` markers record
+the same dy and marker truth from the non-`World` render-view bridge. Reload is
+now `GREEN` through
 `TestWorldSave.open()`: `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_BEFORE]`
 captures lower, upper, double, and owner-top as marked `dy=-1.0` slab states
 before close/save, `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_AFTER]`
