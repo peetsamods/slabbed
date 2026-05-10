@@ -195,9 +195,10 @@ JAVA_TOOL_OPTIONS="-Dslabbed.beta4CompoundVisibleSlabLaneRed=true -Dfabric.clien
 The run must first emit
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]`. The expected current
 summary is `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN
-lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=RED
-reload=PENDING releaseBlockers=compoundVisibleSlabLane`. Any unmarked `dy=-0.5`
-or `dy=0.0` slab result is logged as observed state, not accepted as green.
+lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PARTIAL
+reload=GREEN releaseBlockers=model/manualVisual,JuliaLiveRetest`. Any unmarked
+`dy=-0.5` or `dy=0.0` slab result is logged as observed state, not accepted as
+green.
 
 Latest triad proof outcome:
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]` now records lower, upper,
@@ -241,10 +242,17 @@ the model path, and the direct slab raycast shapes are empty in this harness, so
 the marker includes `missingSurface=model,raycast`. The live triad harness now
 logs `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_PENDING]` with
 `expectedModelDy=-1.0`, `actualModelDy=not_available_in_this_harness`, and
-`proofMethod=noModelHarness` for each named state. Reload remains `PENDING`
-with `reason=reloadHarnessUnavailable` when attempted from inside the active
-visible-lane gametest context. Immediate placement green is therefore still not
-enough for release.
+`proofMethod=noModelHarness` for each named state. Reload is now `GREEN` through
+`TestWorldSave.open()`: `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_BEFORE]`
+captures lower, upper, double, and owner-top as marked `dy=-1.0` slab states
+before close/save, `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_AFTER]`
+captures the same state, marker, and dy after open, and
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_GREEN]` reports
+`markerSourceTruthSurvived=true`, `namedStatesSurvived=true`,
+`noCollapseToDyZeroOrMinusHalf=true`, and `noDyBelowMinusOne=true`. The source
+owner remains `stone`, `dy=-1.0`, and `compoundFullBlockAnchor=true`.
+Immediate placement plus reload green is still not enough for release because
+model/manual visual proof and Julia manual live retest remain blocking.
 
 ## Compatibility audit: old Row 1
 

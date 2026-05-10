@@ -205,9 +205,11 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " gameplayChange=false"
                 + " expectedLane=source_owned_authored_or_persistent_compound_full_block_dy_-1.0");
 
-        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+        TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
-                .create()) {
+                .create();
+        boolean[] singleplayerClosedForReload = {false};
+        try {
             seedCanonicalStructure(singleplayer);
             waitForClient(ctx, singleplayer, 10);
 
@@ -240,7 +242,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     "TOP", false, "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
             results.supportMissing = runCompoundVisibleSupportMissingLaneCase(ctx, singleplayer);
             results.triad = emitCompoundVisibleTriadRed(ctx, singleplayer, results);
-            results.reload = emitCompoundVisibleReloadRed(ctx, singleplayer, results);
+            results.reload = emitCompoundVisibleReloadRed(ctx, singleplayer, results, singleplayerClosedForReload);
 
             System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY]"
                     + " fixtureTruth=GREEN"
@@ -251,7 +253,11 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " supportMissing=" + results.supportMissing
                     + " triad=" + results.triad
                     + " reload=" + results.reload
-                    + " releaseBlockers=compoundVisibleSlabLane");
+                    + " releaseBlockers=" + compoundVisibleReleaseBlockers(results));
+        } finally {
+            if (!singleplayerClosedForReload[0]) {
+                singleplayer.close();
+            }
         }
     }
 
@@ -682,7 +688,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     private static String emitCompoundVisibleReloadRed(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
-            CompoundVisibleSlabLaneResults results
+            CompoundVisibleSlabLaneResults results,
+            boolean[] singleplayerClosedForReload
     ) {
         boolean allNamedStatesGreen = "GREEN".equals(results.lower)
                 && "GREEN".equals(results.upper)
@@ -702,36 +709,40 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         }
 
         try {
-            TestSingleplayerContext reloadSource = ctx.worldBuilder()
-                    .setUseConsistentSettings(true)
-                    .create();
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_START]"
+                    + " expected=named_dy_-1.0_slab_states_persist_after_TestWorldSave_open"
+                    + " reloadHarness=TestWorldSave.open"
+                    + " sameTickRequery=false");
+            TestSingleplayerContext reloadSource = singleplayer;
+            seedCanonicalStructure(reloadSource);
             NamedCompoundVisibleLaneFixture fixture = buildCompoundVisibleNamedStateFixture(ctx, reloadSource,
                     "RELOAD");
-            final String[] pre = {"NOT_RUN"};
-            reloadSource.getServer().runOnServer(server -> pre[0] = describeNamedFixture(server.getOverworld(),
+            final ReloadFixtureSnapshot[] before = new ReloadFixtureSnapshot[1];
+            reloadSource.getServer().runOnServer(server -> before[0] = captureReloadSnapshot(server.getOverworld(),
                     fixture));
+            emitReloadSnapshot("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_BEFORE]", before[0], null);
             TestWorldSave save = reloadSource.getWorldSave();
             reloadSource.close();
+            singleplayerClosedForReload[0] = true;
 
             TestSingleplayerContext reloaded = save.open();
             try {
                 waitForClient(ctx, reloaded, 8);
-                final String[] post = {"NOT_RUN"};
-                final boolean[] persisted = {false};
-                final boolean[] sourceTruth = {false};
-                final boolean[] noCollapse = {false};
-                final boolean[] noDeepDy = {false};
+                final ReloadFixtureSnapshot[] after = new ReloadFixtureSnapshot[1];
                 reloaded.getServer().runOnServer(server -> {
                     World world = server.getOverworld();
-                    post[0] = describeNamedFixture(world, fixture);
-                    sourceTruth[0] = sourceIsCompoundOwnerDyMinusOne(world);
-                    noCollapse[0] = noCollapseToDyZeroOrMinusHalf(world, fixture);
-                    noDeepDy[0] = noDyBelowMinusOne(world, fixture);
-                    persisted[0] = isNamedCompoundVisibleLaneFixture(world, fixture)
-                            && sourceTruth[0]
-                            && noDeepDy[0];
+                    after[0] = captureReloadSnapshot(world, fixture);
                 });
-                String verdict = fixture.green() && persisted[0] ? "GREEN" : "RED";
+                emitReloadSnapshot("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_AFTER]", before[0], after[0]);
+                boolean sourceTruth = before[0].sourcePass() && after[0].sourcePass();
+                boolean noCollapse = after[0].noCollapseToDyZeroOrMinusHalf;
+                boolean noDeepDy = after[0].noDyBelowMinusOne;
+                boolean persisted = before[0].allCasesPass()
+                        && after[0].allCasesPass()
+                        && before[0].stateAndMarkersSurvived(after[0])
+                        && sourceTruth
+                        && noDeepDy;
+                String verdict = fixture.green() && persisted ? "GREEN" : "RED";
                 System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_" + verdict + "]"
                         + " expected=named_dy_-1.0_slab_states_persist_after_TestWorldSave_open"
                         + " lower=" + results.lower
@@ -739,12 +750,12 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                         + " merge=" + results.merge
                         + " top=" + results.top
                         + " supportMissing=" + results.supportMissing
-                        + " pre={" + pre[0] + "}"
-                        + " post={" + post[0] + "}"
-                        + " markerSourceTruthSurvived=" + sourceTruth[0]
-                        + " namedStatesSurvived=" + persisted[0]
-                        + " noCollapseToDyZeroOrMinusHalf=" + noCollapse[0]
-                        + " noDyBelowMinusOne=" + noDeepDy[0]
+                        + " pre={" + before[0].describe() + "}"
+                        + " post={" + after[0].describe() + "}"
+                        + " markerSourceTruthSurvived=" + sourceTruth
+                        + " namedStatesSurvived=" + persisted
+                        + " noCollapseToDyZeroOrMinusHalf=" + noCollapse
+                        + " noDyBelowMinusOne=" + noDeepDy
                         + " reloadHarness=TestWorldSave.open");
                 return verdict;
             } finally {
@@ -766,6 +777,19 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " error=\"" + safeMessage(t) + "\"");
             return "PENDING";
         }
+    }
+
+    private static String compoundVisibleReleaseBlockers(CompoundVisibleSlabLaneResults results) {
+        if ("GREEN".equals(results.reload) && "PARTIAL".equals(results.triad)) {
+            return "model/manualVisual,JuliaLiveRetest";
+        }
+        if ("RED".equals(results.reload)) {
+            return "reload,model/manualVisual,JuliaLiveRetest";
+        }
+        if ("PENDING".equals(results.reload)) {
+            return "reloadHarness,model/manualVisual,JuliaLiveRetest";
+        }
+        return "compoundVisibleSlabLane";
     }
 
     private static NamedCompoundVisibleLaneFixture buildCompoundVisibleNamedStateFixture(
@@ -1106,6 +1130,114 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " sourceTruthGreen=" + sourceIsCompoundOwnerDyMinusOne(world)
                 + " noDyBelowMinusOne=" + noDyBelowMinusOne(world, fixture)
                 + " noCollapseToDyZeroOrMinusHalf=" + noCollapseToDyZeroOrMinusHalf(world, fixture);
+    }
+
+    private static ReloadFixtureSnapshot captureReloadSnapshot(
+            net.minecraft.world.BlockView world,
+            NamedCompoundVisibleLaneFixture fixture
+    ) {
+        return new ReloadFixtureSnapshot(
+                describeBlock(world, UPPER_FULL),
+                dy(world, UPPER_FULL, world.getBlockState(UPPER_FULL)),
+                SlabAnchorAttachment.isCompoundFullBlockAnchor(world, UPPER_FULL),
+                sourceIsCompoundOwnerDyMinusOne(world),
+                noDyBelowMinusOne(world, fixture),
+                noCollapseToDyZeroOrMinusHalf(world, fixture),
+                new ReloadCaseSnapshot[] {
+                        captureReloadCase(world, "COMPOUND_VISIBLE_SIDE_LOWER_SLAB", "lower", "lower",
+                                fixture.lowerPos, SlabType.BOTTOM),
+                        captureReloadCase(world, "COMPOUND_VISIBLE_SIDE_UPPER_SLAB", "upper", "upper",
+                                fixture.upperPos, SlabType.TOP),
+                        captureReloadCase(world, "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB", "double", "merge",
+                                fixture.mergePos, SlabType.DOUBLE),
+                        captureReloadCase(world, "COMPOUND_VISIBLE_OWNER_TOP_SLAB", "owner_top", "top",
+                                fixture.topPos, SlabType.BOTTOM)
+                });
+    }
+
+    private static ReloadCaseSnapshot captureReloadCase(
+            net.minecraft.world.BlockView world,
+            String caseName,
+            String markerType,
+            String markerLookupName,
+            BlockPos pos,
+            SlabType expectedType
+    ) {
+        BlockState state = world.getBlockState(pos);
+        return new ReloadCaseSnapshot(
+                caseName,
+                markerType,
+                pos,
+                state.toString(),
+                dy(world, pos, state),
+                isExpectedCompoundVisibleMarker(world, markerLookupName, pos, state),
+                isSlabDy(world, pos, expectedType, -1.0d));
+    }
+
+    private static void emitReloadSnapshot(
+            String marker,
+            ReloadFixtureSnapshot before,
+            ReloadFixtureSnapshot after
+    ) {
+        for (int i = 0; i < before.cases.length; i++) {
+            ReloadCaseSnapshot beforeCase = before.cases[i];
+            ReloadCaseSnapshot afterCase = after == null ? null : after.cases[i];
+            String reason = reloadCaseReason(before, after, beforeCase, afterCase);
+            boolean pass = after == null
+                    ? before.sourcePass() && beforeCase.expectedPass
+                    : before.sourcePass() && after.sourcePass() && beforeCase.survived(afterCase);
+            System.out.println(marker
+                    + " caseName=" + beforeCase.caseName
+                    + " markerType=" + beforeCase.markerType
+                    + " pos=" + beforeCase.pos.toShortString()
+                    + " beforeState=" + beforeCase.state
+                    + " afterState=" + (afterCase == null ? "not_reloaded_yet" : afterCase.state)
+                    + " beforeDy=" + beforeCase.dy
+                    + " afterDy=" + (afterCase == null ? "not_reloaded_yet" : Double.toString(afterCase.dy))
+                    + " beforeMarker=" + beforeCase.marker
+                    + " afterMarker=" + (afterCase == null ? "not_reloaded_yet" : Boolean.toString(afterCase.marker))
+                    + " sourceBeforeState=" + before.sourceState
+                    + " sourceAfterState=" + (after == null ? "not_reloaded_yet" : after.sourceState)
+                    + " sourceBeforeDy=" + before.sourceDy
+                    + " sourceAfterDy=" + (after == null ? "not_reloaded_yet" : Double.toString(after.sourceDy))
+                    + " sourceBeforeAnchor=" + before.sourceAnchor
+                    + " sourceAfterAnchor=" + (after == null ? "not_reloaded_yet" : Boolean.toString(after.sourceAnchor))
+                    + " pass=" + pass
+                    + " reason=" + reason);
+        }
+    }
+
+    private static String reloadCaseReason(
+            ReloadFixtureSnapshot before,
+            ReloadFixtureSnapshot after,
+            ReloadCaseSnapshot beforeCase,
+            ReloadCaseSnapshot afterCase
+    ) {
+        if (!before.sourcePass()) {
+            return "before_source_truth_missing";
+        }
+        if (!beforeCase.expectedPass) {
+            return "before_named_state_or_marker_missing";
+        }
+        if (after == null) {
+            return "before_save_snapshot";
+        }
+        if (!after.sourcePass()) {
+            return "after_source_truth_missing";
+        }
+        if (!afterCase.expectedPass) {
+            return "after_named_state_marker_or_dy_missing";
+        }
+        if (!beforeCase.state.equals(afterCase.state)) {
+            return "state_changed";
+        }
+        if (Math.abs(beforeCase.dy - afterCase.dy) > EPSILON) {
+            return "dy_changed";
+        }
+        if (beforeCase.marker != afterCase.marker) {
+            return "marker_changed";
+        }
+        return "survived";
     }
 
     private static String safeMessage(Throwable t) {
@@ -2547,6 +2679,115 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
         BlockPos[] positions() {
             return new BlockPos[] {lowerPos, upperPos, mergePos, topPos};
+        }
+    }
+
+    private static final class ReloadFixtureSnapshot {
+        final String sourceState;
+        final double sourceDy;
+        final boolean sourceAnchor;
+        final boolean sourceTruth;
+        final boolean noDyBelowMinusOne;
+        final boolean noCollapseToDyZeroOrMinusHalf;
+        final ReloadCaseSnapshot[] cases;
+
+        ReloadFixtureSnapshot(
+                String sourceState,
+                double sourceDy,
+                boolean sourceAnchor,
+                boolean sourceTruth,
+                boolean noDyBelowMinusOne,
+                boolean noCollapseToDyZeroOrMinusHalf,
+                ReloadCaseSnapshot[] cases
+        ) {
+            this.sourceState = sourceState;
+            this.sourceDy = sourceDy;
+            this.sourceAnchor = sourceAnchor;
+            this.sourceTruth = sourceTruth;
+            this.noDyBelowMinusOne = noDyBelowMinusOne;
+            this.noCollapseToDyZeroOrMinusHalf = noCollapseToDyZeroOrMinusHalf;
+            this.cases = cases;
+        }
+
+        boolean sourcePass() {
+            return sourceTruth && Math.abs(sourceDy + 1.0d) <= EPSILON && sourceAnchor;
+        }
+
+        boolean allCasesPass() {
+            for (ReloadCaseSnapshot snapshot : cases) {
+                if (!snapshot.expectedPass) {
+                    return false;
+                }
+            }
+            return noCollapseToDyZeroOrMinusHalf && noDyBelowMinusOne;
+        }
+
+        boolean stateAndMarkersSurvived(ReloadFixtureSnapshot after) {
+            for (int i = 0; i < cases.length; i++) {
+                if (!cases[i].survived(after.cases[i])) {
+                    return false;
+                }
+            }
+            return sourceState.equals(after.sourceState)
+                    && Math.abs(sourceDy - after.sourceDy) <= EPSILON
+                    && sourceAnchor == after.sourceAnchor;
+        }
+
+        String describe() {
+            StringBuilder builder = new StringBuilder("source={").append(sourceState)
+                    .append(" sourceTruth=").append(sourceTruth)
+                    .append(" noDyBelowMinusOne=").append(noDyBelowMinusOne)
+                    .append(" noCollapseToDyZeroOrMinusHalf=").append(noCollapseToDyZeroOrMinusHalf)
+                    .append("}");
+            for (ReloadCaseSnapshot snapshot : cases) {
+                builder.append(" ").append(snapshot.markerType).append("={").append(snapshot.describe()).append("}");
+            }
+            return builder.toString();
+        }
+    }
+
+    private static final class ReloadCaseSnapshot {
+        final String caseName;
+        final String markerType;
+        final BlockPos pos;
+        final String state;
+        final double dy;
+        final boolean marker;
+        final boolean expectedPass;
+
+        ReloadCaseSnapshot(
+                String caseName,
+                String markerType,
+                BlockPos pos,
+                String state,
+                double dy,
+                boolean marker,
+                boolean expectedPass
+        ) {
+            this.caseName = caseName;
+            this.markerType = markerType;
+            this.pos = pos;
+            this.state = state;
+            this.dy = dy;
+            this.marker = marker;
+            this.expectedPass = expectedPass;
+        }
+
+        boolean survived(ReloadCaseSnapshot after) {
+            return expectedPass
+                    && after.expectedPass
+                    && state.equals(after.state)
+                    && Math.abs(dy - after.dy) <= EPSILON
+                    && marker == after.marker;
+        }
+
+        String describe() {
+            return "caseName=" + caseName
+                    + " pos=" + pos.toShortString()
+                    + " state=" + state
+                    + " dy=" + dy
+                    + " marker=" + marker
+                    + " expectedPass=" + expectedPass;
         }
     }
 
