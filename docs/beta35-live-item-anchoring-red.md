@@ -90,6 +90,35 @@ so this slice does not prove a tiny safe gameplay fix. Julia's live visual
 verdict remains NOT ACCEPTED because the screenshot/live structure has not been
 proven equivalent to the controlled fixture.
 
+## Live-shape fixture parity proof
+
+Gated by `-Dslabbed.beta35FloorTorchLiveShapeRed=true` in
+`SlabbedLabLoweredSidePlacementLiveReproClientGameTest`.
+
+This proof seeds a multi-level screenshot-style slab/full geometry and uses
+player-like `interactionManager.interactBlock(...)` with held `Items.TORCH` for
+the measured placement.
+
+Current measured parity result:
+
+- `expectedTorchPos=67,202,0`
+- `actualTorchPos=67,202,0`
+- `supportPos=67,201,0`
+- `supportState=stone_slab[type=bottom]`
+- `supportDy=-0.500`
+- `supportVisibleTopY=201.000000`
+- `torchDy=-1.000`
+- `torchModelBottomY=201.000000`
+- `contactGap=0.000000`
+- `triad=GREEN`
+- `liveShapeProofStatus=GREEN`
+- `failureLayer=NONE`
+
+Interpretation: this closer fixture still does not reproduce a nonzero contact
+gap or wrong-support-owner/wrong-dy issue for floor torch. Beta 3.5 remains
+blocked by Julia's manual visual rejection, and the next safe step is tighter
+live coordinate/face/owner capture rather than a production fix guess.
+
 ## Live failure
 
 Julia's manual live test (MC 1.21.11) at HEAD `4f63abe` /
@@ -184,7 +213,7 @@ Beta 3.5 release prep is **PAUSED** due to Julia's manual visual anchoring
 rejection:
 
 1. Floor torch placement permission is GREEN.
-2. Floor torch visual/support contact is the active blocker.
+2. Floor torch visual/support acceptance is the active blocker.
 3. If Julia expands scope later, separate wall torch, lantern, sign, or chain
    proofs must be added in later slices.
 4. A final release audit only after Julia authorizes release prep.

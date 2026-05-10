@@ -85,6 +85,15 @@ ranges, and triad co-location. The controlled fixture currently reports
 `failureLayer=FIXTURE_MISMATCH`, so no tiny gameplay fix is proven by this
 measurement alone.
 
+The live-shape parity proof uses
+`-Dslabbed.beta35FloorTorchLiveShapeRed=true`. It seeds a multi-level
+screenshot-style slab/full structure and re-runs player-like floor torch
+placement measurement. Current measured result is still
+`supportVisibleTopY=201.000000`, `torchModelBottomY=201.000000`,
+`contactGap=0.000000`, `torchDy=-1.000`, `supportDy=-0.500`, `triad=GREEN`,
+`liveShapeProofStatus=GREEN`, `failureLayer=NONE`. This means the fixture still
+does not reproduce Julia's manual visual complaint directly.
+
 Do not conflate the triad proof with broader category scope or visual
 acceptance. Wall torch, lanterns, signs, and chains remain not covered and are
 not the current blocker.
@@ -94,8 +103,9 @@ not the current blocker.
 1. Do not touch the object triad. It is triad-proven.
 2. Keep the current work scoped to floor torch visual/support contact.
 3. Do not claim floor-torch-only release scope accepted.
-4. Resume release audit only if Julia explicitly authorizes release prep after the visual anchoring blocker is resolved or waived.
-5. When cutting the Beta 3.5 release branch, use option 1 or 2 from the valid path above, never the invalid cherry-pick-onto-d1417ff path.
+4. Keep live-shape parity work proof-only until a reproducible RED layer is captured.
+5. Resume release audit only if Julia explicitly authorizes release prep after the visual anchoring blocker is resolved or waived.
+6. When cutting the Beta 3.5 release branch, use option 1 or 2 from the valid path above, never the invalid cherry-pick-onto-d1417ff path.
 
 ## See also
 
