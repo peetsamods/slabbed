@@ -291,6 +291,15 @@ sequence. The capture command is:
 
 `JAVA_TOOL_OPTIONS="-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.beta4ManualLiveTrace=true" ./gradlew --no-daemon runClient --console plain`
 
+Delayed-final proof rule after `4e6dae9`: immediate client delta is not proof
+of durable placement. Any manual `runClient` parity claim must inspect
+`[JULIA_BETA4_MANUAL_LIVE_DELAYED_FINAL]` and
+`[JULIA_BETA4_MANUAL_LIVE_DELAYED_SUMMARY]` at client ticks 1, 5, 20, and 40.
+The delayed proof must say whether the immediate candidate survived server
+reconciliation, reverted/vanished as a ghost, remained a clean no-op after
+`Pass[]`, or mismatched the expected candidate/state/dy. Gameplay work should
+not start from an immediate `Success` alone.
+
 ## Implementation slices after design
 
 1. Add/rename focused RED/PENDING proof markers for compound below-lane side slab placement.

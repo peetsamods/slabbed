@@ -231,6 +231,13 @@ readiness claim. They are intended to compare manual target/face/hit/local
 band/candidate/delta/result against the goblin, and to identify whether
 `BlockItemPlacementIntentMixin`, `ServerInteractBlockHitToleranceMixin`, and
 `SlabSupport.findLegalCompoundSlabRemap(...)` ran on the same real click path.
+After `4e6dae9`, the delayed manual trace also emits
+`[JULIA_BETA4_MANUAL_LIVE_DELAYED_FINAL]` and
+`[JULIA_BETA4_MANUAL_LIVE_DELAYED_SUMMARY]` at client ticks 1, 5, 20, and 40.
+Those delayed markers are the required proof surface for ghost/floating/wrong
+placement: they compare the original target/candidate/immediate delta against
+post-reconciliation candidate state/dy, originally changed positions, bounded
+scan changes, ghost resolution/persistence, and durable mismatch reason.
 
 ## Current savepoint
 
