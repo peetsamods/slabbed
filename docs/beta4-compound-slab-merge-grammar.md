@@ -195,7 +195,7 @@ JAVA_TOOL_OPTIONS="-Dslabbed.beta4CompoundVisibleSlabLaneRed=true -Dfabric.clien
 The run must first emit
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]`. The expected current
 summary is `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN
-lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PENDING
+lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PARTIAL
 reload=PENDING releaseBlockers=compoundVisibleSlabLane`. Any unmarked `dy=-0.5`
 or `dy=0.0` slab result is logged as observed state, not accepted as green.
 
@@ -216,8 +216,22 @@ class. `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TOP_GREEN]` reports
 `source.up()` as `stone_slab[type=bottom]`, `dy=-1.0`, backed by
 `COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE`; both server and client report
 `compoundVisibleOwnerTopSlab=true`. Support-missing turned GREEN naturally
-through the same bounded source-owned states. Triad and reload remain PENDING
-until separately proven.
+through the same bounded source-owned states.
+
+Support-missing proof now explicitly builds all four named states, removes the
+direct support under the authored compound full block, and requires the source
+to remain `stone`, `dy=-1.0`, and `compoundFullBlockAnchor=true` with no
+jump/pop. The lower side bottom, upper side top, side double, and owner-top
+bottom states must still resolve to `dy=-1.0`, and no checked state may report
+`dy<-1.0`.
+
+Triad is `PARTIAL`, not release-green: the harness proves dy, outline minY, and
+outline target ownership for the four named states. It does not directly prove
+the model path, and the direct slab raycast shapes are empty in this harness, so
+the marker includes `missingSurface=model,raycast`. Reload remains `PENDING`
+with `reason=reloadHarnessUnavailable` when attempted from inside the active
+visible-lane gametest context. Immediate placement green is therefore still not
+enough for release.
 
 ## Compatibility audit: old Row 1
 
