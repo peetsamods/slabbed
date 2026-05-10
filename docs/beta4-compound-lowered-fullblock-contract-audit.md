@@ -743,16 +743,16 @@ with the clicked source still a compound full block at `dy=-1.0`.
 not accepted as green.
 
 Latest summary:
-`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PARTIAL reload=PENDING releaseBlockers=compoundVisibleSlabLane`.
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PARTIAL reload=GREEN releaseBlockers=model/manualVisual,JuliaLiveRetest`.
 
 | Obligation | Marker | Current status | Evidence / blocker |
 | --- | --- | --- | --- |
 | supportMissing | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_GREEN]` | GREEN | Builds lower side bottom, upper side top, side double, and owner-top bottom states at `dy=-1.0`; removes the direct support slab; verifies the source remains `stone`, `dy=-1.0`, `compoundFullBlockAnchor=true`, no jump/pop, all four named states remain `dy=-1.0`, and no checked state is below `dy=-1.0`. |
 | triad | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_PARTIAL]` | PARTIAL | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]` now proves marker/type truth, `dy=-1.0`, shifted outline bounds, and owner raycast/target ownership for lower, upper, merge, and top through the named compound visible slab lane retarget rule. Raw vanilla outline raycast still records the historical neighboring/support-cell target for lower/upper/merge, so the proof logs both `rawRaycastTarget` and corrected `raycastTarget`. The model surface is explicitly pending in this harness via `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_PENDING]` with `expectedModelDy=-1.0`, `actualModelDy=not_available_in_this_harness`, and `proofMethod=noModelHarness`. |
-| reload | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_PENDING]` | PENDING | The attempted `TestWorldSave.open()` proof is not faked as same-tick persistence; inside the active visible-lane context it reports `reason=reloadHarnessUnavailable` / `Cannot create a world when a server is running`. |
+| reload | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_GREEN]` | GREEN | Uses `TestWorldSave.open()` after close/save, not a same-tick requery. `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_BEFORE]` and `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_AFTER]` report lower `stone_slab[type=bottom]`, upper `stone_slab[type=top]`, double `stone_slab[type=double]`, and owner-top `stone_slab[type=bottom]` with before/after marker true and before/after dy `-1.0`; source remains `stone`, `dy=-1.0`, `compoundFullBlockAnchor=true`, and the proof reports no collapse to `dy=0.0` or `dy=-0.5`. |
 
-Release remains blocked until the model gap plus the reload gap are closed or
-explicitly deferred by Julia, followed by manual live retest.
+Release remains blocked until the model/manual visual gap is closed or explicitly
+deferred by Julia, followed by manual live retest.
 
 ## Old Row 1 compatibility audit
 
