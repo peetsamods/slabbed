@@ -707,29 +707,70 @@ UNDECIDED.
   expose a chunk-only unload/reload primitive. `ChainSurvivalReproTest`
   documents the same caveat. Recorded as helper-absent.
 
-## Compound visible slab lane lower proof
+## Compound visible slab lane lower/upper proof
 
-`COMPOUND_VISIBLE_SIDE_LOWER_SLAB` is now the first implemented compound visible
-slab lane state. The durable source truth is
-`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE`, written only after
-the immediate side candidate finalizes as `stone_slab[type=bottom]` beside an
-authored/persistent compound full-block owner at `dy=-1.0`.
+`COMPOUND_VISIBLE_SIDE_LOWER_SLAB` and `COMPOUND_VISIBLE_SIDE_UPPER_SLAB` are now
+the first two implemented compound visible slab lane states. The durable source
+truth is `SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE` and
+`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE`, written only after
+the immediate side candidate finalizes as `stone_slab[type=bottom]` or
+`stone_slab[type=top]` beside an authored/persistent compound full-block owner
+at `dy=-1.0`.
 
 Focused proof:
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_GREEN]` reports server and client
 candidate `stone_slab[type=bottom] dy=-1.0`, source `compoundFullBlockAnchor=true`
 at `dy=-1.0`, `noRecursiveDyBelowMinusOne=true`, and
-`oldDyMinusHalfIsGreen=false`.
+`oldDyMinusHalfIsGreen=false`. `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_UPPER_GREEN]`
+reports server and client candidate `stone_slab[type=top] dy=-1.0` with the same
+source-owned bounds and no `dy<-1.0`.
 
 Latest summary:
-`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=RED merge=RED top=RED supportMissing=RED triad=RED reload=RED releaseBlockers=compoundVisibleSlabLane`.
-Upper, merge, owner-top, support-missing aggregate, triad, and reload remain
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=RED top=RED supportMissing=RED triad=RED reload=RED releaseBlockers=compoundVisibleSlabLane`.
+Merge, owner-top, support-missing aggregate, triad, and reload remain
 pending/blocked for release confidence.
+
+## Old Row 1 compatibility audit
+
+Decision: **A, old Row 1 superseded**.
+
+| Question | Finding |
+| --- | --- |
+| Clicked source | `FULL_POS`, ordinary `stone`, authored/persistent compound full-block owner |
+| Source dy | `-1.0` |
+| Face | horizontal `EAST` |
+| Hit coordinate | `sourceY - 0.25`, historically labelled lower-half |
+| Corrected visible local Y | `0.75`, so upper-band relative to a `dy=-1.0` source spanning Y-1.0 to Y |
+| Candidate | `source.offset(horizontalFace)` |
+| Old expected result | `stone_slab[type=bottom] dy=-0.5` |
+| Corrected result | `COMPOUND_VISIBLE_SIDE_UPPER_SLAB`, `stone_slab[type=top] dy=-1.0` |
+| Proof action | Row emits `[JULIA_BETA4_COMPOUND_OLD_ROW_VISIBLE_UPPER_SUPERSEDED_GREEN]` |
+
+The old expectation is stale because it used block-coordinate half naming from
+the pre-correction below-lane model. The corrected source-owned visible lane has
+priority only when the source is compound `dy=-1.0`, the face is horizontal, the
+candidate is the immediate side cell, and the hit is inside a named visible
+band. This does not globally legalize `dy=-1.0` slabs.
+
+Old Row 3 is the preserved continuation case, not another visible-upper
+reclassification. It has an existing horizontal legal `dy=-0.5` lane in the
+clicked direction (`legalLaneCount=1`) and expects continuation beyond that lane
+at `2,201,0`. `SlabSupport.findLegalCompoundSlabRemap(...)` now evaluates that
+existing horizontal continuation before the visible side branches. Latest proof
+emits `[JULIA_BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]` with the Row 3 candidate
+finalized as `stone_slab[type=bottom] dy=-0.5`.
+
+Compatibility result:
+
+| Row | Decision |
+| --- | --- |
+| Old Row 1 | Superseded by `COMPOUND_VISIBLE_SIDE_UPPER_SLAB`, `stone_slab[type=top] dy=-1.0` |
+| Old Row 3 | Preserved as `COMPOUND_HORIZONTAL_CONTINUATION_LANE`, `stone_slab[type=bottom] dy=-0.5` |
 
 ## Recommendation
 
-Do not treat the compound visible slab lane as release-complete. The LOWER
-state is implemented/proven, but each remaining named state needs its own
+Do not treat the compound visible slab lane as release-complete. The LOWER and
+UPPER states are implemented/proven, but each remaining named state needs its own
 bounded proof or an explicit deferral. Release remains blocked.
 
 ## Cross-references

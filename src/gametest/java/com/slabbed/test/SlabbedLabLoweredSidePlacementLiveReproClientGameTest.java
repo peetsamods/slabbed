@@ -3654,15 +3654,29 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     adjacentLanePos,
                     false);
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            BlockState compoundState = mc.world.getBlockState(compoundPos);
+            double sourceDy = SlabSupport.getYOffset(mc.world, compoundPos, compoundState);
+            double visibleLocalY = hit.getPos().y - (compoundPos.getY() + sourceDy);
+            boolean visibleUpperBand = visibleLocalY >= 0.5d - EPSILON && visibleLocalY <= 1.0d + EPSILON;
+            String expectedLaw = visibleUpperBand
+                    ? "COMPOUND_VISIBLE_SIDE_UPPER_SLAB"
+                    : "COMPOUND_BELOW_LANE_SIDE_SLAB";
             System.out.println("[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_ATTEMPT]"
                     + " row=" + rowName
                     + " half=" + halfLabel
                     + " result=" + result
+                    + " sourceDy=" + sourceDy
+                    + " visibleLocalY=" + visibleLocalY
+                    + " expectedLaw=" + expectedLaw
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
                     + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos)
-                    + " classification=COMPOUND_BELOW_LANE_SIDE_SLAB"
-                    + " expected=legal_side_slab_dy_-0.5"
-                    + " reason=product_law_promoted_below_lane_class");
+                    + " classification=" + expectedLaw
+                    + " expected=" + (visibleUpperBand
+                    ? "stone_slab[type=top]_dy_-1.0"
+                    : "legal_side_slab_dy_-0.5")
+                    + " reason=" + (visibleUpperBand
+                    ? "old_row_hit_is_upper_visible_band_under_compound_visible_slab_lane"
+                    : "product_law_promoted_below_lane_class"));
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
@@ -3676,21 +3690,33 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[" + rowName + "] compound owner must remain dy=-1.000, found dy="
                         + compoundDy + " state=" + compound);
             }
-            SlabType expectedType = "upper-half".equals(halfLabel) ? SlabType.TOP : SlabType.BOTTOM;
+            double visibleLocalY = hit.getPos().y - (compoundPos.getY() + compoundDy);
+            boolean visibleUpperBand = visibleLocalY >= 0.5d - EPSILON && visibleLocalY <= 1.0d + EPSILON;
+            SlabType expectedType = visibleUpperBand
+                    ? SlabType.TOP
+                    : "upper-half".equals(halfLabel) ? SlabType.TOP : SlabType.BOTTOM;
+            double expectedDy = visibleUpperBand ? -1.0d : -0.5d;
+            String expectedLaw = visibleUpperBand
+                    ? "COMPOUND_VISIBLE_SIDE_UPPER_SLAB"
+                    : "COMPOUND_BELOW_LANE_SIDE_SLAB";
             BlockState adjacent = mc.world.getBlockState(adjacentLanePos);
             double adjacentDy = SlabSupport.getYOffset(mc.world, adjacentLanePos, adjacent);
             if (!adjacent.isOf(Blocks.STONE_SLAB)
                     || !adjacent.contains(SlabBlock.TYPE)
                     || adjacent.get(SlabBlock.TYPE) != expectedType
-                    || Math.abs(adjacentDy + 0.5d) > EPSILON) {
-                failCompoundSlabHarness(rowName, "compound below-lane side slab GREEN must author "
-                        + expectedType + " stone_slab dy=-0.500 at "
+                    || Math.abs(adjacentDy - expectedDy) > EPSILON) {
+                failCompoundSlabHarness(rowName, expectedLaw + " GREEN must author "
+                        + expectedType + " stone_slab dy=" + expectedDy + " at "
                         + adjacentLanePos.toShortString() + ", found " + adjacent + " dy=" + adjacentDy);
             }
-            System.out.println("[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_GREEN]"
+            System.out.println((visibleUpperBand
+                    ? "[JULIA_BETA4_COMPOUND_OLD_ROW_VISIBLE_UPPER_SUPERSEDED_GREEN]"
+                    : "[JULIA_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_GREEN]")
                     + " row=" + rowName
                     + " half=" + halfLabel
-                    + " classification=COMPOUND_BELOW_LANE_SIDE_SLAB"
+                    + " classification=" + expectedLaw
+                    + " visibleLocalY=" + visibleLocalY
+                    + " expectedDy=" + expectedDy
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
                     + " candidate=" + describeOwnerFacts(mc.world, adjacentLanePos)
                     + " illegalDyMinusOneSlab=false"
