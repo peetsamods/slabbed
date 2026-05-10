@@ -490,10 +490,12 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     ) {
         final String[] serverFinal = {"NOT_RUN"};
         final boolean[] serverLegal = {false};
+        final boolean[] serverMarked = {false};
         singleplayer.getServer().runOnServer(server -> {
             World world = server.getOverworld();
             BlockState candidateState = world.getBlockState(candidate);
-            serverLegal[0] = isSlabDy(world, candidate, SlabType.BOTTOM, -1.0d);
+            serverMarked[0] = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, candidate, candidateState);
+            serverLegal[0] = isSlabDy(world, candidate, SlabType.BOTTOM, -1.0d) && serverMarked[0];
             serverFinal[0] = describeBlock(world, candidate, candidateState);
             System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SERVER_FINAL]"
                     + " row=" + caseName
@@ -511,7 +513,9 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             BlockState candidateState = mc.world.getBlockState(candidate);
             BlockState sourceState = mc.world.getBlockState(UPPER_FULL);
-            boolean clientLegal = isSlabDy(mc.world, candidate, SlabType.BOTTOM, -1.0d);
+            boolean clientMarked = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(mc.world, candidate,
+                    candidateState);
+            boolean clientLegal = isSlabDy(mc.world, candidate, SlabType.BOTTOM, -1.0d) && clientMarked;
             boolean sourceLegal = sourceState.isOf(Blocks.STONE)
                     && isDy(mc.world, UPPER_FULL, -1.0d)
                     && SlabAnchorAttachment.isCompoundFullBlockAnchor(mc.world, UPPER_FULL);
@@ -526,8 +530,11 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " expectedCandidate=" + candidate.toShortString()
                     + " expectedState=stone_slab[type=bottom]"
                     + " expectedDy=-1.0"
+                    + " expectedMarker=COMPOUND_VISIBLE_OWNER_TOP_SLAB"
                     + " actualCandidate=" + describeBlock(mc.world, candidate, candidateState)
                     + " serverCandidate=" + serverFinal[0]
+                    + " clientMarked=" + clientMarked
+                    + " serverMarked=" + serverMarked[0]
                     + " clickedSource=" + describeBlock(mc.world, UPPER_FULL, sourceState)
                     + " sourceRemainsCompoundFullBlockDyMinusOne=" + sourceLegal
                     + " noDyZeroFloatingSlab=" + noDyZeroFloatingSlab
@@ -1751,6 +1758,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " slabType=" + (state.contains(SlabBlock.TYPE) ? state.get(SlabBlock.TYPE).asString() : "none")
                 + " anchored=" + SlabAnchorAttachment.isAnchored(world, pos)
                 + " compoundFullBlockAnchor=" + SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)
+                + " compoundVisibleOwnerTopSlab=" + SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)
                 + " persistentLoweredSlabCarrier=" + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
     }
 

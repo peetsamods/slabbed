@@ -128,9 +128,11 @@ The authored candidate is vanilla-height slab law, not lowered side-lane law:
 - final state: `stone_slab[type=bottom]`
 - final dy: `-1.0` under corrected compound visible slab lane law
 - `persistentLoweredSlabCarrier=false`
-- durable distinguisher: the source below carries existing persisted/synced compound full-block owner truth; no new slab lane marker is required
+- durable distinguisher: the candidate carries
+  `SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE`, written only after
+  the pre-placement source truth names `COMPOUND_VISIBLE_OWNER_TOP_SLAB`
 
-The dynamic dy path that previously broke this law was `SlabSupport.getYOffsetInner(...)`'s bottom-slab lowered branch through `hasLoweredCarrierBelow(world, pos)`: a bottom slab directly above an anchored compound full block was being treated as a lowered carrier continuation and resolved to `dy=-0.5`. `COMPOUND_VISIBLE_OWNER_TOP_SLAB` is now narrowly excluded from that branch by checking the durable source-owner sidecar, while side placements continue to use the existing `dy=-0.5` lowered slab grammar.
+The dynamic dy path that previously broke this law was `SlabSupport.getYOffsetInner(...)`'s bottom-slab lowered branch through `hasLoweredCarrierBelow(world, pos)`: a bottom slab directly above an anchored compound full block was being treated as a lowered carrier continuation and resolved to `dy=-0.5`. `COMPOUND_VISIBLE_OWNER_TOP_SLAB` now returns `dy=-1.0` only through its persisted/synced owner-top marker, while unmarked bottom slabs remain under the older lowered-lane rules.
 
 The forbidden results remain unchanged:
 
@@ -163,20 +165,24 @@ Rows 1/2 and Julia's screenshot side-shape are now intentionally unified as the 
 
 ## Proof status
 
-Current implementation has the first three named corrected states implemented:
-`COMPOUND_VISIBLE_SIDE_LOWER_SLAB`, `COMPOUND_VISIBLE_SIDE_UPPER_SLAB`, and
-`COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB`. They are backed by
+Current implementation has the first four named corrected states implemented:
+`COMPOUND_VISIBLE_SIDE_LOWER_SLAB`, `COMPOUND_VISIBLE_SIDE_UPPER_SLAB`,
+`COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB`, and `COMPOUND_VISIBLE_OWNER_TOP_SLAB`.
+They are backed by
 `SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE` and
 `SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE`, plus
 `SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE` for the merge
-state. The sidecar markers are persisted/synced and written only for the
+state and `SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE` for the
+top state. The sidecar markers are persisted/synced and written only for the
 immediate side candidate of an authored or persistent compound full-block owner
 at `dy=-1.0`. Lower and upper require final state
 `stone_slab[type=bottom]` or `stone_slab[type=top]`; double requires an existing
 marked lower/upper visible side candidate in that same source-owned side cell
-and final state `stone_slab[type=double]`.
+and final state `stone_slab[type=double]`. Owner top requires the exact
+`source.up()` candidate and final state `stone_slab[type=bottom]`.
 `SlabSupport.getYOffsetInner(...)` returns `dy=-1.0` for those marked slabs only,
-before the legacy `dy=-0.5` lowered-lane rules.
+before the legacy `dy=-0.5` lowered-lane rules. The old `dy=0.0` owner-top ghost
+result is not accepted as green.
 The historical proof rows below remain evidence for the older law, but they are
 superseded for release confidence by the marker matrix above.
 
@@ -189,9 +195,9 @@ JAVA_TOOL_OPTIONS="-Dslabbed.beta4CompoundVisibleSlabLaneRed=true -Dfabric.clien
 The run must first emit
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]`. The expected current
 summary is `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN
-lower=GREEN upper=GREEN merge=GREEN top=RED supportMissing=RED triad=RED reload=RED
-releaseBlockers=compoundVisibleSlabLane`. Any `dy=-0.5` or `dy=0.0` slab result
-is logged as observed state, not accepted as green.
+lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PENDING
+reload=PENDING releaseBlockers=compoundVisibleSlabLane`. Any unmarked `dy=-0.5`
+or `dy=0.0` slab result is logged as observed state, not accepted as green.
 
 Latest lower/upper/double proof result:
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_GREEN]` reports the candidate at
@@ -206,8 +212,12 @@ candidate merging from a marked lower/upper visible side slab to
 `COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE`. The source remains the compound full
 block at `dy=-1.0`, no `dy<-1.0` result is accepted, and the old `dy=-0.5`
 lowered same-cell merge remains a separate `LOWERED_SAME_CELL_SLAB_MERGE`
-class. The remaining named states are still RED/PENDING unless separately
-proven.
+class. `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TOP_GREEN]` reports
+`source.up()` as `stone_slab[type=bottom]`, `dy=-1.0`, backed by
+`COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE`; both server and client report
+`compoundVisibleOwnerTopSlab=true`. Support-missing turned GREEN naturally
+through the same bounded source-owned states. Triad and reload remain PENDING
+until separately proven.
 
 ## Compatibility audit: old Row 1
 

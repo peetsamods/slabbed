@@ -711,16 +711,21 @@ UNDECIDED.
 ## Compound visible slab lane lower/upper/double proof
 
 `COMPOUND_VISIBLE_SIDE_LOWER_SLAB` and `COMPOUND_VISIBLE_SIDE_UPPER_SLAB` are now
-joined by `COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB` as the first three implemented
-compound visible slab lane states. The durable source truth is
+joined by `COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB` and
+`COMPOUND_VISIBLE_OWNER_TOP_SLAB` as the first four implemented compound visible
+slab lane states. The durable source truth is
 `SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE`,
 `SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE`, and
-`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE`, written only
-after the immediate side candidate finalizes as `stone_slab[type=bottom]`,
-`stone_slab[type=top]`, or `stone_slab[type=double]` beside an
-authored/persistent compound full-block owner at `dy=-1.0`. The double marker
-replaces the lower/upper marker for that side cell after a compatible repeat
-merge; it does not authorize freeform `dy=-1.0` slab chains.
+`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE`, plus
+`SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE`. Side markers are
+written only after the immediate side candidate finalizes as
+`stone_slab[type=bottom]`, `stone_slab[type=top]`, or
+`stone_slab[type=double]` beside an authored/persistent compound full-block
+owner at `dy=-1.0`. The owner-top marker is written only for the exact
+`source.up()` bottom-slab candidate after a held-slab UP-face click on that same
+source. The double marker replaces the lower/upper marker for that side cell
+after a compatible repeat merge; none of these markers authorize freeform
+`dy=-1.0` slab chains.
 
 Focused proof:
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_GREEN]` reports server and client
@@ -732,11 +737,16 @@ source-owned bounds and no `dy<-1.0`.
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MERGE_GREEN]` reports the same
 candidate merging to `stone_slab[type=double] dy=-1.0` on both server and client,
 with the clicked source still a compound full block at `dy=-1.0`.
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TOP_GREEN]` reports `source.up()` as
+`stone_slab[type=bottom] dy=-1.0` on both server and client, with
+`compoundVisibleOwnerTopSlab=true`; the old `dy=0.0` owner-top ghost result is
+not accepted as green.
 
 Latest summary:
-`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=RED supportMissing=RED triad=RED reload=RED releaseBlockers=compoundVisibleSlabLane`.
-Owner-top, support-missing aggregate, triad, and reload remain pending/blocked
-for release confidence.
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PENDING reload=PENDING releaseBlockers=compoundVisibleSlabLane`.
+Support-missing went GREEN naturally through the same bounded source-owned
+side/top markers. Triad and reload remain pending/blocked for release confidence,
+and release remains blocked.
 
 ## Old Row 1 compatibility audit
 
@@ -778,8 +788,9 @@ Compatibility result:
 ## Recommendation
 
 Do not treat the compound visible slab lane as release-complete. The LOWER,
-UPPER, and DOUBLE states are implemented/proven, but each remaining named state
-needs its own bounded proof or an explicit deferral. Release remains blocked.
+UPPER, DOUBLE, OWNER_TOP, and support-missing aggregate states are
+implemented/proven, but triad and reload still need their own bounded proof or
+an explicit deferral. Release remains blocked.
 
 ## Cross-references
 
