@@ -743,10 +743,16 @@ with the clicked source still a compound full block at `dy=-1.0`.
 not accepted as green.
 
 Latest summary:
-`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PENDING reload=PENDING releaseBlockers=compoundVisibleSlabLane`.
-Support-missing went GREEN naturally through the same bounded source-owned
-side/top markers. Triad and reload remain pending/blocked for release confidence,
-and release remains blocked.
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PARTIAL reload=PENDING releaseBlockers=compoundVisibleSlabLane`.
+
+| Obligation | Marker | Current status | Evidence / blocker |
+| --- | --- | --- | --- |
+| supportMissing | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_GREEN]` | GREEN | Builds lower side bottom, upper side top, side double, and owner-top bottom states at `dy=-1.0`; removes the direct support slab; verifies the source remains `stone`, `dy=-1.0`, `compoundFullBlockAnchor=true`, no jump/pop, all four named states remain `dy=-1.0`, and no checked state is below `dy=-1.0`. |
+| triad | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_PARTIAL]` | PARTIAL | Dy, outline minY, and outline target ownership are proven for the four named states. Missing surface is `model,raycast`: the harness does not directly probe model output, and direct slab raycast shapes are empty. |
+| reload | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_PENDING]` | PENDING | The attempted `TestWorldSave.open()` proof is not faked as same-tick persistence; inside the active visible-lane context it reports `reason=reloadHarnessUnavailable` / `Cannot create a world when a server is running`. |
+
+Release remains blocked until the triad/reload gaps are closed or explicitly
+deferred by Julia, followed by manual live retest.
 
 ## Old Row 1 compatibility audit
 
