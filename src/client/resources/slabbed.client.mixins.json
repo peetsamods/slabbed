@@ -3,6 +3,7 @@
   "package": "com.slabbed.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "Beta4ManualLiveInteractionTraceMixin",
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
