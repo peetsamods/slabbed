@@ -440,26 +440,6 @@ public final class SlabSupport {
         }
 
         BlockPos intendedLanePos = sourcePos.offset(intendedDirection);
-        if (isCompoundVisibleSideLowerHit(world, sourcePos, sourceState, hitPos)) {
-            BlockState candidateState = world.getBlockState(intendedLanePos);
-            if (!candidateState.isAir()) {
-                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
-                        CompoundSlabRemapDecision.rejected(
-                        sourcePos,
-                        sourcePos,
-                        intendedLanePos,
-                        "compound_visible_side_lower_candidate_not_air"));
-            }
-            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
-                    new CompoundSlabRemapDecision(
-                    true,
-                    sourcePos,
-                    sourcePos,
-                    intendedLanePos,
-                    SlabType.BOTTOM,
-                    "COMPOUND_VISIBLE_SIDE_LOWER_SLAB"));
-        }
-
         int legalLaneCount = 0;
         BlockPos legalLanePos = null;
         BlockState legalLaneState = null;
@@ -493,6 +473,45 @@ public final class SlabSupport {
                     candidatePlacementPos,
                     legalLaneState.get(SlabBlock.TYPE),
                     "COMPOUND_HORIZONTAL_CONTINUATION_LANE"));
+        }
+
+        if (isCompoundVisibleSideLowerHit(world, sourcePos, sourceState, hitPos)) {
+            BlockState candidateState = world.getBlockState(intendedLanePos);
+            if (!candidateState.isAir()) {
+                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                        CompoundSlabRemapDecision.rejected(
+                        sourcePos,
+                        sourcePos,
+                        intendedLanePos,
+                        "compound_visible_side_lower_candidate_not_air"));
+            }
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    new CompoundSlabRemapDecision(
+                    true,
+                    sourcePos,
+                    sourcePos,
+                    intendedLanePos,
+                    SlabType.BOTTOM,
+                    "COMPOUND_VISIBLE_SIDE_LOWER_SLAB"));
+        }
+        if (isCompoundVisibleSideUpperHit(world, sourcePos, sourceState, hitPos)) {
+            BlockState candidateState = world.getBlockState(intendedLanePos);
+            if (!candidateState.isAir()) {
+                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                        CompoundSlabRemapDecision.rejected(
+                        sourcePos,
+                        sourcePos,
+                        intendedLanePos,
+                        "compound_visible_side_upper_candidate_not_air"));
+            }
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    new CompoundSlabRemapDecision(
+                    true,
+                    sourcePos,
+                    sourcePos,
+                    intendedLanePos,
+                    SlabType.TOP,
+                    "COMPOUND_VISIBLE_SIDE_UPPER_SLAB"));
         }
 
         BlockState belowSourceState = world.getBlockState(sourcePos.down());
@@ -575,6 +594,20 @@ public final class SlabSupport {
         double sourceDy = getYOffset(world, sourcePos, sourceState);
         double localVisibleY = hitPos.y - (sourcePos.getY() + sourceDy);
         return localVisibleY >= -1.0e-6d && localVisibleY < 0.5d - 1.0e-6d;
+    }
+
+    private static boolean isCompoundVisibleSideUpperHit(
+            BlockView world,
+            BlockPos sourcePos,
+            BlockState sourceState,
+            Vec3d hitPos
+    ) {
+        if (world == null || sourcePos == null || sourceState == null || hitPos == null) {
+            return false;
+        }
+        double sourceDy = getYOffset(world, sourcePos, sourceState);
+        double localVisibleY = hitPos.y - (sourcePos.getY() + sourceDy);
+        return localVisibleY >= 0.5d - 1.0e-6d && localVisibleY <= 1.0d + 1.0e-6d;
     }
 
     private static boolean isPersistentVisibleCompoundOwner(BlockView world, BlockPos pos, BlockState state) {
@@ -858,6 +891,9 @@ public final class SlabSupport {
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
             if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)) {
+                return -1.0;
+            }
+            if (SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)) {
                 return -1.0;
             }
             if (state.contains(SlabBlock.TYPE)
