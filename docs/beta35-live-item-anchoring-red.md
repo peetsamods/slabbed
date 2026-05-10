@@ -1,16 +1,56 @@
-# Beta 3.5 Live Item Anchoring RED Proof
+# Beta 3.5 Floor Torch Player Placement Proof
 
 ## Status
 
-**Beta 3.5 release prep is PAUSED.**
+**Floor torch player-like placement/anchoring is GREEN.**
+
+**Beta 3.5 release prep remains PAUSED** until Julia decides whether
+`floor_torch_only` is enough scope or whether wall torches, lanterns, signs, or
+chains must be included.
+
+## GREEN proof added after RED/proof-gap savepoint
+
+Gated by `-Dslabbed.beta35LiveItemAnchoringRed=true` in
+`SlabbedLabLoweredSidePlacementLiveReproClientGameTest`.
+
+The proof now uses the client `interactionManager.interactBlock(...)` path with
+a held `Items.TORCH` stack and a top-face hit on the slab-supported geometry.
+The main placement assertion no longer uses direct `setBlockState(...)`.
+
+Required GREEN markers now emit:
+
+```
+[JULIA_BETA35_LIVE_ITEM_ANCHORING_PLACEMENT_GREEN]
+[JULIA_BETA35_LIVE_ITEM_ANCHORING_SURVIVAL_GREEN]
+[JULIA_BETA35_LIVE_ITEM_ANCHORING_TRIAD_GREEN]
+[JULIA_BETA35_LIVE_ITEM_ANCHORING_SUMMARY] ... categoryScope=floor_torch_only itemCategory=floor_torch ... failureLayer=NONE
+```
+
+The focused proof records:
+
+- `placementResult=Success[...]` / `actionResult=Success[...]`.
+- `supportPos=49,201,0`, `supportDy=-0.500`.
+- `expectedTorchPos=49,202,0`, `finalState=Block{minecraft:torch}`.
+- `canPlaceAt=true` after placement.
+- `torchDy=-1.000`.
+- Survival GREEN after an immediate slab neighbor-update pulse while support
+  remains present.
+- Model, outline, and raycast bounds co-located:
+  `min=(49.375,201.000,0.375),max=(49.625,201.625,0.625)`.
+
+Category scope remains explicit:
+
+- `floor_torch`: GREEN.
+- `wall_torch`: NOT_COVERED.
+- `lantern`: NOT_COVERED.
+- `signs`: NOT_COVERED.
+- `chains`: NOT_COVERED.
 
 ## Live failure
 
 Julia's manual live test (MC 1.21.11) at HEAD `4f63abe` /
-`save/beta35-object-triad-inclusion-strategy` shows torches and items
-floating or failing to anchor on slab-supported geometry in player-facing use.
-
-Julia's report: "Wait we didn't fix the items anchoring to slabs."
+`save/beta35-object-triad-inclusion-strategy` showed that the prior proof did
+not cover player-facing placement onto slab-supported geometry.
 
 Screenshot: provided in chat; local file not available to agent.
 
@@ -37,7 +77,7 @@ torch directly via `world.setBlockState(...)`, bypassing player item-use context
 - Player crosshair targeting for placement intent (only pre-placed targeting was
   tested).
 
-## RED proof added at 4f63abe
+## Historical RED proof added at 4f63abe
 
 Gated by `-Dslabbed.beta35LiveItemAnchoringRed=true` in
 `SlabbedLabLoweredSidePlacementLiveReproClientGameTest`.
@@ -57,7 +97,7 @@ Fixture geometry (matches existing triad proof, torch omitted):
 [JULIA_BETA35_LIVE_ITEM_ANCHORING_FIXTURE_GREEN] supportPos=48,200,0 slabPos=49,201,0 torchPos=49,202,0 slabState=stone_slab[type=bottom] slabDy=-0.500 slabLowered=true torchPosIsAir=true canPlaceAt=true proofScope=PLACEMENT_AND_SURVIVAL_NOT_PLAYER_ITEM_USE_CONTEXT
 [JULIA_BETA35_LIVE_ITEM_ANCHORING_PLACEMENT_GREEN] canPlaceAt=true placementAccepted=true torchPresent=true torchDy=-1.000 expectedTorchDy=-1.000 anchorDyCorrect=true failureLayer=NONE
 [JULIA_BETA35_LIVE_ITEM_ANCHORING_SURVIVAL_GREEN] torchPresent=true afterNeighborUpdateFromSlab=true slabStillPresent=true failureLayer=NONE
-[JULIA_BETA35_LIVE_ITEM_ANCHORING_SUMMARY] proofScope=CONTROLLED_FIXTURE_PLACEMENT_AND_SURVIVAL screenshotFaithfulPlacement=NOT_PROVEN itemCategory=floor_torch_only itemCategoriesNotCovered=wall_torch,lantern,sign,all_attachable_objects playerItemUsePathNotCovered=true fixtureCanPlace=true fixturePlaced=true fixtureAnchorDyOk=true fixtureSurvived=true torchDy=-1.000 slabDy=-0.500 juliaLiveResult=RED failureLayer=PROOF_GAP beta35ReleaseStatus=BLOCKED_LIVE_ITEM_ANCHORING_UNPROVEN priorTriadProofStatus=INCLUDE_READY_TRIAD_ONLY_NOT_PLACEMENT_PROVEN
+[JULIA_BETA35_LIVE_ITEM_ANCHORING_SUMMARY] proofScope=CONTROLLED_FIXTURE_PLACEMENT_AND_SURVIVAL screenshotFaithfulPlacement=NOT_PROVEN itemCategory=floor_torch_only itemCategoriesNotCovered=wall_torch,lantern,signs,chains playerItemUsePathNotCovered=true fixtureCanPlace=true fixturePlaced=true fixtureAnchorDyOk=true fixtureSurvived=true torchDy=-1.000 slabDy=-0.500 juliaLiveResult=RED failureLayer=PROOF_GAP beta35ReleaseStatus=BLOCKED_LIVE_ITEM_ANCHORING_UNPROVEN priorTriadProofStatus=INCLUDE_READY_TRIAD_ONLY_NOT_PLACEMENT_PROVEN
 [JULIA_BETA35_LIVE_ITEM_ANCHORING_RED] fixtureResult=FIXTURE_PASS_LIVE_FAIL failureLayer=PROOF_GAP juliaReport=torches_and_items_floating_or_not_anchoring_on_slab_supported_geometry screenshotEvidence=provided_in_chat_local_file_not_available_to_agent classification=PENDING_RELEASE_BLOCKING nextAction=implement_player_facing_placement_fix_after_RED_proof_classification
 ```
 
@@ -79,32 +119,35 @@ One or more of these must be true to produce the live failure:
   support predicate correctly for all slab configurations Julia is using.
 - **CATEGORY_SCOPE**: wall_torch, lantern, signs, and other attachable objects may
   lack equivalent `canPlaceAt` / `getStateForNeighborUpdate` coverage.
-- **ANCHOR_DY**: player-placed items may not inherit the correct dy from the slab's
-  visual surface in all geometry configurations.
+- **ANCHOR_DY**: the player-placed floor torch may not inherit the correct dy
+  from the slab's visual surface in the tested geometry.
 - **PROOF_GAP**: the prior triad proof was overclaimed as placement-proven when it
   only proved targeting.
 
-## Compile and test results (4f63abe)
+## Compile and test results
 
 - `compileJava` / `compileGametestJava`: **BUILD SUCCESSFUL**
-- Focused proof (`-Dslabbed.beta35LiveItemAnchoringRed=true`): **BUILD SUCCESSFUL in 29s**
-- Default `runClientGameTest`: **BUILD SUCCESSFUL in 1m 43s**
+- Focused floor torch proof (`-Dslabbed.beta35LiveItemAnchoringRed=true`): **BUILD SUCCESSFUL**
+- Object-triad regression proof (`-Dslabbed.beta35ObjectSlabOwnershipRed=true`): **BUILD SUCCESSFUL**
+- Default `runClientGameTest`: **BUILD SUCCESSFUL**
+- `git diff --check`: **PASS**
 
-Evidence: `tmp/beta35-live-item-anchoring-red-4f63abe/`
+Evidence: `tmp/beta35-floor-torch-player-placement-green-97ff495/`
 
 ## Release status
 
-Beta 3.5 release prep is **PAUSED** pending:
+Beta 3.5 release prep is **PAUSED** pending Julia's scope decision:
 
-1. Implementation of the player-facing item placement/anchoring fix.
-2. A GREEN focused proof under `-Dslabbed.beta35LiveItemAnchoringRed=true`.
-3. Julia live retest confirming items anchor correctly on slab-supported geometry.
+1. Julia decides whether floor-torch-only scope is enough for Beta 3.5.
+2. If Julia expands scope, separate wall torch, lantern, sign, or chain proofs
+   must be added in later slices.
+3. A final release audit only after Julia authorizes release prep.
 
 The object-triad fix remains **triad-include-ready** (`beta35IncludeStatus=INCLUDE`
 on the `TRIAD_SUMMARY` marker). Do not confuse triad-include-ready with
 placement-proven or release-ready.
 
-No gameplay fix was implemented in this slice. No release tag was moved.
+No release tag was moved.
 
 ## See also
 
