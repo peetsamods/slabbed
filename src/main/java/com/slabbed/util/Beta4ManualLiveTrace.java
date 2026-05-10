@@ -1,7 +1,10 @@
 package com.slabbed.util;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.block.BlockState;
@@ -23,9 +26,11 @@ import net.minecraft.world.World;
 public final class Beta4ManualLiveTrace {
     private static final String OPT_IN = "slabbed.beta4ManualLiveTrace";
     private static final double EPSILON = 1.0e-6d;
+    private static final int[] DELAY_TICKS = {1, 5, 20, 40};
     private static final AtomicInteger NEXT_CLICK_INDEX = new AtomicInteger();
     private static final ThreadLocal<Integer> ACTIVE_CLICK_INDEX = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> SUPPRESS_SUPPORT_TRACE = ThreadLocal.withInitial(() -> false);
+    private static final List<DelayedClick> PENDING_DELAYED_CLICKS = new ArrayList<>();
     private static volatile int lastClickIndex;
 
     private Beta4ManualLiveTrace() {
@@ -50,6 +55,8 @@ public final class Beta4ManualLiveTrace {
                 hit,
                 heldItem(heldStack),
                 expectedCandidate,
+                classification,
+                cellAt(world, hit.getBlockPos()),
                 snapshotAround(world, hit, expectedCandidate));
         System.out.println("[JULIA_BETA4_MANUAL_LIVE_CLICK_START]"
                 + baseFields(clickIndex, world, hit, heldStack)
@@ -93,7 +100,7 @@ public final class Beta4ManualLiveTrace {
             System.out.println("[JULIA_BETA4_MANUAL_LIVE_SUMMARY]"
                     + " clickIndex=" + snapshot.clickIndex()
                     + " heldItem=" + snapshot.heldItem()
-                    + " classification=" + classify(world, snapshot.hit(), snapshot.heldItem())
+                    + " classification=" + snapshot.classification()
                     + " targetPos=" + formatPos(snapshot.hit().getBlockPos())
                     + " face=" + snapshot.hit().getSide()
                     + " predictedCandidate=" + formatPos(expected)
@@ -102,8 +109,29 @@ public final class Beta4ManualLiveTrace {
                     + " wrongDelta=" + wrongDelta
                     + " releaseReady=false"
                     + " reason=manual_trace_capture_only");
+            scheduleDelayed(snapshot, result, delta, after);
         } finally {
             ACTIVE_CLICK_INDEX.remove();
+        }
+    }
+
+    public static void tickClient(World world) {
+        if (!enabled() || world == null) {
+            PENDING_DELAYED_CLICKS.clear();
+            return;
+        }
+        Iterator<DelayedClick> iterator = PENDING_DELAYED_CLICKS.iterator();
+        while (iterator.hasNext()) {
+            DelayedClick pending = iterator.next();
+            pending.ageTicks++;
+            while (pending.nextDelayIndex < DELAY_TICKS.length
+                    && pending.ageTicks >= DELAY_TICKS[pending.nextDelayIndex]) {
+                logDelayed(world, pending, DELAY_TICKS[pending.nextDelayIndex]);
+                pending.nextDelayIndex++;
+            }
+            if (pending.nextDelayIndex >= DELAY_TICKS.length) {
+                iterator.remove();
+            }
         }
     }
 
@@ -181,6 +209,8 @@ public final class Beta4ManualLiveTrace {
                 + " localZ=" + local(sourcePos, hitPos, 'z')
                 + " heldItem=unknown"
                 + " predictedCandidate=" + formatPos(decision.candidatePlacementPos())
+                + " candidateState=" + formatState(candidateState(world, decision.candidatePlacementPos()))
+                + " candidateDy=" + candidateDy(world, decision.candidatePlacementPos())
                 + " legalLanePos=" + formatPos(decision.legalLanePos())
                 + " result=" + (decision.legal() ? "LEGAL" : "REJECT")
                 + " classification=" + classify(world, sourcePos, sourceState, intendedDirection, hitPos, decision)
@@ -259,15 +289,21 @@ public final class Beta4ManualLiveTrace {
         BlockPos center = hit.getBlockPos();
         for (BlockPos pos : BlockPos.iterate(center.add(-2, -2, -2), center.add(2, 2, 2))) {
             BlockPos immutable = pos.toImmutable();
-            BlockState state = world.getBlockState(immutable);
-            cells.put(immutable, new Cell(formatState(state), SlabSupport.getYOffset(world, immutable, state)));
+            cells.put(immutable, cellAt(world, immutable));
         }
         BlockPos candidate = expectedCandidate == null ? defaultCandidate(hit) : expectedCandidate;
         if (candidate != null && !cells.containsKey(candidate)) {
-            BlockState state = world.getBlockState(candidate);
-            cells.put(candidate.toImmutable(), new Cell(formatState(state), SlabSupport.getYOffset(world, candidate, state)));
+            cells.put(candidate.toImmutable(), cellAt(world, candidate));
         }
         return cells;
+    }
+
+    private static Cell cellAt(World world, BlockPos pos) {
+        if (world == null || pos == null) {
+            return new Cell("null", Double.NaN);
+        }
+        BlockState state = world.getBlockState(pos);
+        return new Cell(formatState(state), SlabSupport.getYOffset(world, pos, state));
     }
 
     private static Delta diff(Map<BlockPos, Cell> before, Map<BlockPos, Cell> after) {
@@ -352,6 +388,12 @@ public final class Beta4ManualLiveTrace {
     ) {
         if (decision != null && "COMPOUND_SUPPORT_MISSING_VISIBLE_OWNER_SIDE_SLAB".equals(decision.reason())) {
             return face == Direction.UP ? "SUPPORT_MISSING_TOP" : "SUPPORT_MISSING_SIDE";
+        }
+        if (decision != null && "compound_visible_owner_top_candidate_not_air".equals(decision.reason())) {
+            return "TOP_FACE_AFTER_EXISTING_TOP_SLAB";
+        }
+        if (decision != null && decision.reason().contains("candidate_not_air")) {
+            return face == Direction.UP ? "TOP_FACE_AFTER_EXISTING_TOP_SLAB" : "SIDE_AFTER_EXISTING_SIDE_SLAB";
         }
         if (decision != null && "COMPOUND_VISIBLE_OWNER_TOP_SLAB".equals(decision.reason())) {
             return "TOP_FACE";
@@ -443,6 +485,15 @@ public final class Beta4ManualLiveTrace {
         return state == null ? "null" : state.toString().replace(' ', '_');
     }
 
+    private static BlockState candidateState(BlockView world, BlockPos pos) {
+        return world == null || pos == null ? null : world.getBlockState(pos);
+    }
+
+    private static String candidateDy(BlockView world, BlockPos pos) {
+        BlockState state = candidateState(world, pos);
+        return formatDy(world, pos, state);
+    }
+
     private static String formatDy(BlockView world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return "NaN";
@@ -450,19 +501,171 @@ public final class Beta4ManualLiveTrace {
         return String.format("%.6f", SlabSupport.getYOffset(world, pos, state));
     }
 
+    private static void scheduleDelayed(ClickSnapshot snapshot, ActionResult result, Delta immediateDelta, Map<BlockPos, Cell> immediateAfter) {
+        PENDING_DELAYED_CLICKS.add(new DelayedClick(
+                snapshot,
+                result == null ? "null" : result.toString(),
+                result != null && result.isAccepted(),
+                immediateDelta,
+                immediateAfter));
+    }
+
+    private static void logDelayed(World world, DelayedClick pending, int delayTicks) {
+        ClickSnapshot snapshot = pending.snapshot;
+        BlockPos expected = snapshot.expectedCandidate();
+        Cell immediateExpected = pending.immediateAfter.get(expected);
+        Cell delayedExpected = cellAt(world, expected);
+        Map<BlockPos, Cell> delayedAfter = snapshotAround(world, snapshot.hit(), expected);
+        Delta delayedDelta = diff(snapshot.before(), delayedAfter);
+        boolean ghostPersisted = anyImmediateChangeStillDifferent(snapshot.before(), pending.immediateDelta, delayedAfter);
+        boolean ghostResolved = pending.immediateDelta.changedCount() > 0 && !ghostPersisted;
+        boolean delayedMatchesExpected = sameCell(immediateExpected, delayedExpected);
+        boolean durable = pending.immediateDelta.changedCount() > 0 && delayedMatchesExpected && ghostPersisted;
+        boolean ghost = pending.immediateDelta.changedCount() > 0 && (!delayedMatchesExpected || ghostResolved);
+        String reason = delayedReason(pending, delayedMatchesExpected, ghostResolved, ghostPersisted);
+        System.out.println("[JULIA_BETA4_MANUAL_LIVE_DELAYED_FINAL]"
+                + " clickIndex=" + snapshot.clickIndex()
+                + " delayTicks=" + delayTicks
+                + " classification=" + snapshot.classification()
+                + " originalTargetPos=" + formatPos(snapshot.hit().getBlockPos())
+                + " originalTargetState=" + snapshot.targetAtStart().state()
+                + " originalTargetDy=" + snapshot.targetAtStart().dyText()
+                + " originalFace=" + snapshot.hit().getSide()
+                + " predictedCandidate=" + formatPos(expected)
+                + " expectedFinalState=" + (immediateExpected == null ? "null" : immediateExpected.state())
+                + " expectedFinalDy=" + (immediateExpected == null ? "NaN" : immediateExpected.dyText())
+                + " immediateChangedPos=" + pending.immediateDelta.changedPositionsText()
+                + " immediateChangedCount=" + pending.immediateDelta.changedCount()
+                + " candidateState=" + delayedExpected.state()
+                + " candidateDy=" + delayedExpected.dyText()
+                + " originallyChangedNow=" + changedPositionsNowText(world, pending.immediateDelta)
+                + " delayedChangedPos=" + delayedDelta.changedPositionsText()
+                + " delayedChangedCount=" + delayedDelta.changedCount()
+                + " delayedChanged=" + delayedDelta.changedCellsText()
+                + " ghostResolved=" + ghostResolved
+                + " ghostPersisted=" + ghostPersisted
+                + " serverAcceptedKnown=unknown"
+                + " mismatchReason=" + reason);
+        System.out.println("[JULIA_BETA4_MANUAL_LIVE_DELAYED_SUMMARY]"
+                + " clickIndex=" + snapshot.clickIndex()
+                + " delayTicks=" + delayTicks
+                + " classification=" + snapshot.classification()
+                + " immediateResult=" + pending.immediateResult
+                + " immediateAccepted=" + pending.immediateAccepted
+                + " immediateChangedCount=" + pending.immediateDelta.changedCount()
+                + " delayedCandidateState=" + delayedExpected.state()
+                + " delayedCandidateDy=" + delayedExpected.dyText()
+                + " delayedMatchesExpected=" + delayedMatchesExpected
+                + " ghost=" + ghost
+                + " durable=" + durable
+                + " reason=" + reason);
+    }
+
+    private static String delayedReason(
+            DelayedClick pending,
+            boolean delayedMatchesExpected,
+            boolean ghostResolved,
+            boolean ghostPersisted
+    ) {
+        if (pending.immediateDelta.changedCount() == 0) {
+            return "no_immediate_client_delta";
+        }
+        if (pending.snapshot.expectedCandidate() == null) {
+            return "no_expected_candidate";
+        }
+        if (ghostResolved) {
+            return "immediate_delta_reverted_or_vanished";
+        }
+        if (!delayedMatchesExpected) {
+            return "delayed_candidate_mismatch";
+        }
+        if (ghostPersisted) {
+            return "immediate_delta_still_present";
+        }
+        return "no_mismatch_detected";
+    }
+
+    private static boolean anyImmediateChangeStillDifferent(
+            Map<BlockPos, Cell> before,
+            Delta immediateDelta,
+            Map<BlockPos, Cell> delayedAfter
+    ) {
+        for (BlockPos pos : immediateDelta.changedPositions()) {
+            Cell beforeCell = before.get(pos);
+            Cell delayedCell = delayedAfter.get(pos);
+            if (delayedCell != null && !sameCell(beforeCell, delayedCell)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean sameCell(Cell first, Cell second) {
+        if (first == null || second == null) {
+            return first == second;
+        }
+        return first.state().equals(second.state()) && Math.abs(first.dy() - second.dy()) <= EPSILON;
+    }
+
+    private static String changedPositionsNowText(World world, Delta immediateDelta) {
+        if (immediateDelta.changedCount() == 0) {
+            return "[]";
+        }
+        StringBuilder builder = new StringBuilder("[");
+        boolean first = true;
+        for (BlockPos pos : immediateDelta.changedPositions()) {
+            if (!first) {
+                builder.append(',');
+            }
+            builder.append(pos.toShortString()).append('=').append(cellAt(world, pos));
+            first = false;
+        }
+        return builder.append(']').toString();
+    }
+
     public record ClickSnapshot(
             int clickIndex,
             BlockHitResult hit,
             String heldItem,
             BlockPos expectedCandidate,
+            String classification,
+            Cell targetAtStart,
             Map<BlockPos, Cell> before
     ) {
     }
 
+    private static final class DelayedClick {
+        private final ClickSnapshot snapshot;
+        private final String immediateResult;
+        private final boolean immediateAccepted;
+        private final Delta immediateDelta;
+        private final Map<BlockPos, Cell> immediateAfter;
+        private int ageTicks;
+        private int nextDelayIndex;
+
+        private DelayedClick(
+                ClickSnapshot snapshot,
+                String immediateResult,
+                boolean immediateAccepted,
+                Delta immediateDelta,
+                Map<BlockPos, Cell> immediateAfter
+        ) {
+            this.snapshot = snapshot;
+            this.immediateResult = immediateResult;
+            this.immediateAccepted = immediateAccepted;
+            this.immediateDelta = immediateDelta;
+            this.immediateAfter = immediateAfter;
+        }
+    }
+
     private record Cell(String state, double dy) {
+        String dyText() {
+            return String.format("%.6f", dy);
+        }
+
         @Override
         public String toString() {
-            return "{state=" + state + ",dy=" + String.format("%.6f", dy) + "}";
+            return "{state=" + state + ",dy=" + dyText() + "}";
         }
     }
 
