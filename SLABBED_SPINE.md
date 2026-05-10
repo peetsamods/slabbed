@@ -264,3 +264,8 @@ If the slice changes, update the source pack and spine together so the current o
 - `01_SLABBED_CANONICAL_DOCTRINE.md`
 - `02_SLABBED_ACTIVE_STATUS.md`
 - `SLABBED_SPINE.md`
+
+## Beta 3.5 salvage audit status
+- Beta4 compound visible slab lane release candidate is rejected and remains disqualified.
+- `docs/beta35-salvage-audit.md` created with candidate `INCLUDE/EXCLUDE/NEEDS PROOF` classification for a `0.2.0-beta.3.5` stability salvage path.
+- Current goal is a smaller release excluding `COMPOUND_VISIBLE_SLAB_LANE` and `dy=-1` visible-lane architecture.
