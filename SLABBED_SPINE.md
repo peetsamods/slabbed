@@ -49,6 +49,24 @@ Current Beta 4 status:
 - candidate note superseded by product law: authored/persistent compound full-block owners at `dy=-1.0` may require named, source-owned compound visible slab lane states rather than forcing all slab results into `dy=0.0` or `dy=-0.5`.
 - failed Row 3 WIP patch preserved under `tmp/beta4-compound-slab-harness-audit-7c45fc0/failed-row3-wip-full.patch`
 
+Manual visual acceptance run at 78c0f01:
+
+- Julia accepts COMPOUND_VISIBLE_SLAB_LANE functionally after placement.
+- lower / upper / repeat-merge / top / support-missing behavior accepted after visual settle.
+- wrong-owner, jump, reload-ish, and ghost-feel are accepted from this manual run.
+- known remaining issue: brief render snap immediately after placement before settle.
+- evidence captured under `tmp/beta4-final-manual-visual-78c0f01/`.
+- delayed manual trace line caveat: some `delayed_candidate_mismatch` entries with `ghost=true` reflect stale `dy=-0.5` expectations and must not override current `dy=-1.0` COMPOUND_VISIBLE_SLAB_LANE product law.
+- release remains blocked pending render-snap audit or explicit deferral plus final release audit.
+- no final Bug Blaster yet.
+
+Next action:
+
+- audit placement-delay/render-snap timing.
+- likely source layers: client prediction / marker sync / rerender scheduling order / stale trace expectation.
+- if easy, fix it.
+- if not, decide whether to defer as a known minor visual issue.
+
 Row 3 savepoint summary: slab-held side-clicks on a proven compound `dy=-1.0`; automated/focused proof passed and runtime/live-launch logs emitted GREEN with evidence in `tmp/beta4-compound-slab-row3-live-742a839/`; Julia manual live-feel test pending.
 Rows 1/2 are no longer release-safe no-lane rejection cases; they are expected
 compound below-lane side slab placements into existing `dy=-0.5` lowered slab
