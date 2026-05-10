@@ -404,34 +404,39 @@ public final class SlabSupport {
             Vec3d hitPos
     ) {
         if (world == null || sourcePos == null || sourceState == null || intendedDirection == null) {
-            return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "missing_context");
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    CompoundSlabRemapDecision.rejected(sourcePos, null, null, "missing_context"));
         }
         if (sourceState.getBlock() instanceof SlabBlock
                 || !SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
                 || !SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos)
                 || Math.abs(getYOffset(world, sourcePos, sourceState) + 1.0d) > 1.0e-6d) {
-            return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "source_not_compound_full_block_dy_-1");
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    CompoundSlabRemapDecision.rejected(sourcePos, null, null, "source_not_compound_full_block_dy_-1"));
         }
         if (intendedDirection == Direction.UP) {
             BlockPos candidatePlacementPos = sourcePos.up();
             BlockState candidateState = world.getBlockState(candidatePlacementPos);
             if (!candidateState.isAir()) {
-                return CompoundSlabRemapDecision.rejected(
+                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                        CompoundSlabRemapDecision.rejected(
                         sourcePos,
                         sourcePos,
                         candidatePlacementPos,
-                        "compound_visible_owner_top_candidate_not_air");
+                        "compound_visible_owner_top_candidate_not_air"));
             }
-            return new CompoundSlabRemapDecision(
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    new CompoundSlabRemapDecision(
                     true,
                     sourcePos,
                     sourcePos,
                     candidatePlacementPos,
                     SlabType.BOTTOM,
-                    "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
+                    "COMPOUND_VISIBLE_OWNER_TOP_SLAB"));
         }
         if (intendedDirection.getAxis().isVertical()) {
-            return CompoundSlabRemapDecision.rejected(sourcePos, null, null, "direction_not_horizontal");
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    CompoundSlabRemapDecision.rejected(sourcePos, null, null, "direction_not_horizontal"));
         }
 
         int legalLaneCount = 0;
@@ -452,20 +457,22 @@ public final class SlabSupport {
             BlockPos candidatePlacementPos = legalLanePos.offset(intendedDirection);
             BlockState candidateState = world.getBlockState(candidatePlacementPos);
             if (!candidateState.isAir()) {
-                return CompoundSlabRemapDecision.rejected(
+                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                        CompoundSlabRemapDecision.rejected(
                         sourcePos,
                         legalLanePos,
                         candidatePlacementPos,
-                        "candidate_not_air");
+                        "candidate_not_air"));
             }
 
-            return new CompoundSlabRemapDecision(
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    new CompoundSlabRemapDecision(
                     true,
                     sourcePos,
                     legalLanePos,
                     candidatePlacementPos,
                     legalLaneState.get(SlabBlock.TYPE),
-                    "COMPOUND_HORIZONTAL_CONTINUATION_LANE");
+                    "COMPOUND_HORIZONTAL_CONTINUATION_LANE"));
         }
 
         BlockState belowSourceState = world.getBlockState(sourcePos.down());
@@ -473,43 +480,60 @@ public final class SlabSupport {
         BlockState candidateState = world.getBlockState(candidatePlacementPos);
         if (legalLaneCount == 0 && isLegalCompoundRemapLane(world, sourcePos.down(), belowSourceState)) {
             if (!candidateState.isAir()) {
-                return CompoundSlabRemapDecision.rejected(
+                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                        CompoundSlabRemapDecision.rejected(
                         sourcePos,
                         sourcePos,
                         candidatePlacementPos,
-                        "below_lane_candidate_not_air");
+                        "below_lane_candidate_not_air"));
             }
-            return new CompoundSlabRemapDecision(
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    new CompoundSlabRemapDecision(
                     true,
                     sourcePos,
                     sourcePos,
                     candidatePlacementPos,
                     compoundBelowLaneResultType(sourcePos, hitPos),
-                    "COMPOUND_BELOW_LANE_SIDE_SLAB");
+                    "COMPOUND_BELOW_LANE_SIDE_SLAB"));
         }
 
         if (legalLaneCount == 0 && isPersistentVisibleCompoundOwner(world, sourcePos, sourceState)) {
             if (!candidateState.isAir()) {
-                return CompoundSlabRemapDecision.rejected(
+                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                        CompoundSlabRemapDecision.rejected(
                         sourcePos,
                         sourcePos,
                         candidatePlacementPos,
-                        "persistent_visible_owner_candidate_not_air");
+                        "persistent_visible_owner_candidate_not_air"));
             }
-            return new CompoundSlabRemapDecision(
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    new CompoundSlabRemapDecision(
                     true,
                     sourcePos,
                     sourcePos,
                     candidatePlacementPos,
                     compoundBelowLaneResultType(sourcePos, hitPos),
-                    "COMPOUND_SUPPORT_MISSING_VISIBLE_OWNER_SIDE_SLAB");
+                    "COMPOUND_SUPPORT_MISSING_VISIBLE_OWNER_SIDE_SLAB"));
         }
 
-        return CompoundSlabRemapDecision.rejected(
+        return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                CompoundSlabRemapDecision.rejected(
                 sourcePos,
                 legalLanePos,
                 legalLanePos == null ? intendedLanePos : legalLanePos.offset(intendedDirection),
-                "legal_lane_count_" + legalLaneCount + "_or_not_in_intended_direction");
+                "legal_lane_count_" + legalLaneCount + "_or_not_in_intended_direction"));
+    }
+
+    private static CompoundSlabRemapDecision traceCompoundSlabRemap(
+            BlockView world,
+            BlockPos sourcePos,
+            BlockState sourceState,
+            Direction intendedDirection,
+            Vec3d hitPos,
+            CompoundSlabRemapDecision decision
+    ) {
+        Beta4ManualLiveTrace.logSlabSupportDecision(world, sourcePos, sourceState, intendedDirection, hitPos, decision);
+        return decision;
     }
 
     private static SlabType compoundBelowLaneResultType(BlockPos sourcePos, Vec3d hitPos) {
