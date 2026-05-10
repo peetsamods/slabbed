@@ -66,3 +66,7 @@ Evidence folder: `tmp/support-anchor-object-triad-audit-9c90c23/`
 
 - Resolve cherry-pick conflicts manually or create a fresh `release/0.2.0-beta.3.5` branch that applies prerequisite commits before c96e674 + 6cb28bb + 274b286.
 - Do not re-cherry-pick without resolving the four conflicting files first.
+
+## See also
+
+- `docs/beta35-inclusion-strategy.md` — inclusion decision, invalid path classification, and valid release path (created at `save/beta35-object-triad-inclusion-strategy`)
