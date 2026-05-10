@@ -39,11 +39,11 @@ Classify beta4 reload/chunk-jump persistence before any further retarget or owne
 
 Current Beta 4 status:
 
-- release gates passed
-- release confidence paused after Julia live feel review
-- issue: compound slab placement UX is too restrictive
-- manual live remains RED after the delayed trace at `d7ef534`
-- automation/goblin proofs prior to the delayed trace are superseded for release confidence
+- `33f7db6` / `save/beta4-render-snap-audit` was audit-passing but manually rejected by Julia.
+- `release/0.2.0-beta.4` was moved to `33f7db6` but is now invalid/retracted and not publishable.
+- Julia manual video review after the audit rejected the candidate: render/model snap and slab placement jank remain unacceptable.
+- Known failure is no longer minor deferred polish; it is release-blocking.
+- Current release state: BLOCKED. Current candidate status: rejected release candidate.
 - top, side, and repeat placement now require the bounded compound visible slab lane design
 - release remains blocked
 - candidate note superseded by product law: authored/persistent compound full-block owners at `dy=-1.0` may require named, source-owned compound visible slab lane states rather than forcing all slab results into `dy=0.0` or `dy=-0.5`.
@@ -64,7 +64,7 @@ Manual visual acceptance run at 78c0f01:
 
 Next action:
 
-- run final release audit with the known minor render snap called out as deferred polish.
+- treat `release/0.2.0-beta.4` as rejected and hold as status-only until architecture/product direction or render/placement snap redesign is complete; do not call final release audit in this rejected state.
 
 Row 3 savepoint summary: slab-held side-clicks on a proven compound `dy=-1.0`; automated/focused proof passed and runtime/live-launch logs emitted GREEN with evidence in `tmp/beta4-compound-slab-row3-live-742a839/`; Julia manual live-feel test pending.
 Rows 1/2 are no longer release-safe no-lane rejection cases; they are expected
@@ -228,7 +228,7 @@ Status: Fixed / saved.
 
 ## Current next action
 
-After the classifier savepoint, the next required gate is Julia live validation of the beta4 seam table before any release candidate decision. Do not upload beta4 or move `release/0.2.0-beta.4`.
+After the classifier savepoint, the next required action is Julia and architecture/product direction on render/placement snap redesign. `release/0.2.0-beta.4` remains not publishable while blocked; do not upload beta4 and do not call it release-ready.
 
 ## Suggested live run command
 

@@ -2,6 +2,12 @@
 
 Audit-only. No gameplay edits in this slice. Release remains blocked.
 
+`33f7db6` / `save/beta4-render-snap-audit` was audit-passing but manually rejected by Julia after the final video review.
+`release/0.2.0-beta.4` was moved to `33f7db6` and is invalid/retracted unless and until the release blocker is redesigned and rerouted.
+Known failure is no longer minor deferred polish: render/model snap and slab placement feel is release-blocking.
+Current release state: BLOCKED.
+Current candidate status: rejected release candidate.
+
 Decision cross-reference: `docs/beta4-compound-source-mode-design.md` adopts
 A-prime, explicit authored lane/depth source mode for compound ordinary full
 blocks. Matrix rows below now have intended beta4 outcomes; implementation is
