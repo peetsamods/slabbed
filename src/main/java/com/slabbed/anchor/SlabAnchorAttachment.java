@@ -46,6 +46,8 @@ public final class SlabAnchorAttachment {
 
     public static final boolean TRACE =
             Boolean.getBoolean("slabbed.anchor.trace");
+    public static final String BETA4_COMPOUND_VISIBLE_RENDER_TRACE_PROPERTY =
+            "slabbed.beta4CompoundVisibleRenderTrace";
 
     /**
      * Client-side fallback for anchor queries issued by chunk render paths that
@@ -350,6 +352,7 @@ public final class SlabAnchorAttachment {
         } else if (state != null && state.getBlock() instanceof SlabBlock) {
             removeFromAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
         }
+        logCompoundVisibleRenderTraceSupportUpdate(world, pos, state, qualifies);
     }
 
     private static boolean addToAttachment(
@@ -374,6 +377,7 @@ public final class SlabAnchorAttachment {
                 Slabbed.LOGGER.info("[ANCHOR] {} add success pos={} chunk={} setSize={}",
                         label, pos.toShortString(), chunk.getPos(), set.size());
             }
+            logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "add", true);
             return true;
         }
         return false;
@@ -436,8 +440,85 @@ public final class SlabAnchorAttachment {
             } else {
                 chunk.setAttached(type, set);
             }
+            logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "remove", false);
         }
         return removed;
+    }
+
+    public static boolean beta4CompoundVisibleRenderTraceEnabled() {
+        return Boolean.getBoolean(BETA4_COMPOUND_VISIBLE_RENDER_TRACE_PROPERTY);
+    }
+
+    public static boolean isCompoundVisibleAttachmentType(AttachmentType<LongOpenHashSet> type) {
+        return type == COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE
+                || type == COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE
+                || type == COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE
+                || type == COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE;
+    }
+
+    public static String compoundVisibleAttachmentLabel(AttachmentType<LongOpenHashSet> type) {
+        if (type == COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE) {
+            return "lower";
+        }
+        if (type == COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE) {
+            return "upper";
+        }
+        if (type == COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE) {
+            return "double";
+        }
+        if (type == COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE) {
+            return "top";
+        }
+        if (type == LOWERED_SLAB_CARRIER_TYPE) {
+            return "lowered_slab_carrier";
+        }
+        if (type == COMPOUND_FULL_BLOCK_ANCHOR_TYPE) {
+            return "compound_full_block_anchor";
+        }
+        if (type == ANCHOR_TYPE) {
+            return "anchor";
+        }
+        return "unknown";
+    }
+
+    private static void logCompoundVisibleRenderTraceMarkerSet(
+            World world,
+            BlockPos pos,
+            AttachmentType<LongOpenHashSet> type,
+            String label,
+            String action,
+            boolean serverMarker
+    ) {
+        if (!beta4CompoundVisibleRenderTraceEnabled() || !isCompoundVisibleAttachmentType(type)) {
+            return;
+        }
+        BlockState state = world.getBlockState(pos);
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        Slabbed.LOGGER.info(
+                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_MARKER_SET] action={} pos={} marker={} label={} serverMarker={} clientMarker=n/a modelViewType=World slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
+                action,
+                pos.toShortString(),
+                compoundVisibleAttachmentLabel(type),
+                label,
+                serverMarker,
+                dy);
+    }
+
+    private static void logCompoundVisibleRenderTraceSupportUpdate(
+            World world,
+            BlockPos pos,
+            BlockState state,
+            boolean qualifies
+    ) {
+        if (!beta4CompoundVisibleRenderTraceEnabled()) {
+            return;
+        }
+        double dy = state == null ? 0.0d : SlabSupport.getYOffset(world, pos, state);
+        Slabbed.LOGGER.info(
+                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_SUPPORT_UPDATE] pos={} marker=lowered_slab_carrier serverMarker={} clientMarker=n/a modelViewType=World slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
+                pos.toShortString(),
+                qualifies,
+                dy);
     }
 
     // ── shared query ──────────────────────────────────────────────────
