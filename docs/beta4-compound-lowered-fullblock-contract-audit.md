@@ -707,13 +707,30 @@ UNDECIDED.
   expose a chunk-only unload/reload primitive. `ChainSurvivalReproTest`
   documents the same caveat. Recorded as helper-absent.
 
+## Compound visible slab lane lower proof
+
+`COMPOUND_VISIBLE_SIDE_LOWER_SLAB` is now the first implemented compound visible
+slab lane state. The durable source truth is
+`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE`, written only after
+the immediate side candidate finalizes as `stone_slab[type=bottom]` beside an
+authored/persistent compound full-block owner at `dy=-1.0`.
+
+Focused proof:
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_GREEN]` reports server and client
+candidate `stone_slab[type=bottom] dy=-1.0`, source `compoundFullBlockAnchor=true`
+at `dy=-1.0`, `noRecursiveDyBelowMinusOne=true`, and
+`oldDyMinusHalfIsGreen=false`.
+
+Latest summary:
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=RED merge=RED top=RED supportMissing=RED triad=RED reload=RED releaseBlockers=compoundVisibleSlabLane`.
+Upper, merge, owner-top, support-missing aggregate, triad, and reload remain
+pending/blocked for release confidence.
+
 ## Recommendation
 
-Do not implement gameplay fixes until Julia decides the intended outcome
-for each UNDECIDED row (3, 5, 7, 8) and the design owner picks among
-A / B / C / D for the RED rows (4, 6, 9, 10). The matrix is the contract
-surface; it is the input to the design decision, not the output. Release
-remains blocked.
+Do not treat the compound visible slab lane as release-complete. The LOWER
+state is implemented/proven, but each remaining named state needs its own
+bounded proof or an explicit deferral. Release remains blocked.
 
 ## Cross-references
 

@@ -158,9 +158,15 @@ Rows 1/2 and Julia's screenshot side-shape are now intentionally unified as the 
 
 ## Proof status
 
-Current implementation is RED/PENDING against the corrected compound visible
-slab lane law. The historical proof rows below remain evidence for the older
-law, but they are superseded for release confidence by the marker matrix above.
+Current implementation has only the first named corrected state implemented:
+`COMPOUND_VISIBLE_SIDE_LOWER_SLAB`. It is backed by
+`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE`, a persisted/synced
+sidecar marker written only for the immediate side candidate of an authored or
+persistent compound full-block owner at `dy=-1.0` when the final state is
+`stone_slab[type=bottom]`. `SlabSupport.getYOffsetInner(...)` returns `dy=-1.0`
+for that marked slab only, before the legacy `dy=-0.5` lowered-lane rules.
+The historical proof rows below remain evidence for the older law, but they are
+superseded for release confidence by the marker matrix above.
 
 The marker matrix is executable as an opt-in client gametest diagnostic:
 
@@ -171,9 +177,16 @@ JAVA_TOOL_OPTIONS="-Dslabbed.beta4CompoundVisibleSlabLaneRed=true -Dfabric.clien
 The run must first emit
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]`. The expected current
 summary is `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN
-lower=RED upper=RED merge=RED top=RED supportMissing=RED triad=RED reload=RED
+lower=GREEN upper=RED merge=RED top=RED supportMissing=RED triad=RED reload=RED
 releaseBlockers=compoundVisibleSlabLane`. Any `dy=-0.5` or `dy=0.0` slab result
 is logged as observed state, not accepted as green.
+
+Latest lower proof result:
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_GREEN]` reports the candidate at
+`source.offset(horizontalFace)` as `stone_slab[type=bottom]`, `dy=-1.0`, with
+the clicked source still a compound full block at `dy=-1.0` and no recursive
+`dy<-1.0`. The remaining named states are still RED/PENDING unless separately
+proven.
 
 These proof rows exist in the focused harness slice under the superseded law:
 
@@ -311,7 +324,7 @@ change Rows 1/2 semantics.
 | Rows 1/2 compound below-lane side slab placement | ordinary stone compound full block, `dy=-1.0` | horizontal side; Row 1 lower band, Row 2 upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | superseded; corrected law requires source-owned `dy=-1.0` lower/upper visible lane states | RED/PENDING against corrected law |
 | Internal artificial Row 3 legal remap | ordinary stone compound full block, `dy=-1.0` | horizontal side; lower band | bottom `stone_slab`, `dy=-0.5` | existing legal bottom `stone_slab`, `dy=-0.5` | `1` | continuation cell beyond existing lane | yes | no, because horizontal lane exists | author `stone_slab[type=bottom]` at `dy=-0.5` | GREEN legal remap |
 | Julia screenshot upper-half side-shape | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; upper band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | `COMPOUND_VISIBLE_SIDE_UPPER_SLAB`, `stone_slab[type=top]`, `dy=-1.0` | RED/PENDING against corrected law |
-| Julia screenshot lower-half side-shape | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; lower/below-source band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | `COMPOUND_VISIBLE_SIDE_LOWER_SLAB`, `stone_slab[type=bottom]`, `dy=-1.0` | RED/PENDING against corrected law |
+| Julia screenshot lower-half side-shape | upper ordinary stone compound full block, `dy=-1.0` | horizontal side; lower/below-source band | bottom `stone_slab`, `dy=-0.5` | air at immediate side cell | `0` | immediate side cell | no | yes | `COMPOUND_VISIBLE_SIDE_LOWER_SLAB`, `stone_slab[type=bottom]`, `dy=-1.0` | GREEN via `COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE` |
 
 Discriminator candidates evaluated:
 
