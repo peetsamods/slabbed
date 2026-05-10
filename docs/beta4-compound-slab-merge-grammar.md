@@ -279,6 +279,18 @@ at `source.up()` as `stone_slab[type=bottom] dy=0.0` with
 `stone_slab[type=bottom] dy=-0.5 -> stone_slab[type=double] dy=-0.5`.
 Release remains blocked until Julia passes or waives that live retest.
 
+Manual-live parity rule after `b92887b`: automation does not count as release
+proof when Julia's real `runClient` interaction disagrees. The live-goblin
+summary may be useful as a harness diagnostic, but manual `runClient` RED wins
+until the actual click stream is captured and explained. Parity proof must use
+real `MinecraftClient.crosshairTarget` clicks, not synthetic `BlockHitResult`
+success, and must include target pos/state/dy, face, hit vector, local hit
+coordinates, expected candidate, changed-block deltas, `ActionResult`, placement
+intent, server tolerance, and `SlabSupport` decision markers for the same manual
+sequence. The capture command is:
+
+`JAVA_TOOL_OPTIONS="-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.beta4ManualLiveTrace=true" ./gradlew --no-daemon runClient --console plain`
+
 ## Implementation slices after design
 
 1. Add/rename focused RED/PENDING proof markers for compound below-lane side slab placement.
