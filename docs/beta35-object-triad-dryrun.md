@@ -52,10 +52,10 @@ Evidence folder: `tmp/support-anchor-object-triad-audit-9c90c23/`
 - The fix (c96e674 + 6cb28bb + 274b286) is functionally correct on the integration branch — all triad markers are GREEN.
 - Model, outline, and raycast agree: all share identical bounds `min=(49.375,201.000,0.375),max=(49.625,201.625,0.625)`.
 - Support-anchor truth exists: torch at `dy=-1.000`, slab carrier at `dy=-0.500`, support at `dy=0.000`.
-- Support-anchor gap/offset measured: `objectDy=-1.000`, `slabDy=-0.500`; gap = 0.5. All agree.
-- Beta 3.5 triad include status: **INCLUDE** (confirmed by `TRIAD_SUMMARY`). **This is triad-only; it does not prove player-facing floor torch placement.**
+- Support-anchor dy values were recorded: `objectDy=-1.000`, `slabDy=-0.500`. This was not a visible contact-gap proof against the slab top surface.
+- Beta 3.5 triad include status: **INCLUDE** (confirmed by `TRIAD_SUMMARY`). **This is triad-only; it does not prove player-facing floor torch placement or Julia's manual visual acceptance.**
 - Cherry-pick onto old `release/0.2.0-beta.2` (d1417ff) fails due to divergent context in SLABBED_SPINE.md, docs/beta35-salvage-audit.md, GameRendererCrosshairRetargetMixin.java, and SlabbedLabLoweredSidePlacementLiveReproClientGameTest.java — not a functional code bug.
-- Release prep remains **PAUSED** pending Julia's decision on whether the floor-torch-only GREEN proof is enough scope.
+- Release prep remains **PAUSED** because Julia's manual live test after the floor-torch player-placement GREEN savepoint did not accept the visual anchoring.
 - Video evidence: not recorded/provided.
 
 ## Floor torch player-placement proof status
@@ -70,13 +70,21 @@ The proof at this savepoint (`proofScope=OWNER_ROUTE_ONLY_SIMPLE_ROUTING`) only 
 
 The gated proof at `-Dslabbed.beta35LiveItemAnchoringRed=true` now uses `interactionManager.interactBlock(...)` with a held floor torch. It emits placement, survival, triad, and summary GREEN markers with `failureLayer=NONE`, `itemCategory=floor_torch`, and `categoryScope=floor_torch_only`.
 
+Julia's later manual verdict is still NOT ACCEPTED. The current blocker is floor
+torch visual/support contact, not placement permission. The new gated audit
+`-Dslabbed.beta35FloorTorchVisualContactRed=true` measures
+`supportVisibleTopY`, `torchModelBottomY`, and `contactGap`; the controlled
+fixture currently reports `contactGap=0.000000`, `triad=GREEN`,
+`visualContactProofStatus=PENDING`, and `failureLayer=FIXTURE_MISMATCH`.
+
 ## Recommendation
 
-- **integration branch triad proof: GREEN** / **floor torch player-placement proof: GREEN** / **cherry-pick into beta.2 baseline: blocked by conflicts** / **release prep: PAUSED pending Julia scope decision**
+- **integration branch triad proof: GREEN** / **floor torch player-placement proof: GREEN** / **floor torch visual acceptance: NOT ACCEPTED** / **visual contact audit: PENDING fixture mismatch** / **cherry-pick into beta.2 baseline: blocked by conflicts** / **release prep: PAUSED**
 
 ## Next slice
 
-- Keep floor torch as the only proven category for this slice.
+- Keep floor torch as the only current category for this slice.
+- Do not claim floor-torch-only release scope accepted until Julia's visual anchoring blocker is resolved or explicitly waived.
 - Do not expand to wall torch, lanterns, signs, or chains unless Julia explicitly requests a new slice.
 - Do not re-cherry-pick without resolving the four conflicting files first.
 

@@ -70,18 +70,32 @@ The object triad is complete. Do not reopen it.
 
 The object triad fix is **triad-include-ready** (targeting, model, outline, raycast co-location proven for a controlled pre-placed fixture). The floor torch player-facing placement path is also GREEN in the gated proof, with category scope limited to `floor_torch_only`.
 
-Beta 3.5 release prep remains **PAUSED** after the original floor torch placement proof gap until Julia decides whether the floor-torch-only GREEN proof is enough scope.
+Beta 3.5 release prep remains **PAUSED** because Julia manually live-tested after
+`0f08624` / `save/beta35-floor-torch-player-placement` and did not accept the
+floor torch visual anchoring. The current blocker is floor torch visual/support
+contact, not placement permission.
 
 The gated floor torch player-placement proof uses `-Dslabbed.beta35LiveItemAnchoringRed=true`. Markers emit placement GREEN, survival GREEN, triad GREEN, and summary `failureLayer=NONE` with `itemCategory=floor_torch` and `categoryScope=floor_torch_only`. See `docs/beta35-live-item-anchoring-red.md`.
 
-Do not conflate the triad proof with broader category scope. Wall torch, lanterns, signs, and chains remain not covered.
+The new gated visual contact audit uses
+`-Dslabbed.beta35FloorTorchVisualContactRed=true`. It measures
+`supportVisibleTopY`, `torchModelBottomY`, `contactGap`, outline/raycast Y
+ranges, and triad co-location. The controlled fixture currently reports
+`contactGap=0.000000`, `triad=GREEN`, `visualContactProofStatus=PENDING`, and
+`failureLayer=FIXTURE_MISMATCH`, so no tiny gameplay fix is proven by this
+measurement alone.
+
+Do not conflate the triad proof with broader category scope or visual
+acceptance. Wall torch, lanterns, signs, and chains remain not covered and are
+not the current blocker.
 
 ## Next recommended action
 
 1. Do not touch the object triad. It is triad-proven.
-2. Keep the current GREEN proof scoped to floor torch only.
-3. Resume release audit only if Julia decides floor-torch-only is enough scope for Beta 3.5.
-4. When cutting the Beta 3.5 release branch, use option 1 or 2 from the valid path above, never the invalid cherry-pick-onto-d1417ff path.
+2. Keep the current work scoped to floor torch visual/support contact.
+3. Do not claim floor-torch-only release scope accepted.
+4. Resume release audit only if Julia explicitly authorizes release prep after the visual anchoring blocker is resolved or waived.
+5. When cutting the Beta 3.5 release branch, use option 1 or 2 from the valid path above, never the invalid cherry-pick-onto-d1417ff path.
 
 ## See also
 
