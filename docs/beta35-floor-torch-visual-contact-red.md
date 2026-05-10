@@ -60,6 +60,44 @@ fixture is not yet proven to match the live screenshot shape, or the live
 complaint depends on player expectation/fixture geometry outside this controlled
 case. No tiny gameplay fix is proven by this measurement alone.
 
+## Live-shape fixture parity follow-up
+
+A second gated proof now targets a screenshot-faithful multi-level structure:
+
+```
+-Dslabbed.beta35FloorTorchLiveShapeRed=true
+```
+
+Markers:
+
+```
+[JULIA_BETA35_FLOOR_TORCH_LIVE_SHAPE_FIXTURE_GREEN]
+[JULIA_BETA35_FLOOR_TORCH_LIVE_SHAPE_CONTACT_MEASURED]
+[JULIA_BETA35_FLOOR_TORCH_LIVE_SHAPE_SUMMARY]
+```
+
+Measured live-shape result in the parity fixture:
+
+- `expectedTorchPos=67,202,0`
+- `actualTorchPos=67,202,0`
+- `supportPos=67,201,0`
+- `supportState=stone_slab[type=bottom]`
+- `supportDy=-0.500`
+- `supportVisibleTopY=201.000000`
+- `torchDy=-1.000`
+- `torchModelBottomY=201.000000`
+- `torchModelTopY=201.625000`
+- `contactGap=0.000000`
+- `triad=GREEN`
+- `liveShapeProofStatus=GREEN`
+- `failureLayer=NONE`
+
+Interpretation: the live-shape parity fixture still does not reproduce a
+nonzero floor-torch contact gap or a wrong-support-owner/wrong-dy failure.
+This means the blocker is still Julia's manual visual rejection and likely
+requires a more specific live coordinate/face/owner capture, not a broad
+production gameplay fix.
+
 ## Audit questions
 
 1. Does the current placement proof measure the visible support top Y?
@@ -93,3 +131,6 @@ case. No tiny gameplay fix is proven by this measurement alone.
 
 This audit is floor-torch-only. `wall_torch`, `lantern`, `signs`, and `chains`
 remain NOT_COVERED and are not the current blocker.
+
+Beta 3.5 release prep remains **PAUSED**. Do not claim `floor_torch_only`
+release scope accepted.
