@@ -2,7 +2,14 @@
 
 ## Problem
 
-Beta 4 gates passed, but the live/product feel is paused.
+Beta 4 gates passed, but this candidate is now rejected.
+
+`33f7db6` / `save/beta4-render-snap-audit` was audit-passing but manually rejected by Julia after video review.
+`release/0.2.0-beta.4` was moved to `33f7db6` and is invalid/retracted, not publishable.
+Known failure is release-blocking render/placement jank (render-model snap), not minor deferred polish.
+Current release state: BLOCKED.
+Current candidate status: rejected release candidate.
+Next work: architecture/product direction or render/placement snap redesign, not final release audit.
 
 The compound ordinary full-block lane at `dy=-1.0` is proven and useful. Slab-held attempts currently reject cleanly by design, which is safe but now feels too restrictive for a mod called Slabbed. The question is not "can we place a slab somehow?" but "what legal stable state should slab placement normalize into?"
 
@@ -574,6 +581,9 @@ Do not implement this enum in this slice; document only.
 
 ## Release impact
 
-Beta 4 artifact/gates may be technically ready.
+Beta 4 artifact/gates may be technically ready, but `release/0.2.0-beta.4` currently points to a rejected candidate.
 
-Public release confidence remains paused because live slab feel is RED, not accepted. Do not move the release tag until Julia explicitly approves.
+Current release state: BLOCKED.
+Current candidate status: rejected release candidate after Julia manual video rejection.
+`33f7db6` / `save/beta4-render-snap-audit` is rechecked as not publishable until the snap/design blocker is redesigned and revalidated.
+Known failure is release-blocking render/model snap and slab placement jank. This is not ready for release.
