@@ -68,13 +68,19 @@ The object triad is complete. Do not reopen it.
 
 ## Release status
 
-The object triad fix is **include-ready**. Release remains **blocked** by a separate Beta 4 issue unrelated to the object triad. Do not conflate the two blockers.
+The object triad fix is **triad-include-ready** (targeting, model, outline, raycast co-location proven for a controlled pre-placed fixture). It is **not** proven for player-facing item placement.
+
+Beta 3.5 release is **PAUSED/BLOCKED** by Julia's manual live item anchoring failure (MC 1.21.11, HEAD `4f63abe`). Julia's report: "Wait we didn't fix the items anchoring to slabs." Torches and items float or fail to anchor on slab-supported geometry in player-facing use. The object-triad proof did not cover this scenario.
+
+The live item anchoring RED proof is at HEAD `4f63abe` / `save/beta35-live-item-anchoring-red`, gated by `-Dslabbed.beta35LiveItemAnchoringRed=true`. Markers emit `juliaLiveResult=RED failureLayer=PROOF_GAP`. See `docs/beta35-live-item-anchoring-red.md`.
+
+Do not conflate the triad blocker (resolved) with the live placement blocker (current).
 
 ## Next recommended action
 
-1. Do not touch the object triad. It is proven and include-ready.
-2. Return to the separate Beta 4 blocker (compound visible slab lane / live manual RED).
-3. If the Beta 4 blocker is resolved or explicitly waived by Julia, perform a final release audit from the integration lineage — do not restart from the old beta.2 baseline.
+1. Do not touch the object triad. It is triad-proven.
+2. Implement the player-facing item placement/anchoring fix after the RED proof classification is clear. Do not release without a GREEN placement proof.
+3. When the live item anchoring is GREEN, perform a final release audit from the integration lineage — do not restart from the old beta.2 baseline.
 4. When cutting the Beta 3.5 release branch, use option 1 or 2 from the valid path above, never the invalid cherry-pick-onto-d1417ff path.
 
 ## See also
