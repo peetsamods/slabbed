@@ -162,6 +162,19 @@ Current implementation is RED/PENDING against the corrected compound visible
 slab lane law. The historical proof rows below remain evidence for the older
 law, but they are superseded for release confidence by the marker matrix above.
 
+The marker matrix is executable as an opt-in client gametest diagnostic:
+
+```bash
+JAVA_TOOL_OPTIONS="-Dslabbed.beta4CompoundVisibleSlabLaneRed=true -Dfabric.client.gametest.disableNetworkSynchronizer=true" ./gradlew --no-daemon runClientGameTest --console plain
+```
+
+The run must first emit
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]`. The expected current
+summary is `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN
+lower=RED upper=RED merge=RED top=RED supportMissing=RED triad=RED reload=RED
+releaseBlockers=compoundVisibleSlabLane`. Any `dy=-0.5` or `dy=0.0` slab result
+is logged as observed state, not accepted as green.
+
 These proof rows exist in the focused harness slice under the superseded law:
 
 - Row 1: GREEN-implemented/proven for compound below-lane side slab placement; lower-half side click authors `stone_slab[type=bottom]` at `dy=-0.5`.

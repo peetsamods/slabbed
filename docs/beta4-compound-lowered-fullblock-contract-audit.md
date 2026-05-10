@@ -23,6 +23,20 @@ satisfy lower-half side placement. Current implementation is RED/PENDING
 against the corrected `COMPOUND_VISIBLE_SLAB_LANE` product law until RED proofs
 exist for lower, upper, merge, top, support-missing, triad, and reload states.
 
+Proof matrix status: gated Java RED coverage now exists behind
+`-Dslabbed.beta4CompoundVisibleSlabLaneRed=true`. It proves the canonical
+fixture with `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]`, then
+emits `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_RED]`,
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_UPPER_RED]`,
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MERGE_RED]`,
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TOP_RED]`,
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_RED]`,
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_RED]`,
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_RED]`, and
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY]`. Current RED is expected:
+the future green result must be source-owned `stone_slab` state at `dy=-1.0`,
+not the old `dy=-0.5` lowered lane or the old `dy=0.0` owner-top result.
+
 Update at `fae6d25`: Julia's screenshot-shape manual live test found an
 uncovered topology after the internal compound slab Row 3 proof went GREEN.
 The internal proof row covers a narrow artificial same-Y remap path; it does

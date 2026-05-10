@@ -174,6 +174,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta4CompoundVisibleSlabLaneRed")) {
+            new SlabbedLabBeta4LiveShapeGoblinClientGameTest().runTest(ctx);
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta4LiveShapeGoblin")) {
             new SlabbedLabBeta4LiveShapeGoblinClientGameTest().runTest(ctx);
             return;

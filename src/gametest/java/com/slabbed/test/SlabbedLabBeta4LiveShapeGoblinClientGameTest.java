@@ -34,6 +34,8 @@ import java.util.Map;
  */
 public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements FabricClientGameTest {
     private static final String OPT_IN = "slabbed.beta4LiveShapeGoblin";
+    private static final String COMPOUND_VISIBLE_SLAB_LANE_RED_OPT_IN =
+            "slabbed.beta4CompoundVisibleSlabLaneRed";
     private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
     private static final double EPSILON = 1.0e-6d;
     private static final double AIM_EPSILON = 1.0e-4d;
@@ -54,6 +56,10 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (Boolean.getBoolean(COMPOUND_VISIBLE_SLAB_LANE_RED_OPT_IN)) {
+            runCompoundVisibleSlabLaneRedProof(ctx);
+            return;
+        }
         if (!Boolean.getBoolean(OPT_IN)) {
             return;
         }
@@ -185,6 +191,390 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " releaseBlockers=" + releaseBlockers);
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_DONE] status=OK");
         }
+    }
+
+    private static void runCompoundVisibleSlabLaneRedProof(ClientGameTestContext ctx) {
+        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_START]"
+                + " flag=-Dslabbed.beta4CompoundVisibleSlabLaneRed=true"
+                + " mode=gated_red_proof"
+                + " gameplayChange=false"
+                + " expectedLane=source_owned_authored_or_persistent_compound_full_block_dy_-1.0");
+
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            seedCanonicalStructure(singleplayer);
+            waitForClient(ctx, singleplayer, 10);
+
+            final boolean[] fixtureGreen = {false};
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]"
+                            + " fixtureTruth=FAIL reason=client_world_missing");
+                    return;
+                }
+                fixtureGreen[0] = emitCompoundVisibleSlabLaneFixtureProof(mc.world);
+            });
+
+            if (!fixtureGreen[0]) {
+                System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY]"
+                        + " fixtureTruth=FAIL lower=PENDING upper=PENDING merge=PENDING top=PENDING"
+                        + " supportMissing=PENDING triad=PENDING reload=PENDING"
+                        + " releaseBlockers=fixture");
+                throw new RuntimeException("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]"
+                        + " reason=fixture_truth_not_proven");
+            }
+
+            CompoundVisibleSlabLaneResults results = new CompoundVisibleSlabLaneResults();
+            results.lower = runCompoundVisibleSideLaneCase(ctx, singleplayer,
+                    "LOWER", 0.25d, SlabType.BOTTOM, "COMPOUND_VISIBLE_SIDE_LOWER_SLAB");
+            results.upper = runCompoundVisibleSideLaneCase(ctx, singleplayer,
+                    "UPPER", 0.75d, SlabType.TOP, "COMPOUND_VISIBLE_SIDE_UPPER_SLAB");
+            results.merge = runCompoundVisibleMergeLaneCase(ctx, singleplayer);
+            results.top = runCompoundVisibleTopLaneCase(ctx, singleplayer,
+                    "TOP", false, "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
+            results.supportMissing = runCompoundVisibleSupportMissingLaneCase(ctx, singleplayer);
+            results.triad = emitCompoundVisibleTriadRed(results);
+            results.reload = emitCompoundVisibleReloadRed(results);
+
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY]"
+                    + " fixtureTruth=GREEN"
+                    + " lower=" + results.lower
+                    + " upper=" + results.upper
+                    + " merge=" + results.merge
+                    + " top=" + results.top
+                    + " supportMissing=" + results.supportMissing
+                    + " triad=" + results.triad
+                    + " reload=" + results.reload
+                    + " releaseBlockers=compoundVisibleSlabLane");
+        }
+    }
+
+    private static String runCompoundVisibleSideLaneCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String caseName,
+            double visualLocalY,
+            SlabType expectedType,
+            String expectedLaw
+    ) {
+        seedCanonicalStructure(singleplayer);
+        waitForClient(ctx, singleplayer, 10);
+        final BlockPos candidate = UPPER_FULL.offset(ANGLE_A_FACE);
+        final BlockHitResult hit = visibleSideHit(UPPER_FULL, ANGLE_A_FACE, visualLocalY);
+        final String[] action = {"NOT_RUN"};
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncAim(ctx, singleplayer, eyeFor(ANGLE_A_FACE), hit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                action[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult beforeTarget = mc.crosshairTarget;
+            action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
+                    + " row=" + caseName
+                    + " phase=click"
+                    + " expectedLaw=" + expectedLaw
+                    + " expectedSource=" + UPPER_FULL.toShortString()
+                    + " expectedCandidate=" + candidate.toShortString()
+                    + " actualTarget=" + describeHit(beforeTarget)
+                    + " syntheticHit=" + describeHit(hit)
+                    + " visualLocalY=" + visualLocalY
+                    + " hitBand=" + hitBand(hit)
+                    + " action=" + action[0]);
+        });
+        waitForClient(ctx, singleplayer, 4);
+        return emitCompoundVisibleSideLaneResult(ctx, singleplayer, caseName, candidate,
+                expectedType, expectedLaw, action[0]);
+    }
+
+    private static String runCompoundVisibleMergeLaneCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        seedCanonicalStructure(singleplayer);
+        waitForClient(ctx, singleplayer, 10);
+        final BlockPos candidate = UPPER_FULL.offset(ANGLE_A_FACE);
+        final BlockHitResult lowerHit = visibleSideHit(UPPER_FULL, ANGLE_A_FACE, 0.25d);
+        final BlockHitResult upperHit = visibleSideHit(UPPER_FULL, ANGLE_A_FACE, 0.75d);
+        final String[] firstAction = {"NOT_RUN"};
+        final String[] secondAction = {"NOT_RUN"};
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncAim(ctx, singleplayer, eyeFor(ANGLE_A_FACE), lowerHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                firstAction[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            firstAction[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, lowerHit).toString();
+        });
+        waitForClient(ctx, singleplayer, 4);
+        syncAim(ctx, singleplayer, eyeFor(ANGLE_A_FACE), upperHit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                secondAction[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            secondAction[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHit).toString();
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
+                    + " row=MERGE phase=clicks"
+                    + " expectedLaw=COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB"
+                    + " expectedSource=" + UPPER_FULL.toShortString()
+                    + " expectedCandidate=" + candidate.toShortString()
+                    + " lowerHit=" + describeHit(lowerHit)
+                    + " upperHit=" + describeHit(upperHit)
+                    + " firstAction=" + firstAction[0]
+                    + " secondAction=" + secondAction[0]);
+        });
+        waitForClient(ctx, singleplayer, 4);
+        return emitCompoundVisibleSideLaneResult(ctx, singleplayer, "MERGE", candidate,
+                SlabType.DOUBLE, "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB",
+                firstAction[0] + "," + secondAction[0]);
+    }
+
+    private static String runCompoundVisibleTopLaneCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String caseName,
+            boolean removeSupport,
+            String expectedLaw
+    ) {
+        seedCanonicalStructure(singleplayer);
+        if (removeSupport) {
+            removeSupportUnderUpperFullBlock(singleplayer);
+        }
+        waitForClient(ctx, singleplayer, 10);
+        final BlockPos candidate = UPPER_FULL.up();
+        final BlockHitResult hit = visibleTopHit(UPPER_FULL);
+        final String[] action = {"NOT_RUN"};
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncAim(ctx, singleplayer, topFaceEye(), hit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                action[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult beforeTarget = mc.crosshairTarget;
+            action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
+                    + " row=" + caseName
+                    + " phase=click"
+                    + " expectedLaw=" + expectedLaw
+                    + " supportRemoved=" + removeSupport
+                    + " expectedSource=" + UPPER_FULL.toShortString()
+                    + " expectedCandidate=" + candidate.toShortString()
+                    + " actualTarget=" + describeHit(beforeTarget)
+                    + " syntheticHit=" + describeHit(hit)
+                    + " hitBand=" + hitBand(hit)
+                    + " action=" + action[0]);
+        });
+        waitForClient(ctx, singleplayer, 4);
+        return emitCompoundVisibleTopLaneResult(ctx, singleplayer, caseName, candidate,
+                removeSupport, expectedLaw, action[0]);
+    }
+
+    private static String runCompoundVisibleSupportMissingLaneCase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        String side = runCompoundVisibleSupportMissingSideSubcase(ctx, singleplayer);
+        String top = runCompoundVisibleTopLaneCase(ctx, singleplayer,
+                "SUPPORT_MISSING_TOP", true, "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
+        String verdict = "GREEN".equals(side) && "GREEN".equals(top) ? "GREEN" : "RED";
+        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_" + verdict + "]"
+                + " expected=source_owned_support_missing_side_and_top_named_dy_-1.0_lane_states"
+                + " side=" + side
+                + " top=" + top
+                + " releaseBlocker=" + (!"GREEN".equals(verdict)));
+        return verdict;
+    }
+
+    private static String runCompoundVisibleSupportMissingSideSubcase(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        seedCanonicalStructure(singleplayer);
+        removeSupportUnderUpperFullBlock(singleplayer);
+        waitForClient(ctx, singleplayer, 10);
+        final BlockPos candidate = UPPER_FULL.offset(ANGLE_A_FACE);
+        final BlockHitResult hit = visibleSideHit(UPPER_FULL, ANGLE_A_FACE, 0.25d);
+        final String[] action = {"NOT_RUN"};
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        syncAim(ctx, singleplayer, eyeFor(ANGLE_A_FACE), hit.getPos());
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                action[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
+        });
+        waitForClient(ctx, singleplayer, 4);
+        return emitCompoundVisibleSideLaneResult(ctx, singleplayer, "SUPPORT_MISSING_SIDE", candidate,
+                SlabType.BOTTOM, "COMPOUND_VISIBLE_SIDE_LOWER_SLAB", action[0]);
+    }
+
+    private static String emitCompoundVisibleSideLaneResult(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String caseName,
+            BlockPos candidate,
+            SlabType expectedType,
+            String expectedLaw,
+            String action
+    ) {
+        final String[] serverFinal = {"NOT_RUN"};
+        final boolean[] serverLegal = {false};
+        singleplayer.getServer().runOnServer(server -> {
+            World world = server.getOverworld();
+            BlockState candidateState = world.getBlockState(candidate);
+            serverLegal[0] = isSlabDy(world, candidate, expectedType, -1.0d);
+            serverFinal[0] = describeBlock(world, candidate, candidateState);
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SERVER_FINAL]"
+                    + " row=" + caseName
+                    + " candidate=" + serverFinal[0]);
+        });
+
+        final String[] verdict = {"RED"};
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                verdict[0] = "RED";
+                System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_RED]"
+                        + " reason=client_world_missing_after_click"
+                        + " expectedLaw=" + expectedLaw);
+                return;
+            }
+            BlockState candidateState = mc.world.getBlockState(candidate);
+            BlockState sourceState = mc.world.getBlockState(UPPER_FULL);
+            boolean clientLegal = isSlabDy(mc.world, candidate, expectedType, -1.0d);
+            boolean sourceLegal = sourceState.isOf(Blocks.STONE)
+                    && isDy(mc.world, UPPER_FULL, -1.0d)
+                    && SlabAnchorAttachment.isCompoundFullBlockAnchor(mc.world, UPPER_FULL);
+            double candidateDy = dy(mc.world, candidate, candidateState);
+            boolean noRecursiveDy = candidateDy >= -1.0d - EPSILON;
+            verdict[0] = clientLegal && serverLegal[0] && sourceLegal && noRecursiveDy ? "GREEN" : "RED";
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_" + verdict[0] + "]"
+                    + " expectedLaw=" + expectedLaw
+                    + " action=" + action
+                    + " expectedCandidate=" + candidate.toShortString()
+                    + " expectedState=stone_slab[type=" + expectedType.asString() + "]"
+                    + " expectedDy=-1.0"
+                    + " actualCandidate=" + describeBlock(mc.world, candidate, candidateState)
+                    + " serverCandidate=" + serverFinal[0]
+                    + " clickedSource=" + describeBlock(mc.world, UPPER_FULL, sourceState)
+                    + " sourceRemainsCompoundFullBlockDyMinusOne=" + sourceLegal
+                    + " noRecursiveDyBelowMinusOne=" + noRecursiveDy
+                    + " oldDyMinusHalfIsGreen=false"
+                    + " dyZeroIsGreen=false");
+        });
+        return verdict[0];
+    }
+
+    private static String emitCompoundVisibleTopLaneResult(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String caseName,
+            BlockPos candidate,
+            boolean supportRemoved,
+            String expectedLaw,
+            String action
+    ) {
+        final String[] serverFinal = {"NOT_RUN"};
+        final boolean[] serverLegal = {false};
+        singleplayer.getServer().runOnServer(server -> {
+            World world = server.getOverworld();
+            BlockState candidateState = world.getBlockState(candidate);
+            serverLegal[0] = isSlabDy(world, candidate, SlabType.BOTTOM, -1.0d);
+            serverFinal[0] = describeBlock(world, candidate, candidateState);
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SERVER_FINAL]"
+                    + " row=" + caseName
+                    + " candidate=" + serverFinal[0]);
+        });
+
+        final String[] verdict = {"RED"};
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                verdict[0] = "RED";
+                System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_RED]"
+                        + " reason=client_world_missing_after_click"
+                        + " expectedLaw=" + expectedLaw);
+                return;
+            }
+            BlockState candidateState = mc.world.getBlockState(candidate);
+            BlockState sourceState = mc.world.getBlockState(UPPER_FULL);
+            boolean clientLegal = isSlabDy(mc.world, candidate, SlabType.BOTTOM, -1.0d);
+            boolean sourceLegal = sourceState.isOf(Blocks.STONE)
+                    && isDy(mc.world, UPPER_FULL, -1.0d)
+                    && SlabAnchorAttachment.isCompoundFullBlockAnchor(mc.world, UPPER_FULL);
+            double candidateDy = dy(mc.world, candidate, candidateState);
+            boolean noDyZeroFloatingSlab = !(candidateState.isOf(Blocks.STONE_SLAB)
+                    && Math.abs(candidateDy) <= EPSILON);
+            verdict[0] = clientLegal && serverLegal[0] && sourceLegal && noDyZeroFloatingSlab ? "GREEN" : "RED";
+            System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_" + verdict[0] + "]"
+                    + " expectedLaw=" + expectedLaw
+                    + " action=" + action
+                    + " supportRemoved=" + supportRemoved
+                    + " expectedCandidate=" + candidate.toShortString()
+                    + " expectedState=stone_slab[type=bottom]"
+                    + " expectedDy=-1.0"
+                    + " actualCandidate=" + describeBlock(mc.world, candidate, candidateState)
+                    + " serverCandidate=" + serverFinal[0]
+                    + " clickedSource=" + describeBlock(mc.world, UPPER_FULL, sourceState)
+                    + " sourceRemainsCompoundFullBlockDyMinusOne=" + sourceLegal
+                    + " noDyZeroFloatingSlab=" + noDyZeroFloatingSlab
+                    + " oldDyMinusHalfIsGreen=false"
+                    + " dyZeroIsGreen=false");
+        });
+        return verdict[0];
+    }
+
+    private static String emitCompoundVisibleTriadRed(CompoundVisibleSlabLaneResults results) {
+        boolean allNamedStatesGreen = "GREEN".equals(results.lower)
+                && "GREEN".equals(results.upper)
+                && "GREEN".equals(results.merge)
+                && "GREEN".equals(results.top)
+                && "GREEN".equals(results.supportMissing);
+        String verdict = allNamedStatesGreen ? "PENDING" : "RED";
+        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_" + verdict + "]"
+                + " expected=model_outline_raycast_agree_for_each_named_dy_-1.0_slab_result"
+                + " lower=" + results.lower
+                + " upper=" + results.upper
+                + " merge=" + results.merge
+                + " top=" + results.top
+                + " supportMissing=" + results.supportMissing
+                + " reason=" + (allNamedStatesGreen
+                ? "named_states_exist_but_triad_parity_not_proven_in_this_slice"
+                : "no_complete_named_dy_-1.0_slab_lane_result_to_validate"));
+        return verdict;
+    }
+
+    private static String emitCompoundVisibleReloadRed(CompoundVisibleSlabLaneResults results) {
+        boolean allNamedStatesGreen = "GREEN".equals(results.lower)
+                && "GREEN".equals(results.upper)
+                && "GREEN".equals(results.merge)
+                && "GREEN".equals(results.top)
+                && "GREEN".equals(results.supportMissing);
+        String verdict = allNamedStatesGreen ? "PENDING" : "RED";
+        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_" + verdict + "]"
+                + " expected=named_dy_-1.0_slab_states_persist_after_reload_or_equivalent_save_load_proof"
+                + " lower=" + results.lower
+                + " upper=" + results.upper
+                + " merge=" + results.merge
+                + " top=" + results.top
+                + " supportMissing=" + results.supportMissing
+                + " reason=" + (allNamedStatesGreen
+                ? "named_states_exist_but_reload_not_proven_in_this_slice"
+                : "no_complete_named_dy_-1.0_slab_lane_result_to_reload"));
+        return verdict;
     }
 
     private static RealClickResult runRealCrosshairClick(
@@ -944,6 +1334,44 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 && sideCandidateEmpty && topFaceCandidateEmpty && skippedTopCandidateEmpty && missingVariantNamed;
     }
 
+    private static boolean emitCompoundVisibleSlabLaneFixtureProof(net.minecraft.world.BlockView world) {
+        boolean bottomA = isBottomSlab(world, BOTTOM_SLAB_A);
+        boolean bottomB = isBottomSlab(world, BOTTOM_SLAB_B);
+        boolean bridgeA = isStoneDy(world, BRIDGE_FULL_A, -0.5d);
+        boolean bridgeB = isStoneDy(world, BRIDGE_FULL_B, -0.5d);
+        boolean topA = isExpectedSlab(world, TOP_SLAB_A, CANONICAL_TOP_SLAB_TYPE) && isDy(world, TOP_SLAB_A, -0.5d);
+        boolean topB = isExpectedSlab(world, TOP_SLAB_B, CANONICAL_TOP_SLAB_TYPE) && isDy(world, TOP_SLAB_B, -0.5d);
+        boolean upper = isStoneDy(world, UPPER_FULL, -1.0d)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, UPPER_FULL);
+        boolean sideCandidateEmpty = world.getBlockState(UPPER_FULL.offset(ANGLE_A_FACE)).isAir();
+        boolean topFaceCandidateEmpty = world.getBlockState(UPPER_FULL.up()).isAir();
+        boolean skippedTopCandidateEmpty = world.getBlockState(UPPER_FULL.up(2)).isAir();
+        boolean missingVariantNamed = TOP_SLAB_A.equals(UPPER_FULL.down());
+        boolean green = bottomA && bottomB && bridgeA && bridgeB && topA && topB && upper
+                && sideCandidateEmpty && topFaceCandidateEmpty && skippedTopCandidateEmpty && missingVariantNamed;
+        String marker = green
+                ? "[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]"
+                : "[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]";
+        System.out.println(marker
+                + " fixtureTruth=" + (green ? "GREEN" : "FAIL")
+                + " bottomSlabA=" + describeBlock(world, BOTTOM_SLAB_A)
+                + " bottomSlabB=" + describeBlock(world, BOTTOM_SLAB_B)
+                + " bridgeFullBlockA=" + describeBlock(world, BRIDGE_FULL_A)
+                + " bridgeFullBlockB=" + describeBlock(world, BRIDGE_FULL_B)
+                + " topSlabA=" + describeBlock(world, TOP_SLAB_A)
+                + " topSlabB=" + describeBlock(world, TOP_SLAB_B)
+                + " upperFullBlock=" + describeBlock(world, UPPER_FULL)
+                + " upperFullBlockCompound=" + SlabAnchorAttachment.isCompoundFullBlockAnchor(world, UPPER_FULL)
+                + " upperFullBlockAuthoredOrPersistent=true"
+                + " upperFullBlockLowered=" + isDy(world, UPPER_FULL, -1.0d)
+                + " lowerHalfSideCandidate=" + describeBlock(world, UPPER_FULL.offset(ANGLE_A_FACE))
+                + " topFaceCandidate=" + describeBlock(world, UPPER_FULL.up())
+                + " missingUnderSlabVariantSupportPos=" + TOP_SLAB_A.toShortString()
+                + " invalidReasons=" + invalidReasons(bottomA, bottomB, bridgeA, bridgeB, topA, topB, upper,
+                sideCandidateEmpty, topFaceCandidateEmpty, skippedTopCandidateEmpty, missingVariantNamed));
+        return green;
+    }
+
     private static void clearArea(World world) {
         for (int x = BOTTOM_SLAB_A.getX() - 3; x <= BOTTOM_SLAB_A.getX() + 4; x++) {
             for (int y = BOTTOM_SLAB_A.getY() - 2; y <= BOTTOM_SLAB_A.getY() + 6; y++) {
@@ -1055,6 +1483,16 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     private static BlockHitResult upHit(BlockPos targetPos) {
         return new BlockHitResult(new Vec3d(targetPos.getX() + 0.5d, targetPos.getY() + 1.0d,
                 targetPos.getZ() + 0.5d), Direction.UP, targetPos, false, false);
+    }
+
+    private static BlockHitResult visibleSideHit(BlockPos targetPos, Direction face, double visualLocalY) {
+        return new BlockHitResult(visibleSideHitPoint(targetPos, face, visualLocalY, EXPECTED_UPPER_FULL_DY),
+                face, targetPos, false, false);
+    }
+
+    private static BlockHitResult visibleTopHit(BlockPos targetPos) {
+        return new BlockHitResult(visibleTopHitPoint(targetPos, EXPECTED_UPPER_FULL_DY),
+                Direction.UP, targetPos, false, false);
     }
 
     private static Vec3d visibleSideHitPoint(BlockPos targetPos, Direction face, double visualLocalY, double ownerDy) {
@@ -1356,6 +1794,15 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         return isExpectedSlab(world, pos, SlabType.DOUBLE) && isDy(world, pos, expectedDy);
     }
 
+    private static boolean isSlabDy(
+            net.minecraft.world.BlockView world,
+            BlockPos pos,
+            SlabType expectedType,
+            double expectedDy
+    ) {
+        return isExpectedSlab(world, pos, expectedType) && isDy(world, pos, expectedDy);
+    }
+
     private static boolean isStoneDy(net.minecraft.world.BlockView world, BlockPos pos, double expectedDy) {
         BlockState state = world.getBlockState(pos);
         return state.isOf(Blocks.STONE) && isDy(world, pos, expectedDy);
@@ -1517,6 +1964,16 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             return "targetingParityClear";
         }
+    }
+
+    private static final class CompoundVisibleSlabLaneResults {
+        String lower = "PENDING";
+        String upper = "PENDING";
+        String merge = "PENDING";
+        String top = "PENDING";
+        String supportMissing = "PENDING";
+        String triad = "PENDING";
+        String reload = "PENDING";
     }
 
     private static final class RealClickResult {
