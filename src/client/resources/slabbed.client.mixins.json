@@ -5,6 +5,7 @@
   "client": [
     "Beta4ManualLiveInteractionTraceMixin",
     "Beta4ManualLiveClientTickTraceMixin",
+    "Beta35LiveTorchCaptureMixin",
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",

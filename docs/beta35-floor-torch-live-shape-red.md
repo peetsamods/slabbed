@@ -8,6 +8,13 @@ This slice adds a screenshot-style live-shape fixture parity proof for
 `floor_torch` only. It does **not** implement a production gameplay fix. Beta
 3.5 release prep remains **PAUSED**.
 
+A new gated live recorder was added for Julia's manual floor-torch mismatch repro:
+
+- Gate: `-Dslabbed.beta35LiveTorchCapture=true`
+- Marker: `[JULIA_BETA35_LIVE_TORCH_CAPTURE]`
+- Classification: `LIVE_CAPTURE_OK`, `NO_TORCH_TARGET`,
+  `TORCH_FOUND_NEAR_TARGET`, `CONTACT_GAP`, `UNKNOWN`
+
 ## Gate and markers
 
 Gate:
