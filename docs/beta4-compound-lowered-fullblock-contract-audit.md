@@ -19,9 +19,10 @@ compound full block at block position Y with `dy=-1.0`, the visible full block
 spans Y-1.0 to Y, so a top-face `stone_slab[type=bottom]` at `source.up()` must
 use `dy=-1.0` to sit on the visible top. The previous `dy=-0.5` side placement
 result only represents the upper half of the compound full block; it cannot
-satisfy lower-half side placement. Current implementation is RED/PENDING
-against the corrected `COMPOUND_VISIBLE_SLAB_LANE` product law until RED proofs
-exist for lower, upper, merge, top, support-missing, triad, and reload states.
+satisfy lower-half side placement. Current implementation is partially green
+against the corrected `COMPOUND_VISIBLE_SLAB_LANE` product law: lower, upper,
+and side double are implemented/proven, while top, support-missing aggregate,
+triad, and reload remain blocked.
 
 Proof matrix status: gated Java RED coverage now exists behind
 `-Dslabbed.beta4CompoundVisibleSlabLaneRed=true`. It proves the canonical
@@ -707,15 +708,19 @@ UNDECIDED.
   expose a chunk-only unload/reload primitive. `ChainSurvivalReproTest`
   documents the same caveat. Recorded as helper-absent.
 
-## Compound visible slab lane lower/upper proof
+## Compound visible slab lane lower/upper/double proof
 
 `COMPOUND_VISIBLE_SIDE_LOWER_SLAB` and `COMPOUND_VISIBLE_SIDE_UPPER_SLAB` are now
-the first two implemented compound visible slab lane states. The durable source
-truth is `SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE` and
-`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE`, written only after
-the immediate side candidate finalizes as `stone_slab[type=bottom]` or
-`stone_slab[type=top]` beside an authored/persistent compound full-block owner
-at `dy=-1.0`.
+joined by `COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB` as the first three implemented
+compound visible slab lane states. The durable source truth is
+`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE`,
+`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE`, and
+`SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE`, written only
+after the immediate side candidate finalizes as `stone_slab[type=bottom]`,
+`stone_slab[type=top]`, or `stone_slab[type=double]` beside an
+authored/persistent compound full-block owner at `dy=-1.0`. The double marker
+replaces the lower/upper marker for that side cell after a compatible repeat
+merge; it does not authorize freeform `dy=-1.0` slab chains.
 
 Focused proof:
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_GREEN]` reports server and client
@@ -724,11 +729,14 @@ at `dy=-1.0`, `noRecursiveDyBelowMinusOne=true`, and
 `oldDyMinusHalfIsGreen=false`. `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_UPPER_GREEN]`
 reports server and client candidate `stone_slab[type=top] dy=-1.0` with the same
 source-owned bounds and no `dy<-1.0`.
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MERGE_GREEN]` reports the same
+candidate merging to `stone_slab[type=double] dy=-1.0` on both server and client,
+with the clicked source still a compound full block at `dy=-1.0`.
 
 Latest summary:
-`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=RED top=RED supportMissing=RED triad=RED reload=RED releaseBlockers=compoundVisibleSlabLane`.
-Merge, owner-top, support-missing aggregate, triad, and reload remain
-pending/blocked for release confidence.
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=RED supportMissing=RED triad=RED reload=RED releaseBlockers=compoundVisibleSlabLane`.
+Owner-top, support-missing aggregate, triad, and reload remain pending/blocked
+for release confidence.
 
 ## Old Row 1 compatibility audit
 
@@ -769,9 +777,9 @@ Compatibility result:
 
 ## Recommendation
 
-Do not treat the compound visible slab lane as release-complete. The LOWER and
-UPPER states are implemented/proven, but each remaining named state needs its own
-bounded proof or an explicit deferral. Release remains blocked.
+Do not treat the compound visible slab lane as release-complete. The LOWER,
+UPPER, and DOUBLE states are implemented/proven, but each remaining named state
+needs its own bounded proof or an explicit deferral. Release remains blocked.
 
 ## Cross-references
 

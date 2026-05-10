@@ -40,11 +40,16 @@ public abstract class BlockItemPlacementIntentMixin {
             new ThreadLocal<>();
     private static final ThreadLocal<CompoundVisibleSideUpperIntent> COMPOUND_VISIBLE_SIDE_UPPER_INTENT =
             new ThreadLocal<>();
+    private static final ThreadLocal<CompoundVisibleSideDoubleIntent> COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT =
+            new ThreadLocal<>();
 
     private record CompoundVisibleSideLowerIntent(BlockPos sourcePos, BlockPos candidatePos) {
     }
 
     private record CompoundVisibleSideUpperIntent(BlockPos sourcePos, BlockPos candidatePos) {
+    }
+
+    private record CompoundVisibleSideDoubleIntent(BlockPos sourcePos, BlockPos candidatePos) {
     }
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(ItemUsageContext context, BlockPos pos, BlockState state) {
@@ -156,6 +161,30 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
         BlockState sourceState = context.getWorld().getBlockState(sourcePos);
         CompoundVisibleSideUpperIntent intent = COMPOUND_VISIBLE_SIDE_UPPER_INTENT.get();
+        return intent != null
+                && sourcePos.equals(intent.sourcePos())
+                && placePos.equals(intent.candidatePos())
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getWorld(), sourcePos, sourceState)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), sourcePos)
+                && Math.abs(SlabSupport.getYOffset(context.getWorld(), sourcePos, sourceState) + 1.0d)
+                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+    }
+
+    private static boolean slabbed$isCompoundVisibleSideDoubleSlabResult(
+            ItemPlacementContext context,
+            BlockPos placePos,
+            BlockState placedState
+    ) {
+        if (context.getSide().getAxis().isVertical()
+                || !placedState.isOf(Blocks.STONE_SLAB)
+                || !placedState.contains(SlabBlock.TYPE)
+                || placedState.get(SlabBlock.TYPE) != SlabType.DOUBLE
+                || !placedState.getFluidState().isEmpty()) {
+            return false;
+        }
+        BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
+        BlockState sourceState = context.getWorld().getBlockState(sourcePos);
+        CompoundVisibleSideDoubleIntent intent = COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.get();
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
@@ -433,6 +462,7 @@ public abstract class BlockItemPlacementIntentMixin {
     private ItemUsageContext slabbed$remapLoweredFullBlockSideHit(ItemUsageContext context) {
         COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
         COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
+        COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
         boolean itemIsSlab = ((BlockItem) (Object) this).getBlock() instanceof SlabBlock;
         if (!itemIsSlab) {
             slabbed$recordRemapAttempt(
@@ -492,6 +522,10 @@ public abstract class BlockItemPlacementIntentMixin {
                         remapDecision.candidatePlacementPos()));
             } else if ("COMPOUND_VISIBLE_SIDE_UPPER_SLAB".equals(remapDecision.reason())) {
                 COMPOUND_VISIBLE_SIDE_UPPER_INTENT.set(new CompoundVisibleSideUpperIntent(
+                        remapDecision.sourcePos(),
+                        remapDecision.candidatePlacementPos()));
+            } else if ("COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB".equals(remapDecision.reason())) {
+                COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.set(new CompoundVisibleSideDoubleIntent(
                         remapDecision.sourcePos(),
                         remapDecision.candidatePlacementPos()));
             }
@@ -810,6 +844,39 @@ public abstract class BlockItemPlacementIntentMixin {
                         false,
                         false,
                         "COMPOUND_VISIBLE_SIDE_UPPER_SLAB");
+            } else if (slabbed$isCompoundVisibleSideDoubleSlabResult(context, placePos, placedState)) {
+                BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
+                BlockState sourceState = world.getBlockState(sourcePos);
+                boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, placePos,
+                        placedState);
+                SlabAnchorAttachment.addCompoundVisibleSideDoubleSlab(world, placePos, placedState, sourcePos,
+                        sourceState);
+                boolean markerAfter = SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, placePos,
+                        placedState);
+                RuntimeDiagnostics.recordPlace(
+                        "finalization-return",
+                        Registries.ITEM.getId(self),
+                        true,
+                        context,
+                        cir.getReturnValue(),
+                        "anchorFinalization=ran_compound_visible_side_double_slab markerBefore="
+                                + markerBefore
+                                + " markerAfter=" + markerAfter
+                                + " sourcePos=" + sourcePos.toShortString()
+                                + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
+                RuntimeDiagnostics.recordCompoundFinalization(
+                        "finalization-return",
+                        Registries.ITEM.getId(self),
+                        true,
+                        context,
+                        cir.getReturnValue(),
+                        "ran_compound_visible_side_double_slab",
+                        sourcePos,
+                        markerBefore,
+                        markerAfter,
+                        false,
+                        false,
+                        "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB");
             } else if (slabbed$isCompoundVisibleOwnerTopSlabResult(context, placePos, placedState)) {
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
@@ -882,6 +949,7 @@ public abstract class BlockItemPlacementIntentMixin {
             }
             COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
             COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
+            COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
             return;
         }
 
