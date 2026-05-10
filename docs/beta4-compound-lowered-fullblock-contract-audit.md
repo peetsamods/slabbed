@@ -750,14 +750,17 @@ Latest summary:
 | supportMissing | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_GREEN]` | GREEN | Builds lower side bottom, upper side top, side double, and owner-top bottom states at `dy=-1.0`; removes the direct support slab; verifies the source remains `stone`, `dy=-1.0`, `compoundFullBlockAnchor=true`, no jump/pop, all four named states remain `dy=-1.0`, and no checked state is below `dy=-1.0`. |
 | triad | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_PARTIAL]` | PARTIAL | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]` now proves marker/type truth, `dy=-1.0`, shifted outline bounds, owner raycast/target ownership, and model authority for lower, upper, merge, and top through the named compound visible slab lane retarget rule and shared dy authority. `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_GREEN]` reports lower, upper, double, and top `modelDy=-1.0` through a render-region-style non-`World` `BlockView`, proving the model path can read the same synced marker truth as outline/raycast. This is still `PARTIAL` because Julia must manually confirm visible model alignment. |
 | immediate render refresh | `[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_SUMMARY]` | PARTIAL | Manual live after `e5492d0` showed marker/outline truth could be lower while the model stayed stale until support replacement. Classification is `D. RERENDER_NOT_SCHEDULED`: marker truth, client marker visibility, non-`World` model bridge, and `modelDy=-1.0` are present, but same-state client rerender was not enough to rebuild the chunk model. The render-refresh slice adds a forced one-block-neighborhood client `scheduleBlockRenders(...)` for the four compound-visible marker attachment changes. Focused proof logs marker set, client sync, model dy, rerender, support update, and summary with `clientMarker=true`, `modelDy=-1.0`, and candidate/neighborhood rerender scheduled. Manual visual retest is still required. |
+| render snap audit | `tmp/beta4-render-snap-audit-fa3fc03/` | DEFERRED | Audit at `fa3fc03` classifies the remaining brief post-placement snap as `C. CLIENT_PREDICTION_UNMARKED_BLOCKSTATE`: compound-visible marker writes are server-truth only, so the client can render the predicted slab blockstate before attachment sync makes the marker visible. The existing sync path then schedules the candidate/source neighborhood and the model reports `clientMarker=true`, `modelDy=-1.0`, and candidate/neighborhood rerender scheduled. Tiny fix applied: no; a temporary client marker would require a safe prediction/rollback path and is deferred as post-beta polish unless Julia objects. |
 | live-shape diagnostic conflict | `[JULIA_BETA4_LIVE_GOBLIN_LEGACY_SEQUENCE_STALE]` | STALE | Classification is `A. STALE_DIAGNOSTIC_EXPECTATION`. The old live-shape lower-after-first and repeat-placement checks expected `dy=-0.5` lowered-same-cell results, but the current product law is the source-owned `COMPOUND_VISIBLE_SLAB_LANE` at `dy=-1.0`. The legacy markers may still report their historical RED facts, but they are no longer release blockers when the current visible-lane proof is green; release remains blocked by Julia live retest. |
 | reload | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_GREEN]` | GREEN | Uses `TestWorldSave.open()` after close/save, not a same-tick requery. `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_BEFORE]` and `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_AFTER]` report lower `stone_slab[type=bottom]`, upper `stone_slab[type=top]`, double `stone_slab[type=double]`, and owner-top `stone_slab[type=bottom]` with before/after marker true and before/after dy `-1.0`; source remains `stone`, `dy=-1.0`, `compoundFullBlockAnchor=true`, and the proof reports no collapse to `dy=0.0` or `dy=-0.5`. |
 
-Release remains blocked until Julia manually confirms model visual alignment in
-live retest; model authority and render-refresh trace alone are not release
-readiness. The legacy live-shape lower-after-first/repeat sequence is retained
-only as stale historical evidence and now reports `releaseBlockers=JuliaLiveRetest`
-when the current visible-lane proof remains green.
+Julia manual visual acceptance after settle is preserved. With the render snap
+explicitly deferred as a known minor visual issue, release remains blocked
+pending final release audit; model authority, render-refresh trace, and snap
+deferral alone are not release readiness. The legacy live-shape lower-after-first
+and repeat sequence is retained only as stale historical evidence and now reports
+`releaseBlockers=JuliaLiveRetest` when the current visible-lane proof remains
+green. No Bug Blaster final has been run yet.
 
 Manual visual acceptance status at `78c0f01`:
 
@@ -766,11 +769,14 @@ Manual visual acceptance status at `78c0f01`:
 - `dy=-1.0` slab lane remains source-owned and bounded.
 - known issue: brief render snap where slab can appear briefly in old/top-half visual
   position before settling to intended `dy=-1.0`.
+- render snap audit classification is `C. CLIENT_PREDICTION_UNMARKED_BLOCKSTATE`;
+  no tiny fix was applied, and the snap is explicitly deferred unless Julia objects.
 - delayed manual evidence includes some `delayed_candidate_mismatch` and
   `ghost=true` lines that reflect stale `dy=-0.5` expectations and should be treated
   as a trace-caveat, not a gameplay regression.
 - no Bug Blaster final yet.
 - evidence folder: `tmp/beta4-final-manual-visual-78c0f01/`
+- render snap audit evidence folder: `tmp/beta4-render-snap-audit-fa3fc03/`
 
 ## Old Row 1 compatibility audit
 
