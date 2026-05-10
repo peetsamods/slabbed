@@ -3590,10 +3590,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " ownerRoute=" + (ownerRouteGreen ? "GREEN" : "RED")
                     + " modelOutline=" + (outlineColocatedWithModel ? "GREEN" : "RED")
                     + " raycast=" + (raycastGreen ? "GREEN" : "RED")
+                    + " survival=" + (survival ? "GREEN" : "RED")
                     + " screenshotFaithfulTriad=" + (outlineColocatedWithModel && raycastGreen ? "GREEN" : "RED")
                     + " failureLayer=" + (outlineColocatedWithModel && raycastGreen ? "NONE" : triadFailureLayer)
-                    + " beta35IncludeStatus=NEEDS_PROOF"
-                    + " c96e674=partial_not_release_ready");
+                    + " beta35IncludeStatus="
+                    + (ownerRouteGreen && outlineColocatedWithModel && raycastGreen ? "INCLUDE" : "NEEDS_PROOF")
+                    + " targetLaw=A");
 
             if (!torchGreen) {
                 throw new RuntimeException("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_RED]"
