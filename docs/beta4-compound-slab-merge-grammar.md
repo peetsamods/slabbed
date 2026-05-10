@@ -195,9 +195,19 @@ JAVA_TOOL_OPTIONS="-Dslabbed.beta4CompoundVisibleSlabLaneRed=true -Dfabric.clien
 The run must first emit
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]`. The expected current
 summary is `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN
-lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PARTIAL
+lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=RED
 reload=PENDING releaseBlockers=compoundVisibleSlabLane`. Any unmarked `dy=-0.5`
 or `dy=0.0` slab result is logged as observed state, not accepted as green.
+
+Latest triad proof outcome:
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]` now records lower, upper,
+merge, and top separately. All four named states prove marker/type truth,
+`dy=-1.0`, shifted outline bounds, and direct outline-shape ownership at the
+visible body. The raw `ShapeType.OUTLINE` raycast/target surface is still RED
+for lower, upper, and merge because it targets neighboring visible/support
+cells instead of the named shifted slab positions; top is the only raw
+raycast/target GREEN case. Model is not directly probed by this harness, so the
+triad cannot be called green.
 
 Latest lower/upper/double proof result:
 `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_LOWER_GREEN]` reports the candidate at

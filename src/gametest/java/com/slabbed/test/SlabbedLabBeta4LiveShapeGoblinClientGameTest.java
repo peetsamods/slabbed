@@ -24,6 +24,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
 import java.util.LinkedHashMap;
@@ -635,11 +636,11 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         NamedCompoundVisibleLaneFixture fixture = buildCompoundVisibleNamedStateFixture(ctx, singleplayer, "TRIAD");
         final TriadProof[] proof = {TriadProof.notRun()};
         ctx.runOnClient(mc -> {
-            if (mc.world == null) {
+            if (mc.world == null || mc.player == null) {
                 proof[0] = TriadProof.red("client_world_missing");
                 return;
             }
-            proof[0] = proveCompoundVisibleTriad(mc.world, fixture);
+            proof[0] = proveCompoundVisibleTriad(mc.world, mc.player, fixture);
         });
 
         String verdict;
@@ -651,6 +652,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             verdict = "PARTIAL";
             missingSurface = proof[0].missingSurfaces("model");
         }
+        String provenSurfaces = proof[0].provenSurfaces();
         System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_" + verdict + "]"
                 + " expected=model_outline_raycast_target_agree_for_each_named_dy_-1.0_slab_result"
                 + " lower=" + results.lower
@@ -665,9 +667,10 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " target=" + proof[0].target
                 + " model=false"
                 + " missingSurface=" + missingSurface
+                + " provenSurfaces=" + provenSurfaces
                 + " detail=\"" + proof[0].detail + "\""
                 + " reason=" + ("PARTIAL".equals(verdict)
-                ? "dy_outline_outline_target_proven_model_or_raycast_path_not_available_in_this_harness"
+                ? "dy_outline_raycast_target_proven_model_path_not_available_in_this_harness"
                 : "one_or_more_direct_surfaces_failed"));
         return verdict;
     }
@@ -863,13 +866,14 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     }
 
     private static TriadProof proveCompoundVisibleTriad(
-            net.minecraft.world.BlockView world,
+            World world,
+            net.minecraft.entity.Entity entity,
             NamedCompoundVisibleLaneFixture fixture
     ) {
-        TriadSurface lower = proveTriadSurface(world, "lower", fixture.lowerPos, SlabType.BOTTOM);
-        TriadSurface upper = proveTriadSurface(world, "upper", fixture.upperPos, SlabType.TOP);
-        TriadSurface merge = proveTriadSurface(world, "merge", fixture.mergePos, SlabType.DOUBLE);
-        TriadSurface top = proveTriadSurface(world, "top", fixture.topPos, SlabType.BOTTOM);
+        TriadSurface lower = proveTriadSurface(world, entity, "lower", fixture.lowerPos, SlabType.BOTTOM);
+        TriadSurface upper = proveTriadSurface(world, entity, "upper", fixture.upperPos, SlabType.TOP);
+        TriadSurface merge = proveTriadSurface(world, entity, "merge", fixture.mergePos, SlabType.DOUBLE);
+        TriadSurface top = proveTriadSurface(world, entity, "top", fixture.topPos, SlabType.BOTTOM);
         return new TriadProof(
                 lower.dy && upper.dy && merge.dy && top.dy,
                 lower.outline && upper.outline && merge.outline && top.outline,
@@ -879,37 +883,140 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     }
 
     private static TriadSurface proveTriadSurface(
-            net.minecraft.world.BlockView world,
+            World world,
+            net.minecraft.entity.Entity entity,
             String name,
             BlockPos pos,
             SlabType expectedType
     ) {
         BlockState state = world.getBlockState(pos);
         boolean dyOk = isSlabDy(world, pos, expectedType, -1.0d);
+        boolean markerTruth = isExpectedCompoundVisibleMarker(world, name, pos, state);
+        double actualDy = dy(world, pos, state);
         VoxelShape outlineShape = state.getOutlineShape(world, pos, ShapeContext.absent());
         VoxelShape raycastShape = state.getRaycastShape(world, pos);
         double expectedOutlineMinY = expectedType == SlabType.TOP ? -0.5d : -1.0d;
         boolean outlineOk = !outlineShape.isEmpty()
                 && Math.abs(outlineShape.getBoundingBox().minY - expectedOutlineMinY) <= EPSILON;
-        boolean raycastOk = !raycastShape.isEmpty()
-                && Math.abs(raycastShape.getBoundingBox().minY - expectedOutlineMinY) <= EPSILON;
-        Box targetBox = !raycastShape.isEmpty() ? raycastShape.getBoundingBox()
-                : (!outlineShape.isEmpty() ? outlineShape.getBoundingBox() : null);
+        Box targetBox = !outlineShape.isEmpty() ? outlineShape.getBoundingBox() : null;
         double targetY = targetBox == null ? pos.getY() : pos.getY() + ((targetBox.minY + targetBox.maxY) * 0.5d);
         double targetX = targetBox == null ? pos.getX() + 0.5d
                 : pos.getX() + ((targetBox.minX + targetBox.maxX) * 0.5d);
-        Vec3d start = new Vec3d(targetX, targetY, pos.getZ() + 2.0d);
-        Vec3d end = new Vec3d(targetX, targetY, pos.getZ() - 1.0d);
+        double targetZ = targetBox == null ? pos.getZ() + 0.5d
+                : pos.getZ() + ((targetBox.minZ + targetBox.maxZ) * 0.5d);
+        Vec3d[] ray = triadRay(name, pos, targetX, targetY, targetZ);
+        Vec3d start = ray[0];
+        Vec3d end = ray[1];
         BlockHitResult outlineHit = outlineShape.raycast(start, end, pos);
         BlockHitResult raycastHit = raycastShape.raycast(start, end, pos);
+        BlockHitResult worldOutlineTarget = world.raycast(new RaycastContext(
+                start,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                entity));
+        boolean raycastOk = worldOutlineTarget.getType() == HitResult.Type.BLOCK
+                && worldOutlineTarget.getBlockPos().equals(pos);
         boolean targetOk = outlineHit != null
-                && outlineHit.getBlockPos().equals(pos);
+                && outlineHit.getBlockPos().equals(pos)
+                && raycastOk
+                && markerTruth;
+        boolean caseGreen = dyOk && outlineOk && raycastOk && targetOk;
+        String markerName = compoundVisibleMarkerName(name);
+        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]"
+                + " caseName=" + name
+                + " pos=" + pos.toShortString()
+                + " state=" + state
+                + " marker=" + markerName
+                + " markerTruth=" + markerTruth
+                + " slabSupportDy=" + actualDy
+                + " clientDy=" + actualDy
+                + " expectedDy=-1.0"
+                + " outlineMinY=" + (outlineShape.isEmpty() ? "empty" : outlineShape.getBoundingBox().minY)
+                + " outlineMaxY=" + (outlineShape.isEmpty() ? "empty" : outlineShape.getBoundingBox().maxY)
+                + " outlineDy=" + (outlineOk ? "-1.0" : "mismatch")
+                + " directRaycastShapeMinY="
+                + (raycastShape.isEmpty() ? "empty" : Double.toString(raycastShape.getBoundingBox().minY))
+                + " raycastTarget=" + describeHit(worldOutlineTarget)
+                + " raycastOwnerMatchesVisibleBody=" + raycastOk
+                + " outlineTarget=" + describeHit(outlineHit)
+                + " directRaycastTarget=" + describeHit(raycastHit)
+                + " targetDy=" + (worldOutlineTarget.getType() == HitResult.Type.BLOCK
+                ? dy(world, worldOutlineTarget.getBlockPos(), world.getBlockState(worldOutlineTarget.getBlockPos()))
+                : "MISS")
+                + " modelDy=not_available_in_this_harness"
+                + " surfaces=dy:" + dyOk
+                + ",outline:" + outlineOk
+                + ",raycast:" + raycastOk
+                + ",target:" + targetOk
+                + ",model:false"
+                + " verdict=" + (caseGreen ? "GREEN_EXCEPT_MODEL" : "RED"));
         return new TriadSurface(dyOk, outlineOk, raycastOk, targetOk,
                 name + "{block=" + describeBlock(world, pos, state)
+                        + " marker=" + markerName
+                        + " markerTruth=" + markerTruth
                         + " outlineMinY=" + (outlineShape.isEmpty() ? "empty" : outlineShape.getBoundingBox().minY)
-                        + " raycastMinY=" + (raycastShape.isEmpty() ? "empty" : raycastShape.getBoundingBox().minY)
+                        + " directRaycastShapeMinY="
+                        + (raycastShape.isEmpty() ? "empty" : raycastShape.getBoundingBox().minY)
                         + " outlineTarget=" + describeHit(outlineHit)
-                        + " raycastTarget=" + describeHit(raycastHit) + "}");
+                        + " raycastTarget=" + describeHit(worldOutlineTarget)
+                        + " directRaycastTarget=" + describeHit(raycastHit) + "}");
+    }
+
+    private static Vec3d[] triadRay(String name, BlockPos pos, double targetX, double targetY, double targetZ) {
+        if ("lower".equals(name)) {
+            return new Vec3d[] {
+                    new Vec3d(pos.getX() - 1.0d, targetY, targetZ),
+                    new Vec3d(pos.getX() + 2.0d, targetY, targetZ)
+            };
+        }
+        if ("upper".equals(name)) {
+            return new Vec3d[] {
+                    new Vec3d(pos.getX() + 2.0d, targetY, targetZ),
+                    new Vec3d(pos.getX() - 1.0d, targetY, targetZ)
+            };
+        }
+        if ("merge".equals(name)) {
+            return new Vec3d[] {
+                    new Vec3d(targetX, targetY, pos.getZ() - 1.0d),
+                    new Vec3d(targetX, targetY, pos.getZ() + 2.0d)
+            };
+        }
+        return new Vec3d[] {
+                new Vec3d(targetX, pos.getY() + 2.0d, targetZ),
+                new Vec3d(targetX, pos.getY() - 1.0d, targetZ)
+        };
+    }
+
+    private static boolean isExpectedCompoundVisibleMarker(
+            net.minecraft.world.BlockView world,
+            String name,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if ("lower".equals(name)) {
+            return SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state);
+        }
+        if ("upper".equals(name)) {
+            return SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state);
+        }
+        if ("merge".equals(name)) {
+            return SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state);
+        }
+        return SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
+    }
+
+    private static String compoundVisibleMarkerName(String name) {
+        if ("lower".equals(name)) {
+            return "COMPOUND_VISIBLE_SIDE_LOWER_SLAB";
+        }
+        if ("upper".equals(name)) {
+            return "COMPOUND_VISIBLE_SIDE_UPPER_SLAB";
+        }
+        if ("merge".equals(name)) {
+            return "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB";
+        }
+        return "COMPOUND_VISIBLE_OWNER_TOP_SLAB";
     }
 
     private static boolean isNamedCompoundVisibleLaneFixture(
@@ -2460,6 +2567,23 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 missing += ",target";
             }
             return missing;
+        }
+
+        String provenSurfaces() {
+            String proven = "";
+            if (dy) {
+                proven = "dy";
+            }
+            if (outline) {
+                proven = proven.isEmpty() ? "outline" : proven + ",outline";
+            }
+            if (raycast) {
+                proven = proven.isEmpty() ? "raycast" : proven + ",raycast";
+            }
+            if (target) {
+                proven = proven.isEmpty() ? "target" : proven + ",target";
+            }
+            return proven.isEmpty() ? "none" : proven;
         }
     }
 
