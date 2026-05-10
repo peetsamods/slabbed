@@ -909,14 +909,16 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         Vec3d end = ray[1];
         BlockHitResult outlineHit = outlineShape.raycast(start, end, pos);
         BlockHitResult raycastHit = raycastShape.raycast(start, end, pos);
-        BlockHitResult worldOutlineTarget = world.raycast(new RaycastContext(
+        BlockHitResult rawWorldOutlineTarget = world.raycast(new RaycastContext(
                 start,
                 end,
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
                 entity));
-        boolean raycastOk = worldOutlineTarget.getType() == HitResult.Type.BLOCK
-                && worldOutlineTarget.getBlockPos().equals(pos);
+        BlockHitResult ownerTarget = SlabSupport.findCompoundVisibleSlabLaneOwnerTarget(world, entity, start, end);
+        boolean raycastOk = ownerTarget != null
+                && ownerTarget.getType() == HitResult.Type.BLOCK
+                && ownerTarget.getBlockPos().equals(pos);
         boolean targetOk = outlineHit != null
                 && outlineHit.getBlockPos().equals(pos)
                 && raycastOk
@@ -937,12 +939,13 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " outlineDy=" + (outlineOk ? "-1.0" : "mismatch")
                 + " directRaycastShapeMinY="
                 + (raycastShape.isEmpty() ? "empty" : Double.toString(raycastShape.getBoundingBox().minY))
-                + " raycastTarget=" + describeHit(worldOutlineTarget)
+                + " rawRaycastTarget=" + describeHit(rawWorldOutlineTarget)
+                + " raycastTarget=" + describeHit(ownerTarget)
                 + " raycastOwnerMatchesVisibleBody=" + raycastOk
                 + " outlineTarget=" + describeHit(outlineHit)
                 + " directRaycastTarget=" + describeHit(raycastHit)
-                + " targetDy=" + (worldOutlineTarget.getType() == HitResult.Type.BLOCK
-                ? dy(world, worldOutlineTarget.getBlockPos(), world.getBlockState(worldOutlineTarget.getBlockPos()))
+                + " targetDy=" + (ownerTarget != null && ownerTarget.getType() == HitResult.Type.BLOCK
+                ? dy(world, ownerTarget.getBlockPos(), world.getBlockState(ownerTarget.getBlockPos()))
                 : "MISS")
                 + " modelDy=not_available_in_this_harness"
                 + " surfaces=dy:" + dyOk
@@ -959,7 +962,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                         + " directRaycastShapeMinY="
                         + (raycastShape.isEmpty() ? "empty" : raycastShape.getBoundingBox().minY)
                         + " outlineTarget=" + describeHit(outlineHit)
-                        + " raycastTarget=" + describeHit(worldOutlineTarget)
+                        + " rawRaycastTarget=" + describeHit(rawWorldOutlineTarget)
+                        + " raycastTarget=" + describeHit(ownerTarget)
                         + " directRaycastTarget=" + describeHit(raycastHit) + "}");
     }
 
