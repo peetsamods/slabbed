@@ -666,6 +666,10 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " raycast=" + proof[0].raycast
                 + " target=" + proof[0].target
                 + " model=false"
+                + " expectedModelDy=-1.0"
+                + " actualModelDy=not_available_in_this_harness"
+                + " proofMethod=noModelHarness"
+                + " modelSurface=PENDING"
                 + " missingSurface=" + missingSurface
                 + " provenSurfaces=" + provenSurfaces
                 + " detail=\"" + proof[0].detail + "\""
@@ -947,13 +951,26 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " targetDy=" + (ownerTarget != null && ownerTarget.getType() == HitResult.Type.BLOCK
                 ? dy(world, ownerTarget.getBlockPos(), world.getBlockState(ownerTarget.getBlockPos()))
                 : "MISS")
-                + " modelDy=not_available_in_this_harness"
+                + " expectedModelDy=-1.0"
+                + " actualModelDy=not_available_in_this_harness"
+                + " proofMethod=noModelHarness"
+                + " modelSurface=PENDING"
                 + " surfaces=dy:" + dyOk
                 + ",outline:" + outlineOk
                 + ",raycast:" + raycastOk
                 + ",target:" + targetOk
                 + ",model:false"
                 + " verdict=" + (caseGreen ? "GREEN_EXCEPT_MODEL" : "RED"));
+        System.out.println("[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_PENDING]"
+                + " caseName=" + name
+                + " pos=" + pos.toShortString()
+                + " state=" + state
+                + " marker=" + markerName
+                + " markerTruth=" + markerTruth
+                + " expectedModelDy=-1.0"
+                + " actualModelDy=not_available_in_this_harness"
+                + " proofMethod=noModelHarness"
+                + " modelSurface=PENDING");
         return new TriadSurface(dyOk, outlineOk, raycastOk, targetOk,
                 name + "{block=" + describeBlock(world, pos, state)
                         + " marker=" + markerName

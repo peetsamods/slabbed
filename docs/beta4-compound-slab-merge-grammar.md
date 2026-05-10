@@ -238,7 +238,10 @@ bottom states must still resolve to `dy=-1.0`, and no checked state may report
 Triad is `PARTIAL`, not release-green: the harness proves dy, outline minY, and
 outline target ownership for the four named states. It does not directly prove
 the model path, and the direct slab raycast shapes are empty in this harness, so
-the marker includes `missingSurface=model,raycast`. Reload remains `PENDING`
+the marker includes `missingSurface=model,raycast`. The live triad harness now
+logs `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_PENDING]` with
+`expectedModelDy=-1.0`, `actualModelDy=not_available_in_this_harness`, and
+`proofMethod=noModelHarness` for each named state. Reload remains `PENDING`
 with `reason=reloadHarnessUnavailable` when attempted from inside the active
 visible-lane gametest context. Immediate placement green is therefore still not
 enough for release.
