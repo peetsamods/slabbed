@@ -52,9 +52,10 @@ public abstract class SlabSupportStateMixin {
      * <p>The fix is two-sided:
      * <ul>
      *   <li><b>Torch outline/raycast</b>: replaced with this 4-pixel-wide post that
-     *       fills the entire native voxel (Y 0–16). After the negative dy offset is
-     *       applied, the comfort shape spans world Y=torchPos.y+dy to torchPos.y.
-     *       This is what the wireframe renderer draws after the rescue retarget.</li>
+     *       matches the torch body (Y 0–10/16). After the negative dy offset is
+     *       applied, the comfort shape spans world Y=torchPos.y+dy to
+     *       torchPos.y+dy+10/16. This is what the wireframe renderer draws after
+     *       the rescue retarget.</li>
      *   <li><b>Slab overlay</b>: when a slab has a lowered floor torch directly above,
      *       this same shape is unioned into the slab's outline (in the slab's voxel
      *       frame, translated by 1+torchDy) so vanilla DDA produces a slab hit at the
@@ -71,7 +72,7 @@ public abstract class SlabSupportStateMixin {
      * same player-trust precedent.
      */
     private static final VoxelShape SLABBED$COMFORT_TORCH_SHAPE =
-            Block.createCuboidShape(6.0, 0.0, 6.0, 10.0, 16.0, 10.0);
+            Block.createCuboidShape(6.0, 0.0, 6.0, 10.0, 10.0, 10.0);
 
     /**
      * Returns true iff {@code state} is a floor torch (TorchBlock, not WallTorchBlock)

@@ -8,7 +8,7 @@ Known failure is no longer minor deferred polish: render/model snap and slab pla
 Current release state: BLOCKED.
 Current candidate status: rejected release candidate.
 
-Beta 3.5 cross-check at `c96e674` / `save/beta35-object-slab-ownership-fix`: the object/slab savepoint is partial, not release-ready. It proves simple torch-vs-slab owner routing only; screenshot-faithful object model/outline/raycast triad proof remains `NEEDS PROOF` and currently classifies as `C. OBJECT_MODEL_OUTLINE_MISMATCH`. This does not reopen `COMPOUND_VISIBLE_SLAB_LANE` or make arbitrary `dy=-1` slab behavior legal.
+Beta 3.5 cross-check: `c96e674` / `save/beta35-object-slab-ownership-fix` was partial because it proved simple torch-vs-slab owner routing only. The follow-up object/slab triad fix selects target law A and keeps the existing support-derived dy while making the lowered floor-torch outline/raycast basis match the visible torch post body. Focused proof now expects owner route `GREEN`, model/outline `GREEN`, raycast `GREEN`, and survival `GREEN`. This does not reopen `COMPOUND_VISIBLE_SLAB_LANE` or make arbitrary broad `dy=-1` slab/object behavior legal.
 
 Decision cross-reference: `docs/beta4-compound-source-mode-design.md` adopts
 A-prime, explicit authored lane/depth source mode for compound ordinary full

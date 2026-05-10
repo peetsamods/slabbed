@@ -222,15 +222,16 @@ This section lists commits classified as `NEEDS PROOF`.
 ## 8. Object/slab ownership stability candidate
 
 - Issue: Julia observed torch/object and slab ownership fighting near slab-supported structures; follow-up screenshots show the old proof was a false-green because it did not prove the visible torch/object triad.
-- Current failure layer: `C. OBJECT_MODEL_OUTLINE_MISMATCH`.
+- Current failure layer: `NONE` after the narrow model/outline shape-basis fix; prior failure was `C. OBJECT_MODEL_OUTLINE_MISMATCH`.
 - Object class in the old proof: floor torch on a bottom slab beside a slab-supported lowered full block.
-- Old proof scope: owner route only. It proves the torch target can win over the slab target and a separate slab-body aim can still resolve to the slab; it does not prove model/outline/raycast co-location.
+- Target law selected: A. The object should inherit the existing support-derived dy for model, outline, and raycast, and the lowered floor-torch outline/raycast basis should match the visible torch post body.
+- Old proof scope: owner route only. It proved the torch target can win over the slab target and a separate slab-body aim can still resolve to the slab; it did not prove model/outline/raycast co-location.
 - Guardrail: no `COMPOUND_VISIBLE_SLAB_LANE` release path was revived, no arbitrary `dy=-1` visible slab lane behavior was broadened, and no release tags were moved.
 - Proof flag: `-Dslabbed.beta35ObjectSlabOwnershipRed=true`.
 - Owner-route markers: `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_FIXTURE_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SLAB_TARGET_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SURVIVAL_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_TRIAD_OWNER_ROUTE_GREEN]`.
-- Screenshot-faithful triad markers: `[JULIA_BETA35_OBJECT_SLAB_TRIAD_FIXTURE_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_TRIAD_MODEL_OUTLINE_RED]`, `[JULIA_BETA35_OBJECT_SLAB_TRIAD_RAYCAST_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_FALSE_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_TRIAD_SUMMARY]`.
-- Latest expected focused result at `c96e674` / `save/beta35-object-slab-ownership-fix`: owner route `GREEN`, screenshot-faithful object triad `RED/PARTIAL`; this savepoint is partial and not release-ready.
-- Beta 3.5 include status: `NEEDS PROOF` until the screenshot-faithful object model/outline/raycast triad passes.
+- Screenshot-faithful triad markers: `[JULIA_BETA35_OBJECT_SLAB_TRIAD_FIXTURE_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_TRIAD_MODEL_OUTLINE_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_TRIAD_RAYCAST_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SUMMARY]`, `[JULIA_BETA35_OBJECT_SLAB_TRIAD_SUMMARY]`.
+- Latest expected focused result after the narrow fix: owner route `GREEN`, model/outline `GREEN`, raycast `GREEN`, survival `GREEN`, screenshot-faithful object triad `GREEN`.
+- Beta 3.5 include status: `INCLUDE` for this narrow object/slab triad fix after compile, focused proof, default client gametest, beta4 diagnostics, and diff-check pass.
 - Cherry-pick only `INCLUDE` commits one at a time.
 - Run compile and targeted gametest checks after each pick.
 - Exclude all `COMPOUND_VISIBLE` and `dy=-1` visible lane work from this branch.
