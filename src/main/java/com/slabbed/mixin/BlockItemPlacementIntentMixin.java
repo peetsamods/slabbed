@@ -42,6 +42,8 @@ public abstract class BlockItemPlacementIntentMixin {
             new ThreadLocal<>();
     private static final ThreadLocal<CompoundVisibleSideDoubleIntent> COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT =
             new ThreadLocal<>();
+    private static final ThreadLocal<CompoundVisibleOwnerTopIntent> COMPOUND_VISIBLE_OWNER_TOP_INTENT =
+            new ThreadLocal<>();
 
     private record CompoundVisibleSideLowerIntent(BlockPos sourcePos, BlockPos candidatePos) {
     }
@@ -50,6 +52,9 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private record CompoundVisibleSideDoubleIntent(BlockPos sourcePos, BlockPos candidatePos) {
+    }
+
+    private record CompoundVisibleOwnerTopIntent(BlockPos sourcePos, BlockPos candidatePos) {
     }
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(ItemUsageContext context, BlockPos pos, BlockState state) {
@@ -109,17 +114,8 @@ public abstract class BlockItemPlacementIntentMixin {
                 || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
             return false;
         }
-        BlockPos sourcePos = placePos.down();
-        BlockState sourceState = context.getWorld().getBlockState(sourcePos);
-        SlabSupport.CompoundSlabRemapDecision decision = SlabSupport.findLegalCompoundSlabRemap(
-                context.getWorld(),
-                sourcePos,
-                sourceState,
-                Direction.UP,
-                context.getHitPos());
-        return decision.legal()
-                && "COMPOUND_VISIBLE_OWNER_TOP_SLAB".equals(decision.reason())
-                && placePos.equals(decision.candidatePlacementPos());
+        CompoundVisibleOwnerTopIntent intent = COMPOUND_VISIBLE_OWNER_TOP_INTENT.get();
+        return intent != null && placePos.equals(intent.candidatePos());
     }
 
     private static boolean slabbed$isCompoundVisibleSideLowerSlabResult(
@@ -463,6 +459,7 @@ public abstract class BlockItemPlacementIntentMixin {
         COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
         COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
         COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
+        COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
         boolean itemIsSlab = ((BlockItem) (Object) this).getBlock() instanceof SlabBlock;
         if (!itemIsSlab) {
             slabbed$recordRemapAttempt(
@@ -492,6 +489,35 @@ public abstract class BlockItemPlacementIntentMixin {
         slabbed$traceRepeatPlacementContext("placement-context", context, context,
                 "initial targetState=" + targetState
                         + " targetDy=" + SlabSupport.getYOffset(context.getWorld(), targetPos, targetState));
+        if (slabbed$isCompoundTopHit(context, targetPos, targetState)) {
+            SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
+                    context.getWorld(),
+                    targetPos,
+                    targetState,
+                    originalSide,
+                    originalHitPos);
+            if (remapDecision.legal()
+                    && "COMPOUND_VISIBLE_OWNER_TOP_SLAB".equals(remapDecision.reason())) {
+                COMPOUND_VISIBLE_OWNER_TOP_INTENT.set(new CompoundVisibleOwnerTopIntent(
+                        remapDecision.sourcePos(),
+                        remapDecision.candidatePlacementPos()));
+                slabbed$recordRemapAttempt(
+                        context,
+                        true,
+                        false,
+                        true,
+                        false,
+                        false,
+                        SlabSupport.getYOffset(context.getWorld(), targetPos, targetState),
+                        true,
+                        true,
+                        remapDecision.reason(),
+                        originalHitPos,
+                        originalSide,
+                        "compound_visible_owner_top_slab");
+            }
+            return slabbed$inspectReturn(context, context, "compound_visible_owner_top_slab");
+        }
         if (slabbed$isCompoundSideHit(context, targetPos, targetState)) {
             SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
                     context.getWorld(),
@@ -878,25 +904,37 @@ public abstract class BlockItemPlacementIntentMixin {
                         false,
                         "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB");
             } else if (slabbed$isCompoundVisibleOwnerTopSlabResult(context, placePos, placedState)) {
+                BlockPos sourcePos = placePos.down();
+                BlockState sourceState = world.getBlockState(sourcePos);
+                boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, placePos,
+                        placedState);
+                SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(world, placePos, placedState, sourcePos,
+                        sourceState);
+                boolean markerAfter = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, placePos,
+                        placedState);
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
                         Registries.ITEM.getId(self),
                         true,
                         context,
                         cir.getReturnValue(),
-                        "anchorFinalization=skipped_compound_visible_owner_top_slab");
+                        "anchorFinalization=ran_compound_visible_owner_top_slab markerBefore="
+                                + markerBefore
+                                + " markerAfter=" + markerAfter
+                                + " sourcePos=" + sourcePos.toShortString()
+                                + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
                 RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
                         Registries.ITEM.getId(self),
                         true,
                         context,
                         cir.getReturnValue(),
-                        "skipped_compound_visible_owner_top_slab",
-                        placePos.down(),
-                        SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
-                        SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
-                        SlabAnchorAttachment.isAnchored(world, placePos),
-                        SlabAnchorAttachment.isAnchored(world, placePos),
+                        "ran_compound_visible_owner_top_slab",
+                        sourcePos,
+                        markerBefore,
+                        markerAfter,
+                        false,
+                        false,
                         "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
             } else if (slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
                 boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
@@ -950,6 +988,7 @@ public abstract class BlockItemPlacementIntentMixin {
             COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
             COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
             COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
+            COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
             return;
         }
 
