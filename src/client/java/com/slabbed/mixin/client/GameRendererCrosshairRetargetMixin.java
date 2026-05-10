@@ -88,6 +88,12 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
         HitResult initialTarget = ht;
         boolean slabHeld = slabbed$isSlabPlacementIntent();
+        BlockHitResult objectOwner = slabbed$retargetLoweredObjectShapeOwner(tickProgress, ht);
+        if (objectOwner != null) {
+            client.crosshairTarget = objectOwner;
+            slabbed$traceTargeting(tickProgress, initialTarget, "object-shape-owner-preserve", false);
+            return;
+        }
 
         // Slab-held intent guard: when vanilla's initial crosshair already
         // sits on an intended placement target (anchored/lowered full-block
@@ -353,6 +359,63 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
     private static boolean slabbed$isDistinctOwner(BlockHitResult initialHit, BlockHitResult candidate) {
         return candidate != null && !candidate.getBlockPos().equals(initialHit.getBlockPos());
+    }
+
+    private BlockHitResult slabbed$retargetLoweredObjectShapeOwner(float tickProgress, HitResult currentHit) {
+        if (!(currentHit instanceof BlockHitResult blockHit) || currentHit.getType() != HitResult.Type.BLOCK) {
+            return null;
+        }
+
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return null;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d currentPos = blockHit.getPos();
+        Vec3d dir = currentPos.subtract(eye);
+        double currentDist = dir.length();
+        if (currentDist <= 0.0d) {
+            return null;
+        }
+        Vec3d end = eye.add(dir.normalize().multiply(currentDist + 0.5d));
+        double currentDist2 = currentPos.squaredDistanceTo(eye);
+
+        BlockPos initialPos = blockHit.getBlockPos();
+        BlockHitResult directHit = slabbed$raycastLoweredObjectShapeOwner(
+                world, cam, eye, end, initialPos, currentDist2);
+        if (directHit != null) {
+            return directHit;
+        }
+
+        return slabbed$raycastLoweredObjectShapeOwner(
+                world, cam, eye, end, initialPos.up(), currentDist2);
+    }
+
+    private static BlockHitResult slabbed$raycastLoweredObjectShapeOwner(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos, double currentDist2
+    ) {
+        BlockState state = world.getBlockState(pos);
+        if (!slabbed$isLoweredObjectShapeOwner(world, pos, state)) {
+            return null;
+        }
+
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        if (outline == null || outline.isEmpty()) {
+            return null;
+        }
+        BlockHitResult hit = outline.raycast(eye, end, pos);
+        if (hit == null) {
+            return null;
+        }
+        return hit.getPos().squaredDistanceTo(eye) <= currentDist2 + 1.0e-6d ? hit : null;
+    }
+
+    private static boolean slabbed$isLoweredObjectShapeOwner(ClientWorld world, BlockPos pos, BlockState state) {
+        return SlabSupport.isLoweredTorchVisual(world, pos, state)
+                || SlabSupport.isLoweredBlockEntityVisual(world, pos, state)
+                || SlabSupport.isLoweredBedVisual(world, pos, state);
     }
 
     private String slabbed$classifyLiveFirstSeamOwner(BlockHitResult hit) {
