@@ -33,6 +33,11 @@ public final class LoweredSideSlabRetargeter {
             return null;
         }
         dir = dir.normalize();
+        BlockHitResult compoundVisibleOwner =
+                SlabSupport.findCompoundVisibleSlabLaneOwnerTarget(world, cam, eye, end);
+        if (compoundVisibleOwner != null) {
+            return compoundVisibleOwner;
+        }
         double currentDist2 = Double.POSITIVE_INFINITY;
             if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
                 currentDist2 = currentHit.getPos().squaredDistanceTo(eye);

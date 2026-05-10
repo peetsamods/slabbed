@@ -34,10 +34,14 @@ import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.block.ShapeContext;
+import net.minecraft.entity.Entity;
 import net.minecraft.state.property.Properties;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.WorldView;
 
@@ -1105,6 +1109,73 @@ public final class SlabSupport {
         }
         // compound dy (-1.0) also qualifies: torch above an adjacent-lowered bottom slab
         return getYOffset(world, pos, state) < 0.0;
+    }
+
+    public static boolean isCompoundVisibleSlabLaneOwner(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        if (getYOffset(world, pos, state) != -1.0d) {
+            return false;
+        }
+        return SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
+    }
+
+    public static BlockHitResult findCompoundVisibleSlabLaneOwnerTarget(
+            BlockView world, Entity entity, Vec3d eye, Vec3d end
+    ) {
+        if (world == null || eye == null || end == null) {
+            return null;
+        }
+        Vec3d ray = end.subtract(eye);
+        double reach = ray.length();
+        if (reach <= 0.0d) {
+            return null;
+        }
+        Vec3d dir = ray.normalize();
+        int steps = Math.max(16, (int) Math.ceil(reach / 0.05d));
+
+        BlockHitResult best = null;
+        double bestDist2 = Double.POSITIVE_INFINITY;
+        double maxDist2 = reach * reach + 1.0e-6d;
+        for (int i = 1; i <= steps; i++) {
+            double t = reach * i / steps;
+            Vec3d sample = eye.add(dir.multiply(t));
+            BlockPos samplePos = BlockPos.ofFloored(sample);
+
+            BlockHitResult candidate = raycastCompoundVisibleSlabLaneOwner(world, entity, eye, end, samplePos);
+            if (candidate != null && candidate.getPos().squaredDistanceTo(eye) <= maxDist2
+                    && candidate.getPos().squaredDistanceTo(eye) < bestDist2 - 1.0e-6d) {
+                best = candidate;
+                bestDist2 = candidate.getPos().squaredDistanceTo(eye);
+            }
+
+            candidate = raycastCompoundVisibleSlabLaneOwner(world, entity, eye, end, samplePos.up());
+            if (candidate != null && candidate.getPos().squaredDistanceTo(eye) <= maxDist2
+                    && candidate.getPos().squaredDistanceTo(eye) < bestDist2 - 1.0e-6d) {
+                best = candidate;
+                bestDist2 = candidate.getPos().squaredDistanceTo(eye);
+            }
+        }
+        return best;
+    }
+
+    private static BlockHitResult raycastCompoundVisibleSlabLaneOwner(
+            BlockView world, Entity entity, Vec3d eye, Vec3d end, BlockPos pos
+    ) {
+        BlockState state = world.getBlockState(pos);
+        if (!isCompoundVisibleSlabLaneOwner(world, pos, state)) {
+            return null;
+        }
+        ShapeContext context = entity == null ? ShapeContext.absent() : ShapeContext.of(entity);
+        VoxelShape outline = state.getOutlineShape(world, pos, context);
+        if (outline == null || outline.isEmpty()) {
+            return null;
+        }
+        return outline.raycast(eye, end, pos);
     }
 
     public static boolean isLoweredBedVisual(BlockView world, BlockPos pos, BlockState state) {
