@@ -57,6 +57,10 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientAnchorLookup = null;
     public static Predicate<BlockPos> clientLoweredSlabCarrierLookup = null;
     public static Predicate<BlockPos> clientCompoundFullBlockAnchorLookup = null;
+    public static Predicate<BlockPos> clientCompoundVisibleSideLowerSlabLookup = null;
+    public static Predicate<BlockPos> clientCompoundVisibleSideUpperSlabLookup = null;
+    public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
+    public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
 
     private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
@@ -504,7 +508,8 @@ public final class SlabAnchorAttachment {
             return false;
         }
         if (!(world instanceof World w)) {
-            return false;
+            return clientCompoundVisibleSideLowerSlabLookup != null
+                    && clientCompoundVisibleSideLowerSlabLookup.test(pos);
         }
         WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
@@ -524,7 +529,8 @@ public final class SlabAnchorAttachment {
             return false;
         }
         if (!(world instanceof World w)) {
-            return false;
+            return clientCompoundVisibleSideUpperSlabLookup != null
+                    && clientCompoundVisibleSideUpperSlabLookup.test(pos);
         }
         WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
@@ -544,7 +550,8 @@ public final class SlabAnchorAttachment {
             return false;
         }
         if (!(world instanceof World w)) {
-            return false;
+            return clientCompoundVisibleSideDoubleSlabLookup != null
+                    && clientCompoundVisibleSideDoubleSlabLookup.test(pos);
         }
         WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
@@ -564,7 +571,8 @@ public final class SlabAnchorAttachment {
             return false;
         }
         if (!(world instanceof World w)) {
-            return false;
+            return clientCompoundVisibleOwnerTopSlabLookup != null
+                    && clientCompoundVisibleOwnerTopSlabLookup.test(pos);
         }
         WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
