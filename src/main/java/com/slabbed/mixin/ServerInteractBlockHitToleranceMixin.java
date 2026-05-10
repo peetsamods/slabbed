@@ -2,6 +2,7 @@ package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.util.Beta4ManualLiveTrace;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.Block;
@@ -106,14 +107,37 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             slabbed$logRepeatMergeTolerance(pos, packet, center, loweredSameCellSlabMergeCenter);
         }
         if (loweredSameCellSlabMergeCenter != null) {
+            Beta4ManualLiveTrace.logServerTolerance(
+                    player.getEntityWorld(),
+                    packet.getBlockHitResult(),
+                    player.getStackInHand(packet.getHand()),
+                    center,
+                    loweredSameCellSlabMergeCenter,
+                    "LOWERED_SAME_CELL_SLAB_MERGE");
             return loweredSameCellSlabMergeCenter;
         }
         if (!(blockPos instanceof BlockPos pos)
                 || player == null
                 || packet == null
                 || !slabbed$isLegalCompoundFullBlockVisualHit(pos, packet)) {
+            if (blockPos instanceof BlockPos rawPos && player != null && packet != null) {
+                Beta4ManualLiveTrace.logServerTolerance(
+                        player.getEntityWorld(),
+                        packet.getBlockHitResult(),
+                        player.getStackInHand(packet.getHand()),
+                        center,
+                        center,
+                        "leave_packet_unchanged");
+            }
             return center;
         }
+        Beta4ManualLiveTrace.logServerTolerance(
+                player.getEntityWorld(),
+                packet.getBlockHitResult(),
+                player.getStackInHand(packet.getHand()),
+                center,
+                center.add(0.0d, COMPOUND_DY, 0.0d),
+                "compound_full_block_visual_hit");
         return center.add(0.0d, COMPOUND_DY, 0.0d);
     }
 
