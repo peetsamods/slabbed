@@ -2,11 +2,16 @@
 
 ## Status
 
-**Floor torch player-like placement/anchoring is GREEN.**
+**Floor torch player-like placement is GREEN, but live visual anchoring is NOT ACCEPTED.**
 
-**Beta 3.5 release prep remains PAUSED** until Julia decides whether
-`floor_torch_only` is enough scope or whether wall torches, lanterns, signs, or
-chains must be included.
+Julia manually live-tested after `0f08624` /
+`save/beta35-floor-torch-player-placement` and reported: "I'm not seeing how
+this is better." Screenshots show torches still appear visually floating or not
+convincingly anchored to the slab-supported surface.
+
+**Beta 3.5 release prep remains PAUSED.** The current blocker is floor torch
+visual/support contact, not placement permission. Do not claim
+`floor_torch_only` release scope accepted.
 
 ## GREEN proof added after RED/proof-gap savepoint
 
@@ -38,6 +43,11 @@ The focused proof records:
 - Model, outline, and raycast bounds co-located:
   `min=(49.375,201.000,0.375),max=(49.625,201.625,0.625)`.
 
+This GREEN proof does **not** prove Julia's manual visual acceptance. It proves
+the player item-use path can place a floor torch and that model/outline/raycast
+co-locate. It does not prove that the co-located triad is sitting on the
+player-expected visible support surface in Julia's live structure.
+
 Category scope remains explicit:
 
 - `floor_torch`: GREEN.
@@ -45,6 +55,40 @@ Category scope remains explicit:
 - `lantern`: NOT_COVERED.
 - `signs`: NOT_COVERED.
 - `chains`: NOT_COVERED.
+
+## Visual contact audit after Julia manual rejection
+
+Gated by `-Dslabbed.beta35FloorTorchVisualContactRed=true` in
+`SlabbedLabLoweredSidePlacementLiveReproClientGameTest`.
+
+The audit measures visible support contact instead of only triad co-location:
+
+```
+[JULIA_BETA35_FLOOR_TORCH_CONTACT_GAP_MEASURED]
+[JULIA_BETA35_FLOOR_TORCH_VISUAL_CONTACT_PENDING]
+[JULIA_BETA35_FLOOR_TORCH_VISUAL_SUMMARY]
+```
+
+Current controlled-fixture measurement:
+
+- `supportPos=49,201,0`
+- `supportState=stone_slab[type=bottom]`
+- `supportDy=-0.500`
+- `supportVisibleTopY=201.000000`
+- `torchPos=49,202,0`
+- `torchDy=-1.000`
+- `torchModelBottomY=201.000000`
+- `torchModelTopY=201.625000`
+- `contactGap=0.000000`
+- `contactGapAcceptable=true`
+- `triad=GREEN`
+- `visualContactProofStatus=PENDING`
+- `failureLayer=FIXTURE_MISMATCH`
+
+Classification: the controlled fixture reports zero model/support contact gap,
+so this slice does not prove a tiny safe gameplay fix. Julia's live visual
+verdict remains NOT ACCEPTED because the screenshot/live structure has not been
+proven equivalent to the controlled fixture.
 
 ## Live failure
 
@@ -136,16 +180,18 @@ Evidence: `tmp/beta35-floor-torch-player-placement-green-97ff495/`
 
 ## Release status
 
-Beta 3.5 release prep is **PAUSED** pending Julia's scope decision:
+Beta 3.5 release prep is **PAUSED** due to Julia's manual visual anchoring
+rejection:
 
-1. Julia decides whether floor-torch-only scope is enough for Beta 3.5.
-2. If Julia expands scope, separate wall torch, lantern, sign, or chain proofs
-   must be added in later slices.
-3. A final release audit only after Julia authorizes release prep.
+1. Floor torch placement permission is GREEN.
+2. Floor torch visual/support contact is the active blocker.
+3. If Julia expands scope later, separate wall torch, lantern, sign, or chain
+   proofs must be added in later slices.
+4. A final release audit only after Julia authorizes release prep.
 
 The object-triad fix remains **triad-include-ready** (`beta35IncludeStatus=INCLUDE`
 on the `TRIAD_SUMMARY` marker). Do not confuse triad-include-ready with
-placement-proven or release-ready.
+placement-proven, visual-accepted, or release-ready.
 
 No release tag was moved.
 
