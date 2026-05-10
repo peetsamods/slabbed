@@ -439,6 +439,27 @@ public final class SlabSupport {
                     CompoundSlabRemapDecision.rejected(sourcePos, null, null, "direction_not_horizontal"));
         }
 
+        BlockPos intendedLanePos = sourcePos.offset(intendedDirection);
+        if (isCompoundVisibleSideLowerHit(world, sourcePos, sourceState, hitPos)) {
+            BlockState candidateState = world.getBlockState(intendedLanePos);
+            if (!candidateState.isAir()) {
+                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                        CompoundSlabRemapDecision.rejected(
+                        sourcePos,
+                        sourcePos,
+                        intendedLanePos,
+                        "compound_visible_side_lower_candidate_not_air"));
+            }
+            return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                    new CompoundSlabRemapDecision(
+                    true,
+                    sourcePos,
+                    sourcePos,
+                    intendedLanePos,
+                    SlabType.BOTTOM,
+                    "COMPOUND_VISIBLE_SIDE_LOWER_SLAB"));
+        }
+
         int legalLaneCount = 0;
         BlockPos legalLanePos = null;
         BlockState legalLaneState = null;
@@ -452,7 +473,6 @@ public final class SlabSupport {
             }
         }
 
-        BlockPos intendedLanePos = sourcePos.offset(intendedDirection);
         if (legalLaneCount == 1 && intendedLanePos.equals(legalLanePos)) {
             BlockPos candidatePlacementPos = legalLanePos.offset(intendedDirection);
             BlockState candidateState = world.getBlockState(candidatePlacementPos);
@@ -541,6 +561,20 @@ public final class SlabSupport {
             return SlabType.TOP;
         }
         return SlabType.BOTTOM;
+    }
+
+    private static boolean isCompoundVisibleSideLowerHit(
+            BlockView world,
+            BlockPos sourcePos,
+            BlockState sourceState,
+            Vec3d hitPos
+    ) {
+        if (world == null || sourcePos == null || sourceState == null || hitPos == null) {
+            return false;
+        }
+        double sourceDy = getYOffset(world, sourcePos, sourceState);
+        double localVisibleY = hitPos.y - (sourcePos.getY() + sourceDy);
+        return localVisibleY >= -1.0e-6d && localVisibleY < 0.5d - 1.0e-6d;
     }
 
     private static boolean isPersistentVisibleCompoundOwner(BlockView world, BlockPos pos, BlockState state) {
@@ -823,6 +857,9 @@ public final class SlabSupport {
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
+            if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)) {
+                return -1.0;
+            }
             if (state.contains(SlabBlock.TYPE)
                     && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && isBottomPersistentTracePos(pos)) {
