@@ -68,19 +68,19 @@ The object triad is complete. Do not reopen it.
 
 ## Release status
 
-The object triad fix is **triad-include-ready** (targeting, model, outline, raycast co-location proven for a controlled pre-placed fixture). It is **not** proven for player-facing item placement.
+The object triad fix is **triad-include-ready** (targeting, model, outline, raycast co-location proven for a controlled pre-placed fixture). The floor torch player-facing placement path is also GREEN in the gated proof, with category scope limited to `floor_torch_only`.
 
-Beta 3.5 release is **PAUSED/BLOCKED** by Julia's manual live item anchoring failure (MC 1.21.11, HEAD `4f63abe`). Julia's report: "Wait we didn't fix the items anchoring to slabs." Torches and items float or fail to anchor on slab-supported geometry in player-facing use. The object-triad proof did not cover this scenario.
+Beta 3.5 release prep remains **PAUSED** after the original floor torch placement proof gap until Julia decides whether the floor-torch-only GREEN proof is enough scope.
 
-The live item anchoring RED proof is at HEAD `4f63abe` / `save/beta35-live-item-anchoring-red`, gated by `-Dslabbed.beta35LiveItemAnchoringRed=true`. Markers emit `juliaLiveResult=RED failureLayer=PROOF_GAP`. See `docs/beta35-live-item-anchoring-red.md`.
+The gated floor torch player-placement proof uses `-Dslabbed.beta35LiveItemAnchoringRed=true`. Markers emit placement GREEN, survival GREEN, triad GREEN, and summary `failureLayer=NONE` with `itemCategory=floor_torch` and `categoryScope=floor_torch_only`. See `docs/beta35-live-item-anchoring-red.md`.
 
-Do not conflate the triad blocker (resolved) with the live placement blocker (current).
+Do not conflate the triad proof with broader category scope. Wall torch, lanterns, signs, and chains remain not covered.
 
 ## Next recommended action
 
 1. Do not touch the object triad. It is triad-proven.
-2. Implement the player-facing item placement/anchoring fix after the RED proof classification is clear. Do not release without a GREEN placement proof.
-3. When the live item anchoring is GREEN, perform a final release audit from the integration lineage — do not restart from the old beta.2 baseline.
+2. Keep the current GREEN proof scoped to floor torch only.
+3. Resume release audit only if Julia decides floor-torch-only is enough scope for Beta 3.5.
 4. When cutting the Beta 3.5 release branch, use option 1 or 2 from the valid path above, never the invalid cherry-pick-onto-d1417ff path.
 
 ## See also
