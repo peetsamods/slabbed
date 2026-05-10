@@ -13,6 +13,16 @@ slab merge/remap grammar lives in
 `docs/beta4-compound-slab-merge-grammar.md`. This audit remains a design/proof
 record; it does not mark implementation complete.
 
+Manual delayed trace correction at `d7ef534`: the previous
+`COMPOUND_VISIBLE_OWNER_TOP_SLAB` `dy=0.0` result is visually invalid. For a
+compound full block at block position Y with `dy=-1.0`, the visible full block
+spans Y-1.0 to Y, so a top-face `stone_slab[type=bottom]` at `source.up()` must
+use `dy=-1.0` to sit on the visible top. The previous `dy=-0.5` side placement
+result only represents the upper half of the compound full block; it cannot
+satisfy lower-half side placement. Current implementation is RED/PENDING
+against the corrected `COMPOUND_VISIBLE_SLAB_LANE` product law until RED proofs
+exist for lower, upper, merge, top, support-missing, triad, and reload states.
+
 Update at `fae6d25`: Julia's screenshot-shape manual live test found an
 uncovered topology after the internal compound slab Row 3 proof went GREEN.
 The internal proof row covers a narrow artificial same-Y remap path; it does
@@ -176,14 +186,14 @@ Server-side tolerance now marks the packet as that legal class, the server direc
 finalization marker reports `setBlockStateDurable=YES`, and server/client ticks
 1, 5, and 20 all report `stone_slab[type=double] dy=-0.5`.
 
-`repeatPlacement=GREEN` and `sequenceLowerResult=GREEN`; the remaining top-face
-blocker is now GREEN in the canonical real-crosshair goblin sequence. The top
-step targets the visible compound owner `UP` face, places exactly at
-`source.up()` as `stone_slab[type=bottom] dy=0.0`, keeps
-`persistentLoweredSlabCarrier=false`, and reports `ghost=false`,
-`wrongDelta=false`, and `releaseBlockers=none`. Client prediction is still not
-server/final proof, the `dy=-1.0` slab lane remains illegal, and release remains
-blocked until Julia manual live retest passes.
+`repeatPlacement=GREEN` and `sequenceLowerResult=GREEN` were historical
+successes under the old lane model. The later `d7ef534` manual delayed trace
+supersedes that release confidence: the old top step landed at `source.up()` as
+`stone_slab[type=bottom] dy=0.0`, which is now classified as visually invalid
+for the compound visible owner. Client prediction is still not server/final
+proof, arbitrary `dy=-1.0` slab lanes remain illegal, and release remains
+blocked until the named compound visible slab lane states have RED proofs and a
+future implementation/proof cycle.
 
 Automated canonical live-shape goblin harness marker set:
 `[JULIA_BETA4_LIVE_GOBLIN_START]`,
@@ -612,15 +622,14 @@ screenshot side-shape without changing placement behavior:
 | --- | --- | --- | --- | --- | --- | --- |
 | Rows 1/2 compound below-lane side slab placement | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell | GREEN; immediate side slab at `dy=-0.5` |
 | Internal Row 3 legal remap | ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | legal bottom slab, `dy=-0.5` | `1` | continuation beyond horizontal lane | author lowered slab; GREEN |
-| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell for side, `source.up()` for top | lower/upper side slab GREEN; top-face GREEN as `COMPOUND_VISIBLE_OWNER_TOP_SLAB` at `dy=0.0` |
+| Julia screenshot side shape | upper ordinary compound stone, `dy=-1.0` | bottom slab, `dy=-0.5` | air in intended direction | `0` | immediate side cell for side, `source.up()` for top | superseded by manual delayed trace; corrected law expects named compound visible slab lane states at `dy=-1.0` |
 
 The audit rejects "lowered bottom slab directly below the source" as a safe
 predicate: it is shared by Julia's screenshot side-shape and Row 1 no-legal-lane
-safe rejection. Product law now intentionally accepts that shared surface rather
-than trying to keep Rows 1/2 rejected while allowing the screenshot shape. The
-existing horizontal legal-lane continuation used by Row 3 remains a separate
-GREEN artificial proof. The top-face path is now proven as
-`COMPOUND_VISIBLE_OWNER_TOP_SLAB`; no full manual live acceptance is claimed.
+safe rejection. Product law now intentionally accepts that shared surface, but
+after the `d7ef534` manual delayed trace it must be accepted as the bounded
+compound visible slab lane at `dy=-1.0`, not as the earlier `dy=-0.5` side lane
+or `dy=0.0` top-face result. No full manual live acceptance is claimed.
 
 ### Compound matrix closure
 
