@@ -48,25 +48,39 @@ Evidence folder: `tmp/support-anchor-object-triad-audit-9c90c23/`
 
 ## Classification
 
-- **Failure layer: beta35 inclusion mismatch**
+- **Failure layer: beta35 inclusion mismatch** (for cherry-pick; not a functional code bug)
 - The fix (c96e674 + 6cb28bb + 274b286) is functionally correct on the integration branch — all triad markers are GREEN.
 - Model, outline, and raycast agree: all share identical bounds `min=(49.375,201.000,0.375),max=(49.625,201.625,0.625)`.
 - Support-anchor truth exists: torch at `dy=-1.000`, slab carrier at `dy=-0.500`, support at `dy=0.000`.
 - Support-anchor gap/offset measured: `objectDy=-1.000`, `slabDy=-0.500`; gap = 0.5. All agree.
-- Beta35 include status: **INCLUDE** (confirmed by `TRIAD_SUMMARY`).
+- Beta35 triad include status: **INCLUDE** (confirmed by `TRIAD_SUMMARY`). **This is triad-only; it does not prove player-facing item placement.**
 - Cherry-pick onto old `release/0.2.0-beta.2` (d1417ff) fails due to divergent context in SLABBED_SPINE.md, docs/beta35-salvage-audit.md, GameRendererCrosshairRetargetMixin.java, and SlabbedLabLoweredSidePlacementLiveReproClientGameTest.java — not a functional code bug.
-- Release remains blocked (separate Beta4 issue, not this triad fix).
+- Release remains **BLOCKED** by Julia's manual live item anchoring failure at `4f63abe` (see below).
 - Video evidence: not recorded/provided.
+
+## Live item anchoring failure (added at 4f63abe)
+
+Julia's manual live test (MC 1.21.11) at HEAD `4f63abe` / `save/beta35-object-triad-inclusion-strategy` shows torches and items floating or failing to anchor on slab-supported geometry. Julia's report: "Wait we didn't fix the items anchoring to slabs."
+
+The proof at this savepoint (`proofScope=OWNER_ROUTE_ONLY_SIMPLE_ROUTING`) only proved owner-route targeting, model/outline/raycast co-location for a pre-placed fixture. It did not prove:
+- player-initiated item placement onto slab-supported faces
+- anchor-dy correctness at the moment of player placement
+- survival through real neighbor-update pulses from player actions
+- coverage beyond floor torch
+
+The live item anchoring RED proof added at `4f63abe` (`-Dslabbed.beta35LiveItemAnchoringRed=true`) emits `juliaLiveResult=RED failureLayer=PROOF_GAP`. The controlled fixture passes (setBlockState-level placement canPlaceAt=true, torchDy=-1.000, survival=GREEN), but the player item-use path and networking layer are not covered. Classification: `PENDING_RELEASE_BLOCKING`.
 
 ## Recommendation
 
-- **integration branch proof: GREEN** / **cherry-pick into beta.2 baseline: blocked by conflicts**
+- **integration branch triad proof: GREEN** / **cherry-pick into beta.2 baseline: blocked by conflicts** / **release: PAUSED pending live item anchoring fix**
 
 ## Next slice
 
-- Resolve cherry-pick conflicts manually or create a fresh `release/0.2.0-beta.3.5` branch that applies prerequisite commits before c96e674 + 6cb28bb + 274b286.
+- Implement player-facing item placement/anchoring fix (not release prep).
+- Add GREEN proof under `-Dslabbed.beta35LiveItemAnchoringRed=true` only after the fix is implemented and live-tested.
 - Do not re-cherry-pick without resolving the four conflicting files first.
 
 ## See also
 
-- `docs/beta35-inclusion-strategy.md` — inclusion decision, invalid path classification, and valid release path (created at `save/beta35-object-triad-inclusion-strategy`)
+- `docs/beta35-inclusion-strategy.md` — inclusion decision, invalid path classification, and valid release path (updated at `4f63abe`)
+- `docs/beta35-live-item-anchoring-red.md` — live item anchoring RED proof details

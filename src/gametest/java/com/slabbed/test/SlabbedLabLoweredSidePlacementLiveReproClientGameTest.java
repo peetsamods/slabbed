@@ -174,6 +174,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35LiveItemAnchoringRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35LiveItemAnchoringRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35ObjectSlabOwnershipRed")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -7252,5 +7261,197 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             }
         });
         ctx.waitTick();
+    }
+
+    /**
+     * Beta 3.5 live item anchoring RED proof.
+     *
+     * <p>Gated by {@code -Dslabbed.beta35LiveItemAnchoringRed=true}.
+     *
+     * <p>Julia's manual live test (MC 1.21.11) shows torches and items floating or
+     * failing to anchor on slab-supported geometry. The prior Beta 3.5 triad proof
+     * ({@code JULIA_BETA35_OBJECT_SLAB_TRIAD_SUMMARY}) proved only owner-route
+     * targeting and model/outline/raycast co-location for a pre-placed controlled
+     * fixture ({@code proofScope=OWNER_ROUTE_ONLY_SIMPLE_ROUTING},
+     * {@code screenshotFaithfulTriad=NOT_PROVEN}). It did not prove:
+     * <ul>
+     *   <li>player-initiated item placement onto slab-supported faces</li>
+     *   <li>anchor-dy correctness at the moment of placement</li>
+     *   <li>survival through real neighbor-update pulses</li>
+     *   <li>coverage beyond floor torch (wall_torch, lantern, sign, etc.)</li>
+     * </ul>
+     *
+     * <p>The SUMMARY marker deliberately emits RED ({@code juliaLiveResult=RED})
+     * regardless of whether the controlled fixture placement passes, because the
+     * live screenshot proves a player-facing failure the fixture does not reproduce.
+     * {@code failureLayer} is set to {@code PROOF_GAP} when the fixture itself
+     * passes; a more specific layer ({@code PLACEMENT}, {@code ANCHOR_DY},
+     * {@code SURVIVAL}) is used when the fixture directly exposes the defect.
+     */
+    private static void runBeta35LiveItemAnchoringRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        // Fixture geometry mirrors the existing triad proof but WITHOUT the torch
+        // pre-placed, so placement is tested rather than assumed.
+        final BlockPos supportPos = SUPPORT_POS.add(48, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos slabPos = fullPos.east();
+        final BlockPos torchPos = slabPos.up();
+
+        // Phase 1: build slab-supported geometry; leave torchPos as air.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+
+        // Phase 2: placement predicate + simulated placement on server.
+        final boolean[] canPlaceAtResult = {false};
+        final boolean[] placementAccepted = {false};
+        final boolean[] torchPresentAfterPlace = {false};
+        final double[] torchDyAfterPlace = {Double.NaN};
+        final double[] slabDyResult = {Double.NaN};
+        final boolean[] slabIsLowered = {false};
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState slabState = world.getBlockState(slabPos);
+            BlockState torchDefault = Blocks.TORCH.getDefaultState();
+
+            double slabDy = SlabSupport.getYOffset(world, slabPos, slabState);
+            slabDyResult[0] = slabDy;
+            slabIsLowered[0] = Math.abs(slabDy - (-0.5)) < EPSILON;
+
+            canPlaceAtResult[0] = torchDefault.canPlaceAt(world, torchPos);
+
+            System.out.println("[JULIA_BETA35_LIVE_ITEM_ANCHORING_FIXTURE_GREEN]"
+                    + " supportPos=" + supportPos.toShortString()
+                    + " slabPos=" + slabPos.toShortString()
+                    + " torchPos=" + torchPos.toShortString()
+                    + " slabState=" + slabState
+                    + " slabDy=" + String.format("%.3f", slabDy)
+                    + " slabLowered=" + slabIsLowered[0]
+                    + " torchPosIsAir=" + world.getBlockState(torchPos).isAir()
+                    + " canPlaceAt=" + canPlaceAtResult[0]
+                    + " proofScope=PLACEMENT_AND_SURVIVAL_NOT_PLAYER_ITEM_USE_CONTEXT");
+
+            // Simulate block-level placement (bypasses player item-use / networking layers).
+            boolean placed = world.setBlockState(torchPos, torchDefault,
+                    net.minecraft.block.Block.NOTIFY_ALL);
+            placementAccepted[0] = placed;
+
+            BlockState afterPlace = world.getBlockState(torchPos);
+            torchPresentAfterPlace[0] = afterPlace.isOf(Blocks.TORCH);
+            if (torchPresentAfterPlace[0]) {
+                torchDyAfterPlace[0] = SlabSupport.getYOffset(world, torchPos, afterPlace);
+            }
+
+            boolean placementOk = canPlaceAtResult[0] && torchPresentAfterPlace[0];
+            boolean anchorDyOk = torchPresentAfterPlace[0]
+                    && Math.abs(torchDyAfterPlace[0] - (-1.0)) < EPSILON;
+            System.out.println((placementOk
+                    ? "[JULIA_BETA35_LIVE_ITEM_ANCHORING_PLACEMENT_GREEN]"
+                    : "[JULIA_BETA35_LIVE_ITEM_ANCHORING_PLACEMENT_RED]")
+                    + " canPlaceAt=" + canPlaceAtResult[0]
+                    + " placementAccepted=" + placed
+                    + " torchPresent=" + torchPresentAfterPlace[0]
+                    + " torchDy=" + (torchPresentAfterPlace[0]
+                            ? String.format("%.3f", torchDyAfterPlace[0]) : "N/A")
+                    + " expectedTorchDy=-1.000"
+                    + " anchorDyCorrect=" + anchorDyOk
+                    + " failureLayer=" + (placementOk ? (anchorDyOk ? "NONE" : "ANCHOR_DY") : "PLACEMENT"));
+        });
+        ctx.waitTick();
+
+        // Phase 3: neighbor-update survival — pulse the slab while it remains in place.
+        final boolean[] torchSurvivedNeighborUpdate = {false};
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            if (torchPresentAfterPlace[0]) {
+                // Re-set the slab with NOTIFY_ALL to send a neighbor update to the torch above.
+                // The slab stays; the torch should survive via TorchBlockMixin.
+                BlockState currentSlab = world.getBlockState(slabPos);
+                world.setBlockState(slabPos, currentSlab, net.minecraft.block.Block.NOTIFY_ALL);
+            }
+        });
+        ctx.waitTick();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState afterPulse = world.getBlockState(torchPos);
+            torchSurvivedNeighborUpdate[0] = afterPulse.isOf(Blocks.TORCH);
+
+            System.out.println((torchSurvivedNeighborUpdate[0]
+                    ? "[JULIA_BETA35_LIVE_ITEM_ANCHORING_SURVIVAL_GREEN]"
+                    : "[JULIA_BETA35_LIVE_ITEM_ANCHORING_SURVIVAL_RED]")
+                    + " torchPresent=" + torchSurvivedNeighborUpdate[0]
+                    + " afterNeighborUpdateFromSlab=true"
+                    + " slabStillPresent=true"
+                    + " failureLayer=" + (torchSurvivedNeighborUpdate[0] ? "NONE" : "SURVIVAL"));
+        });
+        ctx.waitTick();
+
+        // Phase 4: summary — classify and emit the RED marker.
+        // The fixture-level checks (canPlaceAt, setBlockState, dy, survival) may all pass
+        // on the controlled geometry. The SUMMARY is still RED because:
+        //   a) Julia's live test with player-initiated placement fails.
+        //   b) The proof does not exercise the player item-use / packet / server-tolerance path.
+        //   c) Item category coverage gap: only floor torch tested; wall_torch, lantern,
+        //      signs, and other attachable objects are not covered.
+        //   d) The prior triad proof (TRIAD_SUMMARY beta35IncludeStatus=INCLUDE) did not
+        //      include a placement proof; release was mis-classified as placement-proven.
+        boolean fixtureCanPlace = canPlaceAtResult[0];
+        boolean fixturePlaced = torchPresentAfterPlace[0];
+        boolean fixtureSurvived = torchSurvivedNeighborUpdate[0];
+        boolean fixtureAnchorDyOk = torchPresentAfterPlace[0]
+                && Math.abs(torchDyAfterPlace[0] - (-1.0)) < EPSILON;
+
+        String failureLayer;
+        if (!fixtureCanPlace) {
+            failureLayer = "PLACEMENT";
+        } else if (!fixturePlaced) {
+            failureLayer = "PLACEMENT";
+        } else if (!fixtureAnchorDyOk) {
+            failureLayer = "ANCHOR_DY";
+        } else if (!fixtureSurvived) {
+            failureLayer = "SURVIVAL";
+        } else {
+            failureLayer = "PROOF_GAP";
+        }
+
+        System.out.println("[JULIA_BETA35_LIVE_ITEM_ANCHORING_SUMMARY]"
+                + " proofScope=CONTROLLED_FIXTURE_PLACEMENT_AND_SURVIVAL"
+                + " screenshotFaithfulPlacement=NOT_PROVEN"
+                + " itemCategory=floor_torch_only"
+                + " itemCategoriesNotCovered=wall_torch,lantern,sign,all_attachable_objects"
+                + " playerItemUsePathNotCovered=true"
+                + " fixtureCanPlace=" + fixtureCanPlace
+                + " fixturePlaced=" + fixturePlaced
+                + " fixtureAnchorDyOk=" + fixtureAnchorDyOk
+                + " fixtureSurvived=" + fixtureSurvived
+                + " torchDy=" + (fixturePlaced ? String.format("%.3f", torchDyAfterPlace[0]) : "N/A")
+                + " slabDy=" + String.format("%.3f", slabDyResult[0])
+                + " juliaLiveResult=RED"
+                + " failureLayer=" + failureLayer
+                + " beta35ReleaseStatus=BLOCKED_LIVE_ITEM_ANCHORING_UNPROVEN"
+                + " priorTriadProofStatus=INCLUDE_READY_TRIAD_ONLY_NOT_PLACEMENT_PROVEN");
+
+        System.out.println("[JULIA_BETA35_LIVE_ITEM_ANCHORING_RED]"
+                + " fixtureResult=" + (fixtureCanPlace && fixturePlaced && fixtureAnchorDyOk && fixtureSurvived
+                        ? "FIXTURE_PASS_LIVE_FAIL" : "FIXTURE_FAIL")
+                + " failureLayer=" + failureLayer
+                + " juliaReport=torches_and_items_floating_or_not_anchoring_on_slab_supported_geometry"
+                + " screenshotEvidence=provided_in_chat_local_file_not_available_to_agent"
+                + " classification=PENDING_RELEASE_BLOCKING"
+                + " nextAction=implement_player_facing_placement_fix_after_RED_proof_classification");
     }
 }
