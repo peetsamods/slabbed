@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "Beta4ManualLiveInteractionTraceMixin",
+    "Beta4ManualLiveClientTickTraceMixin",
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
