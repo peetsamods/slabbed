@@ -218,6 +218,18 @@ This section lists commits classified as `NEEDS PROOF`.
 
 - Do not start from late Beta4 HEAD as release base.
 - Start a fresh branch from `release/0.2.0-beta.2` (or last safe pre-visible-lane savepoint).
+
+## 8. Object/slab ownership stability candidate
+
+- Issue: Julia observed torch/object and slab ownership fighting near slab-supported structures.
+- Failure layer: `A. OBJECT_RAYCAST_OWNER_STOLEN_BY_SLAB`.
+- Object class proven: floor torch on a bottom slab beside a slab-supported lowered full block.
+- Fix scope: `GameRendererCrosshairRetargetMixin` now gives a lowered object outline hit first ownership chance before generic anchored/full-block or lowered-side-slab rescue can steal it.
+- Guardrail: no `COMPOUND_VISIBLE_SLAB_LANE` release path was revived, no arbitrary `dy=-1` visible slab lane behavior was broadened, and no release tags were moved.
+- Proof flag: `-Dslabbed.beta35ObjectSlabOwnershipRed=true`.
+- Proof markers: `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_FIXTURE_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SLAB_TARGET_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SURVIVAL_GREEN]`, `[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SUMMARY]`.
+- Latest focused result: torch target `GREEN`, slab target `GREEN`, survival `GREEN`; flash/snap remains deferred because this proof ties only to ownership selection.
+- Beta 3.5 include candidate: yes, pending the full validation gate and savepoint.
 - Cherry-pick only `INCLUDE` commits one at a time.
 - Run compile and targeted gametest checks after each pick.
 - Exclude all `COMPOUND_VISIBLE` and `dy=-1` visible lane work from this branch.

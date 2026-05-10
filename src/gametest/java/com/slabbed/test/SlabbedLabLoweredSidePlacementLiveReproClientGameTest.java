@@ -174,6 +174,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35ObjectSlabOwnershipRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35ObjectSlabOwnershipProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta4CompoundVisibleSlabLaneRed")) {
             new SlabbedLabBeta4LiveShapeGoblinClientGameTest().runTest(ctx);
             return;
@@ -3373,6 +3382,202 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         System.out.println("[JULIA_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
                 + " classification=FIXED_GREEN"
                 + " reason=screenshot_shape_top_face_and_side_bands_green");
+    }
+
+    private static void runBeta35ObjectSlabOwnershipProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportPos = SUPPORT_POS.add(48, 0, 0);
+        final BlockPos fullPos = supportPos.up();
+        final BlockPos slabPos = fullPos.east();
+        final BlockPos torchPos = slabPos.up();
+        final String classification = "A. OBJECT_RAYCAST_OWNER_STOLEN_BY_SLAB";
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(fullPos, Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(torchPos, Blocks.TORCH.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_RED] client not ready");
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+
+            BlockState torchState = mc.world.getBlockState(torchPos);
+            BlockState slabState = mc.world.getBlockState(slabPos);
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            if (!torchState.isOf(Blocks.TORCH)) {
+                throw new RuntimeException("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_RED]"
+                        + " expected torch at " + torchPos.toShortString()
+                        + " found=" + torchState);
+            }
+            if (!slabState.isOf(Blocks.STONE_SLAB)) {
+                throw new RuntimeException("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SLAB_TARGET_RED]"
+                        + " expected slab at " + slabPos.toShortString()
+                        + " found=" + slabState);
+            }
+
+            double torchDy = SlabSupport.getYOffset(mc.world, torchPos, torchState);
+            double slabDy = SlabSupport.getYOffset(mc.world, slabPos, slabState);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            boolean survival = torchState.canPlaceAt(mc.world, torchPos);
+            System.out.println("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_FIXTURE_GREEN]"
+                    + " classification=" + classification
+                    + " objectPos=" + torchPos.toShortString()
+                    + " objectState=" + torchState
+                    + " objectDy=" + String.format("%.3f", torchDy)
+                    + " slabPos=" + slabPos.toShortString()
+                    + " slabState=" + slabState
+                    + " slabDy=" + String.format("%.3f", slabDy)
+                    + " supportPos=" + supportPos.toShortString()
+                    + " supportState=" + supportState
+                    + " supportDy=" + String.format("%.3f", supportDy));
+
+            Vec3d torchEye = new Vec3d(
+                    torchPos.getX() + 0.5,
+                    slabPos.getY() + 0.30,
+                    torchPos.getZ() - 2.5);
+            Vec3d torchTarget = new Vec3d(
+                    torchPos.getX() + 0.5,
+                    slabPos.getY() + 0.06,
+                    torchPos.getZ() + 0.5);
+            HitResult torchVanilla = playerRaycastFromEye(mc, torchEye, torchTarget, 6.0);
+            BlockHitResult torchFinal = updateCrosshairFromEye(mc, torchEye, torchTarget);
+            boolean torchGreen = torchFinal != null && torchFinal.getBlockPos().equals(torchPos);
+            System.out.println((torchGreen
+                    ? "[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_GREEN]"
+                    : "[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_RED]")
+                    + " expectedOwner=torch"
+                    + " actualOwner=" + beta35OwnerName(mc, torchFinal)
+                    + " vanillaTarget=" + beta35FormatHit(torchVanilla)
+                    + " finalTarget=" + beta35FormatHit(torchFinal)
+                    + " objectPos=" + torchPos.toShortString()
+                    + " slabPos=" + slabPos.toShortString()
+                    + " raycastTargetPos=" + (torchFinal == null ? "MISS" : torchFinal.getBlockPos().toShortString())
+                    + " targetOwner=" + beta35OwnerName(mc, torchFinal)
+                    + " outlineOwner=" + beta35OwnerName(mc, torchFinal));
+
+            Vec3d slabEye = new Vec3d(
+                    slabPos.getX() + 0.18,
+                    slabPos.getY() + 0.20,
+                    slabPos.getZ() - 2.5);
+            Vec3d slabTarget = new Vec3d(
+                    slabPos.getX() + 0.18,
+                    slabPos.getY() - 0.25,
+                    slabPos.getZ() + 0.18);
+            HitResult slabVanilla = playerRaycastFromEye(mc, slabEye, slabTarget, 6.0);
+            BlockHitResult slabFinal = updateCrosshairFromEye(mc, slabEye, slabTarget);
+            boolean slabGreen = slabFinal != null && slabFinal.getBlockPos().equals(slabPos);
+            System.out.println((slabGreen
+                    ? "[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SLAB_TARGET_GREEN]"
+                    : "[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SLAB_TARGET_RED]")
+                    + " expectedOwner=slab"
+                    + " actualOwner=" + beta35OwnerName(mc, slabFinal)
+                    + " vanillaTarget=" + beta35FormatHit(slabVanilla)
+                    + " finalTarget=" + beta35FormatHit(slabFinal)
+                    + " objectPos=" + torchPos.toShortString()
+                    + " slabPos=" + slabPos.toShortString()
+                    + " raycastTargetPos=" + (slabFinal == null ? "MISS" : slabFinal.getBlockPos().toShortString())
+                    + " targetOwner=" + beta35OwnerName(mc, slabFinal)
+                    + " outlineOwner=" + beta35OwnerName(mc, slabFinal));
+
+            System.out.println("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SURVIVAL_GREEN]"
+                    + " objectPos=" + torchPos.toShortString()
+                    + " objectState=" + torchState
+                    + " supportPos=" + slabPos.toShortString()
+                    + " supportState=" + slabState
+                    + " survival=" + survival);
+            System.out.println("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SUMMARY]"
+                    + " classification=" + classification
+                    + " objectClass=torch"
+                    + " slabState=stone_slab[type=" + slabState.get(SlabBlock.TYPE).asString() + "]"
+                    + " objectDy=" + String.format("%.3f", torchDy)
+                    + " slabDy=" + String.format("%.3f", slabDy)
+                    + " torchTarget=" + (torchGreen ? "GREEN" : "RED")
+                    + " slabTarget=" + (slabGreen ? "GREEN" : "RED")
+                    + " survival=" + (survival ? "GREEN" : "RED")
+                    + " flashSnap=deferred_not_same_path");
+
+            if (!torchGreen) {
+                throw new RuntimeException("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_RED]"
+                        + " expected torch owner at " + torchPos.toShortString()
+                        + " actual=" + beta35FormatHit(torchFinal)
+                        + " vanilla=" + beta35FormatHit(torchVanilla));
+            }
+            if (!slabGreen) {
+                throw new RuntimeException("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SLAB_TARGET_RED]"
+                        + " expected slab owner at " + slabPos.toShortString()
+                        + " actual=" + beta35FormatHit(slabFinal)
+                        + " vanilla=" + beta35FormatHit(slabVanilla));
+            }
+            if (!survival) {
+                throw new RuntimeException("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SURVIVAL_RED]"
+                        + " torch canPlaceAt returned false at " + torchPos.toShortString());
+            }
+        });
+    }
+
+    private static HitResult playerRaycastFromEye(
+            net.minecraft.client.MinecraftClient mc, Vec3d eye, Vec3d target, double reach
+    ) {
+        if (mc.player == null) {
+            return null;
+        }
+        Vec3d delta = target.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - mc.player.getStandingEyeHeight();
+        mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        return mc.player.raycast(reach, 0.0f, false);
+    }
+
+    private static BlockHitResult updateCrosshairFromEye(
+            net.minecraft.client.MinecraftClient mc, Vec3d eye, Vec3d target
+    ) {
+        playerRaycastFromEye(mc, eye, target, 6.0);
+        mc.gameRenderer.updateCrosshairTarget(0.0f);
+        return mc.crosshairTarget instanceof BlockHitResult blockHit ? blockHit : null;
+    }
+
+    private static String beta35OwnerName(net.minecraft.client.MinecraftClient mc, BlockHitResult hit) {
+        if (mc.world == null || hit == null) {
+            return "MISS";
+        }
+        BlockState state = mc.world.getBlockState(hit.getBlockPos());
+        if (state.isOf(Blocks.TORCH)) {
+            return "torch";
+        }
+        if (state.getBlock() instanceof SlabBlock) {
+            return "slab";
+        }
+        return state.getBlock().getTranslationKey();
+    }
+
+    private static String beta35FormatHit(HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
+            return hit == null ? "null" : hit.getType().toString();
+        }
+        return "BLOCK pos=" + blockHit.getBlockPos().toShortString()
+                + " face=" + blockHit.getSide().asString()
+                + " hit=" + String.format("%.4f,%.4f,%.4f",
+                        blockHit.getPos().x,
+                        blockHit.getPos().y,
+                        blockHit.getPos().z);
     }
 
     private static void runBeta4LiveScreenshotSideSlabBandCase(
