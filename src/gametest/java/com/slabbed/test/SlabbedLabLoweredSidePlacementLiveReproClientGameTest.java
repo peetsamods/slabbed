@@ -3392,7 +3392,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         final BlockPos fullPos = supportPos.up();
         final BlockPos slabPos = fullPos.east();
         final BlockPos torchPos = slabPos.up();
-        final String classification = "A. OBJECT_RAYCAST_OWNER_STOLEN_BY_SLAB";
+        final String ownerRouteScope = "OWNER_ROUTE_ONLY_SIMPLE_ROUTING";
+        final String triadFailureLayer = "C. OBJECT_MODEL_OUTLINE_MISMATCH";
 
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
@@ -3436,7 +3437,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
             boolean survival = torchState.canPlaceAt(mc.world, torchPos);
             System.out.println("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_FIXTURE_GREEN]"
-                    + " classification=" + classification
+                    + " proofScope=" + ownerRouteScope
+                    + " screenshotFaithfulTriad=NOT_PROVEN"
                     + " objectPos=" + torchPos.toShortString()
                     + " objectState=" + torchState
                     + " objectDy=" + String.format("%.3f", torchDy)
@@ -3495,6 +3497,76 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " targetOwner=" + beta35OwnerName(mc, slabFinal)
                     + " outlineOwner=" + beta35OwnerName(mc, slabFinal));
 
+            boolean ownerRouteGreen = torchGreen && slabGreen && survival;
+            if (ownerRouteGreen) {
+                System.out.println("[JULIA_BETA35_OBJECT_SLAB_TRIAD_OWNER_ROUTE_GREEN]"
+                        + " proofScope=" + ownerRouteScope
+                        + " oldOwnerOnlyProof=GREEN"
+                        + " screenshotFaithfulTriad=NOT_PROVEN"
+                        + " objectTargetOwner=torch"
+                        + " slabTargetOwner=slab"
+                        + " survival=GREEN");
+            }
+
+            VoxelShape objectOutlineShape = torchState.getOutlineShape(
+                    mc.world, torchPos, net.minecraft.block.ShapeContext.of(mc.player));
+            VoxelShape objectRaycastShape = torchState.getRaycastShape(mc.world, torchPos);
+            VoxelShape slabOutlineShape = slabState.getOutlineShape(
+                    mc.world, slabPos, net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box objectModelBox = beta35FloorTorchModelProxyWorldBox(torchPos, torchDy);
+            net.minecraft.util.math.Box objectOutlineBox = beta35WorldBox(objectOutlineShape, torchPos);
+            net.minecraft.util.math.Box objectRaycastBox = beta35WorldBox(objectRaycastShape, torchPos);
+            net.minecraft.util.math.Box slabOutlineBox = beta35WorldBox(slabOutlineShape, slabPos);
+            BlockHitResult objectOutlineHit = objectOutlineShape.raycast(torchEye, torchTarget, torchPos);
+            BlockHitResult objectRaycastHit = objectRaycastShape.raycast(torchEye, torchTarget, torchPos);
+            boolean outlineColocatedWithModel = beta35SameBox(objectOutlineBox, objectModelBox);
+            boolean outlineDetachedAbove = objectOutlineBox != null
+                    && objectOutlineBox.maxY > objectModelBox.maxY + EPSILON;
+            boolean outlineShiftedAway = objectOutlineBox == null
+                    || !beta35SameHorizontalColumn(objectOutlineBox, objectModelBox);
+            boolean raycastGreen = objectRaycastHit != null
+                    && objectRaycastHit.getBlockPos().equals(torchPos)
+                    && torchGreen;
+            System.out.println("[JULIA_BETA35_OBJECT_SLAB_TRIAD_FIXTURE_GREEN]"
+                    + " objectPos=" + torchPos.toShortString()
+                    + " objectState=" + torchState
+                    + " objectDy=" + String.format("%.3f", torchDy)
+                    + " objectModelBoundsAccessible=false"
+                    + " objectModelExpectedBounds=vanilla_torch_post_proxy:" + formatBox(objectModelBox)
+                    + " objectOutlineBounds=" + beta35FormatBox(objectOutlineBox)
+                    + " objectRaycastBounds=" + beta35FormatBox(objectRaycastBox)
+                    + " objectOutlineHit=" + beta35FormatHit(objectOutlineHit)
+                    + " objectRaycastHit=" + beta35FormatHit(objectRaycastHit)
+                    + " slabPos=" + slabPos.toShortString()
+                    + " slabState=" + slabState
+                    + " slabDy=" + String.format("%.3f", slabDy)
+                    + " slabOutlineBounds=" + beta35FormatBox(slabOutlineBox));
+            System.out.println((outlineColocatedWithModel
+                    ? "[JULIA_BETA35_OBJECT_SLAB_TRIAD_MODEL_OUTLINE_GREEN]"
+                    : "[JULIA_BETA35_OBJECT_SLAB_TRIAD_MODEL_OUTLINE_RED]")
+                    + " failureLayer=" + (outlineColocatedWithModel ? "NONE" : triadFailureLayer)
+                    + " outlineCoLocatedWithVisibleTorchBody=" + outlineColocatedWithModel
+                    + " outlineDetachedAboveVisibleTorchBody=" + outlineDetachedAbove
+                    + " outlineShiftedAwayFromVisibleTorchBody=" + outlineShiftedAway
+                    + " objectModelExpectedBounds=vanilla_torch_post_proxy:" + formatBox(objectModelBox)
+                    + " objectOutlineBounds=" + beta35FormatBox(objectOutlineBox));
+            System.out.println((raycastGreen
+                    ? "[JULIA_BETA35_OBJECT_SLAB_TRIAD_RAYCAST_GREEN]"
+                    : "[JULIA_BETA35_OBJECT_SLAB_TRIAD_RAYCAST_RED]")
+                    + " failureLayer=" + (raycastGreen ? "NONE" : "B. OBJECT_RAYCAST_DY_WRONG")
+                    + " objectRaycastTargetOwner=" + (objectRaycastHit == null ? "MISS" : beta35OwnerName(mc, objectRaycastHit))
+                    + " finalTargetOwner=" + beta35OwnerName(mc, torchFinal)
+                    + " objectRaycastHit=" + beta35FormatHit(objectRaycastHit)
+                    + " finalTarget=" + beta35FormatHit(torchFinal));
+            if (ownerRouteGreen && !outlineColocatedWithModel) {
+                System.out.println("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_FALSE_GREEN]"
+                        + " oldOwnerOnlyProof=GREEN"
+                        + " screenshotFaithfulTriad=RED"
+                        + " failureLayer=" + triadFailureLayer
+                        + " c96e674=partial_not_release_ready"
+                        + " beta35IncludeStatus=NEEDS_PROOF");
+            }
+
             System.out.println("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SURVIVAL_GREEN]"
                     + " objectPos=" + torchPos.toShortString()
                     + " objectState=" + torchState
@@ -3502,7 +3574,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " supportState=" + slabState
                     + " survival=" + survival);
             System.out.println("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_SUMMARY]"
-                    + " classification=" + classification
+                    + " proofScope=" + ownerRouteScope
                     + " objectClass=torch"
                     + " slabState=stone_slab[type=" + slabState.get(SlabBlock.TYPE).asString() + "]"
                     + " objectDy=" + String.format("%.3f", torchDy)
@@ -3510,7 +3582,18 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " torchTarget=" + (torchGreen ? "GREEN" : "RED")
                     + " slabTarget=" + (slabGreen ? "GREEN" : "RED")
                     + " survival=" + (survival ? "GREEN" : "RED")
+                    + " screenshotFaithfulTriad=" + (outlineColocatedWithModel && raycastGreen ? "GREEN" : "RED")
+                    + " failureLayer=" + (outlineColocatedWithModel && raycastGreen ? "NONE" : triadFailureLayer)
                     + " flashSnap=deferred_not_same_path");
+            System.out.println("[JULIA_BETA35_OBJECT_SLAB_TRIAD_SUMMARY]"
+                    + " oldOwnerOnlyProof=" + (ownerRouteGreen ? "GREEN" : "RED")
+                    + " ownerRoute=" + (ownerRouteGreen ? "GREEN" : "RED")
+                    + " modelOutline=" + (outlineColocatedWithModel ? "GREEN" : "RED")
+                    + " raycast=" + (raycastGreen ? "GREEN" : "RED")
+                    + " screenshotFaithfulTriad=" + (outlineColocatedWithModel && raycastGreen ? "GREEN" : "RED")
+                    + " failureLayer=" + (outlineColocatedWithModel && raycastGreen ? "NONE" : triadFailureLayer)
+                    + " beta35IncludeStatus=NEEDS_PROOF"
+                    + " c96e674=partial_not_release_ready");
 
             if (!torchGreen) {
                 throw new RuntimeException("[JULIA_BETA35_OBJECT_SLAB_OWNERSHIP_TORCH_TARGET_RED]"
@@ -3578,6 +3661,55 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         blockHit.getPos().x,
                         blockHit.getPos().y,
                         blockHit.getPos().z);
+    }
+
+    private static net.minecraft.util.math.Box beta35FloorTorchModelProxyWorldBox(BlockPos pos, double dy) {
+        return new net.minecraft.util.math.Box(
+                6.0d / 16.0d,
+                dy,
+                6.0d / 16.0d,
+                10.0d / 16.0d,
+                dy + (10.0d / 16.0d),
+                10.0d / 16.0d).offset(pos);
+    }
+
+    private static net.minecraft.util.math.Box beta35WorldBox(VoxelShape shape, BlockPos pos) {
+        if (shape == null || shape.isEmpty()) {
+            return null;
+        }
+        return shape.getBoundingBox().offset(pos);
+    }
+
+    private static boolean beta35SameBox(
+            net.minecraft.util.math.Box actual,
+            net.minecraft.util.math.Box expected
+    ) {
+        if (actual == null || expected == null) {
+            return false;
+        }
+        return Math.abs(actual.minX - expected.minX) <= EPSILON
+                && Math.abs(actual.minY - expected.minY) <= EPSILON
+                && Math.abs(actual.minZ - expected.minZ) <= EPSILON
+                && Math.abs(actual.maxX - expected.maxX) <= EPSILON
+                && Math.abs(actual.maxY - expected.maxY) <= EPSILON
+                && Math.abs(actual.maxZ - expected.maxZ) <= EPSILON;
+    }
+
+    private static boolean beta35SameHorizontalColumn(
+            net.minecraft.util.math.Box actual,
+            net.minecraft.util.math.Box expected
+    ) {
+        if (actual == null || expected == null) {
+            return false;
+        }
+        return Math.abs(actual.minX - expected.minX) <= EPSILON
+                && Math.abs(actual.minZ - expected.minZ) <= EPSILON
+                && Math.abs(actual.maxX - expected.maxX) <= EPSILON
+                && Math.abs(actual.maxZ - expected.maxZ) <= EPSILON;
+    }
+
+    private static String beta35FormatBox(net.minecraft.util.math.Box box) {
+        return box == null ? "empty" : formatBox(box);
     }
 
     private static void runBeta4LiveScreenshotSideSlabBandCase(
