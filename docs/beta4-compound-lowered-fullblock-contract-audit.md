@@ -215,6 +215,23 @@ Gating note: the harness is opt-in only and is routed from the already-registere
 `-Dslabbed.beta4LiveShapeGoblin=true` is present. Default `runClientGameTest`
 must not execute the goblin proof.
 
+Manual-live parity trace marker set after `b92887b`:
+`[JULIA_BETA4_MANUAL_LIVE_CLICK_START]`,
+`[JULIA_BETA4_MANUAL_LIVE_TARGET]`,
+`[JULIA_BETA4_MANUAL_LIVE_PLACEMENT_INTENT]`,
+`[JULIA_BETA4_MANUAL_LIVE_SERVER_TOLERANCE]`,
+`[JULIA_BETA4_MANUAL_LIVE_SLAB_SUPPORT_DECISION]`,
+`[JULIA_BETA4_MANUAL_LIVE_DELTA]`,
+`[JULIA_BETA4_MANUAL_LIVE_FINAL]`, and
+`[JULIA_BETA4_MANUAL_LIVE_SUMMARY]`. Expected use: Julia runs
+`JAVA_TOOL_OPTIONS="-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.beta4ManualLiveTrace=true" ./gradlew --no-daemon runClient --console plain`
+and performs the exact manual structure/click sequence. These markers are
+diagnostic-only and must be interpreted before any gameplay fix or release
+readiness claim. They are intended to compare manual target/face/hit/local
+band/candidate/delta/result against the goblin, and to identify whether
+`BlockItemPlacementIntentMixin`, `ServerInteractBlockHitToleranceMixin`, and
+`SlabSupport.findLegalCompoundSlabRemap(...)` ran on the same real click path.
+
 ## Current savepoint
 
 - HEAD: `06724fb`
