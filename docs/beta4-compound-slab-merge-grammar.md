@@ -279,6 +279,16 @@ requires `clientMarker=true`, `modelDy=-1.0`, and rerender scheduled for the
 candidate/neighborhood. Release remains blocked until Julia manually confirms
 that the model and outline align immediately in live play.
 
+Render snap audit at `fa3fc03` reclassifies the remaining manual visual snap as
+`C. CLIENT_PREDICTION_UNMARKED_BLOCKSTATE` for the accepted live behavior: the
+client can briefly render the vanilla/predicted slab blockstate before the
+server-authored compound-visible marker is mirrored back to the client. The
+existing sync handler already schedules the candidate/source neighborhood after
+marker arrival and the model trace shows `clientMarker=true`, `modelDy=-1.0`,
+and candidate/neighborhood rerender scheduled. No tiny client fix was applied;
+adding an immediate temporary marker would need a safe prediction/rollback path
+and is deferred as post-beta polish unless Julia objects.
+
 Diagnostic conflict classification after the render-refresh WIP is
 `A. STALE_DIAGNOSTIC_EXPECTATION`: the old live-shape lower-after-first and
 repeat-placement sequence expected `stone_slab[type=bottom/double] dy=-0.5`.
@@ -529,8 +539,13 @@ placement settle.
 - `dy=-1.0` slab lane remains bounded and source-owned.
 - remaining issue is immediate render snap: slab can briefly appear at old/top-half
   visual position before settling to intended `dy=-1.0`.
+- render snap audit classification is `C. CLIENT_PREDICTION_UNMARKED_BLOCKSTATE`.
+- no tiny fix was applied; the snap is documented as a known minor visual issue
+  deferred unless Julia objects.
 - delayed trace includes legacy `dy=-0.5` expectation checks; stale `delayed_candidate_mismatch` lines with `ghost=true` are caveat-only while the current `dy=-1.0` law is in force.
-- no final Bug Blaster yet; release remains blocked until snap is audited or explicitly deferred.
+- evidence: `tmp/beta4-render-snap-audit-fa3fc03/`.
+- no final Bug Blaster yet; with the snap explicitly deferred, release remains
+  blocked pending final release audit.
 
 ## Implementation slices after design
 
