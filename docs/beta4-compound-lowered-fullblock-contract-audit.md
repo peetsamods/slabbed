@@ -743,17 +743,16 @@ with the clicked source still a compound full block at `dy=-1.0`.
 not accepted as green.
 
 Latest summary:
-`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=RED reload=PENDING releaseBlockers=compoundVisibleSlabLane`.
+`[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY] fixtureTruth=GREEN lower=GREEN upper=GREEN merge=GREEN top=GREEN supportMissing=GREEN triad=PARTIAL reload=PENDING releaseBlockers=compoundVisibleSlabLane`.
 
 | Obligation | Marker | Current status | Evidence / blocker |
 | --- | --- | --- | --- |
 | supportMissing | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_GREEN]` | GREEN | Builds lower side bottom, upper side top, side double, and owner-top bottom states at `dy=-1.0`; removes the direct support slab; verifies the source remains `stone`, `dy=-1.0`, `compoundFullBlockAnchor=true`, no jump/pop, all four named states remain `dy=-1.0`, and no checked state is below `dy=-1.0`. |
-| triad | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_RED]` | RED | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]` proves marker/type truth, `dy=-1.0`, shifted outline bounds, and direct outline-shape ownership for lower, upper, merge, and top. Top also proves raw outline raycast/target ownership. Lower, upper, and merge fail raw outline raycast/target ownership by hitting neighboring visible/support cells instead of the named shifted slab body; model remains unproven in this harness. |
+| triad | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_PARTIAL]` | PARTIAL | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]` now proves marker/type truth, `dy=-1.0`, shifted outline bounds, and owner raycast/target ownership for lower, upper, merge, and top through the named compound visible slab lane retarget rule. Raw vanilla outline raycast still records the historical neighboring/support-cell target for lower/upper/merge, so the proof logs both `rawRaycastTarget` and corrected `raycastTarget`. Model remains unproven in this harness (`missingSurface=model`). |
 | reload | `[JULIA_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_PENDING]` | PENDING | The attempted `TestWorldSave.open()` proof is not faked as same-tick persistence; inside the active visible-lane context it reports `reason=reloadHarnessUnavailable` / `Cannot create a world when a server is running`. |
 
-Release remains blocked until the triad raycast/target and model gaps plus the
-reload gap are closed or explicitly deferred by Julia, followed by manual live
-retest.
+Release remains blocked until the model gap plus the reload gap are closed or
+explicitly deferred by Julia, followed by manual live retest.
 
 ## Old Row 1 compatibility audit
 

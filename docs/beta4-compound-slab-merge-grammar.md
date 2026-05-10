@@ -384,6 +384,15 @@ only the named, source-owned compound visible slab lane states at `dy=-1.0`.
 Arbitrary `dy=-1.0` slab lanes remain illegal, but successful visible compound
 side/top results no longer have to normalize into `dy=-0.5` or `dy=0.0`.
 
+Triad targeting follow-up: lower, upper, merge, and owner-top visible slab lane
+states now share one narrow owner rule. If a real ray intersects the shifted
+visible outline body of one of the named compound visible slab lane states, the
+client retargets ownership to that named slab body instead of the neighboring
+support/visible cell that vanilla DDA may visit first. This is not a generic
+lowered-slab rescue: arbitrary `dy=-1.0` slabs remain untargetable unless they
+carry one of the named compound visible lane markers, and the old `dy=-0.5`
+continuation lane remains separate.
+
 ## Screenshot side-shape discriminator audit
 
 Audit status at `08cb004`: no safe screenshot-only discriminator has been
