@@ -520,6 +520,18 @@ reconciliation, reverted/vanished as a ghost, remained a clean no-op after
 `Pass[]`, or mismatched the expected candidate/state/dy. Gameplay work should
 not start from an immediate `Success` alone.
 
+## Manual visual acceptance after 78c0f01
+
+Julia reported manual visual acceptance for `COMPOUND_VISIBLE_SLAB_LANE` after
+placement settle.
+
+- lower / upper / repeat-merge / top / support-missing behavior is accepted.
+- `dy=-1.0` slab lane remains bounded and source-owned.
+- remaining issue is immediate render snap: slab can briefly appear at old/top-half
+  visual position before settling to intended `dy=-1.0`.
+- delayed trace includes legacy `dy=-0.5` expectation checks; stale `delayed_candidate_mismatch` lines with `ghost=true` are caveat-only while the current `dy=-1.0` law is in force.
+- no final Bug Blaster yet; release remains blocked until snap is audited or explicitly deferred.
+
 ## Implementation slices after design
 
 1. Add/rename focused RED/PENDING proof markers for compound below-lane side slab placement.

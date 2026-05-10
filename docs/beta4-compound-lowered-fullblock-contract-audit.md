@@ -759,6 +759,19 @@ readiness. The legacy live-shape lower-after-first/repeat sequence is retained
 only as stale historical evidence and now reports `releaseBlockers=JuliaLiveRetest`
 when the current visible-lane proof remains green.
 
+Manual visual acceptance status at `78c0f01`:
+
+- `COMPOUND_VISIBLE_SLAB_LANE` is accepted functionally in manual live.
+- lower / upper / repeat-merge / top / support-missing behavior accepted after settle.
+- `dy=-1.0` slab lane remains source-owned and bounded.
+- known issue: brief render snap where slab can appear briefly in old/top-half visual
+  position before settling to intended `dy=-1.0`.
+- delayed manual evidence includes some `delayed_candidate_mismatch` and
+  `ghost=true` lines that reflect stale `dy=-0.5` expectations and should be treated
+  as a trace-caveat, not a gameplay regression.
+- no Bug Blaster final yet.
+- evidence folder: `tmp/beta4-final-manual-visual-78c0f01/`
+
 ## Old Row 1 compatibility audit
 
 Decision: **A, old Row 1 superseded**.
