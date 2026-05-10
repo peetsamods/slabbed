@@ -159,11 +159,17 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             verdicts.sequenceTopTargeting = topFace.targetingClassification;
             verdicts.absorb(topFace);
 
-            String releaseBlockers = parityReleaseBlockers(verdicts);
+            boolean legacySequenceStale = compoundVisibleLaneSupersedesLegacySequence();
+            if (legacySequenceStale) {
+                emitLegacySequenceStale(verdicts);
+            }
+
+            String releaseBlockers = parityReleaseBlockers(verdicts, legacySequenceStale);
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_PARITY_SUMMARY]"
                     + " structure=GREEN"
                     + " realCrosshair=true"
                     + " syntheticUsed=false"
+                    + " legacySequence=" + (legacySequenceStale ? "STALE" : "CURRENT")
                     + " lowerAimParity=" + verdicts.lowerAimParity
                     + " upperAimParity=" + verdicts.upperAimParity
                     + " topAimParity=" + verdicts.topAimParity
@@ -189,6 +195,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             System.out.println("[JULIA_BETA4_LIVE_GOBLIN_CORRIDOR_SUMMARY]"
                     + " lowerCorridor=" + verdicts.lowerCorridor
                     + " lowerAfterFirstCorridor=" + verdicts.lowerAfterFirstCorridor
+                    + " legacySequence=" + (legacySequenceStale ? "STALE" : "CURRENT")
                     + " sequenceLowerResult=" + verdicts.lowerAfterFirst
                     + " repeatPlacement=" + verdicts.repeatPlacement
                     + " topFace=" + verdicts.topFace
@@ -1551,7 +1558,27 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         return facts;
     }
 
-    private static String parityReleaseBlockers(ParityVerdicts verdicts) {
+    private static boolean compoundVisibleLaneSupersedesLegacySequence() {
+        return true;
+    }
+
+    private static void emitLegacySequenceStale(ParityVerdicts verdicts) {
+        System.out.println("[JULIA_BETA4_LIVE_GOBLIN_LEGACY_SEQUENCE_STALE]"
+                + " classification=STALE_DIAGNOSTIC_EXPECTATION"
+                + " supersededBy=COMPOUND_VISIBLE_SLAB_LANE"
+                + " oldLowerExpected=\"stone_slab[type=bottom] dy=-0.5\""
+                + " oldRepeatExpected=\"stone_slab[type=double] dy=-0.5\""
+                + " currentLowerExpected=\"COMPOUND_VISIBLE_SIDE_LOWER_SLAB dy=-1.0\""
+                + " currentRepeatExpected=\"COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB dy=-1.0\""
+                + " lowerAfterFirst=" + verdicts.lowerAfterFirst
+                + " repeatPlacement=" + verdicts.repeatPlacement
+                + " releaseBlockers=JuliaLiveRetest");
+    }
+
+    private static String parityReleaseBlockers(ParityVerdicts verdicts, boolean legacySequenceStale) {
+        if (legacySequenceStale) {
+            return "JuliaLiveRetest";
+        }
         String blockers = "";
         if (!"GREEN".equals(verdicts.lowerAimParity) || !"GREEN".equals(verdicts.lowerAfterFirst)) {
             blockers = "lowerAfterFirst";

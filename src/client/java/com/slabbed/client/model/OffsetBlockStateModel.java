@@ -127,6 +127,7 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
             }
         }
         ModelDyTranslateTraceBridge.recordBeta4ModelDy("fabricEmitQuads", view, pos, state, dy);
+        slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
 
         BlockPos modelDyTracePos = slabbed$modelDyOwnerTracePos;
         if (modelDyTracePos != null && modelDyTracePos.equals(pos)) {
@@ -176,5 +177,46 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
 
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
+    }
+
+    private static void slabbed$logCompoundVisibleRenderTraceModelDy(
+            BlockRenderView view,
+            BlockPos pos,
+            BlockState state,
+            float modelDy
+    ) {
+        if (!SlabAnchorAttachment.beta4CompoundVisibleRenderTraceEnabled()) {
+            return;
+        }
+        String marker = slabbed$compoundVisibleMarker(view, pos, state);
+        if ("none".equals(marker)) {
+            return;
+        }
+        double clientDy = ClientDy.dyFor(view, pos, state);
+        double slabSupportDy = SlabSupport.getYOffset(view, pos, state);
+        Slabbed.LOGGER.info(
+                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_MODEL_DY] pos={} marker={} serverMarker=n/a clientMarker=true modelViewType={} modelDy={} slabSupportDy={} clientDy={} candidateRerenderScheduled=n/a neighborRerenderScheduled=n/a",
+                pos.toShortString(),
+                marker,
+                view.getClass().getSimpleName(),
+                modelDy,
+                slabSupportDy,
+                clientDy);
+    }
+
+    private static String slabbed$compoundVisibleMarker(BlockRenderView view, BlockPos pos, BlockState state) {
+        if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(view, pos, state)) {
+            return "lower";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(view, pos, state)) {
+            return "upper";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(view, pos, state)) {
+            return "double";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(view, pos, state)) {
+            return "top";
+        }
+        return "none";
     }
 }

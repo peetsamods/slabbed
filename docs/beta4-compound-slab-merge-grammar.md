@@ -256,6 +256,37 @@ owner remains `stone`, `dy=-1.0`, and `compoundFullBlockAnchor=true`.
 Immediate placement plus reload green is still not enough for release because
 model/manual visual proof and Julia manual live retest remain blocking.
 
+## Immediate render refresh requirement
+
+Manual live after `e5492d0` proved that compound-visible marker truth and
+model dy authority can exist while the client chunk model remains visually stale
+until a support block replacement forces a rebuild. This is classified as
+`D. RERENDER_NOT_SCHEDULED`, not a placement-law or legal-dy failure.
+
+For every `COMPOUND_VISIBLE_*` marker add/remove/change, the client must refresh
+the immediate marker position and nearby affected positions without relying on a
+support-toggle workaround. The visible slab body, outline, raycast/target owner,
+and model must all agree immediately after placement: lower, upper, double, and
+top remain source-owned `dy=-1.0` states, and unmarked `dy=-0.5`/`dy=0.0`
+fallbacks are not accepted as green for this lane.
+
+Current render-refresh slice keeps the existing marker sync/render-view bridge
+and adds a forced one-block-neighborhood client `scheduleBlockRenders(...)`
+refresh for the four compound-visible attachment types. Gated trace
+`-Dslabbed.beta4CompoundVisibleRenderTrace=true` emits marker set, client sync,
+model dy, rerender, support update, and summary records; the focused proof
+requires `clientMarker=true`, `modelDy=-1.0`, and rerender scheduled for the
+candidate/neighborhood. Release remains blocked until Julia manually confirms
+that the model and outline align immediately in live play.
+
+Diagnostic conflict classification after the render-refresh WIP is
+`A. STALE_DIAGNOSTIC_EXPECTATION`: the old live-shape lower-after-first and
+repeat-placement sequence expected `stone_slab[type=bottom/double] dy=-0.5`.
+Those markers are historical evidence for the pre-lane model and are superseded
+where the current `COMPOUND_VISIBLE_SLAB_LANE` proof is green. The current
+release blocker for this lane remains the visible model/manual retest gate, not
+the old lowered-same-cell sequence.
+
 ## Compatibility audit: old Row 1
 
 Decision: **A, old Row 1 superseded**.
@@ -461,6 +492,12 @@ lane results for lower side, upper side, same-cell merge, and owner top. Correct
 future goblin output must report non-empty blockers until those exact states are
 proven through real crosshair targeting, durable server/client final state,
 bounded changed-block deltas, and model/outline/raycast parity.
+
+After the named `COMPOUND_VISIBLE_SLAB_LANE` proof became green, the legacy
+lower-after-first/repeat live-shape markers no longer define current-law
+release blockers. `[JULIA_BETA4_LIVE_GOBLIN_LEGACY_SEQUENCE_STALE]` records the
+old `dy=-0.5` expectation, while the visible-lane summary owns the current
+`dy=-1.0` proof and the remaining `JuliaLiveRetest` blocker.
 
 Manual-live parity rule after `b92887b`: automation does not count as release
 proof when Julia's real `runClient` interaction disagrees. The live-goblin
