@@ -368,3 +368,12 @@ If the slice changes, update the source pack and spine together so the current o
 - `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; scope remains `floor_torch_only`.
 - Beta 3.5 release prep remains paused pending Julia live acceptance; no release tag moved.
 - Next safe action after savepoint: Julia live-tests the lowered bottom-slab floor-torch contact from the savepoint tag; do not broaden into other item categories or release prep without explicit instruction.
+
+## Beta 3.5 live floor torch dual tracer (2026-05-11)
+
+- Operating base for this proof-only tracer slice: `b149996` / `save/beta35-floor-torch-lowered-slab-contact` on `integrate/phase19-into-side-slab-top-support`.
+- Julia's live video after `b149996` means `b149996` is **not live-accepted**: floor torches sometimes place but visibly float, and sometimes floor torch placement attempts do not resolve to the intended support/position.
+- The prior `b149996` proof fixed only the narrow measured lowered-bottom-slab contact case (`COMPOUND_VISIBLE_SIDE_LOWER_SLAB`, `torchDy=-1.500`, `contactGap=0.000000`). It did not cover every live source path or player targeting/intent path.
+- New gated manual-live tracer flag: `-Dslabbed.beta35LiveTorchDualTrace=true`. It emits startup marker `[JULIA_BETA35_LIVE_TORCH_DUAL_TRACE] enabled=true`, placement attempts with `[JULIA_BETA35_LIVE_TORCH_PLACEMENT_ATTEMPT]`, existing nearby floor-torch contact with `[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]`, and `[JULIA_BETA35_LIVE_TORCH_DUAL_SUMMARY]`.
+- The tracer separates placement/targeting/intent classifications from visual contact/source-truth/dy classifications. It is debug-gated and proof-only; no production behavior fix is implemented in this slice.
+- Beta 3.5 release prep remains **PAUSED** pending Julia live trace. Scope remains `floor_torch_only`; `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`. No release tag moved.

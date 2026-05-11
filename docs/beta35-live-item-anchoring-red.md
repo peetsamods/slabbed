@@ -247,3 +247,27 @@ No release tag was moved.
 - `docs/beta35-inclusion-strategy.md` — updated to reflect PAUSED release status
 - `docs/beta35-object-triad-dryrun.md` — updated to reflect live anchoring blocker
 - `SLABBED_SPINE.md` — Beta 3.5 salvage audit status section
+
+## Julia live dual failure after b149996
+
+After `b149996` / `save/beta35-floor-torch-lowered-slab-contact`, Julia's live
+video proves the previous player-like and contact proofs are still incomplete:
+
+1. Floor torches sometimes place but float.
+2. Floor torches sometimes cannot be placed at all on the intended support.
+
+Do not collapse these into one bug. Placement/targeting/intent remains separate
+from visual contact/source-truth/dy.
+
+The new manual-live tracer is gated by
+`-Dslabbed.beta35LiveTorchDualTrace=true`. It emits:
+
+- `[JULIA_BETA35_LIVE_TORCH_DUAL_TRACE] enabled=true`
+- `[JULIA_BETA35_LIVE_TORCH_PLACEMENT_ATTEMPT]`
+- `[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]`
+- `[JULIA_BETA35_LIVE_TORCH_DUAL_SUMMARY]`
+
+This tracer is proof-only/debug-gated and does not implement a production
+behavior fix. Beta 3.5 release prep remains paused pending Julia live trace.
+Scope remains `floor_torch_only`; wall torch, lantern, signs, and chains remain
+`NOT_COVERED`; no release tag moved.

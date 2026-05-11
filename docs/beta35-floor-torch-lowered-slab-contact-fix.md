@@ -80,3 +80,27 @@ The fix makes `SlabSupport.getYOffset(...)` return `torchDy=-1.500000` only for 
 - `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
 - Beta 3.5 release prep remains paused pending Julia live acceptance.
 - No release tag moved.
+
+## Julia live retest after b149996
+
+Julia's live video after `b149996` / `save/beta35-floor-torch-lowered-slab-contact`
+shows this savepoint is **not live-accepted**:
+
+- floor torches sometimes place but visibly float above the slab/stone surface
+- floor torch placement sometimes does not resolve to the intended support/position
+
+The `b149996` proof fixed one narrow lowered-bottom-slab contact case:
+`COMPOUND_VISIBLE_SIDE_LOWER_SLAB`, `torchDy=-1.500`, and
+`contactGap=0.000000`. The video proves at least one live source/shape path and
+one player placement/targeting path still escape that proof.
+
+Follow-up tracer: `-Dslabbed.beta35LiveTorchDualTrace=true` emits
+`[JULIA_BETA35_LIVE_TORCH_DUAL_TRACE] enabled=true`,
+`[JULIA_BETA35_LIVE_TORCH_PLACEMENT_ATTEMPT]`,
+`[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]`, and
+`[JULIA_BETA35_LIVE_TORCH_DUAL_SUMMARY]`.
+
+This tracer is proof-only/debug-gated. No production behavior fix is implemented
+by the tracer slice. Beta 3.5 release prep remains paused; scope remains
+`floor_torch_only`; `wall_torch`, `lantern`, `signs`, and `chains` remain
+`NOT_COVERED`; no release tag moved.

@@ -166,3 +166,24 @@ This historical RED slice is superseded for lowered bottom-slab support by
 `docs/beta35-floor-torch-lowered-slab-contact-fix.md`. Scope remains
 `floor_torch_only`; `wall_torch`, `lantern`, `signs`, and `chains` remain
 `NOT_COVERED`.
+
+## Julia live dual failure after b149996
+
+Julia's live video after `b149996` / `save/beta35-floor-torch-lowered-slab-contact`
+reopens visual/contact acceptance for live-only floor-torch paths. Two failure
+layers must stay separate:
+
+- **VISUAL CONTACT / SOURCE TRUTH / DY**: existing or newly placed floor torches
+  can visibly float even after the narrow `COMPOUND_VISIBLE_SIDE_LOWER_SLAB`
+  case measured `torchDy=-1.500` and `contactGap=0.000000`.
+- **PLACEMENT / TARGETING / INTENT**: some floor torch placement attempts do not
+  resolve to the intended support/position.
+
+The follow-up tracer is manual-live, proof-only, and gated by
+`-Dslabbed.beta35LiveTorchDualTrace=true`. It logs existing floor-torch contact
+with `[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]` and placement attempts with
+`[JULIA_BETA35_LIVE_TORCH_PLACEMENT_ATTEMPT]`.
+
+Beta 3.5 release prep remains paused pending Julia live trace. Scope remains
+`floor_torch_only`; non-floor categories remain `NOT_COVERED`; no release tag
+moved.
