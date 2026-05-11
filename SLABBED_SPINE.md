@@ -232,16 +232,23 @@ After the classifier savepoint, the next required action is Julia and architectu
 
 Current Beta 3.5 floor-torch slice state (2026-05-10): add `-Dslabbed.beta35LiveTorchCapture=true` gated live recorder in `src/client/java/com/slabbed/mixin/client/Beta35LiveTorchCaptureMixin.java` and `src/main/java/com/slabbed/util/Beta35LiveTorchCaptureRecorder.java` as evidence-only capture. Wall torch, lantern, signs, and chains remain explicitly `NOT_COVERED`.
 
-Current follow-up floor-torch contact-gap proof slice (2026-05-10): add
-`-Dslabbed.beta35LiveFloorTorchContactGapRed=true` in
-`SlabbedLabLoweredSidePlacementLiveReproClientGameTest` with markers
-`[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]`,
+Current follow-up floor-torch contact-gap proof slice (2026-05-11): add
+`-Dslabbed.beta35LiveFloorTorchContactGapRed=true` and
+`-Dslabbed.beta35LiveFloorTorchSourceTruthParity=true` in
+`SlabbedLabLoweredSidePlacementLiveReproClientGameTest`.
+Parity markers include
+`[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_GREEN]`,
+`[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_FAIL]`,
 `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]`,
+`[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]`,
 `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]`.
 
-Current proof classification in this slice is RED/PENDING pending live coordinate replay:
-in-scope floor torch captures still show negative contact gap and are release-blocking;
-wall torch remains separate `NOT_COVERED`.
+Current proof status is awaiting source-truth replay results:
+`fixtureMatchesLiveDyStack` must be `true` with
+`supportDy=-0.500`, `torchDy=-1.000`, and `contactGap=-1.500000`.
+If this cannot be reproduced, this slice will stop at
+`failureLayer=SOURCE_TRUTH_MISMATCH`.
+Wall torch remains separate `NOT_COVERED`; Beta 3.5 release remains blocked.
 No gameplay fix and no release tag movement in this slice.
 
 ## Suggested live run command
