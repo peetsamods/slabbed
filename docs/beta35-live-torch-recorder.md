@@ -2,8 +2,12 @@
 
 ## Status
 
-Julia’s manual mismatch capture for floor-torch visuals remains unresolved in this slice.
-No gameplay fix is implemented here.
+Recorder contact math corrected in `save/beta35-live-torch-recorder-contact-math-audit`
+(v2 formula). The previously reported `contactGap=-1.500000` was a measurement artifact.
+With the corrected recorder, `contactGap=0` — the torch sits correctly on the lowered slab.
+No gameplay fix is implemented. Beta 3.5 release prep remains PAUSED pending Julia’s
+live re-verification with the corrected recorder. See
+`docs/beta35-live-torch-recorder-contact-math-audit.md` for the full analysis.
 
 ## Gate and marker
 

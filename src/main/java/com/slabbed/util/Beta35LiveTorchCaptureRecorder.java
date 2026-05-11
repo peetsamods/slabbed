@@ -65,7 +65,8 @@ public final class Beta35LiveTorchCaptureRecorder {
 
         CaptureContext ctx = capture(world, crosshairTarget, player, camera);
         Slabbed.LOGGER.info(
-                "[JULIA_BETA35_LIVE_TORCH_CAPTURE] markerVersion=1"
+                "[JULIA_BETA35_LIVE_TORCH_CAPTURE] markerVersion=2"
+                        + " measurementFormulaVersion=" + ctx.measurementFormula()
                         + " tickProgress=" + String.format("%.3f", tickProgress)
                         + " classification=" + ctx.classification()
                         + " targetType=" + ctx.targetType()
@@ -80,9 +81,12 @@ public final class Beta35LiveTorchCaptureRecorder {
                         + " supportCandidateState=" + ctx.supportCandidateState()
                         + " torchDy=" + ctx.torchDy()
                         + " supportDy=" + ctx.supportDy()
+                        + " rawSupportTopY=" + ctx.rawSupportTopY()
                         + " supportVisibleTopY=" + ctx.supportVisibleTopY()
+                        + " rawTorchShapeMinY=" + ctx.rawTorchShapeMinY()
                         + " torchModelBottomY=" + ctx.torchModelBottomY()
                         + " contactGap=" + ctx.contactGap()
+                        + " contactGapV1=" + ctx.contactGapV1()
                         + " outlineMinY=" + ctx.outlineMinY()
                         + " outlineMaxY=" + ctx.outlineMaxY()
                         + " raycastMinY=" + ctx.raycastMinY()
@@ -150,7 +154,12 @@ public final class Beta35LiveTorchCaptureRecorder {
 
         double torchDy = SlabSupport.getYOffset(world, torchPos, torchState);
         double supportDy = SlabSupport.getYOffset(world, supportCandidatePos, supportCandidateState);
-        double supportVisibleTopY = supportCandidatePos.getY() + 1.0d + supportDy;
+        double supportTopOffset = SlabSupport.isSupportingSlab(supportCandidateState)
+                ? SlabSupport.getSupportYOffset(supportCandidateState)
+                : 1.0d;
+        double rawSupportTopY = supportCandidatePos.getY() + supportTopOffset;
+        double supportVisibleTopY = rawSupportTopY + supportDy;
+        double supportVisibleTopYV1 = supportCandidatePos.getY() + 1.0d + supportDy;
 
         double torchModelBottomY = Double.NaN;
         double outlineMinY = Double.NaN;
@@ -158,24 +167,30 @@ public final class Beta35LiveTorchCaptureRecorder {
         double raycastMinY = Double.NaN;
         double raycastMaxY = Double.NaN;
         double contactGap = Double.NaN;
+        double rawTorchShapeMinY = Double.NaN;
+        double contactGapV1 = Double.NaN;
 
         VoxelShape outlineShape = safeOutlineShape(world, torchPos, torchState, cameraEntity);
         if (outlineShape != null && !outlineShape.isEmpty()) {
             double outlineMin = shapeMinY(outlineShape);
             double outlineMax = shapeMaxY(outlineShape);
-            outlineMinY = torchPos.getY() + outlineMin + torchDy;
-            outlineMaxY = torchPos.getY() + outlineMax + torchDy;
+            rawTorchShapeMinY = outlineMin;
+            outlineMinY = torchPos.getY() + outlineMin;
+            outlineMaxY = torchPos.getY() + outlineMax;
             torchModelBottomY = outlineMinY;
         }
 
         VoxelShape raycastShape = safeRaycastShape(world, torchPos, torchState);
         if (raycastShape != null && !raycastShape.isEmpty()) {
-            raycastMinY = torchPos.getY() + shapeMinY(raycastShape) + torchDy;
-            raycastMaxY = torchPos.getY() + shapeMaxY(raycastShape) + torchDy;
+            raycastMinY = torchPos.getY() + shapeMinY(raycastShape);
+            raycastMaxY = torchPos.getY() + shapeMaxY(raycastShape);
         }
 
         if (Double.isFinite(torchModelBottomY) && Double.isFinite(supportVisibleTopY)) {
             contactGap = torchModelBottomY - supportVisibleTopY;
+        }
+        if (Double.isFinite(rawTorchShapeMinY) && Double.isFinite(supportVisibleTopYV1)) {
+            contactGapV1 = (torchPos.getY() + rawTorchShapeMinY + torchDy) - supportVisibleTopYV1;
         }
 
         String classification = targetIsTorch
@@ -216,7 +231,12 @@ public final class Beta35LiveTorchCaptureRecorder {
                 player == null ? "n/a" : formatDouble(player.getYaw()),
                 player == null ? "n/a" : formatDouble(player.getPitch()),
                 cameraEntity == null ? "n/a" : formatVec(cameraEntity.getX(), cameraEntity.getY(), cameraEntity.getZ()),
-                world.getRegistryKey().getValue().toString()
+                world.getRegistryKey().getValue().toString(),
+                "v2",
+                formatDouble(rawSupportTopY),
+                formatDouble(supportVisibleTopYV1),
+                formatDouble(rawTorchShapeMinY),
+                formatDouble(contactGapV1)
         );
     }
 
@@ -362,6 +382,11 @@ public final class Beta35LiveTorchCaptureRecorder {
                 "n/a",
                 "n/a",
                 "n/a",
+                "n/a",
+                "v2",
+                "n/a",
+                "n/a",
+                "n/a",
                 "n/a"
         );
     }
@@ -392,7 +417,12 @@ public final class Beta35LiveTorchCaptureRecorder {
             String playerYaw,
             String playerPitch,
             String cameraPos,
-            String worldCoords
+            String worldCoords,
+            String measurementFormula,
+            String rawSupportTopY,
+            String supportVisibleTopYV1,
+            String rawTorchShapeMinY,
+            String contactGapV1
     ) {
         CaptureContext withNearestTorch(BlockPos torchPos, double distance) {
             return new CaptureContext(
@@ -421,7 +451,12 @@ public final class Beta35LiveTorchCaptureRecorder {
                     playerYaw,
                     playerPitch,
                     cameraPos,
-                    worldCoords
+                    worldCoords,
+                    measurementFormula,
+                    rawSupportTopY,
+                    supportVisibleTopYV1,
+                    rawTorchShapeMinY,
+                    contactGapV1
             );
         }
     }
