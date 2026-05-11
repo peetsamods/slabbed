@@ -134,3 +134,17 @@ remain NOT_COVERED and are not the current blocker.
 
 Beta 3.5 release prep remains **PAUSED**. Do not claim `floor_torch_only`
 release scope accepted.
+
+## Follow-up contact-gap proof (RED slice)
+
+Wall-torch, lantern, sign, and chain coverage remains `NOT_COVERED`.
+
+A new floor-torch contact-gap proof exists for Julia live capture `CONTACT_GAP`
+with gate `-Dslabbed.beta35LiveFloorTorchContactGapRed=true` and markers:
+
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]`
+
+Current classification in this slice remains RED, with no production gameplay fix
+implemented until the RED evidence is reviewed.

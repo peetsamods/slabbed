@@ -90,6 +90,19 @@ so this slice does not prove a tiny safe gameplay fix. Julia's live visual
 verdict remains NOT ACCEPTED because the screenshot/live structure has not been
 proven equivalent to the controlled fixture.
 
+New follow-up RED proof status:
+
+`-Dslabbed.beta35LiveFloorTorchContactGapRed=true`
+
+Records:
+
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]`
+
+It classifies wall_torch/lantern/signs/chains as `NOT_COVERED`; no production
+gameplay fix is implemented in this new slice.
+
 ## Live-shape fixture parity proof
 
 Gated by `-Dslabbed.beta35FloorTorchLiveShapeRed=true` in
