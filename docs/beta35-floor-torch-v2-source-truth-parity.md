@@ -44,15 +44,18 @@ Previous state at this slice was
 
 ## Interpretation
 
-This reproduces Julia’s corrected v2 live floor-torch contact gap under source truth with
-+0.5-block contact gap and exact coordinate alignment. The evidence is production-fix-ready
-RED evidence and is not a release pass.
+- This reproduces Julia’s corrected v2 live floor-torch contact gap under source truth with
+  +0.5-block contact gap and exact coordinate alignment. The evidence is production-fix-ready
+  RED evidence and is not a release pass.
+- Superseded by the production contact-fix slice in
+  `docs/beta35-floor-torch-v2-contact-fix.md`: top support now aligns at
+  `contactGap=0.000000`, while bottom support is rejected because same-position
+  contact would require illegal `dy<-1.0`.
 
 ## Coverage notes
 
 - `wall_torch` remains `NOT_COVERED`.
 - `lantern`, `signs`, `chains` remain `NOT_COVERED`.
-- next production slice: floor_torch contact-height production fix only, using GPT-5.5 High
-  (not Spark).
+- next production slice: Julia live re-test of the floor_torch contact-height fix.
 - run this slice with `-Dslabbed.beta35FloorTorchV2ContactGapRed=true` and
   `-Dslabbed.beta35LiveFloorTorchSourceTruthParity=true` for the proof path.

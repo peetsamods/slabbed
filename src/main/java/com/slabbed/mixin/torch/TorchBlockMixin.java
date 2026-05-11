@@ -19,14 +19,22 @@ public abstract class TorchBlockMixin {
 
     @Inject(method = "canPlaceAt", at = @At("HEAD"), cancellable = true)
     private void slabbed$allowTorchOnSlabTop(BlockState state, WorldView world, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-        if (SlabSupport.canTreatAsSolidTopFace(world, pos.down())) {
+        if (SlabSupport.isRejectedFloorTorchTopFace(world, pos.down(), state)) {
+            cir.setReturnValue(false);
+            return;
+        }
+        if (SlabSupport.canTreatAsFloorTorchTopFace(world, pos.down(), state)) {
             cir.setReturnValue(true);
         }
     }
 
     @Inject(method = "getStateForNeighborUpdate", at = @At("HEAD"), cancellable = true)
     private void slabbed$keepTorchOnSlabTop(BlockState state, WorldView world, ScheduledTickView scheduledTickView, BlockPos pos, Direction direction, BlockPos neighborPos, BlockState neighborState, Random random, CallbackInfoReturnable<BlockState> cir) {
-        if (direction == Direction.DOWN && SlabSupport.canTreatAsSolidTopFace(world, pos.down())) {
+        if (direction == Direction.DOWN && SlabSupport.isRejectedFloorTorchTopFace(world, pos.down(), state)) {
+            cir.setReturnValue(Blocks.AIR.getDefaultState());
+            return;
+        }
+        if (direction == Direction.DOWN && SlabSupport.canTreatAsFloorTorchTopFace(world, pos.down(), state)) {
             cir.setReturnValue(state);
             return;
         }
