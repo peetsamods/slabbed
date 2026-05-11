@@ -9,16 +9,23 @@ import net.minecraft.block.TorchBlock;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
+import net.minecraft.item.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldView;
+
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Evidence-only recorder for Beta 3.5 floor-torch live mismatch diagnostics.
@@ -31,13 +38,21 @@ public final class Beta35LiveTorchCaptureRecorder {
     private static long lastLogWorldTime = Long.MIN_VALUE;
     private static String lastTargetSignature = "n/a";
     private static boolean startLogged;
+    private static boolean dualStartLogged;
+    private static long placementSequence;
+    private static ComfortEvent lastComfortEvent;
 
     private Beta35LiveTorchCaptureRecorder() {
     }
 
     public static boolean enabled() {
         return Boolean.getBoolean("slabbed.beta35LiveTorchCapture")
+                || dualTraceEnabled()
                 || Boolean.getBoolean("slabbed.beta35FloorTorchSbsbsSourceTruthRed");
+    }
+
+    public static boolean dualTraceEnabled() {
+        return Boolean.getBoolean("slabbed.beta35LiveTorchDualTrace");
     }
 
     private static boolean sourceTruthCaptureEnabled() {
@@ -48,6 +63,8 @@ public final class Beta35LiveTorchCaptureRecorder {
         if (!enabled() || world == null || crosshairTarget == null) {
             return;
         }
+
+        logDualStartIfNeeded(world, player);
 
         String signature = targetSignature(world, crosshairTarget, player);
         long now = world.getTime();
@@ -139,6 +156,101 @@ public final class Beta35LiveTorchCaptureRecorder {
                             + " heldItem=" + ctx.heldItem()
             );
         }
+        if (dualTraceEnabled()) {
+            Slabbed.LOGGER.info(existingContactLogLine(world, crosshairTarget, player, camera));
+        }
+    }
+
+    public static PlacementAttemptSnapshot startPlacementAttempt(
+            World world,
+            PlayerEntity player,
+            ItemStack heldStack,
+            BlockHitResult hitResult,
+            HitResult crosshairTarget
+    ) {
+        if (!dualTraceEnabled() || world == null || player == null || !isHeldFloorTorch(heldStack)) {
+            return null;
+        }
+        logDualStartIfNeeded(world, player);
+        long seq = ++placementSequence;
+        BlockPos targetPos = hitResult == null ? null : hitResult.getBlockPos();
+        Direction side = hitResult == null ? null : hitResult.getSide();
+        BlockPos intendedTorchPos = intendedTorchPos(targetPos, side);
+        BlockPos supportCandidatePos = intendedSupportPos(targetPos, side, intendedTorchPos);
+        return new PlacementAttemptSnapshot(
+                seq,
+                world.getTime(),
+                formatItem(heldStack),
+                hitResult == null ? "null" : "BLOCK",
+                shortPos(targetPos),
+                side == null ? "n/a" : side.name(),
+                hitResult == null ? "n/a" : formatVec(hitResult.getPos()),
+                hitResult == null ? "n/a" : formatDouble(hitResult.getPos().y),
+                player == null ? "n/a" : formatVec(player.getEyePos()),
+                shortPos(intendedTorchPos),
+                shortPos(supportCandidatePos),
+                supportCandidatePos == null ? "n/a" : formatState(world.getBlockState(supportCandidatePos)),
+                supportCandidatePos == null ? "n/a" : formatDouble(SlabSupport.getYOffset(world, supportCandidatePos, world.getBlockState(supportCandidatePos))),
+                supportCandidatePos == null ? "n/a" : supportSourceType(world, supportCandidatePos, world.getBlockState(supportCandidatePos)),
+                crosshairTargetType(crosshairTarget),
+                crosshairTargetPos(crosshairTarget),
+                recentComfortEvent(world),
+                floorTorchPositionsAround(world, targetPos == null ? player.getBlockPos() : targetPos, SEARCH_RADIUS)
+        );
+    }
+
+    public static void finishPlacementAttempt(World world, PlacementAttemptSnapshot snapshot, ActionResult result) {
+        if (!dualTraceEnabled() || world == null || snapshot == null) {
+            return;
+        }
+        TorchAppearance appearance = findNewOrNearbyTorch(world, snapshot);
+        String resultText = String.valueOf(result);
+        String classification = classifyPlacementAttempt(snapshot, resultText, appearance);
+        ComfortEvent comfort = snapshot.comfortEvent();
+        Slabbed.LOGGER.info(
+                "[JULIA_BETA35_LIVE_TORCH_PLACEMENT_ATTEMPT]"
+                        + " sequence=" + snapshot.sequence()
+                        + " tick=" + snapshot.worldTime()
+                        + " heldItem=" + snapshot.heldItem()
+                        + " crosshairTargetType=" + snapshot.crosshairTargetType()
+                        + " crosshairTargetBlockPos=" + snapshot.crosshairTargetPos()
+                        + " interactTargetType=" + snapshot.interactTargetType()
+                        + " interactTargetBlockPos=" + snapshot.interactTargetPos()
+                        + " targetSide=" + snapshot.targetSide()
+                        + " hitVec=" + snapshot.hitVec()
+                        + " hitY=" + snapshot.hitY()
+                        + " playerEyePos=" + snapshot.playerEyePos()
+                        + " intendedTorchPos=" + snapshot.intendedTorchPos()
+                        + " intendedSupportCandidatePos=" + snapshot.intendedSupportCandidatePos()
+                        + " intendedSupportCandidateState=" + snapshot.intendedSupportCandidateState()
+                        + " intendedSupportSourceType=" + snapshot.intendedSupportSourceType()
+                        + " intendedSupportDy=" + snapshot.intendedSupportDy()
+                        + " loweredSideSlabComfortPathFired=" + (comfort != null)
+                        + " comfortReason=" + (comfort == null ? "n/a" : comfort.reason())
+                        + " comfortPos=" + (comfort == null ? "n/a" : shortPos(comfort.pos()))
+                        + " comfortSupportPos=" + (comfort == null ? "n/a" : shortPos(comfort.supportPos()))
+                        + " finalInteractResult=" + resultText
+                        + " torchBlockAppearedAfterAttempt=" + appearance.appeared()
+                        + " appearedTorchPos=" + appearance.pos()
+                        + " appearedTorchState=" + appearance.state()
+                        + " classification=" + classification
+        );
+        Slabbed.LOGGER.info(
+                "[JULIA_BETA35_LIVE_TORCH_DUAL_SUMMARY]"
+                        + " sequence=" + snapshot.sequence()
+                        + " placementClassification=" + classification
+                        + " existingContactClassification=" + existingContactClassification(world, appearance.blockPos())
+                        + " beta35ReleaseStatus=PAUSED_JULIA_LIVE_TRACE_REQUIRED"
+                        + " scope=floor_torch_only"
+        );
+    }
+
+    public static void recordComfortTrace(World world, String reason, BlockPos pos, BlockPos supportPos) {
+        if (!dualTraceEnabled() || world == null) {
+            return;
+        }
+        lastComfortEvent = new ComfortEvent(world.getTime(), reason, pos == null ? null : pos.toImmutable(),
+                supportPos == null ? null : supportPos.toImmutable());
     }
 
     private static CaptureContext capture(World world, HitResult crosshairTarget, PlayerEntity player, Entity cameraEntity) {
@@ -302,6 +414,305 @@ public final class Beta35LiveTorchCaptureRecorder {
             return "UNKNOWN";
         }
         return Math.abs(contactGap) > CONTACT_GAP_EPSILON ? "CONTACT_GAP" : "LIVE_CAPTURE_OK";
+    }
+
+    private static String existingContactLogLine(World world, HitResult crosshairTarget, PlayerEntity player, Entity camera) {
+        if (world == null) {
+            return "[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT] classification=NO_TORCH_NEAR_TARGET";
+        }
+        BlockPos center = player == null ? null : player.getBlockPos();
+        if (crosshairTarget instanceof BlockHitResult blockHit) {
+            center = blockHit.getBlockPos();
+        }
+        FoundTorch nearestTorch = center == null ? new FoundTorch(null, Double.NaN, false, "none")
+                : findNearestFloorTorch(world, center, SEARCH_RADIUS);
+        if (!nearestTorch.found()) {
+            return "[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]"
+                    + " torchPos=n/a torchState=n/a torchSourceType=n/a torchDy=n/a"
+                    + " supportCandidatePos=n/a supportCandidateState=n/a supportSourceType=n/a supportDy=n/a"
+                    + " supportVisibleTopY=n/a torchModelBottomY=n/a contactGap=n/a"
+                    + " modelMinY=n/a modelMaxY=n/a outlineMinY=n/a outlineMaxY=n/a raycastMinY=n/a raycastMaxY=n/a"
+                    + " triadCoLocated=no classification=NO_TORCH_NEAR_TARGET";
+        }
+        return existingContactLogLineForTorch(world, nearestTorch.pos(), camera);
+    }
+
+    private static String existingContactLogLineForTorch(World world, BlockPos torchPos, Entity camera) {
+        ContactMeasurement measurement = measureContact(world, torchPos, camera);
+        return "[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]"
+                + " torchPos=" + shortPos(torchPos)
+                + " torchState=" + measurement.torchState()
+                + " torchSourceType=" + measurement.torchSourceType()
+                + " torchDy=" + measurement.torchDy()
+                + " supportCandidatePos=" + measurement.supportCandidatePos()
+                + " supportCandidateState=" + measurement.supportCandidateState()
+                + " supportSourceType=" + measurement.supportSourceType()
+                + " supportDy=" + measurement.supportDy()
+                + " supportVisibleTopY=" + measurement.supportVisibleTopY()
+                + " torchModelBottomY=" + measurement.torchModelBottomY()
+                + " contactGap=" + measurement.contactGap()
+                + " modelMinY=" + measurement.modelMinY()
+                + " modelMaxY=" + measurement.modelMaxY()
+                + " outlineMinY=" + measurement.outlineMinY()
+                + " outlineMaxY=" + measurement.outlineMaxY()
+                + " raycastMinY=" + measurement.raycastMinY()
+                + " raycastMaxY=" + measurement.raycastMaxY()
+                + " triadCoLocated=" + measurement.triadCoLocated()
+                + " classification=" + measurement.classification();
+    }
+
+    private static ContactMeasurement measureContact(World world, BlockPos torchPos, Entity camera) {
+        if (world == null || torchPos == null) {
+            return ContactMeasurement.empty("NO_TORCH_NEAR_TARGET");
+        }
+        BlockState torchState = world.getBlockState(torchPos);
+        if (!isFloorTorch(torchState)) {
+            return ContactMeasurement.empty("NO_TORCH_NEAR_TARGET");
+        }
+        BlockPos supportCandidatePos = torchPos.down();
+        BlockState supportCandidateState = world.getBlockState(supportCandidatePos);
+        if (supportCandidateState == null || supportCandidateState.isAir()) {
+            return ContactMeasurement.emptyForTorch(world, torchPos, torchState, "NO_SUPPORT_CANDIDATE");
+        }
+
+        double torchDy = SlabSupport.getYOffset(world, torchPos, torchState);
+        double supportDy = SlabSupport.getYOffset(world, supportCandidatePos, supportCandidateState);
+        double supportTopOffset = SlabSupport.isSupportingSlab(supportCandidateState)
+                ? SlabSupport.getSupportYOffset(supportCandidateState)
+                : 1.0d;
+        double rawSupportTopY = supportCandidatePos.getY() + supportTopOffset;
+        double supportVisibleTopY = rawSupportTopY + supportDy;
+
+        VoxelShape outlineShape = safeOutlineShape(world, torchPos, torchState, camera);
+        VoxelShape raycastShape = safeRaycastShape(world, torchPos, torchState);
+        double outlineMinY = shapeWorldMinY(torchPos, outlineShape);
+        double outlineMaxY = shapeWorldMaxY(torchPos, outlineShape);
+        double raycastMinY = shapeWorldMinY(torchPos, raycastShape);
+        double raycastMaxY = shapeWorldMaxY(torchPos, raycastShape);
+        double modelMinY = outlineMinY;
+        double modelMaxY = outlineMaxY;
+        double torchModelBottomY = modelMinY;
+        double contactGap = Double.isFinite(torchModelBottomY)
+                ? torchModelBottomY - supportVisibleTopY
+                : Double.NaN;
+        boolean triad = close(modelMinY, outlineMinY)
+                && close(modelMaxY, outlineMaxY)
+                && close(outlineMinY, raycastMinY)
+                && close(outlineMaxY, raycastMaxY);
+        String classification;
+        if (!Double.isFinite(contactGap)) {
+            classification = "WRONG_SOURCE_TYPE";
+        } else if (Math.abs(contactGap) > CONTACT_GAP_EPSILON) {
+            classification = "PLACED_CONTACT_GAP";
+        } else {
+            classification = "PLACED_CONTACT_GREEN";
+        }
+        return new ContactMeasurement(
+                formatState(torchState),
+                "FLOOR_TORCH",
+                formatDouble(torchDy),
+                shortPos(supportCandidatePos),
+                formatState(supportCandidateState),
+                supportSourceType(world, supportCandidatePos, supportCandidateState),
+                formatDouble(supportDy),
+                formatDouble(supportVisibleTopY),
+                formatDouble(torchModelBottomY),
+                formatDouble(contactGap),
+                formatDouble(modelMinY),
+                formatDouble(modelMaxY),
+                formatDouble(outlineMinY),
+                formatDouble(outlineMaxY),
+                formatDouble(raycastMinY),
+                formatDouble(raycastMaxY),
+                triad ? "yes" : "no",
+                classification
+        );
+    }
+
+    private static String existingContactClassification(World world, BlockPos torchPos) {
+        return measureContact(world, torchPos, null).classification();
+    }
+
+    private static void logDualStartIfNeeded(World world, PlayerEntity player) {
+        if (!dualTraceEnabled() || dualStartLogged) {
+            return;
+        }
+        Slabbed.LOGGER.info("[JULIA_BETA35_LIVE_TORCH_DUAL_TRACE] enabled=true world={} player={}",
+                world == null ? "n/a" : world.getRegistryKey().getValue(),
+                player == null ? "null" : player.getName().getString());
+        dualStartLogged = true;
+    }
+
+    private static String classifyPlacementAttempt(
+            PlacementAttemptSnapshot snapshot,
+            String resultText,
+            TorchAppearance appearance
+    ) {
+        ComfortEvent comfort = snapshot.comfortEvent();
+        if (comfort != null && comfort.reason().contains("no-box-intersection")) {
+            return "COMFORT_NO_BOX_INTERSECTION";
+        }
+        if (comfort != null && comfort.reason().contains("owner")) {
+            return "WRONG_TARGET_OWNER";
+        }
+        if ("MISS".equals(snapshot.crosshairTargetType()) || "n/a".equals(snapshot.crosshairTargetPos())) {
+            return "PLACEMENT_TARGET_MISS";
+        }
+        if (appearance.appeared()) {
+            return "PLACEMENT_ATTEMPT_OK";
+        }
+        if (resultText != null && resultText.contains("FAIL")) {
+            return "PLACEMENT_REJECTED";
+        }
+        return "PLACEMENT_RESULT_UNKNOWN";
+    }
+
+    private static boolean isHeldFloorTorch(ItemStack stack) {
+        return stack != null && stack.isOf(Items.TORCH);
+    }
+
+    private static boolean isFloorTorch(BlockState state) {
+        return state != null && state.isOf(Blocks.TORCH);
+    }
+
+    private static BlockPos intendedTorchPos(BlockPos targetPos, Direction side) {
+        if (targetPos == null || side == null) {
+            return null;
+        }
+        return targetPos.offset(side);
+    }
+
+    private static BlockPos intendedSupportPos(BlockPos targetPos, Direction side, BlockPos intendedTorchPos) {
+        if (side == Direction.UP) {
+            return targetPos;
+        }
+        return intendedTorchPos == null ? targetPos : intendedTorchPos.down();
+    }
+
+    private static Set<String> floorTorchPositionsAround(World world, BlockPos center, int radius) {
+        Set<String> positions = new HashSet<>();
+        if (world == null || center == null) {
+            return positions;
+        }
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    BlockPos candidate = center.add(dx, dy, dz);
+                    if (isFloorTorch(world.getBlockState(candidate))) {
+                        positions.add(candidate.toShortString());
+                    }
+                }
+            }
+        }
+        return positions;
+    }
+
+    private static TorchAppearance findNewOrNearbyTorch(World world, PlacementAttemptSnapshot snapshot) {
+        BlockPos center = parseShortPos(snapshot.intendedTorchPos());
+        if (center == null) {
+            center = parseShortPos(snapshot.interactTargetPos());
+        }
+        FoundTorch nearest = center == null ? new FoundTorch(null, Double.NaN, false, "none")
+                : findNearestFloorTorch(world, center, SEARCH_RADIUS);
+        if (!nearest.found()) {
+            return new TorchAppearance(false, null, "n/a", "n/a");
+        }
+        String shortPos = nearest.pos().toShortString();
+        boolean appeared = !snapshot.preTorchPositions().contains(shortPos);
+        return new TorchAppearance(appeared, nearest.pos(), shortPos, formatState(world.getBlockState(nearest.pos())));
+    }
+
+    private static FoundTorch findNearestFloorTorch(WorldView world, BlockPos targetPos, int radius) {
+        double bestSqDist = Double.POSITIVE_INFINITY;
+        BlockPos bestPos = null;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    BlockPos candidate = targetPos.add(dx, dy, dz);
+                    BlockState candidateState = world.getBlockState(candidate);
+                    if (!isFloorTorch(candidateState)) {
+                        continue;
+                    }
+                    double sq = blockCenterDistanceSq(candidate, targetPos);
+                    if (sq < bestSqDist) {
+                        bestSqDist = sq;
+                        bestPos = candidate.toImmutable();
+                    }
+                }
+            }
+        }
+        return new FoundTorch(bestPos, bestSqDist, bestPos != null, "floor_torch_search");
+    }
+
+    private static ComfortEvent recentComfortEvent(World world) {
+        if (world == null || lastComfortEvent == null) {
+            return null;
+        }
+        return world.getTime() - lastComfortEvent.worldTime() <= 5L ? lastComfortEvent : null;
+    }
+
+    private static String supportSourceType(World world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return "n/a";
+        }
+        if (state.isAir()) {
+            return "AIR";
+        }
+        if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {
+            return "PERSISTENT_LOWERED_SLAB_CARRIER";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)) {
+            return "COMPOUND_VISIBLE_SIDE_LOWER_SLAB";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)) {
+            return "COMPOUND_VISIBLE_SIDE_UPPER_SLAB";
+        }
+        if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            return "ANCHORED_FULL_BLOCK";
+        }
+        return "PLAIN_STATE";
+    }
+
+    private static String crosshairTargetType(HitResult target) {
+        return target == null ? "n/a" : target.getType().name();
+    }
+
+    private static String crosshairTargetPos(HitResult target) {
+        return target instanceof BlockHitResult blockHit ? shortPos(blockHit.getBlockPos()) : "n/a";
+    }
+
+    private static double shapeWorldMinY(BlockPos pos, VoxelShape shape) {
+        return shape == null || shape.isEmpty() ? Double.NaN : pos.getY() + shapeMinY(shape);
+    }
+
+    private static double shapeWorldMaxY(BlockPos pos, VoxelShape shape) {
+        return shape == null || shape.isEmpty() ? Double.NaN : pos.getY() + shapeMaxY(shape);
+    }
+
+    private static boolean close(double a, double b) {
+        return Double.isFinite(a) && Double.isFinite(b) && Math.abs(a - b) <= CONTACT_GAP_EPSILON;
+    }
+
+    private static String formatVec(Vec3d vec) {
+        return vec == null ? "n/a" : formatVec(vec.x, vec.y, vec.z);
+    }
+
+    private static BlockPos parseShortPos(String value) {
+        if (value == null || value.equals("n/a")) {
+            return null;
+        }
+        String[] parts = value.split(",");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            return new BlockPos(
+                    Integer.parseInt(parts[0].trim()),
+                    Integer.parseInt(parts[1].trim()),
+                    Integer.parseInt(parts[2].trim()));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private static String targetSignature(World world, HitResult crosshairTarget, PlayerEntity player) {
@@ -533,6 +944,81 @@ public final class Beta35LiveTorchCaptureRecorder {
                     supportAnchoredFullBlockBelow,
                     isVanillaPosition
             );
+        }
+    }
+
+    public record PlacementAttemptSnapshot(
+            long sequence,
+            long worldTime,
+            String heldItem,
+            String interactTargetType,
+            String interactTargetPos,
+            String targetSide,
+            String hitVec,
+            String hitY,
+            String playerEyePos,
+            String intendedTorchPos,
+            String intendedSupportCandidatePos,
+            String intendedSupportCandidateState,
+            String intendedSupportDy,
+            String intendedSupportSourceType,
+            String crosshairTargetType,
+            String crosshairTargetPos,
+            ComfortEvent comfortEvent,
+            Set<String> preTorchPositions
+    ) {}
+
+    public record ComfortEvent(long worldTime, String reason, BlockPos pos, BlockPos supportPos) {}
+
+    private record TorchAppearance(boolean appeared, BlockPos blockPos, String pos, String state) {}
+
+    private record ContactMeasurement(
+            String torchState,
+            String torchSourceType,
+            String torchDy,
+            String supportCandidatePos,
+            String supportCandidateState,
+            String supportSourceType,
+            String supportDy,
+            String supportVisibleTopY,
+            String torchModelBottomY,
+            String contactGap,
+            String modelMinY,
+            String modelMaxY,
+            String outlineMinY,
+            String outlineMaxY,
+            String raycastMinY,
+            String raycastMaxY,
+            String triadCoLocated,
+            String classification
+    ) {
+        static ContactMeasurement empty(String classification) {
+            return new ContactMeasurement(
+                    "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a",
+                    "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "no", classification);
+        }
+
+        static ContactMeasurement emptyForTorch(World world, BlockPos torchPos, BlockState torchState, String classification) {
+            double torchDy = SlabSupport.getYOffset(world, torchPos, torchState);
+            return new ContactMeasurement(
+                    formatState(torchState),
+                    "FLOOR_TORCH",
+                    formatDouble(torchDy),
+                    shortPos(torchPos.down()),
+                    formatState(world.getBlockState(torchPos.down())),
+                    "AIR",
+                    "n/a",
+                    "n/a",
+                    "n/a",
+                    "n/a",
+                    "n/a",
+                    "n/a",
+                    "n/a",
+                    "n/a",
+                    "n/a",
+                    "n/a",
+                    "no",
+                    classification);
         }
     }
 
