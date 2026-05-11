@@ -549,6 +549,9 @@ public final class Beta35LiveTorchCaptureRecorder {
             TorchAppearance appearance
     ) {
         ComfortEvent comfort = snapshot.comfortEvent();
+        if (appearance.appeared()) {
+            return "PLACEMENT_ATTEMPT_OK";
+        }
         if (comfort != null && comfort.reason().contains("no-box-intersection")) {
             return "COMFORT_NO_BOX_INTERSECTION";
         }
@@ -557,9 +560,6 @@ public final class Beta35LiveTorchCaptureRecorder {
         }
         if ("MISS".equals(snapshot.crosshairTargetType()) || "n/a".equals(snapshot.crosshairTargetPos())) {
             return "PLACEMENT_TARGET_MISS";
-        }
-        if (appearance.appeared()) {
-            return "PLACEMENT_ATTEMPT_OK";
         }
         if (resultText != null && resultText.contains("FAIL")) {
             return "PLACEMENT_REJECTED";
