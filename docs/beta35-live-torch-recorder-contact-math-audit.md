@@ -7,6 +7,10 @@ The live recorder's previously reported `contactGap=-1.500000` was entirely a
 measurement artifact. The actual torch behavior shows `contactGap=0` — the torch
 sits correctly on the lowered slab surface with no visible gap.
 
+A later corrected V2 fixture/live trace review for the same floor-torch path showed
+that the live capture now reports `contactGap=0.500000` in the blocker-relevant stack
+cases, while still leaving `wall_torch`/`lantern`/`signs`/`chains` outside this slice.
+
 No production gameplay fix was implemented. No release tag moved.
 Beta 3.5 release prep should be **unblocked for the floor-torch case** pending
 Julia's re-verification with the corrected recorder, but that decision belongs to Julia.

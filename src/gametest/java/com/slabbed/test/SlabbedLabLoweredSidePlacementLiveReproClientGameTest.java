@@ -201,6 +201,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35FloorTorchV2ContactGapRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FloorTorchV2ContactGapRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35LiveFloorTorchSourceTruthParity")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -7988,6 +7997,269 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
     }
 
+    private static void runBeta35FloorTorchV2ContactGapRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35V2ContactGapAttempt topScenario = runBeta35FloorTorchV2ContactGapRedAttempt(
+                ctx,
+                singleplayer,
+                "top_slab",
+                new BlockPos(44, -56, 87),
+                SlabType.TOP,
+                -1.000d,
+                -0.500d);
+
+        Beta35V2ContactGapAttempt bottomScenario = runBeta35FloorTorchV2ContactGapRedAttempt(
+                ctx,
+                singleplayer,
+                "bottom_slab",
+                new BlockPos(43, -56, 88),
+                SlabType.BOTTOM,
+                -1.000d,
+                -1.000d);
+
+        boolean topMatches = topScenario.fixtureMatchesV2LiveStack();
+        boolean bottomMatches = bottomScenario.fixtureMatchesV2LiveStack();
+        boolean anyMatches = topMatches || bottomMatches;
+
+        String finalFailureLayer = "V2_SOURCE_TRUTH_MISMATCH";
+        if (topMatches && !bottomMatches) {
+            finalFailureLayer = topScenario.failureLayer();
+        } else if (!topMatches && bottomMatches) {
+            finalFailureLayer = bottomScenario.failureLayer();
+        } else if (topMatches) {
+            finalFailureLayer = topScenario.failureLayer().equals("NONE")
+                    ? "NONE"
+                    : bottomScenario.failureLayer().equals("NONE")
+                            ? "NONE"
+                            : topScenario.failureLayer().equals("V2_LIVE_FLOOR_TORCH_CONTACT_GAP")
+                                    ? "V2_LIVE_FLOOR_TORCH_CONTACT_GAP"
+                                    : "V2_LIVE_FLOOR_TORCH_CONTACT_GAP";
+        }
+
+        Beta35V2ContactGapAttempt summary = topMatches ? topScenario : anyMatches ? bottomScenario : topScenario;
+        String redProofResult = finalFailureLayer.equals("NONE") ? "GREEN" : "RED";
+        String proofTarget = summary.scenario();
+
+        System.out.println("[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_SUMMARY]"
+                + " categoryScope=floor_torch_only"
+                + " itemCategory=floor_torch"
+                + " proofTarget=" + proofTarget
+                + " wall_torch=NOT_COVERED"
+                + " lantern=NOT_COVERED"
+                + " signs=NOT_COVERED"
+                + " chains=NOT_COVERED"
+                + " supportCandidatePos=" + summary.supportCandidatePos().toShortString()
+                + " supportCandidateState=" + summary.supportCandidateState()
+                + " supportDy=" + String.format("%.3f", summary.supportDy())
+                + " torchDy=" + String.format("%.3f", summary.torchDy())
+                + " rawSupportTopY=" + (Double.isFinite(summary.rawSupportTopY())
+                        ? String.format("%.6f", summary.rawSupportTopY()) : "N/A")
+                + " supportVisibleTopY=" + (Double.isFinite(summary.supportVisibleTopY())
+                        ? String.format("%.6f", summary.supportVisibleTopY()) : "N/A")
+                + " rawTorchShapeMinY=" + (Double.isFinite(summary.rawTorchShapeMinY())
+                        ? String.format("%.6f", summary.rawTorchShapeMinY()) : "N/A")
+                + " torchModelBottomY=" + (Double.isFinite(summary.torchModelBottomY())
+                        ? String.format("%.6f", summary.torchModelBottomY()) : "N/A")
+                + " contactGap=" + (Double.isFinite(summary.contactGap())
+                        ? String.format("%.6f", summary.contactGap()) : "N/A")
+                + " fixtureMatchesV2LiveStack=" + anyMatches
+                + " failureLayer=" + finalFailureLayer
+                + " redProofExpected=CONTACT_GAP"
+                + " redProofResult=" + redProofResult
+                + " productionGameplayFixApplied=false"
+                + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_V2_CONTACT_GAP_PROOF"
+                + " releasePrep=PAUSED"
+                + " expectedContactGap=0.500000");
+    }
+
+    private static Beta35V2ContactGapAttempt runBeta35FloorTorchV2ContactGapRedAttempt(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String scenario,
+            BlockPos supportCandidatePos,
+            SlabType supportCandidateType,
+            double expectedSupportDy,
+            double expectedTorchDy
+    ) {
+        final BlockPos torchPos = supportCandidatePos.up();
+        final BlockHitResult torchUseHit = new BlockHitResult(
+                new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY(), supportCandidatePos.getZ() + 0.5d),
+                Direction.UP,
+                supportCandidatePos,
+                false);
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(supportCandidatePos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, supportCandidateType),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(torchPos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.TORCH, 4));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY() + 2.2d, supportCandidatePos.getZ() - 2.0d),
+                torchUseHit.getPos());
+
+        final String[] placementResultText = {"not-run"};
+        final boolean[] placementAccepted = {false};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_RED]"
+                        + " reason=client_not_ready categoryScope=floor_torch_only");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, torchUseHit);
+            placementResultText[0] = result.toString();
+            placementAccepted[0] = result.isAccepted();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockState[] supportCandidateStateHolder = {null};
+        final BlockState[] torchStateHolder = {null};
+        final double[] supportDyHolder = {Double.NaN};
+        final double[] torchDyHolder = {Double.NaN};
+        final double[] rawSupportTopYHolder = {Double.NaN};
+        final double[] supportVisibleTopYHolder = {Double.NaN};
+        final double[] rawTorchShapeMinYHolder = {Double.NaN};
+        final double[] torchModelBottomYHolder = {Double.NaN};
+        final double[] contactGapHolder = {Double.NaN};
+        final boolean[] fixtureMatchesHolder = {false};
+        final String[] failureLayerHolder = {"V2_SOURCE_TRUTH_MISMATCH"};
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_RED]"
+                        + " reason=client_world_or_player_missing categoryScope=floor_torch_only");
+            }
+
+            BlockState supportCandidateState = mc.world.getBlockState(supportCandidatePos);
+            BlockState torchState = mc.world.getBlockState(torchPos);
+            supportCandidateStateHolder[0] = supportCandidateState;
+            torchStateHolder[0] = torchState;
+
+            double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportCandidateState);
+            double torchDy = torchState.isOf(Blocks.TORCH)
+                    ? SlabSupport.getYOffset(mc.world, torchPos, torchState)
+                    : Double.NaN;
+            double rawSupportTopY = supportCandidateState.isOf(Blocks.STONE_SLAB)
+                    ? supportCandidatePos.getY() + SlabSupport.getSupportYOffset(supportCandidateState)
+                    : Double.NaN;
+            double supportVisibleTopY = supportCandidateState.isOf(Blocks.STONE_SLAB)
+                    ? beta35SupportVisibleTopY(supportCandidatePos, supportCandidateState, supportDy)
+                    : Double.NaN;
+
+            VoxelShape outlineShape = torchState.isOf(Blocks.TORCH)
+                    ? torchState.getOutlineShape(mc.world, torchPos, net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, torchPos);
+            double rawTorchShapeMinY = outlineBox == null ? Double.NaN : outlineBox.minY - torchPos.getY();
+            double torchModelBottomY = torchState.isOf(Blocks.TORCH) && Double.isFinite(rawTorchShapeMinY)
+                    ? torchPos.getY() + rawTorchShapeMinY
+                    : Double.NaN;
+            double contactGap = torchModelBottomY - supportVisibleTopY;
+
+            boolean supportTypeExpected = supportCandidateState.isOf(Blocks.STONE_SLAB)
+                    && supportCandidateState.get(SlabBlock.TYPE) == supportCandidateType;
+            boolean supportDyExpected = Double.isFinite(supportDy) && Math.abs(supportDy - expectedSupportDy) <= EPSILON;
+            boolean torchDyExpected = torchState.isOf(Blocks.TORCH) && Math.abs(torchDy - expectedTorchDy) <= EPSILON;
+            boolean fixtureMatchesV2LiveStack = placementAccepted[0]
+                    && supportTypeExpected
+                    && supportDyExpected
+                    && torchDyExpected;
+
+            supportDyHolder[0] = supportDy;
+            torchDyHolder[0] = torchDy;
+            rawSupportTopYHolder[0] = rawSupportTopY;
+            supportVisibleTopYHolder[0] = supportVisibleTopY;
+            rawTorchShapeMinYHolder[0] = rawTorchShapeMinY;
+            torchModelBottomYHolder[0] = torchModelBottomY;
+            contactGapHolder[0] = contactGap;
+            fixtureMatchesHolder[0] = fixtureMatchesV2LiveStack;
+
+            String failureLayer = "NONE";
+            if (!placementAccepted[0] || !torchState.isOf(Blocks.TORCH) || !supportTypeExpected) {
+                failureLayer = "V2_SOURCE_TRUTH_MISMATCH";
+            } else if (!fixtureMatchesV2LiveStack) {
+                failureLayer = "V2_SOURCE_TRUTH_MISMATCH";
+            } else if (!Double.isFinite(contactGap) || Math.abs(contactGap - 0.5d) > EPSILON) {
+                failureLayer = "V2_LIVE_FLOOR_TORCH_CONTACT_GAP";
+            }
+            failureLayerHolder[0] = failureLayer;
+
+            boolean contactGapMatch = Double.isFinite(contactGap) && Math.abs(contactGap - 0.5d) <= EPSILON;
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_MEASURED]"
+                    + " categoryScope=floor_torch_only"
+                    + " scenario=" + scenario
+                    + " supportCandidatePos=" + supportCandidatePos.toShortString()
+                    + " supportCandidateState=" + supportCandidateState
+                    + " torchPos=" + torchPos.toShortString()
+                    + " torchState=" + torchState
+                    + " supportDy=" + (Double.isFinite(supportDy) ? String.format("%.3f", supportDy) : "N/A")
+                    + " torchDy=" + (Double.isFinite(torchDy) ? String.format("%.3f", torchDy) : "N/A")
+                    + " rawSupportTopY=" + (Double.isFinite(rawSupportTopY) ? String.format("%.6f", rawSupportTopY) : "N/A")
+                    + " supportVisibleTopY=" + (Double.isFinite(supportVisibleTopY) ? String.format("%.6f", supportVisibleTopY) : "N/A")
+                    + " rawTorchShapeMinY=" + (Double.isFinite(rawTorchShapeMinY) ? String.format("%.6f", rawTorchShapeMinY) : "N/A")
+                    + " torchModelBottomY=" + (Double.isFinite(torchModelBottomY) ? String.format("%.6f", torchModelBottomY) : "N/A")
+                    + " contactGap=" + (Double.isFinite(contactGap) ? String.format("%.6f", contactGap) : "N/A")
+                    + " outlineMinY=" + beta35FormatMinY(outlineBox)
+                    + " outlineMaxY=" + beta35FormatMaxY(outlineBox)
+                    + " expectedSupportDy=" + String.format("%.3f", expectedSupportDy)
+                    + " expectedTorchDy=" + String.format("%.3f", expectedTorchDy)
+                    + " fixtureMatchesV2LiveStack=" + fixtureMatchesV2LiveStack
+                    + " failureLayer=" + failureLayer
+                    + " placementResult=" + placementResultText[0]
+                    + " placementAccepted=" + placementAccepted[0]);
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_RED]"
+                    + " categoryScope=floor_torch_only"
+                    + " scenario=" + scenario
+                    + " supportCandidatePos=" + supportCandidatePos.toShortString()
+                    + " supportCandidateState=" + supportCandidateState
+                    + " torchPos=" + torchPos.toShortString()
+                    + " torchState=" + torchState
+                    + " supportDy=" + (Double.isFinite(supportDy) ? String.format("%.3f", supportDy) : "N/A")
+                    + " torchDy=" + (Double.isFinite(torchDy) ? String.format("%.3f", torchDy) : "N/A")
+                    + " rawSupportTopY=" + (Double.isFinite(rawSupportTopY) ? String.format("%.6f", rawSupportTopY) : "N/A")
+                    + " supportVisibleTopY=" + (Double.isFinite(supportVisibleTopY) ? String.format("%.6f", supportVisibleTopY) : "N/A")
+                    + " rawTorchShapeMinY=" + (Double.isFinite(rawTorchShapeMinY) ? String.format("%.6f", rawTorchShapeMinY) : "N/A")
+                    + " torchModelBottomY=" + (Double.isFinite(torchModelBottomY) ? String.format("%.6f", torchModelBottomY) : "N/A")
+                    + " contactGap=" + (Double.isFinite(contactGap) ? String.format("%.6f", contactGap) : "N/A")
+                    + " contactGapExpected=0.500000"
+                    + " contactGapObservedMatch=" + contactGapMatch
+                    + " fixtureMatchesV2LiveStack=" + fixtureMatchesV2LiveStack
+                    + " redProofExpected=CONTACT_GAP"
+                    + " proofTargetLayer=FLOOR_TORCH_ONLY"
+                    + " failureLayer=" + failureLayer
+                    + " redProofResult=" + (failureLayer.equals("NONE") ? "GREEN" : "RED")
+                    + " heldItem=" + mc.player.getMainHandStack().getItem().getTranslationKey()
+                    + " playerPos="
+                    + String.format("%.3f,%.3f,%.3f", mc.player.getX(), mc.player.getY(), mc.player.getZ())
+                    + " productionGameplayFixApplied=false");
+        });
+
+        return new Beta35V2ContactGapAttempt(
+                scenario,
+                torchPos,
+                supportCandidatePos,
+                supportCandidateStateHolder[0],
+                supportDyHolder[0],
+                rawSupportTopYHolder[0],
+                supportVisibleTopYHolder[0],
+                rawTorchShapeMinYHolder[0],
+                torchModelBottomYHolder[0],
+                torchDyHolder[0],
+                contactGapHolder[0],
+                fixtureMatchesHolder[0],
+                failureLayerHolder[0]);
+    }
+
     private static void runBeta35LiveFloorTorchContactGapRedProof(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
@@ -8489,6 +8761,23 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " productionGameplayFixApplied=false"
                     + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_CONTACT_GAP_PROOF");
         });
+    }
+
+    private static record Beta35V2ContactGapAttempt(
+            String scenario,
+            BlockPos torchPos,
+            BlockPos supportCandidatePos,
+            BlockState supportCandidateState,
+            double supportDy,
+            double rawSupportTopY,
+            double supportVisibleTopY,
+            double rawTorchShapeMinY,
+            double torchModelBottomY,
+            double torchDy,
+            double contactGap,
+            boolean fixtureMatchesV2LiveStack,
+            String failureLayer
+    ) {
     }
 
     private static double beta35SupportVisibleTopY(BlockPos pos, BlockState state, double supportDy) {
