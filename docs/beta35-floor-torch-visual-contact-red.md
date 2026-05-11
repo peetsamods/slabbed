@@ -92,11 +92,27 @@ Measured live-shape result in the parity fixture:
 - `liveShapeProofStatus=GREEN`
 - `failureLayer=NONE`
 
-Interpretation: the live-shape parity fixture still does not reproduce a
-nonzero floor-torch contact gap or a wrong-support-owner/wrong-dy failure.
-This means the blocker is still Julia's manual visual rejection and likely
-requires a more specific live coordinate/face/owner capture, not a broad
-production gameplay fix.
+Follow-up live evidence after `3212d88` proved the remaining bad cases were
+lowered bottom-slab support cases with `supportDy=-1.000000`, not placement,
+survival, or a model/outline/raycast triad split.
+
+The narrow lowered bottom-slab contact fix is documented at
+`docs/beta35-floor-torch-lowered-slab-contact-fix.md`. The focused
+`-Dslabbed.beta35FloorTorchLiveShapeRed=true` proof now also retests two
+coordinate-equivalent lowered bottom-slab cases:
+
+- `torchPos=43,-56,88`, `supportCandidateState=stone_slab[type=bottom]`,
+  previous `contactGap=0.500000`, now `torchDy=-1.500`,
+  `supportVisibleTopY=-57.500000`, `torchModelBottomY=-57.500000`,
+  `contactGap=0.000000`, `triadCoLocated=true`, `failureLayer=NONE`.
+- `torchPos=43,-55,79`, `supportCandidateState=stone_slab[type=bottom]`,
+  previous `contactGap=1.000000`, now `torchDy=-1.500`,
+  `supportVisibleTopY=-56.500000`, `torchModelBottomY=-56.500000`,
+  `contactGap=0.000000`, `triadCoLocated=true`, `failureLayer=NONE`.
+
+The controlled `supportDy=-0.500` fixture remains GREEN/PENDING with
+`contactGap=0.000000`. Beta 3.5 release prep remains paused pending Julia live
+acceptance.
 
 ## Audit questions
 
@@ -146,5 +162,7 @@ with gate `-Dslabbed.beta35LiveFloorTorchContactGapRed=true` and markers:
 - `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]`
 - `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]`
 
-Current classification in this slice remains RED, with no production gameplay fix
-implemented until the RED evidence is reviewed.
+This historical RED slice is superseded for lowered bottom-slab support by
+`docs/beta35-floor-torch-lowered-slab-contact-fix.md`. Scope remains
+`floor_torch_only`; `wall_torch`, `lantern`, `signs`, and `chains` remain
+`NOT_COVERED`.
