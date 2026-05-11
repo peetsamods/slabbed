@@ -1,5 +1,6 @@
 package com.slabbed.client.runtime;
 
+import com.slabbed.util.Beta35LiveTorchCaptureRecorder;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -101,6 +102,8 @@ public final class LoweredSideSlabRetargeter {
                     + " support=" + supportPos.toShortString()
                     + " currentDist2=" + (currentHit == null ? "INF" : currentHit.getPos().squaredDistanceTo(eye))
                     + " endDist2=" + end.squaredDistanceTo(eye));
+            Beta35LiveTorchCaptureRecorder.recordComfortTrace(
+                    world, "comfort_scan_attempt", pos, supportPos);
         }
         BlockHitResult hit = shape.raycast(eye, end, pos);
         if (hit == null && canComfortScan) {
@@ -108,6 +111,8 @@ public final class LoweredSideSlabRetargeter {
             if (hit != null) {
                 System.out.println("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_miss_angle_owner_gap "
                         + "pos=" + pos.toShortString() + " hit=" + hit.getPos());
+                Beta35LiveTorchCaptureRecorder.recordComfortTrace(
+                        world, "comfort_miss_angle_owner_gap", pos, supportPos);
             }
         }
         if (hit == null) {
@@ -151,6 +156,8 @@ public final class LoweredSideSlabRetargeter {
             System.out.println("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_miss_angle_owner_gap"
                     + " no-box-intersection pos=" + pos.toShortString()
                     + " box=" + box);
+            Beta35LiveTorchCaptureRecorder.recordComfortTrace(
+                    world, "comfort_miss_angle_owner_gap no-box-intersection", pos, pos.down());
             return null;
         }
 
@@ -183,6 +190,8 @@ public final class LoweredSideSlabRetargeter {
                     + " distance-reject pos=" + pos.toShortString()
                     + " hit=" + comfortHit.getPos()
                     + " axisDelta=" + maxAxisDelta);
+            Beta35LiveTorchCaptureRecorder.recordComfortTrace(
+                    world, "comfort_miss_angle_owner_gap distance-reject", pos, pos.down());
             return null;
         }
 
