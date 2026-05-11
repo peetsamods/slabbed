@@ -187,3 +187,16 @@ with `[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]` and placement attempts with
 Beta 3.5 release prep remains paused pending Julia live trace. Scope remains
 `floor_torch_only`; non-floor categories remain `NOT_COVERED`; no release tag
 moved.
+
+## Placement follow-up after dual tracer
+
+The `fe7677a` dual trace separated a placement failure from visual/contact. The
+new lowered bottom-slab placement proof is GREEN for `floor_torch` with
+`intendedSupportDy=-1.000000`: `finalInteractResult=Success[...]`,
+`torchBlockAppearedAfterAttempt=true`, `torchDy=-1.500000`,
+`contactGap=0.000000`, `survival=SURVIVAL_GREEN`, and `failureLayer=NONE`.
+
+This does not change the visual-contact fixture status: the controlled visual
+contact proof still builds successfully with `contactGap=0.000000`, `triad=GREEN`,
+and `failureLayer=FIXTURE_MISMATCH`. Julia live acceptance is still required
+before release prep resumes.

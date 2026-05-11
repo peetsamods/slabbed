@@ -78,6 +78,29 @@ The fix makes `SlabSupport.getYOffset(...)` return `torchDy=-1.500000` only for 
 
 - `floor_torch_only` remains the active scope.
 - `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
+
+## Follow-up placement fix
+
+The later live dual tracer at `fe7677a` proved the remaining lowered bottom-slab
+failure was not contact when a torch exists. Contact stayed GREEN for concrete
+rows, including `supportDy=-1.000000` / `torchDy=-1.500000` /
+`contactGap=0.000000`.
+
+The remaining bad layer was player-like placement on a lowered bottom slab:
+`intendedSupportCandidateState=stone_slab[type=bottom]`,
+`intendedSupportDy=-1.000000`, `finalInteractResult=Fail[]`,
+`torchBlockAppearedAfterAttempt=false`, and
+`failureLayer=PLACEMENT_FAILURE_ON_LOWERED_BOTTOM_SLAB_SUPPORT`.
+
+That is now fixed by
+`docs/beta35-floor-torch-lowered-slab-placement-fix.md`. The fixed proof reports
+`finalInteractResult=Success[...]`, `torchBlockAppearedAfterAttempt=true`,
+`torchDy=-1.500000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, and
+`failureLayer=NONE`.
+
+Scope remains `floor_torch_only`; non-floor categories remain `NOT_COVERED`.
+Beta 3.5 release prep remains paused pending Julia live acceptance. No release
+tag moved.
 - Beta 3.5 release prep remains paused pending Julia live acceptance.
 - No release tag moved.
 

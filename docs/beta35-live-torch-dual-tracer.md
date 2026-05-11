@@ -52,3 +52,26 @@ This tracer is manual-live, proof-only, and off by default. It does not implemen
 a production behavior fix. Beta 3.5 release prep remains paused pending Julia
 live trace. `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
 No release tag moved.
+
+## Follow-up placement fix
+
+The live trace at `fe7677a` isolated a placement-layer failure on lowered
+bottom-slab support:
+
+- `heldItem=minecraft:torch`
+- `intendedSupportCandidateState=stone_slab[type=bottom]`
+- `intendedSupportSourceType=PLAIN_STATE`
+- `intendedSupportDy=-1.000000`
+- `finalInteractResult=Fail[]`
+- `torchBlockAppearedAfterAttempt=false`
+- `classification=PLACEMENT_RESULT_UNKNOWN`
+
+That is now covered by
+`-Dslabbed.beta35FloorTorchLoweredSlabPlacement=true`. The fixed proof reports
+`classification=PLACEMENT_ATTEMPT_OK`, `finalInteractResult=Success[...]`,
+`torchBlockAppearedAfterAttempt=true`, `torchDy=-1.500000`,
+`contactGap=0.000000`, `survival=SURVIVAL_GREEN`, and `failureLayer=NONE`.
+
+This remains `floor_torch_only`; wall torch, lantern, signs, and chains are still
+`NOT_COVERED`. Beta 3.5 release prep remains paused pending Julia live
+acceptance. No release tag moved.
