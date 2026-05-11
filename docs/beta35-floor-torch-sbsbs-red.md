@@ -153,3 +153,9 @@ target the specific gameplay path that Julia actually encountered.
 - `chains=NOT_COVERED`
 
 Evidence folder: `tmp/beta35-floor-torch-sbsbs-red-04ace65/`
+
+## 2026-05-11: source-truth probe added
+- Added a live source-truth red probe for SBSBS floor torch under gate `-Dslabbed.beta35FloorTorchSbsbsSourceTruthRed=true`.
+- Probe contrast remains: controlled manual-source proof is green, while source-truth probe keeps live interaction placement path and measures whether required component marks exist.
+- No production gameplay behavior changed; only proof/recording and gating logic were added.
+- Next safe slice: production fix only after source-truth classification is confirmed RED in this branch.
