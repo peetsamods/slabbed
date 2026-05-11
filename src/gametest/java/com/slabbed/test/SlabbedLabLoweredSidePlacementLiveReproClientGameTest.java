@@ -8001,23 +8001,29 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
     ) {
+        // v2 live: torchPos=44,-56,87  supportCandidatePos=44,-57,87  (stone_slab[type=top])
         Beta35V2ContactGapAttempt topScenario = runBeta35FloorTorchV2ContactGapRedAttempt(
                 ctx,
                 singleplayer,
-                "top_slab",
-                new BlockPos(44, -56, 87),
+                "top_slab_support",
+                new BlockPos(44, -57, 87),
                 SlabType.TOP,
                 -1.000d,
-                -0.500d);
+                -0.500d,
+                new BlockPos(44, -56, 87),
+                new BlockPos(44, -57, 87));
 
+        // v2 live: torchPos=43,-56,88  supportCandidatePos=43,-57,88  (stone_slab[type=bottom])
         Beta35V2ContactGapAttempt bottomScenario = runBeta35FloorTorchV2ContactGapRedAttempt(
                 ctx,
                 singleplayer,
-                "bottom_slab",
-                new BlockPos(43, -56, 88),
+                "bottom_slab_support",
+                new BlockPos(43, -57, 88),
                 SlabType.BOTTOM,
                 -1.000d,
-                -1.000d);
+                -1.000d,
+                new BlockPos(43, -56, 88),
+                new BlockPos(43, -57, 88));
 
         boolean topMatches = topScenario.fixtureMatchesV2LiveStack();
         boolean bottomMatches = bottomScenario.fixtureMatchesV2LiveStack();
@@ -8042,6 +8048,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         String redProofResult = finalFailureLayer.equals("NONE") ? "GREEN" : "RED";
         String proofTarget = summary.scenario();
 
+        boolean bothCoordinateParity = topScenario.coordinateParity() && bottomScenario.coordinateParity();
         System.out.println("[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_SUMMARY]"
                 + " categoryScope=floor_torch_only"
                 + " itemCategory=floor_torch"
@@ -8064,6 +8071,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         ? String.format("%.6f", summary.torchModelBottomY()) : "N/A")
                 + " contactGap=" + (Double.isFinite(summary.contactGap())
                         ? String.format("%.6f", summary.contactGap()) : "N/A")
+                + " coordinateParity=" + bothCoordinateParity
                 + " fixtureMatchesV2LiveStack=" + anyMatches
                 + " failureLayer=" + finalFailureLayer
                 + " redProofExpected=CONTACT_GAP"
@@ -8081,9 +8089,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             BlockPos supportCandidatePos,
             SlabType supportCandidateType,
             double expectedSupportDy,
-            double expectedTorchDy
+            double expectedTorchDy,
+            BlockPos v2ExpectedTorchPos,
+            BlockPos v2ExpectedSupportPos
     ) {
         final BlockPos torchPos = supportCandidatePos.up();
+        final boolean coordinateParity =
+                torchPos.equals(v2ExpectedTorchPos) && supportCandidatePos.equals(v2ExpectedSupportPos);
         final BlockHitResult torchUseHit = new BlockHitResult(
                 new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY(), supportCandidatePos.getZ() + 0.5d),
                 Direction.UP,
@@ -8185,7 +8197,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             fixtureMatchesHolder[0] = fixtureMatchesV2LiveStack;
 
             String failureLayer = "NONE";
-            if (!placementAccepted[0] || !torchState.isOf(Blocks.TORCH) || !supportTypeExpected) {
+            if (!coordinateParity) {
+                failureLayer = "V2_COORDINATE_MISMATCH";
+            } else if (!placementAccepted[0] || !torchState.isOf(Blocks.TORCH) || !supportTypeExpected) {
                 failureLayer = "V2_SOURCE_TRUTH_MISMATCH";
             } else if (!fixtureMatchesV2LiveStack) {
                 failureLayer = "V2_SOURCE_TRUTH_MISMATCH";
@@ -8195,9 +8209,18 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             failureLayerHolder[0] = failureLayer;
 
             boolean contactGapMatch = Double.isFinite(contactGap) && Math.abs(contactGap - 0.5d) <= EPSILON;
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_V2_COORDINATE_REPLAY]"
+                    + " categoryScope=floor_torch_only"
+                    + " caseName=" + scenario
+                    + " expectedTorchPos=" + v2ExpectedTorchPos.toShortString()
+                    + " actualTorchPos=" + torchPos.toShortString()
+                    + " expectedSupportCandidatePos=" + v2ExpectedSupportPos.toShortString()
+                    + " actualSupportCandidatePos=" + supportCandidatePos.toShortString()
+                    + " coordinateParity=" + coordinateParity
+                    + " failureLayer=" + failureLayer);
             System.out.println("[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_MEASURED]"
                     + " categoryScope=floor_torch_only"
-                    + " scenario=" + scenario
+                    + " caseName=" + scenario
                     + " supportCandidatePos=" + supportCandidatePos.toShortString()
                     + " supportCandidateState=" + supportCandidateState
                     + " torchPos=" + torchPos.toShortString()
@@ -8213,13 +8236,14 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " outlineMaxY=" + beta35FormatMaxY(outlineBox)
                     + " expectedSupportDy=" + String.format("%.3f", expectedSupportDy)
                     + " expectedTorchDy=" + String.format("%.3f", expectedTorchDy)
+                    + " coordinateParity=" + coordinateParity
                     + " fixtureMatchesV2LiveStack=" + fixtureMatchesV2LiveStack
                     + " failureLayer=" + failureLayer
                     + " placementResult=" + placementResultText[0]
                     + " placementAccepted=" + placementAccepted[0]);
             System.out.println("[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_RED]"
                     + " categoryScope=floor_torch_only"
-                    + " scenario=" + scenario
+                    + " caseName=" + scenario
                     + " supportCandidatePos=" + supportCandidatePos.toShortString()
                     + " supportCandidateState=" + supportCandidateState
                     + " torchPos=" + torchPos.toShortString()
@@ -8233,6 +8257,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " contactGap=" + (Double.isFinite(contactGap) ? String.format("%.6f", contactGap) : "N/A")
                     + " contactGapExpected=0.500000"
                     + " contactGapObservedMatch=" + contactGapMatch
+                    + " coordinateParity=" + coordinateParity
                     + " fixtureMatchesV2LiveStack=" + fixtureMatchesV2LiveStack
                     + " redProofExpected=CONTACT_GAP"
                     + " proofTargetLayer=FLOOR_TORCH_ONLY"
@@ -8256,6 +8281,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 torchModelBottomYHolder[0],
                 torchDyHolder[0],
                 contactGapHolder[0],
+                coordinateParity,
                 fixtureMatchesHolder[0],
                 failureLayerHolder[0]);
     }
@@ -8775,6 +8801,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             double torchModelBottomY,
             double torchDy,
             double contactGap,
+            boolean coordinateParity,
             boolean fixtureMatchesV2LiveStack,
             String failureLayer
     ) {
