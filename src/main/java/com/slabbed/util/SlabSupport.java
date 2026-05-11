@@ -190,8 +190,7 @@ public final class SlabSupport {
         }
         BlockState supportState = world.getBlockState(supportPos);
         return isBottomSlab(supportState)
-                && (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState)
-                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, supportPos, supportState));
+                && SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, supportPos, supportState);
     }
 
     /**
@@ -1073,6 +1072,10 @@ public final class SlabSupport {
         if (isFloorTorch(state)) {
             BlockPos supportPos = pos.down();
             BlockState supportState = world.getBlockState(supportPos);
+            if (isBottomSlab(supportState)
+                    && SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState)) {
+                return -1.5;
+            }
             if (isTopSlab(supportState)
                     && SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, supportPos, supportState)) {
                 return -1.0;
