@@ -8861,9 +8861,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
 
         // ── Phase 2: apply compound-visible-lower mark (simulate slab finalization) ────────
-        // This mirrors what happens in live gameplay when the slab's compound truth is
-        // finalized AFTER the torch was authored.  The mark write does NOT call
-        // world.updateNeighbors so getStateForNeighborUpdate on the torch is never triggered.
+        // Production fix: addCompoundVisibleSideLowerSlab now calls world.updateNeighborsAlways
+        // after the mark write, triggering TorchBlockMixin.getStateForNeighborUpdate(DOWN) which
+        // returns AIR and removes the stale floor torch.
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
             BlockState supportState = world.getBlockState(supportCandidatePos);
@@ -8970,8 +8970,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " legalOutcome=" + legalOutcome
                     + " failureLayer=" + failureLayer
                     + " wall_torch=NOT_COVERED"
-                    + " productionGameplayFixApplied=false"
-                    + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_SUPPORT_FINALIZATION_RED");
+                    + " productionGameplayFixApplied=true"
+                    + " beta35ReleaseStatus=PAUSED_PENDING_JULIA_RETEST");
             System.out.println("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_GREEN]"
                     + " phase=after_finalization"
                     + " categoryScope=floor_torch_only"
@@ -8999,23 +8999,26 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " legalOutcome=" + legalOutcomeHolder[0]
                 + " failureLayer=" + failureLayerHolder[0]
                 + " redProofResult=" + (proofRed ? "RED" : proofGreen ? "GREEN" : "INCONCLUSIVE")
-                + " productionGameplayFixApplied=false"
+                + " productionGameplayFixApplied=true"
                 + " wall_torch=NOT_COVERED"
                 + " lantern=NOT_COVERED"
                 + " signs=NOT_COVERED"
                 + " chains=NOT_COVERED"
-                + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_SUPPORT_FINALIZATION_RED"
+                + " beta35ReleaseStatus=PAUSED_PENDING_JULIA_RETEST"
                 + " releasePrep=PAUSED"
-                + " nextSlice=PRODUCTION_FIX_AFTER_RED_PROOF_CONFIRMED");
+                + " nextSlice=RELEASE_PENDING_JULIA_RETEST");
 
         if (!fixtureOk) {
             throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_RED]"
                     + " reason=fixture_failed failureLayer=" + failureLayerHolder[0]
                     + " categoryScope=floor_torch_only");
         }
-        // The RED proof succeeds as a proof if torch remains (RED = bug confirmed).
-        // Do NOT throw on RED — that is the expected outcome.
-        // Throw only if the fixture itself is broken (SOURCE_TRUTH_MISMATCH).
+        if (proofRed) {
+            throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_RED]"
+                    + " reason=regression_stale_torch_remains failureLayer=" + failureLayerHolder[0]
+                    + " categoryScope=floor_torch_only"
+                    + " productionGameplayFixApplied=true");
+        }
     }
 
     private static void runBeta35LiveFloorTorchContactGapRedProof(
