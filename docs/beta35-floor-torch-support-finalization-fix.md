@@ -6,6 +6,7 @@
 - `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
 - Beta 3.5 release remains paused pending Julia live re-test.
 - No release tag moved.
+- **Remaining gap (2026-05-11):** After this fix, Julia reported a distinct failure: `SBSBS+torch = floating torch at vanilla position`. The SBSBS controlled-fixture proof is GREEN (`torchDy=-1.000`, `contactGap=0.000000`, `failureLayer=NONE`). The gap between the controlled fixture and Julia's live experience is unresolved. See `docs/beta35-floor-torch-sbsbs-red.md`.
 
 ## Bug recap
 
