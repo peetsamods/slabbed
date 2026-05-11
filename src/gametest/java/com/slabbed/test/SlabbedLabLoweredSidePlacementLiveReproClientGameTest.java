@@ -9610,6 +9610,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         boolean carrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
         boolean compoundUpper = SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state);
         boolean compoundLower = SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state);
+        boolean compoundOwnerTop = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
         boolean hasBottomSlabBelow = SlabSupport.hasBottomSlabBelow(world, pos);
         boolean anchoredFullBlockBelow = SlabAnchorAttachment.isAnchored(world, pos.down());
         return label
@@ -9620,6 +9621,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " isPersistentLoweredBottomSlabCarrier=" + carrier
                 + " isCompoundVisibleSideUpperSlab=" + compoundUpper
                 + " isCompoundVisibleSideLowerSlab=" + compoundLower
+                + " isCompoundVisibleOwnerTopSlab=" + compoundOwnerTop
                 + " hasBottomSlabBelow=" + hasBottomSlabBelow
                 + " anchoredFullBlockBelow=" + anchoredFullBlockBelow;
     }
@@ -9861,6 +9863,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         final boolean[] fixtureUpperAnchoredHolder = {false};
         final boolean[] fixtureMiddleCarrierHolder = {false};
         final boolean[] fixtureSupportCarrierHolder = {false};
+        final boolean[] fixtureSupportOwnerTopHolder = {false};
         final String[] fixtureFailureHolder = {null};
 
         ctx.runOnClient(mc -> {
@@ -9875,7 +9878,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     mc.world, middleCarrierSlab, mc.world.getBlockState(middleCarrierSlab));
             fixtureSupportCarrierHolder[0] = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
                     mc.world, supportPos, supportState);
-            boolean supportDyOk = Math.abs(fixtureSupportDy[0] - (-0.5d)) <= EPSILON;
+            fixtureSupportOwnerTopHolder[0] = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(
+                    mc.world, supportPos, supportState);
+            boolean supportDyOk = Math.abs(fixtureSupportDy[0] - (-0.5d)) <= EPSILON
+                    || (sourceTruthCapture
+                    && fixtureSupportOwnerTopHolder[0]
+                    && Math.abs(fixtureSupportDy[0] + 1.0d) <= EPSILON);
             if (!supportDyOk) {
                 fixtureFailureHolder[0] = "supportDy_not_minus_half supportDy="
                         + String.format("%.3f", fixtureSupportDy[0]);
@@ -9890,6 +9898,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " upperAnchored=" + fixtureUpperAnchoredHolder[0]
                     + " middleCarrierMarked=" + fixtureMiddleCarrierHolder[0]
                     + " supportCarrierMarked=" + fixtureSupportCarrierHolder[0]
+                    + " supportOwnerTopMarked=" + fixtureSupportOwnerTopHolder[0]
                     + " fixtureResult=" + (fixtureFailureHolder[0] == null ? "GREEN" : "RED:" + fixtureFailureHolder[0]));
         });
 
@@ -9950,6 +9959,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     mc.world, supportPos, supportStateAfter);
             boolean compoundVisibleLower = SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(
                     mc.world, supportPos, supportStateAfter);
+            boolean compoundOwnerTop = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(
+                    mc.world, supportPos, supportStateAfter);
             boolean carrierMarked = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
                     mc.world, supportPos, supportStateAfter);
             String supportType;
@@ -9957,6 +9968,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 supportType = "compound_visible_upper";
             } else if (compoundVisibleLower) {
                 supportType = "compound_visible_lower";
+            } else if (compoundOwnerTop) {
+                supportType = "compound_visible_owner_top";
             } else if (carrierMarked) {
                 supportType = "lowered_carrier";
             } else if (supportStateAfter.isOf(Blocks.STONE)) {
@@ -9996,16 +10009,25 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     mc.world,
                     supportPos.down());
 
-            boolean sourceTruthOk = Math.abs(supportDy - (-0.5d)) <= EPSILON && carrierMarked;
-            boolean fixtureSourceTruth = sourceTruthOk
+            boolean carrierSourceTruthOk = Math.abs(supportDy - (-0.5d)) <= EPSILON && carrierMarked;
+            boolean ownerTopSourceTruthOk = compoundOwnerTop
+                    && Math.abs(supportDy + 1.0d) <= EPSILON
+                    && supportAnchoredFullBlockBelow;
+            boolean torchRejectedByLaw = !torchPresent
+                    && ownerTopSourceTruthOk
+                    && SlabSupport.isRejectedFloorTorchTopFace(
+                    mc.world, supportPos, Blocks.TORCH.getDefaultState());
+            boolean fixtureSourceTruth = (carrierSourceTruthOk || ownerTopSourceTruthOk)
                     && lowerAnchorIsAnchored
                     && middleCarrierIsCarrier
                     && upperAnchorIsAnchored;
 
             String failureLayer;
-            if (!torchPresent) {
+            if (torchRejectedByLaw) {
+                failureLayer = "NONE";
+            } else if (!torchPresent) {
                 failureLayer = "SBSBS_TORCH_NOT_PLACED";
-            } else if (!sourceTruthOk) {
+            } else if (!carrierSourceTruthOk) {
                 failureLayer = "SBSBS_SUPPORT_SOURCE_TRUTH_MISMATCH";
             } else if (isVanillaPosition || (Double.isFinite(contactGap) && Math.abs(contactGap) > EPSILON)) {
                 failureLayer = "SBSBS_FLOOR_TORCH_VANILLA_POSITION";
@@ -10014,8 +10036,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             }
             failureLayerHolder[0] = failureLayer;
             String sourceTruthClassification = "NONE";
-            if (!fixtureSourceTruth) {
-            sourceTruthClassification = "SBSBS_SOURCE_TRUTH_NOT_AUTHORED";
+            if (torchRejectedByLaw) {
+                sourceTruthClassification = "SBSBS_OWNER_TOP_SUPPORT_REJECTED_BY_LAW";
+            } else if (!fixtureSourceTruth) {
+                sourceTruthClassification = "SBSBS_SOURCE_TRUTH_NOT_AUTHORED";
             } else if (!placementAcceptedHolder[0] || !torchPresent) {
                 sourceTruthClassification = "SBSBS_TORCH_PLACED_BEFORE_SOURCE_TRUTH";
             } else if (isVanillaPosition
@@ -10047,10 +10071,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " isVanillaPosition=" + isVanillaPosition
                     + " placementResult=" + placementResultText[0]
                     + " placementAccepted=" + placementAcceptedHolder[0]
-                    + " survivalResult=" + (torchPresent
-                            ? (survivalGreen ? "SURVIVAL_GREEN" : "SURVIVAL_RED") : "N/A")
-                    + " triadResult=" + (torchPresent ? (triadGreen ? "GREEN" : "RED") : "N/A")
+                    + " survivalResult=" + (torchRejectedByLaw ? "REJECTED_BY_LAW" : (torchPresent
+                            ? (survivalGreen ? "SURVIVAL_GREEN" : "SURVIVAL_RED") : "N/A"))
+                    + " triadResult=" + (torchRejectedByLaw ? "REJECTED_BY_LAW" : (torchPresent
+                            ? (triadGreen ? "GREEN" : "RED") : "N/A"))
                     + " supportType=" + supportType
+                    + " torchRejectedByLaw=" + torchRejectedByLaw
                     + " torchPlacedBeforeFinalization=false"
                     + " failureLayer=" + failureLayer
                     + " wall_torch=NOT_COVERED"
@@ -10091,7 +10117,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " fixtureSourceTruth=" + fixtureSourceTruth
                         + " classification=" + sourceTruthClassification
                         + " failureLayer=" + failureLayer
-                        + " productionGameplayFixApplied=false");
+                        + " productionGameplayFixApplied=true");
             }
 
             System.out.println("[JULIA_BETA35_FLOOR_TORCH_SBSBS_RED]"
@@ -10101,7 +10127,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " contactGap=" + (Double.isFinite(contactGap)
                             ? String.format("%.6f", contactGap) : "N/A")
                     + " categoryScope=floor_torch_only"
-                    + " productionGameplayFixApplied=false");
+                    + " productionGameplayFixApplied=true");
         });
 
         boolean proofRed = !failureLayerHolder[0].equals("NONE")
@@ -10114,7 +10140,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " isVanillaPosition=" + isVanillaPositionHolder[0]
                 + " redProofResult=" + (proofRed ? "RED" : "GREEN")
                 + " juliaLiveReport=SBSBS_TORCH_FLOATS_VANILLA_POSITION"
-                + " productionGameplayFixApplied=false"
+                + " productionGameplayFixApplied=true"
                 + " wall_torch=NOT_COVERED"
                 + " lantern=NOT_COVERED"
                 + " signs=NOT_COVERED"
@@ -10134,7 +10160,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             ? String.format("%.6f", measuredSupportDyHolder[0]) : "N/A")
                     + " torchDy=" + (Double.isFinite(measuredTorchDyHolder[0])
                             ? String.format("%.6f", measuredTorchDyHolder[0]) : "N/A")
-                    + " productionGameplayFixApplied=false"
+                    + " productionGameplayFixApplied=true"
                     + " redProofResult=" + (proofRed ? "RED" : "GREEN"));
         }
 
@@ -10144,7 +10170,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " failureLayer=" + failureLayerHolder[0]
                     + " isVanillaPosition=" + isVanillaPositionHolder[0]
                     + " categoryScope=floor_torch_only"
-                    + " productionGameplayFixApplied=false");
+                    + " productionGameplayFixApplied=true");
         }
     }
 }

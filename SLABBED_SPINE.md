@@ -339,3 +339,16 @@ If the slice changes, update the source pack and spine together so the current o
 - 2026-05-11: Added SBSBS floor-torch source-truth capture branch (proof-only) in `SlabbedLabLoweredSidePlacementLiveReproClientGameTest`.
 - 2026-05-11: Added source-truth recorder emission (`Beta35LiveTorchCaptureRecorder`) for contact/anchor/carrier state under gate `slabbed.beta35FloorTorchSbsbsSourceTruthRed`.
 - 2026-05-11: No production gameplay fix in this slice; no tag/tag movement performed yet.
+
+## Beta 3.5 floor torch SBSBS source-truth fix (2026-05-11)
+
+- Operating base for this slice: `4bca184` / `save/beta35-floor-torch-sbsbs-source-truth-red` on `integrate/phase19-into-side-slab-top-support`.
+- Root remains `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`; tracked tree was clean before edits; `tmp/` remains untracked evidence only.
+- Focused RED was reproduced before the fix: live/player-like SBSBS emitted `failureLayer=SBSBS_SUPPORT_SOURCE_TRUTH_MISMATCH`, `supportDy=-1.000000`, `torchDy=-0.500000`, `contactGap=1.000000`.
+- Root cause is now isolated as authored source-truth class mismatch, not client sync: lower anchor, middle carrier, and upper anchor sync correctly; the live top support slab is authored as `COMPOUND_VISIBLE_OWNER_TOP_SLAB` (`supportDy=-1.000000`) instead of the controlled fixture's persistent lowered carrier (`supportDy=-0.500000`).
+- Narrow production fix: `SlabSupport.isRejectedFloorTorchTopFace(...)` rejects `floor_torch` on a bottom slab marked `COMPOUND_VISIBLE_OWNER_TOP_SLAB`, and `SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(...)` now revalidates the block above on first marker authoring so stale torches are removed through `TorchBlockMixin`.
+- Focused gate `-Dslabbed.beta35FloorTorchSbsbsSourceTruthRed=true` is GREEN after the fix with `sourceTruth=SBSBS_OWNER_TOP_SUPPORT_REJECTED_BY_LAW`, `failureLayer=NONE`, `supportDy=-1.000000`, `torchDy=N/A`, `contactGap=N/A`, and `redProofResult=GREEN`.
+- Controlled SBSBS remains GREEN with `contactGap=0.000000`; support-finalization, V2 contact, fullblock contact, default client gametest, build gate, and `git diff --check` all passed.
+- Evidence folder: `tmp/beta35-floor-torch-sbsbs-source-truth-fix-4bca184`.
+- `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; Beta 3.5 remains paused pending Julia live retest; no release tag moved.
+- Next safe action after savepoint: Julia live retests SBSBS floor-torch behavior from the savepoint tag; do not broaden into other item categories or release prep without explicit instruction.

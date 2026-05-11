@@ -30,3 +30,10 @@ Prove whether Julia’s live SBSBS+floor-torch failure is caused by missing sour
 ## Stop condition
 - No production gameplay logic was modified in this slice.
 - No release tags changed or moved.
+
+## 2026-05-11 follow-up fix
+- Implemented the narrow production fix in the follow-up slice documented at `docs/beta35-floor-torch-sbsbs-source-truth-fix.md`.
+- Live/player-like SBSBS authoring now classifies the top support as `COMPOUND_VISIBLE_OWNER_TOP_SLAB` source truth (`supportDy=-1.000000`) rather than the controlled fixture's persistent lowered carrier.
+- `floor_torch` on that owner-top bottom slab is rejected by law because contact would require an illegal lower-than-`dy=-1.000` torch placement.
+- Focused gate `-Dslabbed.beta35FloorTorchSbsbsSourceTruthRed=true` is GREEN with `failureLayer=NONE`, `supportDy=-1.000000`, `torchDy=N/A`, and `sourceTruth=SBSBS_OWNER_TOP_SUPPORT_REJECTED_BY_LAW`.
+- `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; Beta 3.5 remains paused pending Julia live retest; no release tag moved.
