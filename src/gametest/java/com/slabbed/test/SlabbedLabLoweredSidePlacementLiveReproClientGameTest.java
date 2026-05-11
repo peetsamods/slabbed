@@ -8244,6 +8244,109 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 failureLayer = "LIVE_FLOOR_TORCH_CONTACT_GAP";
             }
 
+            // JULIA_BETA35_FLOOR_TORCH_SUPPORT_SOURCE_AUDIT: diagnostic-only markers that log
+            // every carrier/anchor predicate on the support slab and its immediate surroundings
+            // so we can pinpoint which source truth is present in the live world but absent in
+            // the fixture. No behaviour change.
+            boolean supportIsAnchored = SlabAnchorAttachment.isAnchored(mc.world, supportCandidatePos);
+            boolean supportHasCarrierMark =
+                    SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                            mc.world, supportCandidatePos, supportCandidateState);
+            boolean supportNonRecursiveCarrier =
+                    SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(
+                            mc.world, supportCandidatePos, supportCandidateState);
+            boolean supportSideLaneCarrier =
+                    SlabSupport.isLoweredSideLaneSlabCarrier(
+                            mc.world, supportCandidatePos, supportCandidateState);
+            boolean supportCompoundVisibleLower =
+                    SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(
+                            mc.world, supportCandidatePos, supportCandidateState);
+
+            BlockPos belowSupportPos = supportCandidatePos.down();
+            BlockState belowSupportState = mc.world.getBlockState(belowSupportPos);
+            double belowSupportDy = SlabSupport.getYOffset(mc.world, belowSupportPos, belowSupportState);
+            boolean belowSupportAnchored = SlabAnchorAttachment.isAnchored(mc.world, belowSupportPos);
+            boolean belowHasBottomSlabBelow = SlabSupport.hasBottomSlabBelow(mc.world, belowSupportPos);
+
+            BlockPos northSupportPos = supportCandidatePos.north();
+            BlockPos southSupportPos = supportCandidatePos.south();
+            BlockPos eastSupportPos  = supportCandidatePos.east();
+            BlockPos westSupportPos  = supportCandidatePos.west();
+            BlockState northSupportState = mc.world.getBlockState(northSupportPos);
+            BlockState southSupportState = mc.world.getBlockState(southSupportPos);
+            BlockState eastSupportState  = mc.world.getBlockState(eastSupportPos);
+            BlockState westSupportState  = mc.world.getBlockState(westSupportPos);
+            double northSupportDy = SlabSupport.getYOffset(mc.world, northSupportPos, northSupportState);
+            double southSupportDy = SlabSupport.getYOffset(mc.world, southSupportPos, southSupportState);
+            double eastSupportDy  = SlabSupport.getYOffset(mc.world, eastSupportPos,  eastSupportState);
+            double westSupportDy  = SlabSupport.getYOffset(mc.world, westSupportPos,  westSupportState);
+
+            String dySourceTag = supportHasCarrierMark
+                    ? "PERSISTENT_CARRIER_MARK"
+                    : supportNonRecursiveCarrier
+                            ? "STRUCTURAL_NON_RECURSIVE"
+                            : supportSideLaneCarrier
+                                    ? "SIDE_LANE_CARRIER"
+                                    : "NONE";
+
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_SOURCE_AUDIT]"
+                    + " categoryScope=floor_torch_only"
+                    + " supportCandidatePos=" + supportCandidatePos.toShortString()
+                    + " supportCandidateState=" + supportCandidateState
+                    + " supportDy=" + String.format("%.3f", supportDy)
+                    + " measuredSide=CLIENT"
+                    + " worldClass=" + mc.world.getClass().getSimpleName()
+                    + " supportIsAnchored=" + supportIsAnchored
+                    + " supportHasCarrierMark=" + supportHasCarrierMark
+                    + " supportNonRecursiveCarrier=" + supportNonRecursiveCarrier
+                    + " supportSideLaneCarrier=" + supportSideLaneCarrier
+                    + " supportCompoundVisibleLower=" + supportCompoundVisibleLower
+                    + " dySource=" + dySourceTag
+                    + " belowPos=" + belowSupportPos.toShortString()
+                    + " belowState=" + belowSupportState
+                    + " belowDy=" + String.format("%.3f", belowSupportDy)
+                    + " belowAnchored=" + belowSupportAnchored
+                    + " belowHasBottomSlabBelow=" + belowHasBottomSlabBelow
+                    + " north=" + northSupportState + " northDy=" + String.format("%.3f", northSupportDy)
+                    + " south=" + southSupportState + " southDy=" + String.format("%.3f", southSupportDy)
+                    + " east=" + eastSupportState  + " eastDy="  + String.format("%.3f", eastSupportDy)
+                    + " west=" + westSupportState  + " westDy="  + String.format("%.3f", westSupportDy));
+
+            if (!fixtureMatchesLiveDyStack) {
+                String missingTruth = !belowSupportAnchored && !belowHasBottomSlabBelow
+                        ? "NO_ANCHORED_OR_BOTTOM_SLAB_BACKED_FULL_BLOCK_BELOW"
+                        : !supportSideLaneCarrier
+                                ? "NO_SIDE_LANE_CARRIER_CONTEXT"
+                                : "UNKNOWN_STRUCTURAL_CONTEXT";
+                System.out.println("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_SOURCE_MISSING]"
+                        + " categoryScope=floor_torch_only"
+                        + " expectedSupportDy=-0.500"
+                        + " observedSupportDy=" + String.format("%.3f", supportDy)
+                        + " expectedTorchDy=-1.000"
+                        + " observedTorchDy=" + (torchState.isOf(Blocks.TORCH)
+                                ? String.format("%.3f", torchDy) : "N/A")
+                        + " missingSourceTruth=" + missingTruth
+                        + " updatePersistentLoweredSlabCarrierResult=qualifies_false_no_mark_written"
+                        + " fixture=SLAB_IN_ISOLATION_NO_SURROUNDING_CONTEXT"
+                        + " hypothesizedFix=PLACE_ANCHORED_FULL_BLOCK_AT_BELOW_POS_OR_BOTTOM_SLAB_BELOW_THAT");
+            }
+
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_SOURCE_SUMMARY]"
+                    + " categoryScope=floor_torch_only"
+                    + " fixtureMatchesLiveDyStack=" + fixtureMatchesLiveDyStack
+                    + " supportHasCarrierMark=" + supportHasCarrierMark
+                    + " supportSideLaneCarrier=" + supportSideLaneCarrier
+                    + " belowAnchored=" + belowSupportAnchored
+                    + " belowHasBottomSlabBelow=" + belowHasBottomSlabBelow
+                    + " missingTruth=" + (fixtureMatchesLiveDyStack
+                            ? "NONE" : "CARRIER_CONTEXT_NOT_IN_FIXTURE")
+                    + " nextSlice=" + (fixtureMatchesLiveDyStack
+                            ? "GREEN_PROCEED"
+                            : "BETTER_RED_FIXTURE_PLACE_ANCHORED_FULL_BLOCK_BELOW_SUPPORT")
+                    + " beta35ReleaseStatus=PAUSED"
+                    + " productionGameplayFixApplied=false"
+                    + " wall_torch=NOT_COVERED");
+
             String parityMarker = fixtureMatchesLiveDyStack
                     ? "[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_GREEN]"
                     : "[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_FAIL]";
