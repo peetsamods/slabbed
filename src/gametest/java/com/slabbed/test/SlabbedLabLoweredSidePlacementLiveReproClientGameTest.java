@@ -8011,7 +8011,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 -1.000d,
                 -0.500d,
                 new BlockPos(44, -56, 87),
-                new BlockPos(44, -57, 87));
+                new BlockPos(44, -57, 87),
+                new BlockPos(45, -57, 87));  // compound source: 1 block east, same Y
 
         // v2 live: torchPos=43,-56,88  supportCandidatePos=43,-57,88  (stone_slab[type=bottom])
         Beta35V2ContactGapAttempt bottomScenario = runBeta35FloorTorchV2ContactGapRedAttempt(
@@ -8023,7 +8024,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 -1.000d,
                 -1.000d,
                 new BlockPos(43, -56, 88),
-                new BlockPos(43, -57, 88));
+                new BlockPos(43, -57, 88),
+                new BlockPos(44, -57, 88));  // compound source: 1 block east, same Y
 
         boolean topMatches = topScenario.fixtureMatchesV2LiveStack();
         boolean bottomMatches = bottomScenario.fixtureMatchesV2LiveStack();
@@ -8091,22 +8093,56 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             double expectedSupportDy,
             double expectedTorchDy,
             BlockPos v2ExpectedTorchPos,
-            BlockPos v2ExpectedSupportPos
+            BlockPos v2ExpectedSupportPos,
+            BlockPos compoundSourcePos
     ) {
         final BlockPos torchPos = supportCandidatePos.up();
         final boolean coordinateParity =
                 torchPos.equals(v2ExpectedTorchPos) && supportCandidatePos.equals(v2ExpectedSupportPos);
+        final boolean useUpperMark = (supportCandidateType == SlabType.TOP);
+        final String sourceTruthContext = useUpperMark
+                ? "compound_visible_side_upper_slab"
+                : "compound_visible_side_lower_slab";
         final BlockHitResult torchUseHit = new BlockHitResult(
                 new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY(), supportCandidatePos.getZ() + 0.5d),
                 Direction.UP,
                 supportCandidatePos,
                 false);
 
+        // Build compound tower adjacent to support slab so compound visible mark can be written.
+        // Tower: bare-bottom-slab → anchored-stone → carrier-slab → compound-anchor
+        // (mirrors seedBeta4LiveScreenshotShape pattern that produces isLoweredCompoundSourceSlab=true)
+        final BlockPos towerBase = compoundSourcePos.down(3);
+        final BlockPos towerAnchor = compoundSourcePos.down(2);
+        final BlockPos towerCarrier = compoundSourcePos.down(1);
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
+            world.setBlockState(towerBase,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(towerAnchor, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, towerAnchor, world.getBlockState(towerAnchor));
+            world.setBlockState(towerCarrier,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world, towerCarrier, world.getBlockState(towerCarrier));
+            world.setBlockState(compoundSourcePos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, compoundSourcePos, world.getBlockState(compoundSourcePos));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(
+                    world, compoundSourcePos, world.getBlockState(compoundSourcePos));
             world.setBlockState(supportCandidatePos,
                     Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, supportCandidateType),
                     net.minecraft.block.Block.NOTIFY_LISTENERS);
+            BlockState supportState = world.getBlockState(supportCandidatePos);
+            BlockState compoundState = world.getBlockState(compoundSourcePos);
+            if (useUpperMark) {
+                SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(
+                        world, supportCandidatePos, supportState, compoundSourcePos, compoundState);
+            } else {
+                SlabAnchorAttachment.addCompoundVisibleSideLowerSlab(
+                        world, supportCandidatePos, supportState, compoundSourcePos, compoundState);
+            }
             world.setBlockState(torchPos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
         });
         ctx.waitTick();
@@ -8156,6 +8192,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             BlockState torchState = mc.world.getBlockState(torchPos);
             supportCandidateStateHolder[0] = supportCandidateState;
             torchStateHolder[0] = torchState;
+
+            boolean compoundAnchorAtSource = SlabAnchorAttachment.isCompoundFullBlockAnchor(mc.world, compoundSourcePos);
+            boolean compoundVisibleMarkWritten = useUpperMark
+                    ? SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(mc.world, supportCandidatePos, supportCandidateState)
+                    : SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(mc.world, supportCandidatePos, supportCandidateState);
 
             double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportCandidateState);
             double torchDy = torchState.isOf(Blocks.TORCH)
@@ -8236,6 +8277,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " outlineMaxY=" + beta35FormatMaxY(outlineBox)
                     + " expectedSupportDy=" + String.format("%.3f", expectedSupportDy)
                     + " expectedTorchDy=" + String.format("%.3f", expectedTorchDy)
+                    + " sourceTruthContext=" + sourceTruthContext
+                    + " compoundAnchorAtSource=" + compoundAnchorAtSource
+                    + " compoundVisibleMarkWritten=" + compoundVisibleMarkWritten
                     + " coordinateParity=" + coordinateParity
                     + " fixtureMatchesV2LiveStack=" + fixtureMatchesV2LiveStack
                     + " failureLayer=" + failureLayer
