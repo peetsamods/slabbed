@@ -322,3 +322,16 @@ If the slice changes, update the source pack and spine together so the current o
 - Next safe action: savepoint commit/tag/push for this narrow floor_torch contact fix, then Julia live re-test.
 - production gameplay fix has been applied in this slice.
 - no release tag moved.
+
+## Beta 3.5 floor torch SBSBS red proof (2026-05-11)
+
+- **Julia live after `04ace65`**: "SBSBS+item = floating item in vanilla position. (torch, in this case.)" This is a distinct remaining `floor_torch` failure separate from the support-finalization stale-torch fix.
+- SBSBS fixture = 5-level alternating slab/full-block vertical tower (bottom→top): base slab (S) → lower anchored full block (B) → middle carrier slab (S) → upper anchored full block (B) → support slab (S); torch placed on top.
+- **Controlled fixture result at HEAD `04ace65`**: `[JULIA_BETA35_FLOOR_TORCH_SBSBS_FIXTURE_GREEN]` → `fixtureResult=GREEN`; `[JULIA_BETA35_FLOOR_TORCH_SBSBS_MEASURED]` → `supportDy=-0.500`, `torchDy=-1.000`, `contactGap=0.000000`, `isVanillaPosition=false`, `failureLayer=NONE`; `[JULIA_BETA35_FLOOR_TORCH_SBSBS_SUMMARY]` → `redProofResult=GREEN`.
+- Root cause of GREEN: `hasBottomSlabBelow(world, upperAnchorBlock)` is `true` (middleCarrierSlab is `stone_slab[type=bottom]`) → `isPersistentLoweredBottomSlabCarrierNonRecursive(supportPos)=true` → `supportDy=-0.5`; `isAdjacentSideSlabLowered(world, supportPos)=true` → `getYOffsetInner` returns `-1.0` for the torch via the compound slab case.
+- **Gap**: controlled fixture is GREEN, but Julia's live test shows vanilla position. Failure is in Julia's specific gameplay-path arrangement, not in the plain SBSBS dy model/chain. Possible causes: different slab type, interaction with adjacent compound-visible marks, or chunk-reload timing issue.
+- Gate: `-Dslabbed.beta35FloorTorchSbsbsRed=true`. Regression proofs (`SupportFinalizationRed`, `V2ContactGapRed`) and default suite all pass GREEN.
+- **No production gameplay fix implemented. No release tag moved. Beta 3.5 release remains PAUSED.**
+- Next slice: investigate Julia's exact live structure (block types, adjacent compound marks, placement order) to find the failure path that produces vanilla-position torch.
+- `wall_torch=NOT_COVERED`, `lantern=NOT_COVERED`, `signs=NOT_COVERED`, `chains=NOT_COVERED`.
+- Evidence: `tmp/beta35-floor-torch-sbsbs-red-04ace65/`. See `docs/beta35-floor-torch-sbsbs-red.md`.
