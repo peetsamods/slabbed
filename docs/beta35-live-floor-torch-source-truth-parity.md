@@ -52,16 +52,15 @@ Enable with:
 - `fixtureMatchesLiveDyStack=true/false`
 - `failureLayer`
 
-## Failure-layer contract
+## Failure-layer contract (updated for live dy stack parity slice)
 
-- `SOURCE_TRUTH_MISMATCH`
-- `LIVE_FLOOR_TORCH_WRONG_SUPPORT_OWNER`
-- `LIVE_FLOOR_TORCH_WRONG_DY`
-- `LIVE_FLOOR_TORCH_CONTACT_GAP`
-- `NONE`
+- `SOURCE_TRUTH_MISMATCH` — dy stack did not match live (`supportDy != -0.500` or `torchDy != -1.000`)
+- `LIVE_DY_STACK_MATCH_NO_GAP` — dy stack matches but `contactGap == 0` (unexpected; needs audit)
+- `LIVE_DY_STACK_MATCH_CONTACT_GAP` — dy stack matches, nonzero gap but not matching `-1.500`
+- `NONE` — dy stack matches and `contactGap` matches live `-1.500000`
 
 `fixtureMatchesLiveDyStack` is computed as `supportDy == -0.500` and `torchDy == -1.000`.
-If this is `false`, the proof should report `SOURCE_TRUTH_MISMATCH` and stop.
+If this is `false`, the proof reports `SOURCE_TRUTH_MISMATCH` and stops.
 
 ## Root cause of mismatch (audit 9ac16f2 / save/beta35-floor-torch-source-truth-mismatch)
 
@@ -85,8 +84,38 @@ all clients via `.syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())`.
 There is no client/server dy split: both live capture and replay measure from `mc.world`
 (ClientWorld, a World subclass), which reads the synced chunk attachment directly.
 
-**Missing source truth**: the fixture does not place an anchored full block (or `hasBottomSlabBelow`-
+**Missing source truth**: the fixture did not place an anchored full block (or `hasBottomSlabBelow`-
 backed full block) at `supportCandidatePos.down()`.
 
-**Next slice**: better RED fixture that places the surrounding carrier context so
-`fixtureMatchesLiveDyStack=true`. See `docs/beta35-floor-torch-support-source-truth-audit.md`.
+**Fix applied** (`save/beta35-floor-torch-live-dy-stack-parity`): the fixture now places:
+1. `Blocks.STONE_SLAB[type=bottom]` at `supportCandidatePos.down().down()` — bottom slab so
+   `hasBottomSlabBelow(world, anchoredFullBlockPos)` is true.
+2. `Blocks.STONE` at `supportCandidatePos.down()` — ordinary full block anchor candidate.
+3. `addAnchor(world, anchoredFullBlockPos, stoneState)` — writes `ANCHOR_TYPE` mark (succeeds
+   because `hasBottomSlabBelow` is now true for the stone block).
+4. `Blocks.STONE_SLAB[type=bottom]` at `supportCandidatePos` — support slab.
+5. `updatePersistentLoweredSlabCarrier(world, supportCandidatePos, state)` — now qualifies via
+   `qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlockNonRecursive` (anchored full block
+   below) → carrier mark written → `supportDy=-0.500` ✓.
+
+## Live dy stack parity result (save/beta35-floor-torch-live-dy-stack-parity)
+
+```
+fixtureMatchesLiveDyStack=true
+supportDy=-0.500
+torchDy=-1.000
+contactGap=0.000000
+failureLayer=LIVE_DY_STACK_MATCH_NO_GAP
+anchoredFullBlockAnchored=true
+anchoredFullBlockHasBottomSlabBelow=true
+carrierMarkWritten=true
+```
+
+**Outcome B**: dy stack matches live but `contactGap=0` instead of `-1.500`. The torch model
+bottom Y equals the support visible top Y in the fixture. This diverges from the live capture
+(`contactGap=-1.500000`, `supportVisibleTopY=-55.500000`, `torchModelBottomY=-57.000000`).
+
+**Next audit**: the `getSupportYOffset` / torch outline relative-Y discrepancy between live capture
+and fixture needs investigation. The live `supportVisibleTopY=-55.5` implies
+`getSupportYOffset=1.0` at capture time; the fixture measures `getSupportYOffset=0.5`.
+This is classified as `LIVE_DY_STACK_MATCH_NO_GAP` — recorder/contact-math audit required.

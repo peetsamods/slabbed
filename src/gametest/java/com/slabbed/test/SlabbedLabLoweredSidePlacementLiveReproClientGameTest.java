@@ -8157,6 +8157,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     ) {
         final BlockPos supportCandidatePos = new BlockPos(51, -56, 89);
         final BlockPos torchPos = supportCandidatePos.up();
+        final BlockPos anchoredFullBlockPos = supportCandidatePos.down();
+        final BlockPos bottomSlabBelowFullBlockPos = anchoredFullBlockPos.down();
         final BlockHitResult torchUseHit = new BlockHitResult(
                 new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY(), supportCandidatePos.getZ() + 0.5d),
                 Direction.UP,
@@ -8165,6 +8167,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
+            world.setBlockState(bottomSlabBelowFullBlockPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(anchoredFullBlockPos, Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, anchoredFullBlockPos,
+                    world.getBlockState(anchoredFullBlockPos));
             world.setBlockState(supportCandidatePos,
                     Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                     net.minecraft.block.Block.NOTIFY_LISTENERS);
@@ -8234,14 +8243,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             boolean contactGapExpected = !Double.isNaN(contactGap) && Math.abs(contactGap + 1.5d) <= EPSILON;
 
             String failureLayer = "NONE";
-            if (!placementAccepted[0] || !supportIsBottomSlab || !torchState.isOf(Blocks.TORCH)) {
+            if (!placementAccepted[0] || !supportIsBottomSlab || !torchState.isOf(Blocks.TORCH) || !fixtureMatchesLiveDyStack) {
                 failureLayer = "SOURCE_TRUTH_MISMATCH";
-            } else if (!supportDyExpected) {
-                failureLayer = "LIVE_FLOOR_TORCH_WRONG_SUPPORT_OWNER";
-            } else if (!torchDyExpected) {
-                failureLayer = "LIVE_FLOOR_TORCH_WRONG_DY";
+            } else if (Double.isNaN(contactGap) || Math.abs(contactGap) < EPSILON) {
+                failureLayer = "LIVE_DY_STACK_MATCH_NO_GAP";
             } else if (!contactGapExpected) {
-                failureLayer = "LIVE_FLOOR_TORCH_CONTACT_GAP";
+                failureLayer = "LIVE_DY_STACK_MATCH_CONTACT_GAP";
             }
 
             // JULIA_BETA35_FLOOR_TORCH_SUPPORT_SOURCE_AUDIT: diagnostic-only markers that log
@@ -8357,6 +8364,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " torchState=" + torchState
                     + " supportCandidatePos=" + supportCandidatePos.toShortString()
                     + " supportCandidateState=" + supportCandidateState
+                    + " anchoredFullBlockPos=" + anchoredFullBlockPos.toShortString()
+                    + " anchoredFullBlockState=" + belowSupportState
+                    + " anchoredFullBlockAnchored=" + belowSupportAnchored
+                    + " anchoredFullBlockHasBottomSlabBelow=" + belowHasBottomSlabBelow
+                    + " carrierMarkWritten=" + supportHasCarrierMark
                     + " placementAccepted=" + placementAccepted[0]
                     + " placementResult=" + placementResultText[0]
                     + " supportDy=" + (supportIsBottomSlab ? String.format("%.3f", supportDy) : "N/A")
@@ -8460,6 +8472,22 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_CONTACT_GAP_PROOF"
                     + " releasePrep=PAUSED"
                     + " productionGameplayFixApplied=false");
+
+            System.out.println("[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_SUMMARY]"
+                    + " categoryScope=floor_torch_only"
+                    + " wall_torch=NOT_COVERED"
+                    + " anchoredFullBlockPos=" + anchoredFullBlockPos.toShortString()
+                    + " anchoredFullBlockAnchored=" + belowSupportAnchored
+                    + " anchoredFullBlockHasBottomSlabBelow=" + belowHasBottomSlabBelow
+                    + " carrierMarkWritten=" + supportHasCarrierMark
+                    + " supportDy=" + (supportIsBottomSlab ? String.format("%.3f", supportDy) : "N/A")
+                    + " torchDy=" + (torchState.isOf(Blocks.TORCH) ? String.format("%.3f", torchDy) : "N/A")
+                    + " contactGap=" + (Double.isFinite(contactGap) ? String.format("%.6f", contactGap) : "N/A")
+                    + " fixtureMatchesLiveDyStack=" + fixtureMatchesLiveDyStack
+                    + " failureLayer=" + failureLayer
+                    + " fixtureContext=OPTION_B_BOTTOM_SLAB_BELOW_ANCHORED_FULL_BLOCK"
+                    + " productionGameplayFixApplied=false"
+                    + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_CONTACT_GAP_PROOF");
         });
     }
 
