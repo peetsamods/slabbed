@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.Slabbed;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -35,7 +36,12 @@ public final class Beta35LiveTorchCaptureRecorder {
     }
 
     public static boolean enabled() {
-        return Boolean.getBoolean("slabbed.beta35LiveTorchCapture");
+        return Boolean.getBoolean("slabbed.beta35LiveTorchCapture")
+                || Boolean.getBoolean("slabbed.beta35FloorTorchSbsbsSourceTruthRed");
+    }
+
+    private static boolean sourceTruthCaptureEnabled() {
+        return Boolean.getBoolean("slabbed.beta35FloorTorchSbsbsSourceTruthRed");
     }
 
     public static void recordFrame(World world, Entity camera, PlayerEntity player, HitResult crosshairTarget, float tickProgress) {
@@ -64,6 +70,13 @@ public final class Beta35LiveTorchCaptureRecorder {
         }
 
         CaptureContext ctx = capture(world, crosshairTarget, player, camera);
+        boolean sourceTruthCapture = sourceTruthCaptureEnabled();
+        boolean supportCarrier = sourceTruthCapture && ctx.supportCarrier();
+        boolean supportCompoundUpper = sourceTruthCapture && ctx.supportCompoundUpper();
+        boolean supportCompoundLower = sourceTruthCapture && ctx.supportCompoundLower();
+        boolean supportHasBottomSlabBelow = sourceTruthCapture && ctx.supportHasBottomSlabBelow();
+        boolean supportAnchoredFullBlockBelow = sourceTruthCapture && ctx.supportAnchoredFullBlockBelow();
+        boolean isVanillaPosition = sourceTruthCapture && ctx.isVanillaPosition();
         Slabbed.LOGGER.info(
                 "[JULIA_BETA35_LIVE_TORCH_CAPTURE] markerVersion=2"
                         + " measurementFormulaVersion=" + ctx.measurementFormula()
@@ -91,6 +104,12 @@ public final class Beta35LiveTorchCaptureRecorder {
                         + " outlineMaxY=" + ctx.outlineMaxY()
                         + " raycastMinY=" + ctx.raycastMinY()
                         + " raycastMaxY=" + ctx.raycastMaxY()
+                        + " supportCarrier=" + supportCarrier
+                        + " supportCompoundVisibleUpper=" + supportCompoundUpper
+                        + " supportCompoundVisibleLower=" + supportCompoundLower
+                        + " supportHasBottomSlabBelow=" + supportHasBottomSlabBelow
+                        + " supportAnchoredFullBlockBelow=" + supportAnchoredFullBlockBelow
+                        + " isVanillaPosition=" + isVanillaPosition
                         + " heldItem=" + ctx.heldItem()
                         + " playerPos=" + ctx.playerPos()
                         + " playerYaw=" + ctx.playerYaw()
@@ -98,6 +117,28 @@ public final class Beta35LiveTorchCaptureRecorder {
                         + " cameraPos=" + ctx.cameraPos()
                         + " worldCoords=" + ctx.worldCoords()
         );
+
+        if (sourceTruthCapture) {
+            Slabbed.LOGGER.info(
+                    "[JULIA_BETA35_LIVE_TORCH_CAPTURE_SOURCE_TRUTH]"
+                            + " supportPos=" + ctx.supportCandidatePos()
+                            + " supportState=" + ctx.supportCandidateState()
+                            + " supportDy=" + ctx.supportDy()
+                            + " supportCarrier=" + supportCarrier
+                            + " isCompoundVisibleSideUpperSlab=" + supportCompoundUpper
+                            + " isCompoundVisibleSideLowerSlab=" + supportCompoundLower
+                            + " hasBottomSlabBelow=" + supportHasBottomSlabBelow
+                            + " anchoredFullBlockBelow=" + supportAnchoredFullBlockBelow
+                            + " torchPos=" + ctx.torchPos()
+                            + " torchDy=" + ctx.torchDy()
+                            + " contactGap=" + ctx.contactGap()
+                            + " targetType=" + ctx.targetType()
+                            + " targetPos=" + ctx.targetPos()
+                            + " targetFace=" + ctx.targetFace()
+                            + " targetState=" + ctx.targetState()
+                            + " heldItem=" + ctx.heldItem()
+            );
+        }
     }
 
     private static CaptureContext capture(World world, HitResult crosshairTarget, PlayerEntity player, Entity cameraEntity) {
@@ -205,6 +246,16 @@ public final class Beta35LiveTorchCaptureRecorder {
             classification = "UNKNOWN";
         }
 
+        boolean supportCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                world, supportCandidatePos, supportCandidateState);
+        boolean supportCompoundUpper = SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(
+                world, supportCandidatePos, supportCandidateState);
+        boolean supportCompoundLower = SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(
+                world, supportCandidatePos, supportCandidateState);
+        boolean supportHasBottomSlabBelow = SlabSupport.hasBottomSlabBelow(world, supportCandidatePos);
+        boolean supportAnchoredFullBlockBelow = SlabAnchorAttachment.isAnchored(world, supportCandidatePos.down());
+        boolean isVanillaPosition = targetIsTorch && Math.abs(torchDy) < CONTACT_GAP_EPSILON;
+
         return new CaptureContext(
                 classification,
                 targetType,
@@ -236,7 +287,13 @@ public final class Beta35LiveTorchCaptureRecorder {
                 formatDouble(rawSupportTopY),
                 formatDouble(supportVisibleTopYV1),
                 formatDouble(rawTorchShapeMinY),
-                formatDouble(contactGapV1)
+                formatDouble(contactGapV1),
+                supportCarrier,
+                supportCompoundUpper,
+                supportCompoundLower,
+                supportHasBottomSlabBelow,
+                supportAnchoredFullBlockBelow,
+                isVanillaPosition
         );
     }
 
@@ -387,7 +444,13 @@ public final class Beta35LiveTorchCaptureRecorder {
                 "n/a",
                 "n/a",
                 "n/a",
-                "n/a"
+                "n/a",
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
         );
     }
 
@@ -422,7 +485,13 @@ public final class Beta35LiveTorchCaptureRecorder {
             String rawSupportTopY,
             String supportVisibleTopYV1,
             String rawTorchShapeMinY,
-            String contactGapV1
+            String contactGapV1,
+            boolean supportCarrier,
+            boolean supportCompoundUpper,
+            boolean supportCompoundLower,
+            boolean supportHasBottomSlabBelow,
+            boolean supportAnchoredFullBlockBelow,
+            boolean isVanillaPosition
     ) {
         CaptureContext withNearestTorch(BlockPos torchPos, double distance) {
             return new CaptureContext(
@@ -456,7 +525,13 @@ public final class Beta35LiveTorchCaptureRecorder {
                     rawSupportTopY,
                     supportVisibleTopYV1,
                     rawTorchShapeMinY,
-                    contactGapV1
+                    contactGapV1,
+                    supportCarrier,
+                    supportCompoundUpper,
+                    supportCompoundLower,
+                    supportHasBottomSlabBelow,
+                    supportAnchoredFullBlockBelow,
+                    isVanillaPosition
             );
         }
     }

@@ -335,3 +335,7 @@ If the slice changes, update the source pack and spine together so the current o
 - Next slice: investigate Julia's exact live structure (block types, adjacent compound marks, placement order) to find the failure path that produces vanilla-position torch.
 - `wall_torch=NOT_COVERED`, `lantern=NOT_COVERED`, `signs=NOT_COVERED`, `chains=NOT_COVERED`.
 - Evidence: `tmp/beta35-floor-torch-sbsbs-red-04ace65/`. See `docs/beta35-floor-torch-sbsbs-red.md`.
+
+- 2026-05-11: Added SBSBS floor-torch source-truth capture branch (proof-only) in `SlabbedLabLoweredSidePlacementLiveReproClientGameTest`.
+- 2026-05-11: Added source-truth recorder emission (`Beta35LiveTorchCaptureRecorder`) for contact/anchor/carrier state under gate `slabbed.beta35FloorTorchSbsbsSourceTruthRed`.
+- 2026-05-11: No production gameplay fix in this slice; no tag/tag movement performed yet.

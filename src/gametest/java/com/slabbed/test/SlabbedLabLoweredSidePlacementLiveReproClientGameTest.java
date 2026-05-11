@@ -13,6 +13,7 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
@@ -233,6 +234,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35FloorTorchSbsbsRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35FloorTorchSbsbsSourceTruthRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FloorTorchSbsbsSourceTruthRedProof(ctx, singleplayer);
             }
             return;
         }
@@ -9562,6 +9572,58 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         return pos.getY() + supportDy + SlabSupport.getSupportYOffset(state);
     }
 
+    private static ActionResult beta35PlaceForLiveSbsbsCapture(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Item item,
+            Vec3d eye,
+            BlockHitResult placeHit,
+            String placementLabel
+    ) {
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(item, 1));
+        syncPlayerAim(ctx, singleplayer, eye, placeHit.getPos());
+
+        final ActionResult[] resultHolder = {ActionResult.PASS};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SBSBS_SOURCE_TRUTH_RED]"
+                        + " reason=client_not_ready"
+                        + " step=" + placementLabel
+                        + " categoryScope=floor_torch_only");
+            }
+            resultHolder[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeHit);
+        });
+
+        ctx.waitTick();
+        ctx.waitTick();
+        return resultHolder[0];
+    }
+
+    private static String beta35SbsbsComponentTruth(
+            net.minecraft.world.World world,
+            BlockPos pos,
+            BlockState state,
+            String label
+    ) {
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
+        boolean carrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
+        boolean compoundUpper = SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state);
+        boolean compoundLower = SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state);
+        boolean hasBottomSlabBelow = SlabSupport.hasBottomSlabBelow(world, pos);
+        boolean anchoredFullBlockBelow = SlabAnchorAttachment.isAnchored(world, pos.down());
+        return label
+                + "Pos=" + pos.toShortString()
+                + " state=" + state
+                + " dy=" + String.format("%.3f", dy)
+                + " isAnchored=" + anchored
+                + " isPersistentLoweredBottomSlabCarrier=" + carrier
+                + " isCompoundVisibleSideUpperSlab=" + compoundUpper
+                + " isCompoundVisibleSideLowerSlab=" + compoundLower
+                + " hasBottomSlabBelow=" + hasBottomSlabBelow
+                + " anchoredFullBlockBelow=" + anchoredFullBlockBelow;
+    }
+
     private static BlockPos beta35FindLiveShapeTorchPos(ClientWorld world, BlockPos expectedTorchPos) {
         if (world.getBlockState(expectedTorchPos).isOf(Blocks.TORCH)) {
             return expectedTorchPos;
@@ -9611,9 +9673,24 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
      *
      * Gate: -Dslabbed.beta35FloorTorchSbsbsRed=true
      */
+    private static void runBeta35FloorTorchSbsbsSourceTruthRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        runBeta35FloorTorchSbsbsRedProof(ctx, singleplayer, true);
+    }
+
     private static void runBeta35FloorTorchSbsbsRedProof(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
+    ) {
+        runBeta35FloorTorchSbsbsRedProof(ctx, singleplayer, false);
+    }
+
+    private static void runBeta35FloorTorchSbsbsRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            boolean sourceTruthCapture
     ) {
         // Positions distinct from all existing proof fixtures (X=60, Z=90).
         final BlockPos supportPos   = new BlockPos(60, -57, 90);
@@ -9629,37 +9706,153 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 supportPos,
                 false);
 
-        // ── Phase 1: seed SBSBS fixture (server-side) ────────────────────────────────────
+        // ── Phase 1: seed SBSBS fixture ───────────────────────────────────────────────
+        final BlockPos foundation = baseSlab.down();
+        final BlockHitResult placeBaseSlabHit = new BlockHitResult(
+                new Vec3d(baseSlab.getX() + 0.5d, baseSlab.getY(), baseSlab.getZ() + 0.5d),
+                Direction.UP,
+                foundation,
+                false);
+        final BlockHitResult placeLowerAnchorHit = new BlockHitResult(
+                new Vec3d(baseSlab.getX() + 0.5d, baseSlab.getY() + 1.0d, baseSlab.getZ() + 0.5d),
+                Direction.UP,
+                baseSlab,
+                false);
+        final BlockHitResult placeMiddleCarrierHit = new BlockHitResult(
+                new Vec3d(lowerAnchorBlock.getX() + 0.5d, lowerAnchorBlock.getY() + 1.0d, lowerAnchorBlock.getZ() + 0.5d),
+                Direction.UP,
+                lowerAnchorBlock,
+                false);
+        final BlockHitResult placeUpperAnchorHit = new BlockHitResult(
+                new Vec3d(middleCarrierSlab.getX() + 0.5d, middleCarrierSlab.getY() + 1.0d, middleCarrierSlab.getZ() + 0.5d),
+                Direction.UP,
+                middleCarrierSlab,
+                false);
+        final BlockHitResult placeSupportSlabHit = new BlockHitResult(
+                new Vec3d(upperAnchorBlock.getX() + 0.5d, upperAnchorBlock.getY() + 1.0d, upperAnchorBlock.getZ() + 0.5d),
+                Direction.UP,
+                upperAnchorBlock,
+                false);
+
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
-            // S — base slab
-            world.setBlockState(baseSlab,
-                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+            for (int x = foundation.getX() - 2; x <= foundation.getX() + 2; x++) {
+                for (int y = foundation.getY() - 1; y <= torchPos.getY() + 1; y++) {
+                    for (int z = foundation.getZ() - 2; z <= foundation.getZ() + 2; z++) {
+                        world.setBlockState(
+                                new BlockPos(x, y, z),
+                                Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+            world.setBlockState(foundation, Blocks.STONE.getDefaultState(),
                     net.minecraft.block.Block.NOTIFY_LISTENERS);
-            // B — lower ordinary full block, anchored (hasBottomSlabBelow = baseSlab)
-            world.setBlockState(lowerAnchorBlock, Blocks.STONE.getDefaultState(),
-                    net.minecraft.block.Block.NOTIFY_LISTENERS);
-            SlabAnchorAttachment.addAnchor(world, lowerAnchorBlock, world.getBlockState(lowerAnchorBlock));
-            // S — middle carrier slab (qualifies because lowerAnchorBlock is anchored)
-            world.setBlockState(middleCarrierSlab,
-                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
-                    net.minecraft.block.Block.NOTIFY_LISTENERS);
-            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
-                    world, middleCarrierSlab, world.getBlockState(middleCarrierSlab));
-            // B — upper ordinary full block, anchored (hasBottomSlabBelow = middleCarrierSlab)
-            world.setBlockState(upperAnchorBlock, Blocks.STONE.getDefaultState(),
-                    net.minecraft.block.Block.NOTIFY_LISTENERS);
-            SlabAnchorAttachment.addAnchor(world, upperAnchorBlock, world.getBlockState(upperAnchorBlock));
-            // S — support slab (qualifies because upperAnchorBlock is anchored)
-            world.setBlockState(supportPos,
-                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
-                    net.minecraft.block.Block.NOTIFY_LISTENERS);
-            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
-                    world, supportPos, world.getBlockState(supportPos));
-            // Clear torch position
             world.setBlockState(torchPos, Blocks.AIR.getDefaultState(),
                     net.minecraft.block.Block.NOTIFY_LISTENERS);
         });
+        if (sourceTruthCapture) {
+            ActionResult baseSlabPlace = beta35PlaceForLiveSbsbsCapture(
+                    ctx,
+                    singleplayer,
+                    Items.STONE_SLAB,
+                    new Vec3d(baseSlab.getX() + 0.5d, baseSlab.getY() + 3.2d, baseSlab.getZ() - 2.0d),
+                    placeBaseSlabHit,
+                    "base_slab");
+            if (!baseSlabPlace.isAccepted()) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SBSBS_SOURCE_TRUTH_RED]"
+                        + " reason=source_truth_live_build_blocked"
+                        + " step=base_slab"
+                        + " result=" + baseSlabPlace);
+            }
+
+            ActionResult lowerAnchorPlace = beta35PlaceForLiveSbsbsCapture(
+                    ctx,
+                    singleplayer,
+                    Items.STONE,
+                    new Vec3d(lowerAnchorBlock.getX() + 0.5d, lowerAnchorBlock.getY() + 3.2d, lowerAnchorBlock.getZ() - 2.0d),
+                    placeLowerAnchorHit,
+                    "lower_anchor");
+            if (!lowerAnchorPlace.isAccepted()) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SBSBS_SOURCE_TRUTH_RED]"
+                        + " reason=source_truth_live_build_blocked"
+                        + " step=lower_anchor"
+                        + " result=" + lowerAnchorPlace);
+            }
+
+            ActionResult middleCarrierPlace = beta35PlaceForLiveSbsbsCapture(
+                    ctx,
+                    singleplayer,
+                    Items.STONE_SLAB,
+                    new Vec3d(middleCarrierSlab.getX() + 0.5d, middleCarrierSlab.getY() + 3.2d, middleCarrierSlab.getZ() - 2.0d),
+                    placeMiddleCarrierHit,
+                    "middle_carrier");
+            if (!middleCarrierPlace.isAccepted()) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SBSBS_SOURCE_TRUTH_RED]"
+                        + " reason=source_truth_live_build_blocked"
+                        + " step=middle_carrier"
+                        + " result=" + middleCarrierPlace);
+            }
+
+            ActionResult upperAnchorPlace = beta35PlaceForLiveSbsbsCapture(
+                    ctx,
+                    singleplayer,
+                    Items.STONE,
+                    new Vec3d(upperAnchorBlock.getX() + 0.5d, upperAnchorBlock.getY() + 3.2d, upperAnchorBlock.getZ() - 2.0d),
+                    placeUpperAnchorHit,
+                    "upper_anchor");
+            if (!upperAnchorPlace.isAccepted()) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SBSBS_SOURCE_TRUTH_RED]"
+                        + " reason=source_truth_live_build_blocked"
+                        + " step=upper_anchor"
+                        + " result=" + upperAnchorPlace);
+            }
+
+            ActionResult supportSlabPlace = beta35PlaceForLiveSbsbsCapture(
+                    ctx,
+                    singleplayer,
+                    Items.STONE_SLAB,
+                    new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.2d, supportPos.getZ() - 2.0d),
+                    placeSupportSlabHit,
+                    "support");
+            if (!supportSlabPlace.isAccepted()) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SBSBS_SOURCE_TRUTH_RED]"
+                        + " reason=source_truth_live_build_blocked"
+                        + " step=support_slab"
+                        + " result=" + supportSlabPlace);
+            }
+        } else {
+            singleplayer.getServer().runOnServer(server -> {
+                var world = server.getOverworld();
+                // S — base slab
+                world.setBlockState(baseSlab,
+                        Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+                // B — lower ordinary full block, anchored (hasBottomSlabBelow = baseSlab)
+                world.setBlockState(lowerAnchorBlock, Blocks.STONE.getDefaultState(),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+                SlabAnchorAttachment.addAnchor(world, lowerAnchorBlock, world.getBlockState(lowerAnchorBlock));
+                // S — middle carrier slab (qualifies because lowerAnchorBlock is anchored)
+                world.setBlockState(middleCarrierSlab,
+                        Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+                SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                        world, middleCarrierSlab, world.getBlockState(middleCarrierSlab));
+                // B — upper ordinary full block, anchored (hasBottomSlabBelow = middleCarrierSlab)
+                world.setBlockState(upperAnchorBlock, Blocks.STONE.getDefaultState(),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+                SlabAnchorAttachment.addAnchor(world, upperAnchorBlock, world.getBlockState(upperAnchorBlock));
+                // S — support slab (qualifies because upperAnchorBlock is anchored)
+                world.setBlockState(supportPos,
+                        Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+                SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                        world, supportPos, world.getBlockState(supportPos));
+                // Clear torch position
+                world.setBlockState(torchPos, Blocks.AIR.getDefaultState(),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+            });
+        }
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
 
@@ -9700,7 +9893,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " fixtureResult=" + (fixtureFailureHolder[0] == null ? "GREEN" : "RED:" + fixtureFailureHolder[0]));
         });
 
-        if (fixtureFailureHolder[0] != null) {
+        if (!sourceTruthCapture && fixtureFailureHolder[0] != null) {
             throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SBSBS_FIXTURE_GREEN]"
                     + " reason=fixture_failed detail=" + fixtureFailureHolder[0]
                     + " categoryScope=floor_torch_only");
@@ -9733,16 +9926,25 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         // ── Phase 3: measure and classify ────────────────────────────────────────────────
         final String[] failureLayerHolder = {"SBSBS_MEASUREMENT_NOT_RUN"};
         final boolean[] isVanillaPositionHolder = {false};
+        final double[] measuredSupportDyHolder = {Double.NaN};
+        final double[] measuredTorchDyHolder = {Double.NaN};
+        final String[] sourceTruthClassificationHolder = {"NONE"};
 
         ctx.runOnClient(mc -> {
             if (mc.world == null) return;
 
             BlockState supportStateAfter = mc.world.getBlockState(supportPos);
+            BlockState baseState = mc.world.getBlockState(baseSlab);
+            BlockState lowerAnchorState = mc.world.getBlockState(lowerAnchorBlock);
+            BlockState middleCarrierState = mc.world.getBlockState(middleCarrierSlab);
+            BlockState upperAnchorState = mc.world.getBlockState(upperAnchorBlock);
             BlockState torchState = mc.world.getBlockState(torchPos);
             double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportStateAfter);
+            measuredSupportDyHolder[0] = supportDy;
             boolean torchPresent = torchState.isOf(Blocks.TORCH);
             double torchDy = torchPresent
                     ? SlabSupport.getYOffset(mc.world, torchPos, torchState) : Double.NaN;
+            measuredTorchDyHolder[0] = torchDy;
 
             boolean compoundVisibleUpper = SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(
                     mc.world, supportPos, supportStateAfter);
@@ -9783,7 +9985,22 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             boolean triadGreen = torchPresent
                     && Math.abs(torchDy - (supportDy - 0.5d)) <= EPSILON;
 
+            boolean lowerAnchorIsAnchored = SlabAnchorAttachment.isAnchored(mc.world, lowerAnchorBlock);
+            boolean lowerAnchorIsCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                    mc.world, lowerAnchorBlock, lowerAnchorState);
+            boolean middleCarrierIsCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                    mc.world, middleCarrierSlab, middleCarrierState);
+            boolean upperAnchorIsAnchored = SlabAnchorAttachment.isAnchored(mc.world, upperAnchorBlock);
+            boolean supportHasBottomSlabBelow = SlabSupport.hasBottomSlabBelow(mc.world, supportPos);
+            boolean supportAnchoredFullBlockBelow = SlabAnchorAttachment.isAnchored(
+                    mc.world,
+                    supportPos.down());
+
             boolean sourceTruthOk = Math.abs(supportDy - (-0.5d)) <= EPSILON && carrierMarked;
+            boolean fixtureSourceTruth = sourceTruthOk
+                    && lowerAnchorIsAnchored
+                    && middleCarrierIsCarrier
+                    && upperAnchorIsAnchored;
 
             String failureLayer;
             if (!torchPresent) {
@@ -9796,6 +10013,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 failureLayer = "NONE";
             }
             failureLayerHolder[0] = failureLayer;
+            String sourceTruthClassification = "NONE";
+            if (!fixtureSourceTruth) {
+            sourceTruthClassification = "SBSBS_SOURCE_TRUTH_NOT_AUTHORED";
+            } else if (!placementAcceptedHolder[0] || !torchPresent) {
+                sourceTruthClassification = "SBSBS_TORCH_PLACED_BEFORE_SOURCE_TRUTH";
+            } else if (isVanillaPosition
+                    || (Double.isFinite(contactGap) && Math.abs(contactGap) > EPSILON)) {
+                sourceTruthClassification = "SBSBS_STEADY_STATE_OK_BUT_LIVE_CONSTRUCTION_GAP";
+            }
+            sourceTruthClassificationHolder[0] = sourceTruthClassification;
 
             boolean proofRed = !failureLayer.equals("NONE") && !failureLayer.equals("SBSBS_OUT_OF_SCOPE");
 
@@ -9829,6 +10056,44 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " wall_torch=NOT_COVERED"
                     + " beta35ReleaseStatus=PAUSED_JULIA_SBSBS_UNRESOLVED");
 
+            if (sourceTruthCapture) {
+                System.out.println("[JULIA_BETA35_FLOOR_TORCH_SBSBS_SOURCE_TRUTH_MEASURED]"
+                        + " structure=SBSBS"
+                        + " categoryScope=floor_torch_only"
+                        + " torchPos=" + torchPos.toShortString()
+                        + " torchState=" + torchState
+                        + " supportPos=" + supportPos.toShortString()
+                        + " supportState=" + supportStateAfter
+                        + " supportDy=" + String.format("%.6f", supportDy)
+                        + " torchDy=" + (Double.isFinite(torchDy)
+                                ? String.format("%.6f", torchDy) : "N/A")
+                        + " contactGap=" + (Double.isFinite(contactGap)
+                                ? String.format("%.6f", contactGap) : "N/A")
+                        + " isVanillaPosition=" + isVanillaPosition
+                        + " placementResult=" + placementResultText[0]
+                        + " placementAccepted=" + placementAcceptedHolder[0]
+                        + " lowerAnchor=" + beta35SbsbsComponentTruth(
+                                mc.world, lowerAnchorBlock, lowerAnchorState, "lowerAnchor")
+                        + " middleCarrier=" + beta35SbsbsComponentTruth(
+                                mc.world, middleCarrierSlab, middleCarrierState, "middleCarrier")
+                        + " upperAnchor=" + beta35SbsbsComponentTruth(
+                                mc.world, upperAnchorBlock, upperAnchorState, "upperAnchor")
+                        + " support=" + beta35SbsbsComponentTruth(
+                                mc.world, supportPos, supportStateAfter, "support")
+                        + " base=" + beta35SbsbsComponentTruth(
+                                mc.world, baseSlab, baseState, "base")
+                        + " supportHasBottomSlabBelow=" + supportHasBottomSlabBelow
+                        + " supportAnchoredFullBlockBelow=" + supportAnchoredFullBlockBelow
+                        + " lowerAnchorIsAnchored=" + lowerAnchorIsAnchored
+                        + " lowerAnchorIsCarrier=" + lowerAnchorIsCarrier
+                        + " middleCarrierIsCarrier=" + middleCarrierIsCarrier
+                        + " upperAnchorIsAnchored=" + upperAnchorIsAnchored
+                        + " fixtureSourceTruth=" + fixtureSourceTruth
+                        + " classification=" + sourceTruthClassification
+                        + " failureLayer=" + failureLayer
+                        + " productionGameplayFixApplied=false");
+            }
+
             System.out.println("[JULIA_BETA35_FLOOR_TORCH_SBSBS_RED]"
                     + " redProofResult=" + (proofRed ? "RED" : "GREEN")
                     + " failureLayer=" + failureLayer
@@ -9856,6 +10121,22 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " chains=NOT_COVERED"
                 + " beta35ReleaseStatus=PAUSED_SBSBS_UNRESOLVED"
                 + " nextSlice=PRODUCTION_FIX_AFTER_SBSBS_RED_CLASSIFICATION");
+
+        if (sourceTruthCapture) {
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_SBSBS_SOURCE_TRUTH_SUMMARY]"
+                    + " structure=SBSBS"
+                    + " categoryScope=floor_torch_only"
+                    + " supportPos=" + supportPos.toShortString()
+                    + " torchPos=" + torchPos.toShortString()
+                    + " sourceTruth=" + sourceTruthClassificationHolder[0]
+                    + " failureLayer=" + failureLayerHolder[0]
+                    + " supportDy=" + (Double.isFinite(measuredSupportDyHolder[0])
+                            ? String.format("%.6f", measuredSupportDyHolder[0]) : "N/A")
+                    + " torchDy=" + (Double.isFinite(measuredTorchDyHolder[0])
+                            ? String.format("%.6f", measuredTorchDyHolder[0]) : "N/A")
+                    + " productionGameplayFixApplied=false"
+                    + " redProofResult=" + (proofRed ? "RED" : "GREEN"));
+        }
 
         if (proofRed) {
             throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SBSBS_RED]"
