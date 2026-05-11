@@ -160,6 +160,39 @@ public final class SlabSupport {
         return isSupportingSlab(world, pos);
     }
 
+    public static boolean isFloorTorch(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return block instanceof net.minecraft.block.TorchBlock && !(block instanceof WallTorchBlock);
+    }
+
+    public static boolean canTreatAsFloorTorchTopFace(BlockView world, BlockPos supportPos, BlockState torchState) {
+        if (isRejectedFloorTorchTopFace(world, supportPos, torchState)) {
+            return false;
+        }
+        if (!isFloorTorch(torchState)) {
+            return canTreatAsSolidTopFace(world, supportPos);
+        }
+        if (world == null || supportPos == null) {
+            return false;
+        }
+        return isSupportingSlab(world.getBlockState(supportPos));
+    }
+
+    public static boolean isRejectedFloorTorchTopFace(BlockView world, BlockPos supportPos, BlockState torchState) {
+        if (!isFloorTorch(torchState)) {
+            return false;
+        }
+        if (world == null || supportPos == null) {
+            return false;
+        }
+        BlockState supportState = world.getBlockState(supportPos);
+        return isBottomSlab(supportState)
+                && SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState);
+    }
+
     /**
      * Absolute Y of the slab's top surface.
      */
@@ -1010,6 +1043,15 @@ public final class SlabSupport {
                         side, pos.toShortString(), state);
             }
             return -0.5;
+        }
+
+        if (isFloorTorch(state)) {
+            BlockPos supportPos = pos.down();
+            BlockState supportState = world.getBlockState(supportPos);
+            if (isTopSlab(supportState)
+                    && SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, supportPos, supportState)) {
+                return -1.0;
+            }
         }
 
         if (shouldOffset(world, pos, state)) {
