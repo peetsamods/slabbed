@@ -10,6 +10,25 @@ Julia’s live recorder confirmed `CONTACT_GAP` for in-scope floor torches after
 
 Current operating result is **RED proof-only** and `Beta 3.5` release remains **PAUSED**.
 
+The replay gap proof in this slice did not reproduce the live dy stack:
+`torchDy=-1.000`, `supportDy=-0.500`, `contactGap=-1.500000` until the source-truth parity gate below proves the fixture equivalence.
+
+Source-truth parity verification now runs with:
+
+```bash
+-Dslabbed.beta35LiveFloorTorchSourceTruthParity=true
+```
+
+Its markers are:
+
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_GREEN]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_FAIL]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]`
+
+If source truth still cannot be reproduced, the proof should classify `failureLayer=SOURCE_TRUTH_MISMATCH` with `fixtureMatchesLiveDyStack=false` and report exact missing anchor/source truth.
+
 ## Gate
 
 Enable the focused live contact-gap reproduction with:
