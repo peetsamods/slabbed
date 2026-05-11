@@ -7,6 +7,9 @@ Fixture now reproduces the live dy stack (`supportDy=-0.500`, `torchDy=-1.000`,
 `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
 No production gameplay fix implemented. No release tag moved.
 
+Cross-check against v2 source-truth parity: `fixtureMatchesV2LiveStack=true` with
+`contactGap=0.500000` is now reproduced under compound visible slab-lane source truth.
+
 With corrected V2 capture math in `docs/beta35-live-torch-recorder-contact-math-audit.md`,
 the remaining open blocker in this slice is reproducing the `v2` floor-torch live-contact
 measurement (`contactGap=0.500000`) in a focused RED proof.
