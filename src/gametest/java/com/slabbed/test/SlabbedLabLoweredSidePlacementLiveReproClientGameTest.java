@@ -219,6 +219,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35FloorTorchSupportFinalizationRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FloorTorchSupportFinalizationRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35LiveFloorTorchSourceTruthParity")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -8728,6 +8737,285 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " bottom_slab_support=" + bottomScenario.failureLayer()
                     + " categoryScope=floor_torch_only");
         }
+    }
+
+    /**
+     * RED proof: floor torch placed on a plain bottom slab remains present after the slab
+     * gains its compound-visible-side-lower mark (support finalization).
+     *
+     * The production timing path:
+     *  1. Slab placed in vanilla/pre-finalization state.
+     *  2. Torch authored on slab (canPlaceAt passes — no compound mark yet).
+     *  3. Compound mark applied server-side (addCompoundVisibleSideLowerSlab).
+     *     Attachment write does NOT call world.updateNeighbors → getStateForNeighborUpdate
+     *     is never triggered on the torch.
+     *  4. Torch remains while isRejectedFloorTorchTopFace is now true.
+     *
+     * Expected:
+     *  RED  (SUPPORT_FINALIZATION_STALE_TORCH)  — torch remains after finalization.
+     *  GREEN (SUPPORT_FINALIZATION_REMOVED_GREEN) — only if existing code already removes it.
+     *
+     * Gate: -Dslabbed.beta35FloorTorchSupportFinalizationRed=true
+     */
+    private static void runBeta35FloorTorchSupportFinalizationRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        // Positions — chosen to avoid conflicts with other proof fixtures.
+        // Tower: towerBase → towerAnchor → towerCarrier → compoundSource (compound full-block anchor, dy=-1.0)
+        // Support slab: 1 block west of compound source, same Y.
+        final BlockPos compoundSourcePos = new BlockPos(55, -57, 87);
+        final BlockPos supportCandidatePos = new BlockPos(54, -57, 87);
+        final BlockPos torchPos = supportCandidatePos.up();
+        final BlockPos towerBase = compoundSourcePos.down(3);
+        final BlockPos towerAnchor = compoundSourcePos.down(2);
+        final BlockPos towerCarrier = compoundSourcePos.down(1);
+
+        final BlockHitResult torchUseHit = new BlockHitResult(
+                new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY() + 1.0d, supportCandidatePos.getZ() + 0.5d),
+                Direction.UP,
+                supportCandidatePos,
+                false);
+
+        // ── Phase 1: build fixture, place plain slab (no compound mark), place torch ────────
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            // Tower that makes compoundSourcePos a compound full-block anchor with dy=-1.0.
+            world.setBlockState(towerBase,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(towerAnchor, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, towerAnchor, world.getBlockState(towerAnchor));
+            world.setBlockState(towerCarrier,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world, towerCarrier, world.getBlockState(towerCarrier));
+            world.setBlockState(compoundSourcePos, Blocks.STONE.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, compoundSourcePos, world.getBlockState(compoundSourcePos));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(
+                    world, compoundSourcePos, world.getBlockState(compoundSourcePos));
+            // Support slab: plain bottom slab, NO compound-visible-lower mark yet.
+            world.setBlockState(supportCandidatePos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            // Clear torch position.
+            world.setBlockState(torchPos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.TORCH, 4));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY() + 3.2d, supportCandidatePos.getZ() - 2.0d),
+                torchUseHit.getPos());
+
+        final String[] placementResultText = {"not-run"};
+        final boolean[] placementAccepted = {false};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_RED]"
+                        + " reason=client_not_ready phase=before_finalization categoryScope=floor_torch_only");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, torchUseHit);
+            placementResultText[0] = result.toString();
+            placementAccepted[0] = result.isAccepted();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // Capture before-finalization state.
+        final BlockState[] torchStateBeforeHolder = {null};
+        final double[] torchDyBeforeHolder = {Double.NaN};
+        final double[] supportDyBeforeHolder = {Double.NaN};
+        final boolean[] rejectedBeforeHolder = {false};
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) return;
+            BlockState supportState = mc.world.getBlockState(supportCandidatePos);
+            BlockState torchState = mc.world.getBlockState(torchPos);
+            torchStateBeforeHolder[0] = torchState;
+            double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
+            supportDyBeforeHolder[0] = supportDy;
+            if (torchState.isOf(Blocks.TORCH)) {
+                torchDyBeforeHolder[0] = SlabSupport.getYOffset(mc.world, torchPos, torchState);
+            }
+            rejectedBeforeHolder[0] = SlabSupport.isRejectedFloorTorchTopFace(mc.world, supportCandidatePos, torchState);
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_RED]"
+                    + " phase=before_finalization"
+                    + " categoryScope=floor_torch_only"
+                    + " supportCandidatePos=" + supportCandidatePos.toShortString()
+                    + " supportStateBefore=" + supportState
+                    + " supportDyBefore=" + String.format("%.3f", supportDy)
+                    + " torchPos=" + torchPos.toShortString()
+                    + " torchStateBefore=" + torchState
+                    + " torchDyBefore=" + (Double.isFinite(torchDyBeforeHolder[0])
+                            ? String.format("%.3f", torchDyBeforeHolder[0]) : "N/A")
+                    + " isRejectedBefore=" + rejectedBeforeHolder[0]
+                    + " placementResult=" + placementResultText[0]
+                    + " placementAccepted=" + placementAccepted[0]
+                    + " wall_torch=NOT_COVERED");
+        });
+
+        // ── Phase 2: apply compound-visible-lower mark (simulate slab finalization) ────────
+        // This mirrors what happens in live gameplay when the slab's compound truth is
+        // finalized AFTER the torch was authored.  The mark write does NOT call
+        // world.updateNeighbors so getStateForNeighborUpdate on the torch is never triggered.
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState supportState = world.getBlockState(supportCandidatePos);
+            BlockState compoundState = world.getBlockState(compoundSourcePos);
+            SlabAnchorAttachment.addCompoundVisibleSideLowerSlab(
+                    world, supportCandidatePos, supportState, compoundSourcePos, compoundState);
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // ── Phase 2 check ────────────────────────────────────────────────────────────────
+        final String[] failureLayerHolder = {"FINALIZATION_FIXTURE_NOT_RUN"};
+        final String[] legalOutcomeHolder = {"UNSET"};
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_RED]"
+                        + " reason=client_world_missing phase=after_finalization categoryScope=floor_torch_only");
+            }
+
+            BlockState supportStateAfter = mc.world.getBlockState(supportCandidatePos);
+            BlockState torchStateAfter = mc.world.getBlockState(torchPos);
+            double supportDyAfter = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportStateAfter);
+            boolean compoundLowerMarkWritten =
+                    SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(mc.world, supportCandidatePos, supportStateAfter);
+            boolean rejectedAfter =
+                    SlabSupport.isRejectedFloorTorchTopFace(mc.world, supportCandidatePos, torchStateAfter);
+            boolean torchPresent = torchStateAfter.isOf(Blocks.TORCH);
+            double torchDyAfter = torchPresent
+                    ? SlabSupport.getYOffset(mc.world, torchPos, torchStateAfter)
+                    : Double.NaN;
+
+            // canPlaceAt with finalized support.
+            boolean canPlaceAfter = torchStateAfter.isOf(Blocks.TORCH)
+                    && torchStateAfter.canPlaceAt(mc.world, torchPos);
+
+            // Simulate getStateForNeighborUpdate to show what SHOULD happen.
+            BlockState neighborUpdateResult = null;
+            if (torchPresent) {
+                try {
+                    neighborUpdateResult = torchStateAfter.getStateForNeighborUpdate(
+                            mc.world,
+                            mc.world,
+                            torchPos,
+                            Direction.DOWN,
+                            supportCandidatePos,
+                            supportStateAfter,
+                            net.minecraft.util.math.random.Random.create());
+                } catch (Exception e) {
+                    // ignore — diagnostic only
+                }
+            }
+            boolean neighborUpdateWouldRemove = neighborUpdateResult != null
+                    && neighborUpdateResult.isAir();
+
+            // supportVisibleTopY for bottom slab: pos.getY() + getSupportYOffset(BOTTOM) + supportDy
+            double supportVisibleTopY = supportCandidatePos.getY() + 0.5d + supportDyAfter;
+            net.minecraft.util.math.Box modelBox = torchPresent
+                    ? beta35FloorTorchModelProxyWorldBox(torchPos, torchDyAfter)
+                    : null;
+            double torchModelBottomY = modelBox == null ? Double.NaN : modelBox.minY;
+            double contactGapAfter = Double.isFinite(torchModelBottomY)
+                    ? torchModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+
+            String legalOutcome = torchPresent
+                    ? "FLOOR_TORCH_COMPOUND_VISIBLE_BOTTOM_SLAB_SUPPORT_STALE_TORCH_REMAINS"
+                    : "FLOOR_TORCH_COMPOUND_VISIBLE_BOTTOM_SLAB_SUPPORT_TORCH_CORRECTLY_REMOVED";
+            legalOutcomeHolder[0] = legalOutcome;
+
+            String failureLayer;
+            if (!compoundLowerMarkWritten || Math.abs(supportDyAfter - (-1.0d)) > EPSILON) {
+                failureLayer = "SOURCE_TRUTH_MISMATCH";
+            } else if (torchPresent) {
+                failureLayer = "SUPPORT_FINALIZATION_STALE_TORCH";
+            } else {
+                failureLayer = "SUPPORT_FINALIZATION_REMOVED_GREEN";
+            }
+            failureLayerHolder[0] = failureLayer;
+
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_RED]"
+                    + " phase=after_finalization"
+                    + " categoryScope=floor_torch_only"
+                    + " supportCandidatePos=" + supportCandidatePos.toShortString()
+                    + " supportStateAfter=" + supportStateAfter
+                    + " supportDyAfter=" + String.format("%.3f", supportDyAfter)
+                    + " compoundLowerMarkWritten=" + compoundLowerMarkWritten
+                    + " isRejectedAfter=" + rejectedAfter
+                    + " canPlaceAfter=" + canPlaceAfter
+                    + " neighborUpdateWouldRemove=" + neighborUpdateWouldRemove
+                    + " torchPos=" + torchPos.toShortString()
+                    + " torchStateAfter=" + torchStateAfter
+                    + " torchPresent=" + torchPresent
+                    + " torchDyBefore=" + (Double.isFinite(torchDyBeforeHolder[0])
+                            ? String.format("%.3f", torchDyBeforeHolder[0]) : "N/A")
+                    + " torchDyAfter=" + (Double.isFinite(torchDyAfter)
+                            ? String.format("%.3f", torchDyAfter) : "N/A")
+                    + " supportVisibleTopY=" + String.format("%.6f", supportVisibleTopY)
+                    + " torchModelBottomY=" + (Double.isFinite(torchModelBottomY)
+                            ? String.format("%.6f", torchModelBottomY) : "N/A")
+                    + " contactGapAfter=" + (Double.isFinite(contactGapAfter)
+                            ? String.format("%.6f", contactGapAfter) : "N/A")
+                    + " legalOutcome=" + legalOutcome
+                    + " failureLayer=" + failureLayer
+                    + " wall_torch=NOT_COVERED"
+                    + " productionGameplayFixApplied=false"
+                    + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_SUPPORT_FINALIZATION_RED");
+            System.out.println("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_GREEN]"
+                    + " phase=after_finalization"
+                    + " categoryScope=floor_torch_only"
+                    + " torchPresent=" + torchPresent
+                    + " legalOutcome=" + legalOutcome
+                    + " supportDyAfter=" + String.format("%.3f", supportDyAfter)
+                    + " torchDyBefore=" + (Double.isFinite(torchDyBeforeHolder[0])
+                            ? String.format("%.3f", torchDyBeforeHolder[0]) : "N/A")
+                    + " torchDyAfter=" + (Double.isFinite(torchDyAfter)
+                            ? String.format("%.3f", torchDyAfter) : "N/A")
+                    + " contactGapAfter=" + (Double.isFinite(contactGapAfter)
+                            ? String.format("%.6f", contactGapAfter) : "N/A")
+                    + " neighborUpdateWouldRemove=" + neighborUpdateWouldRemove
+                    + " failureLayer=" + failureLayer);
+        });
+
+        // Summarize.
+        boolean fixtureOk = !failureLayerHolder[0].equals("SOURCE_TRUTH_MISMATCH")
+                && !failureLayerHolder[0].equals("FINALIZATION_FIXTURE_NOT_RUN");
+        boolean proofGreen = failureLayerHolder[0].equals("SUPPORT_FINALIZATION_REMOVED_GREEN");
+        boolean proofRed = failureLayerHolder[0].equals("SUPPORT_FINALIZATION_STALE_TORCH");
+
+        System.out.println("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_SUMMARY]"
+                + " categoryScope=floor_torch_only"
+                + " legalOutcome=" + legalOutcomeHolder[0]
+                + " failureLayer=" + failureLayerHolder[0]
+                + " redProofResult=" + (proofRed ? "RED" : proofGreen ? "GREEN" : "INCONCLUSIVE")
+                + " productionGameplayFixApplied=false"
+                + " wall_torch=NOT_COVERED"
+                + " lantern=NOT_COVERED"
+                + " signs=NOT_COVERED"
+                + " chains=NOT_COVERED"
+                + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_SUPPORT_FINALIZATION_RED"
+                + " releasePrep=PAUSED"
+                + " nextSlice=PRODUCTION_FIX_AFTER_RED_PROOF_CONFIRMED");
+
+        if (!fixtureOk) {
+            throw new RuntimeException("[JULIA_BETA35_FLOOR_TORCH_SUPPORT_FINALIZATION_RED]"
+                    + " reason=fixture_failed failureLayer=" + failureLayerHolder[0]
+                    + " categoryScope=floor_torch_only");
+        }
+        // The RED proof succeeds as a proof if torch remains (RED = bug confirmed).
+        // Do NOT throw on RED — that is the expected outcome.
+        // Throw only if the fixture itself is broken (SOURCE_TRUTH_MISMATCH).
     }
 
     private static void runBeta35LiveFloorTorchContactGapRedProof(
