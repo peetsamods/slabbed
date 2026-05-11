@@ -271,3 +271,19 @@ This tracer is proof-only/debug-gated and does not implement a production
 behavior fix. Beta 3.5 release prep remains paused pending Julia live trace.
 Scope remains `floor_torch_only`; wall torch, lantern, signs, and chains remain
 `NOT_COVERED`; no release tag moved.
+
+## Lowered bottom-slab placement follow-up
+
+The later dual trace isolated one remaining player-like placement path not
+covered by this older `supportDy=-0.5` anchoring proof: floor torch placement on
+a lowered bottom slab with `intendedSupportDy=-1.000000`.
+
+That path is now covered by
+`-Dslabbed.beta35FloorTorchLoweredSlabPlacement=true` and reports
+`classification=PLACEMENT_ATTEMPT_OK`, `finalInteractResult=Success[...]`,
+`torchBlockAppearedAfterAttempt=true`, `torchDy=-1.500000`,
+`contactGap=0.000000`, `survival=SURVIVAL_GREEN`, and `failureLayer=NONE`.
+
+The original `-Dslabbed.beta35LiveItemAnchoringRed=true` regression still passes
+with `supportDy=-0.500`, `torchDy=-1.000`, `playerPlaced=true`,
+`playerSurvived=true`, and `failureLayer=NONE`.

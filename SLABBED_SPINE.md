@@ -377,3 +377,15 @@ If the slice changes, update the source pack and spine together so the current o
 - New gated manual-live tracer flag: `-Dslabbed.beta35LiveTorchDualTrace=true`. It emits startup marker `[JULIA_BETA35_LIVE_TORCH_DUAL_TRACE] enabled=true`, placement attempts with `[JULIA_BETA35_LIVE_TORCH_PLACEMENT_ATTEMPT]`, existing nearby floor-torch contact with `[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]`, and `[JULIA_BETA35_LIVE_TORCH_DUAL_SUMMARY]`.
 - The tracer separates placement/targeting/intent classifications from visual contact/source-truth/dy classifications. It is debug-gated and proof-only; no production behavior fix is implemented in this slice.
 - Beta 3.5 release prep remains **PAUSED** pending Julia live trace. Scope remains `floor_torch_only`; `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`. No release tag moved.
+
+## Beta 3.5 floor torch lowered bottom-slab placement fix (2026-05-11)
+
+- Operating base for this slice: `fe7677a` / `save/beta35-live-torch-dual-tracer` on `integrate/phase19-into-side-slab-top-support`.
+- The dual tracer proved the current failure layer was placement on lowered bottom-slab support, not visual contact: failing live attempts had `heldItem=minecraft:torch`, `intendedSupportCandidateState=stone_slab[type=bottom]`, `intendedSupportSourceType=PLAIN_STATE`, `intendedSupportDy=-1.000000`, `finalInteractResult=Fail[]`, `torchBlockAppearedAfterAttempt=false`, and `classification=PLACEMENT_RESULT_UNKNOWN`.
+- Narrow production fix: `SlabSupport.isLegalFloorTorchLoweredBottomSlabSupport(...)` now authorizes only `floor_torch` on named lowered bottom-slab supports with `supportDy=-1.0`; `TorchBlockMixin` continues to consult SlabSupport authority. The newly legal path reuses the existing contact law and resolves the floor torch to `torchDy=-1.500000` so `contactGap=0.000000`.
+- Focused gate `-Dslabbed.beta35LiveTorchDualTrace=true -Dslabbed.beta35FloorTorchLoweredSlabPlacement=true` is GREEN: `[JULIA_BETA35_LIVE_TORCH_PLACEMENT_ATTEMPT] classification=PLACEMENT_ATTEMPT_OK`, `[JULIA_BETA35_FLOOR_TORCH_LOWERED_SLAB_PLACEMENT_GREEN]`, and `[JULIA_BETA35_FLOOR_TORCH_LOWERED_SLAB_PLACEMENT_SUMMARY] failureLayer=NONE`.
+- Fixed values: `intendedSupportDy=-1.000000`, `finalInteractResult=Success[...]`, `torchBlockAppearedAfterAttempt=true`, `finalTorchState=Block{minecraft:torch}`, `torchDy=-1.500000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`.
+- Regression gates passed: `compileJava compileGametestJava`, focused live-shape/contact, visual contact, player-like placement, object triad, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-floor-torch-lowered-slab-placement-fix-fe7677a`. See `docs/beta35-floor-torch-lowered-slab-placement-fix.md`.
+- `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; scope remains `floor_torch_only`.
+- Beta 3.5 release prep remains paused pending Julia live acceptance; no release tag moved.
