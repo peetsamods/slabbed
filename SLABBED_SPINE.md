@@ -311,10 +311,14 @@ If the slice changes, update the source pack and spine together so the current o
 
 ## Beta 3.5 floor torch v2 source-truth parity status (2026-05-11)
 
-- Beta 3.5 floor torch v2 source-truth parity is achieved (`fixtureMatchesV2LiveStack=true`).
-- Corrected v2 live contact gap `+0.500000` is reproduced under source-truth fixture.
-- Beta 3.5 release remains paused / blocked.
+- Beta 3.5 floor torch v2 contact fix is implemented narrowly for `floor_torch`.
+- `FLOOR_TORCH_COMPOUND_VISIBLE_TOP_SLAB_SUPPORT` is legal and now aligns at `torchDy=-1.000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `triad=GREEN`.
+- `FLOOR_TORCH_COMPOUND_VISIBLE_BOTTOM_SLAB_SUPPORT` is rejected/deferred by law because same-position contact would require illegal `dy<-1.0`; proof reports `placementResult=Fail[]`, `survival=REJECTED_BY_LAW`, `triad=REJECTED_BY_LAW`.
+- Focused proof `-Dslabbed.beta35FloorTorchV2ContactGapRed=true` is GREEN with `coordinateParity=true`, `fixtureMatchesFixedLegalStack=true`, `failureLayer=NONE`.
+- Regression gates passed: `compileJava compileGametestJava`, previous live item anchoring proof, previous object triad proof, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-floor-torch-v2-contact-fix-883b204`.
+- Beta 3.5 release remains paused / blocked pending Julia live re-test.
 - wall_torch remains `NOT_COVERED`.
-- Next slice: production fix for floor_torch contact height only.
-- no production gameplay fix has been applied in this slice.
+- Next safe action: savepoint commit/tag/push for this narrow floor_torch contact fix, then Julia live re-test.
+- production gameplay fix has been applied in this slice.
 - no release tag moved.

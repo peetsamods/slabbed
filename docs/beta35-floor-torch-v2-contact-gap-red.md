@@ -10,8 +10,10 @@ V2 contact-gap proof now reproduces the live +0.5 condition for `top_slab_suppor
 - `fixtureMatchesV2LiveStack=true`.
 
 Current blocker:
-- in-scope `floor_torch` contact gap remains `+0.500` and must be fixed in production code
-  (`floor_torch` contact-height correction slice).
+- superseded by `docs/beta35-floor-torch-v2-contact-fix.md`.
+- in-scope `floor_torch` top support is fixed at `contactGap=0.000000`.
+- in-scope `floor_torch` bottom support is rejected by law because alignment would require
+  illegal `dy<-1.0`.
 
 A previous blocker state `SOURCE_TRUTH_MISMATCH` is superseded by the new source-truth
 parity slice; this doc now reflects the `save/beta35-floor-torch-v2-source-truth-parity`
@@ -21,5 +23,5 @@ savepoint evidence.
 
 - `wall_torch=NOT_COVERED`
 - `lantern`, `signs`, `chains` remain `NOT_COVERED`.
-- No production gameplay fix applied.
+- Production gameplay fix applied narrowly for `floor_torch`.
 - No release tag moved.
