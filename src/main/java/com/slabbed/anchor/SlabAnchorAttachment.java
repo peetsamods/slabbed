@@ -342,8 +342,11 @@ public final class SlabAnchorAttachment {
         if (!qualifiesForCompoundVisibleOwnerTopSlab(world, pos, state, sourcePos, sourceState)) {
             return;
         }
-        addToAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
+        boolean added = addToAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
+        if (added) {
+            world.replaceWithStateForNeighborUpdate(Direction.DOWN, pos.up(), pos, state, Block.NOTIFY_ALL, 512);
+        }
     }
 
     public static void updatePersistentLoweredSlabCarrier(World world, BlockPos pos, BlockState state) {
