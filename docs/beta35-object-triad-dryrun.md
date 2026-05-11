@@ -79,7 +79,12 @@ fixture currently reports `contactGap=0.000000`, `triad=GREEN`,
 
 ## Recommendation
 
-- **integration branch triad proof: GREEN** / **floor torch player-placement proof: GREEN** / **floor torch visual acceptance: NOT ACCEPTED** / **visual contact audit: PENDING fixture mismatch** / **cherry-pick into beta.2 baseline: blocked by conflicts** / **release prep: PAUSED**
+- **integration branch triad proof: GREEN** / **floor torch player-placement proof: GREEN** / **lowered bottom-slab contact proof: GREEN** / **floor torch visual acceptance: pending Julia live acceptance** / **cherry-pick into beta.2 baseline: blocked by conflicts** / **release prep: PAUSED**
+
+The 2026-05-11 lowered bottom-slab contact fix does not reopen object-triad scope.
+The object triad regression remains GREEN with `failureLayer=NONE`; the new
+contact fix is limited to `floor_torch` dy over `COMPOUND_VISIBLE_SIDE_LOWER_SLAB`
+support. `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
 
 ## Next slice
 

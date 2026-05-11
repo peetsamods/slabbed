@@ -127,10 +127,15 @@ Current measured parity result:
 - `liveShapeProofStatus=GREEN`
 - `failureLayer=NONE`
 
-Interpretation: this closer fixture still does not reproduce a nonzero contact
-gap or wrong-support-owner/wrong-dy issue for floor torch. Beta 3.5 remains
-blocked by Julia's manual visual rejection, and the next safe step is tighter
-live coordinate/face/owner capture rather than a production fix guess.
+Follow-up live evidence after `3212d88` isolated the remaining failure to
+`floor_torch` dy/contact over lowered bottom-slab support (`supportDy=-1.000000`),
+not placement permission or survival.
+
+The fix at `docs/beta35-floor-torch-lowered-slab-contact-fix.md` keeps this
+player-like placement proof GREEN while adding lowered bottom-slab contact
+coverage to the live-shape proof. Retested lowered bottom-slab cases now report
+`torchDy=-1.500`, `contactGap=0.000000`, `triadCoLocated=true`,
+`survival=SURVIVAL_GREEN`, and `failureLayer=NONE`.
 
 ## Live failure
 

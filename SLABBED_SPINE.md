@@ -352,3 +352,19 @@ If the slice changes, update the source pack and spine together so the current o
 - Evidence folder: `tmp/beta35-floor-torch-sbsbs-source-truth-fix-4bca184`.
 - `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; Beta 3.5 remains paused pending Julia live retest; no release tag moved.
 - Next safe action after savepoint: Julia live retests SBSBS floor-torch behavior from the savepoint tag; do not broaden into other item categories or release prep without explicit instruction.
+
+## Beta 3.5 floor torch lowered bottom-slab contact fix (2026-05-11)
+
+- Operating base for this slice: `3212d88` / `save/beta35-floor-torch-sbsbs-source-truth-fix` on `integrate/phase19-into-side-slab-top-support`.
+- Root remains `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`; tracked tree was clean before edits; `tmp/` remains untracked evidence only.
+- Julia live evidence after `3212d88` proved the remaining bad layer was `floor_torch` dy/contact over lowered bottom-slab support, not placement, survival, or model/outline/raycast triad split.
+- Previous bad lowered bottom-slab cases:
+  - `torchPos=43,-56,88`, `supportCandidateState=stone_slab[type=bottom]`, `supportDy=-1.000000`, previous `torchDy=-1.000000`, previous `contactGap=0.500000`.
+  - `torchPos=43,-55,79`, `supportCandidateState=stone_slab[type=bottom]`, `supportDy=-1.000000`, previous `torchDy=-0.500000`/live capture and local reproduction `torchDy=-1.000000`, previous `contactGap=1.000000`/`0.500000`.
+- Narrow production fix: `SlabSupport.getYOffsetInner(...)` now returns `torchDy=-1.500000` only for `floor_torch` above a bottom slab marked `COMPOUND_VISIBLE_SIDE_LOWER_SLAB`. This aligns torch model/outline/raycast bottom with the slab's visible top. `COMPOUND_VISIBLE_OWNER_TOP_SLAB` remains rejected by law.
+- Focused gate `-Dslabbed.beta35FloorTorchLiveShapeRed=true` is GREEN after the fix. Retested lowered bottom-slab cases report `supportDy=-1.000`, `torchDy=-1.500`, `contactGap=0.000000`, `triadCoLocated=true`, `survival=SURVIVAL_GREEN`, and `failureLayer=NONE`.
+- Regression gates passed: `compileJava compileGametestJava`, `-Dslabbed.beta35FloorTorchVisualContactRed=true`, `-Dslabbed.beta35LiveItemAnchoringRed=true`, `-Dslabbed.beta35ObjectSlabOwnershipRed=true`, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-floor-torch-lowered-slab-contact-fix-3212d88`.
+- `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; scope remains `floor_torch_only`.
+- Beta 3.5 release prep remains paused pending Julia live acceptance; no release tag moved.
+- Next safe action after savepoint: Julia live-tests the lowered bottom-slab floor-torch contact from the savepoint tag; do not broaden into other item categories or release prep without explicit instruction.
