@@ -230,7 +230,19 @@ Status: Fixed / saved.
 
 After the classifier savepoint, the next required action is Julia and architecture/product direction on render/placement snap redesign. `release/0.2.0-beta.4` remains not publishable while blocked; do not upload beta4 and do not call it release-ready.
 
-Current Beta 3.5 floor-torch slice state (2026-05-10): add `-Dslabbed.beta35LiveTorchCapture=true` gated live recorder in `src/client/java/com/slabbed/mixin/client/Beta35LiveTorchCaptureMixin.java` and `src/main/java/com/slabbed/util/Beta35LiveTorchCaptureRecorder.java` as evidence-only capture. No gameplay fix, no release tag movement.
+Current Beta 3.5 floor-torch slice state (2026-05-10): add `-Dslabbed.beta35LiveTorchCapture=true` gated live recorder in `src/client/java/com/slabbed/mixin/client/Beta35LiveTorchCaptureMixin.java` and `src/main/java/com/slabbed/util/Beta35LiveTorchCaptureRecorder.java` as evidence-only capture. Wall torch, lantern, signs, and chains remain explicitly `NOT_COVERED`.
+
+Current follow-up floor-torch contact-gap proof slice (2026-05-10): add
+`-Dslabbed.beta35LiveFloorTorchContactGapRed=true` in
+`SlabbedLabLoweredSidePlacementLiveReproClientGameTest` with markers
+`[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]`,
+`[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]`,
+`[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]`.
+
+Current proof classification in this slice is RED/PENDING pending live coordinate replay:
+in-scope floor torch captures still show negative contact gap and are release-blocking;
+wall torch remains separate `NOT_COVERED`.
+No gameplay fix and no release tag movement in this slice.
 
 ## Suggested live run command
 

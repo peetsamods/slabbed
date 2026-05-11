@@ -90,6 +90,18 @@ authorize release prep and does **not** imply Julia's manual concern is invalid.
 It indicates that a more specific live coordinate/face/owner capture is needed
 for the exact manual complaint path.
 
+This path is now supplemented by a dedicated contact-gap proof slice:
+
+`-Dslabbed.beta35LiveFloorTorchContactGapRed=true`
+
+Markers:
+
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]`
+- `[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]`
+
+Wall torch remains `NOT_COVERED` in this contact-gap slice.
+
 - Beta 3.5 release prep remains **PAUSED**.
 - Do not claim `floor_torch_only` release scope accepted.
 - No production gameplay fix was implemented in this slice.

@@ -201,6 +201,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35LiveFloorTorchContactGapRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35LiveFloorTorchContactGapRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35ObjectSlabOwnershipRed")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -7967,6 +7976,169 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " beta35ReleaseStatus=PAUSED_LIVE_VISUAL_ANCHORING_NOT_ACCEPTED"
                     + " releasePrep=PAUSED"
                     + " releaseTagMoved=false");
+        });
+    }
+
+    private static void runBeta35LiveFloorTorchContactGapRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final BlockPos supportCandidatePos = new BlockPos(51, -56, 89);
+        final BlockPos torchPos = supportCandidatePos.up();
+        final BlockHitResult torchUseHit = new BlockHitResult(
+                new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY(), supportCandidatePos.getZ() + 0.5d),
+                Direction.UP,
+                supportCandidatePos,
+                false);
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(supportCandidatePos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(torchPos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.TORCH, 4));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY() + 2.2d, supportCandidatePos.getZ() - 2.0d),
+                torchUseHit.getPos());
+
+        final String[] placementResultText = {"not-run"};
+        final boolean[] placementAccepted = {false};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]"
+                        + " reason=client_not_ready categoryScope=floor_torch_only");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, torchUseHit);
+            placementResultText[0] = result.toString();
+            placementAccepted[0] = result.isAccepted();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                throw new RuntimeException("[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]"
+                        + " reason=client_world_or_player_missing categoryScope=floor_torch_only");
+            }
+
+            BlockState torchState = mc.world.getBlockState(torchPos);
+            BlockState supportCandidateState = mc.world.getBlockState(supportCandidatePos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportCandidateState);
+            double torchDy = torchState.isOf(Blocks.TORCH)
+                    ? SlabSupport.getYOffset(mc.world, torchPos, torchState)
+                    : Double.NaN;
+            double supportVisibleTopY = supportCandidateState.isOf(Blocks.STONE_SLAB)
+                    ? beta35SupportVisibleTopY(supportCandidatePos, supportCandidateState, supportDy)
+                    : Double.NaN;
+
+            VoxelShape outlineShape = torchState.isOf(Blocks.TORCH)
+                    ? torchState.getOutlineShape(mc.world, torchPos, net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            VoxelShape raycastShape = torchState.isOf(Blocks.TORCH)
+                    ? torchState.getRaycastShape(mc.world, torchPos)
+                    : null;
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, torchPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, torchPos);
+            double torchModelBottomY = outlineBox == null ? Double.NaN : outlineBox.minY;
+            double contactGap = torchModelBottomY - supportVisibleTopY;
+
+            boolean supportOwnerExpected = torchState.isOf(Blocks.TORCH)
+                    && supportCandidateState.isOf(Blocks.STONE_SLAB)
+                    && supportCandidateState.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+            boolean torchDyExpected = torchState.isOf(Blocks.TORCH) && Math.abs(torchDy + 1.0d) <= EPSILON;
+            boolean contactGapExpected = !Double.isNaN(contactGap) && Math.abs(contactGap + 1.5d) <= EPSILON;
+
+            String failureLayer = "NONE";
+            if (!placementAccepted[0] || !torchState.isOf(Blocks.TORCH)) {
+                failureLayer = "LIVE_FLOOR_TORCH_CONTACT_GAP";
+            } else if (!supportOwnerExpected) {
+                failureLayer = "LIVE_FLOOR_TORCH_WRONG_SUPPORT_OWNER";
+            } else if (!torchDyExpected) {
+                failureLayer = "LIVE_FLOOR_TORCH_WRONG_DY";
+            } else if (!contactGapExpected) {
+                failureLayer = "LIVE_FLOOR_TORCH_CONTACT_GAP";
+            }
+
+            String liveCapturePattern = contactGapExpected ? "MATCHED" : "NOT_MATCHED";
+            String redClassification = "RED";
+            String marker = "[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]";
+            System.out.println("[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]"
+                    + " categoryScope=floor_torch_only"
+                    + " expectedSampleContactGap=-1.500000"
+                    + " observedSampleMatch=" + liveCapturePattern
+                    + " torchPos=" + torchPos.toShortString()
+                    + " torchState=" + torchState
+                    + " supportCandidatePos=" + supportCandidatePos.toShortString()
+                    + " supportCandidateState=" + supportCandidateState
+                    + " supportDy=" + (supportCandidateState.isOf(Blocks.STONE_SLAB) ? String.format("%.3f", supportDy) : "N/A")
+                    + " torchDy=" + (torchState.isOf(Blocks.TORCH) ? String.format("%.3f", torchDy) : "N/A")
+                    + " supportVisibleTopY=" + (Double.isFinite(supportVisibleTopY) ? String.format("%.6f", supportVisibleTopY) : "N/A")
+                    + " torchModelBottomY=" + (Double.isFinite(torchModelBottomY) ? String.format("%.6f", torchModelBottomY) : "N/A")
+                    + " contactGap=" + (Double.isFinite(contactGap) ? String.format("%.6f", contactGap) : "N/A")
+                    + " outlineMinY=" + beta35FormatMinY(outlineBox)
+                    + " outlineMaxY=" + beta35FormatMaxY(outlineBox)
+                    + " raycastMinY=" + beta35FormatMinY(raycastBox)
+                    + " raycastMaxY=" + beta35FormatMaxY(raycastBox)
+                    + " supportCandidateType=stone_slab[type=bottom]"
+                    + " failureLayer=" + failureLayer
+                    + " redClassification=" + redClassification
+                    + " placementAccepted=" + placementAccepted[0]
+                    + " placementResult=" + placementResultText[0]);
+            System.out.println(marker
+                    + " categoryScope=floor_torch_only"
+                    + " itemCategory=floor_torch"
+                    + " wall_torch=NOT_COVERED"
+                    + " lantern=NOT_COVERED"
+                    + " signs=NOT_COVERED"
+                    + " chains=NOT_COVERED"
+                    + " torchPos=" + torchPos.toShortString()
+                    + " torchState=" + torchState
+                    + " supportCandidatePos=" + supportCandidatePos.toShortString()
+                    + " supportCandidateState=" + supportCandidateState
+                    + " torchDy=" + (torchState.isOf(Blocks.TORCH) ? String.format("%.3f", torchDy) : "N/A")
+                    + " supportDy=" + (supportCandidateState.isOf(Blocks.STONE_SLAB) ? String.format("%.3f", supportDy) : "N/A")
+                    + " supportVisibleTopY=" + (Double.isFinite(supportVisibleTopY) ? String.format("%.6f", supportVisibleTopY) : "N/A")
+                    + " torchModelBottomY=" + (Double.isFinite(torchModelBottomY) ? String.format("%.6f", torchModelBottomY) : "N/A")
+                    + " contactGap=" + (Double.isFinite(contactGap) ? String.format("%.6f", contactGap) : "N/A")
+                    + " wallTorchStatus=NOT_COVERED"
+                    + " failureLayer=" + failureLayer
+                    + " liveCaptureMatch=" + liveCapturePattern
+                    + " redProofExpected=CONTACT_GAP"
+                    + " proofTargetLayer=FLOOR_TORCH_ONLY");
+            System.out.println("[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]"
+                    + " categoryScope=floor_torch_only"
+                    + " itemCategory=floor_torch"
+                    + " wall_torch=NOT_COVERED"
+                    + " lantern=NOT_COVERED"
+                    + " signs=NOT_COVERED"
+                    + " chains=NOT_COVERED"
+                    + " expectedContactGap=-1.500000"
+                    + " observedContactGap=" + (Double.isFinite(contactGap) ? String.format("%.6f", contactGap) : "N/A")
+                    + " supportVisibleTopY=" + (Double.isFinite(supportVisibleTopY) ? String.format("%.6f", supportVisibleTopY) : "N/A")
+                    + " torchModelBottomY=" + (Double.isFinite(torchModelBottomY) ? String.format("%.6f", torchModelBottomY) : "N/A")
+                    + " torchDy=" + (torchState.isOf(Blocks.TORCH) ? String.format("%.3f", torchDy) : "N/A")
+                    + " supportDy=" + (supportCandidateState.isOf(Blocks.STONE_SLAB) ? String.format("%.3f", supportDy) : "N/A")
+                    + " supportCandidateState=" + supportCandidateState
+                    + " torchDyExpected=-1.000"
+                    + " supportOwnerExpected=" + supportOwnerExpected
+                    + " contactGapExpected=" + contactGapExpected
+                    + " failureLayer=" + failureLayer
+                    + " heldItem=" + mc.player.getMainHandStack().getItem().getTranslationKey()
+                    + " playerPos="
+                    + String.format("%.3f,%.3f,%.3f", mc.player.getX(), mc.player.getY(), mc.player.getZ())
+                    + " redProofResult="
+                    + (failureLayer.equals("NONE") ? "GREEN" : "RED")
+                    + " beta35ReleaseStatus=PAUSED_LIVE_TORCH_CONTACT_GAP_PROOF"
+                    + " releasePrep=PAUSED"
+                    + " productionGameplayFixApplied=false");
         });
     }
 
