@@ -851,6 +851,30 @@ public final class SlabSupport {
         return hasBottomBelow || anchored;
     }
 
+    /**
+     * Returns true when the non-slab solid block at {@code pos} carries compound dy=-1.0 —
+     * i.e. the same conditions that cause {@link #getYOffsetInner} to return -1.0 for it.
+     * Safe to call inside the IN_GET_Y_OFFSET recursion guard: does not delegate to getYOffset.
+     * Used exclusively by the floor-torch full-block support branch.
+     */
+    private static boolean isOrdinaryFullBlockWithCompoundDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isSolidBlock(world, pos)) {
+            return false;
+        }
+        if (!SlabAnchorAttachment.isAnchored(world, pos)) {
+            return false;
+        }
+        if (SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)) {
+            return true;
+        }
+        BlockState below = world.getBlockState(pos.down());
+        return isBottomSlab(below) && isAdjacentSideSlabLowered(world, pos.down(), below);
+    }
+
     private static boolean hasLoweredCarrierBelow(BlockView world, BlockPos pos) {
         if (world == null || pos == null) {
             return false;
@@ -1050,6 +1074,13 @@ public final class SlabSupport {
             BlockState supportState = world.getBlockState(supportPos);
             if (isTopSlab(supportState)
                     && SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, supportPos, supportState)) {
+                return -1.0;
+            }
+            // floor_torch on a lowered ordinary full-block support (supportDy=-1.0):
+            // must follow the support down so the torch base contacts the support visual top.
+            // Only applies to floor_torch; does not affect wall_torch, lanterns, signs, or chains.
+            // dy=-1.0 does not violate the dy>=-1.0 invariant.
+            if (isOrdinaryFullBlockWithCompoundDy(world, supportPos, supportState)) {
                 return -1.0;
             }
         }
