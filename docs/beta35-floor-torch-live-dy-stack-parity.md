@@ -7,6 +7,10 @@ Fixture now reproduces the live dy stack (`supportDy=-0.500`, `torchDy=-1.000`,
 `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
 No production gameplay fix implemented. No release tag moved.
 
+With corrected V2 capture math in `docs/beta35-live-torch-recorder-contact-math-audit.md`,
+the remaining open blocker in this slice is reproducing the `v2` floor-torch live-contact
+measurement (`contactGap=0.500000`) in a focused RED proof.
+
 Starting HEAD: `9984cf5` / `save/beta35-floor-torch-support-source-truth-audit`
 Commit: `save/beta35-floor-torch-live-dy-stack-parity`
 
@@ -52,6 +56,8 @@ Classification: `LIVE_DY_STACK_MATCH_NO_GAP`.
 
 The previously reported live `contactGap=-1.500000` was a **recorder formula artifact** —
 see `docs/beta35-live-torch-recorder-contact-math-audit.md` for the full analysis.
+`v2` capture math now classifies those reports as corrected measurement artifacts while
+remaining on-file tests focus on reproducing the floor-torch `+0.500000` live-contact condition.
 
 ### Why the old recorder showed `-1.5`
 

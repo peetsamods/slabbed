@@ -232,22 +232,21 @@ After the classifier savepoint, the next required action is Julia and architectu
 
 Current Beta 3.5 floor-torch slice state (2026-05-10): add `-Dslabbed.beta35LiveTorchCapture=true` gated live recorder in `src/client/java/com/slabbed/mixin/client/Beta35LiveTorchCaptureMixin.java` and `src/main/java/com/slabbed/util/Beta35LiveTorchCaptureRecorder.java` as evidence-only capture. Wall torch, lantern, signs, and chains remain explicitly `NOT_COVERED`.
 
-Current follow-up floor-torch contact-gap proof slice (2026-05-11): add
-`-Dslabbed.beta35LiveFloorTorchContactGapRed=true` and
-`-Dslabbed.beta35LiveFloorTorchSourceTruthParity=true` in
-`SlabbedLabLoweredSidePlacementLiveReproClientGameTest`.
-Parity markers include
-`[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_GREEN]`,
-`[JULIA_BETA35_LIVE_FLOOR_TORCH_SOURCE_TRUTH_FAIL]`,
-`[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_MEASURED]`,
-`[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_RED]`,
-`[JULIA_BETA35_LIVE_FLOOR_TORCH_CONTACT_GAP_SUMMARY]`.
+Current v2 floor-torch contact-gap proof slice (2026-05-11): add
+`-Dslabbed.beta35FloorTorchV2ContactGapRed=true` in
+`SlabbedLabLoweredSidePlacementLiveReproClientGameTest` and use
+`docs/beta35-floor-torch-v2-contact-gap-red.md`.
+Required markers:
+`[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_MEASURED]`,
+`[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_RED]`,
+`[JULIA_BETA35_FLOOR_TORCH_V2_CONTACT_GAP_SUMMARY]`.
 
-Current proof status is awaiting source-truth replay results:
-`fixtureMatchesLiveDyStack` must be `true` with
-`supportDy=-0.500`, `torchDy=-1.000`, and `contactGap=-1.500000`.
-If this cannot be reproduced, this slice will stop at
-`failureLayer=SOURCE_TRUTH_MISMATCH`.
+Target blocker shifted from the v1 recorder artifact to corrected live source-truth:
+top/bottom support fixtures should reproduce
+`supportDy=-1.000`, `torchDy=-0.500 or -1.000`, and `contactGap=0.500000`
+under `fixtureMatchesV2LiveStack=true`.
+If both attempts fail to match source truth, this slice should classify
+`failureLayer=V2_SOURCE_TRUTH_MISMATCH`.
 Wall torch remains separate `NOT_COVERED`; Beta 3.5 release remains blocked.
 No gameplay fix and no release tag movement in this slice.
 
