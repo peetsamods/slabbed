@@ -9,6 +9,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.BlockState;
@@ -16,6 +17,7 @@ import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.util.math.Direction;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.state.property.Properties;
@@ -279,8 +281,14 @@ public final class SlabAnchorAttachment {
         if (!qualifiesForCompoundVisibleSideLowerSlab(world, pos, state, sourcePos, sourceState)) {
             return;
         }
-        addToAttachment(world, pos, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE,
+        boolean added = addToAttachment(world, pos, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE,
                 "compound_visible_side_lower_slab");
+        if (added) {
+            // Trigger getStateForNeighborUpdate(DOWN) on the block above so any stale floor
+            // torch that was placed before this compound mark is written gets revalidated and
+            // removed by TorchBlockMixin.getStateForNeighborUpdate.
+            world.replaceWithStateForNeighborUpdate(Direction.DOWN, pos.up(), pos, state, Block.NOTIFY_ALL, 512);
+        }
     }
 
     public static void addCompoundVisibleSideUpperSlab(
