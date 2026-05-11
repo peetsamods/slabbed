@@ -67,3 +67,10 @@ Regression proof runs for this slice:
 Evidence folder:
 
 `tmp/beta35-floor-torch-v2-contact-fix-883b204`
+
+## Residual
+
+After this slice, 14 in-scope `minecraft:torch` cases on lowered ordinary full-block support
+(`supportDy=-1.000`, `torchDy=-0.500`, `contactGap=0.500000`) were identified and resolved by
+the subsequent `save/beta35-floor-torch-fullblock-contact-fix` slice.
+See `docs/beta35-floor-torch-fullblock-contact-fix.md`.
