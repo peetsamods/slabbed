@@ -45,36 +45,32 @@ fixtureMatchesLiveDyStack=true
 failureLayer=LIVE_DY_STACK_MATCH_NO_GAP
 ```
 
-## Outcome: B — dy stack matches, contactGap becomes 0
+## Outcome: B — dy stack matches, contactGap=0 (recorder math corrected)
 
-The fixture reproduces the live dy stack correctly but `contactGap=0.000000` rather than
-the live `-1.500000`. Classification: `LIVE_DY_STACK_MATCH_NO_GAP`.
+The fixture reproduces the live dy stack correctly and `contactGap=0.000000`.
+Classification: `LIVE_DY_STACK_MATCH_NO_GAP`.
 
-### Live capture values (from `beta35-live-floor-torch-contact-gap-red.md`)
+The previously reported live `contactGap=-1.500000` was a **recorder formula artifact** —
+see `docs/beta35-live-torch-recorder-contact-math-audit.md` for the full analysis.
 
-```
-supportVisibleTopY=-55.500000
-torchModelBottomY=-57.000000
-contactGap=-1.500000
-```
+### Why the old recorder showed `-1.5`
 
-### Discrepancy analysis
+Two bugs in `Beta35LiveTorchCaptureRecorder` (v1 formula):
 
-`supportVisibleTopY = supportCandidatePos.getY() + supportDy + getSupportYOffset(state)`
+1. `supportVisibleTopY` used hardcoded `+1.0d` (full-block height) instead of
+   `getSupportYOffset(state)=0.5` for a bottom slab → off by +0.5
+2. `torchModelBottomY` added `+torchDy` again on top of the block-local shape min,
+   but `SlabSupportStateMixin.slabbed$offsetOutline` already shifts the outline shape
+   by `yOff=torchDy` in block-local space → double-applying, off by -1.0
 
-In live: `-56 + (-0.5) + getSupportYOffset = -55.5` → `getSupportYOffset = 1.0`
-In fixture: `-56 + (-0.5) + getSupportYOffset = -56.0` → `getSupportYOffset = 0.5`
+Net: `contactGap_v1 = (-57.0) - (-55.5) = -1.5` (measurement artifact only).
+Corrected: `contactGap_v2 = (-56.0) - (-56.0) = 0.0` (matches fixture proof).
 
-`torchModelBottomY = torchPos.getY() + outline.minY_relative`
+### Implication
 
-In live: `-55 + outline.minY_relative = -57.0` → `outline.minY_relative = -2.0`
-In fixture: `-55 + outline.minY_relative = -56.0` → `outline.minY_relative = -1.0`
-
-The live capture implies `getSupportYOffset=1.0` for a bottom slab and a torch outline
-starting at -2.0 relative to the torch block. The fixture measures `getSupportYOffset=0.5`
-and torch outline at -1.0 relative. The source of this 0.5-block discrepancy in
-`getSupportYOffset` and 1.0-block discrepancy in the torch outline requires a separate
-recorder/contact-math audit.
+The torch placement behavior is **correct**. The torch model bottom sits flush with the
+lowered slab's visible top surface. Beta 3.5 release prep should be unblocked for the
+floor-torch case pending Julia's live re-verification with the v2 recorder.
 
 ## Failure-layer contract
 
