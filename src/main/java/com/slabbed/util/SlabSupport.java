@@ -178,7 +178,27 @@ public final class SlabSupport {
         if (world == null || supportPos == null) {
             return false;
         }
-        return isSupportingSlab(world.getBlockState(supportPos));
+        return isLegalFloorTorchLoweredBottomSlabSupport(world, supportPos, torchState)
+                || isSupportingSlab(world.getBlockState(supportPos));
+    }
+
+    public static boolean isLegalFloorTorchLoweredBottomSlabSupport(
+            BlockView world,
+            BlockPos supportPos,
+            BlockState torchState
+    ) {
+        if (!isFloorTorch(torchState) || world == null || supportPos == null) {
+            return false;
+        }
+        BlockState supportState = world.getBlockState(supportPos);
+        if (!isBottomSlab(supportState)) {
+            return false;
+        }
+        boolean namedLoweredBottomSupport =
+                SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState)
+                        || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, supportPos, supportState);
+        return namedLoweredBottomSupport
+                && Math.abs(getYOffset(world, supportPos, supportState) - (-1.0d)) <= 1.0e-6;
     }
 
     public static boolean isRejectedFloorTorchTopFace(BlockView world, BlockPos supportPos, BlockState torchState) {
@@ -189,6 +209,9 @@ public final class SlabSupport {
             return false;
         }
         BlockState supportState = world.getBlockState(supportPos);
+        if (isLegalFloorTorchLoweredBottomSlabSupport(world, supportPos, torchState)) {
+            return false;
+        }
         return isBottomSlab(supportState)
                 && SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, supportPos, supportState);
     }
@@ -1073,7 +1096,8 @@ public final class SlabSupport {
             BlockPos supportPos = pos.down();
             BlockState supportState = world.getBlockState(supportPos);
             if (isBottomSlab(supportState)
-                    && SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState)) {
+                    && (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState)
+                            || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, supportPos, supportState))) {
                 return -1.5;
             }
             if (isTopSlab(supportState)
