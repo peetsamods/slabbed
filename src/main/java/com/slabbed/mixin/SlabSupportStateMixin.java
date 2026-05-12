@@ -115,6 +115,10 @@ public abstract class SlabSupportStateMixin {
         return yOff < 0.0 && state != null && state.isOf(Blocks.ENCHANTING_TABLE);
     }
 
+    private static boolean slabbed$isLoweredBeta35StonecutterContactObject(BlockState state, double yOff) {
+        return yOff < 0.0 && state != null && state.isOf(Blocks.STONECUTTER);
+    }
+
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
             BlockView world,
             BlockPos pos,
@@ -231,6 +235,10 @@ public abstract class SlabSupportStateMixin {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (slabbed$isLoweredBeta35EnchantingTableContactObject(self, yOff)
+                    && (shape == null || shape.isEmpty())) {
+                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                return;
+            } else if (slabbed$isLoweredBeta35StonecutterContactObject(self, yOff)
                     && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
