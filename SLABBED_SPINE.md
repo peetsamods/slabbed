@@ -634,3 +634,13 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused stonecutter proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-stonecutter-contact-fix-99b03ed`. See `docs/beta35-stonecutter-contact-fix.md`.
 - Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.
+
+## Beta 3.5 special fullblock helper consolidation (2026-05-12)
+
+- Operating base for this consolidation slice: `d854e2b` / `save/beta35-stonecutter-contact` in `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on `work/beta35-special-fullblock-compat`. Canonical checkout was not modified.
+- Consolidation performed: yes. `SlabSupport` now names the already-proven Beta 3.5 special-fullblock contact allowlist as `isBeta35SpecialFullblockContactObject(...)` and routes contact dy through `beta35SpecialFullblockContactDy(...)`. `SlabSupportStateMixin` now names the separate empty-native-raycast fallback allowlist as `slabbed$isBeta35SpecialFullblockRaycastFallbackObject(...)`.
+- The contact allowlist is explicit and limited to already-green representatives: `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter`. The raycast fallback allowlist is separately limited to `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter`.
+- No new object support was implemented. `minecraft:lectern`, `minecraft:grindstone`, and `minecraft:anvil` remain open category slices. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
+- Focused special-fullblock matrix remains GREEN with unchanged summary: `rows=30 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=6 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=2 outOfScopeForBeta35=0`.
+- Focused common-object matrix remains GREEN with unchanged summary: `rows=27 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=4 triadMismatch=0 collisionShapeRisk=0 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=0`. Default `runClientGameTest` and `git diff --check` passed.
+- No release audit run. No release tag moved. Next recommended implementation slice remains `minecraft:grindstone` or `minecraft:anvil`; do not bundle either with lectern.
