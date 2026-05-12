@@ -16,6 +16,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
+import net.minecraft.world.WorldView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -134,6 +135,22 @@ public abstract class SlabSupportStateMixin {
     }
 
     // ── placement / survival support ──────────────────────────────────
+
+    @Inject(method = "canPlaceAt", at = @At("HEAD"), cancellable = true)
+    private void slabbed$flowerPotFloorTopSurvival(
+            WorldView world,
+            BlockPos pos,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        BlockState self = (BlockState) (Object) this;
+        if (!self.isOf(Blocks.FLOWER_POT)) {
+            return;
+        }
+        BlockPos below = pos.down();
+        BlockState belowState = world.getBlockState(below);
+        cir.setReturnValue(SlabSupport.canTreatAsSolidTopFace(world, below)
+                || belowState.isSideSolidFullSquare(world, below, Direction.UP));
+    }
 
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolid(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
