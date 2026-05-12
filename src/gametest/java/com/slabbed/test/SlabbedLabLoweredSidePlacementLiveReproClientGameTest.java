@@ -302,6 +302,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35BookshelfContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35BookshelfContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35TrapdoorDoorAudit")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10842,7 +10851,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " controls=minecraft:crafting_table,minecraft:furnace"
                 + " optionalRows=minecraft:stonecutter,minecraft:grindstone,minecraft:anvil"
                 + " releaseAudit=NOT_RUN"
-                + " productionBehaviorChanged=false");
+                + " productionBehaviorChanged=bookshelf_contact_dy_only");
 
         int green = 0;
         int placementFailure = 0;
@@ -10887,11 +10896,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " specialRendererRisk=" + specialRendererRisk
                 + " needsCategorySlice=" + needsCategorySlice
                 + " outOfScopeForBeta35=" + outOfScope
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf"
                 + " doorSlice=PARALLEL_NOT_INSPECTED"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED"
-                + " productionBehaviorChanged=false");
+                + " productionBehaviorChanged=bookshelf_contact_dy_only");
     }
 
     private static Beta35CommonObjectAuditResult runBeta35SpecialFullblockAuditRow(
@@ -11053,6 +11062,88 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 objectCase.family(),
                 supportCase.toString(),
                 classification[0]);
+    }
+
+    /**
+     * Focused bookshelf proof for the Beta 3.5 ordinary full-block contact slice.
+     *
+     * Gate: -Dslabbed.beta35BookshelfContact=true
+     */
+    private static void runBeta35BookshelfContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase bookshelf = new Beta35CommonObjectCase(
+                "minecraft:bookshelf",
+                "ordinary_full_block",
+                Items.BOOKSHELF,
+                Blocks.BOOKSHELF.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35SpecialFullblockAuditRow(
+                    ctx,
+                    singleplayer,
+                    bookshelf,
+                    supportCase,
+                    0);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "BOOKSHELF_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "BOOKSHELF_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "BOOKSHELF_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "BOOKSHELF_TRIAD_MISMATCH";
+                    default -> "BOOKSHELF_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_BOOKSHELF_CONTACT_GREEN"
+                        + " objectId=minecraft:bookshelf"
+                        + " family=ordinary_full_block"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_BOOKSHELF_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:bookshelf"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " crafting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " furnace=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " enchanting_table=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " lectern=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " chest=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " barrel=UNCHANGED_SEPARATE_TRIAD_RISK"
+                + " stonecutter=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " grindstone=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " anvil=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " doorTrapdoorSignLanternChainEndRodRedstoneRail=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_BOOKSHELF_CONTACT_RED"
+                    + " objectId=minecraft:bookshelf"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_BOOKSHELF_CONTACT_RED]"
+                    + " reason=bookshelf_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
     }
 
     /**

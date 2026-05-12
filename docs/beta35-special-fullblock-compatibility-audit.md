@@ -27,12 +27,14 @@ Only `SLABBED_SPINE.md` is tracked in this checkout among the expected numbered 
 - `minecraft:furnace`
 - `minecraft:oak_fence`
 - `minecraft:oak_trapdoor`
+- `minecraft:bookshelf`
 
 The special-fullblock audit did not inspect door worktree changes and did not touch door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation.
 
 ## Validation
 
 - `./gradlew --no-daemon compileJava compileGametestJava`: PASS
+- `JAVA_TOOL_OPTIONS="-Dslabbed.beta35BookshelfContact=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
 - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35SpecialFullblockCompatibilityAudit=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
 - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35CommonObjectCompatibilityAudit=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
 - `./gradlew --no-daemon runClientGameTest --console plain`: PASS
@@ -41,11 +43,11 @@ The special-fullblock audit did not inspect door worktree changes and did not to
 
 Summary marker:
 
-`JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY rows=30 greenAlreadyInherits=7 placementFailure=0 survivalFailure=0 contactGap=14 triadMismatch=2 blockEntityRisk=2 specialRendererRisk=2 needsCategorySlice=3 outOfScopeForBeta35=0 currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor doorSlice=PARALLEL_NOT_INSPECTED releaseAudit=NOT_RUN releasePrep=PAUSED productionBehaviorChanged=false`
+`JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY rows=30 greenAlreadyInherits=9 placementFailure=0 survivalFailure=0 contactGap=12 triadMismatch=2 blockEntityRisk=2 specialRendererRisk=2 needsCategorySlice=3 outOfScopeForBeta35=0 currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf doorSlice=PARALLEL_NOT_INSPECTED releaseAudit=NOT_RUN releasePrep=PAUSED productionBehaviorChanged=bookshelf_contact_dy_only`
 
 | Representative | Family | Vanilla full block | Plain bottom slab `supportDy=-0.5` | Lowered bottom slab `supportDy=-1.0` | Classification |
 | --- | --- | --- | --- | --- | --- |
-| `minecraft:bookshelf` | `ordinary_full_block` | GREEN | `CONTACT_GAP=0.500000` | `CONTACT_GAP=1.000000` | ordinary full-block sibling, not green |
+| `minecraft:bookshelf` | `ordinary_full_block` | GREEN | GREEN, `contactGap=0.000000`, triad yes | GREEN, `contactGap=0.000000`, triad yes | `GREEN_ALREADY_INHERITS` fixed representative |
 | `minecraft:enchanting_table` | `special_renderer` | `SPECIAL_RENDERER_RISK` | `CONTACT_GAP=0.500000`, triad no | `CONTACT_GAP=1.000000`, triad no | needs renderer/block-entity category slice |
 | `minecraft:lectern` | `interactive_block_entity` | `BLOCK_ENTITY_RISK` | `CONTACT_GAP=0.500000`, triad no | `CONTACT_GAP=1.000000`, triad no | needs interactive block-entity slice |
 | `minecraft:barrel` | `interactive_block_entity` | `BLOCK_ENTITY_RISK` | `TRIAD_MISMATCH`, `contactGap=0.000000` | `TRIAD_MISMATCH`, `contactGap=0.000000` | block-entity triad category slice |
@@ -62,12 +64,12 @@ All representatives placed and survived on the audited rows. No row produced `PL
 
 Objects already inheriting the current `crafting_table` / `furnace` behavior:
 
+- `minecraft:bookshelf`
 - `minecraft:crafting_table`
 - `minecraft:furnace`
 
 Objects that fail contact on slab-supported rows:
 
-- `minecraft:bookshelf`
 - `minecraft:enchanting_table`
 - `minecraft:lectern`
 - `minecraft:chest`
@@ -97,4 +99,4 @@ Separate category slices:
 
 This audit does not change the release decision. It expands the known matrix from the clean Beta 3.5 base and keeps release prep paused.
 
-Recommended next implementation slice, if Julia authorizes one: `minecraft:bookshelf` ordinary-full-block contact/dy proof and fix only. It is the closest sibling to the existing `crafting_table` / `furnace` controls and avoids block-entity, renderer, multipart, and special-shape risk.
+`minecraft:bookshelf` is now GREEN for the focused ordinary-full-block contact/dy representative. Do not claim all special fullblocks are fixed; remaining rows are still separate renderer, block-entity, or special-shape slices.
