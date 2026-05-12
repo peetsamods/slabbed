@@ -89,7 +89,11 @@ The prior `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_SUMMARY outcome=GREEN` for `
 
 `docs/beta35-fence-family-live-red.md` and `docs/beta35-fence-wall-variant-coverage-fix.md` describe the shape-side history and remain accurate for the shape path. They do not constitute a fence/wall variant release green on their own.
 
-## Next implementation slice
+## Follow-up production fix (2026-05-12)
+
+The production render fix was implemented as described below. See `docs/beta35-fence-model-render-fix.md`. The `beta35FenceModelRenderRed` gate now turns GREEN on HEAD `save/beta35-fence-wall-model-render-fix`.
+
+## Next implementation slice (superseded by follow-up above)
 
 Production fix only on the model render path. The minimum surface is `src/client/java/com/slabbed/client/model/OffsetBlockStateModel.java:117-127`:
 
