@@ -477,6 +477,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35FenceGateContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FenceGateContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35LiveHitboxGateRed")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -11112,6 +11121,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         supportCandidatePos.getY() + 3.0d,
                         supportCandidatePos.getZ() - 2.0d),
                 useHit.getPos());
+        ctx.waitTick();
 
         final String[] placementResult = {"not-run"};
         ctx.runOnClient(mc -> {
@@ -13733,7 +13743,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " fenceWallLiveEvidence=TARGET_MISS_REPORTED_SHAPE_MATH_NOT_DECISIVE"
                 + " anvilPriorProof=CONTACT_TRIAD_GREEN_NOT_TRUE_COLLISION_AUTHORITY"
                 + " fenceGateCategory=SEPARATE_FROM_FENCE_WALL_FAMILY"
-                + " recommendedNextSlice=fence_gate_contact_law_and_anvil_collision_hitbox_red_repair"
+                + " recommendedNextSlice=fence_wall_anvil_collision_hitbox_red_harness"
                 + " productionBehaviorChanged=false"
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false");
@@ -13743,6 +13753,63 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         return "PROOF_HARNESS_GAP".equals(failureLayer)
                 || "LIVE_EVIDENCE_GAP".equals(failureLayer)
                 || "UNKNOWN_AFTER_BOUNDED_AUDIT".equals(failureLayer);
+    }
+
+    /**
+     * Focused GREEN proof for the Beta 3.5 cherry fence gate contact/support slice.
+     *
+     * Gate: -Dslabbed.beta35FenceGateContact=true
+     */
+    private static void runBeta35FenceGateContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35LiveHitboxGateAuditResult closed = runBeta35FenceGateContactRow(ctx, singleplayer, 0, false);
+        Beta35LiveHitboxGateAuditResult open = runBeta35FenceGateContactRow(ctx, singleplayer, 1, true);
+
+        boolean allGreen = "NONE".equals(closed.failureLayer()) && "NONE".equals(open.failureLayer());
+        String failureLayer = "NONE";
+        if (!"NONE".equals(closed.failureLayer())) {
+            failureLayer = closed.failureLayer();
+        } else if (!"NONE".equals(open.failureLayer())) {
+            failureLayer = open.failureLayer();
+        }
+
+        if (allGreen) {
+            System.out.println("JULIA_BETA35_FENCE_GATE_CONTACT_GREEN"
+                    + " objectId=minecraft:cherry_fence_gate"
+                    + " family=fence_gate"
+                    + " rows=closed,open"
+                    + " placement=GREEN"
+                    + " survival=GREEN"
+                    + " contact=GREEN"
+                    + " interaction=GREEN"
+                    + " triad=GREEN"
+                    + " collision=CATEGORY_VALID"
+                    + " classification=GREEN"
+                    + " failureLayer=NONE");
+        }
+
+        System.out.println("JULIA_BETA35_FENCE_GATE_CONTACT_SUMMARY"
+                + " outcome=" + (allGreen ? "GREEN" : "RED")
+                + " failureLayer=" + failureLayer
+                + " rows=2"
+                + " closedClassification=" + closed.classification()
+                + " closedFailureLayer=" + closed.failureLayer()
+                + " openClassification=" + open.classification()
+                + " openFailureLayer=" + open.failureLayer()
+                + " scope=cherry_fence_gate_only"
+                + " fenceWallHitboxRows=UNCHANGED_PENDING"
+                + " anvilHitboxRows=UNCHANGED_PENDING"
+                + " panes=NOT_COVERED"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+
+        if (!allGreen) {
+            throw new RuntimeException("[JULIA_BETA35_FENCE_GATE_CONTACT_RED]"
+                    + " reason=cherry_fence_gate_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
     }
 
     private static Beta35LiveHitboxGateAuditResult runBeta35LiveFenceWallHitboxGateRow(
@@ -14082,7 +14149,39 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             int rowIndex,
             boolean openAfterPlacement
     ) {
-        int baseX = 620 + rowIndex * 10;
+        return runBeta35FenceGateContactAuditRow(
+                ctx,
+                singleplayer,
+                rowIndex,
+                openAfterPlacement,
+                620,
+                "JULIA_BETA35_LIVE_HITBOX_GATE_ROW");
+    }
+
+    private static Beta35LiveHitboxGateAuditResult runBeta35FenceGateContactRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            boolean openAfterPlacement
+    ) {
+        return runBeta35FenceGateContactAuditRow(
+                ctx,
+                singleplayer,
+                rowIndex,
+                openAfterPlacement,
+                740,
+                "JULIA_BETA35_FENCE_GATE_CONTACT_ROW");
+    }
+
+    private static Beta35LiveHitboxGateAuditResult runBeta35FenceGateContactAuditRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            boolean openAfterPlacement,
+            int baseStartX,
+            String rowMarker
+    ) {
+        int baseX = baseStartX + rowIndex * 10;
         int baseZ = 172;
         BlockPos supportCandidatePos = new BlockPos(baseX, -55, baseZ);
         BlockPos objectPos = supportCandidatePos.up();
@@ -14156,7 +14255,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.world == null || mc.player == null) {
                 classification[0] = "PENDING";
                 failureLayer[0] = "LIVE_EVIDENCE_GAP";
-                System.out.println("JULIA_BETA35_LIVE_HITBOX_GATE_ROW"
+                System.out.println(rowMarker
                         + " objectId=minecraft:cherry_fence_gate"
                         + " family=fence_gate"
                         + " configuration=" + (openAfterPlacement ? "open" : "closed")
@@ -14169,6 +14268,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             BlockState supportState = mc.world.getBlockState(supportCandidatePos);
             BlockState objectState = mc.world.getBlockState(objectPos);
             boolean blockAppeared = objectState.isOf(Blocks.CHERRY_FENCE_GATE);
+            String placementStatus = blockAppeared ? "PLACEMENT_GREEN" : placementResult[0];
             double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
             double objectDy = blockAppeared ? SlabSupport.getYOffset(mc.world, objectPos, objectState)
                     : Double.NaN;
@@ -14195,25 +14295,53 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     : Double.NaN;
             boolean survivalGreen = blockAppeared && objectState.canPlaceAt(mc.world, objectPos);
             boolean contactGreen = Double.isFinite(contactGap) && Math.abs(contactGap) <= EPSILON;
+            boolean configurationGreen = !openAfterPlacement
+                    || (blockAppeared
+                            && objectState.contains(Properties.OPEN)
+                            && objectState.get(Properties.OPEN));
+            boolean interactionGreen = !openAfterPlacement
+                    || interactionResult[0].startsWith("Success")
+                    || interactionResult[0].startsWith("SUCCESS");
             boolean triadGreen = blockAppeared
                     && modelProxyBox != null
                     && beta35SameBox(outlineBox, modelProxyBox)
                     && beta35SameBox(raycastBox, modelProxyBox);
+            boolean openGate = blockAppeared
+                    && objectState.contains(Properties.OPEN)
+                    && objectState.get(Properties.OPEN);
+            boolean openGateCollisionCategoryValid = openGate
+                    && collisionBox == null;
+            boolean closedGateCollisionCategoryValid = blockAppeared
+                    && !openGate
+                    && collisionBox != null
+                    && modelProxyBox != null
+                    && beta35SameHorizontalColumn(collisionBox, modelProxyBox)
+                    && Math.abs(collisionBox.minY - modelProxyBox.minY) <= EPSILON
+                    && collisionBox.maxY >= modelProxyBox.maxY - EPSILON;
             boolean collisionGreen = blockAppeared
                     && modelProxyBox != null
-                    && beta35SameBox(collisionBox, modelProxyBox);
+                    && (beta35SameBox(collisionBox, modelProxyBox)
+                            || openGateCollisionCategoryValid
+                            || closedGateCollisionCategoryValid);
+            String collisionCoLocated = blockAppeared
+                    ? (beta35SameBox(collisionBox, modelProxyBox) ? "yes"
+                            : openGateCollisionCategoryValid ? "category_valid_open_empty"
+                                    : closedGateCollisionCategoryValid ? "category_valid_closed_tall" : "no")
+                    : "NOT_MEASURED";
             boolean modelRenderGreen = !traceSeen || Math.abs(lastDy - objectDy) <= EPSILON;
 
             if (!blockAppeared || !survivalGreen) {
                 classification[0] = "FENCE_GATE_SUPPORT_GAP";
                 failureLayer[0] = "FENCE_GATE_SUPPORT_GAP";
-            } else if (!contactGreen || Math.abs(objectDy - expectedContactDy) > EPSILON) {
+            } else if (!configurationGreen || !interactionGreen
+                    || !contactGreen
+                    || Math.abs(objectDy - expectedContactDy) > EPSILON) {
                 classification[0] = "FENCE_GATE_CONTACT_GAP";
                 failureLayer[0] = "FENCE_GATE_CONTACT_GAP";
             } else if (!modelRenderGreen) {
                 classification[0] = "FENCE_GATE_MODEL_RENDER_GAP";
                 failureLayer[0] = "FENCE_GATE_MODEL_RENDER_GAP";
-            } else if (!triadGreen) {
+            } else if (!triadGreen || !collisionGreen) {
                 classification[0] = "FENCE_GATE_TRIAD_MISMATCH";
                 failureLayer[0] = "FENCE_GATE_TRIAD_MISMATCH";
             } else {
@@ -14221,7 +14349,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 failureLayer[0] = "NONE";
             }
 
-            System.out.println("JULIA_BETA35_LIVE_HITBOX_GATE_ROW"
+            System.out.println(rowMarker
                     + " objectId=minecraft:cherry_fence_gate"
                     + " family=fence_gate"
                     + " configuration=" + (openAfterPlacement ? "open" : "closed")
@@ -14237,11 +14365,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " outlineBounds=" + beta35FormatBox(outlineBox)
                     + " raycastBounds=" + beta35FormatBox(raycastBox)
                     + " collisionBounds=" + beta35FormatBox(collisionBox)
-                    + " collisionCoLocated=" + (blockAppeared ? (collisionGreen ? "yes" : "no") : "NOT_MEASURED")
+                    + " collisionCoLocated=" + collisionCoLocated
                     + " triadCoLocated=" + (blockAppeared ? (triadGreen ? "yes" : "no") : "NOT_MEASURED")
                     + " renderDyApplied=" + (renderDyApplied ? "yes" : traceSeen ? "no" : "NOT_OBSERVED")
                     + " actualModelAppliedDy=" + beta35FormatDoubleOrNA(lastDy)
-                    + " placementResult=" + placementResult[0]
+                    + " placementResult=" + placementStatus
+                    + " rawPlacementActionResult=" + placementResult[0]
                     + " survivalResult=" + (survivalGreen ? "SURVIVAL_GREEN" : "SURVIVAL_RED")
                     + " interactionResult=" + interactionResult[0]
                     + " classification=" + classification[0]

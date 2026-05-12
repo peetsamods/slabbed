@@ -46,3 +46,18 @@ Fence gates are a separate category from the `FenceBlock`/`WallBlock` family. Th
 ## Next Slice
 
 Recommended next implementation slice: add a fence-gate-specific contact/support law and open/closed proof. Keep anvil and fence/wall live-hitbox reproduction as a separate proof-harness slice unless Julia supplies a sharper local repro path.
+
+## Follow-Up: Cherry Gate Contact Fix
+
+The next slice implemented only `minecraft:cherry_fence_gate` contact/support behavior. It did not expand to all fence gates, panes, fence/wall hitboxes, anvil hitboxes, or any door/trapdoor/sign/lantern/chain/end-rod/redstone/rail category.
+
+Focused proof:
+
+- Gate: `-Dslabbed.beta35FenceGateContact=true`
+- Summary: `JULIA_BETA35_FENCE_GATE_CONTACT_SUMMARY outcome=GREEN failureLayer=NONE rows=2 closedClassification=GREEN closedFailureLayer=NONE openClassification=GREEN openFailureLayer=NONE scope=cherry_fence_gate_only fenceWallHitboxRows=UNCHANGED_PENDING anvilHitboxRows=UNCHANGED_PENDING panes=NOT_COVERED releaseAudit=NOT_RUN releaseTagMoved=false`
+
+Post-fix live-hitbox audit:
+
+- `JULIA_BETA35_LIVE_HITBOX_GATE_SUMMARY outcome=PENDING rows=5 red=0 pending=3 green=2 fenceHitboxClassification=PENDING fenceHitboxFailureLayer=PROOF_HARNESS_GAP wallHitboxClassification=PENDING wallHitboxFailureLayer=PROOF_HARNESS_GAP anvilHitboxClassification=PENDING anvilHitboxFailureLayer=PROOF_HARNESS_GAP fenceGateClosedClassification=GREEN fenceGateClosedFailureLayer=NONE fenceGateOpenClassification=GREEN fenceGateOpenFailureLayer=NONE`
+
+The original RED rows above remain the historical audit result at `edbba27`; after the cherry-gate fix, the remaining live-hitbox matrix blocker is the fence/wall/anvil proof-harness gap, not fence gate contact.
