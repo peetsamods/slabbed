@@ -310,6 +310,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35OakFenceContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35OakFenceContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CandleFloorTopContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10593,7 +10602,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "partial_collision_block",
                         Items.OAK_FENCE,
                         Blocks.OAK_FENCE.getDefaultState(),
-                        "COLLISION_SHAPE_RISK",
+                        "GREEN_ALREADY_INHERITS",
                         false,
                         true,
                         true),
@@ -10687,6 +10696,89 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " rail=NOT_AUDITED_SPECIAL_FLOOR_LOGIC"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED");
+    }
+
+    /**
+     * Focused oak-fence proof for the Beta 3.5 partial-collision contact slice.
+     *
+     * Gate: -Dslabbed.beta35OakFenceContact=true
+     */
+    private static void runBeta35OakFenceContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase oakFence = new Beta35CommonObjectCase(
+                "minecraft:oak_fence",
+                "partial_collision",
+                Items.OAK_FENCE,
+                Blocks.OAK_FENCE.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35CommonObjectAuditRow(
+                    ctx,
+                    singleplayer,
+                    oakFence,
+                    supportCase,
+                    5);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "OAK_FENCE_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "OAK_FENCE_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "OAK_FENCE_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "OAK_FENCE_TRIAD_MISMATCH";
+                    case "COLLISION_SHAPE_RISK" -> "OAK_FENCE_COLLISION_SHAPE_RISK";
+                    default -> "OAK_FENCE_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_OAK_FENCE_CONTACT_GREEN"
+                        + " objectId=minecraft:oak_fence"
+                        + " family=partial_collision"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " collision=GREEN"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_OAK_FENCE_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:oak_fence"
+                + " family=partial_collision"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " crafting_table=CHECK_COMMON_OBJECT_MATRIX"
+                + " furnace=CHECK_COMMON_OBJECT_MATRIX"
+                + " floor_torch=CHECK_FLOOR_TOP_REGRESSION"
+                + " candle=CHECK_FLOOR_TOP_REGRESSION"
+                + " flower_pot=CHECK_FLOOR_TOP_REGRESSION"
+                + " oak_trapdoor=UNCHANGED_SEPARATE_CATEGORY"
+                + " oak_door=UNCHANGED_SEPARATE_CATEGORY"
+                + " oak_sign=UNCHANGED_SEPARATE_RENDERER_RISK"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_OAK_FENCE_CONTACT_RED"
+                    + " objectId=minecraft:oak_fence"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_OAK_FENCE_CONTACT_RED]"
+                    + " reason=oak_fence_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
     }
 
     /**
@@ -10928,10 +11020,17 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             VoxelShape raycastShape = blockAppeared
                     ? objectState.getRaycastShape(mc.world, actualObjectPos)
                     : null;
+            VoxelShape collisionShape = blockAppeared
+                    ? objectState.getCollisionShape(mc.world, actualObjectPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
             net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, actualObjectPos);
             net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, actualObjectPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, actualObjectPos);
             net.minecraft.util.math.Box modelProxyBox = blockAppeared && objectState.isOf(Blocks.TORCH)
                     ? beta35FloorTorchModelProxyWorldBox(actualObjectPos, objectDy)
+                    : blockAppeared && objectState.isOf(Blocks.OAK_FENCE)
+                            ? collisionBox
                     : outlineBox;
             double objectModelBottomY = modelProxyBox == null ? Double.NaN : modelProxyBox.minY;
             double contactGap = objectCase.contactApplicable()
@@ -10952,6 +11051,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             && modelProxyBox != null
                             && beta35SameBox(outlineBox, modelProxyBox)
                             && beta35SameBox(raycastBox, modelProxyBox));
+            boolean collisionGreen = !"partial_collision".equals(objectCase.family())
+                    && !"partial_collision_block".equals(objectCase.family())
+                    || supportCase == Beta35CommonObjectSupportCase.VANILLA_FULL_BLOCK
+                    || (blockAppeared
+                            && modelProxyBox != null
+                            && beta35SameBox(collisionBox, modelProxyBox));
 
             if (!blockAppeared) {
                 classification[0] = "PLACEMENT_FAILURE";
@@ -10961,6 +11066,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 classification[0] = "CONTACT_GAP";
             } else if (!triadGreen) {
                 classification[0] = "TRIAD_MISMATCH";
+            } else if (!collisionGreen) {
+                classification[0] = "COLLISION_SHAPE_RISK";
             } else {
                 classification[0] = objectCase.successfulRiskClassification();
             }
@@ -10986,10 +11093,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " modelBounds=" + beta35FormatBox(modelProxyBox)
                     + " outlineBounds=" + beta35FormatBox(outlineBox)
                     + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
                     + " survival=" + (survivalGreen ? "SURVIVAL_GREEN" : "SURVIVAL_RED")
                     + " unsupported=" + (unsupportedFails ? "UNSUPPORTED_FAILS" : "UNSUPPORTED_STILL_VALID")
                     + " triadCoLocated=" + (blockAppeared
                             ? (triadGreen ? "yes" : "no") : "NOT_MEASURED")
+                    + " collisionCoLocated=" + (blockAppeared
+                            ? (collisionGreen ? "yes" : "no") : "NOT_MEASURED")
                     + " classification=" + classification[0]);
         });
 
