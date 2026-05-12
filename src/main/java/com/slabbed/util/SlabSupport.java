@@ -269,6 +269,19 @@ public final class SlabSupport {
         return state.isSolidBlock(world, pos);
     }
 
+    private static double beta35OrdinaryFullBlockContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (!isBeta35OrdinaryFullBlockContactObject(world, pos, state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+            return supportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
     private static boolean isBeta35SpecialFullblockContactObject(BlockState state) {
         if (state == null) {
             return false;
