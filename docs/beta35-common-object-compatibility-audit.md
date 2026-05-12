@@ -141,3 +141,15 @@ Focused proof reports `failureLayer=NONE` for valid slab-supported oak-door mult
 `minecraft:oak_trapdoor` remains GREEN. Signs, lanterns, chains, redstone, and rails remain not covered by this slice. No release audit ran. No release tag moved.
 
 Current green set is now `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, `minecraft:oak_trapdoor`, and `minecraft:oak_door`.
+
+## Standing Oak Sign Contact Fix Follow-up
+
+Follow-up implementation at `dc1076c` / `save/beta35-oak-door-contact` added `-Dslabbed.beta35StandingOakSignContact=true` for standing `minecraft:oak_sign` only.
+
+Previous standing sign status was `CONTACT_GAP` plus `RENDERER_SPECIAL_CASE`. The first focused attempt proved contact was fixed but exposed `STANDING_OAK_SIGN_TRIAD_MISMATCH` because slab-supported standing sign raycast bounds were empty. The final fix keeps the contact dy path exact to `Blocks.OAK_SIGN` and adds only an outline-backed raycast fallback for lowered standing oak signs when vanilla raycast is empty.
+
+Focused proof reports `failureLayer=NONE`: standing oak sign placement and survival are GREEN, `blockEntityPresent=true`, slab-supported rows report `contactGap=0.000000`, and model/render proxy, outline, and raycast bounds are co-located. Renderer offset remains through the existing `BlockEntityOffsetMixin`.
+
+Updated matrix summary is now `rows=27 greenAlreadyInherits=27 placementFailure=0 survivalFailure=0 contactGap=0 triadMismatch=0 collisionShapeRisk=0 multipartRisk=0 rendererSpecialCase=0`.
+
+Current green set is now `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, `minecraft:oak_trapdoor`, `minecraft:oak_door`, and standing `minecraft:oak_sign`. Wall signs, hanging signs, lanterns, chains, redstone, and rails remain not covered by this slice. No release audit ran. No release tag moved.

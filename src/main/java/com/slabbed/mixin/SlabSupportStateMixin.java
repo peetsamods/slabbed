@@ -113,6 +113,12 @@ public abstract class SlabSupportStateMixin {
                         || state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER);
     }
 
+    private static boolean slabbed$isLoweredBeta35StandingOakSignContactObject(BlockState state, double yOff) {
+        return yOff < 0.0
+                && state != null
+                && state.isOf(Blocks.OAK_SIGN);
+    }
+
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
             BlockView world,
             BlockPos pos,
@@ -223,6 +229,10 @@ public abstract class SlabSupportStateMixin {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (slabbed$isLoweredBeta35OakDoorContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
+                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                return;
+            } else if (slabbed$isLoweredBeta35StandingOakSignContactObject(self, yOff)
+                    && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (self.isOf(Blocks.OAK_FENCE) && (shape == null || shape.isEmpty())) {
