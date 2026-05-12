@@ -145,3 +145,15 @@ Controls remained GREEN: `minecraft:crafting_table` and `minecraft:furnace`. New
 No production behavior fix was implemented. No release audit was run. No release tag was moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
 
 Recommended next implementation slice, if Julia authorizes one: `minecraft:bookshelf` ordinary-full-block contact/dy proof and fix only.
+
+## Bookshelf Contact Fix Follow-up
+
+Follow-up implementation at `e0da848` / `save/beta35-special-fullblock-compatibility-audit` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
+
+Focused gate: `-Dslabbed.beta35BookshelfContact=true`; markers `JULIA_BETA35_BOOKSHELF_CONTACT_GREEN` and `JULIA_BETA35_BOOKSHELF_CONTACT_SUMMARY`.
+
+`minecraft:bookshelf` is now GREEN for the ordinary-full-block contact representative. Slab-supported rows report `contactGap=0.000000`, `triadCoLocated=yes`, placement GREEN, and survival GREEN. The fix is exact `Blocks.BOOKSHELF` contact/dy only via `SlabSupport`; it does not implement enchanting table, lectern, chest, barrel, stonecutter, grindstone, anvil, door, trapdoor, signs, lanterns, chains, end rods, redstone, or rails.
+
+Special-fullblock matrix follow-up now reports `greenAlreadyInherits=9`, `contactGap=12`, `triadMismatch=2`, `blockEntityRisk=2`, `specialRendererRisk=2`, and `needsCategorySlice=3`. Controls `minecraft:crafting_table` and `minecraft:furnace` remain GREEN. `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:chest`, `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` remain contact-gap/category rows; `minecraft:barrel` remains a triad category row.
+
+Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
