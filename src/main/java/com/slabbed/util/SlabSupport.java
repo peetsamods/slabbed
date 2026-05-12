@@ -7,6 +7,7 @@ import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.ButtonBlock;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.CaveVinesBodyBlock;
@@ -166,6 +167,10 @@ public final class SlabSupport {
         }
         Block block = state.getBlock();
         return block instanceof net.minecraft.block.TorchBlock && !(block instanceof WallTorchBlock);
+    }
+
+    private static boolean isBeta35FloorTopContactCandle(BlockState state) {
+        return state != null && state.isOf(Blocks.CANDLE);
     }
 
     public static boolean canTreatAsFloorTorchTopFace(BlockView world, BlockPos supportPos, BlockState torchState) {
@@ -1114,6 +1119,15 @@ public final class SlabSupport {
             // dy=-1.0 does not violate the dy>=-1.0 invariant.
             if (isOrdinaryFullBlockWithCompoundDy(world, supportPos, supportState)) {
                 return -1.0;
+            }
+        }
+
+        if (isBeta35FloorTopContactCandle(state)) {
+            BlockPos supportPos = pos.down();
+            BlockState supportState = world.getBlockState(supportPos);
+            double loweredBottomSupportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+            if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
+                return loweredBottomSupportDy - 0.5d;
             }
         }
 
