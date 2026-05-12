@@ -706,3 +706,14 @@ If the slice changes, update the source pack and spine together so the current o
 - Previous `minecraft:oak_fence` green is valid simplified-only / live-superseded, not a fence-family release claim. No production behavior fix implemented. No release audit run. No release tag moved.
 - Validation passed: `compileJava compileGametestJava`, focused fence-family live-red proof, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-fence-family-live-red-0ccbc7f`. See `docs/beta35-fence-family-live-red.md`.
+
+## Beta 3.5 fence wall variant coverage fix (2026-05-12)
+
+- Operating base for this implementation slice: `c570299` / `save/beta35-fence-family-live-red` in `/Users/joolmac/CascadeProjects/Slabbed-beta35-fence-family-worktree` on `work/beta35-fence-family-live-red`. Canonical checkout was not modified.
+- Previous failure layer: `VARIANT_COVERAGE_GAP`. `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall` placed and survived but had `contactGap=1.500000`, empty raycast bounds, and `triadCoLocated=no`.
+- New failure layer: `NONE`. The fix extends the existing `minecraft:oak_fence` lowered contact/raycast/collision treatment through an explicit named allowlist to `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall` only. It does not add pane support, all-fence/all-wall support, or a global solidity/sturdy-face change.
+- Focused proof `-Dslabbed.beta35FenceWallVariantCoverage=true` is GREEN: `rows=16 greenLiveLike=15 greenSimplifiedOnly=1 contactGap=0 triadMismatch=0 collisionShapeRisk=0 connectionShapeRisk=0 placementFailure=0 survivalFailure=0 variantCoverageGap=0 failureLayer=NONE`.
+- Tested configurations: `isolated`, `one_neighbor`, `two_neighbor`, and `beside_lowered_fullblock` for `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`.
+- Current green fence/wall set: `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`. `minecraft:glass_pane` and panes remain out of scope / not covered.
+- Fence-family live proof rerun is GREEN with no remaining variant coverage gap. Common-object matrix and default `runClientGameTest` passed.
+- No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.

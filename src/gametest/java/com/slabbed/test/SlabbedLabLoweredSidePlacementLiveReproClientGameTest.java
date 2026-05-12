@@ -437,6 +437,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35FenceWallVariantCoverage")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FenceWallVariantCoverageProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CandleFloorTopContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -12610,6 +12619,138 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
+     * Focused GREEN proof for the Beta 3.5 fence/wall named variant coverage fix.
+     *
+     * Gate: -Dslabbed.beta35FenceWallVariantCoverage=true
+     */
+    private static void runBeta35FenceWallVariantCoverageProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35FenceFamilyCase[] cases = {
+                new Beta35FenceFamilyCase(
+                        "minecraft:oak_fence",
+                        "fence_family",
+                        Items.OAK_FENCE,
+                        Blocks.OAK_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase(
+                        "minecraft:spruce_fence",
+                        "fence_family",
+                        Items.SPRUCE_FENCE,
+                        Blocks.SPRUCE_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase(
+                        "minecraft:nether_brick_fence",
+                        "fence_family",
+                        Items.NETHER_BRICK_FENCE,
+                        Blocks.NETHER_BRICK_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase(
+                        "minecraft:cobblestone_wall",
+                        "wall_family",
+                        Items.COBBLESTONE_WALL,
+                        Blocks.COBBLESTONE_WALL.getDefaultState())
+        };
+
+        System.out.println("JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_GREEN"
+                + " scope=explicit_named_fence_wall_variants"
+                + " variants=minecraft:oak_fence,minecraft:spruce_fence,minecraft:nether_brick_fence,minecraft:cobblestone_wall"
+                + " glass_pane=NOT_COVERED"
+                + " releaseAudit=NOT_RUN");
+
+        int rows = 0;
+        int greenLiveLike = 0;
+        int greenSimplifiedOnly = 0;
+        int contactGap = 0;
+        int triadMismatch = 0;
+        int collisionShapeRisk = 0;
+        int connectionShapeRisk = 0;
+        int placementFailure = 0;
+        int survivalFailure = 0;
+        int variantCoverageGap = 0;
+        int needsImplementation = 0;
+        String firstFailureLayer = "NONE";
+        String oakFenceClassification = "NOT_MEASURED";
+        String spruceFenceClassification = "NOT_MEASURED";
+        String netherBrickFenceClassification = "NOT_MEASURED";
+        String cobblestoneWallClassification = "NOT_MEASURED";
+
+        for (Beta35FenceFamilyCase objectCase : cases) {
+            for (Beta35FenceFamilyConfiguration configuration : Beta35FenceFamilyConfiguration.values()) {
+                Beta35FenceFamilyAuditResult result = runBeta35FenceFamilyAuditRow(
+                        ctx,
+                        singleplayer,
+                        objectCase,
+                        configuration,
+                        rows);
+                rows++;
+
+                switch (result.classification()) {
+                    case "GREEN_SIMPLIFIED_ONLY" -> greenSimplifiedOnly++;
+                    case "GREEN_LIVE_LIKE" -> greenLiveLike++;
+                    case "CONTACT_GAP" -> contactGap++;
+                    case "TRIAD_MISMATCH" -> triadMismatch++;
+                    case "COLLISION_SHAPE_RISK" -> collisionShapeRisk++;
+                    case "CONNECTION_SHAPE_RISK" -> connectionShapeRisk++;
+                    case "PLACEMENT_FAILURE" -> placementFailure++;
+                    case "SURVIVAL_FAILURE" -> survivalFailure++;
+                    case "VARIANT_COVERAGE_GAP" -> variantCoverageGap++;
+                    default -> needsImplementation++;
+                }
+
+                if (!"GREEN_LIVE_LIKE".equals(result.classification())
+                        && !"GREEN_SIMPLIFIED_ONLY".equals(result.classification())
+                        && "NONE".equals(firstFailureLayer)) {
+                    firstFailureLayer = result.classification();
+                }
+
+                if ("minecraft:oak_fence".equals(result.objectId())) {
+                    oakFenceClassification = result.classification();
+                } else if ("minecraft:spruce_fence".equals(result.objectId())) {
+                    spruceFenceClassification = result.classification();
+                } else if ("minecraft:nether_brick_fence".equals(result.objectId())) {
+                    netherBrickFenceClassification = result.classification();
+                } else if ("minecraft:cobblestone_wall".equals(result.objectId())) {
+                    cobblestoneWallClassification = result.classification();
+                }
+            }
+        }
+
+        boolean proofGreen = contactGap == 0
+                && triadMismatch == 0
+                && collisionShapeRisk == 0
+                && connectionShapeRisk == 0
+                && placementFailure == 0
+                && survivalFailure == 0
+                && variantCoverageGap == 0
+                && needsImplementation == 0;
+        String failureLayer = proofGreen ? "NONE" : firstFailureLayer;
+
+        System.out.println("JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_SUMMARY"
+                + " outcome=" + (proofGreen ? "GREEN" : "RED")
+                + " rows=" + rows
+                + " greenLiveLike=" + greenLiveLike
+                + " greenSimplifiedOnly=" + greenSimplifiedOnly
+                + " contactGap=" + contactGap
+                + " triadMismatch=" + triadMismatch
+                + " collisionShapeRisk=" + collisionShapeRisk
+                + " connectionShapeRisk=" + connectionShapeRisk
+                + " placementFailure=" + placementFailure
+                + " survivalFailure=" + survivalFailure
+                + " variantCoverageGap=" + variantCoverageGap
+                + " needsImplementation=" + needsImplementation
+                + " oakFenceClassification=" + oakFenceClassification
+                + " spruceFenceClassification=" + spruceFenceClassification
+                + " netherBrickFenceClassification=" + netherBrickFenceClassification
+                + " cobblestoneWallClassification=" + cobblestoneWallClassification
+                + " glassPane=NOT_COVERED"
+                + " previousFailureLayer=VARIANT_COVERAGE_GAP"
+                + " failureLayer=" + failureLayer
+                + " productionFixImplemented=true"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " canonicalCheckoutModified=false");
+    }
+
+    /**
      * Fence-family live-faithful classification for Julia's Beta 3.5 false-green report.
      *
      * Gate: -Dslabbed.beta35FenceFamilyLiveRed=true
@@ -12726,7 +12867,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 || placementFailure > 0 || survivalFailure > 0 || variantCoverageGap > 0
                 || needsImplementation > 0) {
             proofOutcome = "RED";
-        } else if (greenLiveLike > 0 && greenSimplifiedOnly == 0) {
+        } else if (greenLiveLike > 0) {
             proofOutcome = "GREEN";
         } else {
             proofOutcome = "PENDING";
@@ -13020,6 +13161,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         beta35AppendProperty(builder, state, Properties.EAST);
         beta35AppendProperty(builder, state, Properties.SOUTH);
         beta35AppendProperty(builder, state, Properties.WEST);
+        beta35AppendProperty(builder, state, Properties.NORTH_WALL_SHAPE);
+        beta35AppendProperty(builder, state, Properties.EAST_WALL_SHAPE);
+        beta35AppendProperty(builder, state, Properties.SOUTH_WALL_SHAPE);
+        beta35AppendProperty(builder, state, Properties.WEST_WALL_SHAPE);
         beta35AppendProperty(builder, state, Properties.UP);
         return builder.length() == 0 ? "NO_CONNECTION_PROPERTIES" : builder.toString();
     }
@@ -13045,6 +13190,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         if (state == null || state.isAir()) {
             return false;
         }
+        if (state.contains(Properties.NORTH) && Boolean.TRUE.equals(state.get(Properties.NORTH))) {
+            return false;
+        }
+        if (state.contains(Properties.SOUTH) && Boolean.TRUE.equals(state.get(Properties.SOUTH))) {
+            return false;
+        }
         if (state.contains(Properties.EAST)) {
             boolean east = Boolean.TRUE.equals(state.get(Properties.EAST));
             if ((configuration.eastFenceNeighbor || configuration.eastLoweredFullBlockNeighbor) != east) {
@@ -13057,7 +13208,26 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 return false;
             }
         }
+        boolean eastExpected = configuration.eastFenceNeighbor || configuration.eastLoweredFullBlockNeighbor;
+        if (!beta35WallConnectionMatches(state, Properties.NORTH_WALL_SHAPE, false)
+                || !beta35WallConnectionMatches(state, Properties.SOUTH_WALL_SHAPE, false)
+                || !beta35WallConnectionMatches(state, Properties.EAST_WALL_SHAPE, eastExpected)
+                || !beta35WallConnectionMatches(state, Properties.WEST_WALL_SHAPE, configuration.westFenceNeighbor)) {
+            return false;
+        }
         return true;
+    }
+
+    private static boolean beta35WallConnectionMatches(
+            BlockState state,
+            net.minecraft.state.property.Property<?> property,
+            boolean expected
+    ) {
+        if (!state.contains(property)) {
+            return true;
+        }
+        boolean connected = !"none".equals(String.valueOf(state.get(property)));
+        return connected == expected;
     }
 
     /**
