@@ -283,6 +283,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35CandleFloorTopContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35CandleFloorTopContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35LiveFloorTorchContactGapRed")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10451,6 +10460,71 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " rail=OUT_OF_SCOPE_FOR_THIS_SLICE"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED");
+    }
+
+    /**
+     * Focused candle-only proof for the Beta 3.5 floor/top contact slice.
+     *
+     * Gate: -Dslabbed.beta35CandleFloorTopContact=true
+     */
+    private static void runBeta35CandleFloorTopContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35FloorTopObjectCase candle = new Beta35FloorTopObjectCase(
+                "minecraft:candle",
+                Items.CANDLE,
+                Blocks.CANDLE.getDefaultState(),
+                false);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35FloorTopSupportCase supportCase : Beta35FloorTopSupportCase.values()) {
+            Beta35FloorTopObjectAuditResult result = runBeta35FloorTopObjectAuditRow(
+                    ctx,
+                    singleplayer,
+                    candle,
+                    supportCase,
+                    1);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "CANDLE_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "CANDLE_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "CANDLE_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "CANDLE_TRIAD_MISMATCH";
+                    default -> "CANDLE_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_CANDLE_FLOOR_TOP_CONTACT_GREEN"
+                        + " objectId=minecraft:candle"
+                        + " supportCase=" + supportCase
+                        + " classification=CANDLE_CONTACT_GREEN"
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_CANDLE_FLOOR_TOP_CONTACT_SUMMARY"
+                + " objectId=minecraft:candle"
+                + " rows=" + Beta35FloorTopSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " failureLayer=" + failureLayer
+                + " flower_pot=UNCHANGED_SEPARATE_SURVIVAL_FAILURE"
+                + " standing_oak_sign=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            throw new RuntimeException("[JULIA_BETA35_CANDLE_FLOOR_TOP_CONTACT_RED]"
+                    + " reason=candle_floor_top_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
     }
 
     private static Beta35FloorTopObjectAuditResult runBeta35FloorTopObjectAuditRow(
