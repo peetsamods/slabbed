@@ -157,3 +157,15 @@ Focused gate: `-Dslabbed.beta35BookshelfContact=true`; markers `JULIA_BETA35_BOO
 Special-fullblock matrix follow-up now reports `greenAlreadyInherits=9`, `contactGap=12`, `triadMismatch=2`, `blockEntityRisk=2`, `specialRendererRisk=2`, and `needsCategorySlice=3`. Controls `minecraft:crafting_table` and `minecraft:furnace` remain GREEN. `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:chest`, `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` remain contact-gap/category rows; `minecraft:barrel` remains a triad category row.
 
 Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
+
+## Chest Contact Fix Follow-up
+
+Follow-up implementation at `baf09f0` / `save/beta35-bookshelf-contact` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
+
+Focused gate: `-Dslabbed.beta35ChestContact=true`; markers `JULIA_BETA35_CHEST_CONTACT_GREEN` and `JULIA_BETA35_CHEST_CONTACT_SUMMARY`.
+
+`minecraft:chest` is now GREEN for the focused block-entity fullblock contact representative. Slab-supported rows report `contactGap=0.000000`, `triadCoLocated=yes`, `blockEntityPresent=true`, placement GREEN, and survival GREEN. The fix is exact `Blocks.CHEST` contact/dy plus a chest-only lowered raycast fallback to the lowered outline; it does not implement barrel, enchanting table, lectern, stonecutter, grindstone, anvil, door, trapdoor, signs, lanterns, chains, end rods, redstone, or rails.
+
+Special-fullblock matrix follow-up now reports `greenAlreadyInherits=12`, `contactGap=10`, `triadMismatch=2`, `blockEntityRisk=2`, `specialRendererRisk=1`, and `needsCategorySlice=3`. Controls `minecraft:crafting_table`, `minecraft:furnace`, and `minecraft:bookshelf` remain GREEN. `minecraft:barrel` remains a triad category row; `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` remain contact-gap/category rows.
+
+Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.

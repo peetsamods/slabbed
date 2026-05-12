@@ -218,6 +218,9 @@ public final class SlabSupport {
             return false;
         }
         Block block = state.getBlock();
+        if (block == Blocks.CHEST) {
+            return true;
+        }
         if (!(block instanceof CraftingTableBlock || block instanceof BlockEntityProvider
                 || block == Blocks.BOOKSHELF)) {
             return false;
