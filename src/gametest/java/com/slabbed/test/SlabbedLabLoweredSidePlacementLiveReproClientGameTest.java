@@ -302,6 +302,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35OakTrapdoorContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35OakTrapdoorContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CraftingTableContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10629,7 +10638,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "attachment_hinge_block",
                         Items.OAK_TRAPDOOR,
                         Blocks.OAK_TRAPDOOR.getDefaultState(),
-                        "NEEDS_CATEGORY_SLICE",
+                        "GREEN_ALREADY_INHERITS",
                         false,
                         true,
                         true),
@@ -10758,7 +10767,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " trapdoorFailureLayer=" + trapdoorFailureLayer
                 + " doorClassification=" + doorClassification
                 + " doorFailureLayer=" + doorFailureLayer
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor"
                 + " trapdoorRecommendation="
                 + ("CONTACT_GAP".equals(trapdoorClassification)
                         ? "NEXT_SLICE_CATEGORY_SPECIFIC_CONTACT_AND_OPEN_CLOSE_FIX"
@@ -11135,11 +11144,6 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 return row.classification();
             }
         }
-        for (Beta35TrapdoorDoorAuditRow row : rows) {
-            if (!"GREEN_ALREADY_INHERITS".equals(row.classification())) {
-                return row.classification();
-            }
-        }
         return "GREEN_ALREADY_INHERITS";
     }
 
@@ -11175,6 +11179,68 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return "N/A";
         }
         return String.valueOf(state.get(property));
+    }
+
+    /**
+     * Focused oak-trapdoor-only proof for the Beta 3.5 interactive hinge contact slice.
+     *
+     * Gate: -Dslabbed.beta35OakTrapdoorContact=true
+     */
+    private static void runBeta35OakTrapdoorContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35TrapdoorDoorAuditRow result = runBeta35TrapdoorAuditRow(ctx, singleplayer, supportCase,
+                    supportCase.ordinal());
+            if (supportCase == Beta35CommonObjectSupportCase.VANILLA_FULL_BLOCK) {
+                continue;
+            }
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = beta35TrapdoorFailureLayer(result.classification());
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_OAK_TRAPDOOR_CONTACT_GREEN"
+                        + " objectId=minecraft:oak_trapdoor"
+                        + " family=interactive_hinge"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " collision=GREEN"
+                        + " openClose=GREEN"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_OAK_TRAPDOOR_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:oak_trapdoor"
+                + " family=interactive_hinge"
+                + " supportRows=2"
+                + " expectedSupportRowsGreen=" + allGreen
+                + " vanillaFullBlockControl=NOT_RELEASE_CRITERION_FOR_SLAB_CONTACT"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor"
+                + " oak_door=UNCHANGED_DEFERRED_MULTIPART_RISK"
+                + " signs=NOT_TOUCHED"
+                + " lanterns=NOT_TOUCHED"
+                + " chains=NOT_TOUCHED"
+                + " redstone=NOT_TOUCHED"
+                + " rails=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            throw new RuntimeException("[JULIA_BETA35_OAK_TRAPDOOR_CONTACT_RED]"
+                    + " reason=oak_trapdoor_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
     }
 
     /**
