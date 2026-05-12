@@ -456,6 +456,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35BirchFenceVariantRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35BirchFenceVariantRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CandleFloorTopContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -13043,6 +13052,271 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " modelBounds=" + modelBoundsBox[0]
                 + " modelDyOwnerTrace=" + (trace == null ? "none" : trace.toString())
                 + " classification=" + classification);
+
+        return classification;
+    }
+
+    /**
+     * Focused RED proof: minecraft:birch_fence is outside the fence/wall allowlist.
+     * Control: minecraft:oak_fence (GREEN). Live-tested variant: minecraft:birch_fence (RED).
+     *
+     * Gate: -Dslabbed.beta35BirchFenceVariantRed=true
+     */
+    private static void runBeta35BirchFenceVariantRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35FenceFamilyCase[] cases = {
+                new Beta35FenceFamilyCase(
+                        "minecraft:oak_fence",
+                        "fence_family",
+                        Items.OAK_FENCE,
+                        Blocks.OAK_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase(
+                        "minecraft:birch_fence",
+                        "fence_family",
+                        Items.BIRCH_FENCE,
+                        Blocks.BIRCH_FENCE.getDefaultState())
+        };
+
+        System.out.println("JULIA_BETA35_BIRCH_FENCE_VARIANT_RED"
+                + " scope=birch_fence_variant_family_coverage"
+                + " control=minecraft:oak_fence"
+                + " liveTestedVariant=minecraft:birch_fence"
+                + " allowlist=OAK_FENCE,SPRUCE_FENCE,NETHER_BRICK_FENCE,COBBLESTONE_WALL"
+                + " birchFenceInAllowlist=no"
+                + " previousClassification=EXACT_BLOCK_ALLOWLIST_GAP"
+                + " failureLayer=VARIANT_FAMILY_COVERAGE_GAP"
+                + " productionFixImplemented=false"
+                + " releaseAudit=NOT_RUN");
+
+        int rows = 0;
+        int greenAllowlisted = 0;
+        int variantCoverageGap = 0;
+        int modelRenderGap = 0;
+        int placementFailure = 0;
+        String oakFenceClassification = "NOT_MEASURED";
+        String birchFenceClassification = "NOT_MEASURED";
+
+        for (Beta35FenceFamilyCase objectCase : cases) {
+            String classification = runBeta35BirchFenceVariantRedRow(ctx, singleplayer, objectCase, rows);
+            rows++;
+            switch (classification) {
+                case "GREEN_ALLOWLISTED" -> greenAllowlisted++;
+                case "VARIANT_FAMILY_COVERAGE_GAP" -> variantCoverageGap++;
+                case "MODEL_RENDER_GAP" -> modelRenderGap++;
+                case "PLACEMENT_FAILURE" -> placementFailure++;
+                default -> {
+                }
+            }
+            if ("minecraft:oak_fence".equals(objectCase.objectId())) {
+                oakFenceClassification = classification;
+            } else if ("minecraft:birch_fence".equals(objectCase.objectId())) {
+                birchFenceClassification = classification;
+            }
+        }
+
+        boolean red = variantCoverageGap > 0 || modelRenderGap > 0 || placementFailure > 0;
+        String failureLayer = variantCoverageGap > 0 ? "VARIANT_FAMILY_COVERAGE_GAP"
+                : modelRenderGap > 0 ? "MODEL_RENDER_GAP"
+                : placementFailure > 0 ? "PLACEMENT_FAILURE"
+                : "NONE";
+
+        System.out.println("JULIA_BETA35_BIRCH_FENCE_VARIANT_SUMMARY"
+                + " outcome=" + (red ? "RED" : "GREEN")
+                + " rows=" + rows
+                + " greenAllowlisted=" + greenAllowlisted
+                + " variantCoverageGap=" + variantCoverageGap
+                + " modelRenderGap=" + modelRenderGap
+                + " placementFailure=" + placementFailure
+                + " oakFenceClassification=" + oakFenceClassification
+                + " birchFenceClassification=" + birchFenceClassification
+                + " failureLayer=" + failureLayer
+                + " productionFixImplemented=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " canonicalCheckoutModified=false");
+    }
+
+    private static String runBeta35BirchFenceVariantRedRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35FenceFamilyCase objectCase,
+            int rowIndex
+    ) {
+        int baseX = 400 + rowIndex * 9;
+        int baseZ = 130;
+        BlockPos supportCandidatePos = new BlockPos(baseX, -55, baseZ);
+        BlockPos objectPos = supportCandidatePos.up();
+        BlockPos unsupportedPos = supportCandidatePos.add(0, 1, 4);
+        BlockHitResult useHit = new BlockHitResult(
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() - 0.5d,
+                        supportCandidatePos.getZ() + 0.5d),
+                Direction.UP,
+                supportCandidatePos,
+                false);
+
+        prepareBeta35FenceFamilyLiveSupport(
+                singleplayer,
+                objectCase,
+                Beta35FenceFamilyConfiguration.ISOLATED,
+                supportCandidatePos,
+                unsupportedPos);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(objectCase.item(), 4));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() + 3.0d,
+                        supportCandidatePos.getZ() - 2.0d),
+                useHit.getPos());
+
+        final String[] placementResult = {"not-run"};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                placementResult[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, useHit);
+            placementResult[0] = result.toString();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final boolean[] inFenceWallAllowlistBox = {false};
+        final double[] supportDyBox = {Double.NaN};
+        final double[] objectDyBox = {Double.NaN};
+        final double[] expectedModelDyBox = {Double.NaN};
+        final boolean[] blockAppearedBox = {false};
+        final String[] finalStateBox = {"none"};
+        final double[] shapeContactGapBox = {Double.NaN};
+        final boolean[] shapeTriadCoLocatedBox = {false};
+        final String[] modelBoundsBox = {"none"};
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportCandidatePos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            blockAppearedBox[0] = objectState.isOf(objectCase.expectedState().getBlock());
+            inFenceWallAllowlistBox[0] = SlabSupport.isBeta35FenceWallVariantContactObject(objectState);
+            supportDyBox[0] = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
+            objectDyBox[0] = blockAppearedBox[0]
+                    ? SlabSupport.getYOffset(mc.world, objectPos, objectState) : Double.NaN;
+            expectedModelDyBox[0] = blockAppearedBox[0]
+                    ? ClientDy.dyFor(mc.world, objectPos, objectState) : Double.NaN;
+            finalStateBox[0] = objectState.toString();
+            if (blockAppearedBox[0]) {
+                double supportVisibleTopY = beta35CommonSupportVisibleTopY(
+                        supportCandidatePos, supportState, supportDyBox[0]);
+                VoxelShape outlineShape = objectState.getOutlineShape(mc.world, objectPos,
+                        net.minecraft.block.ShapeContext.of(mc.player));
+                VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
+                VoxelShape collisionShape = objectState.getCollisionShape(mc.world, objectPos,
+                        net.minecraft.block.ShapeContext.of(mc.player));
+                net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+                net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+                net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+                net.minecraft.util.math.Box modelProxyBox = collisionBox != null ? collisionBox : outlineBox;
+                double objectModelBottomY = modelProxyBox == null ? Double.NaN : modelProxyBox.minY;
+                shapeContactGapBox[0] = Double.isFinite(objectModelBottomY)
+                        && Double.isFinite(supportVisibleTopY)
+                        ? objectModelBottomY - supportVisibleTopY
+                        : Double.NaN;
+                shapeTriadCoLocatedBox[0] = modelProxyBox != null
+                        && beta35SameBox(outlineBox, modelProxyBox)
+                        && beta35SameBox(raycastBox, modelProxyBox);
+                modelBoundsBox[0] = beta35FormatBox(modelProxyBox);
+            }
+            if (mc.worldRenderer != null) {
+                OffsetBlockStateModel.resetModelDyOwnerTrace(objectPos);
+                mc.worldRenderer.scheduleBlockRenders(
+                        objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
+                        objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
+            }
+        });
+
+        for (int i = 0; i < 6; i++) {
+            ctx.runOnClient(mc -> {
+                if (mc.worldRenderer == null) {
+                    return;
+                }
+                mc.worldRenderer.scheduleBlockRenders(
+                        objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
+                        objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
+            });
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final OffsetBlockStateModel.ModelDyOwnerTrace[] traceBox = {null};
+        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace());
+
+        final boolean[] survivedBox = {false};
+        ctx.runOnClient(mc -> {
+            if (mc.world != null) {
+                survivedBox[0] = mc.world.getBlockState(objectPos)
+                        .isOf(objectCase.expectedState().getBlock());
+            }
+        });
+
+        OffsetBlockStateModel.ModelDyOwnerTrace trace = traceBox[0];
+        boolean traceSeen = trace != null && trace.seen();
+        int emitCalls = trace == null ? 0 : trace.emitCalls();
+        int appliedCalls = trace == null ? 0 : trace.appliedCalls();
+        double totalAppliedDy = trace == null ? 0.0 : trace.totalAppliedDy();
+        double lastDy = trace == null ? 0.0 : trace.lastDy();
+        boolean renderDyApplied = traceSeen && appliedCalls > 0 && Math.abs(totalAppliedDy) > EPSILON;
+
+        String classification;
+        if (!blockAppearedBox[0]) {
+            classification = "PLACEMENT_FAILURE";
+        } else if (!inFenceWallAllowlistBox[0]) {
+            classification = "VARIANT_FAMILY_COVERAGE_GAP";
+        } else if (!Double.isFinite(objectDyBox[0]) || Math.abs(objectDyBox[0]) <= EPSILON) {
+            classification = "SUPPORT_DY_ZERO";
+        } else if (!traceSeen || emitCalls == 0) {
+            classification = "MODEL_DY_TRACE_NOT_OBSERVED";
+        } else if (!renderDyApplied) {
+            classification = "MODEL_RENDER_GAP";
+        } else {
+            classification = "GREEN_ALLOWLISTED";
+        }
+
+        System.out.println("JULIA_BETA35_BIRCH_FENCE_VARIANT_ROW"
+                + " objectId=" + objectCase.objectId()
+                + " family=" + objectCase.family()
+                + " configuration=isolated"
+                + " inFenceWallAllowlist=" + (inFenceWallAllowlistBox[0] ? "yes" : "no")
+                + " placementResult=" + placementResult[0]
+                + " blockAppearedAfterAttempt=" + blockAppearedBox[0]
+                + " survivalResult=" + (survivedBox[0] ? "survived" : "not-survived")
+                + " finalBlockState=" + finalStateBox[0]
+                + " supportDy=" + String.format("%.6f", supportDyBox[0])
+                + " objectDy=" + (Double.isFinite(objectDyBox[0])
+                        ? String.format("%.6f", objectDyBox[0]) : "N/A")
+                + " expectedModelDy=" + (Double.isFinite(expectedModelDyBox[0])
+                        ? String.format("%.6f", expectedModelDyBox[0]) : "N/A")
+                + " actualModelAppliedDy=" + String.format("%.6f", lastDy)
+                + " totalAppliedDy=" + String.format("%.6f", totalAppliedDy)
+                + " renderDyApplied=" + (renderDyApplied ? "yes" : "no")
+                + " shapeContactGap=" + (Double.isFinite(shapeContactGapBox[0])
+                        ? String.format("%.6f", shapeContactGapBox[0]) : "N/A")
+                + " shapeTriadCoLocated=" + (shapeTriadCoLocatedBox[0] ? "yes" : "no")
+                + " modelBounds=" + modelBoundsBox[0]
+                + " modelDyTraceSeen=" + traceSeen
+                + " emitCalls=" + emitCalls
+                + " appliedCalls=" + appliedCalls
+                + " classification=" + classification
+                + " failureLayer=" + ("GREEN_ALLOWLISTED".equals(classification) ? "NONE" : classification));
 
         return classification;
     }
