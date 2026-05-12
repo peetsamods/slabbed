@@ -95,3 +95,24 @@ Updated family matrix summary:
 `minecraft:flower_pot` still has a separate visual/contact layer: `objectDy=-0.500000`, `contactGap=1.000000` on lowered bottom support and `contactGap=0.500000` on plain bottom support, with `triadCoLocated=no`. Standing `minecraft:oak_sign` remains separate due to `CONTACT_GAP` plus block-entity/special renderer risk.
 
 This does not claim all items or all floor/top objects are fixed. Release audit remains paused until Julia decides whether floor torch plus candle plus flower pot survival is enough for this one-more-family pass, or whether flower pot contact and/or standing sign need separate slices.
+
+## Flower Pot Contact Follow-Up Status
+
+Follow-up savepoint: `save/beta35-flower-pot-floor-top-contact`
+
+`minecraft:flower_pot` is now GREEN for floor/top placement, survival, unsupported rejection, contact, and triad co-location on valid slab-supported surfaces.
+
+- lowered bottom support: `supportDy=-1.000000`, `objectDy=-1.500000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`, `triadCoLocated=yes`
+- plain bottom support: `supportDy=-0.500000`, `objectDy=-1.000000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`, `triadCoLocated=yes`
+
+Updated focused proof summary:
+
+`JULIA_BETA35_FLOWER_POT_FLOOR_TOP_CONTACT_SUMMARY objectId=minecraft:flower_pot rows=2 expectedRowsGreen=true failureLayer=NONE candle=GREEN_ALREADY_INHERITS standing_oak_sign=UNCHANGED_SEPARATE_CONTACT_GAP releaseAudit=NOT_RUN releasePrep=PAUSED`
+
+Updated family matrix summary:
+
+`rows=8 greenAlreadyInherits=6 placementFailure=0 survivalFailure=0 contactGap=2 triadMismatch=0 rendererSpecialCase=0 outOfScope=0 releaseAudit=NOT_RUN releasePrep=PAUSED`
+
+Standing `minecraft:oak_sign` remains separate due to `CONTACT_GAP` plus block-entity/special renderer risk. This does not claim all items or all floor/top objects are fixed.
+
+Release audit remains paused until Julia decides whether floor torch plus candle plus flower pot is enough for Beta 3.5, or whether standing sign must also be handled.

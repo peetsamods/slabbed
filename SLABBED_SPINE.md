@@ -470,3 +470,15 @@ If the slice changes, update the source pack and spine together so the current o
 - Evidence folder: `tmp/beta35-flower-pot-floor-top-survival-fix-b76643d`. See `docs/beta35-flower-pot-floor-top-survival-fix.md`.
 - Scope is floor torch plus `minecraft:candle` plus `minecraft:flower_pot` survival only. No standing sign fix, wall/ceiling/hanging category, redstone/rail work, all-object support, or global sturdy-face/solidity change was made.
 - Release audit remains paused until Julia decides whether this is enough for the one-more-family pass or whether flower pot contact and/or standing sign need separate slices. No release audit run. No release tag moved.
+
+## Beta 3.5 flower pot floor/top contact fix (2026-05-11)
+
+- Operating base for this implementation slice: `9ce0211` / `save/beta35-flower-pot-floor-top-survival` on `integrate/phase19-into-side-slab-top-support`.
+- Previous flower pot failure layer: `CONTACT_GAP`; survival was already GREEN, but flower pot stayed at generic `objectDy=-0.500000`, leaving `contactGap=1.000000` on lowered bottom support and `contactGap=0.500000` on plain bottom support.
+- Narrow production fix: `SlabSupport.getYOffsetInner(...)` now has an explicit Beta 3.5 floor/top contact object branch for `Blocks.CANDLE` plus `Blocks.FLOWER_POT` only. `SlabSupportStateMixin` applies the existing lowered floor/top contact raycast fallback to flower pot as well as candle, so model/outline/raycast stay co-located.
+- Focused gate `-Dslabbed.beta35FlowerPotFloorTopContact=true` is GREEN: lowered bottom support reports `supportDy=-1.000000`, `objectDy=-1.500000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`, `triadCoLocated=yes`; plain bottom support reports `supportDy=-0.500000`, `objectDy=-1.000000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`, `triadCoLocated=yes`; summary `failureLayer=NONE`.
+- Updated floor/top matrix: `minecraft:torch=GREEN_ALREADY_INHERITS`; `minecraft:candle=GREEN_ALREADY_INHERITS`; `minecraft:flower_pot=GREEN_ALREADY_INHERITS`; standing-only `minecraft:oak_sign=CONTACT_GAP` with `rendererPath=BLOCK_ENTITY_OR_SPECIAL`.
+- Validation passed: `compileJava compileGametestJava`, focused flower pot contact proof, focused flower pot survival regression, focused candle regression, focused floor/top family audit, floor torch regression, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-flower-pot-floor-top-contact-fix-9ce0211`. See `docs/beta35-flower-pot-floor-top-contact-fix.md`.
+- Scope is floor torch plus `minecraft:candle` plus `minecraft:flower_pot` only. No standing sign fix, wall/ceiling/hanging category, redstone/rail work, all-object support, or global sturdy-face/solidity change was made.
+- Release audit remains paused until Julia decides whether floor torch plus candle plus flower pot is enough for Beta 3.5, or whether standing sign must also be handled. No release audit run. No release tag moved.

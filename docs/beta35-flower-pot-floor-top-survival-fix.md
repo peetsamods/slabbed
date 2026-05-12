@@ -54,3 +54,26 @@ The survival fix exposes, but does not fix, a separate flower pot visual/contact
 Evidence folder: `tmp/beta35-flower-pot-floor-top-survival-fix-b76643d`
 
 No release audit was run. No release tag was moved. Scope is floor torch plus candle plus flower pot survival only.
+
+## Contact Follow-Up
+
+Follow-up savepoint: `save/beta35-flower-pot-floor-top-contact`
+
+The remaining `CONTACT_GAP` layer is now fixed for `minecraft:flower_pot`. The contact slice reuses the explicit Beta 3.5 floor/top contact dy authority for candle plus flower pot only, and keeps the existing flower-pot survival branch intact.
+
+Focused gate: `-Dslabbed.beta35FlowerPotFloorTopContact=true`
+
+Result:
+
+- lowered bottom support: `supportDy=-1.000000`, `objectDy=-1.500000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`, `triadCoLocated=yes`
+- plain bottom support: `supportDy=-0.500000`, `objectDy=-1.000000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`, `triadCoLocated=yes`
+- summary: `failureLayer=NONE`
+
+Updated matrix status:
+
+- `minecraft:torch`: `GREEN_ALREADY_INHERITS`
+- `minecraft:candle`: `GREEN_ALREADY_INHERITS`
+- `minecraft:flower_pot`: `GREEN_ALREADY_INHERITS`
+- standing `minecraft:oak_sign`: unchanged separate `CONTACT_GAP` with block-entity/special renderer risk
+
+This does not claim all items or all floor/top objects are fixed. Release audit remains paused.

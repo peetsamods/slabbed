@@ -301,6 +301,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35FlowerPotFloorTopContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FlowerPotFloorTopContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35LiveFloorTorchContactGapRed")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10524,7 +10533,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " rows=" + Beta35FloorTopSupportCase.values().length
                 + " expectedRowsGreen=" + allGreen
                 + " failureLayer=" + failureLayer
-                + " flower_pot=SURVIVAL_GREEN_CONTACT_GAP_SEPARATE"
+                + " flower_pot=GREEN_ALREADY_INHERITS"
                 + " standing_oak_sign=UNCHANGED_SEPARATE_CONTACT_GAP"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED");
@@ -10602,6 +10611,72 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         if (!survivalRowsGreen) {
             throw new RuntimeException("[JULIA_BETA35_FLOWER_POT_FLOOR_TOP_SURVIVAL_RED]"
                     + " reason=flower_pot_floor_top_survival_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
+    }
+
+    /**
+     * Focused flower-pot contact proof for the Beta 3.5 floor/top contact slice.
+     *
+     * Gate: -Dslabbed.beta35FlowerPotFloorTopContact=true
+     */
+    private static void runBeta35FlowerPotFloorTopContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35FloorTopObjectCase flowerPot = new Beta35FloorTopObjectCase(
+                "minecraft:flower_pot",
+                Items.FLOWER_POT,
+                Blocks.FLOWER_POT.getDefaultState(),
+                false);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35FloorTopSupportCase supportCase : Beta35FloorTopSupportCase.values()) {
+            Beta35FloorTopObjectAuditResult result = runBeta35FloorTopObjectAuditRow(
+                    ctx,
+                    singleplayer,
+                    flowerPot,
+                    supportCase,
+                    2);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "FLOWER_POT_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "FLOWER_POT_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "FLOWER_POT_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "FLOWER_POT_TRIAD_MISMATCH";
+                    default -> "FLOWER_POT_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_FLOWER_POT_FLOOR_TOP_CONTACT_GREEN"
+                        + " objectId=minecraft:flower_pot"
+                        + " supportCase=" + supportCase
+                        + " classification=FLOWER_POT_CONTACT_GREEN"
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " unsupported=UNSUPPORTED_FAILS"
+                        + " contact=GREEN"
+                        + " triad=GREEN");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_FLOWER_POT_FLOOR_TOP_CONTACT_SUMMARY"
+                + " objectId=minecraft:flower_pot"
+                + " rows=" + Beta35FloorTopSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " failureLayer=" + failureLayer
+                + " candle=GREEN_ALREADY_INHERITS"
+                + " standing_oak_sign=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            throw new RuntimeException("[JULIA_BETA35_FLOWER_POT_FLOOR_TOP_CONTACT_RED]"
+                    + " reason=flower_pot_floor_top_contact_not_green"
                     + " failureLayer=" + failureLayer);
         }
     }
