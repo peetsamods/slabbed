@@ -158,6 +158,18 @@ Special-fullblock matrix follow-up now reports `greenAlreadyInherits=9`, `contac
 
 Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
 
+## Barrel Triad Fix Follow-up
+
+Follow-up implementation at `0ee0ab3` / `save/beta35-chest-contact` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
+
+Focused gate: `-Dslabbed.beta35BarrelTriad=true`; markers `JULIA_BETA35_BARREL_TRIAD_GREEN` and `JULIA_BETA35_BARREL_TRIAD_SUMMARY`.
+
+`minecraft:barrel` is now GREEN for the focused block-entity fullblock triad representative. Slab-supported rows report `contactGap=0.000000`, `triadCoLocated=yes`, `blockEntityPresent=true`, placement GREEN, and survival GREEN. The fix is a barrel-only lowered raycast fallback to the lowered outline when vanilla barrel raycast is empty; it does not implement enchanting table, lectern, stonecutter, grindstone, anvil, door, trapdoor, signs, lanterns, chains, end rods, redstone, or rails.
+
+Special-fullblock matrix follow-up now reports `greenAlreadyInherits=15`, `contactGap=10`, `triadMismatch=0`, `blockEntityRisk=1`, `specialRendererRisk=1`, and `needsCategorySlice=3`. Controls `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, and `minecraft:chest` remain GREEN. `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` remain contact-gap/category rows.
+
+Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
+
 ## Chest Contact Fix Follow-up
 
 Follow-up implementation at `baf09f0` / `save/beta35-bookshelf-contact` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.

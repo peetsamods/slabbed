@@ -29,6 +29,7 @@ Only `SLABBED_SPINE.md` is tracked in this checkout among the expected numbered 
 - `minecraft:oak_trapdoor`
 - `minecraft:bookshelf`
 - `minecraft:chest`
+- `minecraft:barrel`
 
 The special-fullblock audit did not inspect door worktree changes and did not touch door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation.
 
@@ -37,6 +38,7 @@ The special-fullblock audit did not inspect door worktree changes and did not to
 - `./gradlew --no-daemon compileJava compileGametestJava`: PASS
 - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35BookshelfContact=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
 - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35ChestContact=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
+- `JAVA_TOOL_OPTIONS="-Dslabbed.beta35BarrelTriad=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
 - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35SpecialFullblockCompatibilityAudit=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
 - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35CommonObjectCompatibilityAudit=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
 - `./gradlew --no-daemon runClientGameTest --console plain`: PASS
@@ -45,14 +47,14 @@ The special-fullblock audit did not inspect door worktree changes and did not to
 
 Summary marker:
 
-`JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY rows=30 greenAlreadyInherits=12 placementFailure=0 survivalFailure=0 contactGap=10 triadMismatch=2 blockEntityRisk=2 specialRendererRisk=1 needsCategorySlice=3 outOfScopeForBeta35=0 currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest doorSlice=PARALLEL_NOT_INSPECTED releaseAudit=NOT_RUN releasePrep=PAUSED productionBehaviorChanged=bookshelf_and_chest_contact_dy_only`
+`JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY rows=30 greenAlreadyInherits=15 placementFailure=0 survivalFailure=0 contactGap=10 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=1 needsCategorySlice=3 outOfScopeForBeta35=0 currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel doorSlice=PARALLEL_NOT_INSPECTED releaseAudit=NOT_RUN releasePrep=PAUSED productionBehaviorChanged=bookshelf_chest_contact_dy_and_barrel_raycast_triad`
 
 | Representative | Family | Vanilla full block | Plain bottom slab `supportDy=-0.5` | Lowered bottom slab `supportDy=-1.0` | Classification |
 | --- | --- | --- | --- | --- | --- |
 | `minecraft:bookshelf` | `ordinary_full_block` | GREEN | GREEN, `contactGap=0.000000`, triad yes | GREEN, `contactGap=0.000000`, triad yes | `GREEN_ALREADY_INHERITS` fixed representative |
 | `minecraft:enchanting_table` | `special_renderer` | `SPECIAL_RENDERER_RISK` | `CONTACT_GAP=0.500000`, triad no | `CONTACT_GAP=1.000000`, triad no | needs renderer/block-entity category slice |
 | `minecraft:lectern` | `interactive_block_entity` | `BLOCK_ENTITY_RISK` | `CONTACT_GAP=0.500000`, triad no | `CONTACT_GAP=1.000000`, triad no | needs interactive block-entity slice |
-| `minecraft:barrel` | `interactive_block_entity` | `BLOCK_ENTITY_RISK` | `TRIAD_MISMATCH`, `contactGap=0.000000` | `TRIAD_MISMATCH`, `contactGap=0.000000` | block-entity triad category slice |
+| `minecraft:barrel` | `interactive_block_entity` | GREEN, `blockEntityPresent=true` | GREEN, `contactGap=0.000000`, triad yes, `blockEntityPresent=true` | GREEN, `contactGap=0.000000`, triad yes, `blockEntityPresent=true` | `GREEN_ALREADY_INHERITS` fixed representative |
 | `minecraft:chest` | `special_renderer` | GREEN, `blockEntityPresent=true` | GREEN, `contactGap=0.000000`, triad yes, `blockEntityPresent=true` | GREEN, `contactGap=0.000000`, triad yes, `blockEntityPresent=true` | `GREEN_ALREADY_INHERITS` fixed representative |
 | `minecraft:crafting_table` | `ordinary_full_block` | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` control |
 | `minecraft:furnace` | `ordinary_full_block` | GREEN | GREEN, `contactGap=0.000000`, triad yes | GREEN, `contactGap=0.000000`, triad yes | `GREEN_ALREADY_INHERITS` control |
@@ -68,6 +70,7 @@ Objects already inheriting the current `crafting_table` / `furnace` behavior:
 
 - `minecraft:bookshelf`
 - `minecraft:chest`
+- `minecraft:barrel`
 - `minecraft:crafting_table`
 - `minecraft:furnace`
 
@@ -81,18 +84,16 @@ Objects that fail contact on slab-supported rows:
 
 Objects that fail triad after contact is otherwise acceptable:
 
-- `minecraft:barrel`
+- none in this focused special-fullblock matrix after the barrel triad slice
 
 Block-entity / special-renderer risks:
 
 - `minecraft:enchanting_table`
 - `minecraft:lectern`
-- `minecraft:barrel`
 
 Separate category slices:
 
 - `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` are special-shape fullblock-ish rows.
-- `minecraft:barrel` is the cleanest block-entity triad follow-up, but not the safest first implementation because it is not an ordinary full-block sibling.
 - `minecraft:enchanting_table` still carries special-renderer risk and should stay deferred until a renderer-aware slice is authorized.
 - `minecraft:lectern` is interactive block-entity work and should not be bundled with ordinary full-block contact.
 
@@ -100,4 +101,4 @@ Separate category slices:
 
 This audit does not change the release decision. It expands the known matrix from the clean Beta 3.5 base and keeps release prep paused.
 
-`minecraft:bookshelf` and `minecraft:chest` are now GREEN for their focused contact/dy representatives. Chest uses exact `Blocks.CHEST` dy authority plus a chest-only lowered raycast fallback to its lowered outline; the existing `BlockEntityOffsetMixin` renders the chest block entity from the same `SlabSupport` dy. Do not claim all special fullblocks or all block entities are fixed; remaining rows are still separate renderer, block-entity, or special-shape slices.
+`minecraft:bookshelf`, `minecraft:chest`, and `minecraft:barrel` are now GREEN for their focused representatives. Chest uses exact `Blocks.CHEST` dy authority plus a chest-only lowered raycast fallback to its lowered outline; barrel keeps its existing contact dy and uses a barrel-only lowered raycast fallback to its lowered outline when vanilla barrel raycast is empty. Do not claim all special fullblocks or all block entities are fixed; remaining rows are still separate renderer, block-entity, or special-shape slices.
