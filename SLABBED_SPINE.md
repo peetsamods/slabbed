@@ -250,6 +250,24 @@ If both attempts fail to match source truth, this slice should classify
 Wall torch remains separate `NOT_COVERED`; Beta 3.5 release remains blocked.
 No gameplay fix and no release tag movement in this slice.
 
+Beta 3.5 floor_torch_only live acceptance status (2026-05-11):
+
+- Julia live trace at `226cc6c` (`save/beta35-floor-torch-plain-bottom-contact`) is accepted for the `floor_torch_only` scope.
+- Dual live tracer report: tracer enabled, 8/8 placement attempts `PLACEMENT_ATTEMPT_OK` with zero
+  `PLACEMENT_REJECTED`, zero `COMFORT_NO_BOX_INTERSECTION`, and zero `WRONG_TARGET_OWNER`.
+- dual floor-torch contact probe reports `PLACED_CONTACT_GREEN=1407`, `PLACED_CONTACT_GAP=0`,
+  `max concrete floor-torch contactGap=0.000000`.
+- floor torch placements are green for lowered bottom slab, top slab, double slab, stone, and plain bottom support:
+  - `COMPOUND_VISIBLE_SIDE_LOWER_SLAB` support with `supportDy=-1.0` → GREEN
+  - `COMPOUND_VISIBLE_SIDE_UPPER_SLAB` support with `supportDy=-0.500` supportDy path GREEN
+  - `PLAIN_STATE` plain bottom support with `supportDy=-0.500` and `contactGap=0.000000`.
+- `supportDy=-0.500` plain bottom contact is live GREEN; `supportDy=-1.0` lowered bottom slab support is green.
+- `OCCUPIED_TORCH_TARGET` / duplicate-occupied noise is present but not treated as release-blocking.
+- old `JULIA_BETA35_LIVE_TORCH_CAPTURE` rows for `minecraft:wall_torch` air-support contact-gap remain outside this `floor_torch_only` acceptance slice and do not block this savepoint.
+- `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
+- Release prep may proceed to a release-readiness audit from this savepoint; this slice moved no release tag.
+- Next safe action: run the Beta 3.5 release-readiness audit with `floor_torch_only` scope and no additional gameplay edits in this slice.
+
 ## Suggested live run command
 
 `./gradlew runClientGameTest --console plain`
