@@ -786,3 +786,17 @@ If the slice changes, update the source pack and spine together so the current o
 - The allowlist at `isBeta35FenceWallVariantContactObject` is too exact for wood fence families. The current four-variant set (`oak_fence`, `spruce_fence`, `nether_brick_fence`, `cobblestone_wall`) covers only those representatives; the wood-fence family requires at minimum the birch variant.
 - **Beta 3.5 release remains BLOCKED.** No production fix implemented in this slice. No release tag moved. No release audit run.
 - Next implementation slice: expand `isBeta35FenceWallVariantContactObject` to include `minecraft:birch_fence` (narrowly, not all wood fences) only after the RED proof is in place (this commit). See `docs/beta35-birch-fence-variant-red.md`.
+
+## Beta 3.5 birch_fence variant fix (2026-05-12)
+
+- Operating base: HEAD `77c11e0` / `save/beta35-birch-fence-variant-red` on `integrate/phase19-into-side-slab-top-support`.
+- Production fix: `src/main/java/com/slabbed/util/SlabSupport.java` `isBeta35FenceWallVariantContactObject` — added `state.isOf(Blocks.BIRCH_FENCE)` to the explicit named allowlist alongside the existing four variants (`OAK_FENCE`, `SPRUCE_FENCE`, `NETHER_BRICK_FENCE`, `COBBLESTONE_WALL`). No other fence/wall/pane variants added. No all-wood-fence, all-FenceBlock, all-WallBlock, all-PaneBlock, or global solidity/sturdy-face changes.
+- `OffsetBlockStateModel.emitQuads` was **not modified**; it already uses `SlabSupport.isBeta35FenceWallVariantContactObject(state)` as its render-quad guard — adding `BIRCH_FENCE` to the allowlist automatically passes through dy for `birch_fence` rendered quads.
+- `SlabSupportStateMixin` was **not modified**; it already uses the same helper for outline/raycast/collision shape offset.
+- Proof updated: `-Dslabbed.beta35BirchFenceVariantRed=true` now emits `JULIA_BETA35_BIRCH_FENCE_VARIANT_GREEN` when outcome is GREEN and records `productionFixImplemented=true`.
+- Result: GREEN. `JULIA_BETA35_BIRCH_FENCE_VARIANT_SUMMARY outcome=GREEN rows=2 greenAllowlisted=2 variantCoverageGap=0 modelRenderGap=0 placementFailure=0 oakFenceClassification=GREEN_ALLOWLISTED birchFenceClassification=GREEN_ALLOWLISTED failureLayer=NONE productionFixImplemented=true releaseAudit=NOT_RUN releaseTagMoved=false canonicalCheckoutModified=false`.
+- birch_fence row: `inFenceWallAllowlist=yes`, `supportDy=-1.000000`, `objectDy=-1.500000`, `expectedModelDy=-1.500000`, `actualModelAppliedDy=-1.500000`, `totalAppliedDy=-9.000000`, `renderDyApplied=yes`, `shapeContactGap=0.000000`, `shapeTriadCoLocated=yes`, `classification=GREEN_ALLOWLISTED`, `failureLayer=NONE`.
+- Prior proofs unaffected: `JULIA_BETA35_FENCE_MODEL_RENDER_SUMMARY outcome=GREEN`; `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_SUMMARY outcome=GREEN`; `JULIA_BETA35_FENCE_FAMILY_SUMMARY outcome=GREEN`; `JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=27 contactGap=0`.
+- Current green fence/wall set (shape-triad + render-quad + birch_fence variant): `minecraft:oak_fence`, `minecraft:birch_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, `minecraft:cobblestone_wall`. `minecraft:glass_pane` remains `NOT_COVERED`. Other wood fences not yet covered.
+- **Beta 3.5 release remains BLOCKED.** Remaining live failures from Julia's session: `birch_trapdoor`, `spruce_door`, `birch_sign`, and anvil placement-event capture. No release audit was run. No release tag was moved.
+- Evidence folder: `tmp/beta35-birch-fence-variant-fix-77c11e0/`. See `docs/beta35-birch-fence-variant-fix.md`.

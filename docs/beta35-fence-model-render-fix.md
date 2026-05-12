@@ -126,6 +126,6 @@ All four variants are now proven across both shape-triad and render-quad dy prob
 - Release tag movement.
 - Version, changelog, or release metadata.
 
-## Birch fence RED confirmation (2026-05-12)
+## Birch fence RED confirmation and fix (2026-05-12)
 
-The allowlist at `isBeta35FenceWallVariantContactObject` is confirmed too narrow for wood fence families by the focused birch_fence variant RED proof at `4f09773` / `save/beta35-birch-fence-variant-red`. Gate: `-Dslabbed.beta35BirchFenceVariantRed=true`. `minecraft:birch_fence` places and survives but reports `inFenceWallAllowlist=no`, `renderDyApplied=no`, `shapeContactGap=1.500000`, `classification=VARIANT_FAMILY_COVERAGE_GAP`. The four-variant fix here remains correct for its declared scope; the next slice should expand the allowlist to include `birch_fence` narrowly. See `docs/beta35-birch-fence-variant-red.md`.
+The allowlist at `isBeta35FenceWallVariantContactObject` was confirmed too narrow for wood fence families by the focused birch_fence RED proof at `4f09773` / `save/beta35-birch-fence-variant-red`. `minecraft:birch_fence` was then added to the allowlist in the follow-up production fix at `save/beta35-birch-fence-variant-fix` — `JULIA_BETA35_BIRCH_FENCE_VARIANT_SUMMARY outcome=GREEN failureLayer=NONE`. See `docs/beta35-birch-fence-variant-fix.md`.
