@@ -583,3 +583,16 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused bookshelf proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-bookshelf-contact-fix-e0da848`. See `docs/beta35-bookshelf-contact-fix.md`.
 - Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.
+
+## Beta 3.5 chest contact fix (2026-05-12)
+
+- Operating base for this implementation slice: `baf09f0` / `save/beta35-bookshelf-contact` in `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on `work/beta35-special-fullblock-compat`. Canonical checkout was not modified.
+- Previous `minecraft:chest` failure layer: `CONTACT_GAP`; placement and survival were already GREEN, but slab-supported rows had `contactGap=0.500000` on plain bottom support and `contactGap=1.000000` on lowered bottom support. First focused implementation attempt fixed contact and exposed `CHEST_TRIAD_MISMATCH` because vanilla chest raycast was empty on lowered rows.
+- New `minecraft:chest` failure layer: `NONE`. The fix is exact `Blocks.CHEST` contact/dy in `SlabSupport` plus a chest-only lowered raycast fallback in `SlabSupportStateMixin`. Existing `BlockEntityOffsetMixin` keeps chest block-entity rendering on the same `SlabSupport` dy; no renderer rewrite was needed.
+- Focused proof `-Dslabbed.beta35ChestContact=true` passes with `JULIA_BETA35_CHEST_CONTACT_SUMMARY failureLayer=NONE`; slab-supported rows report `placementResult=Success`, `blockEntityPresent=true`, `survivalResult=SURVIVAL_GREEN`, `contactGap=0.000000`, `triadCoLocated=yes`, and co-located model/outline/raycast/collision bounds.
+- Updated special-fullblock matrix: `minecraft:chest`, `minecraft:bookshelf`, `minecraft:crafting_table`, and `minecraft:furnace` are GREEN representatives. Matrix summary now reports `rows=30 greenAlreadyInherits=12 placementFailure=0 survivalFailure=0 contactGap=10 triadMismatch=2 blockEntityRisk=2 specialRendererRisk=1 needsCategorySlice=3 outOfScopeForBeta35=0`.
+- Remaining special-fullblock statuses are unchanged and honest: `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` remain slab-supported `CONTACT_GAP`; `minecraft:barrel` remains `TRIAD_MISMATCH` on slab-supported rows. They were not fixed in this slice.
+- Common-object matrix still passes for this worktree and keeps its pre-existing door/sign classifications: `greenAlreadyInherits=21 contactGap=4 multipartRisk=1 rendererSpecialCase=1`.
+- Validation passed: `compileJava compileGametestJava`, focused chest proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-chest-contact-fix-baf09f0`. See `docs/beta35-chest-contact-fix.md`.
+- Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.

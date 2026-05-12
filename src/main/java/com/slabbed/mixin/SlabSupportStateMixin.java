@@ -103,6 +103,10 @@ public abstract class SlabSupportStateMixin {
                 && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
     }
 
+    private static boolean slabbed$isLoweredBeta35ChestContactObject(BlockState state, double yOff) {
+        return yOff < 0.0 && state != null && state.isOf(Blocks.CHEST);
+    }
+
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
             BlockView world,
             BlockPos pos,
@@ -210,6 +214,9 @@ public abstract class SlabSupportStateMixin {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (slabbed$isLoweredBeta35OakTrapdoorContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
+                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                return;
+            } else if (slabbed$isLoweredBeta35ChestContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (self.isOf(Blocks.OAK_FENCE) && (shape == null || shape.isEmpty())) {

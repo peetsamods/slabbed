@@ -311,6 +311,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35ChestContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35ChestContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35TrapdoorDoorAudit")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10794,7 +10803,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "special_renderer",
                         Items.CHEST,
                         Blocks.CHEST.getDefaultState(),
-                        "SPECIAL_RENDERER_RISK",
+                        "GREEN_ALREADY_INHERITS",
                         false,
                         true,
                         true),
@@ -10851,7 +10860,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " controls=minecraft:crafting_table,minecraft:furnace"
                 + " optionalRows=minecraft:stonecutter,minecraft:grindstone,minecraft:anvil"
                 + " releaseAudit=NOT_RUN"
-                + " productionBehaviorChanged=bookshelf_contact_dy_only");
+                + " productionBehaviorChanged=bookshelf_and_chest_contact_dy_only");
 
         int green = 0;
         int placementFailure = 0;
@@ -10896,11 +10905,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " specialRendererRisk=" + specialRendererRisk
                 + " needsCategorySlice=" + needsCategorySlice
                 + " outOfScopeForBeta35=" + outOfScope
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest"
                 + " doorSlice=PARALLEL_NOT_INSPECTED"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED"
-                + " productionBehaviorChanged=bookshelf_contact_dy_only");
+                + " productionBehaviorChanged=bookshelf_and_chest_contact_dy_only");
     }
 
     private static Beta35CommonObjectAuditResult runBeta35SpecialFullblockAuditRow(
@@ -10975,6 +10984,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             BlockState supportState = mc.world.getBlockState(supportCandidatePos);
             BlockState objectState = mc.world.getBlockState(actualObjectPos);
             boolean blockAppeared = objectState.isOf(objectCase.expectedState().getBlock());
+            boolean blockEntityPresent = blockAppeared && mc.world.getBlockEntity(actualObjectPos) != null;
             double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
             double objectDy = blockAppeared ? SlabSupport.getYOffset(mc.world, actualObjectPos, objectState)
                     : Double.NaN;
@@ -11033,6 +11043,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " supportCase=" + supportCase
                     + " placementResult=" + placementResult[0]
                     + " blockAppearedAfterAttempt=" + blockAppeared
+                    + " blockEntityPresent=" + blockEntityPresent
                     + " actualObjectPos=" + actualObjectPos.toShortString()
                     + " finalBlockState=" + objectState
                     + " supportCandidateState=" + supportState
@@ -11062,6 +11073,89 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 objectCase.family(),
                 supportCase.toString(),
                 classification[0]);
+    }
+
+    /**
+     * Focused chest proof for the Beta 3.5 block-entity fullblock contact slice.
+     *
+     * Gate: -Dslabbed.beta35ChestContact=true
+     */
+    private static void runBeta35ChestContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase chest = new Beta35CommonObjectCase(
+                "minecraft:chest",
+                "block_entity_fullblock",
+                Items.CHEST,
+                Blocks.CHEST.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35SpecialFullblockAuditRow(
+                    ctx,
+                    singleplayer,
+                    chest,
+                    supportCase,
+                    0);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "CHEST_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "CHEST_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "CHEST_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "CHEST_TRIAD_MISMATCH";
+                    default -> "CHEST_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_CHEST_CONTACT_GREEN"
+                        + " objectId=minecraft:chest"
+                        + " family=block_entity_fullblock"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " blockEntityRenderDy=SlabSupport_BlockEntityOffsetMixin"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_CHEST_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:chest"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " crafting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " furnace=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " bookshelf=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " enchanting_table=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " lectern=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " barrel=UNCHANGED_SEPARATE_TRIAD_RISK"
+                + " stonecutter=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " grindstone=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " anvil=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " doorTrapdoorSignLanternChainEndRodRedstoneRail=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_CHEST_CONTACT_RED"
+                    + " objectId=minecraft:chest"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_CHEST_CONTACT_RED]"
+                    + " reason=chest_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
     }
 
     /**
