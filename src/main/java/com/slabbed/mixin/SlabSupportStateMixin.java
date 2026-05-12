@@ -108,7 +108,8 @@ public abstract class SlabSupportStateMixin {
                 && (state.isOf(Blocks.CHEST)
                         || state.isOf(Blocks.BARREL)
                         || state.isOf(Blocks.ENCHANTING_TABLE)
-                        || state.isOf(Blocks.STONECUTTER));
+                        || state.isOf(Blocks.STONECUTTER)
+                        || state.isOf(Blocks.ANVIL));
     }
 
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
