@@ -622,3 +622,15 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused enchanting-table proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-enchanting-table-contact-fix-e46cd26`. See `docs/beta35-enchanting-table-contact-fix.md`.
 - Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.
+
+## Beta 3.5 stonecutter contact fix (2026-05-12)
+
+- Operating base for this implementation slice: `99b03ed` / `save/beta35-enchanting-table-contact` in `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on `work/beta35-special-fullblock-compat`. Canonical checkout was not modified.
+- Previous `minecraft:stonecutter` failure layer: `CONTACT_GAP`; placement and survival were already GREEN, but slab-supported rows had `contactGap=0.500000` on plain bottom support and `contactGap=1.000000` on lowered bottom support. The exact mechanism was too-shallow dy plus empty native raycast.
+- New `minecraft:stonecutter` failure layer: `NONE`. The fix is exact `Blocks.STONECUTTER` contact/dy in `SlabSupport` plus a stonecutter-only lowered raycast fallback in `SlabSupportStateMixin`. No broad special-fullblock, stone-like utility block, or global sturdy-face/solidity change was added.
+- Focused proof `-Dslabbed.beta35StonecutterContact=true` passes with `JULIA_BETA35_STONECUTTER_CONTACT_SUMMARY failureLayer=NONE`; slab-supported rows report `placementResult=Success`, `survivalResult=SURVIVAL_GREEN`, `contactGap=0.000000`, `triadCoLocated=yes`, and co-located model/outline/raycast/collision bounds.
+- Updated special-fullblock matrix: `minecraft:stonecutter`, `minecraft:enchanting_table`, `minecraft:barrel`, `minecraft:chest`, `minecraft:bookshelf`, `minecraft:crafting_table`, and `minecraft:furnace` are GREEN representatives. Matrix summary now reports `rows=30 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=6 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=2 outOfScopeForBeta35=0`.
+- Remaining special-fullblock statuses are unchanged and honest: `minecraft:lectern` remains an interactive block-entity contact slice; `minecraft:grindstone` and `minecraft:anvil` remain special-shape category slices. They were not fixed in this slice.
+- Validation passed: `compileJava compileGametestJava`, focused stonecutter proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-stonecutter-contact-fix-99b03ed`. See `docs/beta35-stonecutter-contact-fix.md`.
+- Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.
