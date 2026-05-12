@@ -556,4 +556,13 @@ If the slice changes, update the source pack and spine together so the current o
 - Updated common-object matrix: `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, and `minecraft:oak_trapdoor` are GREEN. `minecraft:oak_door` remains `CONTACT_GAP` plus `MULTIPART_RISK`; standing `minecraft:oak_sign` remains `CONTACT_GAP` plus `RENDERER_SPECIAL_CASE`; `lantern`, `chain`, `redstone_wire`, and `rail` remain not covered.
 - Validation passed: `compileJava compileGametestJava`, focused oak-trapdoor proof, focused trapdoor/door audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-oak-trapdoor-contact-fix-2300229`. See `docs/beta35-oak-trapdoor-contact-fix.md`.
+
+## Beta 3.5 oak door multipart contact fix (2026-05-12)
+
+- Operating base for this implementation slice: `d6c10d8` / `save/beta35-oak-trapdoor-contact` on `integrate/phase19-into-side-slab-top-support`.
+- Narrow production fix: `SlabSupport.getYOffsetInner(...)` now has a `minecraft:oak_door`-only multipart contact dy path for lower and upper door halves over valid lowered bottom slab support truth, and `SlabSupportStateMixin` gives lowered oak-door halves an outline-backed raycast basis when vanilla raycast is empty. This is not signs, lanterns, chains, redstone, rails, all doors, all multipart blocks, all objects, or global sturdy-face/solidity.
+- `minecraft:oak_door` is now GREEN for the audited oak-door multipart representative on valid slab-supported rows: bottom and top halves appear, `bottomDy` and `topDy` remain coherent, `bottomContactGap=0.000000`, `topAlignment=GREEN`, model/outline/raycast/collision are co-located, survival is GREEN, and `openCloseResult=Success->Success`.
+- Updated common-object matrix: `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, `minecraft:oak_trapdoor`, and `minecraft:oak_door` are GREEN. Standing `minecraft:oak_sign` remains `CONTACT_GAP` plus `RENDERER_SPECIAL_CASE`; `lantern`, `chain`, `redstone_wire`, and `rail` remain not covered.
+- Release remains paused pending Julia decision on whether standing signs, hanging objects, rails, redstone, or any broader category are required before Beta 3.5. No release audit run. No release tag moved.
+- Evidence folder: `tmp/beta35-oak-door-multipart-contact-fix-d6c10d8`. See `docs/beta35-oak-door-multipart-contact-fix.md`.
 - Release remains paused pending Julia decision on whether door is required before release. No release audit run. No release tag moved. Oak door, signs, lanterns, chains, redstone, and rails were not touched.

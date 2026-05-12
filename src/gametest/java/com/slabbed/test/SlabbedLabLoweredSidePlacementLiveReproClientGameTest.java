@@ -311,6 +311,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35OakDoorContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35OakDoorContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CraftingTableContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10647,7 +10656,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "multipart_block",
                         Items.OAK_DOOR,
                         Blocks.OAK_DOOR.getDefaultState(),
-                        "MULTIPART_RISK",
+                        "GREEN_ALREADY_INHERITS",
                         true,
                         true,
                         false),
@@ -10767,14 +10776,14 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " trapdoorFailureLayer=" + trapdoorFailureLayer
                 + " doorClassification=" + doorClassification
                 + " doorFailureLayer=" + doorFailureLayer
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,oak_door"
                 + " trapdoorRecommendation="
                 + ("CONTACT_GAP".equals(trapdoorClassification)
                         ? "NEXT_SLICE_CATEGORY_SPECIFIC_CONTACT_AND_OPEN_CLOSE_FIX"
                         : "CLASSIFY_BEFORE_FIX")
                 + " doorRecommendation="
                 + ("GREEN_ALREADY_INHERITS".equals(doorClassification)
-                        ? "CHECK_COMMON_OBJECT_MATRIX"
+                        ? "GREEN_MULTIPART_CONTACT_REPRESENTATIVE"
                         : "DEFER_MULTIPART_CATEGORY_SLICE")
                 + " signs=NOT_TOUCHED"
                 + " lanterns=NOT_TOUCHED"
@@ -11017,6 +11026,44 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
 
+        final String[] openCloseResult = {"NOT_TESTED"};
+        syncHeldMainHand(ctx, singleplayer, ItemStack.EMPTY);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                openCloseResult[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            if (!mc.world.getBlockState(bottomPos).isOf(Blocks.OAK_DOOR)) {
+                openCloseResult[0] = "BLOCK_NOT_PRESENT";
+                return;
+            }
+            BlockHitResult doorHit = new BlockHitResult(
+                    new Vec3d(bottomPos.getX() + 0.5d, bottomPos.getY() + 0.5d, bottomPos.getZ() + 0.0625d),
+                    Direction.NORTH,
+                    bottomPos,
+                    false);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, doorHit);
+            openCloseResult[0] = result.toString();
+        });
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                return;
+            }
+            if (!mc.world.getBlockState(bottomPos).isOf(Blocks.OAK_DOOR)) {
+                return;
+            }
+            BlockHitResult doorHit = new BlockHitResult(
+                    new Vec3d(bottomPos.getX() + 0.5d, bottomPos.getY() + 0.5d, bottomPos.getZ() + 0.0625d),
+                    Direction.NORTH,
+                    bottomPos,
+                    false);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, doorHit);
+            openCloseResult[0] = openCloseResult[0] + "->" + result;
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
         final String[] classification = {"OUT_OF_SCOPE_FOR_BETA35"};
         ctx.runOnClient(mc -> {
             if (mc.world == null || mc.player == null) {
@@ -11049,23 +11096,46 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             net.minecraft.block.ShapeContext.of(mc.player))
                     : null;
             VoxelShape topRaycastShape = topAppeared ? topState.getRaycastShape(mc.world, topPos) : null;
+            VoxelShape bottomCollisionShape = bottomAppeared
+                    ? bottomState.getCollisionShape(mc.world, bottomPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            VoxelShape topCollisionShape = topAppeared
+                    ? topState.getCollisionShape(mc.world, topPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
             net.minecraft.util.math.Box bottomOutlineBox = beta35WorldBox(bottomOutlineShape, bottomPos);
             net.minecraft.util.math.Box bottomRaycastBox = beta35WorldBox(bottomRaycastShape, bottomPos);
             net.minecraft.util.math.Box topOutlineBox = beta35WorldBox(topOutlineShape, topPos);
             net.minecraft.util.math.Box topRaycastBox = beta35WorldBox(topRaycastShape, topPos);
+            net.minecraft.util.math.Box bottomCollisionBox = beta35WorldBox(bottomCollisionShape, bottomPos);
+            net.minecraft.util.math.Box topCollisionBox = beta35WorldBox(topCollisionShape, topPos);
             double bottomModelBottomY = bottomOutlineBox == null ? Double.NaN : bottomOutlineBox.minY;
             double bottomContactGap = Double.isFinite(bottomModelBottomY) && Double.isFinite(supportVisibleTopY)
                     ? bottomModelBottomY - supportVisibleTopY
                     : Double.NaN;
+            double topContactGap = bottomOutlineBox != null && topOutlineBox != null
+                    ? topOutlineBox.minY - bottomOutlineBox.maxY
+                    : Double.NaN;
             boolean bottomSurvivalGreen = bottomAppeared && bottomState.canPlaceAt(mc.world, bottomPos);
             boolean topSurvivalGreen = topAppeared && topState.canPlaceAt(mc.world, topPos);
             boolean contactGreen = Double.isFinite(bottomContactGap) && Math.abs(bottomContactGap) <= EPSILON;
+            boolean bottomTriadGreen = bottomAppeared
+                    && beta35SameBox(bottomOutlineBox, bottomRaycastBox);
+            boolean topTriadGreen = topAppeared
+                    && beta35SameBox(topOutlineBox, topRaycastBox);
+            boolean collisionGreen = bottomAppeared && topAppeared
+                    && beta35SameBox(bottomOutlineBox, bottomCollisionBox)
+                    && beta35SameBox(topOutlineBox, topCollisionBox);
+            boolean openCloseGreen = bottomAppeared && !"CLIENT_NOT_READY".equals(openCloseResult[0])
+                    && !"BLOCK_NOT_PRESENT".equals(openCloseResult[0]);
             boolean topAlignmentGreen = bottomAppeared && topAppeared
                     && Double.isFinite(bottomDy)
                     && Double.isFinite(topDy)
                     && Math.abs(bottomDy - topDy) <= EPSILON
-                    && beta35SameBox(topOutlineBox, topRaycastBox);
-            boolean bottomTriadGreen = bottomAppeared && beta35SameBox(bottomOutlineBox, bottomRaycastBox);
+                    && Double.isFinite(topContactGap)
+                    && Math.abs(topContactGap) <= EPSILON
+                    && topTriadGreen;
 
             if (!bottomAppeared || !topAppeared) {
                 classification[0] = "PLACEMENT_FAILURE";
@@ -11075,6 +11145,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 classification[0] = "CONTACT_GAP";
             } else if (!bottomTriadGreen || !topAlignmentGreen) {
                 classification[0] = "TRIAD_MISMATCH";
+            } else if (!collisionGreen) {
+                classification[0] = "COLLISION_SHAPE_RISK";
+            } else if (!openCloseGreen) {
+                classification[0] = "OPEN_CLOSE_RISK";
             } else {
                 classification[0] = "GREEN_ALREADY_INHERITS";
             }
@@ -11097,13 +11171,30 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " bottomContactGap=" + (Double.isFinite(bottomContactGap)
                             ? String.format("%.6f", bottomContactGap) : "CONTACT_NOT_APPLICABLE")
                     + " topAlignment=" + (topAppeared ? (topAlignmentGreen ? "GREEN" : "RED") : "NOT_MEASURED")
+                    + " topContactGap=" + (Double.isFinite(topContactGap)
+                            ? String.format("%.6f", topContactGap) : "CONTACT_NOT_APPLICABLE")
+                    + " modelBounds=bottom:" + beta35FormatBox(bottomOutlineBox)
+                            + "|top:" + beta35FormatBox(topOutlineBox)
+                    + " outlineBounds=bottom:" + beta35FormatBox(bottomOutlineBox)
+                            + "|top:" + beta35FormatBox(topOutlineBox)
+                    + " raycastBounds=bottom:" + beta35FormatBox(bottomRaycastBox)
+                            + "|top:" + beta35FormatBox(topRaycastBox)
+                    + " collisionBounds=bottom:" + beta35FormatBox(bottomCollisionBox)
+                            + "|top:" + beta35FormatBox(topCollisionBox)
                     + " bottomModelBounds=" + beta35FormatBox(bottomOutlineBox)
                     + " bottomOutlineBounds=" + beta35FormatBox(bottomOutlineBox)
                     + " bottomRaycastBounds=" + beta35FormatBox(bottomRaycastBox)
+                    + " bottomCollisionBounds=" + beta35FormatBox(bottomCollisionBox)
                     + " topOutlineBounds=" + beta35FormatBox(topOutlineBox)
                     + " topRaycastBounds=" + beta35FormatBox(topRaycastBox)
+                    + " topCollisionBounds=" + beta35FormatBox(topCollisionBox)
+                    + " triadCoLocated=" + (bottomAppeared && topAppeared
+                            ? (bottomTriadGreen && topTriadGreen ? "yes" : "no") : "NOT_MEASURED")
+                    + " collisionCoLocated=" + (bottomAppeared && topAppeared
+                            ? (collisionGreen ? "yes" : "no") : "NOT_MEASURED")
                     + " survivalResult=" + (bottomSurvivalGreen && topSurvivalGreen
                             ? "SURVIVAL_GREEN" : "SURVIVAL_RED")
+                    + " openCloseResult=" + openCloseResult[0]
                     + " unsupportedResult=NOT_TESTED_MULTIPART"
                     + " bottomHalf=" + beta35PropertyValue(bottomState, Properties.DOUBLE_BLOCK_HALF)
                     + " topHalf=" + beta35PropertyValue(topState, Properties.DOUBLE_BLOCK_HALF)
@@ -11167,6 +11258,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             case "SURVIVAL_FAILURE" -> "DOOR_MULTIPART_SURVIVAL_FAILURE";
             case "CONTACT_GAP" -> "DOOR_MULTIPART_CONTACT_GAP";
             case "TRIAD_MISMATCH" -> "DOOR_MULTIPART_TRIAD_MISMATCH";
+            case "COLLISION_SHAPE_RISK" -> "DOOR_MULTIPART_COLLISION_SHAPE_RISK";
+            case "OPEN_CLOSE_RISK" -> "DOOR_MULTIPART_OPEN_CLOSE_RISK";
             default -> "DOOR_MULTIPART_RISK";
         };
     }
@@ -11239,6 +11332,70 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         if (!allGreen) {
             throw new RuntimeException("[JULIA_BETA35_OAK_TRAPDOOR_CONTACT_RED]"
                     + " reason=oak_trapdoor_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
+    }
+
+    /**
+     * Focused oak-door-only proof for the Beta 3.5 multipart contact slice.
+     *
+     * Gate: -Dslabbed.beta35OakDoorContact=true
+     */
+    private static void runBeta35OakDoorContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35TrapdoorDoorAuditRow result = runBeta35DoorAuditRow(ctx, singleplayer, supportCase,
+                    supportCase.ordinal());
+            if (supportCase == Beta35CommonObjectSupportCase.VANILLA_FULL_BLOCK) {
+                continue;
+            }
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = beta35DoorFailureLayer(result.classification());
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_OAK_DOOR_CONTACT_GREEN"
+                        + " objectId=minecraft:oak_door"
+                        + " family=multipart_door"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " bottomTopHalves=GREEN"
+                        + " bottomTopDy=GREEN"
+                        + " triad=GREEN"
+                        + " collision=GREEN"
+                        + " openClose=GREEN"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_OAK_DOOR_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:oak_door"
+                + " family=multipart_door"
+                + " supportRows=2"
+                + " expectedSupportRowsGreen=" + allGreen
+                + " vanillaFullBlockControl=NOT_RELEASE_CRITERION_FOR_SLAB_CONTACT"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,oak_door"
+                + " oak_trapdoor=GREEN_UNCHANGED"
+                + " signs=NOT_TOUCHED"
+                + " lanterns=NOT_TOUCHED"
+                + " chains=NOT_TOUCHED"
+                + " redstone=NOT_TOUCHED"
+                + " rails=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            throw new RuntimeException("[JULIA_BETA35_OAK_DOOR_CONTACT_RED]"
+                    + " reason=oak_door_contact_not_green"
                     + " failureLayer=" + failureLayer);
         }
     }

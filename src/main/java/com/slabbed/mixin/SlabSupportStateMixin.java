@@ -12,6 +12,7 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TorchBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.block.enums.BlockHalf;
+import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -101,6 +102,15 @@ public abstract class SlabSupportStateMixin {
                 && state.isOf(Blocks.OAK_TRAPDOOR)
                 && state.contains(Properties.BLOCK_HALF)
                 && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
+    }
+
+    private static boolean slabbed$isLoweredBeta35OakDoorContactObject(BlockState state, double yOff) {
+        return yOff < 0.0
+                && state != null
+                && state.isOf(Blocks.OAK_DOOR)
+                && state.contains(Properties.DOUBLE_BLOCK_HALF)
+                && (state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
+                        || state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER);
     }
 
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
@@ -210,6 +220,9 @@ public abstract class SlabSupportStateMixin {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (slabbed$isLoweredBeta35OakTrapdoorContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
+                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                return;
+            } else if (slabbed$isLoweredBeta35OakDoorContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (self.isOf(Blocks.OAK_FENCE) && (shape == null || shape.isEmpty())) {
