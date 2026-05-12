@@ -42,7 +42,7 @@ From `src/client/java/com/slabbed/client/model/OffsetBlockStateModel.java`:
 
 | Block tested live | Current support status at a891ba6 | Live evidence | Likely failure layer | Next action |
 |---|---|---|---|---|
-| `minecraft:birch_fence` | **FIXED.** Added to `isBeta35FenceWallVariantContactObject` in `save/beta35-birch-fence-variant-fix`. Render dy now passes through; shape triad co-located. | `inFenceWallAllowlist=yes`, `renderDyApplied=yes`, `shapeContactGap=0.000000`, `objectDy=-1.500000`. | `NONE` (gap resolved) | See `docs/beta35-birch-fence-variant-fix.md`. |
+| `minecraft:birch_fence` | **FIXED (family-promoted).** Exact allowlist at `save/beta35-birch-fence-variant-fix` promoted to full `FenceBlock`/`WallBlock` family in `save/beta35-fence-wall-family-fix`. All 11 FenceBlock + 9 WallBlock variants GREEN_FAMILY. | `inFenceWallFamily=yes`, `renderDyApplied=yes`, `shapeContactGap=0.000000`, `objectDy=-1.500000`. | `NONE` (gap resolved) | See `docs/beta35-fence-wall-family-fix.md`. |
 | `minecraft:birch_trapdoor` | Not in `isBeta35OakTrapdoorContactObject`; only `OAK_TRAPDOOR` with `BLOCK_HALF=BOTTOM` is covered. | 242 retarget-true / 177 retarget-false rows; `warning=BOTTOM_SLAB_UNEXPECTED_DY`. | `TRAPDOOR_VARIANT_GAP`, `PROOF_HARNESS_UNDER_SCOPE` | Add a RED proof for `birch_trapdoor` (and other wood trapdoors) mirroring the oak trapdoor contact-dy slice. Do not yet bundle iron/copper trapdoors. |
 | `minecraft:spruce_door` | Not in `isBeta35OakDoorContactObject`; only `OAK_DOOR` multipart is covered. | 93 retarget-true / 287 retarget-false rows; `warning=BOTTOM_SLAB_UNEXPECTED_DY`. | `DOOR_MULTIPART_VARIANT_GAP`, `PROOF_HARNESS_UNDER_SCOPE` | Add a RED proof for `spruce_door` mirroring the existing oak-door multipart contact slice (UPPER/LOWER halves on lowered bottom slab). |
 | `minecraft:birch_sign` | Not in `isBeta35StandingOakSignContactObject`; only `OAK_SIGN` is covered. Wall signs and hanging signs are explicitly `NOT_COVERED` repo-wide. | 23 retarget-true / 31 retarget-false rows; `warning=BOTTOM_SLAB_UNEXPECTED_DY`. | `SIGN_RENDERER_GAP`, `VARIANT_FAMILY_COVERAGE_GAP`, `PROOF_HARNESS_UNDER_SCOPE` | Add a RED proof for standing `birch_sign` on lowered bottom slab mirroring the oak standing-sign contact slice. Do not yet add wall/hanging signs. |
@@ -69,7 +69,7 @@ The new live false-green has three reinforcing causes:
 
 Smallest next-step RED proofs that capture Julia's actual complaint, in priority order. Each slice should add a single narrow named-block RED before any allowlist expansion.
 
-1. `birch_fence` lowered bottom-slab contact + render-quad RED — **DONE and FIXED** (RED: `save/beta35-birch-fence-variant-red`; fix: `save/beta35-birch-fence-variant-fix`; `JULIA_BETA35_BIRCH_FENCE_VARIANT_SUMMARY outcome=GREEN failureLayer=NONE`). See `docs/beta35-birch-fence-variant-fix.md`.
+1. `birch_fence` and full fence/wall family — **DONE and FIXED** (RED: `save/beta35-birch-fence-variant-red`; exact fix: `save/beta35-birch-fence-variant-fix`; family fix: `save/beta35-fence-wall-family-fix`; `JULIA_BETA35_FENCE_WALL_FAMILY_SUMMARY outcome=GREEN failureLayer=NONE`). See `docs/beta35-fence-wall-family-fix.md`.
 2. `birch_trapdoor` (bottom half) contact RED — mirrors the existing oak-trapdoor slice.
 3. `spruce_door` multipart contact RED — mirrors the existing oak-door multipart slice.
 4. `birch_sign` standing contact RED — mirrors the existing oak-sign slice.

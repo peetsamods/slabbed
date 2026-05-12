@@ -88,7 +88,7 @@ Previous result: `VARIANT_FAMILY_COVERAGE_GAP`, `inFenceWallAllowlist=no`, `rend
 
 ## Current fence/wall green set
 
-All five variants proven across shape-triad and render-quad dy:
+All five variants proven across shape-triad and render-quad dy at this savepoint:
 
 - `minecraft:oak_fence` — `GREEN_ALLOWLISTED`
 - `minecraft:birch_fence` — `GREEN_ALLOWLISTED` (new)
@@ -96,7 +96,9 @@ All five variants proven across shape-triad and render-quad dy:
 - `minecraft:nether_brick_fence` — `GREEN_RENDER_DY_APPLIED`
 - `minecraft:cobblestone_wall` — `GREEN_RENDER_DY_APPLIED`
 
-`minecraft:glass_pane` and pane behavior remain `NOT_COVERED`. Other wood fences (`jungle_fence`, `acacia_fence`, `dark_oak_fence`, `mangrove_fence`, `cherry_fence`, `bamboo_fence`, `crimson_fence`, `warped_fence`) are not yet covered.
+`minecraft:glass_pane` and pane behavior remain `NOT_COVERED`. Other wood fences (`jungle_fence`, `acacia_fence`, `dark_oak_fence`, `mangrove_fence`, `cherry_fence`, `bamboo_fence`, `crimson_fence`, `warped_fence`) were not yet covered at this savepoint.
+
+**Superseded**: The exact-block allowlist at this savepoint was promoted to the full `FenceBlock`/`WallBlock` family in `save/beta35-fence-wall-family-fix`. See `docs/beta35-fence-wall-family-fix.md`.
 
 ## Validation
 

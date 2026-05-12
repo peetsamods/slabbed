@@ -129,3 +129,7 @@ All four variants are now proven across both shape-triad and render-quad dy prob
 ## Birch fence RED confirmation and fix (2026-05-12)
 
 The allowlist at `isBeta35FenceWallVariantContactObject` was confirmed too narrow for wood fence families by the focused birch_fence RED proof at `4f09773` / `save/beta35-birch-fence-variant-red`. `minecraft:birch_fence` was then added to the allowlist in the follow-up production fix at `save/beta35-birch-fence-variant-fix` — `JULIA_BETA35_BIRCH_FENCE_VARIANT_SUMMARY outcome=GREEN failureLayer=NONE`. See `docs/beta35-birch-fence-variant-fix.md`.
+
+## Fence/wall family promotion (2026-05-12)
+
+The exact-block allowlist was subsequently promoted to the full `FenceBlock`/`WallBlock` family rule in `save/beta35-fence-wall-family-fix`. `isBeta35FenceWallVariantContactObject` now returns true for all `FenceBlock` and `WallBlock` instances; `PaneBlock` remains `NOT_COVERED`. Proof: `JULIA_BETA35_FENCE_WALL_FAMILY_SUMMARY outcome=GREEN rows=21 greenFamily=20 notCovered=1 failureLayer=NONE`. See `docs/beta35-fence-wall-family-fix.md`.

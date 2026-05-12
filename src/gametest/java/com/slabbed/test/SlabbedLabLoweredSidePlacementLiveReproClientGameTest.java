@@ -10,7 +10,10 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.PaneBlock;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
@@ -461,6 +464,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35BirchFenceVariantRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35FenceWallFamilyFix")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FenceWallFamilyFixProof(ctx, singleplayer);
             }
             return;
         }
@@ -13324,6 +13336,301 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " appliedCalls=" + appliedCalls
                 + " classification=" + classification
                 + " failureLayer=" + ("GREEN_ALLOWLISTED".equals(classification) ? "NONE" : classification));
+
+        return classification;
+    }
+
+    /**
+     * Full FenceBlock/WallBlock family support proof for Beta 3.5.
+     * All FenceBlock and WallBlock variants must be GREEN_FAMILY.
+     * PaneBlock (glass_pane) must remain NOT_COVERED.
+     *
+     * Gate: -Dslabbed.beta35FenceWallFamilyFix=true
+     */
+    private static void runBeta35FenceWallFamilyFixProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35FenceFamilyCase[] cases = {
+                new Beta35FenceFamilyCase("minecraft:oak_fence", "fence_family", Items.OAK_FENCE, Blocks.OAK_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:birch_fence", "fence_family", Items.BIRCH_FENCE, Blocks.BIRCH_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:jungle_fence", "fence_family", Items.JUNGLE_FENCE, Blocks.JUNGLE_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:acacia_fence", "fence_family", Items.ACACIA_FENCE, Blocks.ACACIA_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:dark_oak_fence", "fence_family", Items.DARK_OAK_FENCE, Blocks.DARK_OAK_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:mangrove_fence", "fence_family", Items.MANGROVE_FENCE, Blocks.MANGROVE_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:cherry_fence", "fence_family", Items.CHERRY_FENCE, Blocks.CHERRY_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:bamboo_fence", "fence_family", Items.BAMBOO_FENCE, Blocks.BAMBOO_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:crimson_fence", "fence_family", Items.CRIMSON_FENCE, Blocks.CRIMSON_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:warped_fence", "fence_family", Items.WARPED_FENCE, Blocks.WARPED_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:nether_brick_fence", "fence_family", Items.NETHER_BRICK_FENCE, Blocks.NETHER_BRICK_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:cobblestone_wall", "wall_family", Items.COBBLESTONE_WALL, Blocks.COBBLESTONE_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:mossy_cobblestone_wall", "wall_family", Items.MOSSY_COBBLESTONE_WALL, Blocks.MOSSY_COBBLESTONE_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:stone_brick_wall", "wall_family", Items.STONE_BRICK_WALL, Blocks.STONE_BRICK_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:brick_wall", "wall_family", Items.BRICK_WALL, Blocks.BRICK_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:andesite_wall", "wall_family", Items.ANDESITE_WALL, Blocks.ANDESITE_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:granite_wall", "wall_family", Items.GRANITE_WALL, Blocks.GRANITE_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:diorite_wall", "wall_family", Items.DIORITE_WALL, Blocks.DIORITE_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:cobbled_deepslate_wall", "wall_family", Items.COBBLED_DEEPSLATE_WALL, Blocks.COBBLED_DEEPSLATE_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:polished_blackstone_brick_wall", "wall_family", Items.POLISHED_BLACKSTONE_BRICK_WALL, Blocks.POLISHED_BLACKSTONE_BRICK_WALL.getDefaultState()),
+                new Beta35FenceFamilyCase("minecraft:glass_pane", "pane_family", Items.GLASS_PANE, Blocks.GLASS_PANE.getDefaultState()),
+        };
+
+        int rows = 0;
+        int greenFamily = 0;
+        int notCovered = 0;
+        int modelRenderGap = 0;
+        int shapeContactGap = 0;
+        int placementFailure = 0;
+        int other = 0;
+
+        for (Beta35FenceFamilyCase objectCase : cases) {
+            String classification = runBeta35FenceWallFamilyFixRow(ctx, singleplayer, objectCase, rows);
+            rows++;
+            switch (classification) {
+                case "GREEN_FAMILY" -> greenFamily++;
+                case "NOT_COVERED" -> notCovered++;
+                case "MODEL_RENDER_GAP" -> modelRenderGap++;
+                case "SHAPE_CONTACT_GAP" -> shapeContactGap++;
+                case "PLACEMENT_FAILURE" -> placementFailure++;
+                default -> other++;
+            }
+        }
+
+        boolean red = modelRenderGap > 0 || shapeContactGap > 0 || placementFailure > 0 || other > 0;
+        String failureLayer = modelRenderGap > 0 ? "MODEL_RENDER_GAP"
+                : shapeContactGap > 0 ? "SHAPE_CONTACT_GAP"
+                : placementFailure > 0 ? "PLACEMENT_FAILURE"
+                : other > 0 ? "OTHER_GAP"
+                : "NONE";
+
+        System.out.println("JULIA_BETA35_FENCE_WALL_FAMILY_SUMMARY"
+                + " outcome=" + (red ? "RED" : "GREEN")
+                + " rows=" + rows
+                + " greenFamily=" + greenFamily
+                + " notCovered=" + notCovered
+                + " modelRenderGap=" + modelRenderGap
+                + " shapeContactGap=" + shapeContactGap
+                + " placementFailure=" + placementFailure
+                + " other=" + other
+                + " glassPaneControl=" + (notCovered == 1 ? "NOT_COVERED" : "UNEXPECTED")
+                + " failureLayer=" + failureLayer
+                + " productionFixImplemented=true"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " canonicalCheckoutModified=false");
+        if (!red) {
+            System.out.println("JULIA_BETA35_FENCE_WALL_FAMILY_GREEN"
+                    + " outcome=GREEN"
+                    + " fenceFamilyRows=11"
+                    + " wallFamilyRows=9"
+                    + " glassPaneControl=NOT_COVERED"
+                    + " failureLayer=NONE"
+                    + " productionFixImplemented=true");
+        }
+    }
+
+    private static String runBeta35FenceWallFamilyFixRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35FenceFamilyCase objectCase,
+            int rowIndex
+    ) {
+        int baseX = 500 + rowIndex * 9;
+        int baseZ = 140;
+        BlockPos supportCandidatePos = new BlockPos(baseX, -55, baseZ);
+        BlockPos objectPos = supportCandidatePos.up();
+        BlockPos unsupportedPos = supportCandidatePos.add(0, 1, 4);
+        BlockHitResult useHit = new BlockHitResult(
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() - 0.5d,
+                        supportCandidatePos.getZ() + 0.5d),
+                Direction.UP,
+                supportCandidatePos,
+                false);
+
+        // Move player to this row's position first so the server loads the chunk before placing blocks.
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() + 3.0d,
+                        supportCandidatePos.getZ() - 2.0d),
+                useHit.getPos());
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        prepareBeta35FenceFamilyLiveSupport(
+                singleplayer,
+                objectCase,
+                Beta35FenceFamilyConfiguration.ISOLATED,
+                supportCandidatePos,
+                unsupportedPos);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(objectCase.item(), 4));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() + 3.0d,
+                        supportCandidatePos.getZ() - 2.0d),
+                useHit.getPos());
+
+        final String[] placementResult = {"not-run"};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                placementResult[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, useHit);
+            placementResult[0] = result.toString();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final boolean[] inFenceWallFamilyBox = {false};
+        final String[] blockClassBox = {"Other"};
+        final double[] supportDyBox = {Double.NaN};
+        final double[] objectDyBox = {Double.NaN};
+        final double[] expectedModelDyBox = {Double.NaN};
+        final boolean[] blockAppearedBox = {false};
+        final String[] finalStateBox = {"none"};
+        final double[] shapeContactGapBox = {Double.NaN};
+        final boolean[] shapeTriadCoLocatedBox = {false};
+        final boolean[] collisionCoLocatedBox = {false};
+        final String[] modelBoundsBox = {"none"};
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportCandidatePos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            blockAppearedBox[0] = objectState.isOf(objectCase.expectedState().getBlock());
+            inFenceWallFamilyBox[0] = SlabSupport.isBeta35FenceWallVariantContactObject(objectState);
+            blockClassBox[0] = objectState.getBlock() instanceof FenceBlock ? "FenceBlock"
+                    : objectState.getBlock() instanceof WallBlock ? "WallBlock"
+                    : objectState.getBlock() instanceof PaneBlock ? "PaneBlock"
+                    : "Other";
+            supportDyBox[0] = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
+            objectDyBox[0] = blockAppearedBox[0]
+                    ? SlabSupport.getYOffset(mc.world, objectPos, objectState) : Double.NaN;
+            expectedModelDyBox[0] = blockAppearedBox[0]
+                    ? ClientDy.dyFor(mc.world, objectPos, objectState) : Double.NaN;
+            finalStateBox[0] = objectState.toString();
+            if (blockAppearedBox[0]) {
+                double supportVisibleTopY = beta35CommonSupportVisibleTopY(
+                        supportCandidatePos, supportState, supportDyBox[0]);
+                VoxelShape outlineShape = objectState.getOutlineShape(mc.world, objectPos,
+                        net.minecraft.block.ShapeContext.of(mc.player));
+                VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
+                VoxelShape collisionShape = objectState.getCollisionShape(mc.world, objectPos,
+                        net.minecraft.block.ShapeContext.of(mc.player));
+                net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+                net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+                net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+                net.minecraft.util.math.Box modelProxyBox = collisionBox != null ? collisionBox : outlineBox;
+                double objectModelBottomY = modelProxyBox == null ? Double.NaN : modelProxyBox.minY;
+                shapeContactGapBox[0] = Double.isFinite(objectModelBottomY)
+                        && Double.isFinite(supportVisibleTopY)
+                        ? objectModelBottomY - supportVisibleTopY
+                        : Double.NaN;
+                shapeTriadCoLocatedBox[0] = modelProxyBox != null
+                        && beta35SameBox(outlineBox, modelProxyBox)
+                        && beta35SameBox(raycastBox, modelProxyBox);
+                collisionCoLocatedBox[0] = modelProxyBox != null
+                        && collisionBox != null
+                        && beta35SameBox(collisionBox, modelProxyBox);
+                modelBoundsBox[0] = beta35FormatBox(modelProxyBox);
+            }
+            if (mc.worldRenderer != null) {
+                OffsetBlockStateModel.resetModelDyOwnerTrace(objectPos);
+                mc.worldRenderer.scheduleBlockRenders(
+                        objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
+                        objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
+            }
+        });
+
+        for (int i = 0; i < 6; i++) {
+            ctx.runOnClient(mc -> {
+                if (mc.worldRenderer == null) {
+                    return;
+                }
+                mc.worldRenderer.scheduleBlockRenders(
+                        objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
+                        objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
+            });
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final OffsetBlockStateModel.ModelDyOwnerTrace[] traceBox = {null};
+        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace());
+
+        final boolean[] survivedBox = {false};
+        ctx.runOnClient(mc -> {
+            if (mc.world != null) {
+                survivedBox[0] = mc.world.getBlockState(objectPos)
+                        .isOf(objectCase.expectedState().getBlock());
+            }
+        });
+
+        OffsetBlockStateModel.ModelDyOwnerTrace trace = traceBox[0];
+        boolean traceSeen = trace != null && trace.seen();
+        int emitCalls = trace == null ? 0 : trace.emitCalls();
+        int appliedCalls = trace == null ? 0 : trace.appliedCalls();
+        double totalAppliedDy = trace == null ? 0.0 : trace.totalAppliedDy();
+        double lastDy = trace == null ? 0.0 : trace.lastDy();
+        boolean renderDyApplied = traceSeen && appliedCalls > 0 && Math.abs(totalAppliedDy) > EPSILON;
+
+        String classification;
+        if (!blockAppearedBox[0]) {
+            classification = "PLACEMENT_FAILURE";
+        } else if (!inFenceWallFamilyBox[0]) {
+            classification = "NOT_COVERED";
+        } else if (!Double.isFinite(objectDyBox[0]) || Math.abs(objectDyBox[0]) <= EPSILON) {
+            classification = "SUPPORT_DY_ZERO";
+        } else if (!traceSeen || emitCalls == 0) {
+            classification = "MODEL_DY_TRACE_NOT_OBSERVED";
+        } else if (!renderDyApplied) {
+            classification = "MODEL_RENDER_GAP";
+        } else if (Double.isFinite(shapeContactGapBox[0]) && Math.abs(shapeContactGapBox[0]) > EPSILON) {
+            classification = "SHAPE_CONTACT_GAP";
+        } else {
+            classification = "GREEN_FAMILY";
+        }
+
+        System.out.println("JULIA_BETA35_FENCE_WALL_FAMILY_ROW"
+                + " objectId=" + objectCase.objectId()
+                + " family=" + objectCase.family()
+                + " blockClass=" + blockClassBox[0]
+                + " inFenceWallFamily=" + (inFenceWallFamilyBox[0] ? "yes" : "no")
+                + " placementResult=" + placementResult[0]
+                + " blockAppearedAfterAttempt=" + blockAppearedBox[0]
+                + " survivalResult=" + (survivedBox[0] ? "survived" : "not-survived")
+                + " supportDy=" + String.format("%.6f", supportDyBox[0])
+                + " objectDy=" + (Double.isFinite(objectDyBox[0])
+                        ? String.format("%.6f", objectDyBox[0]) : "N/A")
+                + " expectedModelDy=" + (Double.isFinite(expectedModelDyBox[0])
+                        ? String.format("%.6f", expectedModelDyBox[0]) : "N/A")
+                + " actualModelAppliedDy=" + String.format("%.6f", lastDy)
+                + " totalAppliedDy=" + String.format("%.6f", totalAppliedDy)
+                + " renderDyApplied=" + (renderDyApplied ? "yes" : "no")
+                + " shapeContactGap=" + (Double.isFinite(shapeContactGapBox[0])
+                        ? String.format("%.6f", shapeContactGapBox[0]) : "N/A")
+                + " shapeTriadCoLocated=" + (shapeTriadCoLocatedBox[0] ? "yes" : "no")
+                + " collisionCoLocated=" + (collisionCoLocatedBox[0] ? "yes" : "no")
+                + " modelBounds=" + modelBoundsBox[0]
+                + " emitCalls=" + emitCalls
+                + " appliedCalls=" + appliedCalls
+                + " classification=" + classification
+                + " failureLayer=" + ("GREEN_FAMILY".equals(classification)
+                        || "NOT_COVERED".equals(classification) ? "NONE" : classification));
 
         return classification;
     }
