@@ -131,3 +131,17 @@ Focused proof reports `failureLayer=NONE` for valid slab-supported bottom-half o
 `minecraft:oak_door` remains unchanged and deferred with `DOOR_MULTIPART_CONTACT_GAP`. Signs, lanterns, chains, redstone, and rails remain not covered by this slice. No release audit ran. No release tag moved.
 
 Current green set is now `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, and `minecraft:oak_trapdoor`.
+
+## Special Fullblock Compatibility Audit Follow-up
+
+Follow-up audit at `d6c10d8` / `save/beta35-oak-trapdoor-contact` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
+
+New gated audit: `-Dslabbed.beta35SpecialFullblockCompatibilityAudit=true`; markers `JULIA_BETA35_SPECIAL_FULLBLOCK_MATRIX_START`, `JULIA_BETA35_SPECIAL_FULLBLOCK_ROW`, and `JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY`.
+
+Summary: `rows=30 greenAlreadyInherits=7 placementFailure=0 survivalFailure=0 contactGap=14 triadMismatch=2 blockEntityRisk=2 specialRendererRisk=2 needsCategorySlice=3 outOfScopeForBeta35=0`.
+
+Controls remained GREEN: `minecraft:crafting_table` and `minecraft:furnace`. New ordinary-full-block sibling `minecraft:bookshelf` places and survives but shows slab-supported `CONTACT_GAP` (`0.500000` plain bottom, `1.000000` lowered bottom). Special/block-entity rows need separate category handling: `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:barrel`, and `minecraft:chest`. Optional special-shape rows `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` were audited cheaply and classified as category slices.
+
+No production behavior fix was implemented. No release audit was run. No release tag was moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
+
+Recommended next implementation slice, if Julia authorizes one: `minecraft:bookshelf` ordinary-full-block contact/dy proof and fix only.

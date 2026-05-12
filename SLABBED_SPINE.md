@@ -557,3 +557,16 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused oak-trapdoor proof, focused trapdoor/door audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-oak-trapdoor-contact-fix-2300229`. See `docs/beta35-oak-trapdoor-contact-fix.md`.
 - Release remains paused pending Julia decision on whether door is required before release. No release audit run. No release tag moved. Oak door, signs, lanterns, chains, redstone, and rails were not touched.
+
+## Beta 3.5 special fullblock compatibility audit (2026-05-12)
+
+- Safety worktree for this proof/docs slice: `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on `work/beta35-special-fullblock-compat`, created from `d6c10d8` / `save/beta35-oak-trapdoor-contact`. Canonical checkout was not modified.
+- New gated audit: `-Dslabbed.beta35SpecialFullblockCompatibilityAudit=true`; markers `JULIA_BETA35_SPECIAL_FULLBLOCK_MATRIX_START`, `JULIA_BETA35_SPECIAL_FULLBLOCK_ROW`, and `JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY`.
+- Required representatives audited: `minecraft:bookshelf`, `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:barrel`, `minecraft:chest`, plus controls `minecraft:crafting_table` and `minecraft:furnace`. Optional cheap rows audited: `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil`.
+- Summary: `rows=30 greenAlreadyInherits=7 placementFailure=0 survivalFailure=0 contactGap=14 triadMismatch=2 blockEntityRisk=2 specialRendererRisk=2 needsCategorySlice=3 outOfScopeForBeta35=0`.
+- Controls remain GREEN: `minecraft:crafting_table` and `minecraft:furnace`. Current green set remains `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, and `minecraft:oak_trapdoor`.
+- `minecraft:bookshelf` is the nearest ordinary-full-block sibling and currently places/survives but has slab-supported contact gaps (`0.500000` plain bottom, `1.000000` lowered bottom). Recommended next implementation slice, if Julia authorizes one: bookshelf-only ordinary-full-block contact/dy proof and fix.
+- Block-entity/special-renderer/special-shape rows are category slices: `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:barrel`, `minecraft:chest`, `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil`.
+- Validation passed: `compileJava compileGametestJava`, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-special-fullblock-compat-audit-d6c10d8`. See `docs/beta35-special-fullblock-compatibility-audit.md`.
+- No production behavior fix implemented. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
