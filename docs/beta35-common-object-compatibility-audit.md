@@ -112,6 +112,14 @@ Release remains paused pending Julia decision.
 
 Post-fix status: `minecraft:crafting_table` and `minecraft:furnace` are GREEN ordinary full-block representatives; `minecraft:oak_fence` is GREEN for the oak-fence-only partial-collision representative; `minecraft:oak_trapdoor` is GREEN for the oak-trapdoor-only bottom-half interactive hinge representative; `minecraft:oak_door` and standing `minecraft:oak_sign` remain separate categories. Release remains paused pending Julia decision.
 
+## Special Fullblock Anvil Follow-up
+
+The anvil slice at `9f3bacf` / `save/beta35-special-fullblock-helper-consolidation` did not change this common-object matrix. The matrix remains PASS with unchanged summary: `rows=27 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=4 triadMismatch=0 collisionShapeRisk=0 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=0`.
+
+Special-fullblock status changed only for `minecraft:anvil`: focused anvil proof and the special-fullblock matrix classify it GREEN on valid slab-supported rows. This is not new common-object support, not grindstone support, and not lectern support.
+
+No release audit was run. No release tag was moved. Canonical checkout was not modified. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
+
 ## Trapdoor / Door Category Audit Follow-up
 
 Follow-up audit at `f88afb7` / `save/beta35-oak-fence-contact-integrated` added `-Dslabbed.beta35TrapdoorDoorAudit=true` with no production behavior changes.

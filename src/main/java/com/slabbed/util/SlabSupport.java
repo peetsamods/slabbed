@@ -221,7 +221,8 @@ public final class SlabSupport {
                 || block == Blocks.CHEST
                 || block == Blocks.BARREL
                 || block == Blocks.ENCHANTING_TABLE
-                || block == Blocks.STONECUTTER;
+                || block == Blocks.STONECUTTER
+                || block == Blocks.ANVIL;
     }
 
     private static double beta35SpecialFullblockContactDy(BlockView world, BlockPos pos, BlockState state) {
