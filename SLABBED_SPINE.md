@@ -725,3 +725,15 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed after merge: `compileJava compileGametestJava`, focused fence/wall variant proof, fence-family live proof, common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-fence-wall-variant-integration-merge-f9995b6`.
 - No release audit was run. No release tag was moved. No pane support was implemented.
+
+## Beta 3.5 fence false-green Opus audit (2026-05-12)
+
+- Operating base: HEAD `8545b84` / `save/beta35-fence-wall-variant-coverage-integrated` on `integrate/phase19-into-side-slab-top-support`. Audit/classification slice only; no production gameplay code changed, no release audit run, no release tag moved.
+- Contradiction: focused proof `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_SUMMARY outcome=GREEN ... contactGap=0 failureLayer=NONE`, but Julia's live/headless visual reads fences as "in no way shape or form fixed at all."
+- Failure layer classification: `OBJECT_MODEL_BOTTOM_PROXY_GAP` in the proof harness, masking an underlying `MODEL_RENDER_GAP` in production. The fence/wall variant coverage GREEN claim is rescinded as a release artifact.
+- False-green mechanism: `runBeta35FenceFamilyAuditRow` derives `objectModelBottomY` from `collisionShape` (or `outlineShape`), both forcibly offset by `SlabSupportStateMixin` for the four allowlisted variants. The visible client model bottom is sourced from `OffsetBlockStateModel.emitQuads`, which explicitly sets `dy = 0.0f` for every `FenceBlock | WallBlock | PaneBlock` (`src/client/java/com/slabbed/client/model/OffsetBlockStateModel.java:117-127`). Shape proxy and rendered model are decoupled by design; the proof has no probe that fails when they diverge.
+- Net visible behavior: collision/hitbox/raycast drop ~1.5 blocks for the four allowlisted variants; visible model stays at the original un-shifted Y because the Fabric `emitQuads` exclusion zeros dy for fences/walls/panes.
+- Next RED proof: add a render-quad dy probe to `runBeta35FenceFamilyAuditRow` using existing `OffsetBlockStateModel.resetModelDyOwnerTrace` / `snapshotModelDyOwnerTrace` (or equivalent direct dy-policy assertion) and require `totalAppliedDy != 0` whenever `SlabSupport.getYOffset != 0`. This will go RED on current HEAD for `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`.
+- Recommendation: A then B — proof harness fix first (render-quad dy probe), then a model/render path fix that relaxes the blanket `FenceBlock | WallBlock | PaneBlock` exclusion in `OffsetBlockStateModel.emitQuads` for the allowlisted lowered fence/wall variants. Recommendations C, D, E are not the cheapest path.
+- Release status: remains blocked. Fence/wall variant coverage must be re-proven via the new RED-first probe before re-entering a release slice. `minecraft:glass_pane` remains `NOT_COVERED`.
+- Evidence folder: `tmp/beta35-fence-false-green-opus-audit-8545b84`. See `docs/beta35-fence-false-green-opus-audit.md`.
