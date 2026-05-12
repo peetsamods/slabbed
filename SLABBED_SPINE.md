@@ -759,3 +759,17 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation: `compileJava compileGametestJava` BUILD SUCCESSFUL; `-Dslabbed.beta35FenceModelRenderRed=true` GREEN; `-Dslabbed.beta35FenceWallVariantCoverage=true` GREEN (`rows=16, variantCoverageGap=0`); `-Dslabbed.beta35FenceFamilyLiveRed=true` GREEN (`rows=7, variantCoverageGap=0`); `-Dslabbed.beta35CommonObjectCompatibilityAudit=true` GREEN (`rows=27, greenAlreadyInherits=27`); default suite BUILD SUCCESSFUL; `git diff --check` clean.
 - Current proven fence/wall set (both shape-triad AND render-quad dy): `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, `minecraft:cobblestone_wall`. `minecraft:glass_pane` remains `NOT_COVERED`.
 - See `docs/beta35-fence-model-render-fix.md`.
+
+## Beta 3.5 live object coverage false-green (2026-05-12)
+
+- Operating base: HEAD `a891ba6` / `save/beta35-fence-wall-model-render-fix` on `integrate/phase19-into-side-slab-top-support`. Docs-only audit; no production gameplay code changed; no release audit run; no release tag moved.
+- Julia's live runClient at `gitHead=a891ba6` (single `[SLABBED-INSPECT][SESSION] startedAt=2026-05-12T18:49:25Z` marker) showed that holding `minecraft:birch_fence`, `minecraft:birch_trapdoor`, `minecraft:spruce_door`, `minecraft:birch_sign`, and `minecraft:anvil` still produces player-facing object-compatibility failure on lowered bottom-slab supports. All five held items recorded `warning=BOTTOM_SLAB_UNEXPECTED_DY` on slab targets; four of the five also recorded `warning=TOP_SLAB_WITH_UNSUPPORTED_NEGATIVE_DY`.
+- Root cause classification (from `SlabSupport` allowlists and `OffsetBlockStateModel.emitQuads`):
+  - `birch_fence` → `EXACT_BLOCK_ALLOWLIST_GAP` + `VARIANT_FAMILY_COVERAGE_GAP` + `FENCE_RENDER_VARIANT_GAP`. `isBeta35FenceWallVariantContactObject` covers only `OAK_FENCE`, `SPRUCE_FENCE`, `NETHER_BRICK_FENCE`, `COBBLESTONE_WALL`; render-quad gate forces `dy=0.0f` for non-allowlisted fence/wall/pane.
+  - `birch_trapdoor` → `TRAPDOOR_VARIANT_GAP`. `isBeta35OakTrapdoorContactObject` covers only `OAK_TRAPDOOR[BLOCK_HALF=BOTTOM]`.
+  - `spruce_door` → `DOOR_MULTIPART_VARIANT_GAP`. `isBeta35OakDoorContactObject` covers only `OAK_DOOR`.
+  - `birch_sign` → `SIGN_RENDERER_GAP` + `VARIANT_FAMILY_COVERAGE_GAP`. `isBeta35StandingOakSignContactObject` covers only `OAK_SIGN`.
+  - `anvil` → in `isBeta35SpecialFullblockContactObject`; possible `LIVE_PLACEMENT_TARGETING_GAP` (side-slab retarget fires regardless of held-item placement intent). Inspect-only evidence; needs a follow-up placement-event capture before classifying.
+- Overall mechanism: `EXACT_BLOCK_ALLOWLIST_GAP` + `PROOF_HARNESS_UNDER_SCOPE`. The `a891ba6` fence model render fix is **valid for its declared four-variant allowlist** but the proof harness iterates only category representatives, so wood-variant red cases are never tested. The fix is not rescinded; its scope claim is.
+- **Beta 3.5 release remains BLOCKED.** Current object compatibility proofs are under-scoped for live play. The next safe action is a sequence of single-variant RED proofs (`birch_fence`, then `birch_trapdoor`, then `spruce_door`, then `birch_sign`, then anvil placement-event capture), each followed by an allowlist expansion only after its own RED is in place. Do not bundle.
+- Evidence folder: `tmp/beta35-live-object-coverage-false-green-a891ba6/`. See `docs/beta35-live-object-coverage-false-green.md`.
