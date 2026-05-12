@@ -457,3 +457,16 @@ If the slice changes, update the source pack and spine together so the current o
 - Evidence folder: `tmp/beta35-candle-floor-top-contact-fix-08198ef`. See `docs/beta35-candle-floor-top-contact-fix.md`.
 - Scope is floor torch plus `minecraft:candle` only. No flower pot survival fix, standing sign fix, wall/ceiling/hanging category, redstone/rail work, all-object support, or global sturdy-face/solidity change was made.
 - Release audit remains paused until Julia decides whether candle is enough for this one-more-family pass or whether flower pot/sign need separate slices. No release audit run. No release tag moved.
+
+## Beta 3.5 flower pot floor/top survival fix (2026-05-11)
+
+- Operating base for this implementation slice: `b76643d` / `save/beta35-candle-floor-top-contact` on `integrate/phase19-into-side-slab-top-support`.
+- Previous flower pot failure layer: `SURVIVAL_FAILURE`; `minecraft:flower_pot` placed on the valid slab-supported rows, but the unsupported control remained valid.
+- Narrow production fix: `SlabSupportStateMixin` now has a `Blocks.FLOWER_POT`-only `canPlaceAt` branch. It accepts survival on vanilla full-square top support or Slabbed legal slab top support, and rejects unsupported cases. This is not broad floor-object support and does not change global solidity or sturdy-face truth.
+- Focused gate `-Dslabbed.beta35FlowerPotFloorTopSurvival=true` is GREEN for survival: lowered bottom support reports `supportDy=-1.000000`, placement GREEN, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`; plain bottom support reports `supportDy=-0.500000`, placement GREEN, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`; summary `failureLayer=NONE`.
+- Updated floor/top matrix: `minecraft:torch=GREEN_ALREADY_INHERITS`; `minecraft:candle=GREEN_ALREADY_INHERITS`; `minecraft:flower_pot` survival is GREEN with secondary `CONTACT_GAP`; standing-only `minecraft:oak_sign=CONTACT_GAP` with `rendererPath=BLOCK_ENTITY_OR_SPECIAL`.
+- Flower pot still has a separate visual/contact layer: `contactGap=1.000000` on lowered bottom support and `contactGap=0.500000` on plain bottom support, with `triadCoLocated=no`. Standing sign remains unchanged/separate.
+- Validation passed: `compileJava compileGametestJava`, focused flower pot proof, focused floor/top family audit, floor torch regression, focused candle regression, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-flower-pot-floor-top-survival-fix-b76643d`. See `docs/beta35-flower-pot-floor-top-survival-fix.md`.
+- Scope is floor torch plus `minecraft:candle` plus `minecraft:flower_pot` survival only. No standing sign fix, wall/ceiling/hanging category, redstone/rail work, all-object support, or global sturdy-face/solidity change was made.
+- Release audit remains paused until Julia decides whether this is enough for the one-more-family pass or whether flower pot contact and/or standing sign need separate slices. No release audit run. No release tag moved.
