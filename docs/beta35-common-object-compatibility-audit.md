@@ -260,3 +260,25 @@ The proven special-fullblock work from `work/beta35-special-fullblock-compat` th
 Current special-fullblock GREEN set: `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, `minecraft:stonecutter`, `minecraft:anvil`, and `minecraft:grindstone`.
 
 `minecraft:lectern` remains open / not fixed as an interactive block-entity contact slice. No release audit was run. No release tag was moved.
+
+## Fence Family Live RED Follow-up
+
+Follow-up proof/classification at `0ccbc7f` / `save/beta35-special-fullblock-compat-integrated` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-fence-family-worktree` on branch `work/beta35-fence-family-live-red`.
+
+Focused gate: `-Dslabbed.beta35FenceFamilyLiveRed=true`; markers `JULIA_BETA35_FENCE_FAMILY_LIVE_RED`, `JULIA_BETA35_FENCE_FAMILY_ROW`, and `JULIA_BETA35_FENCE_FAMILY_SUMMARY`.
+
+Previous `minecraft:oak_fence` green status is now classified as valid simplified-only / live-superseded. The new live-like proof keeps `minecraft:oak_fence` GREEN for isolated, one-neighbor, two-neighbor, and beside-lowered-fullblock configurations, with `contactGap=0.000000`, co-located model/outline/raycast/collision bounds, and correct connection state.
+
+The RED is a `VARIANT_COVERAGE_GAP`: `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall` place and survive but report `contactGap=1.500000`, empty raycast bounds, and `triadCoLocated=no`. No production behavior fix was implemented. No release audit ran. No release tag moved. Canonical checkout was not modified.
+
+## Fence Wall Variant Coverage Fix Follow-up
+
+Follow-up implementation at `c570299` / `save/beta35-fence-family-live-red` was run in the same separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-fence-family-worktree` on branch `work/beta35-fence-family-live-red`.
+
+Focused gate: `-Dslabbed.beta35FenceWallVariantCoverage=true`; markers `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_GREEN`, `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_SUMMARY`, and `JULIA_BETA35_FENCE_FAMILY_ROW`.
+
+The implementation is an explicit named allowlist expansion from the existing `minecraft:oak_fence` treatment to `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`. It is not an all-fence, all-wall, all-pane, global solidity, or sturdy-face change.
+
+Focused proof is GREEN: `rows=16 greenLiveLike=15 greenSimplifiedOnly=1 contactGap=0 triadMismatch=0 collisionShapeRisk=0 connectionShapeRisk=0 placementFailure=0 survivalFailure=0 variantCoverageGap=0 needsImplementation=0 failureLayer=NONE`. The tested configurations were `isolated`, `one_neighbor`, `two_neighbor`, and `beside_lowered_fullblock` for oak fence, spruce fence, nether brick fence, and cobblestone wall.
+
+Current green fence/wall set: `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`. `minecraft:glass_pane` and panes remain out of scope / not covered. No release audit ran. No release tag moved. Canonical checkout was not modified.
