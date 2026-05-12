@@ -717,3 +717,11 @@ If the slice changes, update the source pack and spine together so the current o
 - Current green fence/wall set: `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`. `minecraft:glass_pane` and panes remain out of scope / not covered.
 - Fence-family live proof rerun is GREEN with no remaining variant coverage gap. Common-object matrix and default `runClientGameTest` passed.
 - No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
+
+## Beta 3.5 fence wall variant coverage integrated (2026-05-12)
+
+- Canonical integration merged the proven fence-family branch from `/Users/joolmac/CascadeProjects/Slabbed-beta35-fence-family-worktree` at `f9995b6d91ace2d04d522c8c3850798e242adf27` / `save/beta35-fence-wall-variant-coverage` into `integrate/phase19-into-side-slab-top-support` at merge commit `7a5ab91`.
+- The canonical integration result preserves the proven fence/wall coverage slice only: `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall` are GREEN; `minecraft:glass_pane` remains `NOT_COVERED`.
+- Validation passed after merge: `compileJava compileGametestJava`, focused fence/wall variant proof, fence-family live proof, common-object matrix, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-fence-wall-variant-integration-merge-f9995b6`.
+- No release audit was run. No release tag was moved. No pane support was implemented.
