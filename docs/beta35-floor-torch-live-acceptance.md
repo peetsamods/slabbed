@@ -35,6 +35,8 @@
 
 - `Beta 3.5 floor_torch_only` is live accepted and documented as a docs-only
   savepoint.
+- Bug Blaster: finalized `Beta 3.5 Floor Torch Lowered Bottom Slab Source Truth`
+  (`docs/beta35-floor-torch-bug-blaster.md`).
 - No gameplay code changes in this slice.
 - No release tag movement in this slice.
 - Next recommended slice: Beta 3.5 release-readiness audit from

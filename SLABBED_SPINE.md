@@ -194,6 +194,16 @@ Contract note: `docs/beta4-seam-ownership-contract.md`.
 
 ## Latest fixed Bug Blaster
 
+Title: Beta 3.5 Floor Torch Lowered Bottom Slab Source Truth
+Invariant: A floor torch on slab-supported geometry must place through the player path, survive, and visually contact the live support surface with model, outline, and raycast co-located.
+Root cause: Early proofs for floor torch control fixtures were false-green and did not cover Julia’s live SBSBS-style slab-supported structure. The live failure split into two contact layers: lowered bottom slab placement needing `torchDy=-1.5` and plain bottom support needing `torchDy=-1.0` to close contact.
+Fix: Added narrow floor-torch-only source-truth support handling in `SlabSupport`, separated placement-vs-contact tracing in the live dual tracer, and treated duplicate occupied torch clicks as `OCCUPIED_TORCH_TARGET` instead of real placement failures.
+Proof savepoints:
+- `66ca74a` / `save/beta35-floor-torch-lowered-slab-placement`: lowered bottom-slab placement GREEN.
+- `226cc6c` / `save/beta35-floor-torch-plain-bottom-contact`: plain bottom support contact GREEN, `supportDy=-0.5`, `torchDy=-1.0`, `contactGap=0.000000`.
+- `a9c2882` / `save/beta35-floor-torch-live-acceptance`: Julia live acceptance at 8/8 `PLACEMENT_ATTEMPT_OK`, `PLACEMENT_REJECTED=0`, `PLACED_CONTACT_GREEN=1407`, `PLACED_CONTACT_GAP=0`, max concrete floor-torch contactGap=0.000000.
+Status: Fixed for `floor_torch_only`; `wall_torch`, `lantern`, `signs`, `chains` remain `NOT_COVERED`; tag moved: no.
+
 Title: Slab-Held Anchored UP-Hit Rescue Guard
 Invariant: A valid `UP` hit on an anchored lowered full block must keep ownership while holding a slab unless a proven equal-or-closer legal side-placement owner should actually win.
 Root cause: In the first `0.2.0-beta.4` release candidate, slab-held side-slab rescue was too eager. Vanilla targeting correctly hit the anchored lowered stone full block at `24,201,0` face `up`, but Slabbed's slab-held retarget path classified the nearby lowered `DOUBLE` slab at `24,202,0` face `west` as `sideOwnerWouldWin`, stealing the cyan outline/target from the block Julia was actually aiming at. This recreated the live hitbox-targeting bug even though compile, gametest, clean build, jar scan, and `jdeps` had all passed.
@@ -261,11 +271,13 @@ Beta 3.5 floor_torch_only live acceptance status (2026-05-11):
   - `COMPOUND_VISIBLE_SIDE_LOWER_SLAB` support with `supportDy=-1.0` → GREEN
   - `COMPOUND_VISIBLE_SIDE_UPPER_SLAB` support with `supportDy=-0.500` supportDy path GREEN
   - `PLAIN_STATE` plain bottom support with `supportDy=-0.500` and `contactGap=0.000000`.
-- `supportDy=-0.500` plain bottom contact is live GREEN; `supportDy=-1.0` lowered bottom slab support is green.
-- `OCCUPIED_TORCH_TARGET` / duplicate-occupied noise is present but not treated as release-blocking.
-- old `JULIA_BETA35_LIVE_TORCH_CAPTURE` rows for `minecraft:wall_torch` air-support contact-gap remain outside this `floor_torch_only` acceptance slice and do not block this savepoint.
+  - `supportDy=-0.500` plain bottom contact is live GREEN; `supportDy=-1.0` lowered bottom slab support is green.
+  - `OCCUPIED_TORCH_TARGET` / duplicate-occupied noise is present but not treated as release-blocking.
+  - old `JULIA_BETA35_LIVE_TORCH_CAPTURE` rows for `minecraft:wall_torch` air-support contact-gap remain outside this `floor_torch_only` acceptance slice and do not block this savepoint.
 - `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
+- Bug Blaster `Beta 3.5 Floor Torch Lowered Bottom Slab Source Truth` is finalized.
 - Release prep may proceed to a release-readiness audit from this savepoint; this slice moved no release tag.
+- Next action: keep this slice docs-only; do not start the release-readiness audit in this slice.
 - Next safe action: run the Beta 3.5 release-readiness audit with `floor_torch_only` scope and no additional gameplay edits in this slice.
 
 ## Suggested live run command
