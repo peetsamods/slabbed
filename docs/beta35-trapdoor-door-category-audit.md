@@ -81,3 +81,17 @@ Focused proof summary:
 Current green set is now `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, and `minecraft:oak_trapdoor`.
 
 No release audit ran. No release tag moved. Signs, lanterns, chains, redstone, and rails were not touched. Release remains paused pending Julia decision on whether door is required before release.
+
+## Post-Fix Oak Door Multipart Contact Slice
+
+Follow-up implementation at base `d6c10d8` / `save/beta35-oak-trapdoor-contact` added `-Dslabbed.beta35OakDoorContact=true` for `minecraft:oak_door` only.
+
+`minecraft:oak_door` is now GREEN for the audited oak-door multipart representative on valid slab-supported surfaces. Plain bottom slab support reports `supportDy=-0.500000`, `bottomDy=-1.000000`, `topDy=-1.000000`, `bottomContactGap=0.000000`, `topAlignment=GREEN`, `triadCoLocated=yes`, `collisionCoLocated=yes`, and `openCloseResult=Success->Success`. Lowered bottom slab support reports `supportDy=-1.000000`, `bottomDy=-1.500000`, `topDy=-1.500000`, `bottomContactGap=0.000000`, `topAlignment=GREEN`, `triadCoLocated=yes`, `collisionCoLocated=yes`, and `openCloseResult=Success->Success`.
+
+Focused proof summary:
+
+`JULIA_BETA35_OAK_DOOR_CONTACT_SUMMARY failureLayer=NONE objectId=minecraft:oak_door family=multipart_door supportRows=2 expectedSupportRowsGreen=true vanillaFullBlockControl=NOT_RELEASE_CRITERION_FOR_SLAB_CONTACT currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,oak_door oak_trapdoor=GREEN_UNCHANGED signs=NOT_TOUCHED lanterns=NOT_TOUCHED chains=NOT_TOUCHED redstone=NOT_TOUCHED rails=NOT_TOUCHED releaseAudit=NOT_RUN releasePrep=PAUSED`
+
+Current green set is now `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, `minecraft:oak_trapdoor`, and `minecraft:oak_door`.
+
+This proves only `minecraft:oak_door`, not all doors. Signs, lanterns, chains, redstone, and rails remain not covered. No release audit ran. No release tag moved. Release remains paused pending Julia decision on whether remaining categories are required before release.
