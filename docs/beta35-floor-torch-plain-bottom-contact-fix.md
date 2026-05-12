@@ -82,3 +82,16 @@ deferred; it was not changed by this contact slice. Scope remains
 `floor_torch_only`; `wall_torch`, `lantern`, `signs`, and `chains` remain
 `NOT_COVERED`. Beta 3.5 release prep remains paused pending Julia live
 acceptance. No release tag moved.
+
+## Live acceptance addendum
+
+Julia live acceptance at `226cc6c` (`save/beta35-floor-torch-plain-bottom-contact`)
+confirms this row is accepted:
+
+- `PLACEMENT_ATTEMPT_OK` for all 8 attempts.
+- `PLAIN_STATE` support path is `PLACED_CONTACT_GREEN` with `contactGap=0.000000`.
+- `supportDy=-0.500` plain-bottom support is green in live acceptance.
+- `supportDy=-1.0` lowered-bottom-slab support remains green.
+- Non-floor categories remain `NOT_COVERED`.
+- Old wall-torch contact-gap rows for air support are outside `floor_torch_only`
+  acceptance and do not gate this savepoint.

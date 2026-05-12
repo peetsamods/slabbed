@@ -81,6 +81,17 @@ Beta 3.5 release prep remains paused pending Julia live acceptance. No release
 tag moved. Scope remains `floor_torch_only`; `wall_torch`, `lantern`, `signs`,
 and `chains` remain `NOT_COVERED`.
 
+## Live acceptance addendum
+
+At `save/beta35-floor-torch-plain-bottom-contact` (`226cc6c`), this path is
+now part of the live-accepted `floor_torch_only` bundle:
+
+- Julia live trace classification: `PLACEMENT_ATTEMPT_OK` for `8/8` floor torch
+  attempts during the acceptance run.
+- The floor-torch lowered bottom-slab support row remains `GREEN`.
+- Non-floor categories remain out of scope: `wall_torch`, `lantern`, `signs`,
+  and `chains`.
+
 ## Follow-up plain-bottom contact fix
 
 After this savepoint, Julia's live acceptance trace confirmed the

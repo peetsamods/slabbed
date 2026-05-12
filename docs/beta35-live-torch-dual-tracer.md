@@ -103,3 +103,28 @@ Duplicate clicks on an already occupied floor-torch target now classify as
 remains `floor_torch_only`; wall torch, lantern, signs, and chains are still
 `NOT_COVERED`. Beta 3.5 release prep remains paused pending Julia live
 acceptance. No release tag moved.
+
+## Live acceptance addendum
+
+Julia runtime trace uploaded at `tmp/julia-live-torch-acceptance-226cc6c` confirms
+`Beta 3.5 floor_torch_only` is live accepted at `226cc6c`:
+
+- `tracer enabled=true`
+- 8 placement attempts with `PLACEMENT_ATTEMPT_OK` (8/8), and zero
+  `PLACEMENT_REJECTED`.
+- `0` `COMFORT_NO_BOX_INTERSECTION`, `0` `WRONG_TARGET_OWNER`.
+- Concrete floor-torch contact summary:
+  - `PLACED_CONTACT_GREEN = 1407`
+  - `PLACED_CONTACT_GAP = 0`
+  - `max concrete floor-torch contactGap = 0.000000`
+- Confirmed green support categories include lowered bottom slab, top slab, double
+  slab, stone, `COMPOUND_VISIBLE_SIDE_LOWER_SLAB`,
+  `COMPOUND_VISIBLE_SIDE_UPPER_SLAB`, and plain bottom support.
+- `supportDy=-1.0` lower slab placement is GREEN.
+- `supportDy=-0.5` plain bottom contact is GREEN.
+- Duplicate/occupied target logging does not block this acceptance savepoint.
+- old wall-torch air-support contact-gap marker noise remains out of scope for
+  `floor_torch_only`.
+- `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`.
+- Release prep may proceed to release-readiness audit next; no release tag moved in
+  this slice.
