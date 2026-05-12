@@ -329,6 +329,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35EnchantingTableContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35EnchantingTableContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35TrapdoorDoorAudit")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10785,7 +10794,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "special_renderer",
                         Items.ENCHANTING_TABLE,
                         Blocks.ENCHANTING_TABLE.getDefaultState(),
-                        "SPECIAL_RENDERER_RISK",
+                        "GREEN_ALREADY_INHERITS",
                         false,
                         true,
                         true),
@@ -10869,7 +10878,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " controls=minecraft:crafting_table,minecraft:furnace"
                 + " optionalRows=minecraft:stonecutter,minecraft:grindstone,minecraft:anvil"
                 + " releaseAudit=NOT_RUN"
-                + " productionBehaviorChanged=bookshelf_chest_contact_dy_and_barrel_raycast_triad");
+                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_contact_dy_and_barrel_raycast_triad");
 
         int green = 0;
         int placementFailure = 0;
@@ -10914,11 +10923,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " specialRendererRisk=" + specialRendererRisk
                 + " needsCategorySlice=" + needsCategorySlice
                 + " outOfScopeForBeta35=" + outOfScope
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table"
                 + " doorSlice=PARALLEL_NOT_INSPECTED"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED"
-                + " productionBehaviorChanged=bookshelf_chest_contact_dy_and_barrel_raycast_triad");
+                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_contact_dy_and_barrel_raycast_triad");
     }
 
     private static Beta35CommonObjectAuditResult runBeta35SpecialFullblockAuditRow(
@@ -11246,6 +11255,90 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " classification=RED");
             throw new RuntimeException("[JULIA_BETA35_BARREL_TRIAD_RED]"
                     + " reason=barrel_triad_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
+    }
+
+    /**
+     * Focused enchanting-table proof for the Beta 3.5 special-renderer contact slice.
+     *
+     * Gate: -Dslabbed.beta35EnchantingTableContact=true
+     */
+    private static void runBeta35EnchantingTableContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase enchantingTable = new Beta35CommonObjectCase(
+                "minecraft:enchanting_table",
+                "special_renderer",
+                Items.ENCHANTING_TABLE,
+                Blocks.ENCHANTING_TABLE.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35SpecialFullblockAuditRow(
+                    ctx,
+                    singleplayer,
+                    enchantingTable,
+                    supportCase,
+                    0);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "ENCHANTING_TABLE_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "ENCHANTING_TABLE_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "ENCHANTING_TABLE_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "ENCHANTING_TABLE_TRIAD_MISMATCH";
+                    default -> "ENCHANTING_TABLE_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_ENCHANTING_TABLE_CONTACT_GREEN"
+                        + " objectId=minecraft:enchanting_table"
+                        + " family=special_renderer"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " raycastBasis=lowered_outline_when_native_empty"
+                        + " blockEntityRenderDy=SlabSupport_BlockEntityOffsetMixin"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_ENCHANTING_TABLE_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:enchanting_table"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " crafting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " furnace=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " bookshelf=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " chest=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " barrel=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " lectern=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " stonecutter=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " grindstone=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " anvil=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " doorTrapdoorSignLanternChainEndRodRedstoneRail=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_ENCHANTING_TABLE_CONTACT_RED"
+                    + " objectId=minecraft:enchanting_table"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_ENCHANTING_TABLE_CONTACT_RED]"
+                    + " reason=enchanting_table_contact_not_green"
                     + " failureLayer=" + failureLayer);
         }
     }

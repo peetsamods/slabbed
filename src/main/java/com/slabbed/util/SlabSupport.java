@@ -218,7 +218,7 @@ public final class SlabSupport {
             return false;
         }
         Block block = state.getBlock();
-        if (block == Blocks.CHEST) {
+        if (block == Blocks.CHEST || block == Blocks.ENCHANTING_TABLE) {
             return true;
         }
         if (!(block instanceof CraftingTableBlock || block instanceof BlockEntityProvider

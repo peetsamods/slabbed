@@ -158,6 +158,18 @@ Special-fullblock matrix follow-up now reports `greenAlreadyInherits=9`, `contac
 
 Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
 
+## Enchanting Table Contact Fix Follow-up
+
+Follow-up implementation at `e46cd26` / `save/beta35-barrel-triad` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
+
+Focused gate: `-Dslabbed.beta35EnchantingTableContact=true`; markers `JULIA_BETA35_ENCHANTING_TABLE_CONTACT_GREEN` and `JULIA_BETA35_ENCHANTING_TABLE_CONTACT_SUMMARY`.
+
+`minecraft:enchanting_table` is now GREEN for the focused special-renderer contact representative. Slab-supported rows report `contactGap=0.000000`, `triadCoLocated=yes`, `blockEntityPresent=true`, placement GREEN, and survival GREEN. The fix is exact `Blocks.ENCHANTING_TABLE` contact/dy plus an enchanting-table-only lowered raycast fallback to the lowered outline when vanilla enchanting-table raycast is empty; it does not implement lectern, stonecutter, grindstone, anvil, door, trapdoor, signs, lanterns, chains, end rods, redstone, or rails.
+
+Special-fullblock matrix follow-up now reports `greenAlreadyInherits=18`, `contactGap=8`, `triadMismatch=0`, `blockEntityRisk=1`, `specialRendererRisk=0`, and `needsCategorySlice=3`. Controls `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, and `minecraft:barrel` remain GREEN. `minecraft:lectern` remains an interactive block-entity contact row; `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` remain special-shape category rows.
+
+Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
+
 ## Barrel Triad Fix Follow-up
 
 Follow-up implementation at `0ee0ab3` / `save/beta35-chest-contact` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
