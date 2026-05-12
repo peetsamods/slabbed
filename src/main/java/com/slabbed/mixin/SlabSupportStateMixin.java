@@ -119,6 +119,10 @@ public abstract class SlabSupportStateMixin {
                 && state.isOf(Blocks.OAK_SIGN);
     }
 
+    private static boolean slabbed$isLoweredBeta35FenceWallVariantContactObject(BlockState state, double yOff) {
+        return yOff < 0.0 && SlabSupport.isBeta35FenceWallVariantContactObject(state);
+    }
+
     private static boolean slabbed$isBeta35SpecialFullblockRaycastFallbackObject(BlockState state) {
         return state != null
                 && (state.isOf(Blocks.CHEST)
@@ -250,7 +254,8 @@ public abstract class SlabSupportStateMixin {
                     && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
-            } else if (self.isOf(Blocks.OAK_FENCE) && (shape == null || shape.isEmpty())) {
+            } else if (slabbed$isLoweredBeta35FenceWallVariantContactObject(self, yOff)
+                    && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
@@ -265,7 +270,7 @@ public abstract class SlabSupportStateMixin {
     private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockView world, BlockPos pos, ShapeContext ctx,
                                                               CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (!self.isOf(Blocks.OAK_FENCE) && !self.isOf(Blocks.GRINDSTONE)) {
+        if (!SlabSupport.isBeta35FenceWallVariantContactObject(self) && !self.isOf(Blocks.GRINDSTONE)) {
             return;
         }
         double yOff = SlabSupport.getYOffset(world, pos, self);
@@ -295,7 +300,7 @@ public abstract class SlabSupportStateMixin {
         if (yOff != 0.0) {
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
-            } else if (self.isOf(Blocks.OAK_FENCE)) {
+            } else if (slabbed$isLoweredBeta35FenceWallVariantContactObject(self, yOff)) {
                 cir.setReturnValue(self.getCollisionShape(world, pos, ctx));
                 return;
             }

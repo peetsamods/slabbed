@@ -64,3 +64,17 @@ The issue captured here is not oak-fence connection/collision behavior in the te
 ## Next Slice
 
 Recommended next implementation slice, if Julia authorizes it: expand the existing oak-fence contact/raycast/collision treatment into one explicit fence-family/wall-family allowlist, starting with `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`; rerun this gate plus the existing common-object matrix and default gametest. Do not bundle panes unless Julia wants pane coverage in the same category.
+
+## Variant Coverage Fix Follow-up
+
+Follow-up implementation at `c570299` / `save/beta35-fence-family-live-red` was run in this same worktree.
+
+Focused gate: `-Dslabbed.beta35FenceWallVariantCoverage=true`; markers `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_GREEN` and `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_SUMMARY`.
+
+The prior `minecraft:oak_fence` green remains valid but was incomplete as a family claim. The variant coverage gap is now fixed for the explicitly proven missing variants: `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`.
+
+Focused proof result: GREEN, `failureLayer=NONE`, `rows=16`, `contactGap=0`, `triadMismatch=0`, `collisionShapeRisk=0`, `connectionShapeRisk=0`, and `variantCoverageGap=0`. Tested configurations were `isolated`, `one_neighbor`, `two_neighbor`, and `beside_lowered_fullblock` for oak fence, spruce fence, nether brick fence, and cobblestone wall.
+
+Current green fence/wall set: `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`.
+
+`minecraft:glass_pane` and pane behavior remain out of scope / not covered. No release audit was run. No release tag was moved. Canonical checkout was not modified.
