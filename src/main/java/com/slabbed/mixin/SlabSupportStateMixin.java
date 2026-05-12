@@ -103,20 +103,12 @@ public abstract class SlabSupportStateMixin {
                 && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
     }
 
-    private static boolean slabbed$isLoweredBeta35ChestContactObject(BlockState state, double yOff) {
-        return yOff < 0.0 && state != null && state.isOf(Blocks.CHEST);
-    }
-
-    private static boolean slabbed$isLoweredBeta35BarrelTriadObject(BlockState state, double yOff) {
-        return yOff < 0.0 && state != null && state.isOf(Blocks.BARREL);
-    }
-
-    private static boolean slabbed$isLoweredBeta35EnchantingTableContactObject(BlockState state, double yOff) {
-        return yOff < 0.0 && state != null && state.isOf(Blocks.ENCHANTING_TABLE);
-    }
-
-    private static boolean slabbed$isLoweredBeta35StonecutterContactObject(BlockState state, double yOff) {
-        return yOff < 0.0 && state != null && state.isOf(Blocks.STONECUTTER);
+    private static boolean slabbed$isBeta35SpecialFullblockRaycastFallbackObject(BlockState state) {
+        return state != null
+                && (state.isOf(Blocks.CHEST)
+                        || state.isOf(Blocks.BARREL)
+                        || state.isOf(Blocks.ENCHANTING_TABLE)
+                        || state.isOf(Blocks.STONECUTTER));
     }
 
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
@@ -228,17 +220,8 @@ public abstract class SlabSupportStateMixin {
             } else if (slabbed$isLoweredBeta35OakTrapdoorContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
-            } else if (slabbed$isLoweredBeta35ChestContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
-                return;
-            } else if (slabbed$isLoweredBeta35BarrelTriadObject(self, yOff) && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
-                return;
-            } else if (slabbed$isLoweredBeta35EnchantingTableContactObject(self, yOff)
-                    && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
-                return;
-            } else if (slabbed$isLoweredBeta35StonecutterContactObject(self, yOff)
+            } else if (yOff < 0.0
+                    && slabbed$isBeta35SpecialFullblockRaycastFallbackObject(self)
                     && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;

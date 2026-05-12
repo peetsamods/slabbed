@@ -210,26 +210,26 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static boolean isBeta35OrdinaryFullBlockContactObject(BlockView world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || state == null
-                || state.isAir()
-                || state.getBlock() instanceof SlabBlock
-                || !state.getFluidState().isEmpty()) {
+    private static boolean isBeta35SpecialFullblockContactObject(BlockState state) {
+        if (state == null) {
             return false;
         }
         Block block = state.getBlock();
-        if (block == Blocks.CHEST || block == Blocks.ENCHANTING_TABLE || block == Blocks.STONECUTTER) {
-            return true;
-        }
-        if (!(block instanceof CraftingTableBlock || block instanceof BlockEntityProvider
-                || block == Blocks.BOOKSHELF)) {
-            return false;
-        }
-        return state.isSolidBlock(world, pos);
+        return block == Blocks.CRAFTING_TABLE
+                || block == Blocks.FURNACE
+                || block == Blocks.BOOKSHELF
+                || block == Blocks.CHEST
+                || block == Blocks.BARREL
+                || block == Blocks.ENCHANTING_TABLE
+                || block == Blocks.STONECUTTER;
     }
 
-    private static double beta35OrdinaryFullBlockContactDy(BlockView world, BlockPos pos, BlockState state) {
-        if (!isBeta35OrdinaryFullBlockContactObject(world, pos, state)) {
+    private static double beta35SpecialFullblockContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !isBeta35SpecialFullblockContactObject(state)) {
             return Double.NaN;
         }
         BlockPos supportPos = pos.down();
@@ -1157,9 +1157,9 @@ public final class SlabSupport {
                 }
                 return -1.0;
             }
-            double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
-            if (Double.isFinite(ordinaryFullBlockContactDy)) {
-                return ordinaryFullBlockContactDy;
+            double specialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
+            if (Double.isFinite(specialFullblockContactDy)) {
+                return specialFullblockContactDy;
             }
             double oakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);
             if (Double.isFinite(oakTrapdoorContactDy)) {
@@ -1217,9 +1217,9 @@ public final class SlabSupport {
             return oakTrapdoorContactDy;
         }
 
-        double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
-        if (Double.isFinite(ordinaryFullBlockContactDy)) {
-            return ordinaryFullBlockContactDy;
+        double specialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
+        if (Double.isFinite(specialFullblockContactDy)) {
+            return specialFullblockContactDy;
         }
 
         if (shouldOffset(world, pos, state)) {
