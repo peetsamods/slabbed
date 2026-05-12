@@ -107,3 +107,13 @@ Required if Julia wants expanded common-object compatibility to be a Beta 3.5 re
 Release remains paused pending Julia decision.
 
 Post-fix status: `minecraft:crafting_table` and `minecraft:furnace` are GREEN ordinary full-block representatives; `minecraft:oak_fence` is GREEN for the oak-fence-only partial-collision representative; `minecraft:oak_trapdoor`, `minecraft:oak_door`, and standing `minecraft:oak_sign` remain separate categories. Release remains paused pending Julia decision.
+
+## Trapdoor / Door Category Audit Follow-up
+
+Follow-up audit at `f88afb7` / `save/beta35-oak-fence-contact-integrated` added `-Dslabbed.beta35TrapdoorDoorAudit=true` with no production behavior changes.
+
+`minecraft:oak_trapdoor` places and survives on slab-supported rows, and open/close interaction was exercised successfully, but slab-supported rows remain `CONTACT_GAP` (`0.500000` on plain bottom support, `1.000000` on lowered bottom support). Exact failure layer: `TRAPDOOR_CONTACT_GAP`. Recommended next slice is trapdoor-only contact/open-close implementation.
+
+`minecraft:oak_door` places both bottom and top halves and both halves survive, with matching `bottomDy`/`topDy` on audited rows. Slab-supported rows remain `CONTACT_GAP` (`0.500000` plain bottom, `1.000000` lowered bottom) and the category remains multipart-risky. Exact failure layer: `DOOR_MULTIPART_CONTACT_GAP`. Recommended status: defer door unless Julia authorizes a separate multipart slice.
+
+Current green set remains `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, and `minecraft:oak_fence`. No release audit ran. No release tag moved. Signs, lanterns, chains, redstone, and rails were not touched.
