@@ -190,6 +190,10 @@ public final class SlabSupport {
                 && state.contains(Properties.DOUBLE_BLOCK_HALF);
     }
 
+    private static boolean isBeta35StandingOakSignContactObject(BlockState state) {
+        return state != null && state.isOf(Blocks.OAK_SIGN);
+    }
+
     private static double beta35OakFenceContactDy(BlockView world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35OakFenceContactObject(state)) {
             return Double.NaN;
@@ -230,6 +234,19 @@ public final class SlabSupport {
             }
         }
         BlockPos supportPos = bottomPos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+            return supportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
+    private static double beta35StandingOakSignContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35StandingOakSignContactObject(state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.down();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -1193,6 +1210,10 @@ public final class SlabSupport {
             if (Double.isFinite(oakDoorContactDy)) {
                 return oakDoorContactDy;
             }
+            double standingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
+            if (Double.isFinite(standingOakSignContactDy)) {
+                return standingOakSignContactDy;
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
@@ -1248,6 +1269,11 @@ public final class SlabSupport {
         double oakDoorContactDy = beta35OakDoorContactDy(world, pos, state);
         if (Double.isFinite(oakDoorContactDy)) {
             return oakDoorContactDy;
+        }
+
+        double standingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
+        if (Double.isFinite(standingOakSignContactDy)) {
+            return standingOakSignContactDy;
         }
 
         double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);

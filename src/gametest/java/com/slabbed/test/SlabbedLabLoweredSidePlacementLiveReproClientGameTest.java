@@ -320,6 +320,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35StandingOakSignContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35StandingOakSignContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CraftingTableContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10662,13 +10671,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         false),
                 new Beta35CommonObjectCase(
                         "minecraft:oak_sign",
-                        "renderer_block_entity_risk_standing",
+                        "standing_sign",
                         Items.OAK_SIGN,
                         Blocks.OAK_SIGN.getDefaultState(),
-                        "RENDERER_SPECIAL_CASE",
+                        "GREEN_ALREADY_INHERITS",
                         true,
                         true,
-                        false),
+                        true),
         };
 
         System.out.println("JULIA_BETA35_COMMON_OBJECT_MATRIX_START"
@@ -11401,6 +11410,90 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
+     * Focused standing oak sign proof for the Beta 3.5 sign contact slice.
+     *
+     * Gate: -Dslabbed.beta35StandingOakSignContact=true
+     */
+    private static void runBeta35StandingOakSignContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase oakSign = new Beta35CommonObjectCase(
+                "minecraft:oak_sign",
+                "standing_sign",
+                Items.OAK_SIGN,
+                Blocks.OAK_SIGN.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                true,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35CommonObjectAuditRow(
+                    ctx,
+                    singleplayer,
+                    oakSign,
+                    supportCase,
+                    8);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "STANDING_OAK_SIGN_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "STANDING_OAK_SIGN_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "STANDING_OAK_SIGN_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "STANDING_OAK_SIGN_TRIAD_MISMATCH";
+                    default -> "STANDING_OAK_SIGN_RENDERER_OR_UNKNOWN_RISK";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_STANDING_OAK_SIGN_CONTACT_GREEN"
+                        + " objectId=minecraft:oak_sign"
+                        + " family=standing_sign"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " blockEntityPath=BlockEntityOffsetMixin"
+                        + " wallSigns=NOT_TOUCHED"
+                        + " hangingSigns=NOT_TOUCHED"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_STANDING_OAK_SIGN_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:oak_sign"
+                + " family=standing_sign"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " rendererPath=BlockEntityOffsetMixin"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,oak_door,oak_sign"
+                + " wallSigns=NOT_TOUCHED"
+                + " hangingSigns=NOT_TOUCHED"
+                + " lanterns=NOT_TOUCHED"
+                + " chains=NOT_TOUCHED"
+                + " redstone=NOT_TOUCHED"
+                + " rails=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_STANDING_OAK_SIGN_CONTACT_RED"
+                    + " objectId=minecraft:oak_sign"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_STANDING_OAK_SIGN_CONTACT_RED]"
+                    + " reason=standing_oak_sign_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
+    }
+
+    /**
      * Focused oak-fence proof for the Beta 3.5 partial-collision contact slice.
      *
      * Gate: -Dslabbed.beta35OakFenceContact=true
@@ -11734,6 +11827,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     : blockAppeared && objectState.isOf(Blocks.OAK_FENCE)
                             ? collisionBox
                     : outlineBox;
+            boolean blockEntityPresent = blockAppeared && mc.world.getBlockEntity(actualObjectPos) != null;
+            String renderProxyBounds = blockAppeared && objectState.isOf(Blocks.OAK_SIGN)
+                    ? beta35FormatBox(modelProxyBox)
+                    : "N/A";
             double objectModelBottomY = modelProxyBox == null ? Double.NaN : modelProxyBox.minY;
             double contactGap = objectCase.contactApplicable()
                     && actualObjectPos.equals(objectPos)
@@ -11780,9 +11877,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " itemId=" + objectCase.item()
                     + " supportCase=" + supportCase
                     + " blockState=" + objectState
+                    + " finalBlockState=" + objectState
                     + " placementResult=" + placementResult[0]
                     + " blockAppearedAfterAttempt=" + blockAppeared
                     + " actualObjectPos=" + actualObjectPos.toShortString()
+                    + " blockEntityPresent=" + blockEntityPresent
                     + " supportCandidateState=" + supportState
                     + " supportDy=" + String.format("%.6f", supportDy)
                     + " objectDy=" + (Double.isFinite(objectDy) ? String.format("%.6f", objectDy) : "N/A")
@@ -11793,6 +11892,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " contactGap=" + (Double.isFinite(contactGap)
                             ? String.format("%.6f", contactGap) : "CONTACT_NOT_APPLICABLE")
                     + " modelBounds=" + beta35FormatBox(modelProxyBox)
+                    + " renderProxyBounds=" + renderProxyBounds
                     + " outlineBounds=" + beta35FormatBox(outlineBox)
                     + " raycastBounds=" + beta35FormatBox(raycastBox)
                     + " collisionBounds=" + beta35FormatBox(collisionBox)
