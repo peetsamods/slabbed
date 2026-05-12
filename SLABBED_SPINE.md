@@ -609,3 +609,16 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused barrel proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-barrel-triad-fix-0ee0ab3`. See `docs/beta35-barrel-triad-fix.md`.
 - Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.
+
+## Beta 3.5 enchanting table contact fix (2026-05-12)
+
+- Operating base for this implementation slice: `e46cd26` / `save/beta35-barrel-triad` in `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on `work/beta35-special-fullblock-compat`. Canonical checkout was not modified.
+- Previous `minecraft:enchanting_table` failure layer: `CONTACT_GAP`; placement and survival were already GREEN, but slab-supported rows had `contactGap=0.500000` on plain bottom support and `contactGap=1.000000` on lowered bottom support. The exact mechanism was too-shallow dy plus empty native raycast.
+- New `minecraft:enchanting_table` failure layer: `NONE`. The fix is exact `Blocks.ENCHANTING_TABLE` contact/dy in `SlabSupport` plus an enchanting-table-only lowered raycast fallback in `SlabSupportStateMixin`. Existing `BlockEntityOffsetMixin` keeps enchanting-table block-entity rendering on the same `SlabSupport` dy; no renderer rewrite was added.
+- Focused proof `-Dslabbed.beta35EnchantingTableContact=true` passes with `JULIA_BETA35_ENCHANTING_TABLE_CONTACT_SUMMARY failureLayer=NONE`; slab-supported rows report `placementResult=Success`, `blockEntityPresent=true`, `survivalResult=SURVIVAL_GREEN`, `contactGap=0.000000`, `triadCoLocated=yes`, and co-located model/outline/raycast/collision bounds.
+- Updated special-fullblock matrix: `minecraft:enchanting_table`, `minecraft:barrel`, `minecraft:chest`, `minecraft:bookshelf`, `minecraft:crafting_table`, and `minecraft:furnace` are GREEN representatives. Matrix summary now reports `rows=30 greenAlreadyInherits=18 placementFailure=0 survivalFailure=0 contactGap=8 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=3 outOfScopeForBeta35=0`.
+- Remaining special-fullblock statuses are unchanged and honest: `minecraft:lectern` remains an interactive block-entity contact slice; `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` remain special-shape category slices. They were not fixed in this slice.
+- Common-object matrix still passes for this worktree and keeps its pre-existing door/sign classifications: `greenAlreadyInherits=21 contactGap=4 multipartRisk=1 rendererSpecialCase=1`.
+- Validation passed: `compileJava compileGametestJava`, focused enchanting-table proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-enchanting-table-contact-fix-e46cd26`. See `docs/beta35-enchanting-table-contact-fix.md`.
+- Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.
