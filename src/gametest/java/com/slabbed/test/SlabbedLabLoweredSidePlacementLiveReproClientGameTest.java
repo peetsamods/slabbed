@@ -15,6 +15,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
+import net.minecraft.state.property.Properties;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
@@ -288,6 +289,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35CommonObjectCompatibilityAudit(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35TrapdoorDoorAudit")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35TrapdoorDoorAudit(ctx, singleplayer);
             }
             return;
         }
@@ -10454,6 +10464,14 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     ) {
     }
 
+    private record Beta35TrapdoorDoorAuditRow(
+            String objectId,
+            String family,
+            String supportCase,
+            String classification
+    ) {
+    }
+
     /**
      * Gated audit matrix for the floor/top-surface object family.
      *
@@ -10696,6 +10714,467 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " rail=NOT_AUDITED_SPECIAL_FLOOR_LOGIC"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED");
+    }
+
+    /**
+     * Focused audit matrix for the Beta 3.5 trapdoor/door category slice.
+     *
+     * Gate: -Dslabbed.beta35TrapdoorDoorAudit=true
+     */
+    private static void runBeta35TrapdoorDoorAudit(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        System.out.println("JULIA_BETA35_TRAPDOOR_DOOR_MATRIX_START"
+                + " scope=interactive_hinge_and_multipart_audit"
+                + " order=oak_trapdoor_then_oak_door"
+                + " supportCases=VANILLA_FULL_BLOCK,PLAIN_BOTTOM_DY_MINUS_HALF,LOWERED_BOTTOM_DY_MINUS_ONE"
+                + " releaseAudit=NOT_RUN"
+                + " productionBehaviorChanged=false");
+
+        Beta35TrapdoorDoorAuditRow[] trapdoorRows =
+                new Beta35TrapdoorDoorAuditRow[Beta35CommonObjectSupportCase.values().length];
+        Beta35TrapdoorDoorAuditRow[] doorRows =
+                new Beta35TrapdoorDoorAuditRow[Beta35CommonObjectSupportCase.values().length];
+
+        int index = 0;
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            trapdoorRows[index] = runBeta35TrapdoorAuditRow(ctx, singleplayer, supportCase, index);
+            index++;
+        }
+        index = 0;
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            doorRows[index] = runBeta35DoorAuditRow(ctx, singleplayer, supportCase, index);
+            index++;
+        }
+
+        String trapdoorClassification = beta35FirstSlabNonGreenClassification(trapdoorRows);
+        String doorClassification = beta35FirstSlabNonGreenClassification(doorRows);
+        String trapdoorFailureLayer = beta35TrapdoorFailureLayer(trapdoorClassification);
+        String doorFailureLayer = beta35DoorFailureLayer(doorClassification);
+
+        System.out.println("JULIA_BETA35_TRAPDOOR_DOOR_SUMMARY"
+                + " trapdoorClassification=" + trapdoorClassification
+                + " trapdoorFailureLayer=" + trapdoorFailureLayer
+                + " doorClassification=" + doorClassification
+                + " doorFailureLayer=" + doorFailureLayer
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence"
+                + " trapdoorRecommendation="
+                + ("CONTACT_GAP".equals(trapdoorClassification)
+                        ? "NEXT_SLICE_CATEGORY_SPECIFIC_CONTACT_AND_OPEN_CLOSE_FIX"
+                        : "CLASSIFY_BEFORE_FIX")
+                + " doorRecommendation="
+                + ("GREEN_ALREADY_INHERITS".equals(doorClassification)
+                        ? "CHECK_COMMON_OBJECT_MATRIX"
+                        : "DEFER_MULTIPART_CATEGORY_SLICE")
+                + " signs=NOT_TOUCHED"
+                + " lanterns=NOT_TOUCHED"
+                + " chains=NOT_TOUCHED"
+                + " redstone=NOT_TOUCHED"
+                + " rails=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+    }
+
+    private static Beta35TrapdoorDoorAuditRow runBeta35TrapdoorAuditRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35CommonObjectSupportCase supportCase,
+            int rowIndex
+    ) {
+        int baseX = 224 + rowIndex * 8;
+        int baseZ = 132 + supportCase.ordinal() * 6;
+        BlockPos supportCandidatePos = new BlockPos(baseX, -55, baseZ);
+        BlockPos trapdoorPos = supportCandidatePos.up();
+        BlockPos unsupportedPos = supportCandidatePos.add(0, 1, 3);
+        BlockHitResult useHit = beta35TopUseHit(supportCandidatePos, supportCase);
+
+        prepareBeta35CommonObjectSupport(singleplayer, supportCandidatePos, unsupportedPos, supportCase);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.OAK_TRAPDOOR, 4));
+        syncPlayerAim(ctx, singleplayer,
+                new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY() + 3.0d,
+                        supportCandidatePos.getZ() - 2.0d),
+                useHit.getPos());
+
+        final String[] placementResult = {"not-run"};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                placementResult[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, useHit);
+            placementResult[0] = result.toString();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState supportState = world.getBlockState(supportCandidatePos);
+            BlockState trapdoorState = world.getBlockState(trapdoorPos);
+            world.updateNeighbors(trapdoorPos, trapdoorState.getBlock());
+            world.updateNeighbors(supportCandidatePos, supportState.getBlock());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final String[] openCloseResult = {"NOT_TESTED"};
+        syncHeldMainHand(ctx, singleplayer, ItemStack.EMPTY);
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                openCloseResult[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            if (!mc.world.getBlockState(trapdoorPos).isOf(Blocks.OAK_TRAPDOOR)) {
+                openCloseResult[0] = "BLOCK_NOT_PRESENT";
+                return;
+            }
+            BlockHitResult trapdoorHit = new BlockHitResult(
+                    new Vec3d(trapdoorPos.getX() + 0.5d, trapdoorPos.getY() + 0.125d, trapdoorPos.getZ() + 0.5d),
+                    Direction.UP,
+                    trapdoorPos,
+                    false);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, trapdoorHit);
+            openCloseResult[0] = result.toString();
+        });
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                return;
+            }
+            if (!mc.world.getBlockState(trapdoorPos).isOf(Blocks.OAK_TRAPDOOR)) {
+                return;
+            }
+            BlockHitResult trapdoorHit = new BlockHitResult(
+                    new Vec3d(trapdoorPos.getX() + 0.5d, trapdoorPos.getY() + 0.125d, trapdoorPos.getZ() + 0.5d),
+                    Direction.UP,
+                    trapdoorPos,
+                    false);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, trapdoorHit);
+            openCloseResult[0] = openCloseResult[0] + "->" + result;
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final String[] classification = {"OUT_OF_SCOPE_FOR_BETA35"};
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                System.out.println("JULIA_BETA35_TRAPDOOR_DOOR_ROW"
+                        + " objectId=minecraft:oak_trapdoor"
+                        + " family=interactive_hinge"
+                        + " supportCase=" + supportCase
+                        + " classification=OUT_OF_SCOPE_FOR_BETA35"
+                        + " reason=client_world_or_player_missing");
+                return;
+            }
+
+            BlockState supportState = mc.world.getBlockState(supportCandidatePos);
+            BlockState trapdoorState = mc.world.getBlockState(trapdoorPos);
+            boolean blockAppeared = trapdoorState.isOf(Blocks.OAK_TRAPDOOR);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
+            double objectDy = blockAppeared ? SlabSupport.getYOffset(mc.world, trapdoorPos, trapdoorState)
+                    : Double.NaN;
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportCandidatePos, supportState, supportDy);
+            VoxelShape outlineShape = blockAppeared
+                    ? trapdoorState.getOutlineShape(mc.world, trapdoorPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            VoxelShape raycastShape = blockAppeared ? trapdoorState.getRaycastShape(mc.world, trapdoorPos) : null;
+            VoxelShape collisionShape = blockAppeared
+                    ? trapdoorState.getCollisionShape(mc.world, trapdoorPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, trapdoorPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, trapdoorPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, trapdoorPos);
+            net.minecraft.util.math.Box modelProxyBox = outlineBox;
+            double objectModelBottomY = modelProxyBox == null ? Double.NaN : modelProxyBox.minY;
+            double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
+                    ? objectModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+            boolean survivalGreen = blockAppeared && trapdoorState.canPlaceAt(mc.world, trapdoorPos);
+            boolean contactGreen = Double.isFinite(contactGap) && Math.abs(contactGap) <= EPSILON;
+            boolean triadGreen = blockAppeared
+                    && modelProxyBox != null
+                    && beta35SameBox(outlineBox, modelProxyBox)
+                    && beta35SameBox(raycastBox, modelProxyBox);
+            boolean collisionGreen = blockAppeared
+                    && modelProxyBox != null
+                    && beta35SameBox(collisionBox, modelProxyBox);
+            boolean openCloseGreen = blockAppeared && !"CLIENT_NOT_READY".equals(openCloseResult[0])
+                    && !"BLOCK_NOT_PRESENT".equals(openCloseResult[0]);
+
+            if (!blockAppeared) {
+                classification[0] = "PLACEMENT_FAILURE";
+            } else if (!survivalGreen) {
+                classification[0] = "SURVIVAL_FAILURE";
+            } else if (!contactGreen) {
+                classification[0] = "CONTACT_GAP";
+            } else if (!triadGreen) {
+                classification[0] = "TRIAD_MISMATCH";
+            } else if (!collisionGreen) {
+                classification[0] = "COLLISION_SHAPE_RISK";
+            } else if (!openCloseGreen) {
+                classification[0] = "OPEN_CLOSE_RISK";
+            } else {
+                classification[0] = "GREEN_ALREADY_INHERITS";
+            }
+
+            System.out.println("JULIA_BETA35_TRAPDOOR_DOOR_ROW"
+                    + " objectId=minecraft:oak_trapdoor"
+                    + " family=interactive_hinge"
+                    + " supportCase=" + supportCase
+                    + " placementResult=" + placementResult[0]
+                    + " blockAppearedAfterAttempt=" + blockAppeared
+                    + " finalBlockState=" + trapdoorState
+                    + " supportCandidateState=" + supportState
+                    + " supportDy=" + String.format("%.6f", supportDy)
+                    + " objectDy=" + (Double.isFinite(objectDy) ? String.format("%.6f", objectDy) : "N/A")
+                    + " supportVisibleTopY=" + (Double.isFinite(supportVisibleTopY)
+                            ? String.format("%.6f", supportVisibleTopY) : "N/A")
+                    + " objectModelBottomY=" + (Double.isFinite(objectModelBottomY)
+                            ? String.format("%.6f", objectModelBottomY) : "CONTACT_NOT_APPLICABLE")
+                    + " contactGap=" + (Double.isFinite(contactGap)
+                            ? String.format("%.6f", contactGap) : "CONTACT_NOT_APPLICABLE")
+                    + " modelBounds=" + beta35FormatBox(modelProxyBox)
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
+                    + " triadCoLocated=" + (blockAppeared ? (triadGreen ? "yes" : "no") : "NOT_MEASURED")
+                    + " survivalResult=" + (survivalGreen ? "SURVIVAL_GREEN" : "SURVIVAL_RED")
+                    + " openCloseResult=" + openCloseResult[0]
+                    + " half=" + beta35PropertyValue(trapdoorState, Properties.BLOCK_HALF)
+                    + " facing=" + beta35PropertyValue(trapdoorState, Properties.HORIZONTAL_FACING)
+                    + " open=" + beta35PropertyValue(trapdoorState, Properties.OPEN)
+                    + " waterlogged=" + beta35PropertyValue(trapdoorState, Properties.WATERLOGGED)
+                    + " classification=" + classification[0]);
+        });
+
+        return new Beta35TrapdoorDoorAuditRow(
+                "minecraft:oak_trapdoor",
+                "interactive_hinge",
+                supportCase.toString(),
+                classification[0]);
+    }
+
+    private static Beta35TrapdoorDoorAuditRow runBeta35DoorAuditRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35CommonObjectSupportCase supportCase,
+            int rowIndex
+    ) {
+        int baseX = 260 + rowIndex * 8;
+        int baseZ = 132 + supportCase.ordinal() * 6;
+        BlockPos supportCandidatePos = new BlockPos(baseX, -55, baseZ);
+        BlockPos bottomPos = supportCandidatePos.up();
+        BlockPos topPos = bottomPos.up();
+        BlockPos unsupportedPos = supportCandidatePos.add(0, 1, 3);
+        BlockHitResult useHit = beta35TopUseHit(supportCandidatePos, supportCase);
+
+        prepareBeta35CommonObjectSupport(singleplayer, supportCandidatePos, unsupportedPos, supportCase);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.OAK_DOOR, 4));
+        syncPlayerAim(ctx, singleplayer,
+                new Vec3d(supportCandidatePos.getX() + 0.5d, supportCandidatePos.getY() + 3.0d,
+                        supportCandidatePos.getZ() - 2.0d),
+                useHit.getPos());
+
+        final String[] placementResult = {"not-run"};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                placementResult[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, useHit);
+            placementResult[0] = result.toString();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState supportState = world.getBlockState(supportCandidatePos);
+            BlockState bottomState = world.getBlockState(bottomPos);
+            BlockState topState = world.getBlockState(topPos);
+            world.updateNeighbors(bottomPos, bottomState.getBlock());
+            world.updateNeighbors(topPos, topState.getBlock());
+            world.updateNeighbors(supportCandidatePos, supportState.getBlock());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final String[] classification = {"OUT_OF_SCOPE_FOR_BETA35"};
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                System.out.println("JULIA_BETA35_TRAPDOOR_DOOR_ROW"
+                        + " objectId=minecraft:oak_door"
+                        + " family=multipart_door"
+                        + " supportCase=" + supportCase
+                        + " classification=OUT_OF_SCOPE_FOR_BETA35"
+                        + " reason=client_world_or_player_missing");
+                return;
+            }
+
+            BlockState supportState = mc.world.getBlockState(supportCandidatePos);
+            BlockState bottomState = mc.world.getBlockState(bottomPos);
+            BlockState topState = mc.world.getBlockState(topPos);
+            boolean bottomAppeared = bottomState.isOf(Blocks.OAK_DOOR);
+            boolean topAppeared = topState.isOf(Blocks.OAK_DOOR);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
+            double bottomDy = bottomAppeared ? SlabSupport.getYOffset(mc.world, bottomPos, bottomState)
+                    : Double.NaN;
+            double topDy = topAppeared ? SlabSupport.getYOffset(mc.world, topPos, topState) : Double.NaN;
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportCandidatePos, supportState, supportDy);
+            VoxelShape bottomOutlineShape = bottomAppeared
+                    ? bottomState.getOutlineShape(mc.world, bottomPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            VoxelShape bottomRaycastShape = bottomAppeared ? bottomState.getRaycastShape(mc.world, bottomPos) : null;
+            VoxelShape topOutlineShape = topAppeared
+                    ? topState.getOutlineShape(mc.world, topPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            VoxelShape topRaycastShape = topAppeared ? topState.getRaycastShape(mc.world, topPos) : null;
+            net.minecraft.util.math.Box bottomOutlineBox = beta35WorldBox(bottomOutlineShape, bottomPos);
+            net.minecraft.util.math.Box bottomRaycastBox = beta35WorldBox(bottomRaycastShape, bottomPos);
+            net.minecraft.util.math.Box topOutlineBox = beta35WorldBox(topOutlineShape, topPos);
+            net.minecraft.util.math.Box topRaycastBox = beta35WorldBox(topRaycastShape, topPos);
+            double bottomModelBottomY = bottomOutlineBox == null ? Double.NaN : bottomOutlineBox.minY;
+            double bottomContactGap = Double.isFinite(bottomModelBottomY) && Double.isFinite(supportVisibleTopY)
+                    ? bottomModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+            boolean bottomSurvivalGreen = bottomAppeared && bottomState.canPlaceAt(mc.world, bottomPos);
+            boolean topSurvivalGreen = topAppeared && topState.canPlaceAt(mc.world, topPos);
+            boolean contactGreen = Double.isFinite(bottomContactGap) && Math.abs(bottomContactGap) <= EPSILON;
+            boolean topAlignmentGreen = bottomAppeared && topAppeared
+                    && Double.isFinite(bottomDy)
+                    && Double.isFinite(topDy)
+                    && Math.abs(bottomDy - topDy) <= EPSILON
+                    && beta35SameBox(topOutlineBox, topRaycastBox);
+            boolean bottomTriadGreen = bottomAppeared && beta35SameBox(bottomOutlineBox, bottomRaycastBox);
+
+            if (!bottomAppeared || !topAppeared) {
+                classification[0] = "PLACEMENT_FAILURE";
+            } else if (!bottomSurvivalGreen || !topSurvivalGreen) {
+                classification[0] = "SURVIVAL_FAILURE";
+            } else if (!contactGreen) {
+                classification[0] = "CONTACT_GAP";
+            } else if (!bottomTriadGreen || !topAlignmentGreen) {
+                classification[0] = "TRIAD_MISMATCH";
+            } else {
+                classification[0] = "GREEN_ALREADY_INHERITS";
+            }
+
+            System.out.println("JULIA_BETA35_TRAPDOOR_DOOR_ROW"
+                    + " objectId=minecraft:oak_door"
+                    + " family=multipart_door"
+                    + " supportCase=" + supportCase
+                    + " placementResult=" + placementResult[0]
+                    + " bottomHalfAppeared=" + bottomAppeared
+                    + " topHalfAppeared=" + topAppeared
+                    + " bottomState=" + bottomState
+                    + " topState=" + topState
+                    + " supportCandidateState=" + supportState
+                    + " supportDy=" + String.format("%.6f", supportDy)
+                    + " bottomDy=" + (Double.isFinite(bottomDy) ? String.format("%.6f", bottomDy) : "N/A")
+                    + " topDy=" + (Double.isFinite(topDy) ? String.format("%.6f", topDy) : "N/A")
+                    + " supportVisibleTopY=" + (Double.isFinite(supportVisibleTopY)
+                            ? String.format("%.6f", supportVisibleTopY) : "N/A")
+                    + " bottomContactGap=" + (Double.isFinite(bottomContactGap)
+                            ? String.format("%.6f", bottomContactGap) : "CONTACT_NOT_APPLICABLE")
+                    + " topAlignment=" + (topAppeared ? (topAlignmentGreen ? "GREEN" : "RED") : "NOT_MEASURED")
+                    + " bottomModelBounds=" + beta35FormatBox(bottomOutlineBox)
+                    + " bottomOutlineBounds=" + beta35FormatBox(bottomOutlineBox)
+                    + " bottomRaycastBounds=" + beta35FormatBox(bottomRaycastBox)
+                    + " topOutlineBounds=" + beta35FormatBox(topOutlineBox)
+                    + " topRaycastBounds=" + beta35FormatBox(topRaycastBox)
+                    + " survivalResult=" + (bottomSurvivalGreen && topSurvivalGreen
+                            ? "SURVIVAL_GREEN" : "SURVIVAL_RED")
+                    + " unsupportedResult=NOT_TESTED_MULTIPART"
+                    + " bottomHalf=" + beta35PropertyValue(bottomState, Properties.DOUBLE_BLOCK_HALF)
+                    + " topHalf=" + beta35PropertyValue(topState, Properties.DOUBLE_BLOCK_HALF)
+                    + " facing=" + beta35PropertyValue(bottomState, Properties.HORIZONTAL_FACING)
+                    + " hinge=" + beta35PropertyValue(bottomState, Properties.DOOR_HINGE)
+                    + " open=" + beta35PropertyValue(bottomState, Properties.OPEN)
+                    + " classification=" + classification[0]);
+        });
+
+        return new Beta35TrapdoorDoorAuditRow(
+                "minecraft:oak_door",
+                "multipart_door",
+                supportCase.toString(),
+                classification[0]);
+    }
+
+    private static BlockHitResult beta35TopUseHit(
+            BlockPos supportCandidatePos,
+            Beta35CommonObjectSupportCase supportCase
+    ) {
+        double hitY = supportCase == Beta35CommonObjectSupportCase.LOWERED_BOTTOM_DY_MINUS_ONE
+                ? supportCandidatePos.getY() - 0.5d
+                : supportCandidatePos.getY() + 1.0d;
+        return new BlockHitResult(
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        hitY,
+                        supportCandidatePos.getZ() + 0.5d),
+                Direction.UP,
+                supportCandidatePos,
+                false);
+    }
+
+    private static String beta35FirstSlabNonGreenClassification(Beta35TrapdoorDoorAuditRow[] rows) {
+        for (Beta35TrapdoorDoorAuditRow row : rows) {
+            if (!"VANILLA_FULL_BLOCK".equals(row.supportCase())
+                    && !"GREEN_ALREADY_INHERITS".equals(row.classification())) {
+                return row.classification();
+            }
+        }
+        for (Beta35TrapdoorDoorAuditRow row : rows) {
+            if (!"GREEN_ALREADY_INHERITS".equals(row.classification())) {
+                return row.classification();
+            }
+        }
+        return "GREEN_ALREADY_INHERITS";
+    }
+
+    private static String beta35TrapdoorFailureLayer(String classification) {
+        return switch (classification) {
+            case "GREEN_ALREADY_INHERITS" -> "NONE";
+            case "PLACEMENT_FAILURE" -> "TRAPDOOR_PLACEMENT_FAILURE";
+            case "SURVIVAL_FAILURE" -> "TRAPDOOR_SURVIVAL_FAILURE";
+            case "CONTACT_GAP" -> "TRAPDOOR_CONTACT_GAP";
+            case "TRIAD_MISMATCH" -> "TRAPDOOR_TRIAD_MISMATCH";
+            case "COLLISION_SHAPE_RISK" -> "TRAPDOOR_COLLISION_SHAPE_RISK";
+            case "OPEN_CLOSE_RISK" -> "TRAPDOOR_OPEN_CLOSE_RISK";
+            default -> "TRAPDOOR_UNKNOWN_FAILURE";
+        };
+    }
+
+    private static String beta35DoorFailureLayer(String classification) {
+        return switch (classification) {
+            case "GREEN_ALREADY_INHERITS" -> "NONE";
+            case "PLACEMENT_FAILURE" -> "DOOR_MULTIPART_PLACEMENT_FAILURE";
+            case "SURVIVAL_FAILURE" -> "DOOR_MULTIPART_SURVIVAL_FAILURE";
+            case "CONTACT_GAP" -> "DOOR_MULTIPART_CONTACT_GAP";
+            case "TRIAD_MISMATCH" -> "DOOR_MULTIPART_TRIAD_MISMATCH";
+            default -> "DOOR_MULTIPART_RISK";
+        };
+    }
+
+    private static String beta35PropertyValue(
+            BlockState state,
+            net.minecraft.state.property.Property<?> property
+    ) {
+        if (state == null || !state.contains(property)) {
+            return "N/A";
+        }
+        return String.valueOf(state.get(property));
     }
 
     /**

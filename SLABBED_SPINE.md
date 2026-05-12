@@ -535,3 +535,14 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused oak-fence proof, focused common-object matrix, focused floor/top family audit, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-oak-fence-contact-risk-a6400ca`. See `docs/beta35-oak-fence-contact-risk.md`.
 - Release remains paused. No release audit run. No release tag moved. Trapdoor, door, and sign were not touched.
+
+## Beta 3.5 trapdoor / door category audit (2026-05-11)
+
+- Operating base for this proof/docs slice: `f88afb7` / `save/beta35-oak-fence-contact-integrated` on `integrate/phase19-into-side-slab-top-support`.
+- New gated audit: `-Dslabbed.beta35TrapdoorDoorAudit=true`; markers `JULIA_BETA35_TRAPDOOR_DOOR_MATRIX_START`, `JULIA_BETA35_TRAPDOOR_DOOR_ROW`, and `JULIA_BETA35_TRAPDOOR_DOOR_SUMMARY`.
+- Current green set remains `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, and `minecraft:oak_fence`.
+- `minecraft:oak_trapdoor` places and survives on slab-supported rows; open/close was exercised successfully, but slab-supported rows remain `CONTACT_GAP` (`0.500000` plain bottom, `1.000000` lowered bottom). Exact failure layer: `TRAPDOOR_CONTACT_GAP`. Next safe implementation slice is trapdoor-only contact/open-close handling.
+- `minecraft:oak_door` places both halves and both halves survive, with matching `bottomDy`/`topDy` on audited rows; slab-supported rows remain `CONTACT_GAP` (`0.500000` plain bottom, `1.000000` lowered bottom) and the category remains multipart-risky. Exact failure layer: `DOOR_MULTIPART_CONTACT_GAP`. Recommended status: defer door unless Julia authorizes a separate multipart slice.
+- Validation passed: `compileJava compileGametestJava`, focused trapdoor/door audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-trapdoor-door-category-audit-f88afb7`. See `docs/beta35-trapdoor-door-category-audit.md`.
+- Release remains paused. No release audit run. No release tag moved. Signs, lanterns, chains, redstone, and rails were not touched.
