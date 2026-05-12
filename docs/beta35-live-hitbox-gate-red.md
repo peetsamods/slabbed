@@ -77,3 +77,14 @@ Post-family live-hitbox audit:
 - `JULIA_BETA35_LIVE_HITBOX_GATE_SUMMARY outcome=PENDING rows=5 red=0 pending=3 green=2 fenceHitboxClassification=PENDING fenceHitboxFailureLayer=PROOF_HARNESS_GAP wallHitboxClassification=PENDING wallHitboxFailureLayer=PROOF_HARNESS_GAP anvilHitboxClassification=PENDING anvilHitboxFailureLayer=PROOF_HARNESS_GAP fenceGateClosedClassification=GREEN fenceGateClosedFailureLayer=NONE fenceGateOpenClassification=GREEN fenceGateOpenFailureLayer=NONE`
 
 Fence gate contact is now green for the tested family. The remaining blocker in this matrix is still the fence/wall/anvil true hitbox proof-harness gap.
+
+## Follow-Up: Live Hitbox Owner RED
+
+The next proof slice closed the former fence/wall/anvil `PROOF_HARNESS_GAP` as a live player-ray owner mismatch. It did not change production collision, targeting, mixin, render, release, or metadata behavior.
+
+Focused owner proof:
+
+- Gate: `-Dslabbed.beta35LiveHitboxOwnerRed=true`
+- Summary: `JULIA_BETA35_LIVE_HITBOX_OWNER_SUMMARY outcome=RED rows=3 red=3 pending=0 green=0 wallHitboxOwnerClassification=WALL_HITBOX_OWNER_GAP wallHitboxOwnerFailureLayer=OUTLINE_RAYCAST_OWNER_GAP fenceHitboxOwnerClassification=FENCE_HITBOX_OWNER_GAP fenceHitboxOwnerFailureLayer=OUTLINE_RAYCAST_OWNER_GAP anvilHitboxOwnerClassification=ANVIL_HITBOX_OWNER_GAP anvilHitboxOwnerFailureLayer=OUTLINE_RAYCAST_OWNER_GAP contactRenderFenceGateFamily=GREEN_SEPARATE hitboxOwnershipProof=RED recommendedNextSlice=GameRendererCrosshairRetargetMixin_owner_classification productionBehaviorChanged=false releaseAudit=NOT_RUN releaseTagMoved=false`
+
+Contact/render/fence-gate family support remains separate and green. The remaining blocker is selection ownership for visible lowered fence/wall/anvil bodies.
