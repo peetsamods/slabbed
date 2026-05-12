@@ -1100,6 +1100,10 @@ public final class SlabSupport {
                             || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, supportPos, supportState))) {
                 return -1.5;
             }
+            double loweredBottomSupportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+            if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
+                return loweredBottomSupportDy - 0.5d;
+            }
             if (isTopSlab(supportState)
                     && SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, supportPos, supportState)) {
                 return -1.0;
@@ -1168,6 +1172,34 @@ public final class SlabSupport {
         }
 
         return 0.0;
+    }
+
+    private static double floorTorchBottomSlabSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null || !isBottomSlab(state) || !state.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
+            return -1.0d;
+        }
+        if (SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
+            return -0.5d;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        if (below.getBlock() instanceof SlabBlock) {
+            if (isLoweredDoubleSlabCarrier(world, belowPos, below)) {
+                return -0.5d;
+            }
+        } else if (!isCompoundVisibleOwnerTopSlab(world, pos, state)
+                && hasLoweredCarrierBelow(world, pos)) {
+            return -0.5d;
+        }
+        if (!isCompoundVisibleOwnerTopSlab(world, pos, state)
+                && isAdjacentSideSlabLowered(world, pos, state)) {
+            return -0.5d;
+        }
+        return 0.0d;
     }
 
     private static boolean isBottomPersistentTracePos(BlockPos pos) {

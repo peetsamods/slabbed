@@ -80,3 +80,26 @@ Measured fixed result:
 Beta 3.5 release prep remains paused pending Julia live acceptance. No release
 tag moved. Scope remains `floor_torch_only`; `wall_torch`, `lantern`, `signs`,
 and `chains` remain `NOT_COVERED`.
+
+## Follow-up plain-bottom contact fix
+
+After this savepoint, Julia's live acceptance trace confirmed the
+`supportDy=-1.0` lowered bottom-slab placement bug stayed GREEN, including
+`finalInteractResult=Success[...]` and
+`torchBlockAppearedAfterAttempt=true`.
+
+The remaining concrete contact gap was a different row:
+`supportSourceType=PLAIN_STATE`, `supportDy=-0.500000`, previous
+`torchDy=-0.500000`, and previous `contactGap=0.500000`.
+
+That row is now fixed by the plain-bottom contact slice. The focused proof
+reports `supportDy=-0.500000`, `torchDy=-1.000000`,
+`supportVisibleTopY=-55.000000`, `torchModelBottomY=-55.000000`,
+`contactGap=0.000000`, `classification=PLACED_CONTACT_GREEN`, and
+`failureLayer=NONE`. Duplicate occupied-target torch clicks are tracer
+classified as `OCCUPIED_TORCH_TARGET`, not a true empty-target placement
+failure.
+
+This follow-up remains `floor_torch_only`; `wall_torch`, `lantern`, `signs`,
+and `chains` remain `NOT_COVERED`. Beta 3.5 release prep remains paused pending
+Julia live acceptance. No release tag moved.
