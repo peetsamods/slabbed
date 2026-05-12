@@ -484,5 +484,7 @@ If the slice changes, update the source pack and spine together so the current o
 - Release audit remains paused until Julia decides whether floor torch plus candle plus flower pot is enough for Beta 3.5, or whether standing sign must also be handled. No release audit run. No release tag moved.
 
 
-- 2026-05-11: Added Beta 3.5 release-readiness audit PASS record at HEAD `f9d2987` / `save/beta35-flower-pot-floor-top-contact`. Scope is `floor_torch + candle + flower_pot` only. `wall_torch`, `lantern`, `chains`, signs, hanging signs, redstone, and rails remain `NOT_COVERED` with release prep still paused for final release bookkeeping only.
-- 2026-05-11: Marked the release-readiness audit as scoped only. It is a superseded evidence savepoint: PASS for `floor_torch + candle + flower_pot`, but not release authorization for any expanded common-object scope until Julia green-lights the expansion.
+- 2026-05-11: Added Beta 3.5 release-readiness audit PASS record at HEAD `f9d2987` / `save/beta35-flower-pot-floor-top-contact` for scoped candidate `floor_torch + candle + flower_pot`.
+- 2026-05-11: Marked the scoped release-readiness audit as superseded by Julia's expanded common-object scope request (`trapdoors`, `doors`, `crafting_table`, `fences`, etc.); it is not release authorization for that expanded scope.
+- `wall_torch`, `lantern`, `chains`, signs, hanging signs, redstone, and rails remain `NOT_COVERED` for Beta 3.5 scoped scope.
+- Release finalization is paused; next action is a common-object compatibility matrix from a clean savepoint.

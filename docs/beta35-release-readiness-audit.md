@@ -22,4 +22,4 @@
 - jdeps scan: same opt-in recorder classes referenced by runtime paths; no direct dev/debug/gametest package-class hard dependency in main logic beyond beta35 tracer/capture classes.
 - release-audit decision: PASS (scoped to `floor_torch + candle + flower_pot`)
 - expanded scope note: this document is a scoped audit; it should not be treated as release authorization for the expanded common-object scope.
-- nextSlice: release-finalization/version/changelog/tag (only after Julia approval to publish)
+- nextSlice: Beta 3.5 common-object compatibility audit from the next clean savepoint (release finalization remains pending)
