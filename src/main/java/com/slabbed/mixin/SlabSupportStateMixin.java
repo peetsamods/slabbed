@@ -199,10 +199,27 @@ public abstract class SlabSupportStateMixin {
             } else if (slabbed$isLoweredBeta35FloorTopContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
+            } else if (self.isOf(Blocks.OAK_FENCE) && (shape == null || shape.isEmpty())) {
+                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                return;
             } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
                 shape = VoxelShapes.fullCube();
             }
             cir.setReturnValue(shape.offset(0.0, yOff, 0.0));
+        }
+    }
+
+    @Inject(method = "getCollisionShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/ShapeContext;)Lnet/minecraft/util/shape/VoxelShape;",
+            at = @At("RETURN"), cancellable = true)
+    private void slabbed$offsetOakFenceCollision(BlockView world, BlockPos pos, ShapeContext ctx,
+                                                 CallbackInfoReturnable<VoxelShape> cir) {
+        BlockState self = (BlockState) (Object) this;
+        if (!self.isOf(Blocks.OAK_FENCE)) {
+            return;
+        }
+        double yOff = SlabSupport.getYOffset(world, pos, self);
+        if (yOff != 0.0) {
+            cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
         }
     }
 
@@ -227,6 +244,9 @@ public abstract class SlabSupportStateMixin {
         if (yOff != 0.0) {
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
+            } else if (self.isOf(Blocks.OAK_FENCE)) {
+                cir.setReturnValue(self.getCollisionShape(world, pos, ctx));
+                return;
             }
             shape = shape.offset(0.0, yOff, 0.0);
             changed = true;
