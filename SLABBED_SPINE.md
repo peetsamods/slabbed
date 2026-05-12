@@ -546,3 +546,14 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused trapdoor/door audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-trapdoor-door-category-audit-f88afb7`. See `docs/beta35-trapdoor-door-category-audit.md`.
 - Release remains paused. No release audit run. No release tag moved. Signs, lanterns, chains, redstone, and rails were not touched.
+
+## Beta 3.5 oak trapdoor contact fix (2026-05-11)
+
+- Operating base for this implementation slice: `2300229` / `save/beta35-trapdoor-door-category-audit` on `integrate/phase19-into-side-slab-top-support`.
+- Narrow production fix: `SlabSupport.getYOffsetInner(...)` now has an `minecraft:oak_trapdoor` bottom-half-only contact dy path over valid lowered bottom slab support truth, and `SlabSupportStateMixin` gives lowered bottom-half oak trapdoors an outline-backed raycast basis when vanilla raycast is empty. This is not an oak door, sign, lantern, chain, redstone, rail, all-trapdoor, all-object, or global sturdy-face/solidity change.
+- Focused proof gate: `-Dslabbed.beta35OakTrapdoorContact=true`; markers `JULIA_BETA35_OAK_TRAPDOOR_CONTACT_GREEN` and `JULIA_BETA35_OAK_TRAPDOOR_CONTACT_SUMMARY failureLayer=NONE`.
+- `minecraft:oak_trapdoor` is now GREEN for the audited bottom-half interactive hinge representative on valid slab-supported rows: plain bottom support and lowered bottom support both report `contactGap=0.000000`, `triadCoLocated=yes`, collision bounds co-located, and `openCloseResult=Success->Success`.
+- Updated common-object matrix: `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, and `minecraft:oak_trapdoor` are GREEN. `minecraft:oak_door` remains `CONTACT_GAP` plus `MULTIPART_RISK`; standing `minecraft:oak_sign` remains `CONTACT_GAP` plus `RENDERER_SPECIAL_CASE`; `lantern`, `chain`, `redstone_wire`, and `rail` remain not covered.
+- Validation passed: `compileJava compileGametestJava`, focused oak-trapdoor proof, focused trapdoor/door audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-oak-trapdoor-contact-fix-2300229`. See `docs/beta35-oak-trapdoor-contact-fix.md`.
+- Release remains paused pending Julia decision on whether door is required before release. No release audit run. No release tag moved. Oak door, signs, lanterns, chains, redstone, and rails were not touched.

@@ -65,3 +65,19 @@ Recommendation: defer door for Beta 3.5 unless Julia explicitly authorizes a sep
 - `./gradlew --no-daemon runClientGameTest --console plain`: PASS
 
 Release remains paused pending Julia decision.
+
+## Post-Fix Oak Trapdoor Contact Slice
+
+Follow-up implementation at base `2300229` / `save/beta35-trapdoor-door-category-audit` added `-Dslabbed.beta35OakTrapdoorContact=true` for `minecraft:oak_trapdoor` only.
+
+`minecraft:oak_trapdoor` is now GREEN for the audited bottom-half trapdoor representative on valid slab-supported surfaces. Plain bottom slab support now reports `supportDy=-0.500000`, `objectDy=-1.000000`, `contactGap=0.000000`, `triadCoLocated=yes`, collision bounds co-located, and `openCloseResult=Success->Success`. Lowered bottom slab support now reports `supportDy=-1.000000`, `objectDy=-1.500000`, `contactGap=0.000000`, `triadCoLocated=yes`, collision bounds co-located, and `openCloseResult=Success->Success`.
+
+Focused proof summary:
+
+`JULIA_BETA35_OAK_TRAPDOOR_CONTACT_SUMMARY failureLayer=NONE objectId=minecraft:oak_trapdoor family=interactive_hinge supportRows=2 expectedSupportRowsGreen=true vanillaFullBlockControl=NOT_RELEASE_CRITERION_FOR_SLAB_CONTACT currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor oak_door=UNCHANGED_DEFERRED_MULTIPART_RISK signs=NOT_TOUCHED lanterns=NOT_TOUCHED chains=NOT_TOUCHED redstone=NOT_TOUCHED rails=NOT_TOUCHED releaseAudit=NOT_RUN releasePrep=PAUSED`
+
+`minecraft:oak_door` was not implemented in this slice and remains a deferred multipart risk with exact failure layer `DOOR_MULTIPART_CONTACT_GAP`.
+
+Current green set is now `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, and `minecraft:oak_trapdoor`.
+
+No release audit ran. No release tag moved. Signs, lanterns, chains, redstone, and rails were not touched. Release remains paused pending Julia decision on whether door is required before release.

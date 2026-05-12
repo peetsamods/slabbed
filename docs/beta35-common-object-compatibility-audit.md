@@ -53,6 +53,10 @@ Post oak-fence partial-collision contact fix summary marker:
 
 `JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=18 placementFailure=0 survivalFailure=0 contactGap=6 triadMismatch=0 collisionShapeRisk=0 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=1 lantern=NOT_AUDITED_CEILING_HANGING_CATEGORY chain=NOT_AUDITED_CEILING_HANGING_CATEGORY redstone_wire=NOT_AUDITED_SPECIAL_FLOOR_LOGIC rail=NOT_AUDITED_SPECIAL_FLOOR_LOGIC releaseAudit=NOT_RUN releasePrep=PAUSED`
 
+Post oak-trapdoor contact fix summary marker:
+
+`JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=4 triadMismatch=0 collisionShapeRisk=0 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=0 lantern=NOT_AUDITED_CEILING_HANGING_CATEGORY chain=NOT_AUDITED_CEILING_HANGING_CATEGORY redstone_wire=NOT_AUDITED_SPECIAL_FLOOR_LOGIC rail=NOT_AUDITED_SPECIAL_FLOOR_LOGIC releaseAudit=NOT_RUN releasePrep=PAUSED`
+
 | Representative | Family | Vanilla full block | Plain bottom slab `supportDy=-0.5` | Lowered bottom slab `supportDy=-1.0` | Classification |
 | --- | --- | --- | --- | --- | --- |
 | `minecraft:torch` | floor/top decor control | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` |
@@ -61,7 +65,7 @@ Post oak-fence partial-collision contact fix summary marker:
 | `minecraft:crafting_table` | ordinary full block | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` |
 | `minecraft:furnace` | ordinary full block | GREEN | GREEN, `contactGap=0.000000`, `triadCoLocated=yes` | GREEN, `contactGap=0.000000`, `triadCoLocated=yes` | `GREEN_ALREADY_INHERITS` |
 | `minecraft:oak_fence` | partial collision block | GREEN | GREEN, `contactGap=0.000000`, `triadCoLocated=yes`, `collisionCoLocated=yes` | GREEN, `contactGap=0.000000`, `triadCoLocated=yes`, `collisionCoLocated=yes` | `GREEN_ALREADY_INHERITS` for oak fence only |
-| `minecraft:oak_trapdoor` | attachment / hinge block | `NEEDS_CATEGORY_SLICE` | `CONTACT_GAP=0.500000` | `CONTACT_GAP=1.000000` | `CONTACT_GAP` plus category risk |
+| `minecraft:oak_trapdoor` | attachment / hinge block | GREEN | GREEN, `contactGap=0.000000`, `triadCoLocated=yes`, `collisionCoLocated=yes` | GREEN, `contactGap=0.000000`, `triadCoLocated=yes`, `collisionCoLocated=yes` | `GREEN_ALREADY_INHERITS` for oak trapdoor only |
 | `minecraft:oak_door` | multipart block | `MULTIPART_RISK` | `CONTACT_GAP=0.500000` | `CONTACT_GAP=1.000000` | `CONTACT_GAP` plus multipart risk |
 | `minecraft:oak_sign` | renderer / block entity standing sign | `RENDERER_SPECIAL_CASE` | `CONTACT_GAP=0.500000` | `CONTACT_GAP=1.000000` | `CONTACT_GAP` plus renderer risk |
 
@@ -76,8 +80,8 @@ The shared slab-supported failure layer is contact alignment:
 - `crafting_table` is now GREEN for the ordinary-full-block representative contact slice. It places and survives on vanilla, plain bottom slab support, and lowered bottom slab support; slab-supported rows now report `contactGap=0.000000` and `triadCoLocated=yes`.
 - `furnace` is now GREEN for the ordinary-full-block sibling triad slice. It inherited the contact dy (`contactGap=0.000000`) and now reports matching model, outline, and raycast bounds on slab-supported rows.
 - `oak_fence` is now GREEN for the single oak-fence partial-collision representative. It uses oak-fence-only contact dy plus lowered outline/raycast/collision shape alignment; no all-fence, wall, pane, trapdoor, door, sign, or global sturdy-face/solidity behavior was added.
-- attachment/multipart/render-special representatives still show the slab-supported contact-gap pattern before their family-specific risks can honestly be called green.
-- `oak_trapdoor` also needs an attachment/hinge orientation/open-closed category slice.
+- `oak_trapdoor` is now GREEN for the single bottom-half oak-trapdoor interactive hinge representative. It uses oak-trapdoor-only contact dy plus an outline-backed raycast basis for lowered bottom-half trapdoors with empty vanilla raycast. Open/close remained GREEN. This does not claim all trapdoors.
+- multipart/render-special representatives still show the slab-supported contact-gap pattern before their family-specific risks can honestly be called green.
 - `oak_door` also needs a multipart two-block category slice.
 - standing `oak_sign` remains the known renderer/block-entity special case.
 
@@ -96,7 +100,7 @@ Not recommended unless Julia accepts that Beta 3.5 only promises `floor_torch + 
 
 B. Fix one more high-value family before release:
 
-The ordinary full-block representatives (`minecraft:crafting_table` and `minecraft:furnace`) and the single partial-collision representative (`minecraft:oak_fence`) are now fixed. Recommended next implementation category, if Julia wants one more common-object family, is an explicitly chosen remaining category slice such as trapdoor, door, or standing sign. Do not bundle trapdoors, doors, signs, hanging objects, rails, redstone, or all-item support.
+The ordinary full-block representatives (`minecraft:crafting_table` and `minecraft:furnace`), the single partial-collision representative (`minecraft:oak_fence`), and the single interactive hinge representative (`minecraft:oak_trapdoor`) are now fixed. Recommended next implementation category, if Julia wants one more common-object family, is an explicitly chosen remaining category slice such as door or standing sign. Do not bundle doors, signs, hanging objects, rails, redstone, or all-item support.
 
 C. Defer Beta 3.5 release until common object matrix minimum set is green:
 
@@ -106,14 +110,24 @@ Required if Julia wants expanded common-object compatibility to be a Beta 3.5 re
 
 Release remains paused pending Julia decision.
 
-Post-fix status: `minecraft:crafting_table` and `minecraft:furnace` are GREEN ordinary full-block representatives; `minecraft:oak_fence` is GREEN for the oak-fence-only partial-collision representative; `minecraft:oak_trapdoor`, `minecraft:oak_door`, and standing `minecraft:oak_sign` remain separate categories. Release remains paused pending Julia decision.
+Post-fix status: `minecraft:crafting_table` and `minecraft:furnace` are GREEN ordinary full-block representatives; `minecraft:oak_fence` is GREEN for the oak-fence-only partial-collision representative; `minecraft:oak_trapdoor` is GREEN for the oak-trapdoor-only bottom-half interactive hinge representative; `minecraft:oak_door` and standing `minecraft:oak_sign` remain separate categories. Release remains paused pending Julia decision.
 
 ## Trapdoor / Door Category Audit Follow-up
 
 Follow-up audit at `f88afb7` / `save/beta35-oak-fence-contact-integrated` added `-Dslabbed.beta35TrapdoorDoorAudit=true` with no production behavior changes.
 
-`minecraft:oak_trapdoor` places and survives on slab-supported rows, and open/close interaction was exercised successfully, but slab-supported rows remain `CONTACT_GAP` (`0.500000` on plain bottom support, `1.000000` on lowered bottom support). Exact failure layer: `TRAPDOOR_CONTACT_GAP`. Recommended next slice is trapdoor-only contact/open-close implementation.
+At audit time, `minecraft:oak_trapdoor` placed and survived on slab-supported rows, and open/close interaction was exercised successfully, but slab-supported rows reported `CONTACT_GAP` (`0.500000` on plain bottom support, `1.000000` on lowered bottom support). Exact failure layer was `TRAPDOOR_CONTACT_GAP`. This historical audit result is superseded by the oak trapdoor contact fix follow-up below.
 
 `minecraft:oak_door` places both bottom and top halves and both halves survive, with matching `bottomDy`/`topDy` on audited rows. Slab-supported rows remain `CONTACT_GAP` (`0.500000` plain bottom, `1.000000` lowered bottom) and the category remains multipart-risky. Exact failure layer: `DOOR_MULTIPART_CONTACT_GAP`. Recommended status: defer door unless Julia authorizes a separate multipart slice.
 
-Current green set remains `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, and `minecraft:oak_fence`. No release audit ran. No release tag moved. Signs, lanterns, chains, redstone, and rails were not touched.
+At audit time, the green set was `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, and `minecraft:oak_fence`. No release audit ran. No release tag moved. Signs, lanterns, chains, redstone, and rails were not touched.
+
+## Oak Trapdoor Contact Fix Follow-up
+
+Follow-up implementation at `2300229` / `save/beta35-trapdoor-door-category-audit` added `-Dslabbed.beta35OakTrapdoorContact=true` for `minecraft:oak_trapdoor` only.
+
+Focused proof reports `failureLayer=NONE` for valid slab-supported bottom-half oak trapdoor rows. Plain bottom slab support and lowered bottom slab support both report `contactGap=0.000000`, `triadCoLocated=yes`, collision bounds co-located, and `openCloseResult=Success->Success`.
+
+`minecraft:oak_door` remains unchanged and deferred with `DOOR_MULTIPART_CONTACT_GAP`. Signs, lanterns, chains, redstone, and rails remain not covered by this slice. No release audit ran. No release tag moved.
+
+Current green set is now `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, and `minecraft:oak_trapdoor`.
