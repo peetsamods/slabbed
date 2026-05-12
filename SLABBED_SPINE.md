@@ -800,3 +800,18 @@ If the slice changes, update the source pack and spine together so the current o
 - Current green fence/wall set (shape-triad + render-quad + birch_fence variant): `minecraft:oak_fence`, `minecraft:birch_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, `minecraft:cobblestone_wall`. `minecraft:glass_pane` remains `NOT_COVERED`. Other wood fences not yet covered.
 - **Beta 3.5 release remains BLOCKED.** Remaining live failures from Julia's session: `birch_trapdoor`, `spruce_door`, `birch_sign`, and anvil placement-event capture. No release audit was run. No release tag was moved.
 - Evidence folder: `tmp/beta35-birch-fence-variant-fix-77c11e0/`. See `docs/beta35-birch-fence-variant-fix.md`.
+
+## Beta 3.5 fence/wall family fix (2026-05-12)
+
+- Operating base: HEAD `25a6ef6` / `save/beta35-birch-fence-variant-fix` on `integrate/phase19-into-side-slab-top-support`.
+- Production fix: `src/main/java/com/slabbed/util/SlabSupport.java` `isBeta35FenceWallVariantContactObject` — replaced exact-block named allowlist with `state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock`. `PaneBlock` remains explicitly excluded (returns false).
+- `OffsetBlockStateModel.emitQuads` was **not modified**; the existing `!SlabSupport.isBeta35FenceWallVariantContactObject(state)` guard within the `FenceBlock | WallBlock | PaneBlock` branch automatically propagates the wider family rule to the render path.
+- `SlabSupportStateMixin` was **not modified**; it already delegates to the same helper for collision/outline/raycast offset.
+- New proof: `-Dslabbed.beta35FenceWallFamilyFix=true` — `runBeta35FenceWallFamilyFixProof` — 21 rows: 11 FenceBlock + 9 WallBlock + 1 PaneBlock control.
+- Result: GREEN. `JULIA_BETA35_FENCE_WALL_FAMILY_SUMMARY outcome=GREEN rows=21 greenFamily=20 notCovered=1 modelRenderGap=0 shapeContactGap=0 placementFailure=0 glassPaneControl=NOT_COVERED failureLayer=NONE productionFixImplemented=true`.
+- All FenceBlock variants GREEN_FAMILY: `oak_fence`, `birch_fence`, `jungle_fence`, `acacia_fence`, `dark_oak_fence`, `mangrove_fence`, `cherry_fence`, `bamboo_fence`, `crimson_fence`, `warped_fence`, `nether_brick_fence` — all `objectDy=-1.500000`, `renderDyApplied=yes`, `shapeContactGap=0.000000`, `shapeTriadCoLocated=yes`.
+- All WallBlock variants GREEN_FAMILY: `cobblestone_wall`, `mossy_cobblestone_wall`, `stone_brick_wall`, `brick_wall`, `andesite_wall`, `granite_wall`, `diorite_wall`, `cobbled_deepslate_wall`, `polished_blackstone_brick_wall` — all `objectDy=-1.500000`, `renderDyApplied=yes`, `shapeContactGap=0.000000`, `shapeTriadCoLocated=yes`.
+- `glass_pane` control: `inFenceWallFamily=no`, `renderDyApplied=no`, `shapeContactGap=1.500000`, `classification=NOT_COVERED`. Pane support not added.
+- Prior proofs unaffected: `JULIA_BETA35_BIRCH_FENCE_VARIANT_SUMMARY outcome=GREEN`; `JULIA_BETA35_FENCE_MODEL_RENDER_SUMMARY outcome=GREEN`; `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_SUMMARY outcome=GREEN`; `JULIA_BETA35_FENCE_FAMILY_SUMMARY outcome=GREEN`; `JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=27 contactGap=0`.
+- **Beta 3.5 release remains BLOCKED.** Remaining live failures: `birch_trapdoor`, `spruce_door`, `birch_sign`, and anvil placement-event capture. No release audit was run. No release tag was moved.
+- Evidence folder: `tmp/beta35-fence-wall-family-fix-25a6ef6/`. See `docs/beta35-fence-wall-family-fix.md`.

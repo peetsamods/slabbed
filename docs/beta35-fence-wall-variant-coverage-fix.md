@@ -83,3 +83,7 @@ The GREEN result above is **rescinded as a release artifact** by the Beta 3.5 fe
 ## Wood fence family scope gap confirmed (2026-05-12)
 
 In addition to the render-quad gap, the four-variant allowlist does not cover the wood fence family: `birch_fence` (Julia's live-tested variant) is not in the allowlist. The focused RED proof at `4f09773` / `save/beta35-birch-fence-variant-red` confirms `VARIANT_FAMILY_COVERAGE_GAP` for `minecraft:birch_fence` independently of the render-quad issue. The current green set (`oak_fence`, `spruce_fence`, `nether_brick_fence`, `cobblestone_wall`) is too exact for vanilla player expectations. See `docs/beta35-birch-fence-variant-red.md`.
+
+## Fence/wall family promotion (2026-05-12)
+
+The exact-block allowlist was promoted to the full `FenceBlock`/`WallBlock` family rule in `save/beta35-fence-wall-family-fix`. The coverage gap for wood fence variants and all wall variants is now resolved. `PaneBlock` remains NOT_COVERED. See `docs/beta35-fence-wall-family-fix.md`.
