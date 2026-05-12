@@ -175,11 +175,8 @@ public final class SlabSupport {
 
     public static boolean isBeta35FenceWallVariantContactObject(BlockState state) {
         return state != null
-                && (state.isOf(Blocks.OAK_FENCE)
-                        || state.isOf(Blocks.BIRCH_FENCE)
-                        || state.isOf(Blocks.SPRUCE_FENCE)
-                        || state.isOf(Blocks.NETHER_BRICK_FENCE)
-                        || state.isOf(Blocks.COBBLESTONE_WALL));
+                && (state.getBlock() instanceof FenceBlock
+                        || state.getBlock() instanceof WallBlock);
     }
 
     private static boolean isBeta35OakTrapdoorContactObject(BlockState state) {
