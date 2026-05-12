@@ -347,6 +347,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35AnvilContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35AnvilContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35TrapdoorDoorAudit")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10872,10 +10881,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         true),
                 new Beta35CommonObjectCase(
                         "minecraft:anvil",
-                        "special_shape_fullblock",
+                        "falling_special_shape",
                         Items.ANVIL,
                         Blocks.ANVIL.getDefaultState(),
-                        "NEEDS_CATEGORY_SLICE",
+                        "GREEN_ALREADY_INHERITS",
                         false,
                         true,
                         true),
@@ -10932,11 +10941,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " specialRendererRisk=" + specialRendererRisk
                 + " needsCategorySlice=" + needsCategorySlice
                 + " outOfScopeForBeta35=" + outOfScope
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table,stonecutter"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table,stonecutter,anvil"
                 + " doorSlice=PARALLEL_NOT_INSPECTED"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED"
-                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_contact_dy_and_barrel_raycast_triad");
+                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_anvil_contact_dy_and_barrel_raycast_triad");
     }
 
     private static Beta35CommonObjectAuditResult runBeta35SpecialFullblockAuditRow(
@@ -11431,6 +11440,93 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " classification=RED");
             throw new RuntimeException("[JULIA_BETA35_STONECUTTER_CONTACT_RED]"
                     + " reason=stonecutter_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
+    }
+
+    /**
+     * Focused anvil proof for the Beta 3.5 falling special-shape contact slice.
+     *
+     * Gate: -Dslabbed.beta35AnvilContact=true
+     */
+    private static void runBeta35AnvilContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase anvil = new Beta35CommonObjectCase(
+                "minecraft:anvil",
+                "falling_special_shape",
+                Items.ANVIL,
+                Blocks.ANVIL.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35SpecialFullblockAuditRow(
+                    ctx,
+                    singleplayer,
+                    anvil,
+                    supportCase,
+                    0);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "ANVIL_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "ANVIL_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "ANVIL_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "ANVIL_TRIAD_MISMATCH";
+                    default -> "ANVIL_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_ANVIL_CONTACT_GREEN"
+                        + " objectId=minecraft:anvil"
+                        + " family=falling_special_shape"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " fallingBehavior=STABLE_ON_VALID_SUPPORT"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " raycastBasis=lowered_outline_when_native_empty"
+                        + " collisionCategory=vanilla_collision_not_contact_authority"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_ANVIL_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:anvil"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " fallingBehavior=STABLE_ON_VALID_SUPPORT"
+                + " collisionCategory=vanilla_collision_not_contact_authority"
+                + " crafting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " furnace=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " bookshelf=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " chest=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " barrel=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " enchanting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " stonecutter=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " lectern=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " grindstone=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " doorTrapdoorSignLanternChainEndRodRedstoneRail=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_ANVIL_CONTACT_RED"
+                    + " objectId=minecraft:anvil"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_ANVIL_CONTACT_RED]"
+                    + " reason=anvil_contact_not_green"
                     + " failureLayer=" + failureLayer);
         }
     }

@@ -22,9 +22,11 @@ Helpers extracted:
 - `SlabSupport.beta35SpecialFullblockContactDy(...)`
 - `SlabSupportStateMixin.slabbed$isBeta35SpecialFullblockRaycastFallbackObject(...)`
 
-Contact dy and raycast fallback remain separate concerns. The contact helper covers only already-green representatives: `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter`.
+Contact dy and raycast fallback remain separate concerns. At consolidation time, the contact helper covered only already-green representatives: `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter`.
 
-The raycast fallback helper covers only already-proven empty-native-raycast representatives: `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter`.
+The raycast fallback helper covered only already-proven empty-native-raycast representatives at consolidation time: `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter`.
+
+Follow-up: `minecraft:anvil` joined both explicit helper allowlists only after the focused anvil proof at `9f3bacf` showed the same narrow contact-dy plus empty-raycast mechanism on valid slab-supported rows.
 
 ## Boundaries
 
@@ -56,6 +58,6 @@ Common-object matrix summary stayed unchanged: `rows=27 greenAlreadyInherits=21 
 
 ## Next Slice
 
-Recommended next implementation slice: `minecraft:grindstone` or `minecraft:anvil`.
+Recommended next implementation slice after the anvil follow-up: `minecraft:grindstone`, or `minecraft:lectern` if Julia chooses the interactive block-entity slice.
 
-Do not bundle either with lectern.
+Do not bundle grindstone with lectern.
