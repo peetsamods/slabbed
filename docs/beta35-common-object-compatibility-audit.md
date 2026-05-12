@@ -158,6 +158,18 @@ Special-fullblock matrix follow-up now reports `greenAlreadyInherits=9`, `contac
 
 Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
 
+## Stonecutter Contact Fix Follow-up
+
+Follow-up implementation at `99b03ed` / `save/beta35-enchanting-table-contact` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
+
+Focused gate: `-Dslabbed.beta35StonecutterContact=true`; markers `JULIA_BETA35_STONECUTTER_CONTACT_GREEN` and `JULIA_BETA35_STONECUTTER_CONTACT_SUMMARY`.
+
+`minecraft:stonecutter` is now GREEN for the focused special-shape contact representative. Slab-supported rows report `contactGap=0.000000`, `triadCoLocated=yes`, placement GREEN, and survival GREEN. The fix is exact `Blocks.STONECUTTER` contact/dy plus a stonecutter-only lowered raycast fallback to the lowered outline when vanilla stonecutter raycast is empty; it does not implement lectern, grindstone, anvil, door, trapdoor, signs, lanterns, chains, end rods, redstone, or rails.
+
+Special-fullblock matrix follow-up now reports `greenAlreadyInherits=21`, `contactGap=6`, `triadMismatch=0`, `blockEntityRisk=1`, `specialRendererRisk=0`, and `needsCategorySlice=2`. Controls `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, and `minecraft:enchanting_table` remain GREEN. `minecraft:lectern` remains an interactive block-entity contact row; `minecraft:grindstone` and `minecraft:anvil` remain special-shape category rows.
+
+Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
+
 ## Enchanting Table Contact Fix Follow-up
 
 Follow-up implementation at `e46cd26` / `save/beta35-barrel-triad` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.

@@ -338,6 +338,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35StonecutterContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35StonecutterContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35TrapdoorDoorAudit")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10848,7 +10857,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "special_shape_fullblock",
                         Items.STONECUTTER,
                         Blocks.STONECUTTER.getDefaultState(),
-                        "NEEDS_CATEGORY_SLICE",
+                        "GREEN_ALREADY_INHERITS",
                         false,
                         true,
                         true),
@@ -10878,7 +10887,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " controls=minecraft:crafting_table,minecraft:furnace"
                 + " optionalRows=minecraft:stonecutter,minecraft:grindstone,minecraft:anvil"
                 + " releaseAudit=NOT_RUN"
-                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_contact_dy_and_barrel_raycast_triad");
+                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_contact_dy_and_barrel_raycast_triad");
 
         int green = 0;
         int placementFailure = 0;
@@ -10923,11 +10932,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " specialRendererRisk=" + specialRendererRisk
                 + " needsCategorySlice=" + needsCategorySlice
                 + " outOfScopeForBeta35=" + outOfScope
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table,stonecutter"
                 + " doorSlice=PARALLEL_NOT_INSPECTED"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED"
-                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_contact_dy_and_barrel_raycast_triad");
+                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_contact_dy_and_barrel_raycast_triad");
     }
 
     private static Beta35CommonObjectAuditResult runBeta35SpecialFullblockAuditRow(
@@ -11339,6 +11348,89 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " classification=RED");
             throw new RuntimeException("[JULIA_BETA35_ENCHANTING_TABLE_CONTACT_RED]"
                     + " reason=enchanting_table_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
+    }
+
+    /**
+     * Focused stonecutter proof for the Beta 3.5 special-shape contact slice.
+     *
+     * Gate: -Dslabbed.beta35StonecutterContact=true
+     */
+    private static void runBeta35StonecutterContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase stonecutter = new Beta35CommonObjectCase(
+                "minecraft:stonecutter",
+                "special_shape_fullblock",
+                Items.STONECUTTER,
+                Blocks.STONECUTTER.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35SpecialFullblockAuditRow(
+                    ctx,
+                    singleplayer,
+                    stonecutter,
+                    supportCase,
+                    0);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "STONECUTTER_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "STONECUTTER_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "STONECUTTER_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "STONECUTTER_TRIAD_MISMATCH";
+                    default -> "STONECUTTER_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_STONECUTTER_CONTACT_GREEN"
+                        + " objectId=minecraft:stonecutter"
+                        + " family=special_shape_fullblock"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " raycastBasis=lowered_outline_when_native_empty"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_STONECUTTER_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:stonecutter"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " crafting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " furnace=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " bookshelf=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " chest=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " barrel=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " enchanting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " lectern=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " grindstone=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " anvil=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " doorTrapdoorSignLanternChainEndRodRedstoneRail=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_STONECUTTER_CONTACT_RED"
+                    + " objectId=minecraft:stonecutter"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_STONECUTTER_CONTACT_RED]"
+                    + " reason=stonecutter_contact_not_green"
                     + " failureLayer=" + failureLayer);
         }
     }

@@ -47,7 +47,7 @@ The special-fullblock audit did not inspect door worktree changes and did not to
 
 Summary marker:
 
-`JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY rows=30 greenAlreadyInherits=18 placementFailure=0 survivalFailure=0 contactGap=8 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=3 outOfScopeForBeta35=0 currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table doorSlice=PARALLEL_NOT_INSPECTED releaseAudit=NOT_RUN releasePrep=PAUSED productionBehaviorChanged=bookshelf_chest_enchanting_table_contact_dy_and_barrel_raycast_triad`
+`JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY rows=30 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=6 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=2 outOfScopeForBeta35=0 currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table,stonecutter doorSlice=PARALLEL_NOT_INSPECTED releaseAudit=NOT_RUN releasePrep=PAUSED productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_contact_dy_and_barrel_raycast_triad`
 
 | Representative | Family | Vanilla full block | Plain bottom slab `supportDy=-0.5` | Lowered bottom slab `supportDy=-1.0` | Classification |
 | --- | --- | --- | --- | --- | --- |
@@ -58,7 +58,7 @@ Summary marker:
 | `minecraft:chest` | `special_renderer` | GREEN, `blockEntityPresent=true` | GREEN, `contactGap=0.000000`, triad yes, `blockEntityPresent=true` | GREEN, `contactGap=0.000000`, triad yes, `blockEntityPresent=true` | `GREEN_ALREADY_INHERITS` fixed representative |
 | `minecraft:crafting_table` | `ordinary_full_block` | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` control |
 | `minecraft:furnace` | `ordinary_full_block` | GREEN | GREEN, `contactGap=0.000000`, triad yes | GREEN, `contactGap=0.000000`, triad yes | `GREEN_ALREADY_INHERITS` control |
-| `minecraft:stonecutter` | `special_shape_fullblock` | `NEEDS_CATEGORY_SLICE` | `CONTACT_GAP=0.500000`, triad no | `CONTACT_GAP=1.000000`, triad no | special-shape slice |
+| `minecraft:stonecutter` | `special_shape_fullblock` | GREEN | GREEN, `contactGap=0.000000`, triad yes | GREEN, `contactGap=0.000000`, triad yes | `GREEN_ALREADY_INHERITS` fixed representative |
 | `minecraft:grindstone` | `special_shape_fullblock` | `NEEDS_CATEGORY_SLICE` | `CONTACT_GAP=0.500000`, triad no | `CONTACT_GAP=1.000000`, triad no | special-shape slice |
 | `minecraft:anvil` | `special_shape_fullblock` | `NEEDS_CATEGORY_SLICE` | `CONTACT_GAP=0.500000`, triad no | `CONTACT_GAP=1.000000`, triad no | special-shape slice |
 
@@ -72,13 +72,13 @@ Objects already inheriting the current `crafting_table` / `furnace` behavior:
 - `minecraft:enchanting_table`
 - `minecraft:chest`
 - `minecraft:barrel`
+- `minecraft:stonecutter`
 - `minecraft:crafting_table`
 - `minecraft:furnace`
 
 Objects that fail contact on slab-supported rows:
 
 - `minecraft:lectern`
-- `minecraft:stonecutter`
 - `minecraft:grindstone`
 - `minecraft:anvil`
 
@@ -92,11 +92,11 @@ Block-entity / special-renderer risks:
 
 Separate category slices:
 
-- `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` are special-shape fullblock-ish rows.
+- `minecraft:grindstone` and `minecraft:anvil` are special-shape fullblock-ish rows.
 - `minecraft:lectern` is interactive block-entity work and should not be bundled with ordinary full-block contact.
 
 ## Release Decision
 
 This audit does not change the release decision. It expands the known matrix from the clean Beta 3.5 base and keeps release prep paused.
 
-`minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, and `minecraft:enchanting_table` are now GREEN for their focused representatives. Chest and enchanting table use exact block dy authority plus exact lowered raycast fallbacks to their lowered outlines when native raycast is empty; barrel keeps its existing contact dy and uses a barrel-only lowered raycast fallback to its lowered outline. Do not claim all special fullblocks or all block entities are fixed; remaining rows are still separate interactive block-entity or special-shape slices.
+`minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter` are now GREEN for their focused representatives. Chest, enchanting table, and stonecutter use exact block dy authority plus exact lowered raycast fallbacks to their lowered outlines when native raycast is empty; barrel keeps its existing contact dy and uses a barrel-only lowered raycast fallback to its lowered outline. Do not claim all special fullblocks or all block entities are fixed; remaining rows are still separate interactive block-entity or special-shape slices.
