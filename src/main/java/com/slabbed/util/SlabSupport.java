@@ -218,7 +218,8 @@ public final class SlabSupport {
             return false;
         }
         Block block = state.getBlock();
-        if (!(block instanceof CraftingTableBlock || block instanceof BlockEntityProvider)) {
+        if (!(block instanceof CraftingTableBlock || block instanceof BlockEntityProvider
+                || block == Blocks.BOOKSHELF)) {
             return false;
         }
         return state.isSolidBlock(world, pos);
