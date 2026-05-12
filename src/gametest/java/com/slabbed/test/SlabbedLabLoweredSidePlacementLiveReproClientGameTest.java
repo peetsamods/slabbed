@@ -13132,10 +13132,17 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " oakFenceClassification=" + oakFenceClassification
                 + " birchFenceClassification=" + birchFenceClassification
                 + " failureLayer=" + failureLayer
-                + " productionFixImplemented=false"
+                + " productionFixImplemented=true"
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false"
                 + " canonicalCheckoutModified=false");
+        if (!red) {
+            System.out.println("JULIA_BETA35_BIRCH_FENCE_VARIANT_GREEN"
+                    + " outcome=GREEN"
+                    + " variants=minecraft:oak_fence,minecraft:birch_fence"
+                    + " failureLayer=NONE"
+                    + " productionFixImplemented=true");
+        }
     }
 
     private static String runBeta35BirchFenceVariantRedRow(

@@ -114,7 +114,7 @@ The render-quad guard in `OffsetBlockStateModel.emitQuads` is an exact mirror of
 
 ## Next implementation slice
 
-Expand `isBeta35FenceWallVariantContactObject` in `SlabSupport.java` to add `Blocks.BIRCH_FENCE` narrowly (not all wood fences, not panes, not trapdoors, not doors). The companion render guard in `OffsetBlockStateModel.emitQuads` will automatically benefit because it uses the same predicate. After the fix: re-run `-Dslabbed.beta35BirchFenceVariantRed=true` and expect `birchFenceClassification=GREEN_ALLOWLISTED`. Do not yet add all wood fences, panes, trapdoors, doors, or signs.
+**DONE.** `isBeta35FenceWallVariantContactObject` expanded to add `Blocks.BIRCH_FENCE` narrowly in the follow-up commit `save/beta35-birch-fence-variant-fix`. See `docs/beta35-birch-fence-variant-fix.md`.
 
 ## Validation
 
