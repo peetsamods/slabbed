@@ -2,6 +2,7 @@ package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
+import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.client.runtime.SlabbedRetargetTestHooks;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -442,6 +443,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35FenceWallVariantCoverageProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35FenceModelRenderRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FenceModelRenderRedProof(ctx, singleplayer);
             }
             return;
         }
@@ -12748,6 +12758,285 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false"
                 + " canonicalCheckoutModified=false");
+    }
+
+    /**
+     * Render-quad dy RED proof for the Beta 3.5 fence/wall variant false-green.
+     *
+     * Reads {@link OffsetBlockStateModel#snapshotModelDyOwnerTrace()} after a forced
+     * re-render so the proof captures whether the Fabric emitQuads path actually applied
+     * dy for fence/wall variants. The previous shape-triad proof was passing because
+     * collision/outline/raycast shapes are offset by {@code SlabSupportStateMixin}, while
+     * {@code OffsetBlockStateModel.emitQuads} explicitly forces {@code dy = 0.0f} for every
+     * {@code FenceBlock | WallBlock | PaneBlock} — so the visible model never shifts.
+     *
+     * Gate: -Dslabbed.beta35FenceModelRenderRed=true
+     */
+    private static void runBeta35FenceModelRenderRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35FenceFamilyCase[] cases = {
+                new Beta35FenceFamilyCase(
+                        "minecraft:oak_fence",
+                        "fence_family",
+                        Items.OAK_FENCE,
+                        Blocks.OAK_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase(
+                        "minecraft:spruce_fence",
+                        "fence_family",
+                        Items.SPRUCE_FENCE,
+                        Blocks.SPRUCE_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase(
+                        "minecraft:nether_brick_fence",
+                        "fence_family",
+                        Items.NETHER_BRICK_FENCE,
+                        Blocks.NETHER_BRICK_FENCE.getDefaultState()),
+                new Beta35FenceFamilyCase(
+                        "minecraft:cobblestone_wall",
+                        "wall_family",
+                        Items.COBBLESTONE_WALL,
+                        Blocks.COBBLESTONE_WALL.getDefaultState())
+        };
+
+        System.out.println("JULIA_BETA35_FENCE_MODEL_RENDER_RED"
+                + " scope=fence_wall_variant_render_quad_dy"
+                + " variants=minecraft:oak_fence,minecraft:spruce_fence,minecraft:nether_brick_fence,minecraft:cobblestone_wall"
+                + " glass_pane=NOT_COVERED"
+                + " priorVariantCoverageClaim=GREEN_RESCINDED_FOR_RELEASE"
+                + " previousFailureLayer=OBJECT_MODEL_BOTTOM_PROXY_GAP"
+                + " probe=OffsetBlockStateModel.snapshotModelDyOwnerTrace"
+                + " productionRenderFixImplemented=false"
+                + " releaseAudit=NOT_RUN");
+
+        int rows = 0;
+        int modelRenderGap = 0;
+        int greenRenderDyApplied = 0;
+        int modelDyTraceNotObserved = 0;
+        int placementFailure = 0;
+        int supportDyZero = 0;
+        String firstFailureLayer = "NONE";
+        String oakFenceClassification = "NOT_MEASURED";
+        String spruceFenceClassification = "NOT_MEASURED";
+        String netherBrickFenceClassification = "NOT_MEASURED";
+        String cobblestoneWallClassification = "NOT_MEASURED";
+
+        for (Beta35FenceFamilyCase objectCase : cases) {
+            String classification = runBeta35FenceModelRenderRedRow(ctx, singleplayer, objectCase, rows);
+            rows++;
+            switch (classification) {
+                case "MODEL_RENDER_GAP" -> modelRenderGap++;
+                case "GREEN_RENDER_DY_APPLIED" -> greenRenderDyApplied++;
+                case "MODEL_DY_TRACE_NOT_OBSERVED" -> modelDyTraceNotObserved++;
+                case "PLACEMENT_FAILURE" -> placementFailure++;
+                case "SUPPORT_DY_ZERO" -> supportDyZero++;
+                default -> {
+                }
+            }
+            if (!"GREEN_RENDER_DY_APPLIED".equals(classification) && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = classification;
+            }
+            if ("minecraft:oak_fence".equals(objectCase.objectId())) {
+                oakFenceClassification = classification;
+            } else if ("minecraft:spruce_fence".equals(objectCase.objectId())) {
+                spruceFenceClassification = classification;
+            } else if ("minecraft:nether_brick_fence".equals(objectCase.objectId())) {
+                netherBrickFenceClassification = classification;
+            } else if ("minecraft:cobblestone_wall".equals(objectCase.objectId())) {
+                cobblestoneWallClassification = classification;
+            }
+        }
+
+        boolean red = modelRenderGap > 0 || modelDyTraceNotObserved > 0 || placementFailure > 0;
+
+        System.out.println("JULIA_BETA35_FENCE_MODEL_RENDER_SUMMARY"
+                + " outcome=" + (red ? "RED" : "GREEN")
+                + " rows=" + rows
+                + " modelRenderGap=" + modelRenderGap
+                + " greenRenderDyApplied=" + greenRenderDyApplied
+                + " modelDyTraceNotObserved=" + modelDyTraceNotObserved
+                + " placementFailure=" + placementFailure
+                + " supportDyZero=" + supportDyZero
+                + " oakFenceClassification=" + oakFenceClassification
+                + " spruceFenceClassification=" + spruceFenceClassification
+                + " netherBrickFenceClassification=" + netherBrickFenceClassification
+                + " cobblestoneWallClassification=" + cobblestoneWallClassification
+                + " glassPane=NOT_COVERED"
+                + " previousFailureLayer=OBJECT_MODEL_BOTTOM_PROXY_GAP"
+                + " failureLayer=" + (red ? firstFailureLayer : "NONE")
+                + " productionFixImplemented=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " canonicalCheckoutModified=false");
+    }
+
+    private static String runBeta35FenceModelRenderRedRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35FenceFamilyCase objectCase,
+            int rowIndex
+    ) {
+        int baseX = 308 + rowIndex * 9;
+        int baseZ = 124;
+        BlockPos supportCandidatePos = new BlockPos(baseX, -55, baseZ);
+        BlockPos objectPos = supportCandidatePos.up();
+        BlockPos unsupportedPos = supportCandidatePos.add(0, 1, 4);
+        BlockHitResult useHit = new BlockHitResult(
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() - 0.5d,
+                        supportCandidatePos.getZ() + 0.5d),
+                Direction.UP,
+                supportCandidatePos,
+                false);
+
+        prepareBeta35FenceFamilyLiveSupport(
+                singleplayer,
+                objectCase,
+                Beta35FenceFamilyConfiguration.ISOLATED,
+                supportCandidatePos,
+                unsupportedPos);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(objectCase.item(), 4));
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() + 3.0d,
+                        supportCandidatePos.getZ() - 2.0d),
+                useHit.getPos());
+
+        final String[] placementResult = {"not-run"};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                placementResult[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, useHit);
+            placementResult[0] = result.toString();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final double[] supportDyBox = {Double.NaN};
+        final double[] objectDyBox = {Double.NaN};
+        final double[] expectedModelDyBox = {Double.NaN};
+        final boolean[] blockAppearedBox = {false};
+        final String[] finalStateBox = {"none"};
+        final double[] shapeContactGapBox = {Double.NaN};
+        final boolean[] shapeTriadCoLocatedBox = {false};
+        final String[] modelBoundsBox = {"none"};
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportCandidatePos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            blockAppearedBox[0] = objectState.isOf(objectCase.expectedState().getBlock());
+            supportDyBox[0] = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
+            objectDyBox[0] = blockAppearedBox[0]
+                    ? SlabSupport.getYOffset(mc.world, objectPos, objectState) : Double.NaN;
+            expectedModelDyBox[0] = blockAppearedBox[0]
+                    ? ClientDy.dyFor(mc.world, objectPos, objectState) : Double.NaN;
+            finalStateBox[0] = objectState.toString();
+            if (blockAppearedBox[0]) {
+                double supportVisibleTopY = beta35CommonSupportVisibleTopY(
+                        supportCandidatePos, supportState, supportDyBox[0]);
+                VoxelShape outlineShape = objectState.getOutlineShape(mc.world, objectPos,
+                        net.minecraft.block.ShapeContext.of(mc.player));
+                VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
+                VoxelShape collisionShape = objectState.getCollisionShape(mc.world, objectPos,
+                        net.minecraft.block.ShapeContext.of(mc.player));
+                net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+                net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+                net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+                net.minecraft.util.math.Box modelProxyBox = collisionBox != null ? collisionBox : outlineBox;
+                double objectModelBottomY = modelProxyBox == null ? Double.NaN : modelProxyBox.minY;
+                shapeContactGapBox[0] = Double.isFinite(objectModelBottomY)
+                        && Double.isFinite(supportVisibleTopY)
+                        ? objectModelBottomY - supportVisibleTopY
+                        : Double.NaN;
+                shapeTriadCoLocatedBox[0] = modelProxyBox != null
+                        && beta35SameBox(outlineBox, modelProxyBox)
+                        && beta35SameBox(raycastBox, modelProxyBox);
+                modelBoundsBox[0] = beta35FormatBox(modelProxyBox);
+            }
+            if (mc.worldRenderer != null) {
+                OffsetBlockStateModel.resetModelDyOwnerTrace(objectPos);
+                mc.worldRenderer.scheduleBlockRenders(
+                        objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
+                        objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
+            }
+        });
+
+        for (int i = 0; i < 6; i++) {
+            ctx.runOnClient(mc -> {
+                if (mc.worldRenderer == null) {
+                    return;
+                }
+                mc.worldRenderer.scheduleBlockRenders(
+                        objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
+                        objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
+            });
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final OffsetBlockStateModel.ModelDyOwnerTrace[] traceBox = {null};
+        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace());
+
+        OffsetBlockStateModel.ModelDyOwnerTrace trace = traceBox[0];
+        boolean traceSeen = trace != null && trace.seen();
+        int emitCalls = trace == null ? 0 : trace.emitCalls();
+        int appliedCalls = trace == null ? 0 : trace.appliedCalls();
+        double totalAppliedDy = trace == null ? 0.0 : trace.totalAppliedDy();
+        double lastDy = trace == null ? 0.0 : trace.lastDy();
+        boolean renderDyApplied = traceSeen && appliedCalls > 0 && Math.abs(totalAppliedDy) > EPSILON;
+
+        String classification;
+        if (!blockAppearedBox[0]) {
+            classification = "PLACEMENT_FAILURE";
+        } else if (!Double.isFinite(objectDyBox[0]) || Math.abs(objectDyBox[0]) <= EPSILON) {
+            classification = "SUPPORT_DY_ZERO";
+        } else if (!traceSeen || emitCalls == 0) {
+            classification = "MODEL_DY_TRACE_NOT_OBSERVED";
+        } else if (!renderDyApplied) {
+            classification = "MODEL_RENDER_GAP";
+        } else {
+            classification = "GREEN_RENDER_DY_APPLIED";
+        }
+
+        System.out.println("JULIA_BETA35_FENCE_MODEL_RENDER_ROW"
+                + " objectId=" + objectCase.objectId()
+                + " family=" + objectCase.family()
+                + " configuration=isolated"
+                + " placementResult=" + placementResult[0]
+                + " blockAppearedAfterAttempt=" + blockAppearedBox[0]
+                + " finalBlockState=" + finalStateBox[0]
+                + " supportDy=" + String.format("%.6f", supportDyBox[0])
+                + " objectDy=" + (Double.isFinite(objectDyBox[0])
+                        ? String.format("%.6f", objectDyBox[0]) : "N/A")
+                + " expectedModelDy=" + (Double.isFinite(expectedModelDyBox[0])
+                        ? String.format("%.6f", expectedModelDyBox[0]) : "N/A")
+                + " modelDyTraceSeen=" + traceSeen
+                + " emitCalls=" + emitCalls
+                + " appliedCalls=" + appliedCalls
+                + " totalAppliedDy=" + String.format("%.6f", totalAppliedDy)
+                + " actualModelAppliedDy=" + String.format("%.6f", lastDy)
+                + " renderDyApplied=" + (renderDyApplied ? "yes" : "no")
+                + " shapeContactGap=" + (Double.isFinite(shapeContactGapBox[0])
+                        ? String.format("%.6f", shapeContactGapBox[0]) : "N/A")
+                + " shapeTriadCoLocated=" + (shapeTriadCoLocatedBox[0] ? "yes" : "no")
+                + " modelBounds=" + modelBoundsBox[0]
+                + " modelDyOwnerTrace=" + (trace == null ? "none" : trace.toString())
+                + " classification=" + classification);
+
+        return classification;
     }
 
     /**

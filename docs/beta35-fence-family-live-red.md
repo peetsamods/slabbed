@@ -78,3 +78,7 @@ Focused proof result: GREEN, `failureLayer=NONE`, `rows=16`, `contactGap=0`, `tr
 Current green fence/wall set: `minecraft:oak_fence`, `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall`.
 
 `minecraft:glass_pane` and pane behavior remain out of scope / not covered. No release audit was run. No release tag was moved. Canonical checkout was not modified.
+
+## Superseded as a release artifact (2026-05-12)
+
+The follow-up variant coverage GREEN above is **rescinded as a release artifact** by the Beta 3.5 fence false-green Opus audit at `a576fa1` and the follow-up render-quad RED proof. The shape-triad GREEN measured shapes that `SlabSupportStateMixin` already offsets; the visible model is gated separately by `OffsetBlockStateModel.emitQuads`, which forces `dy = 0.0f` for every `FenceBlock | WallBlock | PaneBlock` and therefore never shifted the rendered quads. See `docs/beta35-fence-false-green-opus-audit.md` and `docs/beta35-fence-model-render-red.md`. The new gate `-Dslabbed.beta35FenceModelRenderRed=true` reproduces the live-visible gap as `MODEL_RENDER_GAP` for all four allowlisted variants on current HEAD. Release remains blocked.
