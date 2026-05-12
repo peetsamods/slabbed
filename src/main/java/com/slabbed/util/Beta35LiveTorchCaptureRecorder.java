@@ -552,6 +552,13 @@ public final class Beta35LiveTorchCaptureRecorder {
         if (appearance.appeared()) {
             return "PLACEMENT_ATTEMPT_OK";
         }
+        if (resultFailed(resultText) && appearance.blockPos() != null && !appearance.appeared()) {
+            BlockPos intendedTorchPos = parseShortPos(snapshot.intendedTorchPos());
+            if (intendedTorchPos != null && intendedTorchPos.equals(appearance.blockPos())) {
+                return "OCCUPIED_TORCH_TARGET";
+            }
+            return "DUPLICATE_TORCH_TARGET";
+        }
         if (comfort != null && comfort.reason().contains("no-box-intersection")) {
             return "COMFORT_NO_BOX_INTERSECTION";
         }
@@ -561,10 +568,14 @@ public final class Beta35LiveTorchCaptureRecorder {
         if ("MISS".equals(snapshot.crosshairTargetType()) || "n/a".equals(snapshot.crosshairTargetPos())) {
             return "PLACEMENT_TARGET_MISS";
         }
-        if (resultText != null && resultText.contains("FAIL")) {
+        if (resultFailed(resultText)) {
             return "PLACEMENT_REJECTED";
         }
         return "PLACEMENT_RESULT_UNKNOWN";
+    }
+
+    private static boolean resultFailed(String resultText) {
+        return resultText != null && resultText.toLowerCase(java.util.Locale.ROOT).contains("fail");
     }
 
     private static boolean isHeldFloorTorch(ItemStack stack) {
