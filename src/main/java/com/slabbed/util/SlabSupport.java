@@ -177,8 +177,28 @@ public final class SlabSupport {
         return state != null && state.isOf(Blocks.OAK_FENCE);
     }
 
+    private static boolean isBeta35OakTrapdoorContactObject(BlockState state) {
+        return state != null
+                && state.isOf(Blocks.OAK_TRAPDOOR)
+                && state.contains(Properties.BLOCK_HALF)
+                && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
+    }
+
     private static double beta35OakFenceContactDy(BlockView world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35OakFenceContactObject(state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+            return supportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
+    private static double beta35OakTrapdoorContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35OakTrapdoorContactObject(state)) {
             return Double.NaN;
         }
         BlockPos supportPos = pos.down();
@@ -1137,6 +1157,10 @@ public final class SlabSupport {
             if (Double.isFinite(ordinaryFullBlockContactDy)) {
                 return ordinaryFullBlockContactDy;
             }
+            double oakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);
+            if (Double.isFinite(oakTrapdoorContactDy)) {
+                return oakTrapdoorContactDy;
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
@@ -1182,6 +1206,11 @@ public final class SlabSupport {
         double oakFenceContactDy = beta35OakFenceContactDy(world, pos, state);
         if (Double.isFinite(oakFenceContactDy)) {
             return oakFenceContactDy;
+        }
+
+        double oakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);
+        if (Double.isFinite(oakTrapdoorContactDy)) {
+            return oakTrapdoorContactDy;
         }
 
         double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
