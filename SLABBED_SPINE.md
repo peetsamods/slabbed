@@ -445,3 +445,15 @@ If the slice changes, update the source pack and spine together so the current o
 - Release remains paused until this one-more-family decision is resolved. Recommended next slice: single-representative `minecraft:candle` contact/dy law proof and fix, not all-item support.
 - `wall_torch`, lanterns, chains, wall signs, and hanging signs remain `NOT_COVERED`; redstone/rails remain audit-only/out of scope.
 - No production behavior fix implemented. No release audit run. No release tag moved.
+
+## Beta 3.5 candle floor/top contact fix (2026-05-11)
+
+- Operating base for this implementation slice: `08198ef` / `save/beta35-floor-top-object-family-audit` on `integrate/phase19-into-side-slab-top-support`.
+- Previous candle failure layer: `CONTACT_GAP`; candle placed and survived, but `objectDy=-0.500000` left `contactGap=1.000000` on lowered bottom support (`supportDy=-1.0`) and `contactGap=0.500000` on plain bottom support (`supportDy=-0.5`).
+- Narrow production fix: `SlabSupport.getYOffsetInner(...)` now has a `Blocks.CANDLE`-only floor/top contact branch using the same bottom-slab support dy calculation as floor torch. `SlabSupportStateMixin` also gives lowered `minecraft:candle` an outline-backed raycast basis when vanilla raycast is empty, keeping model/outline/raycast co-located.
+- Focused gate `-Dslabbed.beta35CandleFloorTopContact=true` is GREEN: lowered bottom support reports `objectDy=-1.500000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `triadCoLocated=yes`; plain bottom support reports `objectDy=-1.000000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `triadCoLocated=yes`; summary `failureLayer=NONE`.
+- Updated floor/top matrix: `minecraft:torch=GREEN_ALREADY_INHERITS`; `minecraft:candle=GREEN_ALREADY_INHERITS`; `minecraft:flower_pot=SURVIVAL_FAILURE`; standing-only `minecraft:oak_sign=CONTACT_GAP` with `rendererPath=BLOCK_ENTITY_OR_SPECIAL`.
+- Validation passed: `compileJava compileGametestJava`, focused candle proof, focused floor/top family audit, floor torch regression, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-candle-floor-top-contact-fix-08198ef`. See `docs/beta35-candle-floor-top-contact-fix.md`.
+- Scope is floor torch plus `minecraft:candle` only. No flower pot survival fix, standing sign fix, wall/ceiling/hanging category, redstone/rail work, all-object support, or global sturdy-face/solidity change was made.
+- Release audit remains paused until Julia decides whether candle is enough for this one-more-family pass or whether flower pot/sign need separate slices. No release audit run. No release tag moved.

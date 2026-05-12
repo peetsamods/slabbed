@@ -57,3 +57,20 @@ Recommended next slice: target `minecraft:candle` first as the narrow shared flo
 No production behavior fix was implemented in this audit slice. No release audit was run. No release tag was moved.
 
 `wall_torch`, lanterns, chains, wall signs, and hanging signs remain `NOT_COVERED`.
+
+## Candle Follow-Up Status
+
+Follow-up savepoint: `save/beta35-candle-floor-top-contact`
+
+`minecraft:candle` is now GREEN for floor/top contact and survival on the two audited support rows:
+
+- lowered bottom support: `supportDy=-1.000000`, `objectDy=-1.500000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `triadCoLocated=yes`
+- plain bottom support: `supportDy=-0.500000`, `objectDy=-1.000000`, `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, `triadCoLocated=yes`
+
+Updated matrix summary:
+
+`rows=8 greenAlreadyInherits=4 placementFailure=0 survivalFailure=2 contactGap=2 triadMismatch=0 rendererSpecialCase=0 outOfScope=0 releaseAudit=NOT_RUN releasePrep=PAUSED`
+
+`minecraft:flower_pot` remains separate due to `SURVIVAL_FAILURE`. Standing `minecraft:oak_sign` remains separate due to `CONTACT_GAP` plus block-entity/special renderer risk.
+
+This does not claim all items or all floor/top objects are fixed. Release audit remains paused until Julia decides whether candle is enough for this one-more-family pass or whether flower pot/sign require separate slices.

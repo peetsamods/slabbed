@@ -5,6 +5,7 @@ import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
 import net.minecraft.block.SlabBlock;
@@ -85,6 +86,10 @@ public abstract class SlabSupportStateMixin {
         }
         Block block = state.getBlock();
         return block instanceof TorchBlock && !(block instanceof WallTorchBlock);
+    }
+
+    private static boolean slabbed$isLoweredBeta35Candle(BlockState state, double yOff) {
+        return yOff < 0.0 && state != null && state.isOf(Blocks.CANDLE);
     }
 
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
@@ -173,6 +178,9 @@ public abstract class SlabSupportStateMixin {
             VoxelShape shape = cir.getReturnValue();
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
+            } else if (slabbed$isLoweredBeta35Candle(self, yOff) && (shape == null || shape.isEmpty())) {
+                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                return;
             } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
                 shape = VoxelShapes.fullCube();
             }
