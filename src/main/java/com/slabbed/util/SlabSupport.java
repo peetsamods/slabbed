@@ -179,6 +179,10 @@ public final class SlabSupport {
                         || state.getBlock() instanceof WallBlock);
     }
 
+    public static boolean isBeta35CherryFenceGateContactObject(BlockState state) {
+        return state != null && state.isOf(Blocks.CHERRY_FENCE_GATE);
+    }
+
     private static boolean isBeta35OakTrapdoorContactObject(BlockState state) {
         return state != null
                 && state.isOf(Blocks.OAK_TRAPDOOR)
@@ -198,6 +202,19 @@ public final class SlabSupport {
 
     private static double beta35FenceWallVariantContactDy(BlockView world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35FenceWallVariantContactObject(state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+            return supportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
+    private static double beta35CherryFenceGateContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35CherryFenceGateContactObject(state)) {
             return Double.NaN;
         }
         BlockPos supportPos = pos.down();
@@ -1294,6 +1311,11 @@ public final class SlabSupport {
         double fenceWallVariantContactDy = beta35FenceWallVariantContactDy(world, pos, state);
         if (Double.isFinite(fenceWallVariantContactDy)) {
             return fenceWallVariantContactDy;
+        }
+
+        double cherryFenceGateContactDy = beta35CherryFenceGateContactDy(world, pos, state);
+        if (Double.isFinite(cherryFenceGateContactDy)) {
+            return cherryFenceGateContactDy;
         }
 
         double oakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);
