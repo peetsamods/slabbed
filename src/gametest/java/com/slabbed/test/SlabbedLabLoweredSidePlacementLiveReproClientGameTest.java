@@ -320,6 +320,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35BarrelTriad")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35BarrelTriadProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35TrapdoorDoorAudit")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10794,7 +10803,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "interactive_block_entity",
                         Items.BARREL,
                         Blocks.BARREL.getDefaultState(),
-                        "BLOCK_ENTITY_RISK",
+                        "GREEN_ALREADY_INHERITS",
                         false,
                         true,
                         true),
@@ -10860,7 +10869,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " controls=minecraft:crafting_table,minecraft:furnace"
                 + " optionalRows=minecraft:stonecutter,minecraft:grindstone,minecraft:anvil"
                 + " releaseAudit=NOT_RUN"
-                + " productionBehaviorChanged=bookshelf_and_chest_contact_dy_only");
+                + " productionBehaviorChanged=bookshelf_chest_contact_dy_and_barrel_raycast_triad");
 
         int green = 0;
         int placementFailure = 0;
@@ -10905,11 +10914,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " specialRendererRisk=" + specialRendererRisk
                 + " needsCategorySlice=" + needsCategorySlice
                 + " outOfScopeForBeta35=" + outOfScope
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel"
                 + " doorSlice=PARALLEL_NOT_INSPECTED"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED"
-                + " productionBehaviorChanged=bookshelf_and_chest_contact_dy_only");
+                + " productionBehaviorChanged=bookshelf_chest_contact_dy_and_barrel_raycast_triad");
     }
 
     private static Beta35CommonObjectAuditResult runBeta35SpecialFullblockAuditRow(
@@ -11154,6 +11163,89 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " classification=RED");
             throw new RuntimeException("[JULIA_BETA35_CHEST_CONTACT_RED]"
                     + " reason=chest_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
+    }
+
+    /**
+     * Focused barrel proof for the Beta 3.5 block-entity fullblock triad slice.
+     *
+     * Gate: -Dslabbed.beta35BarrelTriad=true
+     */
+    private static void runBeta35BarrelTriadProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase barrel = new Beta35CommonObjectCase(
+                "minecraft:barrel",
+                "block_entity_fullblock",
+                Items.BARREL,
+                Blocks.BARREL.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35SpecialFullblockAuditRow(
+                    ctx,
+                    singleplayer,
+                    barrel,
+                    supportCase,
+                    0);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "BARREL_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "BARREL_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "BARREL_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "BARREL_TRIAD_MISMATCH";
+                    default -> "BARREL_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_BARREL_TRIAD_GREEN"
+                        + " objectId=minecraft:barrel"
+                        + " family=block_entity_fullblock"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " raycastBasis=lowered_outline_when_native_empty"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_BARREL_TRIAD_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:barrel"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " crafting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " furnace=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " bookshelf=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " chest=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " enchanting_table=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " lectern=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " stonecutter=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " grindstone=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " anvil=UNCHANGED_SEPARATE_SHAPE_SLICE"
+                + " doorTrapdoorSignLanternChainEndRodRedstoneRail=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_BARREL_TRIAD_RED"
+                    + " objectId=minecraft:barrel"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_BARREL_TRIAD_RED]"
+                    + " reason=barrel_triad_not_green"
                     + " failureLayer=" + failureLayer);
         }
     }

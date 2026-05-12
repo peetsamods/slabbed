@@ -596,3 +596,16 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused chest proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-chest-contact-fix-baf09f0`. See `docs/beta35-chest-contact-fix.md`.
 - Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.
+
+## Beta 3.5 barrel triad fix (2026-05-12)
+
+- Operating base for this implementation slice: `0ee0ab3` / `save/beta35-chest-contact` in `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on `work/beta35-special-fullblock-compat`. Canonical checkout was not modified.
+- Previous `minecraft:barrel` failure layer: `TRIAD_MISMATCH`; placement, survival, and contact were already GREEN, with slab-supported rows at `contactGap=0.000000`. The exact mismatch was raycast-only: model, outline, and collision were co-located, while vanilla barrel raycast was empty.
+- New `minecraft:barrel` failure layer: `NONE`. The fix is a barrel-only lowered raycast fallback in `SlabSupportStateMixin` that uses the lowered outline basis when native barrel raycast is empty. No broad block-entity/fullblock fallback and no renderer rewrite were added.
+- Focused proof `-Dslabbed.beta35BarrelTriad=true` passes with `JULIA_BETA35_BARREL_TRIAD_SUMMARY failureLayer=NONE`; slab-supported rows report `placementResult=Success`, `blockEntityPresent=true`, `survivalResult=SURVIVAL_GREEN`, `contactGap=0.000000`, `triadCoLocated=yes`, and co-located model/outline/raycast/collision bounds.
+- Updated special-fullblock matrix: `minecraft:barrel`, `minecraft:chest`, `minecraft:bookshelf`, `minecraft:crafting_table`, and `minecraft:furnace` are GREEN representatives. Matrix summary now reports `rows=30 greenAlreadyInherits=15 placementFailure=0 survivalFailure=0 contactGap=10 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=1 needsCategorySlice=3 outOfScopeForBeta35=0`.
+- Remaining special-fullblock statuses are unchanged and honest: `minecraft:enchanting_table`, `minecraft:lectern`, `minecraft:stonecutter`, `minecraft:grindstone`, and `minecraft:anvil` remain slab-supported `CONTACT_GAP`. They were not fixed in this slice.
+- Common-object matrix still passes for this worktree and keeps its pre-existing door/sign classifications: `greenAlreadyInherits=21 contactGap=4 multipartRisk=1 rendererSpecialCase=1`.
+- Validation passed: `compileJava compileGametestJava`, focused barrel proof, focused special-fullblock audit, focused common-object matrix, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-barrel-triad-fix-0ee0ab3`. See `docs/beta35-barrel-triad-fix.md`.
+- Release remains paused. No release audit run. No release tag moved. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched. Canonical checkout was not modified.
