@@ -38,3 +38,20 @@ The next implementation slice should inspect `GameRendererCrosshairRetargetMixin
 
 - `./gradlew --no-daemon compileJava compileGametestJava` -> `BUILD SUCCESSFUL`
 - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35LiveHitboxOwnerRed=true" ./gradlew --no-daemon runClientGameTest --console plain` -> `BUILD SUCCESSFUL`; RED markers emitted as documented above
+
+## Follow-Up: Live Hitbox Owner Fix
+
+The implementation slice based on `ace31b5` / `save/beta35-live-hitbox-owner-red` fixed the owner layer only. It did not change collision math, contact dy, model/render dy, `SlabSupportStateMixin`, or `OffsetBlockStateModel`.
+
+Focused owner proof now reports:
+
+- `JULIA_BETA35_LIVE_HITBOX_OWNER_SUMMARY outcome=GREEN rows=3 red=0 pending=0 green=3 wallHitboxOwnerClassification=GREEN wallHitboxOwnerFailureLayer=NONE fenceHitboxOwnerClassification=GREEN fenceHitboxOwnerFailureLayer=NONE anvilHitboxOwnerClassification=GREEN anvilHitboxOwnerFailureLayer=NONE contactRenderFenceGateFamily=GREEN_SEPARATE hitboxOwnershipProof=GREEN recommendedNextSlice=savepoint_gate productionBehaviorChanged=true releaseAudit=NOT_RUN releaseTagMoved=false`
+- `JULIA_BETA35_LIVE_HITBOX_OWNER_GREEN rows=3 wall=GREEN fence=GREEN anvil=GREEN finalCrosshairOwner=expected_visible_owner failureLayer=NONE releaseAudit=NOT_RUN releaseTagMoved=false`
+
+The three former RED rows now preserve the visible lowered owner:
+
+- `minecraft:stone_brick_wall`: final crosshair target is the wall owner.
+- `minecraft:oak_fence`: final crosshair target is the fence owner.
+- `minecraft:anvil`: final crosshair target is the anvil owner.
+
+Panes remain excluded. Doors, trapdoors, signs, lanterns, chains, end rods, redstone, and rails were not opened. No release audit was run. No release tag was moved.
