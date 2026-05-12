@@ -432,3 +432,16 @@ If the slice changes, update the source pack and spine together so the current o
 - Evidence folder: `tmp/beta35-floor-torch-plain-bottom-contact-fix-66ca74a`. See `docs/beta35-floor-torch-plain-bottom-contact-fix.md`.
 - `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; scope remains `floor_torch_only`.
 - Beta 3.5 release prep remains paused pending Julia live acceptance; no release tag moved.
+
+## Beta 3.5 floor/top object family audit (2026-05-11)
+
+- Operating base for this proof/docs slice: `8a03902` / `save/beta35-floor-torch-bug-blaster` on `integrate/phase19-into-side-slab-top-support`.
+- Floor torch remains the live-accepted reference control: player-like placement, survival, contact, and model/outline/raycast co-location are GREEN on both lowered bottom support (`supportDy=-1.0`) and plain bottom support (`supportDy=-0.5`).
+- New gated audit: `-Dslabbed.beta35FloorTopObjectFamilyAudit=true`, emitting `JULIA_BETA35_FLOOR_TOP_OBJECT_MATRIX_START`, `JULIA_BETA35_FLOOR_TOP_OBJECT_ROW`, and `JULIA_BETA35_FLOOR_TOP_OBJECT_SUMMARY`.
+- Matrix result: `minecraft:torch=GREEN_ALREADY_INHERITS`; `minecraft:candle=CONTACT_GAP`; `minecraft:flower_pot=SURVIVAL_FAILURE`; standing-only `minecraft:oak_sign=CONTACT_GAP` with `rendererPath=BLOCK_ENTITY_OR_SPECIAL`.
+- Shared failure layer: non-torch floor/top objects do not inherit the floor-torch contact dy law. Candle and standing sign place/survive but stay at `objectDy=-0.5`, producing `contactGap=1.000000` on lowered bottom support and `contactGap=0.500000` on plain bottom support. Flower pot also has an unsupported survival-law mismatch and should not be bundled with the candle contact fix.
+- Validation passed: `compileJava compileGametestJava`, focused floor/top object audit, floor torch regression, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-floor-top-object-family-audit-8a03902`. See `docs/beta35-floor-top-object-family-audit.md`.
+- Release remains paused until this one-more-family decision is resolved. Recommended next slice: single-representative `minecraft:candle` contact/dy law proof and fix, not all-item support.
+- `wall_torch`, lanterns, chains, wall signs, and hanging signs remain `NOT_COVERED`; redstone/rails remain audit-only/out of scope.
+- No production behavior fix implemented. No release audit run. No release tag moved.
