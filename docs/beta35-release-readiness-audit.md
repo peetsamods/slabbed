@@ -1,0 +1,25 @@
+# Beta 3.5 Release Readiness Audit (HEAD f9d2987)
+
+- auditHead: f9d2987
+- scope: `floor_torch`, `candle`, `flower_pot`
+- notCovered: `wall_torch`, `lantern`, `wall_sign`, `hanging_sign`, `chains`, `redstone_wire`, `rail`
+- commandsRun:
+  - `compileJava compileGametestJava`
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35LiveTorchDualTrace=true -Dslabbed.beta35FloorTorchLoweredSlabPlacement=true" ./gradlew --no-daemon runClientGameTest --console plain`
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35CandleFloorTopContact=true" ./gradlew --no-daemon runClientGameTest --console plain`
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35FlowerPotFloorTopContact=true" ./gradlew --no-daemon runClientGameTest --console plain`
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35FloorTopObjectFamilyAudit=true" ./gradlew --no-daemon runClientGameTest --console plain`
+  - `./gradlew --no-daemon runClientGameTest --console plain`
+  - `./gradlew --no-daemon clean build`
+- evidenceFolder: `tmp/beta35-release-readiness-audit-f9d2987`
+- compile: PASS
+- floor torch proof: PASS (`JULIA_BETA35_FLOOR_TORCH_LOWERED_SLAB_PLACEMENT_SUMMARY`/`FLOOR_TORCH_V2_CONTACT_FIX_GREEN`, failureLayer=NONE)
+- candle proof: PASS (`JULIA_BETA35_CANDLE_FLOOR_TOP_CONTACT_*`, failureLayer=NONE)
+- flower pot proof: PASS (`JULIA_BETA35_FLOWER_POT_FLOOR_TOP_CONTACT_*`, failureLayer=NONE)
+- floor/top object family audit: PASS (`JULIA_BETA35_FLOOR_TOP_OBJECT_MATRIX_START` and `..._SUMMARY` with CONTACT_GAP only for `standing_oak_sign`)
+- default gametest: PASS
+- jar scan: main jar contains trace/debug classes under opt-in beta35 recorder paths only (`Beta35LiveTorchCaptureMixin`, `Beta35LiveTorchDualTraceInteractionMixin`, `Beta35LiveTorchCaptureRecorder`); no unexpected gameplay logic paths surfaced.
+- jdeps scan: same opt-in recorder classes referenced by runtime paths; no direct dev/debug/gametest package-class hard dependency in main logic beyond beta35 tracer/capture classes.
+- release-audit decision: PASS (scoped to `floor_torch + candle + flower_pot`)
+- expanded scope note: this document is a scoped audit; it should not be treated as release authorization for the expanded common-object scope.
+- nextSlice: release-finalization/version/changelog/tag (only after Julia approval to publish)

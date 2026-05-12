@@ -482,3 +482,7 @@ If the slice changes, update the source pack and spine together so the current o
 - Evidence folder: `tmp/beta35-flower-pot-floor-top-contact-fix-9ce0211`. See `docs/beta35-flower-pot-floor-top-contact-fix.md`.
 - Scope is floor torch plus `minecraft:candle` plus `minecraft:flower_pot` only. No standing sign fix, wall/ceiling/hanging category, redstone/rail work, all-object support, or global sturdy-face/solidity change was made.
 - Release audit remains paused until Julia decides whether floor torch plus candle plus flower pot is enough for Beta 3.5, or whether standing sign must also be handled. No release audit run. No release tag moved.
+
+
+- 2026-05-11: Added Beta 3.5 release-readiness audit PASS record at HEAD `f9d2987` / `save/beta35-flower-pot-floor-top-contact`. Scope is `floor_torch + candle + flower_pot` only. `wall_torch`, `lantern`, `chains`, signs, hanging signs, redstone, and rails remain `NOT_COVERED` with release prep still paused for final release bookkeeping only.
+- 2026-05-11: Marked the release-readiness audit as scoped only. It is a superseded evidence savepoint: PASS for `floor_torch + candle + flower_pot`, but not release authorization for any expanded common-object scope until Julia green-lights the expansion.
