@@ -35,15 +35,17 @@ Tracked tree is clean.
 
 ## Current Beta 3.5 live hitbox owner status
 
-Operating base before this proof slice: `13775ce` / `save/beta35-fence-gate-family-fix` on `integrate/phase19-into-side-slab-top-support`.
+Operating base before the fix slice: `ace31b5` / `save/beta35-live-hitbox-owner-red` on `integrate/phase19-into-side-slab-top-support`.
 
-Gated proof `-Dslabbed.beta35LiveHitboxOwnerRed=true` captures the remaining fence/wall/anvil hitbox complaint as RED without production behavior changes. Rows:
+The owner fix is limited to crosshair ownership / retarget eligibility for the already-proven lowered `FenceBlock` / `WallBlock` family and exact `minecraft:anvil` body. Collision math, contact dy, and model/render dy were not changed. Panes remain excluded, and no door/trapdoor/sign/lantern/chain/end-rod/redstone/rail category was opened.
 
-- `minecraft:stone_brick_wall`: direct outline/raycast hits expected owner, final crosshair remains `type=MISS`; `WALL_HITBOX_OWNER_GAP`, failure layer `OUTLINE_RAYCAST_OWNER_GAP`.
-- `minecraft:oak_fence`: direct outline/raycast hits expected owner, final crosshair remains `type=MISS`; `FENCE_HITBOX_OWNER_GAP`, failure layer `OUTLINE_RAYCAST_OWNER_GAP`.
-- `minecraft:anvil`: direct outline/raycast hits expected owner, final crosshair remains `type=MISS`; `ANVIL_HITBOX_OWNER_GAP`, failure layer `OUTLINE_RAYCAST_OWNER_GAP`.
+Gated proof `-Dslabbed.beta35LiveHitboxOwnerRed=true` now reports `JULIA_BETA35_LIVE_HITBOX_OWNER_SUMMARY outcome=GREEN rows=3 red=0 pending=0 green=3`, plus `JULIA_BETA35_LIVE_HITBOX_OWNER_GREEN`. Rows:
 
-Contact/render/fence-gate family support remains separate and green. No production gameplay/render/collision/targeting fix was implemented, no release audit was run, and no release tag was moved. Next safe slice: inspect `GameRendererCrosshairRetargetMixin` owner classification for lowered fence/wall/anvil visible bodies.
+- `minecraft:stone_brick_wall`: direct outline/raycast hits expected owner, final crosshair resolves to the visible wall owner, classification `GREEN`, failure layer `NONE`.
+- `minecraft:oak_fence`: direct outline/raycast hits expected owner, final crosshair resolves to the visible fence owner, classification `GREEN`, failure layer `NONE`.
+- `minecraft:anvil`: direct outline/raycast hits expected owner, final crosshair resolves to the visible anvil owner, classification `GREEN`, failure layer `NONE`.
+
+Contact/render/collision-shape math remains the previously proven category behavior. The live-hitbox-gate matrix remains honest with fence/wall/anvil rows `PENDING/PROOF_HARNESS_GAP` and fence-gate rows `GREEN`; the dedicated owner proof is the authority for the closed owner layer. No release audit was run and no release tag was moved. Savepoint target: `save/beta35-live-hitbox-owner-fix`.
 
 ## Current product goal
 

@@ -13852,10 +13852,21 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " anvilHitboxOwnerFailureLayer=" + anvil.failureLayer()
                 + " contactRenderFenceGateFamily=GREEN_SEPARATE"
                 + " hitboxOwnershipProof=" + outcome
-                + " recommendedNextSlice=GameRendererCrosshairRetargetMixin_owner_classification"
-                + " productionBehaviorChanged=false"
+                + " recommendedNextSlice=" + ("GREEN".equals(outcome) ? "savepoint_gate" : "GameRendererCrosshairRetargetMixin_owner_classification")
+                + " productionBehaviorChanged=" + ("GREEN".equals(outcome) ? "true" : "false")
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false");
+        if ("GREEN".equals(outcome)) {
+            System.out.println("JULIA_BETA35_LIVE_HITBOX_OWNER_GREEN"
+                    + " rows=" + results.length
+                    + " wall=GREEN"
+                    + " fence=GREEN"
+                    + " anvil=GREEN"
+                    + " finalCrosshairOwner=expected_visible_owner"
+                    + " failureLayer=NONE"
+                    + " releaseAudit=NOT_RUN"
+                    + " releaseTagMoved=false");
+        }
     }
 
     private static Beta35LiveHitboxGateAuditResult runBeta35LiveHitboxOwnerFenceWallRow(
@@ -14070,7 +14081,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     && finalHit instanceof BlockHitResult finalBlock
                     && mc.world.getBlockState(finalBlock.getBlockPos()).getBlock() instanceof SlabBlock;
             boolean sideSlabRetargetFired = finalBlockIsSlab && !finalEqualsInitial;
-            String finalDecision = ownerMatchesExpected ? "expected-owner"
+            String finalDecision = ownerMatchesExpected ? "object-shape-owner-preserve"
                     : finalHit == null || finalHit.getType() != HitResult.Type.BLOCK ? "MISS"
                     : sideSlabRetargetFired ? "scan-side-slab-fired"
                     : finalEqualsInitial ? "kept-initial"

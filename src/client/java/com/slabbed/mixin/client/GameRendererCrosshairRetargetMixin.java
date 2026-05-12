@@ -8,6 +8,7 @@ import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockEntityProvider;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.SlabBlock;
@@ -362,7 +363,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
     }
 
     private BlockHitResult slabbed$retargetLoweredObjectShapeOwner(float tickProgress, HitResult currentHit) {
-        if (!(currentHit instanceof BlockHitResult blockHit) || currentHit.getType() != HitResult.Type.BLOCK) {
+        if (currentHit == null || currentHit.getType() == HitResult.Type.ENTITY) {
             return null;
         }
 
@@ -373,24 +374,61 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
 
         Vec3d eye = cam.getCameraPosVec(tickProgress);
-        Vec3d currentPos = blockHit.getPos();
-        Vec3d dir = currentPos.subtract(eye);
-        double currentDist = dir.length();
-        if (currentDist <= 0.0d) {
-            return null;
-        }
-        Vec3d end = eye.add(dir.normalize().multiply(currentDist + 0.5d));
-        double currentDist2 = currentPos.squaredDistanceTo(eye);
+        Vec3d end;
+        double currentDist2 = Double.POSITIVE_INFINITY;
+        if (currentHit instanceof BlockHitResult blockHit && currentHit.getType() == HitResult.Type.BLOCK) {
+            Vec3d currentPos = blockHit.getPos();
+            Vec3d dir = currentPos.subtract(eye);
+            double currentDist = dir.length();
+            if (currentDist <= 0.0d) {
+                return null;
+            }
+            end = eye.add(dir.normalize().multiply(currentDist + 0.5d));
+            currentDist2 = currentPos.squaredDistanceTo(eye);
 
-        BlockPos initialPos = blockHit.getBlockPos();
-        BlockHitResult directHit = slabbed$raycastLoweredObjectShapeOwner(
-                world, cam, eye, end, initialPos, currentDist2);
-        if (directHit != null) {
-            return directHit;
+            BlockPos initialPos = blockHit.getBlockPos();
+            BlockHitResult directHit = slabbed$raycastLoweredObjectShapeOwner(
+                    world, cam, eye, end, initialPos, currentDist2);
+            if (directHit != null) {
+                return directHit;
+            }
+
+            directHit = slabbed$raycastLoweredObjectShapeOwner(
+                    world, cam, eye, end, initialPos.up(), currentDist2);
+            if (directHit != null) {
+                return directHit;
+            }
+        } else {
+            end = eye.add(cam.getRotationVec(tickProgress).multiply(6.0d));
         }
 
-        return slabbed$raycastLoweredObjectShapeOwner(
-                world, cam, eye, end, initialPos.up(), currentDist2);
+        int steps = Math.max(16, (int) Math.ceil(6.0d / 0.05d));
+        BlockHitResult bestHit = null;
+        double bestDist2 = currentDist2;
+        for (int i = 1; i <= steps; i++) {
+            double t = 6.0d * i / steps;
+            if (t * t > bestDist2 + 1.0e-6d) {
+                break;
+            }
+            Vec3d sample = eye.add(cam.getRotationVec(tickProgress).multiply(t));
+            BlockPos samplePos = BlockPos.ofFloored(sample);
+
+            BlockHitResult hit = slabbed$raycastLoweredObjectShapeOwner(
+                    world, cam, eye, end, samplePos, bestDist2);
+            if (hit != null) {
+                bestHit = hit;
+                bestDist2 = hit.getPos().squaredDistanceTo(eye);
+            }
+
+            hit = slabbed$raycastLoweredObjectShapeOwner(
+                    world, cam, eye, end, samplePos.up(), bestDist2);
+            if (hit != null) {
+                bestHit = hit;
+                bestDist2 = hit.getPos().squaredDistanceTo(eye);
+            }
+        }
+
+        return bestHit;
     }
 
     private static BlockHitResult slabbed$raycastLoweredObjectShapeOwner(
@@ -415,7 +453,17 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static boolean slabbed$isLoweredObjectShapeOwner(ClientWorld world, BlockPos pos, BlockState state) {
         return SlabSupport.isLoweredTorchVisual(world, pos, state)
                 || SlabSupport.isLoweredBlockEntityVisual(world, pos, state)
-                || SlabSupport.isLoweredBedVisual(world, pos, state);
+                || SlabSupport.isLoweredBedVisual(world, pos, state)
+                || slabbed$isBeta35HitboxOwnerObject(world, pos, state);
+    }
+
+    private static boolean slabbed$isBeta35HitboxOwnerObject(ClientWorld world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && state != null
+                && SlabSupport.getYOffset(world, pos, state) < 0.0d
+                && (SlabSupport.isBeta35FenceWallVariantContactObject(state)
+                        || state.isOf(Blocks.ANVIL));
     }
 
     private String slabbed$classifyLiveFirstSeamOwner(BlockHitResult hit) {

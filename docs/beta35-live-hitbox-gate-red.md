@@ -88,3 +88,18 @@ Focused owner proof:
 - Summary: `JULIA_BETA35_LIVE_HITBOX_OWNER_SUMMARY outcome=RED rows=3 red=3 pending=0 green=0 wallHitboxOwnerClassification=WALL_HITBOX_OWNER_GAP wallHitboxOwnerFailureLayer=OUTLINE_RAYCAST_OWNER_GAP fenceHitboxOwnerClassification=FENCE_HITBOX_OWNER_GAP fenceHitboxOwnerFailureLayer=OUTLINE_RAYCAST_OWNER_GAP anvilHitboxOwnerClassification=ANVIL_HITBOX_OWNER_GAP anvilHitboxOwnerFailureLayer=OUTLINE_RAYCAST_OWNER_GAP contactRenderFenceGateFamily=GREEN_SEPARATE hitboxOwnershipProof=RED recommendedNextSlice=GameRendererCrosshairRetargetMixin_owner_classification productionBehaviorChanged=false releaseAudit=NOT_RUN releaseTagMoved=false`
 
 Contact/render/fence-gate family support remains separate and green. The remaining blocker is selection ownership for visible lowered fence/wall/anvil bodies.
+
+## Follow-Up: Live Hitbox Owner Fix
+
+The owner-fix slice resolved the dedicated fence/wall/anvil ownership layer without changing the live-hitbox-gate shape/contact/render math. The gate matrix remains honest: fence/wall/anvil rows are still `PENDING/PROOF_HARNESS_GAP` in this older mixed-purpose matrix, while fence-gate rows remain `GREEN`.
+
+Focused owner proof:
+
+- Gate: `-Dslabbed.beta35LiveHitboxOwnerRed=true`
+- Summary: `JULIA_BETA35_LIVE_HITBOX_OWNER_SUMMARY outcome=GREEN rows=3 red=0 pending=0 green=3 wallHitboxOwnerClassification=GREEN wallHitboxOwnerFailureLayer=NONE fenceHitboxOwnerClassification=GREEN fenceHitboxOwnerFailureLayer=NONE anvilHitboxOwnerClassification=GREEN anvilHitboxOwnerFailureLayer=NONE contactRenderFenceGateFamily=GREEN_SEPARATE hitboxOwnershipProof=GREEN recommendedNextSlice=savepoint_gate productionBehaviorChanged=true releaseAudit=NOT_RUN releaseTagMoved=false`
+
+Post-fix live-hitbox-gate proof:
+
+- `JULIA_BETA35_LIVE_HITBOX_GATE_SUMMARY outcome=PENDING rows=5 red=0 pending=3 green=2 fenceHitboxClassification=PENDING fenceHitboxFailureLayer=PROOF_HARNESS_GAP wallHitboxClassification=PENDING wallHitboxFailureLayer=PROOF_HARNESS_GAP anvilHitboxClassification=PENDING anvilHitboxFailureLayer=PROOF_HARNESS_GAP fenceGateClosedClassification=GREEN fenceGateClosedFailureLayer=NONE fenceGateOpenClassification=GREEN fenceGateOpenFailureLayer=NONE`
+
+No collision math, contact dy, or model/render dy was changed. No release audit was run. No release tag was moved.
