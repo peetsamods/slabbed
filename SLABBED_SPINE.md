@@ -389,3 +389,16 @@ If the slice changes, update the source pack and spine together so the current o
 - Evidence folder: `tmp/beta35-floor-torch-lowered-slab-placement-fix-fe7677a`. See `docs/beta35-floor-torch-lowered-slab-placement-fix.md`.
 - `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; scope remains `floor_torch_only`.
 - Beta 3.5 release prep remains paused pending Julia live acceptance; no release tag moved.
+
+## Beta 3.5 floor torch plain bottom contact fix (2026-05-11)
+
+- Operating base for this slice: `66ca74a` / `save/beta35-floor-torch-lowered-slab-placement` on `integrate/phase19-into-side-slab-top-support`.
+- Julia's live acceptance trace proved the `supportDy=-1.0` lowered bottom-slab placement bug was fixed. The remaining concrete contact gap was a different `floor_torch` row: `torchPos=32,-54,80`, `supportCandidateState=stone_slab[type=bottom]`, `supportSourceType=PLAIN_STATE`, `supportDy=-0.500000`, previous `torchDy=-0.500000`, and previous `contactGap=0.500000`.
+- Narrow production fix: `SlabSupport` now computes floor-torch bottom-slab contact dy from existing lowered support truth, so a plain bottom slab at `supportDy=-0.5` gives `torchDy=-1.0`. This is not a global slab solidity/sturdy-face change and does not broaden all item or attachable placement.
+- Tracer hygiene: duplicate/occupied target clicks where the intended torch position already contains `minecraft:torch` now classify as `OCCUPIED_TORCH_TARGET` rather than a true empty-target placement failure. Sequence 16 / `PERSISTENT_LOWERED_SLAB_CARRIER` comfort-scan behavior was deferred and not changed in this slice.
+- Focused gate `-Dslabbed.beta35LiveTorchDualTrace=true -Dslabbed.beta35FloorTorchPlainBottomContact=true` is GREEN: `[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT] classification=PLACED_CONTACT_GREEN` with `supportSourceType=PLAIN_STATE`, `[JULIA_BETA35_FLOOR_TORCH_PLAIN_BOTTOM_CONTACT_GREEN]`, and `[JULIA_BETA35_FLOOR_TORCH_PLAIN_BOTTOM_CONTACT_SUMMARY] failureLayer=NONE`.
+- Fixed values: `supportDy=-0.500000`, `torchDy=-1.000000`, `supportVisibleTopY=-55.000000`, `torchModelBottomY=-55.000000`, `contactGap=0.000000`, `triadCoLocated=yes`, `survival=SURVIVAL_GREEN`, duplicate click `classification=OCCUPIED_TORCH_TARGET`.
+- Regression gates passed: `compileJava compileGametestJava`, lowered `supportDy=-1.0` placement regression, live-shape/contact, visual contact, player-like placement, object triad, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-floor-torch-plain-bottom-contact-fix-66ca74a`. See `docs/beta35-floor-torch-plain-bottom-contact-fix.md`.
+- `wall_torch`, `lantern`, `signs`, and `chains` remain `NOT_COVERED`; scope remains `floor_torch_only`.
+- Beta 3.5 release prep remains paused pending Julia live acceptance; no release tag moved.

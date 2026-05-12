@@ -127,3 +127,31 @@ This tracer is proof-only/debug-gated. No production behavior fix is implemented
 by the tracer slice. Beta 3.5 release prep remains paused; scope remains
 `floor_torch_only`; `wall_torch`, `lantern`, `signs`, and `chains` remain
 `NOT_COVERED`; no release tag moved.
+
+## Follow-up plain bottom supportDy=-0.5 contact fix
+
+The live trace after `66ca74a` found one remaining concrete
+`PLACED_CONTACT_GAP` row. It was not the earlier `supportDy=-1.0`
+lowered-bottom-slab contact/placement issue. The row was:
+
+- `torchPos=32,-54,80`
+- `supportCandidateState=stone_slab[type=bottom]`
+- `supportSourceType=PLAIN_STATE`
+- `supportDy=-0.500000`
+- previous `torchDy=-0.500000`
+- previous `contactGap=0.500000`
+
+The follow-up fix keeps the same floor-torch contact law and applies it to a
+plain bottom-slab support that already resolves to `supportDy=-0.5`. The fixed
+proof reports `torchDy=-1.000000`, `supportVisibleTopY=-55.000000`,
+`torchModelBottomY=-55.000000`, `contactGap=0.000000`,
+`triadCoLocated=yes`, `classification=PLACED_CONTACT_GREEN`, and
+`failureLayer=NONE`.
+
+Duplicate occupied floor-torch clicks are now tracer-classified as
+`OCCUPIED_TORCH_TARGET`. Sequence 16 / `PERSISTENT_LOWERED_SLAB_CARRIER`
+comfort-scan behavior was not changed in this contact slice.
+
+Scope remains `floor_torch_only`; `wall_torch`, `lantern`, `signs`, and
+`chains` remain `NOT_COVERED`. Beta 3.5 release prep remains paused pending
+Julia live acceptance. No release tag moved.

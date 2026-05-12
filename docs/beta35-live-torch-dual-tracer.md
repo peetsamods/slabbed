@@ -37,6 +37,8 @@ placement/targeting/intent path.
 - `WRONG_TARGET_OWNER`
 - `PLACEMENT_RESULT_UNKNOWN`
 - `PLACEMENT_ATTEMPT_OK`
+- `OCCUPIED_TORCH_TARGET`
+- `DUPLICATE_TORCH_TARGET`
 
 ## Existing contact classifications
 
@@ -73,5 +75,31 @@ That is now covered by
 `contactGap=0.000000`, `survival=SURVIVAL_GREEN`, and `failureLayer=NONE`.
 
 This remains `floor_torch_only`; wall torch, lantern, signs, and chains are still
+`NOT_COVERED`. Beta 3.5 release prep remains paused pending Julia live
+acceptance. No release tag moved.
+
+## Follow-up plain-bottom contact fix
+
+The live trace after `66ca74a` showed one remaining concrete contact gap, now
+isolated away from the previous `supportDy=-1.0` placement bug:
+
+- `torchPos=32,-54,80`
+- `supportCandidateState=stone_slab[type=bottom]`
+- `supportSourceType=PLAIN_STATE`
+- `supportDy=-0.500000`
+- previous `torchDy=-0.500000`
+- previous `contactGap=0.500000`
+
+That row is now covered by
+`-Dslabbed.beta35FloorTorchPlainBottomContact=true`. The fixed proof reports
+`supportSourceType=PLAIN_STATE`, `supportDy=-0.500000`,
+`torchDy=-1.000000`, `supportVisibleTopY=-55.000000`,
+`torchModelBottomY=-55.000000`, `contactGap=0.000000`,
+`triadCoLocated=yes`, `classification=PLACED_CONTACT_GREEN`, and
+`failureLayer=NONE`.
+
+Duplicate clicks on an already occupied floor-torch target now classify as
+`OCCUPIED_TORCH_TARGET` instead of a release-blocking placement failure. Scope
+remains `floor_torch_only`; wall torch, lantern, signs, and chains are still
 `NOT_COVERED`. Beta 3.5 release prep remains paused pending Julia live
 acceptance. No release tag moved.
