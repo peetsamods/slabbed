@@ -173,6 +173,23 @@ public final class SlabSupport {
         return state != null && (state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT));
     }
 
+    private static boolean isBeta35OakFenceContactObject(BlockState state) {
+        return state != null && state.isOf(Blocks.OAK_FENCE);
+    }
+
+    private static double beta35OakFenceContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35OakFenceContactObject(state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+            return supportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
     private static boolean isBeta35OrdinaryFullBlockContactObject(BlockView world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || state.isAir()
@@ -1160,6 +1177,11 @@ public final class SlabSupport {
             if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
                 return loweredBottomSupportDy - 0.5d;
             }
+        }
+
+        double oakFenceContactDy = beta35OakFenceContactDy(world, pos, state);
+        if (Double.isFinite(oakFenceContactDy)) {
+            return oakFenceContactDy;
         }
 
         double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
