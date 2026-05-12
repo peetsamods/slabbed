@@ -75,3 +75,7 @@ Validation passed:
 - `./gradlew --no-daemon runClientGameTest --console plain`
 
 No release audit was run. No release tag was moved. Canonical checkout was not modified.
+
+## Superseded as a release artifact (2026-05-12)
+
+The GREEN result above is **rescinded as a release artifact** by the Beta 3.5 fence false-green Opus audit at `a576fa1` and the follow-up render-quad RED proof. The shape-triad GREEN reflected only `getOutlineShape`, `getRaycastShape`, and `getCollisionShape` — all three forcibly offset by `SlabSupportStateMixin` for the four allowlisted variants. The visible quads come from `OffsetBlockStateModel.emitQuads`, which forces `dy = 0.0f` for every `FenceBlock | WallBlock | PaneBlock`, so the rendered model never shifted. See `docs/beta35-fence-false-green-opus-audit.md` and `docs/beta35-fence-model-render-red.md`. The new gate `-Dslabbed.beta35FenceModelRenderRed=true` reproduces the live-visible gap as `MODEL_RENDER_GAP` for all four allowlisted variants on current HEAD. Release remains blocked; a follow-up production render fix in `OffsetBlockStateModel.emitQuads` is required before this slice can re-enter a release claim.
