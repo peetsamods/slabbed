@@ -85,3 +85,15 @@ The remaining three pending rows are fence, wall, and anvil hitbox/collision pro
 - `git diff --check` -> clean
 
 Beta 3.5 release remains blocked. No release audit was run. No release tag was moved.
+
+## FenceGateBlock Family Promotion Follow-Up
+
+The cherry-only contact/support path was promoted to the vanilla `FenceGateBlock` family in the next slice. The production helper now uses `state.getBlock() instanceof FenceGateBlock`; `SlabSupportStateMixin` uses that same family helper for lowered shape/raycast/collision handling. `OffsetBlockStateModel` was not modified.
+
+Focused family proof:
+
+- Gate: `-Dslabbed.beta35FenceGateFamilyFix=true`
+- Summary: `JULIA_BETA35_FENCE_GATE_FAMILY_SUMMARY outcome=GREEN failureLayer=NONE variants=11 rows=22 greenRows=22 closedGreen=11 openGreen=11 interactionRepresentatives=3 interactionRepresentativeGreen=3 scope=FenceGateBlock_family fenceWallHitboxRows=UNCHANGED_PENDING anvilHitboxRows=UNCHANGED_PENDING panes=NOT_COVERED releaseAudit=NOT_RUN releaseTagMoved=false failedRows=none`
+- Tested variants: `oak_fence_gate`, `spruce_fence_gate`, `birch_fence_gate`, `jungle_fence_gate`, `acacia_fence_gate`, `dark_oak_fence_gate`, `mangrove_fence_gate`, `cherry_fence_gate`, `bamboo_fence_gate`, `crimson_fence_gate`, and `warped_fence_gate`.
+
+Closed and open rows are GREEN for every tested gate. Open/close interaction representatives `oak_fence_gate`, `cherry_fence_gate`, and `crimson_fence_gate` are GREEN. Fence/wall/anvil hitbox rows remain separate `PENDING` / `PROOF_HARNESS_GAP` work.
