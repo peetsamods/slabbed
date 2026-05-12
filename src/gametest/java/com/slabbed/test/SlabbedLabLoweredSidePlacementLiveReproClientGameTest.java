@@ -356,6 +356,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35GrindstoneContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35GrindstoneContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35TrapdoorDoorAudit")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10872,10 +10881,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         true),
                 new Beta35CommonObjectCase(
                         "minecraft:grindstone",
-                        "special_shape_fullblock",
+                        "special_shape_oriented",
                         Items.GRINDSTONE,
                         Blocks.GRINDSTONE.getDefaultState(),
-                        "NEEDS_CATEGORY_SLICE",
+                        "GREEN_ALREADY_INHERITS",
                         false,
                         true,
                         true),
@@ -10941,11 +10950,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " specialRendererRisk=" + specialRendererRisk
                 + " needsCategorySlice=" + needsCategorySlice
                 + " outOfScopeForBeta35=" + outOfScope
-                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table,stonecutter,anvil"
+                + " currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table,stonecutter,anvil,grindstone"
                 + " doorSlice=PARALLEL_NOT_INSPECTED"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED"
-                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_anvil_contact_dy_and_barrel_raycast_triad");
+                + " productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_anvil_grindstone_contact_dy_and_barrel_raycast_triad");
     }
 
     private static Beta35CommonObjectAuditResult runBeta35SpecialFullblockAuditRow(
@@ -11527,6 +11536,93 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " classification=RED");
             throw new RuntimeException("[JULIA_BETA35_ANVIL_CONTACT_RED]"
                     + " reason=anvil_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
+    }
+
+    /**
+     * Focused grindstone proof for the Beta 3.5 oriented special-shape contact slice.
+     *
+     * Gate: -Dslabbed.beta35GrindstoneContact=true
+     */
+    private static void runBeta35GrindstoneContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase grindstone = new Beta35CommonObjectCase(
+                "minecraft:grindstone",
+                "special_shape_oriented",
+                Items.GRINDSTONE,
+                Blocks.GRINDSTONE.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35SpecialFullblockAuditRow(
+                    ctx,
+                    singleplayer,
+                    grindstone,
+                    supportCase,
+                    0);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "GRINDSTONE_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "GRINDSTONE_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "GRINDSTONE_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "GRINDSTONE_TRIAD_MISMATCH";
+                    default -> "GRINDSTONE_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_GRINDSTONE_CONTACT_GREEN"
+                        + " objectId=minecraft:grindstone"
+                        + " family=special_shape_oriented"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " testedOrientation=face_floor_facing_south_from_top_use_hit"
+                        + " raycastBasis=lowered_outline_when_native_empty"
+                        + " collisionCategory=oriented_special_shape_collision_co_located"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_GRINDSTONE_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:grindstone"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " testedOrientation=face_floor_facing_south_from_top_use_hit"
+                + " collisionCategory=oriented_special_shape_collision_co_located"
+                + " crafting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " furnace=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " bookshelf=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " chest=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " barrel=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " enchanting_table=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " stonecutter=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " anvil=CHECK_SPECIAL_FULLBLOCK_MATRIX"
+                + " lectern=UNCHANGED_SEPARATE_CONTACT_GAP"
+                + " doorTrapdoorSignLanternChainEndRodRedstoneRail=NOT_TOUCHED"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            System.out.println("JULIA_BETA35_GRINDSTONE_CONTACT_RED"
+                    + " objectId=minecraft:grindstone"
+                    + " failureLayer=" + failureLayer
+                    + " classification=RED");
+            throw new RuntimeException("[JULIA_BETA35_GRINDSTONE_CONTACT_RED]"
+                    + " reason=grindstone_contact_not_green"
                     + " failureLayer=" + failureLayer);
         }
     }

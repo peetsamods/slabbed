@@ -120,6 +120,14 @@ Special-fullblock status changed only for `minecraft:anvil`: focused anvil proof
 
 No release audit was run. No release tag was moved. Canonical checkout was not modified. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
 
+## Special Fullblock Grindstone Follow-up
+
+The grindstone slice at `805b070` / `save/beta35-anvil-contact` did not change this common-object matrix. The matrix remains PASS with unchanged summary: `rows=27 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=4 triadMismatch=0 collisionShapeRisk=0 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=0`.
+
+Special-fullblock status changed only for `minecraft:grindstone`: focused grindstone proof and the special-fullblock matrix classify it GREEN on valid slab-supported rows, with tested state `face=floor,facing=south`, `contactGap=0.000000`, `triadCoLocated=yes`, and co-located model/outline/raycast/collision bounds. This is not new common-object support, not lectern support, and not door/trapdoor/sign/lantern/chain/end-rod/redstone/rail support.
+
+No release audit was run. No release tag was moved. Canonical checkout was not modified.
+
 ## Trapdoor / Door Category Audit Follow-up
 
 Follow-up audit at `f88afb7` / `save/beta35-oak-fence-contact-integrated` added `-Dslabbed.beta35TrapdoorDoorAudit=true` with no production behavior changes.

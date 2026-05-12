@@ -28,17 +28,17 @@ The raycast fallback helper covered only already-proven empty-native-raycast rep
 
 Follow-up: `minecraft:anvil` joined both explicit helper allowlists only after the focused anvil proof at `9f3bacf` showed the same narrow contact-dy plus empty-raycast mechanism on valid slab-supported rows.
 
+Follow-up: `minecraft:grindstone` joined both explicit helper allowlists only after the focused grindstone proof at `805b070` showed the same narrow contact-dy plus empty-raycast mechanism on valid slab-supported rows. A separate grindstone-only collision fallback was added to keep the tested floor-oriented special shape co-located; this is not broad collision support.
+
 ## Boundaries
 
-No new object support was implemented.
+New object support after the grindstone follow-up is limited to exact `minecraft:grindstone`.
 
-The green set remains unchanged.
+The green set now adds `minecraft:grindstone`.
 
 Still open:
 
 - `minecraft:lectern`: interactive block-entity contact slice
-- `minecraft:grindstone`: special-shape slice
-- `minecraft:anvil`: special-shape/falling-ish slice
 
 Forbidden categories were not touched: doors, trapdoors, signs, lanterns, chains, end rods, redstone, and rails.
 
@@ -52,12 +52,12 @@ No release audit was run. No release tag was moved. Canonical checkout was not m
 - `./gradlew --no-daemon runClientGameTest --console plain`: PASS
 - `git diff --check`: PASS
 
-Special-fullblock matrix summary stayed unchanged: `rows=30 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=6 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=2 outOfScopeForBeta35=0`.
+Special-fullblock matrix summary after grindstone stayed PASS: `rows=30 greenAlreadyInherits=27 placementFailure=0 survivalFailure=0 contactGap=2 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=0 outOfScopeForBeta35=0`.
 
 Common-object matrix summary stayed unchanged: `rows=27 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=4 triadMismatch=0 collisionShapeRisk=0 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=0`.
 
 ## Next Slice
 
-Recommended next implementation slice after the anvil follow-up: `minecraft:grindstone`, or `minecraft:lectern` if Julia chooses the interactive block-entity slice.
+Recommended next implementation slice after the grindstone follow-up: `minecraft:lectern` only if Julia chooses the interactive block-entity slice.
 
-Do not bundle grindstone with lectern.
+Do not bundle other special fullblocks with lectern.
