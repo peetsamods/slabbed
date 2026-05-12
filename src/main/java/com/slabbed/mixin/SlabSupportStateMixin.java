@@ -109,7 +109,8 @@ public abstract class SlabSupportStateMixin {
                         || state.isOf(Blocks.BARREL)
                         || state.isOf(Blocks.ENCHANTING_TABLE)
                         || state.isOf(Blocks.STONECUTTER)
-                        || state.isOf(Blocks.ANVIL));
+                        || state.isOf(Blocks.ANVIL)
+                        || state.isOf(Blocks.GRINDSTONE));
     }
 
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
@@ -238,10 +239,10 @@ public abstract class SlabSupportStateMixin {
 
     @Inject(method = "getCollisionShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/ShapeContext;)Lnet/minecraft/util/shape/VoxelShape;",
             at = @At("RETURN"), cancellable = true)
-    private void slabbed$offsetOakFenceCollision(BlockView world, BlockPos pos, ShapeContext ctx,
-                                                 CallbackInfoReturnable<VoxelShape> cir) {
+    private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockView world, BlockPos pos, ShapeContext ctx,
+                                                              CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (!self.isOf(Blocks.OAK_FENCE)) {
+        if (!self.isOf(Blocks.OAK_FENCE) && !self.isOf(Blocks.GRINDSTONE)) {
             return;
         }
         double yOff = SlabSupport.getYOffset(world, pos, self);
