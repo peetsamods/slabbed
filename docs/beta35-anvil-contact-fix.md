@@ -40,6 +40,16 @@ Slab-supported rows:
 
 The anvil is treated as `falling_special_shape`; focused proof classifies falling behavior as stable on valid slab-supported surfaces.
 
+Post-live audit at `edbba27` added
+`-Dslabbed.beta35LiveHitboxGateRed=true`. The bounded anvil row still reports
+`supportDy=-1.000000`, `objectDy=-1.500000`, `contactGap=0.000000`,
+`collisionCoLocated=yes`, and `triadCoLocated=yes`, so it did not reproduce
+Julia's live hitbox/collision feel as `ANVIL_COLLISION_HITBOX_GAP`. That is
+not a release green: current live classification is `PENDING` /
+`PROOF_HARNESS_GAP`, and contact/triad green is not sufficient to close a
+future hitbox/collision RED if one is reproduced. See
+`docs/beta35-live-hitbox-gate-red.md`.
+
 ## Matrix
 
 Special-fullblock matrix summary after the fix:

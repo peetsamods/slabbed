@@ -117,6 +117,15 @@ JULIA_BETA35_FENCE_WALL_FAMILY_GREEN outcome=GREEN
 
 **Beta 3.5 release remains BLOCKED.**
 
+Post-live audit at `edbba27` added `-Dslabbed.beta35LiveHitboxGateRed=true`.
+The connected `minecraft:cherry_fence` and `minecraft:stone_brick_wall`
+rows still report `objectDy=-1.500000`, `contactGap=0.000000`,
+`collisionCoLocated=yes`, and `triadCoLocated=yes`, but Julia's live
+hitbox/collision complaint is not closed by this shape-math proof. Current
+classification: `PENDING` / `PROOF_HARNESS_GAP`. Fence gates are separate
+from this family law and are RED as `FENCE_GATE_CONTACT_GAP`; see
+`docs/beta35-live-hitbox-gate-red.md`.
+
 Remaining unresolved live failures:
 
 - `minecraft:birch_trapdoor` — not yet covered (no RED proof yet)
