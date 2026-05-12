@@ -695,3 +695,14 @@ If the slice changes, update the source pack and spine together so the current o
 - Current special-fullblock GREEN set: `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, `minecraft:stonecutter`, `minecraft:anvil`, and `minecraft:grindstone`.
 - `minecraft:lectern` remains open / not fixed as an interactive block-entity contact slice.
 - No release audit was run in this merge. No release tag was moved.
+
+## Beta 3.5 fence family live RED (2026-05-12)
+
+- Operating base for this proof/classification slice: `0ccbc7f` / `save/beta35-special-fullblock-compat-integrated` in `/Users/joolmac/CascadeProjects/Slabbed-beta35-fence-family-worktree` on `work/beta35-fence-family-live-red`. Canonical checkout was not modified after worktree creation.
+- New gated proof: `-Dslabbed.beta35FenceFamilyLiveRed=true`, markers `JULIA_BETA35_FENCE_FAMILY_LIVE_RED`, `JULIA_BETA35_FENCE_FAMILY_ROW`, and `JULIA_BETA35_FENCE_FAMILY_SUMMARY`.
+- Result: RED, first failure layer `VARIANT_COVERAGE_GAP`. Summary: `rows=7 greenSimplifiedOnly=1 greenLiveLike=3 variantCoverageGap=3 oakFenceClassification=GREEN_LIVE_LIKE`.
+- `minecraft:oak_fence` remains GREEN in the tested live-like configurations: isolated, one-neighbor, two-neighbor, and beside-lowered-fullblock; connected rows report `contactGap=0.000000`, correct connection properties, and co-located model/outline/raycast/collision bounds.
+- `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall` place and survive but fail as `VARIANT_COVERAGE_GAP` with `contactGap=1.500000`, empty raycast bounds, and `triadCoLocated=no`.
+- Previous `minecraft:oak_fence` green is valid simplified-only / live-superseded, not a fence-family release claim. No production behavior fix implemented. No release audit run. No release tag moved.
+- Validation passed: `compileJava compileGametestJava`, focused fence-family live-red proof, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-fence-family-live-red-0ccbc7f`. See `docs/beta35-fence-family-live-red.md`.

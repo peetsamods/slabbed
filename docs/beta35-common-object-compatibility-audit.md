@@ -260,3 +260,13 @@ The proven special-fullblock work from `work/beta35-special-fullblock-compat` th
 Current special-fullblock GREEN set: `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, `minecraft:stonecutter`, `minecraft:anvil`, and `minecraft:grindstone`.
 
 `minecraft:lectern` remains open / not fixed as an interactive block-entity contact slice. No release audit was run. No release tag was moved.
+
+## Fence Family Live RED Follow-up
+
+Follow-up proof/classification at `0ccbc7f` / `save/beta35-special-fullblock-compat-integrated` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-fence-family-worktree` on branch `work/beta35-fence-family-live-red`.
+
+Focused gate: `-Dslabbed.beta35FenceFamilyLiveRed=true`; markers `JULIA_BETA35_FENCE_FAMILY_LIVE_RED`, `JULIA_BETA35_FENCE_FAMILY_ROW`, and `JULIA_BETA35_FENCE_FAMILY_SUMMARY`.
+
+Previous `minecraft:oak_fence` green status is now classified as valid simplified-only / live-superseded. The new live-like proof keeps `minecraft:oak_fence` GREEN for isolated, one-neighbor, two-neighbor, and beside-lowered-fullblock configurations, with `contactGap=0.000000`, co-located model/outline/raycast/collision bounds, and correct connection state.
+
+The RED is a `VARIANT_COVERAGE_GAP`: `minecraft:spruce_fence`, `minecraft:nether_brick_fence`, and `minecraft:cobblestone_wall` place and survive but report `contactGap=1.500000`, empty raycast bounds, and `triadCoLocated=no`. No production behavior fix was implemented. No release audit ran. No release tag moved. Canonical checkout was not modified.
