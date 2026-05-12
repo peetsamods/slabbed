@@ -100,3 +100,33 @@ Separate category slices:
 This audit does not change the release decision. It expands the known matrix from the clean Beta 3.5 base and keeps release prep paused.
 
 `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter` are now GREEN for their focused representatives. Chest, enchanting table, and stonecutter use exact block dy authority plus exact lowered raycast fallbacks to their lowered outlines when native raycast is empty; barrel keeps its existing contact dy and uses a barrel-only lowered raycast fallback to its lowered outline. Do not claim all special fullblocks or all block entities are fixed; remaining rows are still separate interactive block-entity or special-shape slices.
+
+## Helper Consolidation Follow-up
+
+Follow-up implementation at `d854e2b` / `save/beta35-stonecutter-contact` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
+
+Consolidation performed: yes.
+
+Helpers extracted:
+
+- `SlabSupport.isBeta35SpecialFullblockContactObject(...)`
+- `SlabSupport.beta35SpecialFullblockContactDy(...)`
+- `SlabSupportStateMixin.slabbed$isBeta35SpecialFullblockRaycastFallbackObject(...)`
+
+The contact helper is explicit and limited to already-green representatives: `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter`. The raycast fallback helper is a separate concern and remains limited to the already-proven empty-native-raycast representatives: `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, and `minecraft:stonecutter`.
+
+No new object support was added. The green set remains unchanged. `minecraft:lectern`, `minecraft:grindstone`, and `minecraft:anvil` remain open; lectern remains an interactive block-entity slice, while grindstone and anvil remain special-shape slices.
+
+Validation after consolidation:
+
+- `./gradlew --no-daemon compileJava compileGametestJava`: PASS
+- `JAVA_TOOL_OPTIONS="-Dslabbed.beta35SpecialFullblockCompatibilityAudit=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
+- `JAVA_TOOL_OPTIONS="-Dslabbed.beta35CommonObjectCompatibilityAudit=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS
+- `./gradlew --no-daemon runClientGameTest --console plain`: PASS
+- `git diff --check`: PASS
+
+Special-fullblock matrix summary remains unchanged: `rows=30 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=6 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=2 outOfScopeForBeta35=0`.
+
+No release audit was run. No release tag was moved. Canonical checkout was not modified. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
+
+Next recommended implementation slice: `minecraft:grindstone` or `minecraft:anvil`; do not bundle either with lectern.

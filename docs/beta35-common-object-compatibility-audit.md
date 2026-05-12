@@ -170,6 +170,16 @@ Special-fullblock matrix follow-up now reports `greenAlreadyInherits=21`, `conta
 
 Focused common-object matrix remains passing for this worktree and preserves its existing door/sign classifications (`contactGap=4`, `multipartRisk=1`, `rendererSpecialCase=1`). No release audit ran. No release tag moved. Canonical checkout was not modified.
 
+## Special Fullblock Helper Consolidation Follow-up
+
+Follow-up implementation at `d854e2b` / `save/beta35-stonecutter-contact` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
+
+Consolidation performed: yes. `SlabSupport` now uses explicit already-green Beta 3.5 special-fullblock contact helpers, and `SlabSupportStateMixin` now uses a separate explicit raycast fallback helper for the already-proven empty-native-raycast representatives.
+
+No new common-object support was added. The common-object matrix remains unchanged: `rows=27 greenAlreadyInherits=21 placementFailure=0 survivalFailure=0 contactGap=4 triadMismatch=0 collisionShapeRisk=0 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=0`.
+
+Door and standing sign classifications are unchanged. Lanterns, chains, redstone, and rails remain not covered. No release audit ran. No release tag moved. Canonical checkout was not modified.
+
 ## Enchanting Table Contact Fix Follow-up
 
 Follow-up implementation at `e46cd26` / `save/beta35-barrel-triad` was run in the separate worktree `/Users/joolmac/CascadeProjects/Slabbed-beta35-special-fullblock-worktree` on branch `work/beta35-special-fullblock-compat`.
