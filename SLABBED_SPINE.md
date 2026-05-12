@@ -524,3 +524,14 @@ If the slice changes, update the source pack and spine together so the current o
 - Validation passed: `compileJava compileGametestJava`, focused furnace triad proof, focused common-object matrix, focused crafting table contact regression, focused floor/top family audit, default `runClientGameTest`, and `git diff --check`.
 - Evidence folder: `tmp/beta35-furnace-triad-fix-3712a37`. See `docs/beta35-furnace-triad-fix.md`.
 - Release remains paused pending Julia decision on whether ordinary full blocks plus the existing floor/top green set are enough, or whether fence, trapdoor, door, sign, and/or other categories must be handled before Beta 3.5. No release audit run. No release tag moved.
+
+## Beta 3.5 oak fence partial-collision contact fix (2026-05-11)
+
+- Safety worktree for this slice: `/Users/joolmac/CascadeProjects/Slabbed-beta35-object-compat-worktree` on `work/beta35-common-object-compat`, created from `a6400ca` / `save/beta35-furnace-triad`. Original canonical repo stayed tracked/staged-clean.
+- Previous `minecraft:oak_fence` failure layer: `CONTACT_GAP` plus `COLLISION_SHAPE_RISK`; placement and survival were already GREEN, but slab-supported rows had `contactGap=0.500000` on plain bottom support and `contactGap=1.000000` on lowered bottom support.
+- Narrow production fix: `SlabSupport.getYOffsetInner(...)` now has an `minecraft:oak_fence`-only contact dy path over lowered bottom slab support truth, and `SlabSupportStateMixin` aligns lowered oak-fence outline/raycast/collision shape to the fence collision body. This is not all fences, walls, panes, trapdoors, doors, signs, all partial blocks, or a global sturdy-face/solidity change.
+- Focused gate `-Dslabbed.beta35OakFenceContact=true` is GREEN: vanilla, plain bottom, and lowered bottom rows all place/survive; slab-supported rows report `objectDy=-1.000000` or `-1.500000`, `contactGap=0.000000`, `triadCoLocated=yes`, `collisionCoLocated=yes`, and summary `failureLayer=NONE`.
+- Updated common-object matrix: `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, and `minecraft:oak_fence` are GREEN. `minecraft:oak_trapdoor` remains `CONTACT_GAP` plus `NEEDS_CATEGORY_SLICE`; `minecraft:oak_door` remains `CONTACT_GAP` plus `MULTIPART_RISK`; standing `minecraft:oak_sign` remains `CONTACT_GAP` plus `RENDERER_SPECIAL_CASE`.
+- Validation passed: `compileJava compileGametestJava`, focused oak-fence proof, focused common-object matrix, focused floor/top family audit, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-oak-fence-contact-risk-a6400ca`. See `docs/beta35-oak-fence-contact-risk.md`.
+- Release remains paused. No release audit run. No release tag moved. Trapdoor, door, and sign were not touched.
