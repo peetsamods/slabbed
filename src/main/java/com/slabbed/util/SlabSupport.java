@@ -169,8 +169,8 @@ public final class SlabSupport {
         return block instanceof net.minecraft.block.TorchBlock && !(block instanceof WallTorchBlock);
     }
 
-    private static boolean isBeta35FloorTopContactCandle(BlockState state) {
-        return state != null && state.isOf(Blocks.CANDLE);
+    private static boolean isBeta35FloorTopContactObject(BlockState state) {
+        return state != null && (state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT));
     }
 
     public static boolean canTreatAsFloorTorchTopFace(BlockView world, BlockPos supportPos, BlockState torchState) {
@@ -1122,7 +1122,7 @@ public final class SlabSupport {
             }
         }
 
-        if (isBeta35FloorTopContactCandle(state)) {
+        if (isBeta35FloorTopContactObject(state)) {
             BlockPos supportPos = pos.down();
             BlockState supportState = world.getBlockState(supportPos);
             double loweredBottomSupportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
