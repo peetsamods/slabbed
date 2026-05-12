@@ -61,3 +61,19 @@ Post-fix live-hitbox audit:
 - `JULIA_BETA35_LIVE_HITBOX_GATE_SUMMARY outcome=PENDING rows=5 red=0 pending=3 green=2 fenceHitboxClassification=PENDING fenceHitboxFailureLayer=PROOF_HARNESS_GAP wallHitboxClassification=PENDING wallHitboxFailureLayer=PROOF_HARNESS_GAP anvilHitboxClassification=PENDING anvilHitboxFailureLayer=PROOF_HARNESS_GAP fenceGateClosedClassification=GREEN fenceGateClosedFailureLayer=NONE fenceGateOpenClassification=GREEN fenceGateOpenFailureLayer=NONE`
 
 The original RED rows above remain the historical audit result at `edbba27`; after the cherry-gate fix, the remaining live-hitbox matrix blocker is the fence/wall/anvil proof-harness gap, not fence gate contact.
+
+## Follow-Up: FenceGateBlock Family Fix
+
+The next family slice promoted the cherry-only gate behavior to the vanilla `FenceGateBlock` family. It did not add doors, trapdoors, signs, panes, fence/wall hitbox fixes, anvil hitbox fixes, release audit work, or release tag movement.
+
+Focused family proof:
+
+- Gate: `-Dslabbed.beta35FenceGateFamilyFix=true`
+- Summary: `JULIA_BETA35_FENCE_GATE_FAMILY_SUMMARY outcome=GREEN failureLayer=NONE variants=11 rows=22 greenRows=22 closedGreen=11 openGreen=11 interactionRepresentatives=3 interactionRepresentativeGreen=3 scope=FenceGateBlock_family fenceWallHitboxRows=UNCHANGED_PENDING anvilHitboxRows=UNCHANGED_PENDING panes=NOT_COVERED releaseAudit=NOT_RUN releaseTagMoved=false failedRows=none`
+- Tested variants: `oak_fence_gate`, `spruce_fence_gate`, `birch_fence_gate`, `jungle_fence_gate`, `acacia_fence_gate`, `dark_oak_fence_gate`, `mangrove_fence_gate`, `cherry_fence_gate`, `bamboo_fence_gate`, `crimson_fence_gate`, and `warped_fence_gate`.
+
+Post-family live-hitbox audit:
+
+- `JULIA_BETA35_LIVE_HITBOX_GATE_SUMMARY outcome=PENDING rows=5 red=0 pending=3 green=2 fenceHitboxClassification=PENDING fenceHitboxFailureLayer=PROOF_HARNESS_GAP wallHitboxClassification=PENDING wallHitboxFailureLayer=PROOF_HARNESS_GAP anvilHitboxClassification=PENDING anvilHitboxFailureLayer=PROOF_HARNESS_GAP fenceGateClosedClassification=GREEN fenceGateClosedFailureLayer=NONE fenceGateOpenClassification=GREEN fenceGateOpenFailureLayer=NONE`
+
+Fence gate contact is now green for the tested family. The remaining blocker in this matrix is still the fence/wall/anvil true hitbox proof-harness gap.

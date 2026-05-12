@@ -8,6 +8,7 @@ import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.FenceBlock;
@@ -482,6 +483,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35FenceGateContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35FenceGateFamilyFix")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FenceGateFamilyFixProof(ctx, singleplayer);
             }
             return;
         }
@@ -10642,6 +10652,14 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     ) {
     }
 
+    private record Beta35FenceGateFamilyCase(
+            String objectId,
+            Item item,
+            Block block,
+            boolean interactionRepresentative
+    ) {
+    }
+
     private record Beta35LiveHitboxGateAuditResult(
             String objectId,
             String family,
@@ -11121,6 +11139,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         supportCandidatePos.getY() + 3.0d,
                         supportCandidatePos.getZ() - 2.0d),
                 useHit.getPos());
+        beta35FenceGateStabilizePlayer(ctx, singleplayer);
         ctx.waitTick();
 
         final String[] placementResult = {"not-run"};
@@ -13812,6 +13831,158 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
     }
 
+    /**
+     * Focused GREEN proof for the Beta 3.5 full vanilla FenceGateBlock family slice.
+     *
+     * Gate: -Dslabbed.beta35FenceGateFamilyFix=true
+     */
+    private static void runBeta35FenceGateFamilyFixProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35FenceGateFamilyCase[] cases = beta35FenceGateFamilyCases();
+        int rows = 0;
+        int greenRows = 0;
+        int closedGreen = 0;
+        int openGreen = 0;
+        int interactionRepresentatives = 0;
+        int interactionRepresentativeGreen = 0;
+        String failureLayer = "NONE";
+        StringBuilder failedRows = new StringBuilder();
+
+        for (int i = 0; i < cases.length; i++) {
+            Beta35FenceGateFamilyCase gateCase = cases[i];
+            Beta35LiveHitboxGateAuditResult closed = runBeta35FenceGateContactAuditRow(
+                    ctx,
+                    singleplayer,
+                    i * 2,
+                    false,
+                    780,
+                    "JULIA_BETA35_FENCE_GATE_FAMILY_ROW",
+                    gateCase);
+            Beta35LiveHitboxGateAuditResult open = runBeta35FenceGateContactAuditRow(
+                    ctx,
+                    singleplayer,
+                    i * 2 + 1,
+                    true,
+                    780,
+                    "JULIA_BETA35_FENCE_GATE_FAMILY_ROW",
+                    gateCase);
+
+            rows += 2;
+            if ("GREEN".equals(closed.classification())) {
+                greenRows++;
+                closedGreen++;
+            } else {
+                failureLayer = beta35FirstFailureLayer(failureLayer, closed.failureLayer());
+                beta35AppendFailedFenceGateFamilyRow(failedRows, gateCase.objectId(), "closed", closed.failureLayer());
+            }
+            if ("GREEN".equals(open.classification())) {
+                greenRows++;
+                openGreen++;
+            } else {
+                failureLayer = beta35FirstFailureLayer(failureLayer, open.failureLayer());
+                beta35AppendFailedFenceGateFamilyRow(failedRows, gateCase.objectId(), "open", open.failureLayer());
+            }
+            if (gateCase.interactionRepresentative()) {
+                interactionRepresentatives++;
+                if ("GREEN".equals(open.classification())) {
+                    interactionRepresentativeGreen++;
+                }
+            }
+        }
+
+        boolean allGreen = greenRows == rows && interactionRepresentativeGreen == interactionRepresentatives;
+        if (allGreen) {
+            System.out.println("JULIA_BETA35_FENCE_GATE_FAMILY_GREEN"
+                    + " family=fence_gate"
+                    + " variants=" + cases.length
+                    + " rows=" + rows
+                    + " closed=GREEN"
+                    + " open=GREEN"
+                    + " placement=GREEN"
+                    + " survival=GREEN"
+                    + " contact=GREEN"
+                    + " interactionRepresentatives=oak_fence_gate,cherry_fence_gate,crimson_fence_gate"
+                    + " interaction=GREEN"
+                    + " triad=GREEN"
+                    + " collision=CATEGORY_VALID"
+                    + " classification=GREEN"
+                    + " failureLayer=NONE");
+        }
+
+        System.out.println("JULIA_BETA35_FENCE_GATE_FAMILY_SUMMARY"
+                + " outcome=" + (allGreen ? "GREEN" : "RED")
+                + " failureLayer=" + failureLayer
+                + " variants=" + cases.length
+                + " rows=" + rows
+                + " greenRows=" + greenRows
+                + " closedGreen=" + closedGreen
+                + " openGreen=" + openGreen
+                + " interactionRepresentatives=" + interactionRepresentatives
+                + " interactionRepresentativeGreen=" + interactionRepresentativeGreen
+                + " scope=FenceGateBlock_family"
+                + " fenceWallHitboxRows=UNCHANGED_PENDING"
+                + " anvilHitboxRows=UNCHANGED_PENDING"
+                + " panes=NOT_COVERED"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " failedRows=" + (failedRows.length() == 0 ? "none" : failedRows));
+
+        if (!allGreen) {
+            throw new RuntimeException("[JULIA_BETA35_FENCE_GATE_FAMILY_RED]"
+                    + " reason=fence_gate_family_not_green"
+                    + " failureLayer=" + failureLayer
+                    + " failedRows=" + failedRows);
+        }
+    }
+
+    private static Beta35FenceGateFamilyCase[] beta35FenceGateFamilyCases() {
+        return new Beta35FenceGateFamilyCase[] {
+                new Beta35FenceGateFamilyCase("minecraft:oak_fence_gate", Items.OAK_FENCE_GATE,
+                        Blocks.OAK_FENCE_GATE, true),
+                new Beta35FenceGateFamilyCase("minecraft:spruce_fence_gate", Items.SPRUCE_FENCE_GATE,
+                        Blocks.SPRUCE_FENCE_GATE, false),
+                new Beta35FenceGateFamilyCase("minecraft:birch_fence_gate", Items.BIRCH_FENCE_GATE,
+                        Blocks.BIRCH_FENCE_GATE, false),
+                new Beta35FenceGateFamilyCase("minecraft:jungle_fence_gate", Items.JUNGLE_FENCE_GATE,
+                        Blocks.JUNGLE_FENCE_GATE, false),
+                new Beta35FenceGateFamilyCase("minecraft:acacia_fence_gate", Items.ACACIA_FENCE_GATE,
+                        Blocks.ACACIA_FENCE_GATE, false),
+                new Beta35FenceGateFamilyCase("minecraft:dark_oak_fence_gate", Items.DARK_OAK_FENCE_GATE,
+                        Blocks.DARK_OAK_FENCE_GATE, false),
+                new Beta35FenceGateFamilyCase("minecraft:mangrove_fence_gate", Items.MANGROVE_FENCE_GATE,
+                        Blocks.MANGROVE_FENCE_GATE, false),
+                new Beta35FenceGateFamilyCase("minecraft:cherry_fence_gate", Items.CHERRY_FENCE_GATE,
+                        Blocks.CHERRY_FENCE_GATE, true),
+                new Beta35FenceGateFamilyCase("minecraft:bamboo_fence_gate", Items.BAMBOO_FENCE_GATE,
+                        Blocks.BAMBOO_FENCE_GATE, false),
+                new Beta35FenceGateFamilyCase("minecraft:crimson_fence_gate", Items.CRIMSON_FENCE_GATE,
+                        Blocks.CRIMSON_FENCE_GATE, true),
+                new Beta35FenceGateFamilyCase("minecraft:warped_fence_gate", Items.WARPED_FENCE_GATE,
+                        Blocks.WARPED_FENCE_GATE, false),
+        };
+    }
+
+    private static String beta35FirstFailureLayer(String current, String candidate) {
+        if ("NONE".equals(current) && candidate != null && !"NONE".equals(candidate)) {
+            return candidate;
+        }
+        return current;
+    }
+
+    private static void beta35AppendFailedFenceGateFamilyRow(
+            StringBuilder failedRows,
+            String objectId,
+            String configuration,
+            String failureLayer
+    ) {
+        if (failedRows.length() > 0) {
+            failedRows.append(',');
+        }
+        failedRows.append(objectId).append(':').append(configuration).append(':').append(failureLayer);
+    }
+
     private static Beta35LiveHitboxGateAuditResult runBeta35LiveFenceWallHitboxGateRow(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
@@ -13870,8 +14041,6 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             world.updateNeighbors(objectPos.west(), world.getBlockState(objectPos.west()).getBlock());
         });
         ctx.waitTick();
-        singleplayer.getClientWorld().waitForChunksRender();
-
         OffsetBlockStateModel.ModelDyOwnerTrace trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
         boolean traceSeen = trace != null && trace.seen();
         int appliedCalls = trace == null ? 0 : trace.appliedCalls();
@@ -14029,8 +14198,6 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             world.updateNeighbors(supportCandidatePos, supportState.getBlock());
         });
         ctx.waitTick();
-        singleplayer.getClientWorld().waitForChunksRender();
-
         OffsetBlockStateModel.ModelDyOwnerTrace trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
         boolean traceSeen = trace != null && trace.seen();
         int appliedCalls = trace == null ? 0 : trace.appliedCalls();
@@ -14155,7 +14322,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 rowIndex,
                 openAfterPlacement,
                 620,
-                "JULIA_BETA35_LIVE_HITBOX_GATE_ROW");
+                "JULIA_BETA35_LIVE_HITBOX_GATE_ROW",
+                new Beta35FenceGateFamilyCase("minecraft:cherry_fence_gate", Items.CHERRY_FENCE_GATE,
+                        Blocks.CHERRY_FENCE_GATE, true));
     }
 
     private static Beta35LiveHitboxGateAuditResult runBeta35FenceGateContactRow(
@@ -14170,7 +14339,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 rowIndex,
                 openAfterPlacement,
                 740,
-                "JULIA_BETA35_FENCE_GATE_CONTACT_ROW");
+                "JULIA_BETA35_FENCE_GATE_CONTACT_ROW",
+                new Beta35FenceGateFamilyCase("minecraft:cherry_fence_gate", Items.CHERRY_FENCE_GATE,
+                        Blocks.CHERRY_FENCE_GATE, true));
     }
 
     private static Beta35LiveHitboxGateAuditResult runBeta35FenceGateContactAuditRow(
@@ -14179,7 +14350,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             int rowIndex,
             boolean openAfterPlacement,
             int baseStartX,
-            String rowMarker
+            String rowMarker,
+            Beta35FenceGateFamilyCase gateCase
     ) {
         int baseX = baseStartX + rowIndex * 10;
         int baseZ = 172;
@@ -14193,7 +14365,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
 
-        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.CHERRY_FENCE_GATE, 4));
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(gateCase.item(), 4));
         syncPlayerAim(
                 ctx,
                 singleplayer,
@@ -14218,12 +14390,13 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         final String[] interactionResult = {openAfterPlacement ? "not-run" : "NOT_TESTED_CLOSED_ROW"};
         if (openAfterPlacement) {
             syncHeldMainHand(ctx, singleplayer, ItemStack.EMPTY);
+            beta35FenceGateStabilizePlayer(ctx, singleplayer);
             ctx.runOnClient(mc -> {
                 if (mc.player == null || mc.interactionManager == null || mc.world == null) {
                     interactionResult[0] = "CLIENT_NOT_READY";
                     return;
                 }
-                if (!mc.world.getBlockState(objectPos).isOf(Blocks.CHERRY_FENCE_GATE)) {
+                if (!mc.world.getBlockState(objectPos).isOf(gateCase.block())) {
                     interactionResult[0] = "BLOCK_NOT_PRESENT";
                     return;
                 }
@@ -14241,7 +14414,6 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             ctx.waitTick();
             ctx.waitTick();
         }
-        singleplayer.getClientWorld().waitForChunksRender();
 
         OffsetBlockStateModel.ModelDyOwnerTrace trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
         boolean traceSeen = trace != null && trace.seen();
@@ -14256,7 +14428,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 classification[0] = "PENDING";
                 failureLayer[0] = "LIVE_EVIDENCE_GAP";
                 System.out.println(rowMarker
-                        + " objectId=minecraft:cherry_fence_gate"
+                        + " objectId=" + gateCase.objectId()
                         + " family=fence_gate"
                         + " configuration=" + (openAfterPlacement ? "open" : "closed")
                         + " classification=" + classification[0]
@@ -14267,7 +14439,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
             BlockState supportState = mc.world.getBlockState(supportCandidatePos);
             BlockState objectState = mc.world.getBlockState(objectPos);
-            boolean blockAppeared = objectState.isOf(Blocks.CHERRY_FENCE_GATE);
+            boolean blockAppeared = objectState.isOf(gateCase.block());
             String placementStatus = blockAppeared ? "PLACEMENT_GREEN" : placementResult[0];
             double supportDy = SlabSupport.getYOffset(mc.world, supportCandidatePos, supportState);
             double objectDy = blockAppeared ? SlabSupport.getYOffset(mc.world, objectPos, objectState)
@@ -14350,7 +14522,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             }
 
             System.out.println(rowMarker
-                    + " objectId=minecraft:cherry_fence_gate"
+                    + " objectId=" + gateCase.objectId()
                     + " family=fence_gate"
                     + " configuration=" + (openAfterPlacement ? "open" : "closed")
                     + " finalBlockState=" + objectState
@@ -14378,10 +14550,32 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
 
         return new Beta35LiveHitboxGateAuditResult(
-                "minecraft:cherry_fence_gate",
+                gateCase.objectId(),
                 "fence_gate",
                 classification[0],
                 failureLayer[0]);
+    }
+
+    private static void beta35FenceGateStabilizePlayer(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                return;
+            }
+            var player = server.getPlayerManager().getPlayerList().get(0);
+            player.setNoGravity(true);
+            player.setVelocity(Vec3d.ZERO);
+        });
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.player != null) {
+                mc.player.setNoGravity(true);
+                mc.player.setVelocity(Vec3d.ZERO);
+            }
+        });
+        ctx.waitTick();
     }
 
     private static OffsetBlockStateModel.ModelDyOwnerTrace beta35CaptureModelDyTrace(

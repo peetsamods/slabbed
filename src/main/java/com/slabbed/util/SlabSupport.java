@@ -15,6 +15,7 @@ import net.minecraft.block.CaveVinesHeadBlock;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.FenceBlock;
+import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.HangingRootsBlock;
 import net.minecraft.block.HangingSignBlock;
 import net.minecraft.block.LeverBlock;
@@ -179,8 +180,8 @@ public final class SlabSupport {
                         || state.getBlock() instanceof WallBlock);
     }
 
-    public static boolean isBeta35CherryFenceGateContactObject(BlockState state) {
-        return state != null && state.isOf(Blocks.CHERRY_FENCE_GATE);
+    public static boolean isBeta35FenceGateContactObject(BlockState state) {
+        return state != null && state.getBlock() instanceof FenceGateBlock;
     }
 
     private static boolean isBeta35OakTrapdoorContactObject(BlockState state) {
@@ -213,8 +214,8 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35CherryFenceGateContactDy(BlockView world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || !isBeta35CherryFenceGateContactObject(state)) {
+    private static double beta35FenceGateContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35FenceGateContactObject(state)) {
             return Double.NaN;
         }
         BlockPos supportPos = pos.down();
@@ -1313,9 +1314,9 @@ public final class SlabSupport {
             return fenceWallVariantContactDy;
         }
 
-        double cherryFenceGateContactDy = beta35CherryFenceGateContactDy(world, pos, state);
-        if (Double.isFinite(cherryFenceGateContactDy)) {
-            return cherryFenceGateContactDy;
+        double fenceGateContactDy = beta35FenceGateContactDy(world, pos, state);
+        if (Double.isFinite(fenceGateContactDy)) {
+            return fenceGateContactDy;
         }
 
         double oakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);

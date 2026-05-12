@@ -123,8 +123,8 @@ public abstract class SlabSupportStateMixin {
         return yOff < 0.0 && SlabSupport.isBeta35FenceWallVariantContactObject(state);
     }
 
-    private static boolean slabbed$isLoweredBeta35CherryFenceGateContactObject(BlockState state, double yOff) {
-        return yOff < 0.0 && SlabSupport.isBeta35CherryFenceGateContactObject(state);
+    private static boolean slabbed$isLoweredBeta35FenceGateContactObject(BlockState state, double yOff) {
+        return yOff < 0.0 && SlabSupport.isBeta35FenceGateContactObject(state);
     }
 
     private static boolean slabbed$isBeta35SpecialFullblockRaycastFallbackObject(BlockState state) {
@@ -262,7 +262,7 @@ public abstract class SlabSupportStateMixin {
                     && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
-            } else if (slabbed$isLoweredBeta35CherryFenceGateContactObject(self, yOff)
+            } else if (slabbed$isLoweredBeta35FenceGateContactObject(self, yOff)
                     && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
@@ -279,7 +279,7 @@ public abstract class SlabSupportStateMixin {
                                                               CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
         if (!SlabSupport.isBeta35FenceWallVariantContactObject(self)
-                && !SlabSupport.isBeta35CherryFenceGateContactObject(self)
+                && !SlabSupport.isBeta35FenceGateContactObject(self)
                 && !self.isOf(Blocks.GRINDSTONE)) {
             return;
         }
