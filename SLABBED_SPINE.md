@@ -487,4 +487,16 @@ If the slice changes, update the source pack and spine together so the current o
 - 2026-05-11: Added Beta 3.5 release-readiness audit PASS record at HEAD `f9d2987` / `save/beta35-flower-pot-floor-top-contact` for scoped candidate `floor_torch + candle + flower_pot`.
 - 2026-05-11: Marked the scoped release-readiness audit as superseded by Julia's expanded common-object scope request (`trapdoors`, `doors`, `crafting_table`, `fences`, etc.); it is not release authorization for that expanded scope.
 - `wall_torch`, `lantern`, `chains`, signs, hanging signs, redstone, and rails remain `NOT_COVERED` for Beta 3.5 scoped scope.
+
+## Beta 3.5 common object compatibility audit (2026-05-11)
+
+- Audit-only common-object matrix added behind `-Dslabbed.beta35CommonObjectCompatibilityAudit=true`; no production behavior fix, release audit, release tag movement, version metadata, changelog, or all-item support change.
+- Operating base for the audit slice: `e8f5fdb` / `save/beta35-scoped-release-readiness-audit`.
+- Required representatives audited: `minecraft:torch`, `minecraft:candle`, `minecraft:flower_pot`, `minecraft:crafting_table`, `minecraft:furnace`, `minecraft:oak_fence`, `minecraft:oak_trapdoor`, `minecraft:oak_door`, and standing `minecraft:oak_sign`.
+- Current green set remains `floor_torch + candle + flower_pot`; all three are `GREEN_ALREADY_INHERITS` on plain bottom and lowered bottom slab-supported rows.
+- Expanded common objects are not release-green: `crafting_table`, `furnace`, `oak_fence`, `oak_trapdoor`, `oak_door`, and standing `oak_sign` all place and survive on slab-supported rows but show contact gaps (`0.500000` on plain bottom support, `1.000000` on lowered bottom support).
+- Additional category risks remain: `oak_fence=COLLISION_SHAPE_RISK`, `oak_trapdoor=NEEDS_CATEGORY_SLICE`, `oak_door=MULTIPART_RISK`, standing `oak_sign=RENDERER_SPECIAL_CASE`. `lantern`, `chain`, `redstone_wire`, and `rail` were not audited in this slice.
+- Validation passed: `compileJava compileGametestJava`, focused common-object matrix, floor/top family regression, default `runClientGameTest`, and `git diff --check`.
+- Evidence folder: `tmp/beta35-common-object-compatibility-audit-e8f5fdb`. See `docs/beta35-common-object-compatibility-audit.md`.
+- Release remains paused pending Julia decision. Recommended next slice, if fixing one more family before release: single-representative ordinary full block contact/dy proof and fix starting with `minecraft:crafting_table`, not fences/trapdoors/doors/signs/all-item support.
 - Release finalization is paused; next action is a common-object compatibility matrix from a clean savepoint.
