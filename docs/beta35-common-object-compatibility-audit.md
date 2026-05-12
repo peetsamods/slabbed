@@ -42,13 +42,17 @@ Post crafting-table contact fix summary marker:
 
 `JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=13 placementFailure=0 survivalFailure=0 contactGap=8 triadMismatch=2 collisionShapeRisk=1 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=1 lantern=NOT_AUDITED_CEILING_HANGING_CATEGORY chain=NOT_AUDITED_CEILING_HANGING_CATEGORY redstone_wire=NOT_AUDITED_SPECIAL_FLOOR_LOGIC rail=NOT_AUDITED_SPECIAL_FLOOR_LOGIC releaseAudit=NOT_RUN releasePrep=PAUSED`
 
+Post furnace triad fix summary marker:
+
+`JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=15 placementFailure=0 survivalFailure=0 contactGap=8 triadMismatch=0 collisionShapeRisk=1 multipartRisk=1 rendererSpecialCase=1 ceilingAttachmentRisk=0 outOfScopeForBeta35=0 needsCategorySlice=1 lantern=NOT_AUDITED_CEILING_HANGING_CATEGORY chain=NOT_AUDITED_CEILING_HANGING_CATEGORY redstone_wire=NOT_AUDITED_SPECIAL_FLOOR_LOGIC rail=NOT_AUDITED_SPECIAL_FLOOR_LOGIC releaseAudit=NOT_RUN releasePrep=PAUSED`
+
 | Representative | Family | Vanilla full block | Plain bottom slab `supportDy=-0.5` | Lowered bottom slab `supportDy=-1.0` | Classification |
 | --- | --- | --- | --- | --- | --- |
 | `minecraft:torch` | floor/top decor control | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` |
 | `minecraft:candle` | floor/top decor control | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` |
 | `minecraft:flower_pot` | floor/top decor control | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` |
 | `minecraft:crafting_table` | ordinary full block | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` |
-| `minecraft:furnace` | ordinary full block | GREEN | `contactGap=0.000000`, `TRIAD_MISMATCH` | `contactGap=0.000000`, `TRIAD_MISMATCH` | `TRIAD_MISMATCH` |
+| `minecraft:furnace` | ordinary full block | GREEN | GREEN, `contactGap=0.000000`, `triadCoLocated=yes` | GREEN, `contactGap=0.000000`, `triadCoLocated=yes` | `GREEN_ALREADY_INHERITS` |
 | `minecraft:oak_fence` | partial collision block | `COLLISION_SHAPE_RISK` | `CONTACT_GAP=0.500000` | `CONTACT_GAP=1.000000` | `CONTACT_GAP` plus category risk |
 | `minecraft:oak_trapdoor` | attachment / hinge block | `NEEDS_CATEGORY_SLICE` | `CONTACT_GAP=0.500000` | `CONTACT_GAP=1.000000` | `CONTACT_GAP` plus category risk |
 | `minecraft:oak_door` | multipart block | `MULTIPART_RISK` | `CONTACT_GAP=0.500000` | `CONTACT_GAP=1.000000` | `CONTACT_GAP` plus multipart risk |
@@ -63,7 +67,7 @@ All required representatives placed on the audited rows. No row produced `PLACEM
 The shared slab-supported failure layer is contact alignment:
 
 - `crafting_table` is now GREEN for the ordinary-full-block representative contact slice. It places and survives on vanilla, plain bottom slab support, and lowered bottom slab support; slab-supported rows now report `contactGap=0.000000` and `triadCoLocated=yes`.
-- `furnace` inherited the ordinary full-block contact dy (`contactGap=0.000000`) but is not release-green because slab-supported rows now classify as `TRIAD_MISMATCH`. It needs a separate furnace/block-entity triad slice if Julia wants it in the Beta 3.5 minimum set.
+- `furnace` is now GREEN for the ordinary-full-block sibling triad slice. It inherited the contact dy (`contactGap=0.000000`) and now reports matching model, outline, and raycast bounds on slab-supported rows.
 - partial/attachment/multipart/render-special representatives show the same slab-supported contact-gap pattern before their family-specific risks can honestly be called green.
 - `oak_fence` also needs a collision/connection category slice.
 - `oak_trapdoor` also needs an attachment/hinge orientation/open-closed category slice.
@@ -85,7 +89,7 @@ Not recommended unless Julia accepts that Beta 3.5 only promises `floor_torch + 
 
 B. Fix one more high-value family before release:
 
-The first ordinary full-block representative (`minecraft:crafting_table`) is now fixed. Recommended next implementation category, if Julia wants one more common-object family, is either furnace/block-entity triad parity or partial collision blocks (`minecraft:oak_fence`). Do not bundle trapdoors, doors, signs, hanging objects, rails, redstone, or all-item support.
+The ordinary full-block representatives (`minecraft:crafting_table` and `minecraft:furnace`) are now fixed. Recommended next implementation category, if Julia wants one more common-object family, is partial collision blocks (`minecraft:oak_fence`) or another explicitly chosen category slice. Do not bundle trapdoors, doors, signs, hanging objects, rails, redstone, or all-item support.
 
 C. Defer Beta 3.5 release until common object matrix minimum set is green:
 
@@ -95,4 +99,4 @@ Required if Julia wants expanded common-object compatibility to be a Beta 3.5 re
 
 Release remains paused pending Julia decision.
 
-Post-fix status: `minecraft:crafting_table` is GREEN; `minecraft:furnace` has contact fixed but remains `TRIAD_MISMATCH`; `minecraft:oak_fence`, `minecraft:oak_trapdoor`, `minecraft:oak_door`, and standing `minecraft:oak_sign` remain separate categories. Release remains paused pending Julia decision.
+Post-fix status: `minecraft:crafting_table` and `minecraft:furnace` are GREEN ordinary full-block representatives; `minecraft:oak_fence`, `minecraft:oak_trapdoor`, `minecraft:oak_door`, and standing `minecraft:oak_sign` remain separate categories. Release remains paused pending Julia decision.

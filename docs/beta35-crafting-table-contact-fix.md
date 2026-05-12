@@ -37,7 +37,7 @@ This makes the full block bottom align with the support slab visible top:
 
 ## Matrix After Fix
 
-`minecraft:furnace` inherited the same contact dy and now reports `contactGap=0.000000` on slab-supported rows, but it is not GREEN because the common-object matrix classifies those rows as `TRIAD_MISMATCH`.
+Follow-up at `3712a37` fixed the remaining furnace sibling issue. `minecraft:furnace` inherited the same contact dy and now reports `contactGap=0.000000` plus `triadCoLocated=yes` on slab-supported rows.
 
 `minecraft:oak_fence`, `minecraft:oak_trapdoor`, `minecraft:oak_door`, and standing `minecraft:oak_sign` remain separate categories:
 
@@ -68,5 +68,5 @@ Release remains paused pending Julia decision.
 Decision point:
 
 - Stop here and release with documented limitations if `crafting_table` plus the existing floor/top green set is enough.
-- Fix one more high-value category before release, likely furnace/block-entity triad parity or `oak_fence` collision/contact.
+- Fix one more high-value category before release, likely `oak_fence` collision/contact or another explicitly chosen category slice.
 - Defer Beta 3.5 until the expanded common-object minimum set is green.
