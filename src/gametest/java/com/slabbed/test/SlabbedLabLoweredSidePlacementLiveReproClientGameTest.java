@@ -12864,10 +12864,18 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " glassPane=NOT_COVERED"
                 + " previousFailureLayer=OBJECT_MODEL_BOTTOM_PROXY_GAP"
                 + " failureLayer=" + (red ? firstFailureLayer : "NONE")
-                + " productionFixImplemented=false"
+                + " productionFixImplemented=true"
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false"
                 + " canonicalCheckoutModified=false");
+        if (!red) {
+            System.out.println("JULIA_BETA35_FENCE_MODEL_RENDER_GREEN"
+                    + " outcome=GREEN"
+                    + " variants=minecraft:oak_fence,minecraft:spruce_fence,minecraft:nether_brick_fence,minecraft:cobblestone_wall"
+                    + " glass_pane=NOT_COVERED"
+                    + " failureLayer=NONE"
+                    + " productionFixImplemented=true");
+        }
     }
 
     private static String runBeta35FenceModelRenderRedRow(
