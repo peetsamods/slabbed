@@ -106,7 +106,8 @@ public abstract class SlabSupportStateMixin {
         if (SlabSupport.isSupportingSlab(state) || SlabSupport.isThinTopLayer(state)) {
             return false;
         }
-        return SlabAnchorAttachment.isAnchored(world, pos);
+        return SlabAnchorAttachment.isAnchored(world, pos)
+                || state.isOf(Blocks.FURNACE);
     }
 
     /**

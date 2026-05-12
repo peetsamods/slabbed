@@ -301,6 +301,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35FurnaceTriad")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FurnaceTriadProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CandleFloorTopContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10681,6 +10690,76 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
+     * Focused furnace proof for the Beta 3.5 ordinary full-block triad slice.
+     *
+     * Gate: -Dslabbed.beta35FurnaceTriad=true
+     */
+    private static void runBeta35FurnaceTriadProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase furnace = new Beta35CommonObjectCase(
+                "minecraft:furnace",
+                "ordinary_full_block",
+                Items.FURNACE,
+                Blocks.FURNACE.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35CommonObjectAuditRow(
+                    ctx,
+                    singleplayer,
+                    furnace,
+                    supportCase,
+                    4);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "FURNACE_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "FURNACE_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "FURNACE_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "FURNACE_TRIAD_MISMATCH";
+                    default -> "FURNACE_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_FURNACE_TRIAD_GREEN"
+                        + " objectId=minecraft:furnace"
+                        + " family=ordinary_full_block"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_FURNACE_TRIAD_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:furnace"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " crafting_table=CHECK_CRAFTING_TABLE_REGRESSION"
+                + " floor_torch=CHECK_FLOOR_TOP_REGRESSION"
+                + " candle=CHECK_FLOOR_TOP_REGRESSION"
+                + " flower_pot=CHECK_FLOOR_TOP_REGRESSION"
+                + " oak_fence=UNCHANGED_SEPARATE_CATEGORY"
+                + " oak_trapdoor=UNCHANGED_SEPARATE_CATEGORY"
+                + " oak_door=UNCHANGED_SEPARATE_CATEGORY"
+                + " oak_sign=UNCHANGED_SEPARATE_RENDERER_RISK"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+    }
+
+    /**
      * Focused crafting-table proof for the Beta 3.5 ordinary full-block contact slice.
      *
      * Gate: -Dslabbed.beta35CraftingTableContact=true
@@ -10904,6 +10983,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             ? String.format("%.6f", objectModelBottomY) : "CONTACT_NOT_APPLICABLE")
                     + " contactGap=" + (Double.isFinite(contactGap)
                             ? String.format("%.6f", contactGap) : "CONTACT_NOT_APPLICABLE")
+                    + " modelBounds=" + beta35FormatBox(modelProxyBox)
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
                     + " survival=" + (survivalGreen ? "SURVIVAL_GREEN" : "SURVIVAL_RED")
                     + " unsupported=" + (unsupportedFails ? "UNSUPPORTED_FAILS" : "UNSUPPORTED_STILL_VALID")
                     + " triadCoLocated=" + (blockAppeared
