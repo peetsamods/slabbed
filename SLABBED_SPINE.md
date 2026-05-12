@@ -815,3 +815,14 @@ If the slice changes, update the source pack and spine together so the current o
 - Prior proofs unaffected: `JULIA_BETA35_BIRCH_FENCE_VARIANT_SUMMARY outcome=GREEN`; `JULIA_BETA35_FENCE_MODEL_RENDER_SUMMARY outcome=GREEN`; `JULIA_BETA35_FENCE_WALL_VARIANT_COVERAGE_SUMMARY outcome=GREEN`; `JULIA_BETA35_FENCE_FAMILY_SUMMARY outcome=GREEN`; `JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=27 contactGap=0`.
 - **Beta 3.5 release remains BLOCKED.** Remaining live failures: `birch_trapdoor`, `spruce_door`, `birch_sign`, and anvil placement-event capture. No release audit was run. No release tag was moved.
 - Evidence folder: `tmp/beta35-fence-wall-family-fix-25a6ef6/`. See `docs/beta35-fence-wall-family-fix.md`.
+
+## Beta 3.5 live hitbox/gate RED audit (2026-05-12)
+
+- Operating base: HEAD `edbba27` / `save/beta35-fence-wall-family-fix` on `integrate/phase19-into-side-slab-top-support`. Proof/docs only; no production gameplay/render fix implemented; no release audit run; no release tag moved.
+- New gated audit: `-Dslabbed.beta35LiveHitboxGateRed=true`; markers `JULIA_BETA35_LIVE_HITBOX_GATE_MATRIX_START`, `JULIA_BETA35_LIVE_HITBOX_GATE_ROW`, and `JULIA_BETA35_LIVE_HITBOX_GATE_SUMMARY`.
+- Result: RED. `JULIA_BETA35_LIVE_HITBOX_GATE_SUMMARY outcome=RED rows=5 red=2 pending=3 green=0 fenceHitboxFailureLayer=PROOF_HARNESS_GAP wallHitboxFailureLayer=PROOF_HARNESS_GAP anvilHitboxFailureLayer=PROOF_HARNESS_GAP fenceGateClosedFailureLayer=FENCE_GATE_CONTACT_GAP fenceGateOpenFailureLayer=FENCE_GATE_CONTACT_GAP`.
+- Connected `cherry_fence` and `stone_brick_wall` rows stayed shape/math co-located (`supportDy=-1.000000`, `objectDy=-1.500000`, `contactGap=0.000000`, `collisionCoLocated=yes`, `triadCoLocated=yes`) but Julia's live hitbox/collision feel remains unclosed: `PENDING` / `PROOF_HARNESS_GAP`.
+- `minecraft:anvil` stayed contact/triad/collision co-located in the bounded proof (`objectDy=-1.500000`, `contactGap=0.000000`, `collisionCoLocated=yes`, `triadCoLocated=yes`) but this does not close live hitbox suspicion: `PENDING` / `PROOF_HARNESS_GAP`.
+- `minecraft:cherry_fence_gate` is a separate category, not fixed by `FenceBlock`/`WallBlock` family law. Closed and open rows place/survive, but both have `objectDy=-0.500000` over `supportDy=-1.000000`, expected `-1.500000`, `contactGap=1.000000`: `FENCE_GATE_CONTACT_GAP`.
+- **Beta 3.5 release remains BLOCKED.** Next safe implementation slice: fence-gate-specific contact/support law with closed/open proof. Keep fence/wall and anvil live-hitbox reproduction as a separate proof-harness slice unless Julia supplies sharper live evidence.
+- Evidence folder: `tmp/beta35-live-hitbox-gate-red-edbba27/`. See `docs/beta35-live-hitbox-gate-red.md`.
