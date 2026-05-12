@@ -47,7 +47,7 @@ The special-fullblock audit did not inspect door worktree changes and did not to
 
 Summary marker:
 
-`JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY rows=30 greenAlreadyInherits=24 placementFailure=0 survivalFailure=0 contactGap=4 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=1 outOfScopeForBeta35=0 currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table,stonecutter,anvil doorSlice=PARALLEL_NOT_INSPECTED releaseAudit=NOT_RUN releasePrep=PAUSED productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_anvil_contact_dy_and_barrel_raycast_triad`
+`JULIA_BETA35_SPECIAL_FULLBLOCK_SUMMARY rows=30 greenAlreadyInherits=27 placementFailure=0 survivalFailure=0 contactGap=2 triadMismatch=0 blockEntityRisk=1 specialRendererRisk=0 needsCategorySlice=0 outOfScopeForBeta35=0 currentGreenSet=torch,candle,flower_pot,crafting_table,furnace,oak_fence,oak_trapdoor,bookshelf,chest,barrel,enchanting_table,stonecutter,anvil,grindstone doorSlice=PARALLEL_NOT_INSPECTED releaseAudit=NOT_RUN releasePrep=PAUSED productionBehaviorChanged=bookshelf_chest_enchanting_table_stonecutter_anvil_grindstone_contact_dy_and_barrel_raycast_triad`
 
 | Representative | Family | Vanilla full block | Plain bottom slab `supportDy=-0.5` | Lowered bottom slab `supportDy=-1.0` | Classification |
 | --- | --- | --- | --- | --- | --- |
@@ -59,7 +59,7 @@ Summary marker:
 | `minecraft:crafting_table` | `ordinary_full_block` | GREEN | GREEN, `contactGap=0.000000` | GREEN, `contactGap=0.000000` | `GREEN_ALREADY_INHERITS` control |
 | `minecraft:furnace` | `ordinary_full_block` | GREEN | GREEN, `contactGap=0.000000`, triad yes | GREEN, `contactGap=0.000000`, triad yes | `GREEN_ALREADY_INHERITS` control |
 | `minecraft:stonecutter` | `special_shape_fullblock` | GREEN | GREEN, `contactGap=0.000000`, triad yes | GREEN, `contactGap=0.000000`, triad yes | `GREEN_ALREADY_INHERITS` fixed representative |
-| `minecraft:grindstone` | `special_shape_fullblock` | `NEEDS_CATEGORY_SLICE` | `CONTACT_GAP=0.500000`, triad no | `CONTACT_GAP=1.000000`, triad no | special-shape slice |
+| `minecraft:grindstone` | `special_shape_oriented` | GREEN, `face=floor,facing=south` | GREEN, `contactGap=0.000000`, triad yes, collision co-located, `face=floor,facing=south` | GREEN, `contactGap=0.000000`, triad yes, collision co-located, `face=floor,facing=south` | `GREEN_ALREADY_INHERITS` fixed representative |
 | `minecraft:anvil` | `falling_special_shape` | GREEN | GREEN, `contactGap=0.000000`, triad yes, stable on valid support | GREEN, `contactGap=0.000000`, triad yes, stable on valid support | `GREEN_ALREADY_INHERITS` fixed representative |
 
 All representatives placed and survived on the audited rows. No row produced `PLACEMENT_FAILURE` or `SURVIVAL_FAILURE`.
@@ -73,13 +73,13 @@ Objects already inheriting the current `crafting_table` / `furnace` behavior:
 - `minecraft:chest`
 - `minecraft:barrel`
 - `minecraft:stonecutter`
+- `minecraft:grindstone`
 - `minecraft:crafting_table`
 - `minecraft:furnace`
 
 Objects that fail contact on slab-supported rows:
 
 - `minecraft:lectern`
-- `minecraft:grindstone`
 
 Objects that fail triad after contact is otherwise acceptable:
 
@@ -91,7 +91,6 @@ Block-entity / special-renderer risks:
 
 Separate category slices:
 
-- `minecraft:grindstone` remains a special-shape fullblock-ish row.
 - `minecraft:anvil` is now fixed as a falling/special-shape representative on valid slab-supported rows.
 - `minecraft:lectern` is interactive block-entity work and should not be bundled with ordinary full-block contact.
 
@@ -99,7 +98,7 @@ Separate category slices:
 
 This audit does not change the release decision. It expands the known matrix from the clean Beta 3.5 base and keeps release prep paused.
 
-`minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, `minecraft:stonecutter`, and `minecraft:anvil` are now GREEN for their focused representatives. Chest, enchanting table, stonecutter, and anvil use exact block dy authority plus exact lowered raycast fallbacks to their lowered outlines when native raycast is empty; barrel keeps its existing contact dy and uses the same lowered raycast fallback to its lowered outline. Do not claim all special fullblocks, all falling blocks, or all block entities are fixed; remaining rows are still separate interactive block-entity or special-shape slices.
+`minecraft:bookshelf`, `minecraft:chest`, `minecraft:barrel`, `minecraft:enchanting_table`, `minecraft:stonecutter`, `minecraft:anvil`, and `minecraft:grindstone` are now GREEN for their focused representatives. Chest, enchanting table, stonecutter, anvil, and grindstone use exact block dy authority plus exact lowered raycast fallbacks to their lowered outlines when native raycast is empty; grindstone also uses a grindstone-only lowered collision fallback so its floor-oriented model, outline, raycast, and collision bounds remain co-located. Barrel keeps its existing contact dy and uses the same lowered raycast fallback to its lowered outline. Do not claim all special fullblocks, all falling blocks, all oriented blocks, or all block entities are fixed; lectern remains a separate interactive block-entity slice.
 
 ## Helper Consolidation Follow-up
 
@@ -141,4 +140,16 @@ No lectern or grindstone implementation was added. `minecraft:lectern` remains a
 
 No release audit was run. No release tag was moved. Canonical checkout was not modified. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
 
-Next recommended implementation slice: `minecraft:grindstone`, or `minecraft:lectern` if Julia chooses the interactive block-entity slice.
+## Grindstone Contact Follow-up
+
+Follow-up implementation at `805b070` / `save/beta35-anvil-contact` added only `minecraft:grindstone` after focused proof showed the same too-shallow contact dy plus empty native raycast mechanism on valid slab-supported rows, with one extra grindstone-only collision fallback so the oriented special shape stays co-located.
+
+Focused gate: `JAVA_TOOL_OPTIONS="-Dslabbed.beta35GrindstoneContact=true" ./gradlew --no-daemon runClientGameTest --console plain`: PASS.
+
+Grindstone result: `JULIA_BETA35_GRINDSTONE_CONTACT_SUMMARY failureLayer=NONE`. Tested rows use `finalBlockState=Block{minecraft:grindstone}[face=floor,facing=south]`; slab-supported rows report `objectDy=-1.000000` or `-1.500000`, `contactGap=0.000000`, `triadCoLocated=yes`, `survivalResult=SURVIVAL_GREEN`, and co-located model/outline/raycast/collision bounds.
+
+No lectern implementation was added. `minecraft:lectern` remains an interactive block-entity contact slice.
+
+No release audit was run. No release tag was moved. Canonical checkout was not modified. Door/trapdoor/sign/lantern/chain/end-rod/redstone/rail implementation was not touched.
+
+Next recommended implementation slice: `minecraft:lectern` only if Julia chooses the interactive block-entity slice.
