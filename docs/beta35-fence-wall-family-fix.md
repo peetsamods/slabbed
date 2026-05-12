@@ -123,15 +123,19 @@ rows still report `objectDy=-1.500000`, `contactGap=0.000000`,
 `collisionCoLocated=yes`, and `triadCoLocated=yes`, but Julia's live
 hitbox/collision complaint is not closed by this shape-math proof. Current
 classification: `PENDING` / `PROOF_HARNESS_GAP`. Fence gates are separate
-from this family law and are RED as `FENCE_GATE_CONTACT_GAP`; see
-`docs/beta35-live-hitbox-gate-red.md`.
+from this family law. The later cherry-gate-only slice fixed
+`minecraft:cherry_fence_gate` contact for closed/open states, but it did not
+expand the fence/wall family law or prove all fence gates. See
+`docs/beta35-live-hitbox-gate-red.md` and
+`docs/beta35-fence-gate-contact-fix.md`.
 
 Remaining unresolved live failures:
 
 - `minecraft:birch_trapdoor` — not yet covered (no RED proof yet)
 - `minecraft:spruce_door` — not yet covered (no RED proof yet)
 - `minecraft:birch_sign` — not yet covered (no RED proof yet)
-- `minecraft:anvil` — in allowlist; live evidence is inspect-only; placement-event capture still needed
+- `minecraft:anvil` — contact/triad green, but live hitbox proof still pending
+- fence/wall/anvil true hitbox/collision harness — still pending
 
 No release audit was run. No release tag was moved.
 
