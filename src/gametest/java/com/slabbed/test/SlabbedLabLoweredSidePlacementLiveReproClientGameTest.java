@@ -505,6 +505,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35LiveHitboxOwnerRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35LiveHitboxOwnerRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CandleFloorTopContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -13772,6 +13781,410 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         return "PROOF_HARNESS_GAP".equals(failureLayer)
                 || "LIVE_EVIDENCE_GAP".equals(failureLayer)
                 || "UNKNOWN_AFTER_BOUNDED_AUDIT".equals(failureLayer);
+    }
+
+    /**
+     * Julia Beta 3.5 live-hitbox owner proof.
+     *
+     * Gate: -Dslabbed.beta35LiveHitboxOwnerRed=true
+     */
+    private static void runBeta35LiveHitboxOwnerRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        System.out.println("JULIA_BETA35_LIVE_HITBOX_OWNER_RED"
+                + " scope=player_like_ray_selection_ownership"
+                + " supportCase=LOWERED_BOTTOM_DY_MINUS_ONE"
+                + " rows=stone_brick_wall_visible_body,oak_fence_visible_body,anvil_visible_body"
+                + " priorContactRenderGateSupport=GREEN_OR_PENDING_SEPARATE"
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+
+        Beta35LiveHitboxGateAuditResult wall = runBeta35LiveHitboxOwnerFenceWallRow(
+                ctx,
+                singleplayer,
+                new Beta35FenceFamilyCase(
+                        "minecraft:stone_brick_wall",
+                        "wall",
+                        Items.STONE_BRICK_WALL,
+                        Blocks.STONE_BRICK_WALL.getDefaultState()),
+                Beta35FenceFamilyConfiguration.TWO_NEIGHBOR,
+                0);
+        Beta35LiveHitboxGateAuditResult fence = runBeta35LiveHitboxOwnerFenceWallRow(
+                ctx,
+                singleplayer,
+                new Beta35FenceFamilyCase(
+                        "minecraft:oak_fence",
+                        "fence",
+                        Items.OAK_FENCE,
+                        Blocks.OAK_FENCE.getDefaultState()),
+                Beta35FenceFamilyConfiguration.TWO_NEIGHBOR,
+                1);
+        Beta35LiveHitboxGateAuditResult anvil = runBeta35LiveHitboxOwnerAnvilRow(ctx, singleplayer, 2);
+
+        Beta35LiveHitboxGateAuditResult[] results = {wall, fence, anvil};
+        int red = 0;
+        int pending = 0;
+        int green = 0;
+        for (Beta35LiveHitboxGateAuditResult result : results) {
+            if ("NONE".equals(result.failureLayer())) {
+                green++;
+            } else if (beta35IsPendingLiveHitboxGateLayer(result.failureLayer())) {
+                pending++;
+            } else {
+                red++;
+            }
+        }
+        String outcome = red > 0 ? "RED" : pending > 0 ? "PENDING" : "GREEN";
+
+        System.out.println("JULIA_BETA35_LIVE_HITBOX_OWNER_SUMMARY"
+                + " outcome=" + outcome
+                + " rows=" + results.length
+                + " red=" + red
+                + " pending=" + pending
+                + " green=" + green
+                + " wallHitboxOwnerClassification=" + wall.classification()
+                + " wallHitboxOwnerFailureLayer=" + wall.failureLayer()
+                + " fenceHitboxOwnerClassification=" + fence.classification()
+                + " fenceHitboxOwnerFailureLayer=" + fence.failureLayer()
+                + " anvilHitboxOwnerClassification=" + anvil.classification()
+                + " anvilHitboxOwnerFailureLayer=" + anvil.failureLayer()
+                + " contactRenderFenceGateFamily=GREEN_SEPARATE"
+                + " hitboxOwnershipProof=" + outcome
+                + " recommendedNextSlice=GameRendererCrosshairRetargetMixin_owner_classification"
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+    }
+
+    private static Beta35LiveHitboxGateAuditResult runBeta35LiveHitboxOwnerFenceWallRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35FenceFamilyCase objectCase,
+            Beta35FenceFamilyConfiguration configuration,
+            int rowIndex
+    ) {
+        int baseX = 680 + rowIndex * 10;
+        int baseZ = 196;
+        BlockPos supportCandidatePos = new BlockPos(baseX, -55, baseZ);
+        BlockPos objectPos = supportCandidatePos.up();
+        BlockPos unsupportedPos = supportCandidatePos.add(0, 1, 4);
+
+        beta35LoadLiveHitboxOwnerChunk(ctx, singleplayer, supportCandidatePos);
+        prepareBeta35FenceFamilyLiveSupport(
+                singleplayer,
+                objectCase,
+                configuration,
+                supportCandidatePos,
+                unsupportedPos);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    objectPos,
+                    objectCase.expectedState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.updateNeighbors(objectPos, objectCase.expectedState().getBlock());
+            world.updateNeighbors(supportCandidatePos, world.getBlockState(supportCandidatePos).getBlock());
+            world.updateNeighbors(objectPos.east(), world.getBlockState(objectPos.east()).getBlock());
+            world.updateNeighbors(objectPos.west(), world.getBlockState(objectPos.west()).getBlock());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(objectCase.item(), 4));
+        beta35LoadLiveHitboxOwnerChunk(ctx, singleplayer, supportCandidatePos);
+        ctx.waitTick();
+
+        return beta35RunLiveHitboxOwnerRayRow(
+                ctx,
+                objectCase.objectId(),
+                objectCase.family(),
+                objectCase.objectId(),
+                supportCandidatePos,
+                objectPos,
+                "FIXTURE_DIRECT_FROM_FAMILY_GREEN_PRECONDITION");
+    }
+
+    private static Beta35LiveHitboxGateAuditResult runBeta35LiveHitboxOwnerAnvilRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex
+    ) {
+        int baseX = 680 + rowIndex * 10;
+        int baseZ = 196;
+        BlockPos supportCandidatePos = new BlockPos(baseX, -55, baseZ);
+        BlockPos objectPos = supportCandidatePos.up();
+        BlockPos unsupportedPos = supportCandidatePos.add(0, 1, 4);
+
+        beta35LoadLiveHitboxOwnerChunk(ctx, singleplayer, supportCandidatePos);
+        prepareBeta35CommonObjectSupport(
+                singleplayer,
+                supportCandidatePos,
+                unsupportedPos,
+                Beta35CommonObjectSupportCase.LOWERED_BOTTOM_DY_MINUS_ONE);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    objectPos,
+                    Blocks.ANVIL.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.updateNeighbors(objectPos, Blocks.ANVIL);
+            world.updateNeighbors(supportCandidatePos, world.getBlockState(supportCandidatePos).getBlock());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.ANVIL, 4));
+        beta35LoadLiveHitboxOwnerChunk(ctx, singleplayer, supportCandidatePos);
+
+        final BlockPos[] actualObjectPos = {objectPos};
+        ctx.runOnClient(mc -> {
+            if (mc.world != null) {
+                actualObjectPos[0] = beta35CommonActualObjectPos(
+                        mc.world,
+                        supportCandidatePos,
+                        objectPos,
+                        Blocks.ANVIL.getDefaultState());
+            }
+        });
+
+        return beta35RunLiveHitboxOwnerRayRow(
+                ctx,
+                "minecraft:anvil",
+                "anvil",
+                "minecraft:anvil",
+                supportCandidatePos,
+                actualObjectPos[0],
+                "FIXTURE_DIRECT_FROM_ANVIL_CONTACT_GREEN_PRECONDITION");
+    }
+
+    private static void beta35LoadLiveHitboxOwnerChunk(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            BlockPos supportCandidatePos
+    ) {
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() + 3.0d,
+                        supportCandidatePos.getZ() - 2.0d),
+                new Vec3d(
+                        supportCandidatePos.getX() + 0.5d,
+                        supportCandidatePos.getY() - 0.5d,
+                        supportCandidatePos.getZ() + 0.5d));
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+    }
+
+    private static Beta35LiveHitboxGateAuditResult beta35RunLiveHitboxOwnerRayRow(
+            ClientGameTestContext ctx,
+            String objectId,
+            String family,
+            String heldItem,
+            BlockPos supportCandidatePos,
+            BlockPos expectedOwnerPos,
+            String placementResult
+    ) {
+        final String[] classification = {"PENDING"};
+        final String[] failureLayer = {"PROOF_HARNESS_GAP"};
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                classification[0] = "PENDING";
+                failureLayer[0] = "LIVE_EVIDENCE_GAP";
+                System.out.println("JULIA_BETA35_LIVE_HITBOX_OWNER_ROW"
+                        + " objectId=" + objectId
+                        + " family=" + family
+                        + " fixturePos=" + expectedOwnerPos.toShortString()
+                        + " heldItem=" + heldItem
+                        + " classification=" + classification[0]
+                        + " failureLayer=" + failureLayer[0]
+                        + " reason=client_world_player_or_renderer_missing");
+                return;
+            }
+
+            BlockState supportState = mc.world.getBlockState(supportCandidatePos);
+            BlockState expectedOwnerState = mc.world.getBlockState(expectedOwnerPos);
+            boolean expectedOwnerPresent = !expectedOwnerState.isAir()
+                    && ("anvil".equals(family) ? expectedOwnerState.isOf(Blocks.ANVIL)
+                            : objectId.equals(beta35BlockId(expectedOwnerState)));
+            double expectedOwnerDy = expectedOwnerPresent
+                    ? SlabSupport.getYOffset(mc.world, expectedOwnerPos, expectedOwnerState)
+                    : Double.NaN;
+            VoxelShape outlineShape = expectedOwnerPresent
+                    ? expectedOwnerState.getOutlineShape(mc.world, expectedOwnerPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            VoxelShape raycastShape = expectedOwnerPresent
+                    ? expectedOwnerState.getRaycastShape(mc.world, expectedOwnerPos)
+                    : null;
+            VoxelShape collisionShape = expectedOwnerPresent
+                    ? expectedOwnerState.getCollisionShape(mc.world, expectedOwnerPos,
+                            net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, expectedOwnerPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, expectedOwnerPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, expectedOwnerPos);
+            net.minecraft.util.math.Box modelBox = outlineBox != null ? outlineBox : collisionBox;
+            Vec3d aim = beta35BoxCenter(modelBox, expectedOwnerPos);
+            Vec3d eye = new Vec3d(aim.x, aim.y, aim.z + 4.0d);
+
+            playerRaycastFromEye(mc, eye, aim, 6.0d);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayDir = mc.player.getRotationVec(0.0f);
+            Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
+            float yaw = mc.player.getYaw();
+            float pitch = mc.player.getPitch();
+            BlockHitResult initialHit = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            HitResult finalHit = mc.crosshairTarget;
+            BlockHitResult outlineDirectHit = outlineShape == null ? null
+                    : outlineShape.raycast(rayStart, rayEnd, expectedOwnerPos);
+            BlockHitResult raycastDirectHit = raycastShape == null ? null
+                    : raycastShape.raycast(rayStart, rayEnd, expectedOwnerPos);
+
+            boolean ownerMatchesExpected = finalHit != null
+                    && finalHit.getType() == HitResult.Type.BLOCK
+                    && finalHit instanceof BlockHitResult finalBlock
+                    && finalBlock.getBlockPos().equals(expectedOwnerPos);
+            boolean initialMatchesExpected = initialHit != null
+                    && initialHit.getType() == HitResult.Type.BLOCK
+                    && initialHit.getBlockPos().equals(expectedOwnerPos);
+            boolean finalEqualsInitial = finalHit != null
+                    && finalHit.getType() == HitResult.Type.BLOCK
+                    && finalHit instanceof BlockHitResult finalBlock
+                    && initialHit != null
+                    && initialHit.getType() == HitResult.Type.BLOCK
+                    && finalBlock.getBlockPos().equals(initialHit.getBlockPos())
+                    && finalBlock.getSide() == initialHit.getSide();
+            boolean finalBlockIsSlab = finalHit != null
+                    && finalHit.getType() == HitResult.Type.BLOCK
+                    && finalHit instanceof BlockHitResult finalBlock
+                    && mc.world.getBlockState(finalBlock.getBlockPos()).getBlock() instanceof SlabBlock;
+            boolean sideSlabRetargetFired = finalBlockIsSlab && !finalEqualsInitial;
+            String finalDecision = ownerMatchesExpected ? "expected-owner"
+                    : finalHit == null || finalHit.getType() != HitResult.Type.BLOCK ? "MISS"
+                    : sideSlabRetargetFired ? "scan-side-slab-fired"
+                    : finalEqualsInitial ? "kept-initial"
+                    : "retargeted-nonexpected-owner";
+            boolean visibleOwnerRayHitsExpected = outlineDirectHit != null;
+
+            if (!expectedOwnerPresent) {
+                classification[0] = "PENDING";
+                failureLayer[0] = "PROOF_HARNESS_GAP";
+            } else if (ownerMatchesExpected) {
+                classification[0] = "GREEN";
+                failureLayer[0] = "NONE";
+            } else if (!visibleOwnerRayHitsExpected) {
+                classification[0] = "PENDING";
+                failureLayer[0] = "PROOF_HARNESS_GAP";
+            } else {
+                classification[0] = beta35HitboxOwnerGapClassification(family);
+                failureLayer[0] = initialMatchesExpected ? "CROSSHAIR_RETARGET_GAP"
+                        : "OUTLINE_RAYCAST_OWNER_GAP";
+            }
+
+            System.out.println("JULIA_BETA35_LIVE_HITBOX_OWNER_ROW"
+                    + " objectId=" + objectId
+                    + " family=" + family
+                    + " fixturePos=" + expectedOwnerPos.toShortString()
+                    + " eye=" + beta35FormatVec(rayStart)
+                    + " yaw=" + String.format("%.3f", yaw)
+                    + " pitch=" + String.format("%.3f", pitch)
+                    + " rayEnd=" + beta35FormatVec(rayEnd)
+                    + " heldItem=" + heldItem
+                    + " expectedOwnerPos=" + expectedOwnerPos.toShortString()
+                    + " expectedOwnerState=" + expectedOwnerState
+                    + " expectedOwnerDy=" + beta35FormatDoubleOrNA(expectedOwnerDy)
+                    + " supportCandidateState=" + supportState
+                    + " initialHit=" + beta35DescribeHitWithType(initialHit)
+                    + " finalHit=" + beta35DescribeHitWithType(finalHit)
+                    + " outlineDirectHit=" + beta35DescribeHitWithType(outlineDirectHit)
+                    + " raycastDirectHit=" + beta35DescribeHitWithType(raycastDirectHit)
+                    + " finalTargetState=" + beta35HitBlockState(mc.world, finalHit)
+                    + " finalDecision=" + finalDecision
+                    + " sideSlabRetargetFired=" + sideSlabRetargetFired
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
+                    + " modelBounds=" + beta35FormatBox(modelBox)
+                    + " visibleOwnerRayHitsExpected=" + (visibleOwnerRayHitsExpected ? "yes" : "no")
+                    + " ownerMatchesExpected=" + (ownerMatchesExpected ? "yes" : "no")
+                    + " placementResult=" + placementResult
+                    + " classification=" + classification[0]
+                    + " failureLayer=" + failureLayer[0]);
+        });
+
+        return new Beta35LiveHitboxGateAuditResult(
+                objectId,
+                family,
+                classification[0],
+                failureLayer[0]);
+    }
+
+    private static Vec3d beta35BoxCenter(net.minecraft.util.math.Box box, BlockPos fallbackPos) {
+        if (box == null) {
+            return new Vec3d(
+                    fallbackPos.getX() + 0.5d,
+                    fallbackPos.getY() + 0.5d,
+                    fallbackPos.getZ() + 0.5d);
+        }
+        return new Vec3d(
+                (box.minX + box.maxX) * 0.5d,
+                (box.minY + box.maxY) * 0.5d,
+                (box.minZ + box.maxZ) * 0.5d);
+    }
+
+    private static String beta35HitboxOwnerGapClassification(String family) {
+        return switch (family) {
+            case "wall" -> "WALL_HITBOX_OWNER_GAP";
+            case "fence" -> "FENCE_HITBOX_OWNER_GAP";
+            case "anvil" -> "ANVIL_HITBOX_OWNER_GAP";
+            default -> "UNKNOWN_AFTER_BOUNDED_AUDIT";
+        };
+    }
+
+    private static String beta35BlockId(BlockState state) {
+        if (state == null || state.isAir()) {
+            return "minecraft:air";
+        }
+        return state.getBlock().getTranslationKey().replace("block.minecraft.", "minecraft:");
+    }
+
+    private static String beta35HitBlockState(ClientWorld world, HitResult hit) {
+        if (world == null || hit == null || hit.getType() != HitResult.Type.BLOCK
+                || !(hit instanceof BlockHitResult blockHit)) {
+            return "MISS";
+        }
+        return world.getBlockState(blockHit.getBlockPos()).toString();
+    }
+
+    private static String beta35DescribeHitWithType(HitResult hit) {
+        if (hit == null) {
+            return "null";
+        }
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return "type=" + hit.getType();
+        }
+        return "type=" + hit.getType()
+                + ",pos=" + blockHit.getBlockPos().toShortString()
+                + ",face=" + blockHit.getSide()
+                + ",hit=" + blockHit.getPos();
+    }
+
+    private static String beta35FormatVec(Vec3d vec) {
+        if (vec == null) {
+            return "N/A";
+        }
+        return String.format("(%.3f,%.3f,%.3f)", vec.x, vec.y, vec.z);
     }
 
     /**

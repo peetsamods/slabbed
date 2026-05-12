@@ -33,6 +33,18 @@ Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it 
 Tracked tree is clean.
 `tmp/` may remain intentionally untracked and must not be staged.
 
+## Current Beta 3.5 live hitbox owner status
+
+Operating base before this proof slice: `13775ce` / `save/beta35-fence-gate-family-fix` on `integrate/phase19-into-side-slab-top-support`.
+
+Gated proof `-Dslabbed.beta35LiveHitboxOwnerRed=true` captures the remaining fence/wall/anvil hitbox complaint as RED without production behavior changes. Rows:
+
+- `minecraft:stone_brick_wall`: direct outline/raycast hits expected owner, final crosshair remains `type=MISS`; `WALL_HITBOX_OWNER_GAP`, failure layer `OUTLINE_RAYCAST_OWNER_GAP`.
+- `minecraft:oak_fence`: direct outline/raycast hits expected owner, final crosshair remains `type=MISS`; `FENCE_HITBOX_OWNER_GAP`, failure layer `OUTLINE_RAYCAST_OWNER_GAP`.
+- `minecraft:anvil`: direct outline/raycast hits expected owner, final crosshair remains `type=MISS`; `ANVIL_HITBOX_OWNER_GAP`, failure layer `OUTLINE_RAYCAST_OWNER_GAP`.
+
+Contact/render/fence-gate family support remains separate and green. No production gameplay/render/collision/targeting fix was implemented, no release audit was run, and no release tag was moved. Next safe slice: inspect `GameRendererCrosshairRetargetMixin` owner classification for lowered fence/wall/anvil visible bodies.
+
 ## Current product goal
 
 Classify beta4 reload/chunk-jump persistence before any further retarget or owner-rule work.
