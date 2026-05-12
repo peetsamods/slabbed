@@ -292,6 +292,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35CraftingTableContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35CraftingTableContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35CandleFloorTopContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -10669,6 +10678,82 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " rail=NOT_AUDITED_SPECIAL_FLOOR_LOGIC"
                 + " releaseAudit=NOT_RUN"
                 + " releasePrep=PAUSED");
+    }
+
+    /**
+     * Focused crafting-table proof for the Beta 3.5 ordinary full-block contact slice.
+     *
+     * Gate: -Dslabbed.beta35CraftingTableContact=true
+     */
+    private static void runBeta35CraftingTableContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35CommonObjectCase craftingTable = new Beta35CommonObjectCase(
+                "minecraft:crafting_table",
+                "ordinary_full_block",
+                Items.CRAFTING_TABLE,
+                Blocks.CRAFTING_TABLE.getDefaultState(),
+                "GREEN_ALREADY_INHERITS",
+                false,
+                true,
+                true);
+
+        boolean allGreen = true;
+        String firstFailureLayer = "NONE";
+        for (Beta35CommonObjectSupportCase supportCase : Beta35CommonObjectSupportCase.values()) {
+            Beta35CommonObjectAuditResult result = runBeta35CommonObjectAuditRow(
+                    ctx,
+                    singleplayer,
+                    craftingTable,
+                    supportCase,
+                    3);
+            boolean rowGreen = "GREEN_ALREADY_INHERITS".equals(result.classification());
+            allGreen &= rowGreen;
+            if (!rowGreen && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = switch (result.classification()) {
+                    case "PLACEMENT_FAILURE" -> "CRAFTING_TABLE_PLACEMENT_FAILURE";
+                    case "SURVIVAL_FAILURE" -> "CRAFTING_TABLE_SURVIVAL_FAILURE";
+                    case "CONTACT_GAP" -> "CRAFTING_TABLE_CONTACT_GAP";
+                    case "TRIAD_MISMATCH" -> "CRAFTING_TABLE_TRIAD_MISMATCH";
+                    default -> "CRAFTING_TABLE_UNKNOWN_FAILURE";
+                };
+            }
+            if (rowGreen) {
+                System.out.println("JULIA_BETA35_CRAFTING_TABLE_CONTACT_GREEN"
+                        + " objectId=minecraft:crafting_table"
+                        + " family=ordinary_full_block"
+                        + " supportCase=" + supportCase
+                        + " placement=GREEN"
+                        + " survival=GREEN"
+                        + " contact=GREEN"
+                        + " triad=GREEN"
+                        + " classification=GREEN_ALREADY_INHERITS");
+            }
+        }
+
+        String failureLayer = allGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_CRAFTING_TABLE_CONTACT_SUMMARY"
+                + " failureLayer=" + failureLayer
+                + " objectId=minecraft:crafting_table"
+                + " rows=" + Beta35CommonObjectSupportCase.values().length
+                + " expectedRowsGreen=" + allGreen
+                + " furnace=CHECK_COMMON_OBJECT_MATRIX"
+                + " floor_torch=CHECK_FLOOR_TOP_REGRESSION"
+                + " candle=CHECK_FLOOR_TOP_REGRESSION"
+                + " flower_pot=CHECK_FLOOR_TOP_REGRESSION"
+                + " oak_fence=UNCHANGED_SEPARATE_CATEGORY"
+                + " oak_trapdoor=UNCHANGED_SEPARATE_CATEGORY"
+                + " oak_door=UNCHANGED_SEPARATE_CATEGORY"
+                + " oak_sign=UNCHANGED_SEPARATE_RENDERER_RISK"
+                + " releaseAudit=NOT_RUN"
+                + " releasePrep=PAUSED");
+
+        if (!allGreen) {
+            throw new RuntimeException("[JULIA_BETA35_CRAFTING_TABLE_CONTACT_RED]"
+                    + " reason=crafting_table_contact_not_green"
+                    + " failureLayer=" + failureLayer);
+        }
     }
 
     private static Beta35CommonObjectAuditResult runBeta35CommonObjectAuditRow(

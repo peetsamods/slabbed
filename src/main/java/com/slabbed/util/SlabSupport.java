@@ -173,6 +173,33 @@ public final class SlabSupport {
         return state != null && (state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT));
     }
 
+    private static boolean isBeta35OrdinaryFullBlockContactObject(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        Block block = state.getBlock();
+        if (!(block instanceof CraftingTableBlock || block instanceof BlockEntityProvider)) {
+            return false;
+        }
+        return state.isSolidBlock(world, pos);
+    }
+
+    private static double beta35OrdinaryFullBlockContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (!isBeta35OrdinaryFullBlockContactObject(world, pos, state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+            return supportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
     public static boolean canTreatAsFloorTorchTopFace(BlockView world, BlockPos supportPos, BlockState torchState) {
         if (isRejectedFloorTorchTopFace(world, supportPos, torchState)) {
             return false;
@@ -1089,6 +1116,10 @@ public final class SlabSupport {
                 }
                 return -1.0;
             }
+            double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
+            if (Double.isFinite(ordinaryFullBlockContactDy)) {
+                return ordinaryFullBlockContactDy;
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
@@ -1129,6 +1160,11 @@ public final class SlabSupport {
             if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
                 return loweredBottomSupportDy - 0.5d;
             }
+        }
+
+        double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
+        if (Double.isFinite(ordinaryFullBlockContactDy)) {
+            return ordinaryFullBlockContactDy;
         }
 
         if (shouldOffset(world, pos, state)) {
