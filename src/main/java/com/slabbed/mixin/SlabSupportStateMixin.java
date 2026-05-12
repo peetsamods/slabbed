@@ -123,6 +123,10 @@ public abstract class SlabSupportStateMixin {
         return yOff < 0.0 && SlabSupport.isBeta35FenceWallVariantContactObject(state);
     }
 
+    private static boolean slabbed$isLoweredBeta35CherryFenceGateContactObject(BlockState state, double yOff) {
+        return yOff < 0.0 && SlabSupport.isBeta35CherryFenceGateContactObject(state);
+    }
+
     private static boolean slabbed$isBeta35SpecialFullblockRaycastFallbackObject(BlockState state) {
         return state != null
                 && (state.isOf(Blocks.CHEST)
@@ -258,6 +262,10 @@ public abstract class SlabSupportStateMixin {
                     && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
+            } else if (slabbed$isLoweredBeta35CherryFenceGateContactObject(self, yOff)
+                    && (shape == null || shape.isEmpty())) {
+                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                return;
             } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
                 shape = VoxelShapes.fullCube();
             }
@@ -270,7 +278,9 @@ public abstract class SlabSupportStateMixin {
     private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockView world, BlockPos pos, ShapeContext ctx,
                                                               CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (!SlabSupport.isBeta35FenceWallVariantContactObject(self) && !self.isOf(Blocks.GRINDSTONE)) {
+        if (!SlabSupport.isBeta35FenceWallVariantContactObject(self)
+                && !SlabSupport.isBeta35CherryFenceGateContactObject(self)
+                && !self.isOf(Blocks.GRINDSTONE)) {
             return;
         }
         double yOff = SlabSupport.getYOffset(world, pos, self);
