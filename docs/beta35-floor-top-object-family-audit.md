@@ -74,3 +74,24 @@ Updated matrix summary:
 `minecraft:flower_pot` remains separate due to `SURVIVAL_FAILURE`. Standing `minecraft:oak_sign` remains separate due to `CONTACT_GAP` plus block-entity/special renderer risk.
 
 This does not claim all items or all floor/top objects are fixed. Release audit remains paused until Julia decides whether candle is enough for this one-more-family pass or whether flower pot/sign require separate slices.
+
+## Flower Pot Follow-Up Status
+
+Follow-up savepoint: `save/beta35-flower-pot-floor-top-survival`
+
+`minecraft:flower_pot` is now GREEN for floor/top placement and survival on valid slab-supported surfaces, and the unsupported control now fails. This resolves the previous `SURVIVAL_FAILURE` layer only.
+
+- lowered bottom support: `supportDy=-1.000000`, `placement=GREEN`, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`
+- plain bottom support: `supportDy=-0.500000`, `placement=GREEN`, `survival=SURVIVAL_GREEN`, `unsupported=UNSUPPORTED_FAILS`
+
+Updated focused proof summary:
+
+`JULIA_BETA35_FLOWER_POT_FLOOR_TOP_SURVIVAL_SUMMARY objectId=minecraft:flower_pot rows=2 expectedRowsSurvivalGreen=true failureLayer=NONE secondaryLayer=CONTACT_GAP candle=GREEN_ALREADY_INHERITS standing_oak_sign=UNCHANGED_SEPARATE_CONTACT_GAP releaseAudit=NOT_RUN releasePrep=PAUSED`
+
+Updated family matrix summary:
+
+`rows=8 greenAlreadyInherits=4 placementFailure=0 survivalFailure=0 contactGap=4 triadMismatch=0 rendererSpecialCase=0 outOfScope=0 releaseAudit=NOT_RUN releasePrep=PAUSED`
+
+`minecraft:flower_pot` still has a separate visual/contact layer: `objectDy=-0.500000`, `contactGap=1.000000` on lowered bottom support and `contactGap=0.500000` on plain bottom support, with `triadCoLocated=no`. Standing `minecraft:oak_sign` remains separate due to `CONTACT_GAP` plus block-entity/special renderer risk.
+
+This does not claim all items or all floor/top objects are fixed. Release audit remains paused until Julia decides whether floor torch plus candle plus flower pot survival is enough for this one-more-family pass, or whether flower pot contact and/or standing sign need separate slices.
