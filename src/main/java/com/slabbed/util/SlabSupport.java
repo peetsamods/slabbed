@@ -269,8 +269,28 @@ public final class SlabSupport {
         return state.isSolidBlock(world, pos);
     }
 
-    private static double beta35OrdinaryFullBlockContactDy(BlockView world, BlockPos pos, BlockState state) {
-        if (!isBeta35OrdinaryFullBlockContactObject(world, pos, state)) {
+    private static boolean isBeta35SpecialFullblockContactObject(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return block == Blocks.CRAFTING_TABLE
+                || block == Blocks.FURNACE
+                || block == Blocks.BOOKSHELF
+                || block == Blocks.CHEST
+                || block == Blocks.BARREL
+                || block == Blocks.ENCHANTING_TABLE
+                || block == Blocks.STONECUTTER
+                || block == Blocks.ANVIL
+                || block == Blocks.GRINDSTONE;
+    }
+
+    private static double beta35SpecialFullblockContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !isBeta35SpecialFullblockContactObject(state)) {
             return Double.NaN;
         }
         BlockPos supportPos = pos.down();
@@ -1198,9 +1218,9 @@ public final class SlabSupport {
                 }
                 return -1.0;
             }
-            double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
-            if (Double.isFinite(ordinaryFullBlockContactDy)) {
-                return ordinaryFullBlockContactDy;
+            double specialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
+            if (Double.isFinite(specialFullblockContactDy)) {
+                return specialFullblockContactDy;
             }
             double oakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);
             if (Double.isFinite(oakTrapdoorContactDy)) {
@@ -1274,6 +1294,11 @@ public final class SlabSupport {
         double standingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
         if (Double.isFinite(standingOakSignContactDy)) {
             return standingOakSignContactDy;
+        }
+
+        double specialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
+        if (Double.isFinite(specialFullblockContactDy)) {
+            return specialFullblockContactDy;
         }
 
         double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
