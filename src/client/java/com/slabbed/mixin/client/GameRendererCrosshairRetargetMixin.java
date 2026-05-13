@@ -519,7 +519,30 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 && state != null
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d
                 && (SlabSupport.isBeta35FenceWallVariantContactObject(state)
-                        || state.isOf(Blocks.ANVIL));
+                        || state.isOf(Blocks.ANVIL)
+                        || slabbed$isBeta35SlabHeightApertureOwnerObject(world, pos, state));
+    }
+
+    private static boolean slabbed$isBeta35SlabHeightApertureOwnerObject(
+            ClientWorld world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null || state.isAir()) {
+            return false;
+        }
+        if (state.getBlock() instanceof SlabBlock || SlabSupport.isSupportingSlab(state)) {
+            return false;
+        }
+        double objectDy = SlabSupport.getYOffset(world, pos, state);
+        if (objectDy >= -1.0e-6d) {
+            return false;
+        }
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (!(supportState.getBlock() instanceof SlabBlock)) {
+            return false;
+        }
+        double supportDy = SlabSupport.getYOffset(world, supportPos, supportState);
+        return Math.abs(supportDy + 1.0d) <= 1.0e-6d;
     }
 
     private String slabbed$classifyLiveFirstSeamOwner(BlockHitResult hit) {
