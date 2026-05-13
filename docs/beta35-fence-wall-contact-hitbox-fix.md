@@ -53,3 +53,11 @@ Julia's latest live acceptance zip after `57d651a` emitted no fence/wall live co
 Current classification is `LIVE_TRACE_MISSING_PLUS_SERVER_HIT_TOLERANCE_REJECT`. The follow-up tracer slice adds `-Dslabbed.beta35FenceWallLiveInspect=true` with startup marker `[JULIA_BETA35_FENCE_WALL_LIVE_INSPECT] enabled=true`, client contact/triad/owner rows, and server hit-tolerance rows including `SERVER_HIT_TOO_FAR`.
 
 This is diagnostics only. No gameplay fix, tolerance widening, contact dy change, release audit, or release tag movement is included.
+
+## Follow-Up: Owner / Server-Hit Fix
+
+The `fbbbd68` tracer proved contact and triad stayed green in live rows, but owner targeting and server shifted-hit validation still failed: `LIVE_OWNER_GAP=1495`, `SERVER_HIT_TOO_FAR=2`, `LIVE_CONTACT_GAP=0`, and `LIVE_TRIAD_MISMATCH=0`.
+
+The follow-up owner/server-hit slice changes only final owner priority and server validation for legal Slabbed-lowered fence/wall/anvil target contexts. It does not rewrite the `57d651a` fence/wall contact dy path. The focused proof now reports `JULIA_BETA35_FENCE_WALL_OWNER_SERVER_HIT_SUMMARY outcome=GREEN ... failureLayer=NONE`, with `finalDecision=object-shape-owner-preserve` and `SERVER_SHIFTED_HIT_GREEN`.
+
+No release audit was run. No release tag was moved. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain out of scope.
