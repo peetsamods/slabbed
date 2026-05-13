@@ -55,3 +55,9 @@ Julia's live inspect after `983d8ab` confirmed the owner fix but found a separat
 The follow-up contact slice updates only the `FenceBlock` / `WallBlock` family contact dy path in `SlabSupport`, deriving object dy from the visible support top. Focused proof `-Dslabbed.beta35FenceWallContactHitbox=true` now reports `JULIA_BETA35_FENCE_WALL_CONTACT_HITBOX_SUMMARY outcome=GREEN rows=10 green=10 contactGap=0 triadMismatch=0 ownerGap=0 dyMismatch=0 failureLayer=NONE`.
 
 Wall/fence model, outline, raycast, and collision bounds are co-located after the corrected dy. Anvil owner remains a regression check only for this contact slice. Floor_torch, candle, and flower_pot regressions remain green. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain not covered. No release audit was run. No release tag was moved.
+
+## Follow-Up: Fence/Wall Live Reject Tracer
+
+After `57d651a`, Julia's live acceptance zip emitted no fence/wall live contact markers, but did emit server `Rejecting UseItemOnPacket ... too far away from hit block` lines at the lowered test positions. The next problem is live client/server hit validation capture, not release audit.
+
+The diagnostics-only tracer flag is `-Dslabbed.beta35FenceWallLiveInspect=true`. It emits `[JULIA_BETA35_FENCE_WALL_LIVE_INSPECT] enabled=true`, client contact/triad/owner classifications, and server `SERVER_HIT_TOO_FAR` tolerance rows. No gameplay fix, release audit, or release tag movement is included.

@@ -45,3 +45,11 @@ Live inspect before this fix found wall contact gaps of `0.5` on `supportDy=-1.0
 - `git diff --check` -> clean
 
 Beta 3.5 release audit remains paused until Julia live-accepts this wall/fence correction.
+
+## Follow-Up: Live Reject Tracer
+
+Julia's latest live acceptance zip after `57d651a` emitted no fence/wall live contact markers, so the proof harness was not producing live runClient diagnostics. The same log did emit vanilla server `Rejecting UseItemOnPacket ... too far away from hit block` lines at the tested lowered positions.
+
+Current classification is `LIVE_TRACE_MISSING_PLUS_SERVER_HIT_TOLERANCE_REJECT`. The follow-up tracer slice adds `-Dslabbed.beta35FenceWallLiveInspect=true` with startup marker `[JULIA_BETA35_FENCE_WALL_LIVE_INSPECT] enabled=true`, client contact/triad/owner rows, and server hit-tolerance rows including `SERVER_HIT_TOO_FAR`.
+
+This is diagnostics only. No gameplay fix, tolerance widening, contact dy change, release audit, or release tag movement is included.

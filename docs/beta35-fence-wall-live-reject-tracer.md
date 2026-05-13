@@ -1,0 +1,71 @@
+# Beta 3.5 Fence/Wall Live Reject Tracer
+
+Diagnostics-only slice after `57d651a` / `save/beta35-fence-wall-contact-hitbox`.
+
+Evidence folder: `tmp/beta35-fence-wall-live-reject-tracer-57d651a/`.
+
+## Why
+
+The `57d651a` proof savepoint is not live-accepted yet. Julia's latest live acceptance zip emitted no fence/wall live contact markers:
+
+- `FENCE_WALL_CONTACT_HITBOX = 0`
+- `LIVE_HITBOX = 0`
+- `LIVE_INSPECT = 0`
+- `CONTACT_GREEN = 0`
+- `CONTACT_GAP = 0`
+- `TRIAD_MISMATCH = 0`
+- `HITBOX_SHAPE_OFFSET = 0`
+
+The same live log did emit server rejects:
+
+- `Rejecting UseItemOnPacket ... Location (44.625, -56.673780620098114, 89.6164071559906) too far away from hit block BlockPos{x=44, y=-56, z=89}`
+- `Rejecting UseItemOnPacket ... Location (44.582998633384705, -55.74407768249512, 88.75) too far away from hit block BlockPos{x=44, y=-55, z=88}`
+
+Current classification: `LIVE_TRACE_MISSING_PLUS_SERVER_HIT_TOLERANCE_REJECT`.
+
+## Flag
+
+Run client with:
+
+```bash
+JAVA_TOOL_OPTIONS="-Dslabbed.beta35FenceWallLiveInspect=true" ./gradlew --no-daemon runClient --console plain
+```
+
+Startup marker:
+
+```text
+[JULIA_BETA35_FENCE_WALL_LIVE_INSPECT] enabled=true
+```
+
+## Markers
+
+Client marker:
+
+```text
+[JULIA_BETA35_FENCE_WALL_LIVE_INSPECT]
+```
+
+Client rows include held item, initial/final crosshair target, target object state and dy, support state and dy, model/outline/raycast/collision min/max Y, `supportVisibleTopY`, `objectModelBottomY`, `contactGap`, and classifications:
+
+- `LIVE_CONTACT_GREEN`
+- `LIVE_CONTACT_GAP`
+- `LIVE_TRIAD_MISMATCH`
+- `LIVE_OWNER_GAP`
+- `TRACE_ACTIVE_NO_TARGET`
+
+Server marker:
+
+```text
+[JULIA_BETA35_FENCE_WALL_LIVE_SERVER]
+```
+
+Server rows include held item, packet hit block, face, hit vector, vanilla validation center, validation delta, tolerance, target state/dy, object/support dy, `contactGap`, and:
+
+- `SERVER_HIT_TOO_FAR`
+- `SERVER_HIT_WITHIN_TOLERANCE`
+
+## Scope
+
+No gameplay fix is implemented. The server tracer records the vanilla packet validation center and predicted component-tolerance result; it does not widen tolerance, rewrite packets, change contact dy, change render/model dy, or retarget owners.
+
+No release audit was run. No release tag was moved. Scope remains fence/wall/anvil diagnostics plus existing floor_torch/candle/flower_pot regression status. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain out of scope.
