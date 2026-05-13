@@ -20,8 +20,10 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current savepoint: Beta 3.5 slab-height generic hit-acceptance RED tracer at `save/beta35-slab-height-hit-acceptance-red`
-- Previous operating base for this slice: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`
+- Current savepoint: Beta 3.5 visible hit aperture fix at `save/beta35-hitbox-aperture-fix`
+- Previous operating base for this slice: `48550c7` / `save/beta35-hitbox-aperture-contact-red`
+- Prior slab-height generic hit-acceptance RED tracer: `63a0e32` / `save/beta35-slab-height-hit-acceptance-red`
+- Prior fence/wall visual-hitbox base: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`
 - Previous fence/wall stack-contact base: `5f94ed5` / `save/beta35-fence-wall-stack-contact`
 - Older compound visible slab lane law base: `d7ef534`
 - Older compound visible slab lane law base tag: `save/beta4-manual-live-delayed-final-trace`
@@ -56,17 +58,21 @@ No contact dy rewrite or server hit tolerance change was made in this slice. No 
 
 ## Current Beta 3.5 slab-height generic hit-acceptance status
 
-Operating base for this diagnostic slice: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`.
+Operating base for the original diagnostic tracer: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`. Operating base for the visible hit aperture fix: `48550c7` / `save/beta35-hitbox-aperture-contact-red`.
 
 Julia's post-`eec3bc0` live verdict is near-acceptance for fence/wall: "everything looks almost perfect." The remaining visible blocker is not scoped to lantern, chain, or button; those are examples from the video. The active classification is `failureLayer=SLAB_HEIGHT_GENERIC_HIT_ACCEPTANCE_UNINSTRUMENTED` until a live-faithful row proves otherwise.
 
-Diagnostic flags: `-Dslabbed.beta35SlabHeightHitAcceptance=true`, `-Dslabbed.beta35SlabHeightHitAcceptanceRed=true`, and corrected proof flag `-Dslabbed.beta35HitboxApertureContactRed=true`. Startup marker: `[JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE] enabled=true`. Corrected proof rows use `JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED_ROW` and summary `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY`.
+Diagnostic flags: `-Dslabbed.beta35SlabHeightHitAcceptance=true`, `-Dslabbed.beta35SlabHeightHitAcceptanceRed=true`, corrected proof flag `-Dslabbed.beta35HitboxApertureContactRed=true`, and aperture-fix proof flag `-Dslabbed.beta35HitboxApertureFix=true`. Startup marker: `[JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE] enabled=true`. Corrected proof rows use `JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED_ROW` and summary `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY`; the aperture fix proof uses `JULIA_BETA35_HITBOX_APERTURE_FIX_RED`, `JULIA_BETA35_HITBOX_APERTURE_FIX_GREEN`, and `JULIA_BETA35_HITBOX_APERTURE_FIX_SUMMARY`.
 
-This slice is tracing/proof only. It does not widen global hit tolerance, does not add server accept bypasses, does not add solidity/sturdy-face lies, does not add category-specific fixes, does not claim all-item support, does not run a release audit, and does not move release tags.
+The current production change is narrow: the existing Beta 3.5 object-owner scan now admits lowered non-slab visible objects only when their own dy is lowered, they sit over a direct slab support whose support dy is `-1.0`, and the ray intersects the visible outline/raycast shape. This fixes the proven player-feel aim aperture without using empty overhang as the interaction point. It does not widen global hit tolerance, does not add server accept bypasses, does not lower global collision, does not add solidity/sturdy-face lies, does not claim all-item support, does not run a release audit, and does not move release tags.
 
 The `63a0e32` matrix is now known false-green evidence: it did not fail `HIT_ACCEPTANCE_GREEN` rows with nonzero contact metrics and did not measure player-feel aim aperture. Julia's live video showed finicky hitboxes at this slab height; one concrete live row was `minecraft:acacia_button[face=floor]` on `stone_slab[type=top]` with `supportDy=-1.0`, `objectDy=-0.5`, `contactGap=0.500000`, previously misclassified as `HIT_ACCEPTANCE_GREEN`.
 
-Latest corrected local result: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=2 red=6 buttonContactGapRows=1 chainMetricGapRows=1 apertureTooNarrowRows=4 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED`. The corrected proof is diagnostics-only: it proves button floor contact dy is missing, chain axis contact metric is unimplemented, and visible-body/top/edge/support-seam aim aperture is too narrow in the replay fixture. No gameplay fix or all-item support claim has been made.
+`48550c7` corrected proof result: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=2 red=6 buttonContactGapRows=1 chainMetricGapRows=1 apertureTooNarrowRows=4 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED`. That proof found three buckets: button floor contact dy, chain axis contact metrics, and `HITBOX_AIM_APERTURE_TOO_NARROW`.
+
+Current aperture-fix proof result: `JULIA_BETA35_HITBOX_APERTURE_FIX_SUMMARY outcome=GREEN rows=6 apertureTooNarrowRowsBefore=4 apertureTooNarrowRowsAfter=0 emptyOverhangStealRows=0 visibleBodyGreen=yes visibleTopGreen=yes edgeClassification=GREEN supportSeamClassification=GREEN buttonContactGapStillDeferred=yes chainAxisMetricStillDeferred=yes failureLayer=NONE`.
+
+Corrected RED proof after the aperture fix: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=6 red=2 buttonContactGapRows=1 chainMetricGapRows=1 apertureTooNarrowRows=0 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED buttonContactGapStillDeferred=yes chainAxisMetricStillDeferred=yes apertureFixApplied=true`. Button floor contact and chain axis metric remain deferred known REDs; they were not fixed in this slice.
 
 ## Current product goal
 

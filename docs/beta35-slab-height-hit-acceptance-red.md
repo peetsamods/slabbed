@@ -32,8 +32,16 @@ Concrete false-green live row: `minecraft:acacia_button[face=floor]` on `minecra
 
 Corrected diagnostic proof: `-Dslabbed.beta35HitboxApertureContactRed=true`. Latest summary: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=2 red=6 buttonContactGapRows=1 chainMetricGapRows=1 supportMetricNoiseRows=0 apertureTooNarrowRows=4 fixtureMismatchRows=0 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED`.
 
-The corrected proof still does not justify a gameplay fix in this slice; it only names the first proven layers for a next slice.
+That corrected proof named three layers: `BUTTON_FLOOR_CONTACT_DY_MISSING`, `CHAIN_AXIS_CONTACT_METRIC_MISSING`, and `HITBOX_AIM_APERTURE_TOO_NARROW`.
+
+Follow-up aperture fix: `-Dslabbed.beta35HitboxApertureFix=true` / `save/beta35-hitbox-aperture-fix`.
+
+Focused aperture result: `JULIA_BETA35_HITBOX_APERTURE_FIX_SUMMARY outcome=GREEN rows=6 apertureTooNarrowRowsBefore=4 apertureTooNarrowRowsAfter=0 emptyOverhangStealRows=0 visibleBodyGreen=yes visibleTopGreen=yes edgeClassification=GREEN supportSeamClassification=GREEN buttonContactGapStillDeferred=yes chainAxisMetricStillDeferred=yes fixtureMismatchRows=0 failureLayer=NONE`.
+
+Corrected RED proof after the aperture fix: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=6 red=2 buttonContactGapRows=1 chainMetricGapRows=1 apertureTooNarrowRows=0 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED buttonContactGapStillDeferred=yes chainAxisMetricStillDeferred=yes apertureFixApplied=true`.
+
+The current gameplay change is limited to the visible-target aim aperture: visible body/top/edge/support-seam rows now preserve the intended visible object when the ray intersects the object's visible outline/raycast shape, while empty overhang and near-miss rows do not steal owner. Button floor contact dy and chain axis metrics remain deferred known REDs.
 
 ## Scope
 
-No gameplay fix was implemented. No global hit tolerance was widened. No server accept bypass was added. No global solidity or sturdy-face behavior was changed. No broad all-item support was attempted. No release audit was run, and no release tag was moved.
+No button contact fix was implemented. No chain axis metric fix was implemented. No global hit tolerance was widened. No server accept bypass was added. No global solidity or sturdy-face behavior was changed. No broad all-item support claim was made. No release audit was run, and no release tag was moved.

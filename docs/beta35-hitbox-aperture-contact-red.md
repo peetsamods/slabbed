@@ -31,6 +31,27 @@ Proven layers:
 - `CHAIN_AXIS_CONTACT_METRIC_MISSING`: chain needs an axis/contact metric before it can be classified green.
 - `HITBOX_AIM_APERTURE_TOO_NARROW`: visible body, top, edge, and support seam rows miss in the replay fixture.
 
+## Follow-up Aperture Fix
+
+Follow-up savepoint: `save/beta35-hitbox-aperture-fix`.
+
+Focused proof flag: `-Dslabbed.beta35HitboxApertureFix=true`.
+
+The aperture slice fixes only `HITBOX_AIM_APERTURE_TOO_NARROW`. The owner path now lets the existing object-shape owner-preserve scan consider a lowered non-slab visible object over a direct `supportDy=-1.0` slab support, and only when the ray intersects the visible outline/raycast shape. Empty overhang remains non-owning.
+
+Focused aperture result:
+
+`JULIA_BETA35_HITBOX_APERTURE_FIX_SUMMARY outcome=GREEN rows=6 apertureTooNarrowRowsBefore=4 apertureTooNarrowRowsAfter=0 emptyOverhangStealRows=0 visibleBodyGreen=yes visibleTopGreen=yes edgeClassification=GREEN supportSeamClassification=GREEN buttonContactGapStillDeferred=yes chainAxisMetricStillDeferred=yes fixtureMismatchRows=0 failureLayer=NONE`
+
+Corrected RED proof after the aperture fix:
+
+`JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=6 red=2 buttonContactGapRows=1 chainMetricGapRows=1 supportMetricNoiseRows=0 apertureTooNarrowRows=0 fixtureMismatchRows=0 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED buttonContactGapStillDeferred=yes chainAxisMetricStillDeferred=yes apertureFixApplied=true`
+
+Deferred known REDs remain:
+
+- `BUTTON_FLOOR_CONTACT_DY_MISSING`: the floating floor button contact gap is not fixed here.
+- `CHAIN_AXIS_CONTACT_METRIC_MISSING`: chain axis/contact metric work is not fixed here.
+
 ## Scope
 
-No gameplay fix was implemented. No global hit tolerance was widened. No server accept bypass was added. No global collision, solidity, or sturdy-face behavior was changed. No broad all-item support was attempted. No release audit was run, and no release tag was moved.
+The original `48550c7` slice was diagnostics-only. The follow-up aperture slice changes only visible-target owner acceptance for the proven slab-height aperture fixture. No button contact fix was implemented. No chain axis metric fix was implemented. No global hit tolerance was widened. No server accept bypass was added. No global collision, solidity, or sturdy-face behavior was changed. No broad all-item support claim was made. No release audit was run, and no release tag was moved.
