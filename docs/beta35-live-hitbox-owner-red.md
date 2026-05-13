@@ -55,3 +55,11 @@ The three former RED rows now preserve the visible lowered owner:
 - `minecraft:anvil`: final crosshair target is the anvil owner.
 
 Panes remain excluded. Doors, trapdoors, signs, lanterns, chains, end rods, redstone, and rails were not opened. No release audit was run. No release tag was moved.
+
+## Follow-Up: Fence/Wall Contact Hitbox Fix
+
+The `983d8ab` owner fix did not fix contact height. Julia's live inspect after that savepoint found wall contact gaps of `0.5` when lowered wall/fence-family objects sat over `supportDy=-1.0` full-block and top-slab support.
+
+The follow-up contact slice changes only the `FenceBlock` / `WallBlock` family contact dy path. Focused proof now reports `JULIA_BETA35_FENCE_WALL_CONTACT_HITBOX_SUMMARY outcome=GREEN rows=10 green=10 contactGap=0 triadMismatch=0 ownerGap=0 dyMismatch=0 failureLayer=NONE`; wall and fence representatives both contact the visible support surface and keep model/outline/raycast/collision co-located.
+
+Anvil owner remains a regression check only in this contact slice. Floor_torch, candle, and flower_pot regressions remain green. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain not covered. No release audit was run. No release tag was moved.

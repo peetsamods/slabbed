@@ -207,9 +207,41 @@ public final class SlabSupport {
         }
         BlockPos supportPos = pos.down();
         BlockState supportState = world.getBlockState(supportPos);
-        double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        double supportDy = beta35FenceWallVisibleSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
-            return supportDy - 0.5d;
+            double supportTopOffset = isSupportingSlab(supportState) ? getSupportYOffset(supportState) : 1.0d;
+            return supportDy + supportTopOffset - 1.0d;
+        }
+        return Double.NaN;
+    }
+
+    private static double beta35FenceWallVisibleSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null || state.isAir() || !state.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        if (isBottomSlab(state)) {
+            return floorTorchBottomSlabSupportDy(world, pos, state);
+        }
+        if (isTopSlab(state) && SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)) {
+            return -1.0d;
+        }
+        if (state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE)
+                && (state.get(SlabBlock.TYPE) == SlabType.TOP || state.get(SlabBlock.TYPE) == SlabType.DOUBLE)) {
+            if (state.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                    && SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)) {
+                return -1.0d;
+            }
+            BlockPos belowPos = pos.down();
+            BlockState below = world.getBlockState(belowPos);
+            if (below.getBlock() instanceof SlabBlock && isLoweredDoubleSlabCarrier(world, belowPos, below)) {
+                return -0.5d;
+            }
+            if (hasLoweredCarrierBelow(world, pos) || isAdjacentSideSlabLowered(world, pos, state)) {
+                return -0.5d;
+            }
+        }
+        if (isOrdinaryFullBlockWithCompoundDy(world, pos, state)) {
+            return -1.0d;
         }
         return Double.NaN;
     }

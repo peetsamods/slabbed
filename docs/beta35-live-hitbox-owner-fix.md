@@ -47,3 +47,11 @@ The final target is not `MISS`, not the slab underneath, and not the stone suppo
 The first exact owner-proof run without the Fabric synchronizer disable emitted GREEN owner rows but the harness exited during later network synchronization. The validated owner rerun used the same proof flag plus `-Dfabric.client.gametest.disableNetworkSynchronizer=true`, matching the rest of the savepoint gates.
 
 No release audit was run. No release tag was moved.
+
+## Follow-Up: Fence/Wall Contact Hitbox Fix
+
+Julia's live inspect after `983d8ab` confirmed the owner fix but found a separate wall/fence contact-height problem: wall/fence objects over `supportDy=-1.0` full-block and top-slab support could float by `0.5` block. The previous owner savepoint did not change contact dy, collision math, or model/render dy.
+
+The follow-up contact slice updates only the `FenceBlock` / `WallBlock` family contact dy path in `SlabSupport`, deriving object dy from the visible support top. Focused proof `-Dslabbed.beta35FenceWallContactHitbox=true` now reports `JULIA_BETA35_FENCE_WALL_CONTACT_HITBOX_SUMMARY outcome=GREEN rows=10 green=10 contactGap=0 triadMismatch=0 ownerGap=0 dyMismatch=0 failureLayer=NONE`.
+
+Wall/fence model, outline, raycast, and collision bounds are co-located after the corrected dy. Anvil owner remains a regression check only for this contact slice. Floor_torch, candle, and flower_pot regressions remain green. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain not covered. No release audit was run. No release tag was moved.
