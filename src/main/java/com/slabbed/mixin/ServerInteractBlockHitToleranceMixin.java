@@ -103,14 +103,17 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     private Vec3d slabbed$compoundFullBlockVisualCenter(Vec3i blockPos, PlayerInteractBlockC2SPacket packet) {
         Vec3d center = Vec3d.ofCenter(blockPos);
         Vec3d loweredSameCellSlabMergeCenter = null;
+        Vec3d beta35ShiftedCenter = null;
         if (blockPos instanceof BlockPos pos && player != null && packet != null) {
             loweredSameCellSlabMergeCenter = slabbed$loweredSameCellSlabMergeValidationCenter(pos, packet);
+            beta35ShiftedCenter = slabbed$beta35ShiftedValidationCenter(pos, packet, center);
             Beta35FenceWallLiveInspectRecorder.logServerTolerance(
                     player.getEntityWorld(),
                     player,
                     packet.getBlockHitResult(),
                     player.getStackInHand(packet.getHand()),
-                    center);
+                    center,
+                    beta35ShiftedCenter);
             slabbed$logRepeatMergeTolerance(pos, packet, center, loweredSameCellSlabMergeCenter);
         }
         if (loweredSameCellSlabMergeCenter != null) {
@@ -122,6 +125,9 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                     loweredSameCellSlabMergeCenter,
                     "LOWERED_SAME_CELL_SLAB_MERGE");
             return loweredSameCellSlabMergeCenter;
+        }
+        if (beta35ShiftedCenter != null) {
+            return beta35ShiftedCenter;
         }
         if (!(blockPos instanceof BlockPos pos)
                 || player == null
@@ -146,6 +152,57 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                 center.add(0.0d, COMPOUND_DY, 0.0d),
                 "compound_full_block_visual_hit");
         return center.add(0.0d, COMPOUND_DY, 0.0d);
+    }
+
+    private Vec3d slabbed$beta35ShiftedValidationCenter(
+            BlockPos pos,
+            PlayerInteractBlockC2SPacket packet,
+            Vec3d center
+    ) {
+        ServerWorld world = player.getEntityWorld();
+        BlockHitResult hit = packet.getBlockHitResult();
+        if (world == null || hit == null || center == null || !pos.equals(hit.getBlockPos())) {
+            return null;
+        }
+        BlockState state = world.getBlockState(pos);
+        double targetDy = SlabSupport.getYOffset(world, pos, state);
+        if (!Double.isFinite(targetDy) || targetDy >= -EPSILON) {
+            return null;
+        }
+        if (!slabbed$isBeta35ShiftedHitTarget(world, pos, packet)) {
+            return null;
+        }
+        Vec3d shiftedCenter = center.add(0.0d, targetDy, 0.0d);
+        Vec3d delta = hit.getPos().subtract(shiftedCenter);
+        return slabbed$isWithinVanillaComponentTolerance(delta) ? shiftedCenter : null;
+    }
+
+    private boolean slabbed$isBeta35ShiftedHitTarget(
+            ServerWorld world,
+            BlockPos pos,
+            PlayerInteractBlockC2SPacket packet
+    ) {
+        BlockState targetState = world.getBlockState(pos);
+        BlockState objectState = world.getBlockState(pos.up());
+        ItemStack heldStack = player.getStackInHand(packet.getHand());
+        if (SlabSupport.isBeta35FenceWallVariantContactObject(targetState) || targetState.isOf(net.minecraft.block.Blocks.ANVIL)) {
+            return true;
+        }
+        if (SlabSupport.isBeta35FenceWallVariantContactObject(objectState) || objectState.isOf(net.minecraft.block.Blocks.ANVIL)) {
+            return true;
+        }
+        if (heldStack != null && heldStack.getItem() instanceof BlockItem blockItem) {
+            BlockState heldState = blockItem.getBlock().getDefaultState();
+            return SlabSupport.isBeta35FenceWallVariantContactObject(heldState) || heldState.isOf(net.minecraft.block.Blocks.ANVIL);
+        }
+        return false;
+    }
+
+    private static boolean slabbed$isWithinVanillaComponentTolerance(Vec3d delta) {
+        double tolerance = 1.0000001d;
+        return Math.abs(delta.x) < tolerance
+                && Math.abs(delta.y) < tolerance
+                && Math.abs(delta.z) < tolerance;
     }
 
     private void slabbed$logRepeatMergeTolerance(

@@ -33,15 +33,15 @@ Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it 
 Tracked tree is clean.
 `tmp/` may remain intentionally untracked and must not be staged.
 
-## Current Beta 3.5 fence/wall live inspect status
+## Current Beta 3.5 fence/wall owner/server-hit status
 
-Operating base before the live-inspect tracer slice: `57d651a` / `save/beta35-fence-wall-contact-hitbox` on `integrate/phase19-into-side-slab-top-support`.
+Operating base before this owner/server-hit slice: `fbbbd68` / `save/beta35-fence-wall-live-reject-tracer` on `integrate/phase19-into-side-slab-top-support`.
 
-The `57d651a` proof savepoint is useful but not live-accepted yet. Julia's latest live acceptance zip emitted zero fence/wall live contact markers (`FENCE_WALL_CONTACT_HITBOX=0`, `LIVE_HITBOX=0`, `LIVE_INSPECT=0`, `CONTACT_GREEN=0`, `CONTACT_GAP=0`, `TRIAD_MISMATCH=0`, `HITBOX_SHAPE_OFFSET=0`), while the same live log did emit vanilla server packet rejects: `Rejecting UseItemOnPacket ... too far away from hit block` at the tested lowered positions. Current classification: `LIVE_TRACE_MISSING_PLUS_SERVER_HIT_TOLERANCE_REJECT`.
+The `fbbbd68` live tracer worked. Julia's live capture proved fence/wall contact and triad are green (`LIVE_CONTACT_GREEN=2058`, `LIVE_CONTACT_GAP=0`, `LIVE_TRIAD_MISMATCH=0`) but still showed `LIVE_OWNER_GAP=1495` and two captured `SERVER_HIT_TOO_FAR` rows. Current fixed classification for the focused reproduction is `failureLayer=NONE`; previous failure layer was `LIVE_OWNER_GAP_PLUS_SERVER_SHIFTED_HIT_TOLERANCE`.
 
-Current slice adds diagnostics only. New runClient flag: `-Dslabbed.beta35FenceWallLiveInspect=true`. Startup marker: `[JULIA_BETA35_FENCE_WALL_LIVE_INSPECT] enabled=true`. Client rows capture held item, initial/final crosshair target, object/support state and dy, model/outline/raycast/collision Y bounds, `supportVisibleTopY`, `objectModelBottomY`, `contactGap`, and classifications `LIVE_CONTACT_GREEN`, `LIVE_CONTACT_GAP`, `LIVE_TRIAD_MISMATCH`, `LIVE_OWNER_GAP`, or `TRACE_ACTIVE_NO_TARGET`. Server rows capture packet hit vector, hit block, validation center/delta, tolerance, held item, object/support dy, and `SERVER_HIT_TOO_FAR` when the vanilla component tolerance would reject.
+Narrow production change: `GameRendererCrosshairRetargetMixin` now lets the proven Beta 3.5 visible object owner set (`FenceBlock` / `WallBlock` family plus exact anvil) win over side-slab scan when the corrected visible object shape is intersected. `ServerInteractBlockHitToleranceMixin` validates legal Slabbed-lowered fence/wall/anvil target hits against the shifted Slabbed center when the shifted center is still inside vanilla component tolerance. This does not globally widen hit tolerance.
 
-No gameplay fix is implemented in this tracer slice. The server logger records the existing validation center and predicted rejection state; it does not widen tolerance or rewrite fence/wall/anvil packets. No release audit was run, no release tag was moved, and scope remains fence/wall/anvil diagnostics plus existing floor_torch/candle/flower_pot regression status.
+Focused proof flag: `-Dslabbed.beta35FenceWallOwnerServerHit=true -Dslabbed.beta35FenceWallLiveInspect=true`. Required green marker: `JULIA_BETA35_FENCE_WALL_OWNER_SERVER_HIT_GREEN`. The reproduced row now reports `finalDecision=object-shape-owner-preserve`, `ownerClassification=LIVE_OWNER_GREEN`, `SERVER_SHIFTED_HIT_GREEN`, `contactGap=0.000000`, `triadCoLocated=yes`, and `failureLayer=NONE`.
 
 Julia live command:
 
@@ -49,7 +49,7 @@ Julia live command:
 JAVA_TOOL_OPTIONS="-Dslabbed.beta35FenceWallLiveInspect=true" ./gradlew --no-daemon runClient --console plain
 ```
 
-Next problem is live client/server hit validation capture, not release audit. Savepoint target: `save/beta35-fence-wall-live-reject-tracer`.
+No contact dy rewrite was made in this slice. No release audit was run, no release tag was moved, and scope remains fence/wall/anvil owner/server-hit behavior plus existing floor_torch/candle/flower_pot regression status. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain out of scope. Savepoint target: `save/beta35-fence-wall-owner-server-hit`.
 
 ## Current product goal
 

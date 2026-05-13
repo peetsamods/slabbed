@@ -63,9 +63,18 @@ Server rows include held item, packet hit block, face, hit vector, vanilla valid
 
 - `SERVER_HIT_TOO_FAR`
 - `SERVER_HIT_WITHIN_TOLERANCE`
+- `SERVER_SHIFTED_HIT_GREEN` after the owner/server-hit fix when a legal Slabbed-lowered target validates against the shifted center while staying inside vanilla component tolerance.
 
 ## Scope
 
 No gameplay fix is implemented. The server tracer records the vanilla packet validation center and predicted component-tolerance result; it does not widen tolerance, rewrite packets, change contact dy, change render/model dy, or retarget owners.
 
 No release audit was run. No release tag was moved. Scope remains fence/wall/anvil diagnostics plus existing floor_torch/candle/flower_pot regression status. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain out of scope.
+
+## Follow-Up: Owner / Server-Hit Fix
+
+Julia's live capture after this tracer savepoint proved contact and triad were green, but still showed `LIVE_OWNER_GAP=1495` and two `SERVER_HIT_TOO_FAR` rows.
+
+The follow-up fix keeps the tracer flag and adds the focused proof `-Dslabbed.beta35FenceWallOwnerServerHit=true`. The reproduced row now reports `ownerClassification=LIVE_OWNER_GREEN`, `finalDecision=object-shape-owner-preserve`, `SERVER_SHIFTED_HIT_GREEN`, and `failureLayer=NONE`.
+
+No contact dy rewrite, global hit tolerance widening, release audit, release tag movement, or all-item expansion is included.

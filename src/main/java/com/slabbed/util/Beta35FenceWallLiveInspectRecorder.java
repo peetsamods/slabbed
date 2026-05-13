@@ -193,6 +193,17 @@ public final class Beta35FenceWallLiveInspectRecorder {
             ItemStack held,
             Vec3d validationCenter
     ) {
+        logServerTolerance(world, player, hit, held, validationCenter, null);
+    }
+
+    public static void logServerTolerance(
+            World world,
+            PlayerEntity player,
+            BlockHitResult hit,
+            ItemStack held,
+            Vec3d validationCenter,
+            Vec3d shiftedValidationCenter
+    ) {
         if (!enabled() || world == null || hit == null || validationCenter == null) {
             return;
         }
@@ -224,12 +235,19 @@ public final class Beta35FenceWallLiveInspectRecorder {
         boolean tooFar = Math.abs(delta.x) >= SERVER_HIT_TOLERANCE
                 || Math.abs(delta.y) >= SERVER_HIT_TOLERANCE
                 || Math.abs(delta.z) >= SERVER_HIT_TOLERANCE;
-        String classification = tooFar ? "SERVER_HIT_TOO_FAR" : "SERVER_HIT_WITHIN_TOLERANCE";
+        Vec3d shiftedDelta = shiftedValidationCenter == null ? null : hitVec.subtract(shiftedValidationCenter);
+        boolean shiftedWithinTolerance = shiftedDelta != null
+                && Math.abs(shiftedDelta.x) < SERVER_HIT_TOLERANCE
+                && Math.abs(shiftedDelta.y) < SERVER_HIT_TOLERANCE
+                && Math.abs(shiftedDelta.z) < SERVER_HIT_TOLERANCE;
+        String classification = shiftedWithinTolerance
+                ? "SERVER_SHIFTED_HIT_GREEN"
+                : (tooFar ? "SERVER_HIT_TOO_FAR" : "SERVER_HIT_WITHIN_TOLERANCE");
 
         Slabbed.LOGGER.info(
-                "[JULIA_BETA35_FENCE_WALL_LIVE_SERVER] classification={} failureLayer={} heldItem={} player={} packetBlockPos={} hitFace={} hitVec={} validationCenter={} validationDelta={} tolerance={} targetState={} targetDy={} objectPos={} objectState={} objectDy={} supportPos={} supportState={} supportDy={} supportVisibleTopY={} objectModelBottomY={} contactGap={} diagnosticsOnly=true releaseAudit=NOT_RUN releaseTagMoved=false",
+                "[JULIA_BETA35_FENCE_WALL_LIVE_SERVER] classification={} failureLayer={} heldItem={} player={} packetBlockPos={} hitFace={} hitVec={} validationCenter={} validationDelta={} shiftedValidationCenter={} shiftedValidationDelta={} tolerance={} targetState={} targetDy={} objectPos={} objectState={} objectDy={} supportPos={} supportState={} supportDy={} supportVisibleTopY={} objectModelBottomY={} contactGap={} diagnosticsOnly=true releaseAudit=NOT_RUN releaseTagMoved=false",
                 classification,
-                tooFar ? "SERVER_HIT_TOO_FAR" : "NONE",
+                shiftedWithinTolerance || !tooFar ? "NONE" : "SERVER_HIT_TOO_FAR",
                 heldItemId(held),
                 player == null ? "null" : player.getName().getString(),
                 pos.toShortString(),
@@ -237,6 +255,8 @@ public final class Beta35FenceWallLiveInspectRecorder {
                 formatVec(hitVec),
                 formatVec(validationCenter),
                 formatVec(delta),
+                formatVec(shiftedValidationCenter),
+                formatVec(shiftedDelta),
                 fmt(SERVER_HIT_TOLERANCE),
                 state,
                 fmt(SlabSupport.getYOffset(world, pos, state)),

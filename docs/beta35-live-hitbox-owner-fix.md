@@ -61,3 +61,13 @@ Wall/fence model, outline, raycast, and collision bounds are co-located after th
 After `57d651a`, Julia's live acceptance zip emitted no fence/wall live contact markers, but did emit server `Rejecting UseItemOnPacket ... too far away from hit block` lines at the lowered test positions. The next problem is live client/server hit validation capture, not release audit.
 
 The diagnostics-only tracer flag is `-Dslabbed.beta35FenceWallLiveInspect=true`. It emits `[JULIA_BETA35_FENCE_WALL_LIVE_INSPECT] enabled=true`, client contact/triad/owner classifications, and server `SERVER_HIT_TOO_FAR` tolerance rows. No gameplay fix, release audit, or release tag movement is included.
+
+## Follow-Up: Fence/Wall Owner Server-Hit Fix
+
+After `fbbbd68`, live tracing showed contact and triad were green but final owner selection and server validation still failed for fence/wall rows. The owner failure was `scan-side-slab-fired` winning where the visible object owner should be preserved. The server failure was validation against an unshifted vanilla center for a legal Slabbed-lowered target/hit.
+
+The follow-up fix keeps the owner allowlist narrow: proven `FenceBlock` / `WallBlock` family owners plus exact anvil. It also shifts server validation center only for legal Slabbed negative-dy fence/wall/anvil contexts when the shifted hit remains inside vanilla component tolerance. It does not globally widen hit tolerance and does not rewrite contact dy.
+
+Focused proof `-Dslabbed.beta35FenceWallOwnerServerHit=true -Dslabbed.beta35FenceWallLiveInspect=true` now reports `JULIA_BETA35_FENCE_WALL_OWNER_SERVER_HIT_SUMMARY outcome=GREEN ... failureLayer=NONE`, `finalDecision=object-shape-owner-preserve`, and `SERVER_SHIFTED_HIT_GREEN`.
+
+Floor_torch, candle, and flower_pot regressions remain green. No release audit was run. No release tag was moved. There is no all-item claim.
