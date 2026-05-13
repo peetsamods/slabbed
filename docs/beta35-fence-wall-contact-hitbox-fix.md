@@ -61,3 +61,11 @@ The `fbbbd68` tracer proved contact and triad stayed green in live rows, but own
 The follow-up owner/server-hit slice changes only final owner priority and server validation for legal Slabbed-lowered fence/wall/anvil target contexts. It does not rewrite the `57d651a` fence/wall contact dy path. The focused proof now reports `JULIA_BETA35_FENCE_WALL_OWNER_SERVER_HIT_SUMMARY outcome=GREEN ... failureLayer=NONE`, with `finalDecision=object-shape-owner-preserve` and `SERVER_SHIFTED_HIT_GREEN`.
 
 No release audit was run. No release tag was moved. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain out of scope.
+
+## Follow-Up: Stack Contact
+
+Julia's live acceptance after the owner/server-hit fix (`aa66efd`) proved the slab/full-block fence/wall contact path still green and server validation green, but found one remaining stack bucket: wall over lowered wall support with `supportDy=-1.000000`, `objectDy=-0.500000`, and `contactGap=0.500000`.
+
+The follow-up stack-contact slice extends the same fence/wall contact dy authority to legal lowered fence/wall support states. The focused proof now reports wall-on-wall, fence-on-fence, wall-on-fence, and fence-on-wall stack rows green with `contactGap=0.000000` and `triadCoLocated=yes`.
+
+No server hit tolerance change, release audit, release tag movement, pane support, sign/door/trapdoor work, or all-item claim is included.

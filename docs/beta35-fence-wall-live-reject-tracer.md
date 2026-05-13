@@ -78,3 +78,9 @@ Julia's live capture after this tracer savepoint proved contact and triad were g
 The follow-up fix keeps the tracer flag and adds the focused proof `-Dslabbed.beta35FenceWallOwnerServerHit=true`. The reproduced row now reports `ownerClassification=LIVE_OWNER_GREEN`, `finalDecision=object-shape-owner-preserve`, `SERVER_SHIFTED_HIT_GREEN`, and `failureLayer=NONE`.
 
 No contact dy rewrite, global hit tolerance widening, release audit, release tag movement, or all-item expansion is included.
+
+## Follow-Up: Stack Contact
+
+The live tracer after `aa66efd` proved server validation remained green (`SERVER_HIT_TOO_FAR=0`) and isolated the next concrete failure to stacked wall/fence-family contact. The repeated contact-gap bucket was wall over lowered wall support with `contactGap=0.500000`, while contact on slab/full-block supports stayed green.
+
+The follow-up stack-contact proof uses `-Dslabbed.beta35FenceWallStackContact=true -Dslabbed.beta35FenceWallLiveInspect=true` and now reports `JULIA_BETA35_FENCE_WALL_STACK_CONTACT_GREEN`. Residual connected-wall triad rows are classified as `TRACE_FALSE_POSITIVE` / vanilla connected-wall shape limit, and remaining owner gaps are classified as out-of-scope held-item/category rows or a future focused RED target.

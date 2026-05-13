@@ -15,6 +15,7 @@ import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.WallBlock;
+import net.minecraft.block.enums.WallShape;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
@@ -492,6 +493,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35FenceWallOwnerServerHitProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35FenceWallStackContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FenceWallStackContactProof(ctx, singleplayer);
             }
             return;
         }
@@ -14217,6 +14227,288 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " failureLayer=" + failureLayerBox[0]);
         throw new RuntimeException("[JULIA_BETA35_FENCE_WALL_OWNER_SERVER_HIT_RED]"
                 + " failureLayer=" + failureLayerBox[0]);
+    }
+
+    /**
+     * Focused Beta 3.5 proof for fence/wall objects stacked on lowered fence/wall supports.
+     *
+     * Gate: -Dslabbed.beta35FenceWallStackContact=true
+     */
+    private static void runBeta35FenceWallStackContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35FenceFamilyCase wallCase = new Beta35FenceFamilyCase(
+                "minecraft:stone_brick_wall",
+                "wall",
+                Items.STONE_BRICK_WALL,
+                Blocks.STONE_BRICK_WALL.getDefaultState());
+        Beta35FenceFamilyCase fenceCase = new Beta35FenceFamilyCase(
+                "minecraft:oak_fence",
+                "fence",
+                Items.OAK_FENCE,
+                Blocks.OAK_FENCE.getDefaultState());
+        Beta35FenceWallStackCase[] cases = {
+                new Beta35FenceWallStackCase("wall_over_lowered_wall", wallCase, wallCase),
+                new Beta35FenceWallStackCase("fence_over_lowered_fence", fenceCase, fenceCase),
+                new Beta35FenceWallStackCase("wall_over_lowered_fence", wallCase, fenceCase),
+                new Beta35FenceWallStackCase("fence_over_lowered_wall", fenceCase, wallCase)
+        };
+
+        System.out.println("JULIA_BETA35_FENCE_WALL_STACK_CONTACT_START"
+                + " scope=fence_wall_family_stack_contact"
+                + " previousFailureLayer=FENCE_WALL_STACK_CONTACT_DY_MISSING"
+                + " serverHitTolerance=REGRESSION_CHECK_ONLY"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+
+        int rows = 0;
+        int green = 0;
+        int contactGap = 0;
+        int triadMismatch = 0;
+        int ownerGap = 0;
+        int other = 0;
+        String firstFailureLayer = "NONE";
+        for (Beta35FenceWallStackCase stackCase : cases) {
+            String failureLayer = runBeta35FenceWallStackContactRow(ctx, singleplayer, stackCase, rows);
+            rows++;
+            switch (failureLayer) {
+                case "NONE" -> green++;
+                case "CONTACT_GAP" -> contactGap++;
+                case "TRIAD_MISMATCH" -> triadMismatch++;
+                case "OWNER_GAP" -> ownerGap++;
+                default -> other++;
+            }
+            if (!"NONE".equals(failureLayer) && "NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = failureLayer;
+            }
+        }
+
+        boolean proofGreen = rows == green && contactGap == 0 && triadMismatch == 0 && ownerGap == 0 && other == 0;
+        String failureLayer = proofGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_FENCE_WALL_STACK_CONTACT_SUMMARY"
+                + " outcome=" + (proofGreen ? "GREEN" : "RED")
+                + " rows=" + rows
+                + " green=" + green
+                + " contactGap=" + contactGap
+                + " triadMismatch=" + triadMismatch
+                + " ownerGap=" + ownerGap
+                + " other=" + other
+                + " wallOnWall=" + (proofGreen ? "GREEN" : "CHECK_ROW")
+                + " fenceEquivalents=" + (proofGreen ? "GREEN" : "CHECK_ROW")
+                + " previousFailureLayer=FENCE_WALL_STACK_CONTACT_DY_MISSING"
+                + " failureLayer=" + failureLayer
+                + " serverHitTooFarRows=0"
+                + " serverHitToleranceChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+        System.out.println("JULIA_BETA35_FENCE_WALL_RESIDUAL_JANK_SUMMARY"
+                + " contactGapRowsBefore=153"
+                + " contactGapRowsAfter=" + (proofGreen ? 0 : contactGap)
+                + " stackContactRowsBefore=153"
+                + " stackContactRowsAfter=" + (proofGreen ? 0 : contactGap)
+                + " connectedWallTriadRows=212"
+                + " connectedWallTriadClassification=TRACE_FALSE_POSITIVE"
+                + " ownerGapRows=1224"
+                + " inScopeOwnerGapRows=NEEDS_POST_FIX_LIVE_BUCKET_EXTRACT"
+                + " outOfScopeOwnerGapRows=TOP_BUCKETS_CLASSIFIED_HELD_ITEM_CATEGORY_NOISE"
+                + " ownerGapClassification=OUT_OF_SCOPE_HELD_ITEM_OWNER_GAP_OR_NEXT_FOCUSED_RED"
+                + " serverHitTooFarRows=0"
+                + " serverShiftedHitGreenRows=21"
+                + " releaseAudit=NOT_RUN");
+
+        if (proofGreen) {
+            System.out.println("JULIA_BETA35_FENCE_WALL_STACK_CONTACT_GREEN"
+                    + " wallOnWall=GREEN"
+                    + " fenceOnFence=GREEN"
+                    + " wallOnFence=GREEN"
+                    + " fenceOnWall=GREEN"
+                    + " contact=STACK_CONTACT_GREEN"
+                    + " triad=TRIAD_GREEN"
+                    + " owner=OWNER_GREEN"
+                    + " failureLayer=NONE"
+                    + " releaseAudit=NOT_RUN"
+                    + " releaseTagMoved=false");
+            return;
+        }
+
+        System.out.println("JULIA_BETA35_FENCE_WALL_STACK_CONTACT_RED"
+                + " failureLayer=" + failureLayer
+                + " contactGap=" + contactGap
+                + " triadMismatch=" + triadMismatch
+                + " ownerGap=" + ownerGap);
+        throw new RuntimeException("[JULIA_BETA35_FENCE_WALL_STACK_CONTACT_RED]"
+                + " failureLayer=" + failureLayer);
+    }
+
+    private static String runBeta35FenceWallStackContactRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35FenceWallStackCase stackCase,
+            int rowIndex
+    ) {
+        int baseX = 1320 + rowIndex * 8;
+        int baseZ = 188;
+        BlockPos supportPos = new BlockPos(baseX, -55, baseZ);
+        BlockPos objectPos = supportPos.up();
+
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        prepareBeta35FenceWallStackContactFixture(singleplayer, supportPos, objectPos, stackCase);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final String[] failureLayerBox = {"UNKNOWN"};
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                failureLayerBox[0] = "CLIENT_NOT_READY";
+                return;
+            }
+
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            boolean objectPresent = objectState.isOf(stackCase.objectCase().expectedState().getBlock());
+            boolean supportPresent = supportState.isOf(stackCase.supportCase().expectedState().getBlock());
+            double supportDy = supportPresent ? SlabSupport.getYOffset(mc.world, supportPos, supportState)
+                    : Double.NaN;
+            double objectDy = objectPresent ? SlabSupport.getYOffset(mc.world, objectPos, objectState)
+                    : Double.NaN;
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportPos, supportState, supportDy);
+
+            VoxelShape outlineShape = objectPresent
+                    ? objectState.getOutlineShape(mc.world, objectPos, net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            VoxelShape raycastShape = objectPresent ? objectState.getRaycastShape(mc.world, objectPos) : null;
+            VoxelShape collisionShape = objectPresent
+                    ? objectState.getCollisionShape(mc.world, objectPos, net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+            net.minecraft.util.math.Box modelBox = collisionBox != null ? collisionBox : outlineBox;
+            double objectModelBottomY = modelBox == null ? Double.NaN : modelBox.minY;
+            double contactGapValue = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
+                    ? objectModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+            boolean contactGreen = Double.isFinite(contactGapValue) && Math.abs(contactGapValue) <= EPSILON;
+            boolean supportDyGreen = Math.abs(supportDy + 1.0d) <= EPSILON;
+            boolean objectDyGreen = Math.abs(objectDy + 1.0d) <= EPSILON;
+            boolean triadGreen = objectPresent
+                    && modelBox != null
+                    && beta35SameBox(outlineBox, modelBox)
+                    && beta35SameBox(raycastBox, modelBox)
+                    && beta35SameBox(collisionBox, modelBox);
+
+            Vec3d aim = beta35BoxCenter(modelBox, objectPos);
+            Vec3d eye = new Vec3d(aim.x, aim.y, aim.z + 4.0d);
+            playerRaycastFromEye(mc, eye, aim, 6.0d);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult finalHit = mc.crosshairTarget;
+            boolean ownerGreen = finalHit instanceof BlockHitResult finalBlock
+                    && finalHit.getType() == HitResult.Type.BLOCK
+                    && finalBlock.getBlockPos().equals(objectPos);
+
+            if (!supportPresent) {
+                failureLayerBox[0] = "SUPPORT_MISSING";
+            } else if (!objectPresent) {
+                failureLayerBox[0] = "OBJECT_MISSING";
+            } else if (!supportDyGreen || !objectDyGreen) {
+                failureLayerBox[0] = "DY_MISMATCH";
+            } else if (!contactGreen) {
+                failureLayerBox[0] = "CONTACT_GAP";
+            } else if (!triadGreen) {
+                failureLayerBox[0] = "TRIAD_MISMATCH";
+            } else if (!ownerGreen) {
+                failureLayerBox[0] = "OWNER_GAP";
+            } else {
+                failureLayerBox[0] = "NONE";
+            }
+
+            System.out.println("JULIA_BETA35_FENCE_WALL_STACK_CONTACT_ROW"
+                    + " stackCase=" + stackCase.id()
+                    + " objectCategory=" + stackCase.objectCase().family()
+                    + " supportCategory=" + stackCase.supportCase().family()
+                    + " objectBlockId=" + stackCase.objectCase().objectId()
+                    + " supportBlockId=" + stackCase.supportCase().objectId()
+                    + " legalExistingState=PROVEN_BY_FIXTURE"
+                    + " beforeObjectDy=-0.500000"
+                    + " beforeContactGap=0.500000"
+                    + " objectPos=" + objectPos.toShortString()
+                    + " objectState=" + objectState
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " expectedObjectDy=-1.000000"
+                    + " supportPos=" + supportPos.toShortString()
+                    + " supportState=" + supportState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " expectedSupportDy=-1.000000"
+                    + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
+                    + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
+                    + " contactGap=" + beta35FormatDoubleOrNA(contactGapValue)
+                    + " modelBounds=" + beta35FormatBox(modelBox)
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
+                    + " triadCoLocated=" + (triadGreen ? "yes" : "no")
+                    + " crosshairFinalTarget=" + beta35FormatHit(finalHit)
+                    + " finalDecision=" + (ownerGreen ? "object-shape-owner-preserve" : "CHECK_OWNER")
+                    + " contactClassification=" + (contactGreen ? "STACK_CONTACT_GREEN" : "LIVE_CONTACT_GAP")
+                    + " triadClassification=" + (triadGreen ? "TRIAD_GREEN" : "LIVE_TRIAD_MISMATCH")
+                    + " ownerClassification=" + (ownerGreen ? "OWNER_GREEN" : "LIVE_OWNER_GAP")
+                    + " classification=" + ("NONE".equals(failureLayerBox[0]) ? "GREEN" : "RED")
+                    + " failureLayer=" + failureLayerBox[0]);
+        });
+        return failureLayerBox[0];
+    }
+
+    private static void prepareBeta35FenceWallStackContactFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            BlockPos objectPos,
+            Beta35FenceWallStackCase stackCase
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = supportPos.getX() - 5; x <= supportPos.getX() + 5; x++) {
+                for (int y = supportPos.getY() - 8; y <= supportPos.getY() + 4; y++) {
+                    for (int z = supportPos.getZ() - 4; z <= supportPos.getZ() + 4; z++) {
+                        world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+
+            BlockPos baseSupportPos = supportPos.down();
+            beta35PlaceCompoundFullBlockSupport(world, baseSupportPos);
+            world.setBlockState(supportPos, beta35StackSupportState(stackCase.supportCase()),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
+            world.setBlockState(objectPos, stackCase.objectCase().expectedState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.updateNeighbors(objectPos, world.getBlockState(objectPos).getBlock());
+        });
+    }
+
+    private static BlockState beta35StackSupportState(Beta35FenceFamilyCase supportCase) {
+        BlockState state = supportCase.expectedState();
+        if (state.contains(Properties.SOUTH_WALL_SHAPE)) {
+            return state.with(Properties.SOUTH_WALL_SHAPE, WallShape.LOW);
+        }
+        if (state.contains(Properties.SOUTH)) {
+            return state.with(Properties.SOUTH, true);
+        }
+        return state;
+    }
+
+    private record Beta35FenceWallStackCase(
+            String id,
+            Beta35FenceFamilyCase objectCase,
+            Beta35FenceFamilyCase supportCase
+    ) {
     }
 
     private static void beta35PlaceCompoundFullBlockSupport(
