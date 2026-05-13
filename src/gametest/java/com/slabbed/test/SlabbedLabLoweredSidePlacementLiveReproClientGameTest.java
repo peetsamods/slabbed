@@ -15,6 +15,7 @@ import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.WallBlock;
+import net.minecraft.block.enums.BlockFace;
 import net.minecraft.block.enums.WallShape;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.world.ClientWorld;
@@ -511,6 +512,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35FenceWallVisualHitboxStackAimProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35HitboxApertureContactRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35HitboxApertureContactRedProof(ctx, singleplayer);
             }
             return;
         }
@@ -14855,6 +14865,516 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
+     * Corrected Beta 3.5 proof for the false-green hitbox/contact tracer and aim-aperture gap.
+     *
+     * Gate: -Dslabbed.beta35HitboxApertureContactRed=true
+     */
+    private static void runBeta35HitboxApertureContactRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        System.out.println("JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED"
+                + " scope=correct_false_green_contact_metrics_and_aim_aperture"
+                + " previousHead=63a0e32"
+                + " previousFalseGreen=SLAB_HEIGHT_HIT_ACCEPTANCE_GREEN_WITH_CONTACT_GAP"
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        BlockState floorButton = Blocks.ACACIA_BUTTON.getDefaultState()
+                .with(Properties.BLOCK_FACE, BlockFace.FLOOR)
+                .with(Properties.HORIZONTAL_FACING, Direction.SOUTH);
+        Beta35HitboxContactRow buttonRow = runBeta35HitboxContactMetricRow(
+                ctx,
+                singleplayer,
+                0,
+                "floating_floor_button_on_lowered_top_slab",
+                Beta35SlabHeightSupportCase.LOWERED_TOP,
+                floorButton,
+                "BUTTON",
+                "minecraft:acacia_button",
+                new BlockPos(1900, -55, 188));
+        Beta35HitboxContactRow chainRow = runBeta35HitboxContactMetricRow(
+                ctx,
+                singleplayer,
+                1,
+                "chain_axis_metric_probe_on_lowered_top_slab",
+                Beta35SlabHeightSupportCase.LOWERED_TOP,
+                Blocks.IRON_CHAIN.getDefaultState(),
+                "CHAIN",
+                "minecraft:iron_chain",
+                new BlockPos(1910, -55, 188));
+        Beta35ApertureSummary apertureSummary = runBeta35HitboxApertureRows(
+                ctx,
+                singleplayer,
+                2,
+                "floating_floor_button_aperture",
+                Beta35SlabHeightSupportCase.LOWERED_TOP,
+                floorButton,
+                new BlockPos(1920, -55, 188));
+
+        int rows = 2 + apertureSummary.rows();
+        int buttonContactGapRows = "BUTTON_CONTACT_GAP".equals(buttonRow.classification()) ? 1 : 0;
+        int chainMetricGapRows = "CHAIN_AXIS_CONTACT_METRIC_MISSING".equals(chainRow.failureLayer()) ? 1 : 0;
+        int supportMetricNoiseRows = 0;
+        int fixtureMismatchRows = ("HIT_ACCEPTANCE_FIXTURE_MISMATCH".equals(buttonRow.failureLayer()) ? 1 : 0)
+                + ("HIT_ACCEPTANCE_FIXTURE_MISMATCH".equals(chainRow.failureLayer()) ? 1 : 0)
+                + apertureSummary.fixtureMismatchRows();
+        int apertureTooNarrowRows = apertureSummary.apertureTooNarrowRows();
+        int red = buttonContactGapRows + chainMetricGapRows + apertureTooNarrowRows + fixtureMismatchRows;
+        int green = Math.max(0, rows - red);
+        String firstFailureLayer = !"NONE".equals(buttonRow.failureLayer()) ? buttonRow.failureLayer()
+                : (!"NONE".equals(chainRow.failureLayer()) ? chainRow.failureLayer()
+                : apertureSummary.firstFailureLayer());
+        String nextRecommendedFix = buttonContactGapRows > 0 && apertureTooNarrowRows > 0 ? "MIXED"
+                : (buttonContactGapRows > 0 ? "BUTTON_CONTACT_DY"
+                : (apertureTooNarrowRows > 0 ? "GENERIC_AIM_APERTURE"
+                : (chainMetricGapRows > 0 ? "CHAIN_AXIS_METRIC" : "MIXED")));
+
+        System.out.println("JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY"
+                + " outcome=" + (red > 0 ? "RED" : "NOT_REPRODUCED")
+                + " rows=" + rows
+                + " green=" + green
+                + " red=" + red
+                + " buttonContactGapRows=" + buttonContactGapRows
+                + " chainMetricGapRows=" + chainMetricGapRows
+                + " supportMetricNoiseRows=" + supportMetricNoiseRows
+                + " apertureTooNarrowRows=" + apertureTooNarrowRows
+                + " fixtureMismatchRows=" + fixtureMismatchRows
+                + " firstFailureLayer=" + firstFailureLayer
+                + " nextRecommendedFix=" + nextRecommendedFix
+                + " previousFalseGreenCorrected=true"
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+    }
+
+    private static Beta35HitboxContactRow runBeta35HitboxContactMetricRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            Beta35SlabHeightSupportCase supportCase,
+            BlockState visibleObjectState,
+            String visibleObjectCategory,
+            String objectBlockId,
+            BlockPos supportPos
+    ) {
+        BlockPos objectPos = supportPos.up();
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        prepareBeta35HitboxApertureContactFixture(
+                singleplayer,
+                supportPos,
+                objectPos,
+                visibleObjectState);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 4));
+
+        final Beta35HitboxContactRow[] rowBox = {
+                new Beta35HitboxContactRow(rowId, "HIT_ACCEPTANCE_FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                System.out.println("JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED_ROW"
+                        + " rowIndex=" + rowIndex
+                        + " rowId=" + rowId
+                        + " classification=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " reason=client_world_player_or_renderer_missing");
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportPos, supportState, supportDy);
+            VoxelShape outlineShape = objectState.getOutlineShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+            Vec3d aim = beta35BoxCenter(outlineBox, objectPos);
+            AimResult aimResult = beta35AimAt(mc, objectPos, aim, "VISIBLE_BODY");
+            boolean finalTargetsSupport = aimResult.finalTarget() instanceof BlockHitResult finalBlock
+                    && aimResult.finalTarget().getType() == HitResult.Type.BLOCK
+                    && finalBlock.getBlockPos().equals(supportPos);
+            boolean finalMiss = aimResult.finalTarget() == null
+                    || aimResult.finalTarget().getType() == HitResult.Type.MISS;
+            String targetOnlyClassification = aimResult.finalTargetsObject() ? "HIT_ACCEPTANCE_GREEN"
+                    : (finalMiss ? "HIT_ACCEPTANCE_MISS"
+                    : (finalTargetsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP"));
+            double targetDy = aimResult.finalTarget() instanceof BlockHitResult finalBlock
+                    ? SlabSupport.getYOffset(mc.world, finalBlock.getBlockPos(),
+                            mc.world.getBlockState(finalBlock.getBlockPos()))
+                    : Double.NaN;
+            double objectModelBottomY = outlineBox == null ? Double.NaN : outlineBox.minY;
+            double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
+                    ? objectModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+            String metricType = beta35HitAcceptanceMetricType(objectState);
+            double sideFaceGap = Double.NaN;
+            double axisGap = Double.NaN;
+            String newClassification = beta35HitAcceptanceClassification(
+                    aimResult.finalTargetsObject(),
+                    finalTargetsSupport,
+                    finalMiss,
+                    visibleObjectCategory,
+                    metricType,
+                    contactGap,
+                    sideFaceGap,
+                    axisGap);
+            String failureLayer = beta35HitAcceptanceFailureLayer(newClassification, metricType);
+            String oldClassification = "BUTTON_CONTACT_GAP".equals(newClassification)
+                    ? "HIT_ACCEPTANCE_GREEN"
+                    : targetOnlyClassification;
+            rowBox[0] = new Beta35HitboxContactRow(rowId, newClassification, failureLayer);
+
+            System.out.println("JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED_ROW"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " objectBlockId=" + objectBlockId
+                    + " visibleObjectPos=" + objectPos.toShortString()
+                    + " visibleObjectState=" + objectState
+                    + " visibleObjectCategory=" + visibleObjectCategory
+                    + " supportCandidatePos=" + supportPos.toShortString()
+                    + " supportCandidateState=" + supportState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " slabHeightCategory=" + beta35SlabHeightCategory(supportState, supportDy, objectDy)
+                    + " metricType=" + metricType
+                    + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
+                    + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
+                    + " contactGap=" + beta35FormatDoubleOrNA(contactGap)
+                    + " sideFaceGap=" + beta35FormatDoubleOrNA(sideFaceGap)
+                    + " axisGap=" + beta35FormatDoubleOrNA(axisGap)
+                    + " aimZone=VISIBLE_BODY"
+                    + " initialCrosshairTarget=" + beta35FormatHit(aimResult.initialTarget())
+                    + " finalTarget=" + beta35FormatHit(aimResult.finalTarget())
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " oldClassification=" + oldClassification
+                    + " targetOnlyClassification=" + targetOnlyClassification
+                    + " newClassification=" + newClassification
+                    + " classification=" + newClassification
+                    + " failureLayer=" + failureLayer);
+        });
+        ctx.waitTick();
+        return rowBox[0];
+    }
+
+    private static void prepareBeta35HitboxApertureContactFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            BlockPos objectPos,
+            BlockState visibleObjectState
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = supportPos.getX() - 5; x <= supportPos.getX() + 5; x++) {
+                for (int y = supportPos.getY() - 8; y <= supportPos.getY() + 5; y++) {
+                    for (int z = supportPos.getZ() - 5; z <= supportPos.getZ() + 5; z++) {
+                        world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+
+            BlockPos compoundSourcePos = supportPos.west();
+            beta35PlaceCompoundFullBlockSupport(world, compoundSourcePos);
+            world.setBlockState(supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(
+                    world,
+                    supportPos,
+                    world.getBlockState(supportPos),
+                    compoundSourcePos,
+                    world.getBlockState(compoundSourcePos));
+            world.setBlockState(objectPos, visibleObjectState, net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, objectPos, world.getBlockState(objectPos));
+            world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
+            world.updateNeighbors(objectPos, world.getBlockState(objectPos).getBlock());
+        });
+    }
+
+    private static Beta35ApertureSummary runBeta35HitboxApertureRows(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int firstRowIndex,
+            String rowId,
+            Beta35SlabHeightSupportCase supportCase,
+            BlockState visibleObjectState,
+            BlockPos supportPos
+    ) {
+        BlockPos objectPos = supportPos.up();
+        prepareBeta35HitboxApertureContactFixture(
+                singleplayer,
+                supportPos,
+                objectPos,
+                visibleObjectState);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 4));
+
+        final Beta35ApertureSummary[] summaryBox = {
+                new Beta35ApertureSummary(0, 0, 0, 0, 1, "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                System.out.println("JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED_ROW"
+                        + " rowIndex=" + firstRowIndex
+                        + " rowId=" + rowId
+                        + " classification=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " reason=client_world_player_or_renderer_missing");
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportPos, supportState, supportDy);
+            VoxelShape outlineShape = objectState.getOutlineShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            VoxelShape collisionShape = objectState.getCollisionShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+            Vec3d center = beta35BoxCenter(outlineBox, objectPos);
+            double minX = outlineBox == null ? objectPos.getX() + 0.25d : outlineBox.minX;
+            double maxX = outlineBox == null ? objectPos.getX() + 0.75d : outlineBox.maxX;
+            double minY = outlineBox == null ? objectPos.getY() + 0.1d : outlineBox.minY;
+            double maxY = outlineBox == null ? objectPos.getY() + 0.9d : outlineBox.maxY;
+            double centerZ = center.z;
+            Vec3d[] aims = {
+                    center,
+                    new Vec3d(center.x, maxY - 0.01d, centerZ),
+                    new Vec3d(minX + 0.01d, center.y, centerZ),
+                    new Vec3d(center.x, minY - 0.02d, centerZ),
+                    beta35EmptyOverhangAimPoint(outlineBox, collisionBox, objectPos),
+                    new Vec3d(maxX + 0.08d, center.y, centerZ)
+            };
+            String[] zones = {
+                    "VISIBLE_BODY",
+                    "VISIBLE_TOP",
+                    "EDGE",
+                    "SUPPORT_SEAM",
+                    "EMPTY_OVERHANG",
+                    "NEAR_MISS"
+            };
+            boolean[] expectsObject = {true, true, true, true, false, false};
+            int green = 0;
+            int red = 0;
+            int apertureTooNarrow = 0;
+            String firstFailure = "NONE";
+            for (int i = 0; i < zones.length; i++) {
+                AimResult aimResult = beta35AimAt(mc, objectPos, aims[i], zones[i]);
+                boolean finalTargetsSupport = aimResult.finalTarget() instanceof BlockHitResult finalBlock
+                        && aimResult.finalTarget().getType() == HitResult.Type.BLOCK
+                        && finalBlock.getBlockPos().equals(supportPos);
+                String classification = beta35ApertureClassification(
+                        aimResult,
+                        finalTargetsSupport,
+                        expectsObject[i],
+                        zones[i]);
+                String failureLayer = beta35ApertureFailureLayer(classification);
+                if ("NONE".equals(failureLayer)) {
+                    green++;
+                } else {
+                    red++;
+                    if ("HITBOX_AIM_APERTURE_TOO_NARROW".equals(failureLayer)) {
+                        apertureTooNarrow++;
+                    }
+                    if ("NONE".equals(firstFailure)) {
+                        firstFailure = failureLayer;
+                    }
+                }
+                System.out.println("JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED_ROW"
+                        + " rowIndex=" + (firstRowIndex + i)
+                        + " rowId=" + rowId
+                        + " objectBlockId=minecraft:acacia_button"
+                        + " aimZone=" + zones[i]
+                        + " expectedOwner=" + (expectsObject[i] ? "visible_object" : "not_visible_object")
+                        + " visibleObjectPos=" + objectPos.toShortString()
+                        + " visibleObjectState=" + objectState
+                        + " supportCandidatePos=" + supportPos.toShortString()
+                        + " supportCandidateState=" + supportState
+                        + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                        + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                        + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
+                        + " hitVec=" + beta35FormatVec(aims[i])
+                        + " initialCrosshairTarget=" + beta35FormatHit(aimResult.initialTarget())
+                        + " finalTarget=" + beta35FormatHit(aimResult.finalTarget())
+                        + " finalTargetsObject=" + aimResult.finalTargetsObject()
+                        + " finalTargetsSupport=" + finalTargetsSupport
+                        + " classification=" + classification
+                        + " failureLayer=" + failureLayer);
+            }
+            summaryBox[0] = new Beta35ApertureSummary(
+                    zones.length,
+                    green,
+                    red,
+                    apertureTooNarrow,
+                    0,
+                    firstFailure);
+        });
+        ctx.waitTick();
+        return summaryBox[0];
+    }
+
+    private static String beta35HitAcceptanceMetricType(BlockState state) {
+        if (state == null) {
+            return "OWNER_ONLY";
+        }
+        if (SlabSupport.isSupportingSlab(state) || state.getBlock() instanceof SlabBlock) {
+            return "SUPPORT_TARGET";
+        }
+        if (state.getBlock() instanceof net.minecraft.block.ChainBlock) {
+            return "AXIS_CONTACT";
+        }
+        String id = net.minecraft.registry.Registries.BLOCK.getId(state.getBlock()).toString();
+        if (id.contains("button")) {
+            if (state.contains(Properties.BLOCK_FACE)
+                    && state.get(Properties.BLOCK_FACE) == BlockFace.FLOOR) {
+                return "FLOOR_CONTACT";
+            }
+            return "SIDE_FACE_CONTACT";
+        }
+        if (state.isOf(Blocks.TORCH) || state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT)) {
+            return "FLOOR_CONTACT";
+        }
+        if (state.getBlock() instanceof net.minecraft.block.TrapdoorBlock) {
+            return "SIDE_FACE_CONTACT";
+        }
+        return "OWNER_ONLY";
+    }
+
+    private static String beta35HitAcceptanceClassification(
+            boolean finalTargetsObject,
+            boolean finalTargetsSupport,
+            boolean finalMiss,
+            String visibleObjectCategory,
+            String metricType,
+            double contactGap,
+            double sideFaceGap,
+            double axisGap
+    ) {
+        if ("FLOOR_CONTACT".equals(metricType)
+                && Double.isFinite(contactGap)
+                && Math.abs(contactGap) > EPSILON) {
+            return "BUTTON".equals(visibleObjectCategory) ? "BUTTON_CONTACT_GAP" : "HIT_ACCEPTANCE_CONTACT_GAP";
+        }
+        if ("SIDE_FACE_CONTACT".equals(metricType)
+                && Double.isFinite(sideFaceGap)
+                && Math.abs(sideFaceGap) > EPSILON) {
+            return "HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP";
+        }
+        if ("AXIS_CONTACT".equals(metricType)) {
+            if (!Double.isFinite(axisGap)
+                    || (Double.isFinite(axisGap) && Math.abs(axisGap) > EPSILON)) {
+                return "CHAIN".equals(visibleObjectCategory)
+                        ? "CHAIN_AXIS_CONTACT_METRIC_MISSING"
+                        : "HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP";
+            }
+        }
+        if (!finalTargetsObject) {
+            if (finalMiss) {
+                return "HIT_ACCEPTANCE_MISS";
+            }
+            return finalTargetsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP";
+        }
+        return "HIT_ACCEPTANCE_GREEN";
+    }
+
+    private static String beta35HitAcceptanceFailureLayer(String classification, String metricType) {
+        if ("HIT_ACCEPTANCE_GREEN".equals(classification)) {
+            return "NONE";
+        }
+        if ("BUTTON_CONTACT_GAP".equals(classification)) {
+            return "BUTTON_FLOOR_CONTACT_DY_MISSING";
+        }
+        if ("HIT_ACCEPTANCE_CONTACT_GAP".equals(classification)) {
+            return "SLAB_HEIGHT_CONTACT_DY_MISSING";
+        }
+        if ("CHAIN_AXIS_CONTACT_METRIC_MISSING".equals(classification)) {
+            return "CHAIN_AXIS_CONTACT_METRIC_MISSING";
+        }
+        if ("HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP".equals(classification)) {
+            return "SIDE_ATTACHMENT_ACCEPTANCE_GAP";
+        }
+        if ("SUPPORT_TARGET".equals(metricType)) {
+            return "TRACER_METRIC_NOISE";
+        }
+        return classification;
+    }
+
+    private static String beta35ApertureClassification(
+            AimResult aimResult,
+            boolean finalTargetsSupport,
+            boolean expectedObject,
+            String aimZone
+    ) {
+        if (expectedObject) {
+            if (aimResult.finalTargetsObject()) {
+                return "APERTURE_GREEN";
+            }
+            return finalTargetsSupport ? "SUPPORT_STEAL" : "APERTURE_TOO_NARROW";
+        }
+        if ("EMPTY_OVERHANG".equals(aimZone) && aimResult.finalTargetsObject()) {
+            return "EMPTY_OVERHANG_STEAL";
+        }
+        return "APERTURE_GREEN";
+    }
+
+    private static String beta35ApertureFailureLayer(String classification) {
+        if ("APERTURE_GREEN".equals(classification)) {
+            return "NONE";
+        }
+        if ("SUPPORT_STEAL".equals(classification)
+                || "APERTURE_TOO_NARROW".equals(classification)
+                || "EMPTY_OVERHANG_STEAL".equals(classification)) {
+            return "HITBOX_AIM_APERTURE_TOO_NARROW";
+        }
+        return classification;
+    }
+
+    private record Beta35HitboxContactRow(
+            String rowId,
+            String classification,
+            String failureLayer
+    ) {
+    }
+
+    private record Beta35ApertureSummary(
+            int rows,
+            int green,
+            int red,
+            int apertureTooNarrowRows,
+            int fixtureMismatchRows,
+            String firstFailureLayer
+    ) {
+    }
+
+    /**
      * Focused Beta 3.5 RED/proof matrix for Julia's remaining generic slab-height hit acceptance gap.
      *
      * Gate: -Dslabbed.beta35SlabHeightHitAcceptanceRed=true
@@ -15093,10 +15613,6 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     && finalHit.getType() == HitResult.Type.BLOCK
                     && finalBlock.getBlockPos().equals(supportPos);
             boolean finalMiss = finalHit == null || finalHit.getType() == HitResult.Type.MISS;
-            String classification = finalTargetsObject ? "HIT_ACCEPTANCE_GREEN"
-                    : (finalMiss ? "HIT_ACCEPTANCE_MISS"
-                    : (finalTargetsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP"));
-            String failureLayer = finalTargetsObject ? "NONE" : classification;
             String targetOwner = finalTargetsObject ? "visible_object"
                     : (finalTargetsSupport ? "support_slab" : (finalMiss ? "MISS" : "unrelated_neighbor"));
             double targetDy = finalHit instanceof BlockHitResult finalBlock
@@ -15108,6 +15624,19 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     ? objectModelBottomY - supportVisibleTopY
                     : Double.NaN;
             String slabHeightCategory = beta35SlabHeightCategory(supportState, supportDy, objectDy);
+            String metricType = beta35HitAcceptanceMetricType(objectState);
+            double sideFaceGap = Double.NaN;
+            double axisGap = Double.NaN;
+            String classification = beta35HitAcceptanceClassification(
+                    finalTargetsObject,
+                    finalTargetsSupport,
+                    finalMiss,
+                    visibleObjectCategory,
+                    metricType,
+                    contactGap,
+                    sideFaceGap,
+                    axisGap);
+            String failureLayer = beta35HitAcceptanceFailureLayer(classification, metricType);
             String interactionResult = "NOT_CLICKED";
             if (finalHit instanceof BlockHitResult finalBlock && mc.interactionManager != null) {
                 ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, finalBlock);
@@ -15138,10 +15667,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
                     + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
                     + " slabHeightCategory=" + slabHeightCategory
+                    + " metricType=" + metricType
                     + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
                     + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
                     + " contactGap=" + beta35FormatDoubleOrNA(contactGap)
-                    + " sideFaceGap=N/A"
+                    + " sideFaceGap=" + beta35FormatDoubleOrNA(sideFaceGap)
+                    + " axisGap=" + beta35FormatDoubleOrNA(axisGap)
                     + " outlineBounds=" + beta35FormatBox(outlineBox)
                     + " raycastBounds=" + beta35FormatBox(raycastBox)
                     + " collisionBounds=" + beta35FormatBox(collisionBox)

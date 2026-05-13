@@ -12,6 +12,7 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.StairsBlock;
 import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.WallBlock;
+import net.minecraft.block.enums.BlockFace;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -121,6 +122,10 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 ? objectModelBottomY - supportVisibleTopY
                 : Double.NaN;
 
+        String visibleObjectCategory = visibleObjectCategory(visibleObjectState);
+        String metricType = contactMetricType(visibleObjectState);
+        double sideFaceGap = Double.NaN;
+        double axisGap = Double.NaN;
         boolean finalIsObject = finalTarget instanceof BlockHitResult finalBlock
                 && finalTarget.getType() == HitResult.Type.BLOCK
                 && finalBlock.getBlockPos().equals(visibleObjectPos);
@@ -128,10 +133,16 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 && finalTarget.getType() == HitResult.Type.BLOCK
                 && finalBlock.getBlockPos().equals(supportCandidatePos);
         boolean miss = finalTarget == null || finalTarget.getType() == HitResult.Type.MISS;
-        String classification = finalIsObject ? "HIT_ACCEPTANCE_GREEN"
-                : (miss ? "HIT_ACCEPTANCE_MISS"
-                : (finalIsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP"));
-        String failureLayer = finalIsObject ? "NONE" : classification;
+        String classification = classifyClientHit(
+                finalIsObject,
+                finalIsSupport,
+                miss,
+                visibleObjectCategory,
+                metricType,
+                contactGap,
+                sideFaceGap,
+                axisGap);
+        String failureLayer = failureLayerFor(classification, visibleObjectCategory, metricType);
         String slabHeightCategory = slabHeightCategory(supportCandidateState, supportDy, objectDy);
         String targetOwner = finalIsObject ? "visible_object"
                 : (finalIsSupport ? "support_slab" : (miss ? "MISS" : "unrelated_neighbor"));
@@ -156,15 +167,17 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                         + " targetOwner=" + targetOwner
                         + " visibleObjectPos=" + visibleObjectPos.toShortString()
                         + " visibleObjectState=" + visibleObjectState
-                        + " visibleObjectCategory=" + visibleObjectCategory(visibleObjectState)
+                        + " visibleObjectCategory=" + visibleObjectCategory
                         + " supportCandidatePos=" + supportCandidatePos.toShortString()
                         + " supportCandidateState=" + supportCandidateState
                         + " supportDy=" + fmt(supportDy)
                         + " targetDy=" + fmt(targetDy)
                         + " objectDy=" + fmt(objectDy)
                         + " slabHeightCategory=" + slabHeightCategory
+                        + " metricType=" + metricType
                         + " contactGap=" + fmt(contactGap)
-                        + " sideFaceGap=N/A"
+                        + " sideFaceGap=" + fmt(sideFaceGap)
+                        + " axisGap=" + fmt(axisGap)
                         + " eye=" + formatVec(eye)
                         + " rayEnd=" + formatVec(rayEnd)
                         + " diagnosticsOnly=true releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
@@ -241,10 +254,18 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
 
     private static BlockPos resolveVisibleObjectPos(World world, HitResult initialTarget, HitResult finalTarget) {
         BlockPos finalPos = hitBlockPos(finalTarget);
+        BlockPos finalAbove = visibleObjectAboveSupport(world, finalPos);
+        if (finalAbove != null) {
+            return finalAbove;
+        }
         if (finalPos != null && !world.getBlockState(finalPos).isAir()) {
             return finalPos;
         }
         BlockPos initialPos = hitBlockPos(initialTarget);
+        BlockPos initialAbove = visibleObjectAboveSupport(world, initialPos);
+        if (initialAbove != null) {
+            return initialAbove;
+        }
         if (initialPos != null && !world.getBlockState(initialPos).isAir()) {
             return initialPos;
         }
@@ -255,6 +276,19 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
             return initialPos.up();
         }
         return null;
+    }
+
+    private static BlockPos visibleObjectAboveSupport(World world, BlockPos pos) {
+        if (world == null || pos == null) {
+            return null;
+        }
+        BlockState state = world.getBlockState(pos);
+        BlockPos abovePos = pos.up();
+        BlockState aboveState = world.getBlockState(abovePos);
+        if (aboveState.isAir() || SlabSupport.isSupportingSlab(aboveState)) {
+            return null;
+        }
+        return SlabSupport.isSupportingSlab(state) ? abovePos : null;
     }
 
     private static BlockPos hitBlockPos(HitResult hit) {
@@ -324,6 +358,92 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
             return "BUTTON";
         }
         return Registries.BLOCK.getId(state.getBlock()).toString();
+    }
+
+    private static String contactMetricType(BlockState state) {
+        if (state == null) {
+            return "OWNER_ONLY";
+        }
+        if (SlabSupport.isSupportingSlab(state) || state.getBlock() instanceof SlabBlock) {
+            return "SUPPORT_TARGET";
+        }
+        if (state.getBlock() instanceof ChainBlock) {
+            return "AXIS_CONTACT";
+        }
+        String id = Registries.BLOCK.getId(state.getBlock()).toString();
+        if (id.contains("button")) {
+            if (state.contains(Properties.BLOCK_FACE)
+                    && state.get(Properties.BLOCK_FACE) == BlockFace.FLOOR) {
+                return "FLOOR_CONTACT";
+            }
+            return "SIDE_FACE_CONTACT";
+        }
+        if (state.isOf(Blocks.TORCH) || state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT)) {
+            return "FLOOR_CONTACT";
+        }
+        if (state.getBlock() instanceof TrapdoorBlock) {
+            return "SIDE_FACE_CONTACT";
+        }
+        return "OWNER_ONLY";
+    }
+
+    private static String classifyClientHit(
+            boolean finalIsObject,
+            boolean finalIsSupport,
+            boolean miss,
+            String visibleObjectCategory,
+            String metricType,
+            double contactGap,
+            double sideFaceGap,
+            double axisGap
+    ) {
+        if ("FLOOR_CONTACT".equals(metricType)
+                && Double.isFinite(contactGap)
+                && Math.abs(contactGap) > EPSILON) {
+            return "BUTTON".equals(visibleObjectCategory) ? "BUTTON_CONTACT_GAP" : "HIT_ACCEPTANCE_CONTACT_GAP";
+        }
+        if ("SIDE_FACE_CONTACT".equals(metricType)
+                && Double.isFinite(sideFaceGap)
+                && Math.abs(sideFaceGap) > EPSILON) {
+            return "HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP";
+        }
+        if ("AXIS_CONTACT".equals(metricType)) {
+            if (!Double.isFinite(axisGap)
+                    || (Double.isFinite(axisGap) && Math.abs(axisGap) > EPSILON)) {
+                return "CHAIN".equals(visibleObjectCategory)
+                        ? "CHAIN_AXIS_CONTACT_METRIC_MISSING"
+                        : "HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP";
+            }
+        }
+        if (!finalIsObject) {
+            if (miss) {
+                return "HIT_ACCEPTANCE_MISS";
+            }
+            return finalIsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP";
+        }
+        return "HIT_ACCEPTANCE_GREEN";
+    }
+
+    private static String failureLayerFor(String classification, String visibleObjectCategory, String metricType) {
+        if ("HIT_ACCEPTANCE_GREEN".equals(classification)) {
+            return "NONE";
+        }
+        if ("BUTTON_CONTACT_GAP".equals(classification)) {
+            return "BUTTON_FLOOR_CONTACT_DY_MISSING";
+        }
+        if ("HIT_ACCEPTANCE_CONTACT_GAP".equals(classification)) {
+            return "SLAB_HEIGHT_CONTACT_DY_MISSING";
+        }
+        if ("CHAIN_AXIS_CONTACT_METRIC_MISSING".equals(classification)) {
+            return "CHAIN_AXIS_CONTACT_METRIC_MISSING";
+        }
+        if ("HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP".equals(classification)) {
+            return "SIDE_ATTACHMENT_ACCEPTANCE_GAP";
+        }
+        if ("SUPPORT_TARGET".equals(metricType)) {
+            return "TRACER_METRIC_NOISE";
+        }
+        return classification;
     }
 
     private static String slabHeightCategory(BlockState supportState, double supportDy, double objectDy) {

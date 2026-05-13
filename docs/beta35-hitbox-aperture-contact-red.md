@@ -1,0 +1,36 @@
+# Beta 3.5 Hitbox Aperture Contact RED Proof
+
+Diagnostic correction slice after `63a0e32` / `save/beta35-slab-height-hit-acceptance-red`.
+
+Evidence folder: `tmp/beta35-hitbox-aperture-contact-red-63a0e32/`.
+
+## Why
+
+Julia's live retest showed the `63a0e32` slab-height hit acceptance matrix was a false green. The tracer logged accepted targets but did not fail nonzero contact metrics, and it did not measure aim aperture. The visible issue is player feel: hitboxes are finicky and require weird aim around some objects.
+
+Concrete live false green: `minecraft:acacia_button[face=floor]` on `minecraft:stone_slab[type=top]` reported `supportDy=-1.000000`, `objectDy=-0.500000`, `contactGap=0.500000`, `classification=HIT_ACCEPTANCE_GREEN`, `failureLayer=NONE`.
+
+## Added
+
+- Corrected metric-first classification in the slab-height tracer.
+- Metric type field: `FLOOR_CONTACT`, `SIDE_FACE_CONTACT`, `AXIS_CONTACT`, `OWNER_ONLY`, or `SUPPORT_TARGET`.
+- Corrected proof flag: `-Dslabbed.beta35HitboxApertureContactRed=true`.
+- Row marker: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED_ROW`.
+- Summary marker: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY`.
+- Aim zones: `VISIBLE_BODY`, `VISIBLE_TOP`, `EDGE`, `SUPPORT_SEAM`, `EMPTY_OVERHANG`, `NEAR_MISS`.
+
+## Result
+
+Corrected local proof:
+
+`JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=2 red=6 buttonContactGapRows=1 chainMetricGapRows=1 supportMetricNoiseRows=0 apertureTooNarrowRows=4 fixtureMismatchRows=0 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED`
+
+Proven layers:
+
+- `BUTTON_FLOOR_CONTACT_DY_MISSING`: floor acacia button has `contactGap=0.500000` at `supportDy=-1.000000`.
+- `CHAIN_AXIS_CONTACT_METRIC_MISSING`: chain needs an axis/contact metric before it can be classified green.
+- `HITBOX_AIM_APERTURE_TOO_NARROW`: visible body, top, edge, and support seam rows miss in the replay fixture.
+
+## Scope
+
+No gameplay fix was implemented. No global hit tolerance was widened. No server accept bypass was added. No global collision, solidity, or sturdy-face behavior was changed. No broad all-item support was attempted. No release audit was run, and no release tag was moved.
