@@ -3,6 +3,7 @@
   "package": "com.slabbed.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "Beta35FenceWallLiveInspectTickMixin",
     "Beta4ManualLiveInteractionTraceMixin",
     "Beta4ManualLiveClientTickTraceMixin",
     "Beta35LiveTorchDualTraceInteractionMixin",
