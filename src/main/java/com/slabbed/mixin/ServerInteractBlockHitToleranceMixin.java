@@ -3,6 +3,7 @@ package com.slabbed.mixin;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.Beta4ManualLiveTrace;
+import com.slabbed.util.Beta35FenceWallLiveInspectRecorder;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.Block;
@@ -104,6 +105,12 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         Vec3d loweredSameCellSlabMergeCenter = null;
         if (blockPos instanceof BlockPos pos && player != null && packet != null) {
             loweredSameCellSlabMergeCenter = slabbed$loweredSameCellSlabMergeValidationCenter(pos, packet);
+            Beta35FenceWallLiveInspectRecorder.logServerTolerance(
+                    player.getEntityWorld(),
+                    player,
+                    packet.getBlockHitResult(),
+                    player.getStackInHand(packet.getHand()),
+                    center);
             slabbed$logRepeatMergeTolerance(pos, packet, center, loweredSameCellSlabMergeCenter);
         }
         if (loweredSameCellSlabMergeCenter != null) {
