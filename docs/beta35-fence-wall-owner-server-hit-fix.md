@@ -75,3 +75,11 @@ Julia's live acceptance after `aa66efd` kept server validation green (`SERVER_HI
 The follow-up stack-contact slice fixes only that fence/wall-family stack dy path. The focused proof now reports `JULIA_BETA35_FENCE_WALL_STACK_CONTACT_SUMMARY outcome=GREEN ... failureLayer=NONE`, with wall-on-wall and fence stack equivalents green.
 
 No server hit tolerance rewrite, global tolerance widening, release audit, release tag movement, or all-item expansion is included.
+
+## Follow-Up: Visual Hitbox / Stack Aim
+
+Julia's live acceptance after `5f94ed5` kept server validation green (`SERVER_HIT_TOO_FAR=0`) and stack contact green, but showed a remaining visible issue: fence/wall hitboxes appeared above the model and stack aim felt like it required the empty overhang.
+
+The follow-up visual-hitbox slice changes the fence/wall visual selection path, not server tolerance. Lowered fence/wall outline selection now follows the visual outline/raycast body instead of the tall collision shape, and the owner scan still preserves deeply lowered visible fence/wall/anvil owners. Collision overhang remains logged separately as `COLLISION_OVERHANG`.
+
+No server hit tolerance change, global tolerance widening, global collision lowering, release audit, release tag movement, or all-item expansion is included.

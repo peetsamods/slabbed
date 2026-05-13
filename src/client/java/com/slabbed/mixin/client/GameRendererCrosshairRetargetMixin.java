@@ -476,6 +476,12 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 bestHit = hit;
                 bestDist2 = hit.getPos().squaredDistanceTo(eye);
             }
+
+            hit = slabbed$raycastBeta35HitboxOwnerObject(world, cam, eye, end, samplePos.up(2), bestDist2);
+            if (hit != null) {
+                bestHit = hit;
+                bestDist2 = hit.getPos().squaredDistanceTo(eye);
+            }
         }
         return bestHit;
     }

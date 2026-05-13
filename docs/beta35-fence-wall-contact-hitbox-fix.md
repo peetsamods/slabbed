@@ -69,3 +69,11 @@ Julia's live acceptance after the owner/server-hit fix (`aa66efd`) proved the sl
 The follow-up stack-contact slice extends the same fence/wall contact dy authority to legal lowered fence/wall support states. The focused proof now reports wall-on-wall, fence-on-fence, wall-on-fence, and fence-on-wall stack rows green with `contactGap=0.000000` and `triadCoLocated=yes`.
 
 No server hit tolerance change, release audit, release tag movement, pane support, sign/door/trapdoor work, or all-item claim is included.
+
+## Follow-Up: Visual Hitbox / Stack Aim
+
+Julia's live acceptance after the stack-contact fix (`5f94ed5`) showed the remaining wall/fence problem was not contact dy or server tolerance. The visible complaint was hitbox/selection overhang and awkward stack aim.
+
+The visual-hitbox follow-up separates visual triad from collision: model/outline/raycast are the visual selection authority, while vanilla collision height is logged separately as collision overhang. Lowered fence/wall outline selection no longer uses collision as the outline. Torch-support contact rows are classified as invalid support/tracer noise unless a legal placement proof says otherwise.
+
+No contact dy rewrite, server hit tolerance change, global collision lowering, release audit, release tag movement, pane support, sign/door/trapdoor work, or all-item claim is included.
