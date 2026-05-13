@@ -116,21 +116,38 @@ public final class Beta35FenceWallLiveInspectRecorder {
         boolean contactGreen = Double.isFinite(contactGap) && Math.abs(contactGap) <= EPSILON;
         boolean triadGreen = sameBox(modelBox, outlineBox) && sameBox(modelBox, raycastBox)
                 && (collisionBox == null || sameBox(modelBox, collisionBox));
+        boolean connectedWallShapeLimit = contactGreen
+                && !triadGreen
+                && isConnectedVanillaWallShapeLimit(objectState, objectDy, supportDy, modelBox, outlineBox, raycastBox);
         boolean ownerGreen = finalTarget instanceof BlockHitResult finalBlock
                 && finalTarget.getType() == HitResult.Type.BLOCK
                 && finalBlock.getBlockPos().equals(objectPos);
+        boolean outOfScopeHeldItemOwnerGap = contactGreen
+                && (triadGreen || connectedWallShapeLimit)
+                && !ownerGreen
+                && !isRelevantHeldItem(held);
 
         String contactClassification = contactGreen ? "LIVE_CONTACT_GREEN" : "LIVE_CONTACT_GAP";
-        String triadClassification = triadGreen ? "LIVE_TRIAD_GREEN" : "LIVE_TRIAD_MISMATCH";
-        String ownerClassification = ownerGreen ? "LIVE_OWNER_GREEN" : "LIVE_OWNER_GAP";
+        String triadClassification = triadGreen
+                ? "LIVE_TRIAD_GREEN"
+                : (connectedWallShapeLimit ? "TRACE_SHAPE_FALSE_POSITIVE" : "LIVE_TRIAD_MISMATCH");
+        String ownerClassification = ownerGreen
+                ? "LIVE_OWNER_GREEN"
+                : (outOfScopeHeldItemOwnerGap ? "OUT_OF_SCOPE_HELD_ITEM_OWNER_GAP" : "LIVE_OWNER_GAP");
         String classification;
         String failureLayer;
         if (!contactGreen) {
             classification = "LIVE_CONTACT_GAP";
             failureLayer = "LIVE_CONTACT_GAP";
+        } else if (connectedWallShapeLimit) {
+            classification = "LIVE_CONNECTED_WALL_TRIAD_FALSE_POSITIVE";
+            failureLayer = ownerGreen ? "TRACE_SHAPE_FALSE_POSITIVE" : ownerClassification;
         } else if (!triadGreen) {
             classification = "LIVE_TRIAD_MISMATCH";
             failureLayer = "LIVE_TRIAD_MISMATCH";
+        } else if (outOfScopeHeldItemOwnerGap) {
+            classification = "OUT_OF_SCOPE_HELD_ITEM_OWNER_GAP";
+            failureLayer = "OUT_OF_SCOPE_HELD_ITEM_OWNER_GAP";
         } else if (!ownerGreen) {
             classification = "LIVE_OWNER_GAP";
             failureLayer = "LIVE_OWNER_GAP";
@@ -388,6 +405,27 @@ public final class Beta35FenceWallLiveInspectRecorder {
                 && (state.getBlock() instanceof FenceBlock
                         || state.getBlock() instanceof WallBlock
                         || state.isOf(Blocks.ANVIL));
+    }
+
+    private static boolean isConnectedVanillaWallShapeLimit(
+            BlockState state,
+            double objectDy,
+            double supportDy,
+            Box modelBox,
+            Box outlineBox,
+            Box raycastBox
+    ) {
+        if (state == null
+                || !(state.getBlock() instanceof WallBlock)
+                || Math.abs(objectDy) > EPSILON
+                || Math.abs(supportDy) > EPSILON
+                || modelBox == null
+                || outlineBox == null
+                || raycastBox != null) {
+            return false;
+        }
+        String encodedState = state.toString();
+        return encodedState.contains("=low") || encodedState.contains("=tall");
     }
 
     private static double supportVisibleTopY(BlockPos supportPos, BlockState supportState, double supportDy) {
