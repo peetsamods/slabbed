@@ -310,9 +310,6 @@ public abstract class SlabSupportStateMixin {
         if (yOff != 0.0) {
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
-            } else if (slabbed$isLoweredBeta35FenceWallVariantContactObject(self, yOff)) {
-                cir.setReturnValue(self.getCollisionShape(world, pos, ctx));
-                return;
             }
             shape = shape.offset(0.0, yOff, 0.0);
             changed = true;
