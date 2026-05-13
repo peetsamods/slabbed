@@ -81,3 +81,11 @@ Torch-support contact rows are classified as `TRACER_SUPPORT_NOISE` / `INVALID_S
 - `git diff --check` -> clean
 
 Release audit remains paused pending Julia live acceptance. No release tag was moved. Scope remains fence/wall visual selection/stack aim plus existing fence/wall/anvil owner diagnostics and floor_torch/candle/flower_pot regressions. There is no all-item claim.
+
+## Follow-Up Julia Live Scope Correction
+
+After `eec3bc0`, Julia's live verdict was near-acceptance for fence/wall: "everything looks almost perfect." The remaining issue is at one slab height and is not bounded to lantern, chain, or button. Those are examples from the video; the real question is generic visible-target hit acceptance for arbitrary held-item categories at that slab height.
+
+The follow-up diagnostic slice adds `-Dslabbed.beta35SlabHeightHitAcceptance=true` and focused matrix proof `-Dslabbed.beta35SlabHeightHitAcceptanceRed=true`. It is tracing/proof only: no gameplay fix, no category-specific fix, no all-item claim, no release audit, and no release tag movement.
+
+Latest local focused matrix result: `JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_SUMMARY outcome=NOT_REPRODUCED rows=51 green=51 red=0 failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH`. That means the local fixture did not reproduce Julia's one-height live issue; the next slice should capture or replay Julia's exact live fixture before any generic or category-specific fix.

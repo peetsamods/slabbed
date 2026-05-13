@@ -5,6 +5,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.runtime.LoweredSideSlabRetargeter;
 import com.slabbed.util.Beta35FenceWallLiveInspectRecorder;
+import com.slabbed.util.Beta35SlabHeightHitAcceptanceRecorder;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockState;
@@ -1234,6 +1235,16 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 anchoredDecision,
                 sideSlabRetargetFired);
         Beta35FenceWallLiveInspectRecorder.recordClientTarget(
+                world,
+                cam,
+                client.player,
+                eye,
+                end,
+                held,
+                initialTarget,
+                client.crosshairTarget,
+                anchoredDecision);
+        Beta35SlabHeightHitAcceptanceRecorder.recordClientTarget(
                 world,
                 cam,
                 client.player,

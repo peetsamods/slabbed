@@ -4,6 +4,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.Beta4ManualLiveTrace;
 import com.slabbed.util.Beta35FenceWallLiveInspectRecorder;
+import com.slabbed.util.Beta35SlabHeightHitAcceptanceRecorder;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.Block;
@@ -108,6 +109,13 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             loweredSameCellSlabMergeCenter = slabbed$loweredSameCellSlabMergeValidationCenter(pos, packet);
             beta35ShiftedCenter = slabbed$beta35ShiftedValidationCenter(pos, packet, center);
             Beta35FenceWallLiveInspectRecorder.logServerTolerance(
+                    player.getEntityWorld(),
+                    player,
+                    packet.getBlockHitResult(),
+                    player.getStackInHand(packet.getHand()),
+                    center,
+                    beta35ShiftedCenter);
+            Beta35SlabHeightHitAcceptanceRecorder.logServerTolerance(
                     player.getEntityWorld(),
                     player,
                     packet.getBlockHitResult(),
