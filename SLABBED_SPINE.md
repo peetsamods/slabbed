@@ -20,8 +20,10 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current operating base before compound visible slab lane law slice: `d7ef534`
-- Current operating base tag before compound visible slab lane law slice: `save/beta4-manual-live-delayed-final-trace`
+- Current savepoint: Beta 3.5 fence/wall visual hitbox stack-aim fix at `save/beta35-fence-wall-visual-hitbox-stack-aim`
+- Previous operating base for this slice: `5f94ed5` / `save/beta35-fence-wall-stack-contact`
+- Older compound visible slab lane law base: `d7ef534`
+- Older compound visible slab lane law base tag: `save/beta4-manual-live-delayed-final-trace`
 - Prior live-first classifier base: `767f735` / `save/beta4-live-first-seam-owner-classifier`
 - Reverted failed classifier: `763434e` / `save/beta4-seam-owner-classifier`
 - Stale, provenance-confusing release tag for this issue: `release/0.2.0-beta.4`
@@ -33,15 +35,15 @@ Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it 
 Tracked tree is clean.
 `tmp/` may remain intentionally untracked and must not be staged.
 
-## Current Beta 3.5 fence/wall owner/server-hit status
+## Current Beta 3.5 fence/wall visual hitbox stack-aim status
 
-Operating base before this owner/server-hit slice: `fbbbd68` / `save/beta35-fence-wall-live-reject-tracer` on `integrate/phase19-into-side-slab-top-support`.
+Operating base before this visual-hitbox slice: `5f94ed5` / `save/beta35-fence-wall-stack-contact` on `integrate/phase19-into-side-slab-top-support`.
 
-The `fbbbd68` live tracer worked. Julia's live capture proved fence/wall contact and triad are green (`LIVE_CONTACT_GREEN=2058`, `LIVE_CONTACT_GAP=0`, `LIVE_TRIAD_MISMATCH=0`) but still showed `LIVE_OWNER_GAP=1495` and two captured `SERVER_HIT_TOO_FAR` rows. Current fixed classification for the focused reproduction is `failureLayer=NONE`; previous failure layer was `LIVE_OWNER_GAP_PLUS_SERVER_SHIFTED_HIT_TOLERANCE`.
+Julia's post-`5f94ed5` live verdict accepted the prior contact/server-hit improvements as much better, with the remaining visible issue that fence/wall selection felt above the model and stacking required aiming into an empty overhang. Current focused classification is `failureLayer=NONE`; previous failure layer was `FENCE_WALL_VISUAL_HITBOX_OVERHANG_STACK_AIM`.
 
-Narrow production change: `GameRendererCrosshairRetargetMixin` now lets the proven Beta 3.5 visible object owner set (`FenceBlock` / `WallBlock` family plus exact anvil) win over side-slab scan when the corrected visible object shape is intersected. `ServerInteractBlockHitToleranceMixin` validates legal Slabbed-lowered fence/wall/anvil target hits against the shifted Slabbed center when the shifted center is still inside vanilla component tolerance. This does not globally widen hit tolerance.
+Narrow production change: lowered Beta 3.5 fence/wall outline selection no longer uses the tall collision shape as the visual outline. Visual selection/raycast/stack aim now follow the visible outline/raycast body; vanilla fence/wall collision height remains separate and is logged as `COLLISION_OVERHANG`. `GameRendererCrosshairRetargetMixin` also extends the existing Beta 3.5 object-owner scan to check one more upward candidate so deeply lowered visible owners are still found after the outline stops using collision. This remains gated to the proven fence/wall/anvil owner set and is not a broad owner rescue.
 
-Focused proof flag: `-Dslabbed.beta35FenceWallOwnerServerHit=true -Dslabbed.beta35FenceWallLiveInspect=true`. Required green marker: `JULIA_BETA35_FENCE_WALL_OWNER_SERVER_HIT_GREEN`. The reproduced row now reports `finalDecision=object-shape-owner-preserve`, `ownerClassification=LIVE_OWNER_GREEN`, `SERVER_SHIFTED_HIT_GREEN`, `contactGap=0.000000`, `triadCoLocated=yes`, and `failureLayer=NONE`.
+Focused proof flag: `-Dslabbed.beta35FenceWallVisualHitboxStackAim=true -Dslabbed.beta35FenceWallLiveInspect=true`. Required green marker: `JULIA_BETA35_FENCE_WALL_VISUAL_HITBOX_STACK_AIM_GREEN`. The birch fence row reports `classification=VISUAL_HITBOX_GREEN`, `visibleBodyAim=STACK_AIM_GREEN`, `emptyOverhang=DOES_NOT_STEAL_OWNER`, `contactGap=0.000000`, `triadCoLocated=yes`, and `failureLayer=NONE`. The connected wall row is classified as `COLLISION_OVERHANG_NOT_VISUAL_TRIAD`, not as a visual triad failure.
 
 Julia live command:
 
@@ -49,7 +51,7 @@ Julia live command:
 JAVA_TOOL_OPTIONS="-Dslabbed.beta35FenceWallLiveInspect=true" ./gradlew --no-daemon runClient --console plain
 ```
 
-No contact dy rewrite was made in this slice. No release audit was run, no release tag was moved, and scope remains fence/wall/anvil owner/server-hit behavior plus existing floor_torch/candle/flower_pot regression status. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain out of scope. Savepoint target: `save/beta35-fence-wall-owner-server-hit`.
+No contact dy rewrite or server hit tolerance change was made in this slice. No global collision lowering was made. No release audit was run, no release tag was moved, and scope remains fence/wall visual selection/stack aim plus existing fence/wall/anvil owner diagnostics and floor_torch/candle/flower_pot regression status. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain out of scope. Savepoint tag: `save/beta35-fence-wall-visual-hitbox-stack-aim`.
 
 ## Current product goal
 

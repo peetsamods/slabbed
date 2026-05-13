@@ -59,9 +59,17 @@ Fence stack equivalents are green for fence-on-fence, wall-on-fence, and fence-o
 
 ## Residual Jank Classification
 
-The residual connected-wall triad bucket is classified as `TRACE_FALSE_POSITIVE` / vanilla connected-wall shape limit for now: the rows have contact green and dy `0.000000`, but connected wall model/collision height can exceed outline/raycast reporting (`raycastBounds=null`). This slice does not patch that path.
+The residual connected-wall triad bucket is now classified as `COLLISION_OVERHANG_NOT_VISUAL_TRIAD`: the rows have contact green and visual outline/model alignment, while vanilla fence/wall collision can extend above the visible selection body. This is not treated as visual triad green unless outline/raycast/model agree; collision is logged separately.
 
 Residual owner gaps are classified as `OUT_OF_SCOPE_HELD_ITEM_OWNER_GAP_OR_NEXT_FOCUSED_RED`: top buckets from Julia's trace involve held chain/stairs/trapdoor/button or anvil-plus-chain contexts outside this slice. If post-fix live capture still shows in-scope fence/wall/anvil visible-owner rows with legal support, that should become a separate focused RED proof.
+
+## Follow-Up: Visual Hitbox / Stack Aim
+
+Julia's post-`5f94ed5` video showed that stack contact was fixed, but fence/wall selection still felt above the visible model and stacking could require aiming into the empty collision overhang.
+
+The follow-up visual-hitbox slice keeps collision tall for vanilla entity blocking, but separates collision from visual selection/raycast/stack aim. Lowered fence/wall outline selection no longer returns the collision shape. Focused proof `-Dslabbed.beta35FenceWallVisualHitboxStackAim=true -Dslabbed.beta35FenceWallLiveInspect=true` reports birch fence `VISUAL_HITBOX_GREEN`, visible-body stack aim green, empty-overhang no owner steal, connected wall `COLLISION_OVERHANG_NOT_VISUAL_TRIAD`, and torch-support gaps as `TRACER_SUPPORT_NOISE`.
+
+No contact dy rewrite, server hit tolerance change, global collision lowering, release audit, release tag movement, or all-item expansion is included.
 
 ## Regression Gates
 

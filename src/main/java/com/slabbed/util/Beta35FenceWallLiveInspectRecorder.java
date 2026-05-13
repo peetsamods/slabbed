@@ -107,42 +107,47 @@ public final class Beta35FenceWallLiveInspectRecorder {
         Box outlineBox = worldBox(objectState.getOutlineShape(world, objectPos, shapeContext), objectPos);
         Box raycastBox = worldBox(objectState.getRaycastShape(world, objectPos), objectPos);
         Box collisionBox = worldBox(objectState.getCollisionShape(world, objectPos, shapeContext), objectPos);
-        Box modelBox = collisionBox != null ? collisionBox : outlineBox;
+        Box modelBox = outlineBox;
         double objectModelBottomY = modelBox == null ? Double.NaN : modelBox.minY;
         double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
                 ? objectModelBottomY - supportVisibleTopY
                 : Double.NaN;
+        double collisionOverhangY = collisionOverhangY(modelBox, collisionBox);
 
+        boolean invalidSupportCandidate = !isLegalFenceWallSupportCandidate(world, supportPos, supportState);
         boolean contactGreen = Double.isFinite(contactGap) && Math.abs(contactGap) <= EPSILON;
-        boolean triadGreen = sameBox(modelBox, outlineBox) && sameBox(modelBox, raycastBox)
-                && (collisionBox == null || sameBox(modelBox, collisionBox));
+        boolean visualTriadGreen = modelBox != null
+                && sameBox(modelBox, outlineBox)
+                && (raycastBox == null || sameBox(modelBox, raycastBox));
+        boolean collisionOverhang = collisionOverhangY > EPSILON;
         boolean connectedWallShapeLimit = contactGreen
-                && !triadGreen
+                && collisionOverhang
                 && isConnectedVanillaWallShapeLimit(objectState, objectDy, supportDy, modelBox, outlineBox, raycastBox);
         boolean ownerGreen = finalTarget instanceof BlockHitResult finalBlock
                 && finalTarget.getType() == HitResult.Type.BLOCK
                 && finalBlock.getBlockPos().equals(objectPos);
         boolean outOfScopeHeldItemOwnerGap = contactGreen
-                && (triadGreen || connectedWallShapeLimit)
+                && (visualTriadGreen || collisionOverhang)
                 && !ownerGreen
                 && !isRelevantHeldItem(held);
 
-        String contactClassification = contactGreen ? "LIVE_CONTACT_GREEN" : "LIVE_CONTACT_GAP";
-        String triadClassification = triadGreen
-                ? "LIVE_TRIAD_GREEN"
-                : (connectedWallShapeLimit ? "TRACE_SHAPE_FALSE_POSITIVE" : "LIVE_TRIAD_MISMATCH");
+        String contactClassification = contactGreen ? "LIVE_CONTACT_GREEN"
+                : (invalidSupportCandidate ? "INVALID_SUPPORT_CANDIDATE" : "LIVE_CONTACT_GAP");
+        String triadClassification = collisionOverhang
+                ? "COLLISION_OVERHANG"
+                : (visualTriadGreen ? "LIVE_VISUAL_TRIAD_GREEN" : "LIVE_TRIAD_MISMATCH");
         String ownerClassification = ownerGreen
                 ? "LIVE_OWNER_GREEN"
                 : (outOfScopeHeldItemOwnerGap ? "OUT_OF_SCOPE_HELD_ITEM_OWNER_GAP" : "LIVE_OWNER_GAP");
         String classification;
         String failureLayer;
-        if (!contactGreen) {
+        if (!contactGreen && invalidSupportCandidate) {
+            classification = "INVALID_SUPPORT_CANDIDATE";
+            failureLayer = "TRACER_SUPPORT_NOISE";
+        } else if (!contactGreen) {
             classification = "LIVE_CONTACT_GAP";
             failureLayer = "LIVE_CONTACT_GAP";
-        } else if (connectedWallShapeLimit) {
-            classification = "LIVE_CONNECTED_WALL_TRIAD_FALSE_POSITIVE";
-            failureLayer = ownerGreen ? "TRACE_SHAPE_FALSE_POSITIVE" : ownerClassification;
-        } else if (!triadGreen) {
+        } else if (!visualTriadGreen) {
             classification = "LIVE_TRIAD_MISMATCH";
             failureLayer = "LIVE_TRIAD_MISMATCH";
         } else if (outOfScopeHeldItemOwnerGap) {
@@ -151,6 +156,12 @@ public final class Beta35FenceWallLiveInspectRecorder {
         } else if (!ownerGreen) {
             classification = "LIVE_OWNER_GAP";
             failureLayer = "LIVE_OWNER_GAP";
+        } else if (connectedWallShapeLimit) {
+            classification = "COLLISION_OVERHANG_NOT_VISUAL_TRIAD";
+            failureLayer = "NONE";
+        } else if (collisionOverhang) {
+            classification = "COLLISION_OVERHANG";
+            failureLayer = "NONE";
         } else {
             classification = "LIVE_CONTACT_GREEN";
             failureLayer = "NONE";
@@ -190,16 +201,21 @@ public final class Beta35FenceWallLiveInspectRecorder {
                         + " raycastMaxY=" + fmt(raycastBox == null ? Double.NaN : raycastBox.maxY)
                         + " collisionMinY=" + fmt(collisionBox == null ? Double.NaN : collisionBox.minY)
                         + " collisionMaxY=" + fmt(collisionBox == null ? Double.NaN : collisionBox.maxY)
+                        + " visualSelectionMinY=" + fmt(modelBox == null ? Double.NaN : modelBox.minY)
+                        + " visualSelectionMaxY=" + fmt(modelBox == null ? Double.NaN : modelBox.maxY)
+                        + " collisionOverhangY=" + fmt(collisionOverhangY)
                         + " supportPos=" + supportPos.toShortString()
                         + " supportState=" + supportState
                         + " supportDy=" + fmt(supportDy)
                         + " supportVisibleTopY=" + fmt(supportVisibleTopY)
                         + " objectModelBottomY=" + fmt(objectModelBottomY)
                         + " contactGap=" + fmt(contactGap)
+                        + " supportCandidateClassification=" + (invalidSupportCandidate ? "TRACER_SUPPORT_NOISE" : "LEGAL_SUPPORT_CANDIDATE")
                         + " outlineBounds=" + formatBox(outlineBox)
                         + " raycastBounds=" + formatBox(raycastBox)
+                        + " collisionBounds=" + formatBox(collisionBox)
                         + " modelBounds=" + formatBox(modelBox)
-                        + " triadCoLocated=" + (triadGreen ? "yes" : "no")
+                        + " triadCoLocated=" + (visualTriadGreen ? "yes" : "no")
                         + " diagnosticsOnly=true releaseAudit=NOT_RUN releaseTagMoved=false");
     }
 
@@ -349,6 +365,13 @@ public final class Beta35FenceWallLiveInspectRecorder {
                     bestDist2 = box.getCenter().squaredDistanceTo(eye);
                 }
             }
+            bestPos = chooseCloserCandidate(world, shapeContext, eye, rayEnd, samplePos.up(2), bestPos, bestDist2);
+            if (bestPos != null) {
+                Box box = worldBox(world.getBlockState(bestPos).getOutlineShape(world, bestPos, shapeContext), bestPos);
+                if (box != null) {
+                    bestDist2 = box.getCenter().squaredDistanceTo(eye);
+                }
+            }
         }
         return bestPos;
     }
@@ -426,6 +449,22 @@ public final class Beta35FenceWallLiveInspectRecorder {
         }
         String encodedState = state.toString();
         return encodedState.contains("=low") || encodedState.contains("=tall");
+    }
+
+    private static boolean isLegalFenceWallSupportCandidate(World world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        return SlabSupport.isSupportingSlab(state)
+                || SlabSupport.isBeta35FenceWallVariantContactObject(state)
+                || state.isSolidBlock(world, pos);
+    }
+
+    private static double collisionOverhangY(Box visualBox, Box collisionBox) {
+        if (visualBox == null || collisionBox == null) {
+            return 0.0d;
+        }
+        return Math.max(0.0d, collisionBox.maxY - visualBox.maxY);
     }
 
     private static double supportVisibleTopY(BlockPos supportPos, BlockState supportState, double supportDy) {

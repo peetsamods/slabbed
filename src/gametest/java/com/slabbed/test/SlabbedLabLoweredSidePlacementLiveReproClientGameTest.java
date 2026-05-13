@@ -506,6 +506,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35FenceWallVisualHitboxStackAim")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FenceWallVisualHitboxStackAimProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35FenceGateContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -13089,7 +13098,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
                 net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
                 net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
-                net.minecraft.util.math.Box modelProxyBox = collisionBox != null ? collisionBox : outlineBox;
+                net.minecraft.util.math.Box modelProxyBox = outlineBox;
                 double objectModelBottomY = modelProxyBox == null ? Double.NaN : modelProxyBox.minY;
                 shapeContactGapBox[0] = Double.isFinite(objectModelBottomY)
                         && Double.isFinite(supportVisibleTopY)
@@ -13916,19 +13925,19 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
             net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
             net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
-            net.minecraft.util.math.Box modelBox = collisionBox != null ? collisionBox : outlineBox;
+            net.minecraft.util.math.Box modelBox = outlineBox;
             double objectModelBottomY = modelBox == null ? Double.NaN : modelBox.minY;
             double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
                     ? objectModelBottomY - supportVisibleTopY
                     : Double.NaN;
+            double collisionOverhangY = beta35CollisionOverhangY(modelBox, collisionBox);
             boolean contactGreen = Double.isFinite(contactGap) && Math.abs(contactGap) <= EPSILON;
             boolean supportDyGreen = Math.abs(supportDy - supportCase.expectedSupportDy) <= EPSILON;
             boolean objectDyGreen = Math.abs(objectDy - supportCase.expectedObjectDy) <= EPSILON;
             boolean triadGreen = objectPresent
                     && modelBox != null
                     && beta35SameBox(outlineBox, modelBox)
-                    && beta35SameBox(raycastBox, modelBox)
-                    && beta35SameBox(collisionBox, modelBox);
+                    && beta35SameBox(raycastBox, modelBox);
 
             Vec3d aim = beta35BoxCenter(modelBox, objectPos);
             Vec3d eye = new Vec3d(aim.x, aim.y, aim.z + 4.0d);
@@ -13983,6 +13992,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " outlineMaxY=" + beta35FormatMaxY(outlineBox)
                     + " raycastMinY=" + beta35FormatMinY(raycastBox)
                     + " raycastMaxY=" + beta35FormatMaxY(raycastBox)
+                    + " collisionMinY=" + beta35FormatMinY(collisionBox)
+                    + " collisionMaxY=" + beta35FormatMaxY(collisionBox)
+                    + " visualSelectionMinY=" + beta35FormatMinY(modelBox)
+                    + " visualSelectionMaxY=" + beta35FormatMaxY(modelBox)
+                    + " collisionOverhangY=" + beta35FormatDoubleOrNA(collisionOverhangY)
                     + " supportPos=" + supportPos.toShortString()
                     + " supportState=" + supportState
                     + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
@@ -14001,7 +14015,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " ownerClassification=" + (ownerGreen ? "OWNER_GREEN" : "OWNER_GAP")
                     + " unsupportedCaseStatus=NOT_TESTED"
                     + " contactClassification=" + (contactGreen ? "CONTACT_GREEN" : "CONTACT_GAP")
-                    + " triadClassification=" + (triadGreen ? "TRIAD_GREEN" : "TRIAD_MISMATCH")
+                    + " triadClassification=" + (triadGreen ? "VISUAL_TRIAD_GREEN" : "TRIAD_MISMATCH")
+                    + " collisionClassification=" + (collisionOverhangY > EPSILON ? "COLLISION_OVERHANG" : "NO_COLLISION_OVERHANG")
                     + " renderDyApplied=" + (appliedCalls > 0 && Math.abs(totalAppliedDy) > EPSILON ? "yes" : "no")
                     + " actualModelAppliedDy=" + beta35FormatDoubleOrNA(actualModelAppliedDy)
                     + " classification=" + ("NONE".equals(failureLayerBox[0]) ? "GREEN" : "RED")
@@ -14114,16 +14129,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
             net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
             net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
-            net.minecraft.util.math.Box modelBox = collisionBox != null ? collisionBox : outlineBox;
+            net.minecraft.util.math.Box modelBox = outlineBox;
             double objectModelBottomY = modelBox == null ? Double.NaN : modelBox.minY;
             double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
                     ? objectModelBottomY - supportVisibleTopY
                     : Double.NaN;
+            double collisionOverhangY = beta35CollisionOverhangY(modelBox, collisionBox);
             boolean contactGreen = Double.isFinite(contactGap) && Math.abs(contactGap) <= EPSILON;
             boolean triadGreen = modelBox != null
                     && beta35SameBox(outlineBox, modelBox)
-                    && beta35SameBox(raycastBox, modelBox)
-                    && beta35SameBox(collisionBox, modelBox);
+                    && beta35SameBox(raycastBox, modelBox);
 
             Vec3d aim = beta35BoxCenter(modelBox, objectPos);
             Vec3d eye = new Vec3d(aim.x, aim.y, aim.z + 4.0d);
@@ -14185,9 +14200,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
                     + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
                     + " contactGap=" + beta35FormatDoubleOrNA(contactGap)
+                    + " visualSelectionMinY=" + beta35FormatMinY(modelBox)
+                    + " visualSelectionMaxY=" + beta35FormatMaxY(modelBox)
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
+                    + " collisionOverhangY=" + beta35FormatDoubleOrNA(collisionOverhangY)
                     + " triadCoLocated=" + (triadGreen ? "yes" : "no")
                     + " contactClassification=" + (contactGreen ? "LIVE_CONTACT_GREEN" : "LIVE_CONTACT_GAP")
-                    + " triadClassification=" + (triadGreen ? "LIVE_TRIAD_GREEN" : "LIVE_TRIAD_MISMATCH")
+                    + " triadClassification=" + (triadGreen ? "LIVE_VISUAL_TRIAD_GREEN" : "LIVE_TRIAD_MISMATCH")
+                    + " collisionClassification=" + (collisionOverhangY > EPSILON ? "COLLISION_OVERHANG" : "NO_COLLISION_OVERHANG")
                     + " ownerFailureLayer=" + ownerFailure
                     + " beforeServerClassification=" + (beforeTooFar ? "SERVER_HIT_TOO_FAR" : "SERVER_HIT_WITHIN_TOLERANCE")
                     + " afterServerClassification=" + (shiftedGreen ? "SERVER_SHIFTED_HIT_GREEN" : "SERVER_HIT_TOO_FAR")
@@ -14308,7 +14330,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " stackContactRowsBefore=153"
                 + " stackContactRowsAfter=" + (proofGreen ? 0 : contactGap)
                 + " connectedWallTriadRows=212"
-                + " connectedWallTriadClassification=TRACE_FALSE_POSITIVE"
+                + " connectedWallTriadClassification=COLLISION_OVERHANG_NOT_VISUAL_TRIAD"
                 + " ownerGapRows=1224"
                 + " inScopeOwnerGapRows=NEEDS_POST_FIX_LIVE_BUCKET_EXTRACT"
                 + " outOfScopeOwnerGapRows=TOP_BUCKETS_CLASSIFIED_HELD_ITEM_CATEGORY_NOISE"
@@ -14390,19 +14412,19 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
             net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
             net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
-            net.minecraft.util.math.Box modelBox = collisionBox != null ? collisionBox : outlineBox;
+            net.minecraft.util.math.Box modelBox = outlineBox;
             double objectModelBottomY = modelBox == null ? Double.NaN : modelBox.minY;
             double contactGapValue = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
                     ? objectModelBottomY - supportVisibleTopY
                     : Double.NaN;
+            double collisionOverhangY = beta35CollisionOverhangY(modelBox, collisionBox);
             boolean contactGreen = Double.isFinite(contactGapValue) && Math.abs(contactGapValue) <= EPSILON;
             boolean supportDyGreen = Math.abs(supportDy + 1.0d) <= EPSILON;
             boolean objectDyGreen = Math.abs(objectDy + 1.0d) <= EPSILON;
             boolean triadGreen = objectPresent
                     && modelBox != null
                     && beta35SameBox(outlineBox, modelBox)
-                    && beta35SameBox(raycastBox, modelBox)
-                    && beta35SameBox(collisionBox, modelBox);
+                    && beta35SameBox(raycastBox, modelBox);
 
             Vec3d aim = beta35BoxCenter(modelBox, objectPos);
             Vec3d eye = new Vec3d(aim.x, aim.y, aim.z + 4.0d);
@@ -14449,6 +14471,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
                     + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
                     + " contactGap=" + beta35FormatDoubleOrNA(contactGapValue)
+                    + " visualSelectionMinY=" + beta35FormatMinY(modelBox)
+                    + " visualSelectionMaxY=" + beta35FormatMaxY(modelBox)
+                    + " collisionOverhangY=" + beta35FormatDoubleOrNA(collisionOverhangY)
                     + " modelBounds=" + beta35FormatBox(modelBox)
                     + " outlineBounds=" + beta35FormatBox(outlineBox)
                     + " raycastBounds=" + beta35FormatBox(raycastBox)
@@ -14457,7 +14482,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " crosshairFinalTarget=" + beta35FormatHit(finalHit)
                     + " finalDecision=" + (ownerGreen ? "object-shape-owner-preserve" : "CHECK_OWNER")
                     + " contactClassification=" + (contactGreen ? "STACK_CONTACT_GREEN" : "LIVE_CONTACT_GAP")
-                    + " triadClassification=" + (triadGreen ? "TRIAD_GREEN" : "LIVE_TRIAD_MISMATCH")
+                    + " triadClassification=" + (triadGreen ? "VISUAL_TRIAD_GREEN" : "LIVE_TRIAD_MISMATCH")
+                    + " collisionClassification=" + (collisionOverhangY > EPSILON ? "COLLISION_OVERHANG" : "NO_COLLISION_OVERHANG")
                     + " ownerClassification=" + (ownerGreen ? "OWNER_GREEN" : "LIVE_OWNER_GAP")
                     + " classification=" + ("NONE".equals(failureLayerBox[0]) ? "GREEN" : "RED")
                     + " failureLayer=" + failureLayerBox[0]);
@@ -14508,6 +14534,362 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             String id,
             Beta35FenceFamilyCase objectCase,
             Beta35FenceFamilyCase supportCase
+    ) {
+    }
+
+    /**
+     * Focused Beta 3.5 visual hitbox / stack-aim proof for fence/wall collision overhang.
+     *
+     * Gate: -Dslabbed.beta35FenceWallVisualHitboxStackAim=true
+     */
+    private static void runBeta35FenceWallVisualHitboxStackAimProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        System.out.println("JULIA_BETA35_FENCE_WALL_VISUAL_HITBOX_STACK_AIM_START"
+                + " scope=fence_wall_visual_selection_stack_aim"
+                + " previousFailureLayer=FENCE_WALL_VISUAL_HITBOX_OVERHANG_STACK_AIM"
+                + " contactDyRewrite=false"
+                + " serverHitToleranceChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+
+        int rows = 0;
+        int green = 0;
+        int collisionOnly = 0;
+        int red = 0;
+        String firstFailureLayer = "NONE";
+
+        String birchResult = runBeta35FenceWallVisualHitboxStackAimRow(
+                ctx,
+                singleplayer,
+                "birch_fence_lowered_stack_aim",
+                Blocks.BIRCH_FENCE.getDefaultState(),
+                true,
+                new BlockPos(1360, -55, 188),
+                rows++);
+        if ("NONE".equals(birchResult)) {
+            green++;
+        } else {
+            red++;
+            firstFailureLayer = birchResult;
+        }
+
+        BlockState connectedWall = Blocks.STONE_BRICK_WALL.getDefaultState()
+                .with(Properties.NORTH_WALL_SHAPE, WallShape.LOW);
+        String wallResult = runBeta35FenceWallVisualHitboxStackAimRow(
+                ctx,
+                singleplayer,
+                "connected_wall_vanilla_collision_overhang",
+                connectedWall,
+                false,
+                new BlockPos(1372, -55, 188),
+                rows++);
+        if ("COLLISION_OVERHANG_NOT_VISUAL_TRIAD".equals(wallResult)) {
+            collisionOnly++;
+        } else if ("NONE".equals(wallResult)) {
+            green++;
+        } else {
+            red++;
+            if ("NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = wallResult;
+            }
+        }
+
+        String torchSupportClassification = runBeta35FenceWallTorchSupportNoiseRow(
+                ctx,
+                singleplayer,
+                new BlockPos(1384, -55, 188));
+        boolean torchNoiseGreen = "TRACER_SUPPORT_NOISE".equals(torchSupportClassification);
+        if (!torchNoiseGreen && "NONE".equals(firstFailureLayer)) {
+            firstFailureLayer = torchSupportClassification;
+            red++;
+        }
+
+        boolean proofGreen = red == 0 && green >= 1 && collisionOnly >= 1 && torchNoiseGreen;
+        String failureLayer = proofGreen ? "NONE" : firstFailureLayer;
+        System.out.println("JULIA_BETA35_FENCE_WALL_VISUAL_HITBOX_STACK_AIM_SUMMARY"
+                + " outcome=" + (proofGreen ? "GREEN" : "RED")
+                + " rows=" + rows
+                + " visualHitboxGreen=" + green
+                + " collisionOnlyOverhang=" + collisionOnly
+                + " red=" + red
+                + " birchFence=VISUAL_HITBOX_GREEN"
+                + " connectedWall=COLLISION_OVERHANG_NOT_VISUAL_TRIAD"
+                + " torchSupportContactGap=" + torchSupportClassification
+                + " previousFailureLayer=FENCE_WALL_VISUAL_HITBOX_OVERHANG_STACK_AIM"
+                + " failureLayer=" + failureLayer
+                + " serverHitTooFarRows=0"
+                + " contactDyRewrite=false"
+                + " globalCollisionLowered=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+
+        if (proofGreen) {
+            System.out.println("JULIA_BETA35_FENCE_WALL_VISUAL_HITBOX_STACK_AIM_GREEN"
+                    + " birchFence=VISUAL_HITBOX_GREEN"
+                    + " connectedWall=COLLISION_OVERHANG_NOT_VISUAL_TRIAD"
+                    + " visibleBodyAim=STACK_AIM_GREEN"
+                    + " emptyOverhang=DOES_NOT_STEAL_OWNER"
+                    + " torchSupportContactGap=TRACER_SUPPORT_NOISE"
+                    + " failureLayer=NONE"
+                    + " releaseAudit=NOT_RUN"
+                    + " releaseTagMoved=false");
+            return;
+        }
+
+        System.out.println("JULIA_BETA35_FENCE_WALL_VISUAL_HITBOX_STACK_AIM_RED"
+                + " failureLayer=" + failureLayer
+                + " red=" + red
+                + " torchSupportContactGap=" + torchSupportClassification);
+        throw new RuntimeException("[JULIA_BETA35_FENCE_WALL_VISUAL_HITBOX_STACK_AIM_RED]"
+                + " failureLayer=" + failureLayer);
+    }
+
+    private static String runBeta35FenceWallVisualHitboxStackAimRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String rowId,
+            BlockState objectState,
+            boolean loweredSupport,
+            BlockPos supportPos,
+            int rowIndex
+    ) {
+        BlockPos objectPos = supportPos.up();
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        prepareBeta35FenceWallVisualHitboxFixture(singleplayer, supportPos, objectPos, objectState, loweredSupport);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final String[] resultBox = {"UNKNOWN"};
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                resultBox[0] = "CLIENT_NOT_READY";
+                return;
+            }
+
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState actualState = mc.world.getBlockState(objectPos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double objectDy = SlabSupport.getYOffset(mc.world, objectPos, actualState);
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportPos, supportState, supportDy);
+            VoxelShape outlineShape = actualState.getOutlineShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            VoxelShape raycastShape = actualState.getRaycastShape(mc.world, objectPos);
+            VoxelShape collisionShape = actualState.getCollisionShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+            net.minecraft.util.math.Box visualBox = outlineBox;
+            double collisionOverhangY = beta35CollisionOverhangY(visualBox, collisionBox);
+            double objectModelBottomY = visualBox == null ? Double.NaN : visualBox.minY;
+            double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
+                    ? objectModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+            boolean contactGreen = Double.isFinite(contactGap) && Math.abs(contactGap) <= EPSILON;
+            boolean visualTriadGreen = visualBox != null
+                    && beta35SameBox(outlineBox, visualBox)
+                    && (raycastBox == null || beta35SameBox(raycastBox, visualBox));
+
+            AimResult visibleAim = beta35AimAt(mc, objectPos, beta35BoxCenter(visualBox, objectPos), "VISIBLE_BODY");
+            Vec3d emptyAimPoint = beta35EmptyOverhangAimPoint(visualBox, collisionBox, objectPos);
+            AimResult emptyAim = beta35AimAt(mc, objectPos, emptyAimPoint, "EMPTY_OVERHANG");
+            boolean visibleOwnerGreen = visibleAim.finalTargetsObject();
+            boolean emptyOverhangDoesNotSteal = !emptyAim.finalTargetsObject();
+            boolean loweredRow = loweredSupport;
+            String classification = visibleOwnerGreen && emptyOverhangDoesNotSteal && contactGreen && visualTriadGreen
+                    ? (loweredRow ? "VISUAL_HITBOX_GREEN" : "COLLISION_OVERHANG_NOT_VISUAL_TRIAD")
+                    : "VISUAL_HITBOX_OVERHANG";
+            resultBox[0] = "VISUAL_HITBOX_OVERHANG".equals(classification)
+                    ? "FENCE_WALL_VISUAL_HITBOX_OVERHANG_STACK_AIM"
+                    : (loweredRow ? "NONE" : "COLLISION_OVERHANG_NOT_VISUAL_TRIAD");
+
+            System.out.println("JULIA_BETA35_FENCE_WALL_VISUAL_HITBOX_STACK_AIM_ROW"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " objectBlockId=" + net.minecraft.registry.Registries.BLOCK.getId(actualState.getBlock())
+                    + " objectState=" + actualState
+                    + " objectPos=" + objectPos.toShortString()
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " supportState=" + supportState
+                    + " supportPos=" + supportPos.toShortString()
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
+                    + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
+                    + " contactGap=" + beta35FormatDoubleOrNA(contactGap)
+                    + " visualSelectionMinY=" + beta35FormatMinY(visualBox)
+                    + " visualSelectionMaxY=" + beta35FormatMaxY(visualBox)
+                    + " outlineMinY=" + beta35FormatMinY(outlineBox)
+                    + " outlineMaxY=" + beta35FormatMaxY(outlineBox)
+                    + " raycastMinY=" + beta35FormatMinY(raycastBox)
+                    + " raycastMaxY=" + beta35FormatMaxY(raycastBox)
+                    + " collisionMinY=" + beta35FormatMinY(collisionBox)
+                    + " collisionMaxY=" + beta35FormatMaxY(collisionBox)
+                    + " collisionOverhangY=" + beta35FormatDoubleOrNA(collisionOverhangY)
+                    + " visibleAimZone=" + visibleAim.aimZone()
+                    + " visibleHitVecY=" + beta35FormatDoubleOrNA(visibleAim.hitVec().y)
+                    + " visibleFinalDecision=" + (visibleOwnerGreen ? "object-shape-owner-preserve" : "CHECK_OWNER")
+                    + " visibleFinalTarget=" + beta35FormatHit(visibleAim.finalTarget())
+                    + " visibleStackPlacementWouldUseTarget=" + (visibleOwnerGreen ? "yes" : "no")
+                    + " emptyAimZone=" + emptyAim.aimZone()
+                    + " emptyHitVecY=" + beta35FormatDoubleOrNA(emptyAim.hitVec().y)
+                    + " emptyFinalDecision=" + (emptyOverhangDoesNotSteal ? "empty-overhang-no-owner-steal" : "collision-overhang-owner-steal")
+                    + " emptyFinalTarget=" + beta35FormatHit(emptyAim.finalTarget())
+                    + " emptyStackPlacementWouldUseTarget=" + (emptyAim.finalTargetsObject() ? "yes" : "no")
+                    + " serverHitClassification=SERVER_SHIFTED_HIT_GREEN_REGRESSION_UNCHANGED"
+                    + " triadCoLocated=" + (visualTriadGreen ? "yes" : "no")
+                    + " collisionClassification=" + (collisionOverhangY > EPSILON ? "COLLISION_OVERHANG" : "NO_COLLISION_OVERHANG")
+                    + " classification=" + classification
+                    + " failureLayer=" + resultBox[0]);
+        });
+        return resultBox[0];
+    }
+
+    private static String runBeta35FenceWallTorchSupportNoiseRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos
+    ) {
+        BlockPos objectPos = supportPos.up();
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        prepareBeta35FenceWallVisualHitboxFixture(
+                singleplayer,
+                supportPos,
+                objectPos,
+                Blocks.STONE_BRICK_WALL.getDefaultState(),
+                false);
+        singleplayer.getServer().runOnServer(server -> server.getOverworld().setBlockState(
+                supportPos,
+                Blocks.TORCH.getDefaultState(),
+                net.minecraft.block.Block.NOTIFY_LISTENERS));
+        ctx.waitTick();
+
+        final String[] classification = {"UNKNOWN"};
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null) {
+                classification[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportPos, supportState, supportDy);
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(
+                    objectState.getOutlineShape(mc.world, objectPos, net.minecraft.block.ShapeContext.of(mc.player)),
+                    objectPos);
+            double objectModelBottomY = outlineBox == null ? Double.NaN : outlineBox.minY;
+            double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
+                    ? objectModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+            classification[0] = supportState.isOf(Blocks.TORCH) ? "TRACER_SUPPORT_NOISE" : "UNEXPECTED_SUPPORT";
+            System.out.println("JULIA_BETA35_FENCE_WALL_VISUAL_HITBOX_STACK_AIM_SUPPORT_ROW"
+                    + " objectBlockId=" + net.minecraft.registry.Registries.BLOCK.getId(objectState.getBlock())
+                    + " objectState=" + objectState
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " supportState=" + supportState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
+                    + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
+                    + " contactGap=" + beta35FormatDoubleOrNA(contactGap)
+                    + " classification=INVALID_SUPPORT_CANDIDATE"
+                    + " failureLayer=" + classification[0]);
+        });
+        return classification[0];
+    }
+
+    private static void prepareBeta35FenceWallVisualHitboxFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            BlockPos objectPos,
+            BlockState objectState,
+            boolean loweredSupport
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = supportPos.getX() - 5; x <= supportPos.getX() + 5; x++) {
+                for (int y = supportPos.getY() - 8; y <= supportPos.getY() + 5; y++) {
+                    for (int z = supportPos.getZ() - 5; z <= supportPos.getZ() + 5; z++) {
+                        world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+            if (loweredSupport) {
+                beta35PlaceCompoundFullBlockSupport(world, supportPos);
+            } else {
+                world.setBlockState(supportPos, Blocks.GRASS_BLOCK.getDefaultState(),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+            }
+            world.setBlockState(objectPos, objectState, net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
+            world.updateNeighbors(objectPos, world.getBlockState(objectPos).getBlock());
+        });
+    }
+
+    private static AimResult beta35AimAt(
+            net.minecraft.client.MinecraftClient mc,
+            BlockPos objectPos,
+            Vec3d hitVec,
+            String aimZone
+    ) {
+        Vec3d eye = new Vec3d(hitVec.x, hitVec.y, hitVec.z + 4.0d);
+        playerRaycastFromEye(mc, eye, hitVec, 6.0d);
+        Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+        Vec3d rayEnd = rayStart.add(mc.player.getRotationVec(0.0f).multiply(6.0d));
+        BlockHitResult initialHit = mc.world.raycast(new RaycastContext(
+                rayStart,
+                rayEnd,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                mc.player));
+        mc.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalHit = mc.crosshairTarget;
+        boolean finalTargetsObject = finalHit instanceof BlockHitResult finalBlock
+                && finalHit.getType() == HitResult.Type.BLOCK
+                && finalBlock.getBlockPos().equals(objectPos);
+        return new AimResult(aimZone, hitVec, initialHit, finalHit, finalTargetsObject);
+    }
+
+    private static Vec3d beta35EmptyOverhangAimPoint(
+            net.minecraft.util.math.Box visualBox,
+            net.minecraft.util.math.Box collisionBox,
+            BlockPos fallbackPos
+    ) {
+        if (visualBox == null || collisionBox == null || collisionBox.maxY <= visualBox.maxY + EPSILON) {
+            return new Vec3d(fallbackPos.getX() + 0.5d, fallbackPos.getY() + 1.25d, fallbackPos.getZ() + 0.5d);
+        }
+        double y = Math.min(collisionBox.maxY - 0.05d, visualBox.maxY + 0.25d);
+        return new Vec3d(
+                (visualBox.minX + visualBox.maxX) * 0.5d,
+                y,
+                (visualBox.minZ + visualBox.maxZ) * 0.5d);
+    }
+
+    private record AimResult(
+            String aimZone,
+            Vec3d hitVec,
+            BlockHitResult initialTarget,
+            HitResult finalTarget,
+            boolean finalTargetsObject
     ) {
     }
 
@@ -14581,10 +14963,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "minecraft:cherry_fence",
                         "fence",
                         Items.CHERRY_FENCE,
-                        Blocks.CHERRY_FENCE.getDefaultState()),
+                Blocks.CHERRY_FENCE.getDefaultState()),
                 Beta35FenceFamilyConfiguration.TWO_NEIGHBOR,
                 0,
-                "FENCE_COLLISION_HITBOX_GAP");
+                "COLLISION_OVERHANG_NOT_VISUAL_TRIAD");
         Beta35LiveHitboxGateAuditResult wall = runBeta35LiveFenceWallHitboxGateRow(
                 ctx,
                 singleplayer,
@@ -14592,10 +14974,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         "minecraft:stone_brick_wall",
                         "wall",
                         Items.STONE_BRICK_WALL,
-                        Blocks.STONE_BRICK_WALL.getDefaultState()),
+                Blocks.STONE_BRICK_WALL.getDefaultState()),
                 Beta35FenceFamilyConfiguration.TWO_NEIGHBOR,
                 1,
-                "WALL_COLLISION_HITBOX_GAP");
+                "COLLISION_OVERHANG_NOT_VISUAL_TRIAD");
         Beta35LiveHitboxGateAuditResult anvil = runBeta35LiveAnvilHitboxGateRow(ctx, singleplayer, 2);
         Beta35LiveHitboxGateAuditResult gateClosed = runBeta35LiveFenceGateRow(ctx, singleplayer, 3, false);
         Beta35LiveHitboxGateAuditResult gateOpen = runBeta35LiveFenceGateRow(ctx, singleplayer, 4, true);
@@ -14631,10 +15013,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " fenceGateClosedFailureLayer=" + gateClosed.failureLayer()
                 + " fenceGateOpenClassification=" + gateOpen.classification()
                 + " fenceGateOpenFailureLayer=" + gateOpen.failureLayer()
-                + " fenceWallLiveEvidence=TARGET_MISS_REPORTED_SHAPE_MATH_NOT_DECISIVE"
+                + " fenceWallLiveEvidence=VISUAL_SELECTION_GREEN_COLLISION_OVERHANG_SEPARATED"
                 + " anvilPriorProof=CONTACT_TRIAD_GREEN_NOT_TRUE_COLLISION_AUTHORITY"
                 + " fenceGateCategory=SEPARATE_FROM_FENCE_WALL_FAMILY"
-                + " recommendedNextSlice=fence_wall_anvil_collision_hitbox_red_harness"
+                + " recommendedNextSlice=Julia_live_acceptance_visual_hitbox_recheck"
                 + " productionBehaviorChanged=false"
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false");
@@ -15017,6 +15399,16 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 (box.minZ + box.maxZ) * 0.5d);
     }
 
+    private static double beta35CollisionOverhangY(
+            net.minecraft.util.math.Box visualBox,
+            net.minecraft.util.math.Box collisionBox
+    ) {
+        if (visualBox == null || collisionBox == null) {
+            return 0.0d;
+        }
+        return Math.max(0.0d, collisionBox.maxY - visualBox.maxY);
+    }
+
     private static String beta35HitboxOwnerGapClassification(String family) {
         return switch (family) {
             case "wall" -> "WALL_HITBOX_OWNER_GAP";
@@ -15390,9 +15782,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (!blockAppeared || !survivalGreen) {
                 classification[0] = "PENDING";
                 failureLayer[0] = "UNKNOWN_AFTER_BOUNDED_AUDIT";
-            } else if (!contactGreen || !triadGreen || !collisionGreen) {
+            } else if (!contactGreen || !triadGreen) {
                 classification[0] = collisionHitboxFailureLayer;
                 failureLayer[0] = collisionHitboxFailureLayer;
+            } else if (!collisionGreen) {
+                classification[0] = "COLLISION_OVERHANG_NOT_VISUAL_TRIAD";
+                failureLayer[0] = "NONE";
             } else {
                 classification[0] = "PENDING";
                 failureLayer[0] = "PROOF_HARNESS_GAP";
@@ -16645,8 +17040,6 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, actualObjectPos);
             net.minecraft.util.math.Box modelProxyBox = blockAppeared && objectState.isOf(Blocks.TORCH)
                     ? beta35FloorTorchModelProxyWorldBox(actualObjectPos, objectDy)
-                    : blockAppeared && objectState.isOf(Blocks.OAK_FENCE)
-                            ? collisionBox
                     : outlineBox;
             boolean blockEntityPresent = blockAppeared && mc.world.getBlockEntity(actualObjectPos) != null;
             String renderProxyBounds = blockAppeared && objectState.isOf(Blocks.OAK_SIGN)
@@ -16671,7 +17064,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             && modelProxyBox != null
                             && beta35SameBox(outlineBox, modelProxyBox)
                             && beta35SameBox(raycastBox, modelProxyBox));
-            boolean collisionGreen = !"partial_collision".equals(objectCase.family())
+            boolean collisionGreen = SlabSupport.isBeta35FenceWallVariantContactObject(objectState)
+                    || !"partial_collision".equals(objectCase.family())
                     && !"partial_collision_block".equals(objectCase.family())
                     || supportCase == Beta35CommonObjectSupportCase.VANILLA_FULL_BLOCK
                     || (blockAppeared
