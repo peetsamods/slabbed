@@ -243,6 +243,12 @@ public final class SlabSupport {
         if (isOrdinaryFullBlockWithCompoundDy(world, pos, state)) {
             return -1.0d;
         }
+        if (isBeta35FenceWallVariantContactObject(state)) {
+            double dy = beta35FenceWallVariantContactDy(world, pos, state);
+            if (Double.isFinite(dy) && dy < -1.0e-6d) {
+                return dy;
+            }
+        }
         return Double.NaN;
     }
 
