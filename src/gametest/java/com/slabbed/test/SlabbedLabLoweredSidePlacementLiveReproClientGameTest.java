@@ -515,6 +515,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35SlabHeightHitAcceptanceRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35SlabHeightHitAcceptanceRedProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35FenceGateContact")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -14843,6 +14852,411 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
             world.updateNeighbors(objectPos, world.getBlockState(objectPos).getBlock());
         });
+    }
+
+    /**
+     * Focused Beta 3.5 RED/proof matrix for Julia's remaining generic slab-height hit acceptance gap.
+     *
+     * Gate: -Dslabbed.beta35SlabHeightHitAcceptanceRed=true
+     */
+    private static void runBeta35SlabHeightHitAcceptanceRedProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35SlabHeightHeldItemCase[] heldItems = {
+                new Beta35SlabHeightHeldItemCase("minecraft:stone", Items.STONE, "INERT_BLOCK"),
+                new Beta35SlabHeightHeldItemCase("minecraft:stone_slab", Items.STONE_SLAB, "SLAB"),
+                new Beta35SlabHeightHeldItemCase("minecraft:stone_stairs", Items.STONE_STAIRS, "STAIRS"),
+                new Beta35SlabHeightHeldItemCase("minecraft:oak_trapdoor", Items.OAK_TRAPDOOR, "TRAPDOOR"),
+                new Beta35SlabHeightHeldItemCase("minecraft:lantern", Items.LANTERN, "LANTERN"),
+                new Beta35SlabHeightHeldItemCase("minecraft:iron_chain", Blocks.IRON_CHAIN.asItem(), "CHAIN"),
+                new Beta35SlabHeightHeldItemCase("minecraft:oak_button", Items.OAK_BUTTON, "BUTTON"),
+                new Beta35SlabHeightHeldItemCase("minecraft:torch", Items.TORCH, "OTHER_ATTACHABLE"),
+                new Beta35SlabHeightHeldItemCase("minecraft:candle", Items.CANDLE, "OTHER_ATTACHABLE"),
+                new Beta35SlabHeightHeldItemCase("minecraft:flower_pot", Items.FLOWER_POT, "OTHER_ATTACHABLE")
+        };
+        Beta35SlabHeightSupportCase[] supportCases = {
+                Beta35SlabHeightSupportCase.SUPPORT_DY_NEG_1_BOTTOM_SLAB,
+                Beta35SlabHeightSupportCase.SUPPORT_DY_NEG_0_5_BOTTOM_SLAB,
+                Beta35SlabHeightSupportCase.LOWERED_TOP,
+                Beta35SlabHeightSupportCase.LOWERED_DOUBLE,
+                Beta35SlabHeightSupportCase.COMPOUND_LOWERED_FULL_BLOCK
+        };
+
+        System.out.println("JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_RED"
+                + " scope=generic_held_item_visible_target_hit_acceptance"
+                + " rows=held_item_matrix_x_slab_height_cases_plus_anvil_baseline"
+                + " examples=lantern,chain,button"
+                + " examplesAreScopeBoundaries=false"
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        int rowIndex = 0;
+        int green = 0;
+        int ownerGap = 0;
+        int miss = 0;
+        int supportSteal = 0;
+        int sideAttachmentGap = 0;
+        int survivalGap = 0;
+        int fixtureMismatch = 0;
+        int red = 0;
+        String firstFailureLayer = "NONE";
+        String firstFailureHeight = "NONE";
+        String firstFailingHeldItem = "NONE";
+        boolean mixedHeldResultsAtOneHeight = false;
+        boolean anyHeightAllFailed = false;
+
+        for (Beta35SlabHeightSupportCase supportCase : supportCases) {
+            int supportRows = 0;
+            int supportFailures = 0;
+            String supportFirstLayer = "NONE";
+            for (Beta35SlabHeightHeldItemCase heldItem : heldItems) {
+                Beta35SlabHeightHitAcceptanceRow row = runBeta35SlabHeightHitAcceptanceRow(
+                        ctx,
+                        singleplayer,
+                        supportCase,
+                        heldItem,
+                        Blocks.STONE_BRICK_WALL.getDefaultState().with(Properties.NORTH_WALL_SHAPE, WallShape.LOW),
+                        "FENCE_WALL",
+                        new BlockPos(1400 + rowIndex * 7, -55, 188),
+                        rowIndex++);
+                supportRows++;
+                if ("NONE".equals(row.failureLayer())) {
+                    green++;
+                } else {
+                    red++;
+                    supportFailures++;
+                    if ("NONE".equals(firstFailureLayer)) {
+                        firstFailureLayer = row.failureLayer();
+                        firstFailureHeight = row.slabHeightCategory();
+                        firstFailingHeldItem = row.heldItemId();
+                    }
+                    if ("NONE".equals(supportFirstLayer)) {
+                        supportFirstLayer = row.failureLayer();
+                    } else if (!supportFirstLayer.equals(row.failureLayer())) {
+                        mixedHeldResultsAtOneHeight = true;
+                    }
+                    switch (row.failureLayer()) {
+                        case "HIT_ACCEPTANCE_OWNER_GAP" -> ownerGap++;
+                        case "HIT_ACCEPTANCE_MISS" -> miss++;
+                        case "HIT_ACCEPTANCE_SUPPORT_STEAL" -> supportSteal++;
+                        case "HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP" -> sideAttachmentGap++;
+                        case "HIT_ACCEPTANCE_SURVIVAL_GAP" -> survivalGap++;
+                        default -> fixtureMismatch++;
+                    }
+                }
+            }
+            if (supportRows > 0 && supportRows == supportFailures) {
+                anyHeightAllFailed = true;
+            }
+        }
+
+        Beta35SlabHeightHitAcceptanceRow anvilBaseline = runBeta35SlabHeightHitAcceptanceRow(
+                ctx,
+                singleplayer,
+                Beta35SlabHeightSupportCase.SUPPORT_DY_NEG_1_BOTTOM_SLAB,
+                new Beta35SlabHeightHeldItemCase("minecraft:stone", Items.STONE, "INERT_BLOCK"),
+                Blocks.ANVIL.getDefaultState(),
+                "ANVIL",
+                new BlockPos(1800, -55, 188),
+                rowIndex++);
+        if ("NONE".equals(anvilBaseline.failureLayer())) {
+            green++;
+        } else {
+            red++;
+            fixtureMismatch++;
+            if ("NONE".equals(firstFailureLayer)) {
+                firstFailureLayer = anvilBaseline.failureLayer();
+                firstFailureHeight = anvilBaseline.slabHeightCategory();
+                firstFailingHeldItem = anvilBaseline.heldItemId();
+            }
+        }
+
+        boolean notReproduced = red == 0;
+        String outcome = notReproduced ? "NOT_REPRODUCED" : "RED";
+        String summaryFailureLayer = notReproduced ? "HIT_ACCEPTANCE_FIXTURE_MISMATCH" : firstFailureLayer;
+        String exactProblematicHeight = notReproduced ? "NOT_REPRODUCED_IN_MATRIX" : firstFailureHeight;
+        String nextSlice = notReproduced ? "live_fixture_capture_or_Julia_exact_height_replay"
+                : (mixedHeldResultsAtOneHeight ? "category_specific_hit_acceptance_audit"
+                : "generic_slab_height_hit_acceptance_fix");
+
+        System.out.println("JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_SUMMARY"
+                + " outcome=" + outcome
+                + " rows=" + rowIndex
+                + " green=" + green
+                + " red=" + red
+                + " ownerGap=" + ownerGap
+                + " miss=" + miss
+                + " supportSteal=" + supportSteal
+                + " sideAttachmentGap=" + sideAttachmentGap
+                + " survivalGap=" + survivalGap
+                + " fixtureMismatch=" + fixtureMismatch
+                + " exactProblematicSlabHeight=" + exactProblematicHeight
+                + " heldItemIndependent=" + (anyHeightAllFailed && !mixedHeldResultsAtOneHeight ? "YES" : "NO")
+                + " categorySpecific=" + (mixedHeldResultsAtOneHeight ? "YES" : "NO")
+                + " exactFailingHeldItemFirst=" + firstFailingHeldItem
+                + " failureLayer=" + summaryFailureLayer
+                + " firstLayerFailsBeforePlacement="
+                + (!notReproduced && summaryFailureLayer.startsWith("HIT_ACCEPTANCE_") ? "YES" : "NO")
+                + " nextRecommendedFix=" + nextSlice
+                + " fenceWallEec3bc0Scope=REGRESSION_COMMAND_REQUIRED"
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+    }
+
+    private static Beta35SlabHeightHitAcceptanceRow runBeta35SlabHeightHitAcceptanceRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35SlabHeightSupportCase supportCase,
+            Beta35SlabHeightHeldItemCase heldItem,
+            BlockState visibleObjectState,
+            String visibleObjectCategory,
+            BlockPos supportPos,
+            int rowIndex
+    ) {
+        BlockPos objectPos = supportPos.up();
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        prepareBeta35SlabHeightHitAcceptanceFixture(singleplayer, supportPos, objectPos, supportCase,
+                visibleObjectState);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(heldItem.item(), 4));
+
+        final Beta35SlabHeightHitAcceptanceRow[] rowBox = {
+                new Beta35SlabHeightHitAcceptanceRow(heldItem.itemId(), heldItem.category(), supportCase.id,
+                        "UNKNOWN", "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                rowBox[0] = new Beta35SlabHeightHitAcceptanceRow(
+                        heldItem.itemId(),
+                        heldItem.category(),
+                        supportCase.id,
+                        "UNKNOWN",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH");
+                System.out.println("JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_RED_ROW"
+                        + " rowIndex=" + rowIndex
+                        + " heldItem=" + heldItem.itemId()
+                        + " heldItemCategory=" + heldItem.category()
+                        + " supportCase=" + supportCase.id
+                        + " classification=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " reason=client_world_player_or_renderer_missing");
+                return;
+            }
+
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportPos, supportState, supportDy);
+            VoxelShape outlineShape = objectState.getOutlineShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
+            VoxelShape collisionShape = objectState.getCollisionShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+            Vec3d aim = beta35BoxCenter(outlineBox, objectPos);
+            Vec3d eye = new Vec3d(aim.x, aim.y, aim.z + 4.0d);
+            playerRaycastFromEye(mc, eye, aim, 6.0d);
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayEnd = rayStart.add(mc.player.getRotationVec(0.0f).multiply(6.0d));
+            BlockHitResult initialHit = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult finalHit = mc.crosshairTarget;
+            boolean finalTargetsObject = finalHit instanceof BlockHitResult finalBlock
+                    && finalHit.getType() == HitResult.Type.BLOCK
+                    && finalBlock.getBlockPos().equals(objectPos);
+            boolean finalTargetsSupport = finalHit instanceof BlockHitResult finalBlock
+                    && finalHit.getType() == HitResult.Type.BLOCK
+                    && finalBlock.getBlockPos().equals(supportPos);
+            boolean finalMiss = finalHit == null || finalHit.getType() == HitResult.Type.MISS;
+            String classification = finalTargetsObject ? "HIT_ACCEPTANCE_GREEN"
+                    : (finalMiss ? "HIT_ACCEPTANCE_MISS"
+                    : (finalTargetsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP"));
+            String failureLayer = finalTargetsObject ? "NONE" : classification;
+            String targetOwner = finalTargetsObject ? "visible_object"
+                    : (finalTargetsSupport ? "support_slab" : (finalMiss ? "MISS" : "unrelated_neighbor"));
+            double targetDy = finalHit instanceof BlockHitResult finalBlock
+                    ? SlabSupport.getYOffset(mc.world, finalBlock.getBlockPos(),
+                            mc.world.getBlockState(finalBlock.getBlockPos()))
+                    : Double.NaN;
+            double objectModelBottomY = outlineBox == null ? Double.NaN : outlineBox.minY;
+            double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
+                    ? objectModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+            String slabHeightCategory = beta35SlabHeightCategory(supportState, supportDy, objectDy);
+            String interactionResult = "NOT_CLICKED";
+            if (finalHit instanceof BlockHitResult finalBlock && mc.interactionManager != null) {
+                ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, finalBlock);
+                interactionResult = result.toString();
+            }
+            rowBox[0] = new Beta35SlabHeightHitAcceptanceRow(
+                    heldItem.itemId(),
+                    heldItem.category(),
+                    supportCase.id,
+                    slabHeightCategory,
+                    failureLayer);
+
+            System.out.println("JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_RED_ROW"
+                    + " rowIndex=" + rowIndex
+                    + " supportCase=" + supportCase.id
+                    + " heldItem=" + heldItem.itemId()
+                    + " heldItemCategory=" + heldItem.category()
+                    + " initialCrosshairTarget=" + beta35FormatHit(initialHit)
+                    + " finalTarget=" + beta35FormatHit(finalHit)
+                    + " finalDecision=" + (finalTargetsObject ? "object-shape-owner-preserve" : "CHECK_OWNER")
+                    + " targetOwner=" + targetOwner
+                    + " visibleObjectPos=" + objectPos.toShortString()
+                    + " visibleObjectState=" + objectState
+                    + " visibleObjectCategory=" + visibleObjectCategory
+                    + " supportCandidatePos=" + supportPos.toShortString()
+                    + " supportCandidateState=" + supportState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " slabHeightCategory=" + slabHeightCategory
+                    + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
+                    + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
+                    + " contactGap=" + beta35FormatDoubleOrNA(contactGap)
+                    + " sideFaceGap=N/A"
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
+                    + " placementInteractResult=" + interactionResult
+                    + " serverHitClassification=SEE_LIVE_SERVER_MARKER_IF_PACKET_LOGGED"
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer);
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        return rowBox[0];
+    }
+
+    private static void prepareBeta35SlabHeightHitAcceptanceFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            BlockPos objectPos,
+            Beta35SlabHeightSupportCase supportCase,
+            BlockState visibleObjectState
+    ) {
+        if (supportCase == Beta35SlabHeightSupportCase.SUPPORT_DY_NEG_1_BOTTOM_SLAB) {
+            prepareBeta35CommonObjectSupport(
+                    singleplayer,
+                    supportPos,
+                    supportPos.add(0, 1, 4),
+                    Beta35CommonObjectSupportCase.LOWERED_BOTTOM_DY_MINUS_ONE);
+        } else if (supportCase == Beta35SlabHeightSupportCase.SUPPORT_DY_NEG_0_5_BOTTOM_SLAB) {
+            prepareBeta35CommonObjectSupport(
+                    singleplayer,
+                    supportPos,
+                    supportPos.add(0, 1, 4),
+                    Beta35CommonObjectSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF);
+        } else {
+            singleplayer.getServer().runOnServer(server -> {
+                var world = server.getOverworld();
+                for (int x = supportPos.getX() - 4; x <= supportPos.getX() + 4; x++) {
+                    for (int y = supportPos.getY() - 6; y <= supportPos.getY() + 5; y++) {
+                        for (int z = supportPos.getZ() - 4; z <= supportPos.getZ() + 4; z++) {
+                            world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(),
+                                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+                        }
+                    }
+                }
+                if (supportCase == Beta35SlabHeightSupportCase.LOWERED_TOP) {
+                    beta35PlaceLoweredTopOrDoubleSupport(world, supportPos, SlabType.TOP);
+                } else if (supportCase == Beta35SlabHeightSupportCase.LOWERED_DOUBLE) {
+                    beta35PlaceLoweredTopOrDoubleSupport(world, supportPos, SlabType.DOUBLE);
+                } else {
+                    beta35PlaceCompoundFullBlockSupport(world, supportPos);
+                }
+            });
+        }
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(objectPos, visibleObjectState, net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
+            world.updateNeighbors(objectPos, world.getBlockState(objectPos).getBlock());
+        });
+    }
+
+    private static String beta35SlabHeightCategory(BlockState supportState, double supportDy, double objectDy) {
+        if (Double.isFinite(supportDy)) {
+            if (Math.abs(supportDy) <= EPSILON) {
+                return "SUPPORT_DY_0";
+            }
+            if (Math.abs(supportDy + 0.5d) <= EPSILON) {
+                return "SUPPORT_DY_NEG_0_5";
+            }
+            if (Math.abs(supportDy + 1.0d) <= EPSILON) {
+                return "SUPPORT_DY_NEG_1";
+            }
+        }
+        if (supportState != null && supportState.getBlock() instanceof SlabBlock
+                && supportState.contains(SlabBlock.TYPE)) {
+            SlabType type = supportState.get(SlabBlock.TYPE);
+            if (type == SlabType.TOP) {
+                return "LOWERED_TOP";
+            }
+            if (type == SlabType.BOTTOM) {
+                return "LOWERED_BOTTOM";
+            }
+            if (type == SlabType.DOUBLE) {
+                return "LOWERED_DOUBLE";
+            }
+        }
+        if (Double.isFinite(objectDy) && objectDy <= -1.0d + EPSILON) {
+            return "COMPOUND_LOWERED";
+        }
+        return "UNKNOWN";
+    }
+
+    private enum Beta35SlabHeightSupportCase {
+        SUPPORT_DY_NEG_1_BOTTOM_SLAB("support_dy_neg_1_bottom_slab"),
+        SUPPORT_DY_NEG_0_5_BOTTOM_SLAB("support_dy_neg_0_5_bottom_slab"),
+        LOWERED_TOP("lowered_top_slab_support"),
+        LOWERED_DOUBLE("lowered_double_slab_support"),
+        COMPOUND_LOWERED_FULL_BLOCK("compound_lowered_full_block_support");
+
+        private final String id;
+
+        Beta35SlabHeightSupportCase(String id) {
+            this.id = id;
+        }
+    }
+
+    private record Beta35SlabHeightHeldItemCase(String itemId, Item item, String category) {
+    }
+
+    private record Beta35SlabHeightHitAcceptanceRow(
+            String heldItemId,
+            String heldItemCategory,
+            String supportCase,
+            String slabHeightCategory,
+            String failureLayer
+    ) {
     }
 
     private static AimResult beta35AimAt(

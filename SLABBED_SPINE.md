@@ -20,8 +20,9 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current savepoint: Beta 3.5 fence/wall visual hitbox stack-aim fix at `save/beta35-fence-wall-visual-hitbox-stack-aim`
-- Previous operating base for this slice: `5f94ed5` / `save/beta35-fence-wall-stack-contact`
+- Current savepoint: Beta 3.5 slab-height generic hit-acceptance RED tracer at `save/beta35-slab-height-hit-acceptance-red`
+- Previous operating base for this slice: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`
+- Previous fence/wall stack-contact base: `5f94ed5` / `save/beta35-fence-wall-stack-contact`
 - Older compound visible slab lane law base: `d7ef534`
 - Older compound visible slab lane law base tag: `save/beta4-manual-live-delayed-final-trace`
 - Prior live-first classifier base: `767f735` / `save/beta4-live-first-seam-owner-classifier`
@@ -52,6 +53,18 @@ JAVA_TOOL_OPTIONS="-Dslabbed.beta35FenceWallLiveInspect=true" ./gradlew --no-dae
 ```
 
 No contact dy rewrite or server hit tolerance change was made in this slice. No global collision lowering was made. No release audit was run, no release tag was moved, and scope remains fence/wall visual selection/stack aim plus existing fence/wall/anvil owner diagnostics and floor_torch/candle/flower_pot regression status. Standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, panes, doors, and trapdoors remain out of scope. Savepoint tag: `save/beta35-fence-wall-visual-hitbox-stack-aim`.
+
+## Current Beta 3.5 slab-height generic hit-acceptance status
+
+Operating base for this diagnostic slice: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`.
+
+Julia's post-`eec3bc0` live verdict is near-acceptance for fence/wall: "everything looks almost perfect." The remaining visible blocker is not scoped to lantern, chain, or button; those are examples from the video. The active classification is `failureLayer=SLAB_HEIGHT_GENERIC_HIT_ACCEPTANCE_UNINSTRUMENTED` until a live-faithful row proves otherwise.
+
+New diagnostic flag: `-Dslabbed.beta35SlabHeightHitAcceptance=true`. Startup marker: `[JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE] enabled=true`. Focused matrix flag: `-Dslabbed.beta35SlabHeightHitAcceptanceRed=true`, with rows under `JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_RED_ROW` and summary `JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_SUMMARY`.
+
+This slice is tracing/proof only. It does not widen global hit tolerance, does not add server accept bypasses, does not add solidity/sturdy-face lies, does not add category-specific fixes, does not claim all-item support, does not run a release audit, and does not move release tags.
+
+Latest local matrix result: `outcome=NOT_REPRODUCED`, `rows=51`, `green=51`, `red=0`, `ownerGap=0`, `miss=0`, `supportSteal=0`, `exactProblematicSlabHeight=NOT_REPRODUCED_IN_MATRIX`, `categorySpecific=NO`, `failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH`. The matrix covers `supportDy=-1.0`, `supportDy=-0.5`, lowered top/double support variants, compound lowered full-block support, held stone/slab/stairs/trapdoor/lantern/iron_chain/button/torch/candle/flower_pot, and an anvil visible-owner baseline. Next smallest slice is a Julia-live fixture capture or exact-height replay, not a gameplay fix.
 
 ## Current product goal
 
