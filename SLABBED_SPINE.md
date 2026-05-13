@@ -60,11 +60,13 @@ Operating base for this diagnostic slice: `eec3bc0` / `save/beta35-fence-wall-vi
 
 Julia's post-`eec3bc0` live verdict is near-acceptance for fence/wall: "everything looks almost perfect." The remaining visible blocker is not scoped to lantern, chain, or button; those are examples from the video. The active classification is `failureLayer=SLAB_HEIGHT_GENERIC_HIT_ACCEPTANCE_UNINSTRUMENTED` until a live-faithful row proves otherwise.
 
-New diagnostic flag: `-Dslabbed.beta35SlabHeightHitAcceptance=true`. Startup marker: `[JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE] enabled=true`. Focused matrix flag: `-Dslabbed.beta35SlabHeightHitAcceptanceRed=true`, with rows under `JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_RED_ROW` and summary `JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_SUMMARY`.
+Diagnostic flags: `-Dslabbed.beta35SlabHeightHitAcceptance=true`, `-Dslabbed.beta35SlabHeightHitAcceptanceRed=true`, and corrected proof flag `-Dslabbed.beta35HitboxApertureContactRed=true`. Startup marker: `[JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE] enabled=true`. Corrected proof rows use `JULIA_BETA35_HITBOX_APERTURE_CONTACT_RED_ROW` and summary `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY`.
 
 This slice is tracing/proof only. It does not widen global hit tolerance, does not add server accept bypasses, does not add solidity/sturdy-face lies, does not add category-specific fixes, does not claim all-item support, does not run a release audit, and does not move release tags.
 
-Latest local matrix result: `outcome=NOT_REPRODUCED`, `rows=51`, `green=51`, `red=0`, `ownerGap=0`, `miss=0`, `supportSteal=0`, `exactProblematicSlabHeight=NOT_REPRODUCED_IN_MATRIX`, `categorySpecific=NO`, `failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH`. The matrix covers `supportDy=-1.0`, `supportDy=-0.5`, lowered top/double support variants, compound lowered full-block support, held stone/slab/stairs/trapdoor/lantern/iron_chain/button/torch/candle/flower_pot, and an anvil visible-owner baseline. Next smallest slice is a Julia-live fixture capture or exact-height replay, not a gameplay fix.
+The `63a0e32` matrix is now known false-green evidence: it did not fail `HIT_ACCEPTANCE_GREEN` rows with nonzero contact metrics and did not measure player-feel aim aperture. Julia's live video showed finicky hitboxes at this slab height; one concrete live row was `minecraft:acacia_button[face=floor]` on `stone_slab[type=top]` with `supportDy=-1.0`, `objectDy=-0.5`, `contactGap=0.500000`, previously misclassified as `HIT_ACCEPTANCE_GREEN`.
+
+Latest corrected local result: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=2 red=6 buttonContactGapRows=1 chainMetricGapRows=1 apertureTooNarrowRows=4 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED`. The corrected proof is diagnostics-only: it proves button floor contact dy is missing, chain axis contact metric is unimplemented, and visible-body/top/edge/support-seam aim aperture is too narrow in the replay fixture. No gameplay fix or all-item support claim has been made.
 
 ## Current product goal
 

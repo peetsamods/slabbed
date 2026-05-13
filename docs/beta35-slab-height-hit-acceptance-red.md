@@ -26,7 +26,13 @@ Focused local matrix:
 
 `JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_SUMMARY outcome=NOT_REPRODUCED rows=51 green=51 red=0 ownerGap=0 miss=0 supportSteal=0 sideAttachmentGap=0 survivalGap=0 fixtureMismatch=0 exactProblematicSlabHeight=NOT_REPRODUCED_IN_MATRIX heldItemIndependent=NO categorySpecific=NO failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH nextRecommendedFix=live_fixture_capture_or_Julia_exact_height_replay`
 
-The tracer/proof did not prove a gameplay mechanism yet. It therefore does not justify a generic fix or a category-specific fix.
+That matrix is superseded as proof evidence after Julia's live retest. It was a false green because it let target ownership dominate `HIT_ACCEPTANCE_GREEN` before checking nonzero contact metrics, and it sampled accepted hits without measuring visible-body/top/edge/seam/overhang aim aperture.
+
+Concrete false-green live row: `minecraft:acacia_button[face=floor]` on `minecraft:stone_slab[type=top]` had `supportDy=-1.000000`, `objectDy=-0.500000`, `contactGap=0.500000`, and was reported as `HIT_ACCEPTANCE_GREEN`. Correct classification is `BUTTON_CONTACT_GAP` with failure layer `BUTTON_FLOOR_CONTACT_DY_MISSING` or the generic slab-height contact dy layer.
+
+Corrected diagnostic proof: `-Dslabbed.beta35HitboxApertureContactRed=true`. Latest summary: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=RED rows=8 green=2 red=6 buttonContactGapRows=1 chainMetricGapRows=1 supportMetricNoiseRows=0 apertureTooNarrowRows=4 fixtureMismatchRows=0 firstFailureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING nextRecommendedFix=MIXED`.
+
+The corrected proof still does not justify a gameplay fix in this slice; it only names the first proven layers for a next slice.
 
 ## Scope
 
