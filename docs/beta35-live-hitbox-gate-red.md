@@ -103,3 +103,11 @@ Post-fix live-hitbox-gate proof:
 - `JULIA_BETA35_LIVE_HITBOX_GATE_SUMMARY outcome=PENDING rows=5 red=0 pending=3 green=2 fenceHitboxClassification=PENDING fenceHitboxFailureLayer=PROOF_HARNESS_GAP wallHitboxClassification=PENDING wallHitboxFailureLayer=PROOF_HARNESS_GAP anvilHitboxClassification=PENDING anvilHitboxFailureLayer=PROOF_HARNESS_GAP fenceGateClosedClassification=GREEN fenceGateClosedFailureLayer=NONE fenceGateOpenClassification=GREEN fenceGateOpenFailureLayer=NONE`
 
 No collision math, contact dy, or model/render dy was changed. No release audit was run. No release tag was moved.
+
+## Follow-Up: Fence/Wall Contact Hitbox Fix
+
+After the owner fix, Julia's live inspect found that the older gate/contact truth was incomplete for wall/fence-family contact height: `supportDy=-1.0` full-block and top-slab support could leave the wall/fence object at `objectDy=-0.5`, producing `contactGap=0.5`.
+
+The follow-up contact slice changes only the `FenceBlock` / `WallBlock` family contact dy path in `SlabSupport`. Focused proof `-Dslabbed.beta35FenceWallContactHitbox=true` now reports `JULIA_BETA35_FENCE_WALL_CONTACT_HITBOX_SUMMARY outcome=GREEN rows=10 green=10 contactGap=0 triadMismatch=0 ownerGap=0 dyMismatch=0 failureLayer=NONE`.
+
+The live-hitbox-gate proof remains an older mixed-purpose matrix and still reports `outcome=PENDING` for its fence/wall/anvil rows, while fence-gate family proof remains `GREEN`. The new contact proof is the authority for named wall/fence support rows. Release audit remains paused. No release tag was moved.

@@ -33,19 +33,19 @@ Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it 
 Tracked tree is clean.
 `tmp/` may remain intentionally untracked and must not be staged.
 
-## Current Beta 3.5 live hitbox owner status
+## Current Beta 3.5 fence/wall contact hitbox status
 
-Operating base before the fix slice: `ace31b5` / `save/beta35-live-hitbox-owner-red` on `integrate/phase19-into-side-slab-top-support`.
+Operating base before the contact slice: `983d8ab` / `save/beta35-live-hitbox-owner-fix` on `integrate/phase19-into-side-slab-top-support`.
 
-The owner fix is limited to crosshair ownership / retarget eligibility for the already-proven lowered `FenceBlock` / `WallBlock` family and exact `minecraft:anvil` body. Collision math, contact dy, and model/render dy were not changed. Panes remain excluded, and no door/trapdoor/sign/lantern/chain/end-rod/redstone/rail category was opened.
+The `983d8ab` owner fix is real but only fixed crosshair ownership / retarget eligibility for lowered `FenceBlock` / `WallBlock` family members and exact `minecraft:anvil`. Julia's live inspect after that savepoint found a separate fence/wall family contact gap: wall/fence objects over `supportDy=-1.0` full-block and top-slab support could remain at `objectDy=-0.5`, producing `contactGap=0.5`.
 
-Gated proof `-Dslabbed.beta35LiveHitboxOwnerRed=true` now reports `JULIA_BETA35_LIVE_HITBOX_OWNER_SUMMARY outcome=GREEN rows=3 red=0 pending=0 green=3`, plus `JULIA_BETA35_LIVE_HITBOX_OWNER_GREEN`. Rows:
+Current contact fix changes only the `FenceBlock` / `WallBlock` family contact dy path in `SlabSupport`: object dy is derived from the visible support top for legal slab-supported floor/top cases. It does not open all items, does not add panes, and does not touch standing signs, lanterns, chains, redstone, rails, buttons/levers, wall/hanging signs, doors, trapdoors, release metadata, or release tags.
 
-- `minecraft:stone_brick_wall`: direct outline/raycast hits expected owner, final crosshair resolves to the visible wall owner, classification `GREEN`, failure layer `NONE`.
-- `minecraft:oak_fence`: direct outline/raycast hits expected owner, final crosshair resolves to the visible fence owner, classification `GREEN`, failure layer `NONE`.
-- `minecraft:anvil`: direct outline/raycast hits expected owner, final crosshair resolves to the visible anvil owner, classification `GREEN`, failure layer `NONE`.
+Gated proof `-Dslabbed.beta35FenceWallContactHitbox=true` reports `JULIA_BETA35_FENCE_WALL_CONTACT_HITBOX_SUMMARY outcome=GREEN rows=10 green=10 contactGap=0 triadMismatch=0 ownerGap=0 dyMismatch=0 failureLayer=NONE`, plus `JULIA_BETA35_FENCE_WALL_CONTACT_HITBOX_GREEN`. Rows cover `minecraft:stone_brick_wall` and `minecraft:oak_fence` over lowered full-block, lowered top-slab, lowered bottom-slab, lowered top-slab `supportDy=-0.5`, and lowered double-slab `supportDy=-0.5` support.
 
-Contact/render/collision-shape math remains the previously proven category behavior. The live-hitbox-gate matrix remains honest with fence/wall/anvil rows `PENDING/PROOF_HARNESS_GAP` and fence-gate rows `GREEN`; the dedicated owner proof is the authority for the closed owner layer. No release audit was run and no release tag was moved. Savepoint target: `save/beta35-live-hitbox-owner-fix`.
+Expected contact rows are now green: full-block and top-slab `supportDy=-1.0` use `objectDy=-1.0`; bottom-slab `supportDy=-1.0` preserves `objectDy=-1.5`; top/double `supportDy=-0.5` preserves `objectDy=-0.5`. Model, outline, raycast, and collision bounds are co-located in the focused proof, and final crosshair owner remains the visible wall/fence object. The prior owner proof remains green for wall/fence/anvil, while anvil contact is a regression check only in this slice.
+
+Regression gates remain green for live-hitbox owner, fence/wall family, fence-gate family, common-object matrix, floor_torch, candle, flower_pot contact/survival, and default gametest. The older live-hitbox-gate matrix remains `PENDING` for its mixed-purpose fence/wall/anvil rows and `GREEN` for fence gates. Release audit remains paused pending Julia live acceptance of this wall/fence correction. No release audit was run and no release tag was moved. Savepoint target: `save/beta35-fence-wall-contact-hitbox`.
 
 ## Current product goal
 
