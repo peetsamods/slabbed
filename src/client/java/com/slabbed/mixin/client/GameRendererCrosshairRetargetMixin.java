@@ -429,7 +429,10 @@ public abstract class GameRendererCrosshairRetargetMixin {
             }
         }
 
-        return bestHit;
+        if (bestHit != null) {
+            return bestHit;
+        }
+        return slabbed$findBeta35HitboxOwnerObject(world, cam, eye, end);
     }
 
     private static BlockHitResult slabbed$raycastLoweredObjectShapeOwner(
@@ -449,6 +452,51 @@ public abstract class GameRendererCrosshairRetargetMixin {
             return null;
         }
         return hit.getPos().squaredDistanceTo(eye) <= currentDist2 + 1.0e-6d ? hit : null;
+    }
+
+    private static BlockHitResult slabbed$findBeta35HitboxOwnerObject(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end
+    ) {
+        int steps = Math.max(16, (int) Math.ceil(6.0d / 0.05d));
+        BlockHitResult bestHit = null;
+        double bestDist2 = Double.POSITIVE_INFINITY;
+        Vec3d ray = end.subtract(eye);
+        for (int i = 1; i <= steps; i++) {
+            Vec3d sample = eye.add(ray.multiply((double) i / steps));
+            BlockPos samplePos = BlockPos.ofFloored(sample);
+
+            BlockHitResult hit = slabbed$raycastBeta35HitboxOwnerObject(world, cam, eye, end, samplePos, bestDist2);
+            if (hit != null) {
+                bestHit = hit;
+                bestDist2 = hit.getPos().squaredDistanceTo(eye);
+            }
+
+            hit = slabbed$raycastBeta35HitboxOwnerObject(world, cam, eye, end, samplePos.up(), bestDist2);
+            if (hit != null) {
+                bestHit = hit;
+                bestDist2 = hit.getPos().squaredDistanceTo(eye);
+            }
+        }
+        return bestHit;
+    }
+
+    private static BlockHitResult slabbed$raycastBeta35HitboxOwnerObject(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos, double bestDist2
+    ) {
+        BlockState state = world.getBlockState(pos);
+        if (!slabbed$isBeta35HitboxOwnerObject(world, pos, state)) {
+            return null;
+        }
+
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        if (outline == null || outline.isEmpty()) {
+            return null;
+        }
+        BlockHitResult hit = outline.raycast(eye, end, pos);
+        if (hit == null) {
+            return null;
+        }
+        return hit.getPos().squaredDistanceTo(eye) <= bestDist2 + 1.0e-6d ? hit : null;
     }
 
     private static boolean slabbed$isLoweredObjectShapeOwner(ClientWorld world, BlockPos pos, BlockState state) {
