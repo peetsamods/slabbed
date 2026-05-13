@@ -67,3 +67,11 @@ Contact and triad remain green: `contactGap=0.000000`, `triadCoLocated=yes`.
 - `git diff --check` -> clean
 
 Release audit remains paused pending Julia live acceptance. No release tag was moved. Scope remains fence/wall/anvil owner/server-hit behavior plus existing floor_torch/candle/flower_pot regression coverage; there is no all-item claim.
+
+## Follow-Up: Stack Contact
+
+Julia's live acceptance after `aa66efd` kept server validation green (`SERVER_HIT_TOO_FAR=0`) but exposed one concrete contact bucket: a wall stacked on lowered wall-family support with `objectDy=-0.500000`, `supportDy=-1.000000`, and `contactGap=0.500000`.
+
+The follow-up stack-contact slice fixes only that fence/wall-family stack dy path. The focused proof now reports `JULIA_BETA35_FENCE_WALL_STACK_CONTACT_SUMMARY outcome=GREEN ... failureLayer=NONE`, with wall-on-wall and fence stack equivalents green.
+
+No server hit tolerance rewrite, global tolerance widening, release audit, release tag movement, or all-item expansion is included.
