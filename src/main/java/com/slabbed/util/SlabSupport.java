@@ -33,6 +33,7 @@ import net.minecraft.block.WallHangingSignBlock;
 import net.minecraft.block.WallSignBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.block.enums.BedPart;
+import net.minecraft.block.enums.BlockFace;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
@@ -174,6 +175,84 @@ public final class SlabSupport {
         return state != null && (state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT));
     }
 
+    public static boolean isBeta35FloorButtonContactObject(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof ButtonBlock
+                && state.contains(Properties.BLOCK_FACE)
+                && state.get(Properties.BLOCK_FACE) == BlockFace.FLOOR;
+    }
+
+    public static boolean isBeta35BottomTrapdoorVisibleOwnerObject(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof TrapdoorBlock
+                && state.contains(Properties.BLOCK_HALF)
+                && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
+    }
+
+    public static boolean isBeta35VerticalChainVisibleOwnerObject(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y;
+    }
+
+    public static boolean isBeta35LoweredTrapdoorOrFloorButtonVisibleTarget(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        if (!isBeta35FloorButtonContactObject(state) && !isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
+            return false;
+        }
+        double objectDy = getYOffset(world, pos, state);
+        if (!Double.isFinite(objectDy) || objectDy >= -1.0e-6d) {
+            return false;
+        }
+        return true;
+    }
+
+    public static boolean isBeta35LoweredTrapdoorOrFloorButtonVisibleOwnerTarget(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        if (!isBeta35FloorButtonContactObject(state) && !isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
+            return false;
+        }
+        return Double.isFinite(beta35FloorButtonContactDy(world, pos, state))
+                || Double.isFinite(beta35BottomTrapdoorVisibleOwnerDy(world, pos, state));
+    }
+
+    private static double beta35BottomTrapdoorVisibleOwnerDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+            return supportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
+    public static boolean isBeta35SlabHeightVisibleOwnerObject(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        if (!isBeta35FloorButtonContactObject(state)
+                && !isBeta35BottomTrapdoorVisibleOwnerObject(state)
+                && !isBeta35VerticalChainVisibleOwnerObject(state)) {
+            return false;
+        }
+        double objectDy = getYOffset(world, pos, state);
+        return Double.isFinite(objectDy) && objectDy < -1.0e-6d;
+    }
+
     public static boolean isBeta35FenceWallVariantContactObject(BlockState state) {
         return state != null
                 && (state.getBlock() instanceof FenceBlock
@@ -261,6 +340,22 @@ public final class SlabSupport {
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
             return supportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
+    private static double beta35FloorButtonContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35FloorButtonContactObject(state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (!isSupportingSlab(supportState)) {
+            return Double.NaN;
+        }
+        double supportDy = beta35FenceWallVisibleSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+            return supportDy + getSupportYOffset(supportState) - 1.0d;
         }
         return Double.NaN;
     }
@@ -1305,6 +1400,10 @@ public final class SlabSupport {
             if (Double.isFinite(standingOakSignContactDy)) {
                 return standingOakSignContactDy;
             }
+            double floorButtonContactDy = beta35FloorButtonContactDy(world, pos, state);
+            if (Double.isFinite(floorButtonContactDy)) {
+                return floorButtonContactDy;
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
@@ -1345,6 +1444,11 @@ public final class SlabSupport {
             if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
                 return loweredBottomSupportDy - 0.5d;
             }
+        }
+
+        double floorButtonContactDy = beta35FloorButtonContactDy(world, pos, state);
+        if (Double.isFinite(floorButtonContactDy)) {
+            return floorButtonContactDy;
         }
 
         double fenceWallVariantContactDy = beta35FenceWallVariantContactDy(world, pos, state);
