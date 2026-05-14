@@ -173,7 +173,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return null;
         }
         BlockState state = world.getBlockState(pos);
-        double targetDy = SlabSupport.getYOffset(world, pos, state);
+        double targetDy = SlabSupport.getBeta35ShiftedServerValidationYOffset(world, pos, state);
         if (!Double.isFinite(targetDy) || targetDy >= -EPSILON) {
             return null;
         }
@@ -196,7 +196,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (SlabSupport.isBeta35FenceWallVariantContactObject(targetState) || targetState.isOf(net.minecraft.block.Blocks.ANVIL)) {
             return true;
         }
-        if (SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonVisibleOwnerTarget(world, pos, targetState)) {
+        if (SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonServerHitTarget(world, pos, targetState)) {
             return true;
         }
         if (SlabSupport.isBeta35FenceWallVariantContactObject(objectState) || objectState.isOf(net.minecraft.block.Blocks.ANVIL)) {
