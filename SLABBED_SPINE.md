@@ -61,6 +61,22 @@ Run-client startup smoke emitted beta35 hit-acceptance markers and owner-stable 
 
 Beta 3.5 release audit remains paused. Julia live acceptance is still required after sleep. No release audit was run, no release tag was moved, and no release-ready or all-item gameplay claim is made.
 
+## Current Beta 3.5 lowered trapdoor server validation status
+
+Operating base before this continuation: `22ec3f2` / `save/beta35-visible-object-owner-stability` on `integrate/phase19-into-side-slab-top-support`.
+
+Julia's 10:47 live source truth after `22ec3f2` keeps visible-object owner stability green for trapdoors, chains, torches, and buttons, but shows one remaining trapdoor interaction failure: lowered trapdoors above one slab height can appear to open and then repeatedly close or snap back. The live extract shows client-side trapdoor owner rows are green while server validation rejects some legal `targetDy=-1.000000` bottom-trapdoor hits because `shiftedValidationCenter=null`.
+
+Primary classification for this continuation is `LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP`. This is not a visible-owner support steal, not a floor-button contact gap, not a chain owner failure, and not a fence/wall regression.
+
+Narrow production change: server shifted-hit validation now accepts the same bounded shifted center path for legal lowered bottom-trapdoor server targets with finite negative target dy. The hit still has to validate inside the shifted vanilla component tolerance; this is not a global hit tolerance widening, server accept bypass, global collision lowering, solidity/sturdy-face lie, or all-item gameplay claim. Floor-button server behavior remains on the existing proven helper path.
+
+Focused proof flag: `-Dslabbed.beta35TrapdoorServerValidationFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`. Required markers: `JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_RED`, `JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_GREEN`, `JULIA_BETA35_TRAPDOOR_OPEN_STATE_GREEN`, `TRAPDOOR_SERVER_NEGATIVE_GREEN`, and `JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_SUMMARY`.
+
+The slab-neighbor update/jump concern remains proof-only in this slice. Focused flag: `-Dslabbed.beta35SlabNeighborJumpRed=true -Dslabbed.beta35SlabHeightHitAcceptance=true`. The tracer records hit/place/placeAbove/placeBelow/visible-object state and dy before side placement, after side placement, after merge placement, and after neighbor update. Current automated classification is `EXPECTED_SLAB_PLACEMENT failureLayer=NONE`; no neighbor-update production patch was made.
+
+Chain status is unchanged from `22ec3f2`: owner stability is green enough for this slice and axis metric remains deferred unless ownership regresses. Release audit remains paused pending Julia live acceptance. No release tag was moved, and no release-ready or all-item gameplay claim is made.
+
 ## Current Beta 3.5 fence/wall visual hitbox stack-aim status
 
 Operating base before this visual-hitbox slice: `5f94ed5` / `save/beta35-fence-wall-stack-contact` on `integrate/phase19-into-side-slab-top-support`.

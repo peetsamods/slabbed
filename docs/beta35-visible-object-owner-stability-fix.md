@@ -59,3 +59,32 @@ Regression status:
 This is an automated-proof savepoint, not Julia live acceptance. Julia live acceptance is still required.
 
 No global hit tolerance widening. No server accept bypass. No global collision lowering. No global solidity or sturdy-face lies. No release audit run. No release tag moved. No all-item gameplay claim.
+
+## 2026-05-14 Continuation: Trapdoor Server Validation
+
+Continuation base: `22ec3f2` / `save/beta35-visible-object-owner-stability`.
+
+Julia's 10:47 live source truth keeps the visible-owner fix intact: chains, trapdoor selection, torches, and buttons are very good. The remaining trapdoor failure is server-side validation, not client ownership. Live rows show `TRAPDOOR_OWNER_GREEN` and `HIT_ACCEPTANCE_GREEN` are common, with `SERVER_HIT_TOO_FAR=0`, but specific legal lowered bottom-trapdoor hits still reached `classification=HIT_ACCEPTANCE_SERVER_REJECT` because `shiftedValidationCenter=null`.
+
+Primary failure layer for the continuation:
+
+`LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP`
+
+Representative before row:
+
+`targetState=minecraft:oak_trapdoor[half=bottom] targetDy=-1.000000 hitFace=up validationDeltaY=-1.312500 shiftedValidationCenter=null classification=HIT_ACCEPTANCE_SERVER_REJECT failureLayer=LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP`
+
+The continuation narrows server shifted validation to legal lowered bottom-trapdoor server targets with finite negative target dy. The shifted center is still checked through the existing vanilla component tolerance path; no global hit tolerance was widened and no server accept bypass was added.
+
+Focused proof flag:
+
+`-Dslabbed.beta35TrapdoorServerValidationFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+
+Required green coverage:
+
+- Oak, mangrove, and birch bottom-trapdoor rows at `targetDy=-1.000000` classify as `SERVER_SHIFTED_HIT_GREEN` with `failureLayer=NONE`.
+- Held item examples include `stone_slab`, `mangrove_trapdoor`, `torch`, and `acacia_button`.
+- Negative boundary remains rejected as `TRAPDOOR_SERVER_NEGATIVE_GREEN accepted=false`.
+- Open-state proof reports `JULIA_BETA35_TRAPDOOR_OPEN_STATE_GREEN` with `serverAccepted=true` and `finalStateOpen=true`.
+
+The paired slab-neighbor tracer is proof-only. It records side placement, merge placement, and neighbor-update state/dy around the live-shaped slab lane and currently classifies the automated fixture as `EXPECTED_SLAB_PLACEMENT failureLayer=NONE`. No neighbor-update production patch was made.
