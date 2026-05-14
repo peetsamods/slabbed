@@ -6,6 +6,7 @@ import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.DoorBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
 import net.minecraft.block.SlabBlock;
@@ -104,10 +105,10 @@ public abstract class SlabSupportStateMixin {
                 && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
     }
 
-    private static boolean slabbed$isLoweredBeta35OakDoorContactObject(BlockState state, double yOff) {
+    private static boolean slabbed$isLoweredBeta35RegularDoorContactObject(BlockState state, double yOff) {
         return yOff < 0.0
                 && state != null
-                && state.isOf(Blocks.OAK_DOOR)
+                && state.getBlock() instanceof DoorBlock
                 && state.contains(Properties.DOUBLE_BLOCK_HALF)
                 && (state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
                         || state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER);
@@ -246,7 +247,8 @@ public abstract class SlabSupportStateMixin {
             } else if (slabbed$isLoweredBeta35OakTrapdoorContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
-            } else if (slabbed$isLoweredBeta35OakDoorContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
+            } else if (slabbed$isLoweredBeta35RegularDoorContactObject(self, yOff)
+                    && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
                 return;
             } else if (slabbed$isLoweredBeta35StandingOakSignContactObject(self, yOff)

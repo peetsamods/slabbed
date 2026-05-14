@@ -651,6 +651,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (SlabSupport.isBeta35VerticalChainVisibleOwnerObject(state)) {
             return "visible-chain-owner-preserve";
         }
+        if (SlabSupport.isBeta35RegularDoorVisibleOwnerObject(world, chosen.getBlockPos(), state)) {
+            return "visible-door-owner-preserve";
+        }
         return "visible-object-owner-preserve";
     }
 
