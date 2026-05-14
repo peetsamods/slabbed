@@ -399,6 +399,16 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         return "OWNER_ONLY";
     }
 
+    private static boolean isRegularDoorCategory(String visibleObjectCategory) {
+        return visibleObjectCategory != null
+                && visibleObjectCategory.endsWith("_door")
+                && !visibleObjectCategory.contains("trapdoor");
+    }
+
+    private static boolean isStairsCategory(String visibleObjectCategory) {
+        return visibleObjectCategory != null && visibleObjectCategory.endsWith("_stairs");
+    }
+
     private static String classifyClientHit(
             boolean finalIsObject,
             boolean finalIsSupport,
@@ -447,7 +457,13 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
             if (miss) {
                 return "HIT_ACCEPTANCE_MISS";
             }
+            if (finalIsSupport && isStairsCategory(visibleObjectCategory)) {
+                return "STAIRS_VISIBLE_OWNER_DEFERRED";
+            }
             return finalIsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP";
+        }
+        if (isRegularDoorCategory(visibleObjectCategory)) {
+            return "REGULAR_DOOR_OWNER_GREEN";
         }
         if ("BUTTON".equals(visibleObjectCategory) && "FLOOR_CONTACT".equals(metricType)) {
             return "BUTTON_CONTACT_GREEN";
@@ -462,6 +478,7 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         if ("HIT_ACCEPTANCE_GREEN".equals(classification)
                 || "BUTTON_CONTACT_GREEN".equals(classification)
                 || "TRAPDOOR_OWNER_GREEN".equals(classification)
+                || "REGULAR_DOOR_OWNER_GREEN".equals(classification)
                 || "CHAIN_AXIS_OWNER_GREEN".equals(classification)
                 || "CHAIN_AXIS_METRIC_ONLY_DEFERRED".equals(classification)
                 || "CHAIN_AXIS_MISS".equals(classification)
@@ -483,6 +500,13 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         }
         if ("HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP".equals(classification)) {
             return "SIDE_ATTACHMENT_ACCEPTANCE_GAP";
+        }
+        if ("STAIRS_VISIBLE_OWNER_DEFERRED".equals(classification)) {
+            return "STAIRS_VISIBLE_OWNER_DEFERRED";
+        }
+        if ("HIT_ACCEPTANCE_SUPPORT_STEAL".equals(classification)
+                && isRegularDoorCategory(visibleObjectCategory)) {
+            return "REGULAR_DOOR_VISIBLE_OWNER_SUPPORT_STEAL";
         }
         if ("SUPPORT_TARGET".equals(metricType)) {
             return "TRACER_METRIC_NOISE";
