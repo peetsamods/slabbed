@@ -14,6 +14,7 @@ import net.minecraft.block.CaveVinesBodyBlock;
 import net.minecraft.block.CaveVinesHeadBlock;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.block.CraftingTableBlock;
+import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.HangingRootsBlock;
@@ -196,6 +197,19 @@ public final class SlabSupport {
                 && state.get(Properties.AXIS) == Direction.Axis.Y;
     }
 
+    public static boolean isBeta35RegularDoorVisibleOwnerObject(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        if (!(state.getBlock() instanceof DoorBlock) || !state.contains(Properties.DOUBLE_BLOCK_HALF)) {
+            return false;
+        }
+        double objectDy = getYOffset(world, pos, state);
+        return Double.isFinite(objectDy) && objectDy < -1.0e-6d;
+    }
+
     public static boolean isBeta35LoweredTrapdoorOrFloorButtonVisibleTarget(
             BlockView world, BlockPos pos, BlockState state
     ) {
@@ -276,7 +290,8 @@ public final class SlabSupport {
         }
         if (!isBeta35FloorButtonContactObject(state)
                 && !isBeta35BottomTrapdoorVisibleOwnerObject(state)
-                && !isBeta35VerticalChainVisibleOwnerObject(state)) {
+                && !isBeta35VerticalChainVisibleOwnerObject(state)
+                && !isBeta35RegularDoorVisibleOwnerObject(world, pos, state)) {
             return false;
         }
         double objectDy = getYOffset(world, pos, state);
