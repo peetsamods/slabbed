@@ -210,6 +210,56 @@ public final class SlabSupport {
         return Double.isFinite(objectDy) && objectDy < -1.0e-6d;
     }
 
+    public static boolean isBeta35LoweredRegularDoorServerHitTarget(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (!isBeta35RegularDoorVisibleOwnerObject(world, pos, state)) {
+            return false;
+        }
+        if (!hasConsistentBeta35RegularDoorPair(world, pos, state)) {
+            return false;
+        }
+        double targetDy = getBeta35ShiftedServerValidationYOffset(world, pos, state);
+        return Double.isFinite(targetDy) && targetDy < -1.0e-6d;
+    }
+
+    private static boolean hasConsistentBeta35RegularDoorPair(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null
+                || !(state.getBlock() instanceof DoorBlock)
+                || !state.contains(Properties.DOUBLE_BLOCK_HALF)) {
+            return false;
+        }
+        DoubleBlockHalf half = state.get(Properties.DOUBLE_BLOCK_HALF);
+        BlockPos pairedPos = half == DoubleBlockHalf.LOWER ? pos.up() : pos.down();
+        BlockState pairedState = world.getBlockState(pairedPos);
+        if (pairedState == null
+                || pairedState.getBlock() != state.getBlock()
+                || !pairedState.contains(Properties.DOUBLE_BLOCK_HALF)
+                || pairedState.get(Properties.DOUBLE_BLOCK_HALF) == half) {
+            return false;
+        }
+        if (state.contains(Properties.HORIZONTAL_FACING)
+                && pairedState.contains(Properties.HORIZONTAL_FACING)
+                && state.get(Properties.HORIZONTAL_FACING) != pairedState.get(Properties.HORIZONTAL_FACING)) {
+            return false;
+        }
+        if (state.contains(Properties.DOOR_HINGE)
+                && pairedState.contains(Properties.DOOR_HINGE)
+                && state.get(Properties.DOOR_HINGE) != pairedState.get(Properties.DOOR_HINGE)) {
+            return false;
+        }
+        if (state.contains(Properties.OPEN)
+                && pairedState.contains(Properties.OPEN)
+                && state.get(Properties.OPEN) != pairedState.get(Properties.OPEN)) {
+            return false;
+        }
+        return !state.contains(Properties.POWERED)
+                || !pairedState.contains(Properties.POWERED)
+                || state.get(Properties.POWERED) == pairedState.get(Properties.POWERED);
+    }
+
     public static boolean isBeta35LoweredTrapdoorOrFloorButtonVisibleTarget(
             BlockView world, BlockPos pos, BlockState state
     ) {
@@ -315,9 +365,9 @@ public final class SlabSupport {
                 && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
     }
 
-    private static boolean isBeta35OakDoorContactObject(BlockState state) {
+    private static boolean isBeta35RegularDoorContactObject(BlockState state) {
         return state != null
-                && state.isOf(Blocks.OAK_DOOR)
+                && state.getBlock() instanceof DoorBlock
                 && state.contains(Properties.DOUBLE_BLOCK_HALF);
     }
 
@@ -418,15 +468,15 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35OakDoorContactDy(BlockView world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || !isBeta35OakDoorContactObject(state)) {
+    private static double beta35RegularDoorContactDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35RegularDoorContactObject(state)) {
             return Double.NaN;
         }
         BlockPos bottomPos = pos;
         if (state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
             bottomPos = pos.down();
             BlockState bottomState = world.getBlockState(bottomPos);
-            if (!isBeta35OakDoorContactObject(bottomState)
+            if (!isBeta35RegularDoorContactObject(bottomState)
                     || bottomState.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
                 return Double.NaN;
             }
@@ -1437,9 +1487,9 @@ public final class SlabSupport {
             if (Double.isFinite(oakTrapdoorContactDy)) {
                 return oakTrapdoorContactDy;
             }
-            double oakDoorContactDy = beta35OakDoorContactDy(world, pos, state);
-            if (Double.isFinite(oakDoorContactDy)) {
-                return oakDoorContactDy;
+            double regularDoorContactDy = beta35RegularDoorContactDy(world, pos, state);
+            if (Double.isFinite(regularDoorContactDy)) {
+                return regularDoorContactDy;
             }
             double standingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
             if (Double.isFinite(standingOakSignContactDy)) {
@@ -1511,9 +1561,9 @@ public final class SlabSupport {
             return oakTrapdoorContactDy;
         }
 
-        double oakDoorContactDy = beta35OakDoorContactDy(world, pos, state);
-        if (Double.isFinite(oakDoorContactDy)) {
-            return oakDoorContactDy;
+        double regularDoorContactDy = beta35RegularDoorContactDy(world, pos, state);
+        if (Double.isFinite(regularDoorContactDy)) {
+            return regularDoorContactDy;
         }
 
         double standingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);

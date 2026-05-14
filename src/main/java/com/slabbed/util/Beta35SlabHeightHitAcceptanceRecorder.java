@@ -217,10 +217,15 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 world, hit.getBlockPos(), targetState);
         String failureLayer = "NONE";
         if (tooFar && !shiftedGreen) {
-            failureLayer = SlabSupport.isBeta35LoweredBottomTrapdoorServerHitTarget(
-                    world, hit.getBlockPos(), targetState)
-                    ? "LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP"
-                    : "HIT_ACCEPTANCE_SERVER_REJECT";
+            if (SlabSupport.isBeta35LoweredBottomTrapdoorServerHitTarget(
+                    world, hit.getBlockPos(), targetState)) {
+                failureLayer = "LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP";
+            } else if (SlabSupport.isBeta35LoweredRegularDoorServerHitTarget(
+                    world, hit.getBlockPos(), targetState)) {
+                failureLayer = "REGULAR_DOOR_SERVER_SHIFTED_VALIDATION_GAP";
+            } else {
+                failureLayer = "HIT_ACCEPTANCE_SERVER_REJECT";
+            }
         }
         Slabbed.LOGGER.info(
                 "[JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE_SAMPLE] phase=server-hit classification={} failureLayer={} heldItem={} heldItemCategory={} packetBlockPos={} hitFace={} hitVec={} validationCenter={} validationDelta={} shiftedValidationCenter={} shiftedValidationDelta={} tolerance={} targetState={} targetDy={} slabHeightCategory={} diagnosticsOnly=true releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false",

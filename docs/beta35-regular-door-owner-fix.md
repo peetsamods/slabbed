@@ -49,3 +49,26 @@ Stairs remain explicit deferred scope: `STAIRS_VISIBLE_OWNER_DEFERRED`, not fixe
 ## Scope
 
 This is automated-proof green only. Julia live acceptance is still required. Release audit remains paused. No release tag was moved.
+
+## 2026-05-14 Continuation: Door Half Server Validation
+
+Continuation base: `e23c62a` / `save/beta35-door-owner-slab-jump`.
+
+Julia's 7:20 live source truth after the visible-owner fix showed support steal was gone for regular doors (`HIT_ACCEPTANCE_SUPPORT_STEAL=0`) and regular-door owner rows were frequent, but server validation still rejected lowered door hits. The live reject distribution was `spruce_door=21`, `acacia_door=2`, mostly upper-half rows, with `targetDy=-1.000000`, `shiftedValidationCenter=null`, and `failureLayer=HIT_ACCEPTANCE_SERVER_REJECT`.
+
+This continuation narrows the fix to regular `DoorBlock` server validation and paired half durability:
+
+- regular door contact dy now applies to all regular `DoorBlock` halves, not only oak;
+- server shifted validation accepts lowered regular doors only when the paired half exists and is consistent;
+- the shifted hit still has to remain inside the vanilla component tolerance;
+- upper and lower half clicks both toggle the paired door durably.
+
+Focused proof flag:
+
+`-Dslabbed.beta35DoorHalfServerValidationFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+
+Green summary:
+
+`JULIA_BETA35_DOOR_HALF_SERVER_VALIDATION_SUMMARY outcome=GREEN rows=8 green=8 red=0 spruceUpperServerRejectRowsBefore=20 spruceUpperServerRejectRowsAfter=0 spruceLowerServerRejectRowsBefore=1 spruceLowerServerRejectRowsAfter=0 acaciaUpperServerRejectRowsBefore=2 acaciaUpperServerRejectRowsAfter=0 beforeFailureLayer=REGULAR_DOOR_SERVER_SHIFTED_VALIDATION_GAP afterFailureLayer=NONE openState=JULIA_BETA35_DOOR_HALF_OPEN_STATE_GREEN negativeBoundary=JULIA_BETA35_DOOR_HALF_SERVER_NEGATIVE_GREEN slabJumpStatus=SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`
+
+Half-targeting is structurally normal because vanilla doors are two blocks. The inconsistent rejection/blinking layer is fixed in automated proof; Julia live acceptance remains required.

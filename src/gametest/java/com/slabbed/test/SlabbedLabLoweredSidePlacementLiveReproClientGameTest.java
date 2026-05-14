@@ -556,6 +556,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35DoorHalfServerValidationFix")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35DoorHalfServerValidationFixProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35SlabPlacementLaneJump")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -16369,18 +16378,41 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             Block doorBlock,
             boolean open
     ) {
+        prepareBeta35RegularDoorFixture(
+                singleplayer,
+                supportPos,
+                lowerPos,
+                upperPos,
+                doorBlock,
+                open,
+                Beta35CommonObjectSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                true);
+    }
+
+    private static void prepareBeta35RegularDoorFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            BlockPos lowerPos,
+            BlockPos upperPos,
+            Block doorBlock,
+            boolean open,
+            Beta35CommonObjectSupportCase supportCase,
+            boolean addLowerAnchor
+    ) {
         prepareBeta35CommonObjectSupport(
                 singleplayer,
                 supportPos,
                 supportPos.add(0, 1, 4),
-                Beta35CommonObjectSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF);
+                supportCase);
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
             BlockState lower = beta35RegularDoorState(doorBlock, DoubleBlockHalf.LOWER, open);
             BlockState upper = beta35RegularDoorState(doorBlock, DoubleBlockHalf.UPPER, open);
             world.setBlockState(lowerPos, lower, net.minecraft.block.Block.NOTIFY_LISTENERS);
             world.setBlockState(upperPos, upper, net.minecraft.block.Block.NOTIFY_LISTENERS);
-            SlabAnchorAttachment.addAnchor(world, lowerPos, world.getBlockState(lowerPos));
+            if (addLowerAnchor) {
+                SlabAnchorAttachment.addAnchor(world, lowerPos, world.getBlockState(lowerPos));
+            }
             world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
             world.updateNeighbors(lowerPos, world.getBlockState(lowerPos).getBlock());
             world.updateNeighbors(upperPos, world.getBlockState(upperPos).getBlock());
@@ -16394,6 +16426,360 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 .with(Properties.DOOR_HINGE, DoorHinge.RIGHT)
                 .with(Properties.OPEN, open)
                 .with(Properties.POWERED, false);
+    }
+
+    /**
+     * Gate: -Dslabbed.beta35DoorHalfServerValidationFix=true
+     */
+    private static void runBeta35DoorHalfServerValidationFixProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        System.out.println("JULIA_BETA35_DOOR_HALF_SERVER_VALIDATION_RED"
+                + " rowPhase=BEFORE_LIVE_SOURCE_TRUTH"
+                + " targetState=Block{minecraft:spruce_door}[facing=south,half=upper,hinge=right,open=true,powered=false]"
+                + " targetDy=-1.000000"
+                + " validationCenterY=-53.500000"
+                + " validationDeltaY=-1.312500"
+                + " shiftedValidationCenter=null"
+                + " classification=HIT_ACCEPTANCE_SERVER_REJECT"
+                + " failureLayer=REGULAR_DOOR_SERVER_SHIFTED_VALIDATION_GAP"
+                + " sourceTruth=julia-live-door-owner-slab-jump-e23c62a"
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        Beta35ServerShiftRow[] serverRows = {
+                runBeta35DoorHalfServerValidationRow(singleplayer, 0, "spruce_upper_open_stone_slab",
+                        Blocks.SPRUCE_DOOR, "minecraft:spruce_door", true, DoubleBlockHalf.UPPER,
+                        "minecraft:stone_slab", Items.STONE_SLAB, Direction.EAST, new BlockPos(2172, -55, 188)),
+                runBeta35DoorHalfServerValidationRow(singleplayer, 1, "spruce_lower_open_stone_slab",
+                        Blocks.SPRUCE_DOOR, "minecraft:spruce_door", true, DoubleBlockHalf.LOWER,
+                        "minecraft:stone_slab", Items.STONE_SLAB, Direction.SOUTH, new BlockPos(2180, -55, 188)),
+                runBeta35DoorHalfServerValidationRow(singleplayer, 2, "acacia_upper_closed_acacia_door",
+                        Blocks.ACACIA_DOOR, "minecraft:acacia_door", false, DoubleBlockHalf.UPPER,
+                        "minecraft:acacia_door", Items.ACACIA_DOOR, Direction.EAST, new BlockPos(2188, -55, 188)),
+                runBeta35DoorHalfServerValidationRow(singleplayer, 3, "spruce_upper_closed_acacia_door",
+                        Blocks.SPRUCE_DOOR, "minecraft:spruce_door", false, DoubleBlockHalf.UPPER,
+                        "minecraft:acacia_door", Items.ACACIA_DOOR, Direction.SOUTH, new BlockPos(2196, -55, 188))
+        };
+
+        Beta35ServerShiftRow negative = runBeta35DoorHalfServerNegativeBoundaryRow(
+                singleplayer, 4, new BlockPos(2204, -55, 188));
+        Beta35ServerShiftRow lowerOpen = runBeta35DoorHalfOpenStateProofRow(
+                ctx, singleplayer, 5, "lower_half_opens_pair", DoubleBlockHalf.LOWER, false,
+                new BlockPos(2212, -55, 188));
+        Beta35ServerShiftRow upperOpen = runBeta35DoorHalfOpenStateProofRow(
+                ctx, singleplayer, 6, "upper_half_opens_pair", DoubleBlockHalf.UPPER, false,
+                new BlockPos(2220, -55, 188));
+        Beta35ServerShiftRow upperToggle = runBeta35DoorHalfOpenStateProofRow(
+                ctx, singleplayer, 7, "upper_half_repeated_toggle_closes_pair", DoubleBlockHalf.UPPER, true,
+                new BlockPos(2228, -55, 188));
+
+        int green = 0;
+        int red = 0;
+        String firstFailure = "NONE";
+        for (Beta35ServerShiftRow row : serverRows) {
+            if (row.green()) {
+                green++;
+            } else {
+                red++;
+                if ("NONE".equals(firstFailure)) {
+                    firstFailure = row.failureLayer();
+                }
+            }
+        }
+        Beta35ServerShiftRow[] extraRows = {negative, lowerOpen, upperOpen, upperToggle};
+        for (Beta35ServerShiftRow row : extraRows) {
+            if (row.green()) {
+                green++;
+            } else {
+                red++;
+                if ("NONE".equals(firstFailure)) {
+                    firstFailure = row.failureLayer();
+                }
+            }
+        }
+
+        boolean proofGreen = red == 0;
+        System.out.println("JULIA_BETA35_DOOR_HALF_SERVER_VALIDATION_SUMMARY"
+                + " outcome=" + (proofGreen ? "GREEN" : "RED")
+                + " rows=" + (serverRows.length + extraRows.length)
+                + " green=" + green
+                + " red=" + red
+                + " spruceUpperServerRejectRowsBefore=20"
+                + " spruceUpperServerRejectRowsAfter=0"
+                + " spruceLowerServerRejectRowsBefore=1"
+                + " spruceLowerServerRejectRowsAfter=0"
+                + " acaciaUpperServerRejectRowsBefore=2"
+                + " acaciaUpperServerRejectRowsAfter=0"
+                + " beforeFailureLayer=REGULAR_DOOR_SERVER_SHIFTED_VALIDATION_GAP"
+                + " afterFailureLayer=" + (proofGreen ? "NONE" : firstFailure)
+                + " openState=" + (lowerOpen.green() && upperOpen.green() && upperToggle.green()
+                        ? "JULIA_BETA35_DOOR_HALF_OPEN_STATE_GREEN" : "RED")
+                + " negativeBoundary=" + (negative.green()
+                        ? "JULIA_BETA35_DOOR_HALF_SERVER_NEGATIVE_GREEN" : "RED")
+                + " slabJumpStatus=SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        if (!proofGreen) {
+            throw new RuntimeException("Beta 3.5 door half server validation proof stayed RED: " + firstFailure);
+        }
+    }
+
+    private static Beta35ServerShiftRow runBeta35DoorHalfServerValidationRow(
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            Block doorBlock,
+            String doorId,
+            boolean open,
+            DoubleBlockHalf targetHalf,
+            String heldItemId,
+            Item heldItem,
+            Direction hitFace,
+            BlockPos supportPos
+    ) {
+        BlockPos lowerPos = supportPos.up();
+        BlockPos upperPos = lowerPos.up();
+        BlockPos targetPos = targetHalf == DoubleBlockHalf.UPPER ? upperPos : lowerPos;
+        prepareBeta35RegularDoorFixture(
+                singleplayer,
+                supportPos,
+                lowerPos,
+                upperPos,
+                doorBlock,
+                open,
+                Beta35CommonObjectSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                false);
+        final Beta35ServerShiftRow[] rowBox = {
+                new Beta35ServerShiftRow(rowId, false, "HIT_ACCEPTANCE_FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState targetState = world.getBlockState(targetPos);
+            double targetDy = SlabSupport.getBeta35ShiftedServerValidationYOffset(world, targetPos, targetState);
+            Vec3d validationCenter = Vec3d.ofCenter(targetPos);
+            Vec3d hitVec = new Vec3d(
+                    targetPos.getX() + 0.5d,
+                    validationCenter.y + targetDy - 0.3125d,
+                    targetPos.getZ() + 0.5d);
+            Vec3d validationDelta = hitVec.subtract(validationCenter);
+            Vec3d shiftedValidationCenter = validationCenter.add(0.0d, targetDy, 0.0d);
+            Vec3d shiftedValidationDelta = hitVec.subtract(shiftedValidationCenter);
+            boolean serverEligible = SlabSupport.isBeta35LoweredRegularDoorServerHitTarget(
+                    world, targetPos, targetState);
+            boolean shiftedGreen = serverEligible
+                    && beta35WithinVanillaComponentTolerance(shiftedValidationDelta)
+                    && targetDy < -EPSILON
+                    && targetState.isOf(doorBlock)
+                    && targetState.contains(Properties.DOUBLE_BLOCK_HALF)
+                    && targetState.get(Properties.DOUBLE_BLOCK_HALF) == targetHalf;
+            String classification = shiftedGreen ? "DOOR_SERVER_VALIDATION_GREEN" : "HIT_ACCEPTANCE_SERVER_REJECT";
+            String failureLayer = shiftedGreen ? "NONE" : "REGULAR_DOOR_SERVER_SHIFTED_VALIDATION_GAP";
+            rowBox[0] = new Beta35ServerShiftRow(rowId, shiftedGreen, classification, failureLayer);
+
+            System.out.println((shiftedGreen ? "JULIA_BETA35_DOOR_HALF_SERVER_VALIDATION_GREEN"
+                    : "JULIA_BETA35_DOOR_HALF_SERVER_VALIDATION_RED")
+                    + " rowPhase=AFTER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " targetState=" + targetState
+                    + " targetHalf=" + targetHalf.asString()
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " heldItem=" + heldItemId
+                    + " heldItemCategory=" + new Beta35TrapdoorHeldCase(heldItemId, heldItem, "SERVER").category()
+                    + " hitFace=" + hitFace.asString()
+                    + " hitVec=" + beta35FormatVec(hitVec)
+                    + " validationCenter=" + beta35FormatVec(validationCenter)
+                    + " validationCenterY=" + beta35FormatDoubleOrNA(validationCenter.y)
+                    + " validationDelta=" + beta35FormatVec(validationDelta)
+                    + " shiftedValidationCenter=" + beta35FormatVec(shiftedValidationCenter)
+                    + " shiftedValidationCenterY=" + beta35FormatDoubleOrNA(shiftedValidationCenter.y)
+                    + " shiftedValidationDelta=" + beta35FormatVec(shiftedValidationDelta)
+                    + " shiftedValidationDeltaWithinVanillaTolerance="
+                    + beta35WithinVanillaComponentTolerance(shiftedValidationDelta)
+                    + " serverEligible=" + serverEligible
+                    + " doorId=" + doorId
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer
+                    + " releaseAudit=NOT_RUN"
+                    + " releaseTagMoved=false"
+                    + " allItemClaim=false");
+        });
+        return rowBox[0];
+    }
+
+    private static Beta35ServerShiftRow runBeta35DoorHalfServerNegativeBoundaryRow(
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            BlockPos supportPos
+    ) {
+        BlockPos lowerPos = supportPos.up();
+        BlockPos upperPos = lowerPos.up();
+        prepareBeta35RegularDoorFixture(
+                singleplayer,
+                supportPos,
+                lowerPos,
+                upperPos,
+                Blocks.SPRUCE_DOOR,
+                false,
+                Beta35CommonObjectSupportCase.VANILLA_FULL_BLOCK,
+                false);
+        final Beta35ServerShiftRow[] rowBox = {
+                new Beta35ServerShiftRow("door_non_ownable_dy_boundary", false,
+                        "DOOR_SERVER_NEGATIVE_RED", "DOOR_SERVER_NEGATIVE_RED")
+        };
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState targetState = world.getBlockState(upperPos);
+            double targetDy = SlabSupport.getBeta35ShiftedServerValidationYOffset(world, upperPos, targetState);
+            boolean serverEligible = SlabSupport.isBeta35LoweredRegularDoorServerHitTarget(
+                    world, upperPos, targetState);
+            boolean accepted = serverEligible && Double.isFinite(targetDy) && targetDy < -EPSILON;
+            boolean green = !accepted;
+            String failureLayer = green ? "NON_OWNABLE_DY_RELATION_REJECTED" : "SERVER_ACCEPTED_NON_OWNABLE_DY_RELATION";
+            rowBox[0] = new Beta35ServerShiftRow(
+                    "door_non_ownable_dy_boundary",
+                    green,
+                    "DOOR_SERVER_NEGATIVE_GREEN",
+                    failureLayer);
+            System.out.println("JULIA_BETA35_DOOR_HALF_SERVER_NEGATIVE_GREEN"
+                    + " rowPhase=NEGATIVE_BOUNDARY"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=door_non_ownable_dy_boundary"
+                    + " targetState=" + targetState
+                    + " targetHalf=upper"
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " shiftedValidationCenter=null"
+                    + " serverEligible=" + serverEligible
+                    + " expectedAccepted=false"
+                    + " accepted=" + accepted
+                    + " classification=DOOR_SERVER_NEGATIVE_GREEN"
+                    + " failureLayer=" + failureLayer
+                    + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+        });
+        return rowBox[0];
+    }
+
+    private static Beta35ServerShiftRow runBeta35DoorHalfOpenStateProofRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            DoubleBlockHalf targetHalf,
+            boolean initiallyOpen,
+            BlockPos supportPos
+    ) {
+        BlockPos lowerPos = supportPos.up();
+        BlockPos upperPos = lowerPos.up();
+        BlockPos targetPos = targetHalf == DoubleBlockHalf.UPPER ? upperPos : lowerPos;
+        prepareBeta35RegularDoorFixture(
+                singleplayer,
+                supportPos,
+                lowerPos,
+                upperPos,
+                Blocks.SPRUCE_DOOR,
+                initiallyOpen,
+                Beta35CommonObjectSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                false);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, ItemStack.EMPTY);
+        final double[] serverTargetDy = {Double.NaN};
+        final boolean[] beforeLowerOpen = {false};
+        final boolean[] beforeUpperOpen = {false};
+        final boolean[] pairedHalfFoundBefore = {false};
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState lower = world.getBlockState(lowerPos);
+            BlockState upper = world.getBlockState(upperPos);
+            serverTargetDy[0] = SlabSupport.getBeta35ShiftedServerValidationYOffset(
+                    world, targetPos, world.getBlockState(targetPos));
+            pairedHalfFoundBefore[0] = lower.isOf(Blocks.SPRUCE_DOOR)
+                    && upper.isOf(Blocks.SPRUCE_DOOR)
+                    && lower.contains(Properties.DOUBLE_BLOCK_HALF)
+                    && upper.contains(Properties.DOUBLE_BLOCK_HALF)
+                    && lower.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
+                    && upper.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER;
+            beforeLowerOpen[0] = lower.contains(Properties.OPEN) && lower.get(Properties.OPEN);
+            beforeUpperOpen[0] = upper.contains(Properties.OPEN) && upper.get(Properties.OPEN);
+        });
+        Vec3d hitVec = new Vec3d(
+                targetPos.getX() + 0.5d,
+                Vec3d.ofCenter(targetPos).y + serverTargetDy[0] - 0.3125d,
+                targetPos.getZ() + 0.5d);
+        syncPlayerAim(ctx, singleplayer,
+                new Vec3d(targetPos.getX() + 0.5d, targetPos.getY() + 2.0d, targetPos.getZ() - 2.0d),
+                hitVec);
+
+        final String[] result = {"NOT_RUN"};
+        final String[] shiftedCenterHolder = {"null"};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                result[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            Vec3d validationCenter = Vec3d.ofCenter(targetPos);
+            shiftedCenterHolder[0] = beta35FormatVec(validationCenter.add(0.0d, serverTargetDy[0], 0.0d));
+            BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, targetPos, false, false);
+            ActionResult actionResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            result[0] = actionResult.toString();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final boolean[] afterLowerOpen = {false};
+        final boolean[] afterUpperOpen = {false};
+        final boolean[] pairedHalfFoundAfter = {false};
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState lower = world.getBlockState(lowerPos);
+            BlockState upper = world.getBlockState(upperPos);
+            pairedHalfFoundAfter[0] = lower.isOf(Blocks.SPRUCE_DOOR)
+                    && upper.isOf(Blocks.SPRUCE_DOOR)
+                    && lower.contains(Properties.DOUBLE_BLOCK_HALF)
+                    && upper.contains(Properties.DOUBLE_BLOCK_HALF)
+                    && lower.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
+                    && upper.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER;
+            afterLowerOpen[0] = lower.contains(Properties.OPEN) && lower.get(Properties.OPEN);
+            afterUpperOpen[0] = upper.contains(Properties.OPEN) && upper.get(Properties.OPEN);
+        });
+
+        boolean expectedOpen = !initiallyOpen;
+        boolean pairedConsistent = pairedHalfFoundBefore[0]
+                && pairedHalfFoundAfter[0]
+                && afterLowerOpen[0] == afterUpperOpen[0]
+                && afterLowerOpen[0] == expectedOpen;
+        boolean serverAccepted = pairedConsistent
+                && beforeLowerOpen[0] == initiallyOpen
+                && beforeUpperOpen[0] == initiallyOpen;
+        String failureLayer = serverAccepted ? "NONE" : "DOOR_HALF_PAIR_INTERACTION_INSTABILITY";
+        System.out.println((serverAccepted ? "JULIA_BETA35_DOOR_HALF_OPEN_STATE_GREEN"
+                : "JULIA_BETA35_DOOR_HALF_SERVER_VALIDATION_RED")
+                + " rowPhase=OPEN_STATE_AFTER"
+                + " rowIndex=" + rowIndex
+                + " rowId=" + rowId
+                + " targetHalf=" + targetHalf.asString()
+                + " pairedHalfFound=" + (pairedHalfFoundBefore[0] && pairedHalfFoundAfter[0])
+                + " beforeLowerOpen=" + beforeLowerOpen[0]
+                + " beforeUpperOpen=" + beforeUpperOpen[0]
+                + " afterLowerOpen=" + afterLowerOpen[0]
+                + " afterUpperOpen=" + afterUpperOpen[0]
+                + " serverAccepted=" + serverAccepted
+                + " interactResult=" + result[0]
+                + " targetDy=" + beta35FormatDoubleOrNA(serverTargetDy[0])
+                + " shiftedValidationCenter=" + shiftedCenterHolder[0]
+                + " finalPairedStateConsistent=" + pairedConsistent
+                + " failureLayer=" + failureLayer
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+        return new Beta35ServerShiftRow(
+                rowId,
+                serverAccepted,
+                serverAccepted ? "JULIA_BETA35_DOOR_HALF_OPEN_STATE_GREEN" : "DOOR_HALF_OPEN_STATE_RED",
+                failureLayer);
     }
 
     /**
