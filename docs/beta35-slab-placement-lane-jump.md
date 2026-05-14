@@ -40,3 +40,17 @@ No neighbor dy renormalization was observed in the automated proof (`neighborDyR
 ## Scope
 
 No broad `dy=-1` lane was added. No global hit tolerance, collision, solidity, or sturdy-face behavior changed. No all-item gameplay claim was made. Julia live acceptance remains required.
+
+## 2026-05-14 Continuation: Door Half Server Validation
+
+Continuation base: `e23c62a` / `save/beta35-door-owner-slab-jump`.
+
+This continuation fixed regular `DoorBlock` shifted server validation for upper and lower halves. It did not change the slab placement grammar.
+
+Current slab status remains:
+
+`SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE`
+
+The door-half proof summary carries the same status:
+
+`slabJumpStatus=SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE`

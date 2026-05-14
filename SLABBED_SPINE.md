@@ -41,6 +41,18 @@ Tracked tree is clean.
 
 ## Current Beta 3.5 regular door owner and slab placement lane status
 
+Operating base before latest continuation: `e23c62a` / `save/beta35-door-owner-slab-jump` on `integrate/phase19-into-side-slab-top-support`.
+
+Julia's 2026-05-14 7:20 live source truth after `e23c62a` showed regular-door visible ownership was mostly fixed (`REGULAR_DOOR_OWNER_GREEN=1621`, `HIT_ACCEPTANCE_SUPPORT_STEAL=0`), but regular doors still behaved inconsistently when upper/lower halves were targeted. The live extract had `HIT_ACCEPTANCE_SERVER_REJECT=23`, `SERVER_HIT_TOO_FAR=0`, and `CONTACT_GAP=0`; rejects were `spruce_door=21` and `acacia_door=2`, mostly upper-half rows with `targetDy=-1.000000` and `shiftedValidationCenter=null`.
+
+Narrow production change after `e23c62a`: regular `DoorBlock` halves now share the existing Beta 3.5 door contact-dy path, and server shifted validation admits only lowered, paired, internally consistent regular doors. The shifted center still has to pass the vanilla component tolerance. This fixes `REGULAR_DOOR_SERVER_SHIFTED_VALIDATION_GAP` and paired half interaction durability without changing trapdoor server validation, fence/wall, buttons, chains, global hit tolerance, global collision, solidity/sturdy-face behavior, or slab-lane grammar.
+
+Focused proof flag: `-Dslabbed.beta35DoorHalfServerValidationFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`. Current summary: `JULIA_BETA35_DOOR_HALF_SERVER_VALIDATION_SUMMARY outcome=GREEN rows=8 green=8 red=0 spruceUpperServerRejectRowsBefore=20 spruceUpperServerRejectRowsAfter=0 spruceLowerServerRejectRowsBefore=1 spruceLowerServerRejectRowsAfter=0 acaciaUpperServerRejectRowsBefore=2 acaciaUpperServerRejectRowsAfter=0 beforeFailureLayer=REGULAR_DOOR_SERVER_SHIFTED_VALIDATION_GAP afterFailureLayer=NONE openState=JULIA_BETA35_DOOR_HALF_OPEN_STATE_GREEN negativeBoundary=JULIA_BETA35_DOOR_HALF_SERVER_NEGATIVE_GREEN slabJumpStatus=SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`. Upper/lower server rows use `targetDy=-1.000000`, `shiftedValidationCenterY=validationCenterY + targetDy`, and shifted deltas within vanilla tolerance. Lower-half open, upper-half open, and repeated upper-half toggle all leave the paired door state consistent.
+
+Regression gates for this continuation are automated-proof green: compile, focused door-half server validation, regular-door owner regression, trapdoor server validation, visible-owner stability, floor-button contact, aperture, fence/wall visual-hitbox stack aim, fence/wall stack contact, fence/wall owner-server hit, candle contact, flower-pot contact, flower-pot survival, common-object matrix, default `runClientGameTest` rerun, `runClient` startup smoke, and `git diff --check`. The first default run hit a Fabric client-gametest network synchronizer crash after a lowered-double boundary case; the immediate same-command rerun passed.
+
+Release audit remains paused. Julia live acceptance is still required. No release tag was moved, no release audit was run, and no release-ready or all-item gameplay claim is made.
+
 Operating base before this continuation: `23b562c` / `save/beta35-trapdoor-server-validation` on `integrate/phase19-into-side-slab-top-support`.
 
 Julia's 2026-05-14 6:30 live source truth after trapdoor server validation is close but not release-ready: trapdoors, chains, buttons, and torches are much improved, while regular doors still lose targeting to the support slab and slab placement/break neighbor updates still visibly jump around the lowered lane. The live support-steal extract had `HIT_ACCEPTANCE_SUPPORT_STEAL=31`: `minecraft:spruce_door=23`, `minecraft:acacia_door=3`, and `minecraft:birch_stairs=5`.
