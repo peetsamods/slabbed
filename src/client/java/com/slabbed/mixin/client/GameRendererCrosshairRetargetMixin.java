@@ -62,6 +62,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
     @Shadow @Final private MinecraftClient client;
     private static final long BETA4_FINAL_TARGET_TRACE_MIN_INTERVAL_NANOS = 1_000_000_000L;
+    private static final double BETA35_VISIBLE_OWNER_SUPPORT_OVERRUN = 0.75d;
     private static String slabbed$beta4FinalTargetTraceLastSignature;
     private static long slabbed$beta4FinalTargetTraceLastLogNanos;
     private static boolean slabbed$beta4LiveRetargetRecorderStartLogged;
@@ -122,9 +123,15 @@ public abstract class GameRendererCrosshairRetargetMixin {
                         tickProgress,
                         initialTarget,
                         initialHit);
+                BlockHitResult originalSideOwner = sideOwner;
+                sideOwner = slabbed$preserveBeta35VisibleOwnerBeforeSupport(tickProgress, sideOwner);
                 if (sideOwner != null) {
                     client.crosshairTarget = sideOwner;
-                    slabbed$traceTargeting(tickProgress, initialTarget, "scan-side-slab-fired", true);
+                    slabbed$traceTargeting(
+                            tickProgress,
+                            initialTarget,
+                            slabbed$beta35VisibleOwnerDecision(originalSideOwner, sideOwner, "scan-side-slab-fired"),
+                            !slabbed$beta35VisibleOwnerPreserved(originalSideOwner, sideOwner));
                     return;
                 }
                 slabbed$traceTargeting(
@@ -160,6 +167,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
                         tickProgress,
                         initialTarget,
                         "lowered-slab-face-preserve");
+                BlockHitResult originalSideOwner = sideOwner;
+                sideOwner = slabbed$preserveBeta35VisibleOwnerBeforeSupport(tickProgress, sideOwner);
                 if (sideOwner != null) {
                     BlockHitResult chosenOwner = slabbed$chooseRescue(tickProgress, anchoredOwner, sideOwner, false);
                     if (chosenOwner == anchoredOwner) {
@@ -168,12 +177,26 @@ public abstract class GameRendererCrosshairRetargetMixin {
                         return;
                     }
                     client.crosshairTarget = sideOwner;
-                    slabbed$traceTargeting(tickProgress, initialTarget, "scan-side-slab-fired", true);
+                    slabbed$traceTargeting(
+                            tickProgress,
+                            initialTarget,
+                            slabbed$beta35VisibleOwnerDecision(originalSideOwner, sideOwner, "scan-side-slab-fired"),
+                            !slabbed$beta35VisibleOwnerPreserved(originalSideOwner, sideOwner));
                     return;
                 }
                 if (slabbed$isDistinctOwner(initialHit, anchoredOwner)) {
                     client.crosshairTarget = anchoredOwner;
                     slabbed$traceTargeting(tickProgress, initialTarget, "scan-anchored-fb-fired-slab-held", false);
+                    return;
+                }
+                BlockHitResult visibleOwner = slabbed$preserveBeta35VisibleOwnerBeforeSupport(tickProgress, initialHit);
+                if (slabbed$beta35VisibleOwnerPreserved(initialHit, visibleOwner)) {
+                    client.crosshairTarget = visibleOwner;
+                    slabbed$traceTargeting(
+                            tickProgress,
+                            initialTarget,
+                            slabbed$beta35VisibleOwnerDecision(initialHit, visibleOwner, "visible-object-owner-preserve"),
+                            false);
                     return;
                 }
                 slabbed$traceTargeting(
@@ -203,6 +226,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
         // initial target sits on a farther/underneath block.
         BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
         BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht, slabHeld);
+        BlockHitResult originalLoweredSlabHit = loweredSlabHit;
+        loweredSlabHit = slabbed$preserveBeta35VisibleOwnerBeforeSupport(tickProgress, loweredSlabHit);
         if (slabHeld && slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(tickProgress, initialTarget, loweredSlabHit)) {
             loweredSlabHit = null;
         }
@@ -217,6 +242,13 @@ public abstract class GameRendererCrosshairRetargetMixin {
             String decision;
             if (chosen == loweredChainHit) {
                 decision = "scan-lowered-chain-fired";
+            } else if (slabbed$beta35VisibleOwnerPreserved(originalLoweredSlabHit, loweredSlabHit)
+                    && chosen == loweredSlabHit) {
+                decision = slabbed$beta35VisibleOwnerDecision(
+                        originalLoweredSlabHit,
+                        loweredSlabHit,
+                        "visible-object-owner-preserve");
+                sideSlabFired = false;
             } else if (sideSlabFired) {
                 decision = slabHeld
                         ? (anchoredHit != null ? "scan-side-slab-fired-slab-held-tiebreak" : "scan-side-slab-fired")
@@ -234,9 +266,15 @@ public abstract class GameRendererCrosshairRetargetMixin {
                         tickProgress,
                         initialTarget,
                         "miss-no-rescue-candidate");
+                BlockHitResult originalSideOwner = sideOwner;
+                sideOwner = slabbed$preserveBeta35VisibleOwnerBeforeSupport(tickProgress, sideOwner);
                 if (sideOwner != null) {
                     client.crosshairTarget = sideOwner;
-                    slabbed$traceTargeting(tickProgress, initialTarget, "scan-side-slab-fired", true);
+                    slabbed$traceTargeting(
+                            tickProgress,
+                            initialTarget,
+                            slabbed$beta35VisibleOwnerDecision(originalSideOwner, sideOwner, "scan-side-slab-fired"),
+                            !slabbed$beta35VisibleOwnerPreserved(originalSideOwner, sideOwner));
                     return;
                 }
             }
@@ -275,6 +313,14 @@ public abstract class GameRendererCrosshairRetargetMixin {
                     && SlabSupport.getYOffset(world, abovePos, aboveState) == -0.5;
         }
         if (!loweredOwner) {
+            BlockHitResult visibleOwner = slabbed$preserveBeta35VisibleOwnerBeforeSupport(tickProgress, slabHit);
+            if (slabbed$beta35VisibleOwnerPreserved(slabHit, visibleOwner)) {
+                client.crosshairTarget = visibleOwner;
+                slabbed$traceTargeting(tickProgress, initialTarget,
+                        slabbed$beta35VisibleOwnerDecision(slabHit, visibleOwner, "visible-object-owner-preserve"),
+                        false);
+                return;
+            }
             slabbed$traceTargeting(tickProgress, initialTarget,
                     "scan-no-rescue-candidate;legacy-above-target-not-lowered-owner", false);
             return;
@@ -400,6 +446,20 @@ public abstract class GameRendererCrosshairRetargetMixin {
             if (directHit != null) {
                 return directHit;
             }
+
+            BlockState initialState = world.getBlockState(initialPos);
+            if (slabbed$isBeta35VisibleOwnerSupportSurface(initialState)) {
+                directHit = slabbed$raycastBeta35VisibleOwnerBehindSupport(
+                        world,
+                        cam,
+                        eye,
+                        end,
+                        initialPos.up(),
+                        currentPos);
+                if (directHit != null) {
+                    return directHit;
+                }
+            }
         } else {
             end = eye.add(cam.getRotationVec(tickProgress).multiply(6.0d));
         }
@@ -506,6 +566,98 @@ public abstract class GameRendererCrosshairRetargetMixin {
         return hit.getPos().squaredDistanceTo(eye) <= bestDist2 + 1.0e-6d ? hit : null;
     }
 
+    private static BlockHitResult slabbed$raycastBeta35VisibleOwnerBehindSupport(
+            ClientWorld world,
+            Entity cam,
+            Vec3d eye,
+            Vec3d end,
+            BlockPos pos,
+            Vec3d supportHit
+    ) {
+        BlockState state = world.getBlockState(pos);
+        if (!SlabSupport.isBeta35SlabHeightVisibleOwnerObject(world, pos, state)) {
+            return null;
+        }
+
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        if (outline == null || outline.isEmpty()) {
+            return null;
+        }
+        BlockHitResult hit = outline.raycast(eye, end, pos);
+        if (hit == null) {
+            return null;
+        }
+        double supportDist = supportHit.distanceTo(eye);
+        double ownerDist = hit.getPos().distanceTo(eye);
+        return ownerDist <= supportDist + BETA35_VISIBLE_OWNER_SUPPORT_OVERRUN ? hit : null;
+    }
+
+    private BlockHitResult slabbed$preserveBeta35VisibleOwnerBeforeSupport(float tickProgress, BlockHitResult candidate) {
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (candidate == null || world == null || cam == null || candidate.getType() != HitResult.Type.BLOCK) {
+            return candidate;
+        }
+        BlockPos supportPos = candidate.getBlockPos();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (!slabbed$isBeta35VisibleOwnerSupportSurface(supportState)) {
+            return candidate;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d supportHit = candidate.getPos();
+        Vec3d toSupport = supportHit.subtract(eye);
+        double supportDist = toSupport.length();
+        if (supportDist <= 0.0d) {
+            return candidate;
+        }
+        Vec3d end = eye.add(toSupport.normalize().multiply(supportDist + BETA35_VISIBLE_OWNER_SUPPORT_OVERRUN));
+        BlockHitResult visibleOwner = slabbed$raycastBeta35VisibleOwnerBehindSupport(
+                world,
+                cam,
+                eye,
+                end,
+                supportPos.up(),
+                supportHit);
+        return visibleOwner == null ? candidate : visibleOwner;
+    }
+
+    private boolean slabbed$beta35VisibleOwnerPreserved(BlockHitResult original, BlockHitResult chosen) {
+        if (original == null || chosen == null || original.getBlockPos().equals(chosen.getBlockPos())) {
+            return false;
+        }
+        ClientWorld world = client.world;
+        return world != null
+                && SlabSupport.isBeta35SlabHeightVisibleOwnerObject(
+                        world,
+                        chosen.getBlockPos(),
+                        world.getBlockState(chosen.getBlockPos()));
+    }
+
+    private String slabbed$beta35VisibleOwnerDecision(
+            BlockHitResult original, BlockHitResult chosen, String fallback
+    ) {
+        if (!slabbed$beta35VisibleOwnerPreserved(original, chosen)) {
+            return fallback;
+        }
+        ClientWorld world = client.world;
+        if (world == null) {
+            return "visible-object-owner-preserve";
+        }
+        BlockState state = world.getBlockState(chosen.getBlockPos());
+        if (SlabSupport.isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
+            return "visible-trapdoor-owner-preserve";
+        }
+        if (SlabSupport.isBeta35VerticalChainVisibleOwnerObject(state)) {
+            return "visible-chain-owner-preserve";
+        }
+        return "visible-object-owner-preserve";
+    }
+
+    private static boolean slabbed$isBeta35VisibleOwnerSupportSurface(BlockState state) {
+        return state != null && (state.getBlock() instanceof SlabBlock || SlabSupport.isSupportingSlab(state));
+    }
+
     private static boolean slabbed$isLoweredObjectShapeOwner(ClientWorld world, BlockPos pos, BlockState state) {
         return SlabSupport.isLoweredTorchVisual(world, pos, state)
                 || SlabSupport.isLoweredBlockEntityVisual(world, pos, state)
@@ -520,6 +672,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d
                 && (SlabSupport.isBeta35FenceWallVariantContactObject(state)
                         || state.isOf(Blocks.ANVIL)
+                        || SlabSupport.isBeta35SlabHeightVisibleOwnerObject(world, pos, state)
                         || slabbed$isBeta35SlabHeightApertureOwnerObject(world, pos, state));
     }
 

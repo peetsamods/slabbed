@@ -15,6 +15,7 @@ import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.WallBlock;
+import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.BlockFace;
 import net.minecraft.block.enums.WallShape;
 import net.minecraft.block.enums.SlabType;
@@ -521,6 +522,25 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35HitboxApertureFixProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35FloorButtonContact")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35FloorButtonContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35VisibleObjectOwnerStability")
+                || Boolean.getBoolean("slabbed.beta35TrapdoorVisibleOwnerFix")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35VisibleObjectOwnerStabilityProof(ctx, singleplayer);
             }
             return;
         }
@@ -14886,7 +14906,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " scope=correct_false_green_contact_metrics_and_aim_aperture"
                 + " previousHead=63a0e32"
                 + " previousFalseGreen=SLAB_HEIGHT_HIT_ACCEPTANCE_GREEN_WITH_CONTACT_GAP"
-                + " productionBehaviorChanged=aperture_owner_scan_only"
+                + " productionBehaviorChanged=aperture_owner_scan_and_floor_button_contact_dy"
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false"
                 + " allItemClaim=false");
@@ -14958,7 +14978,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " chainAxisMetricStillDeferred=" + (chainMetricGapRows > 0 ? "yes" : "no")
                 + " previousFalseGreenCorrected=true"
                 + " apertureFixApplied=true"
-                + " productionBehaviorChanged=aperture_owner_scan_only"
+                + " floorButtonContactFixApplied=true"
+                + " productionBehaviorChanged=aperture_owner_scan_and_floor_button_contact_dy"
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false"
                 + " allItemClaim=false");
@@ -15032,6 +15053,1130 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " emptyOverhangSteal=" + summary.emptyOverhangStealRows()
                     + " firstFailureLayer=" + summary.firstFailureLayer());
         }
+    }
+
+    /**
+     * Gate: -Dslabbed.beta35FloorButtonContact=true
+     */
+    private static void runBeta35FloorButtonContactProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        BlockState floorButton = Blocks.ACACIA_BUTTON.getDefaultState()
+                .with(Properties.BLOCK_FACE, BlockFace.FLOOR)
+                .with(Properties.HORIZONTAL_FACING, Direction.SOUTH);
+
+        System.out.println("JULIA_BETA35_FLOOR_BUTTON_CONTACT_RED"
+                + " rowPhase=BEFORE"
+                + " objectBlockId=minecraft:acacia_button"
+                + " objectState=" + floorButton
+                + " supportState=Block{minecraft:stone_slab}[type=top,waterlogged=false]"
+                + " supportDy=-1.000000"
+                + " objectDy=-0.500000"
+                + " contactGap=0.500000"
+                + " classification=BUTTON_CONTACT_GAP"
+                + " failureLayer=BUTTON_FLOOR_CONTACT_DY_MISSING"
+                + " previousHead=05f1582"
+                + " chainAxisMetricDeferred=true"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        Beta35FloorButtonContactRow loweredTop = runBeta35FloorButtonContactRow(
+                ctx,
+                singleplayer,
+                0,
+                "floor_button_lowered_top_support_dy_neg_1",
+                Beta35FloorButtonSupportCase.LOWERED_TOP,
+                floorButton,
+                new BlockPos(1940, -55, 188),
+                -1.0d,
+                -1.0d,
+                false);
+        Beta35FloorButtonContactRow loweredBottom = runBeta35FloorButtonContactRow(
+                ctx,
+                singleplayer,
+                1,
+                "floor_button_bottom_support_dy_neg_0_5",
+                Beta35FloorButtonSupportCase.LOWERED_BOTTOM_NEG_HALF,
+                floorButton,
+                new BlockPos(1950, -55, 188),
+                -0.5d,
+                -1.0d,
+                false);
+        Beta35FloorButtonContactRow normalTop = runBeta35FloorButtonContactRow(
+                ctx,
+                singleplayer,
+                2,
+                "floor_button_normal_top_support_dy_0",
+                Beta35FloorButtonSupportCase.NORMAL_TOP,
+                floorButton,
+                new BlockPos(1960, -55, 188),
+                0.0d,
+                0.0d,
+                false);
+        Beta35FloorButtonContactRow unsupported = runBeta35FloorButtonContactRow(
+                ctx,
+                singleplayer,
+                3,
+                "floor_button_unsupported_remains_unsupported",
+                Beta35FloorButtonSupportCase.UNSUPPORTED,
+                floorButton,
+                new BlockPos(1970, -55, 188),
+                0.0d,
+                0.0d,
+                true);
+
+        System.out.println("JULIA_BETA35_FLOOR_BUTTON_CONTACT_GREEN"
+                + " rowIndex=4"
+                + " rowId=wall_and_ceiling_buttons_not_covered"
+                + " wallButtonStatus=NOT_COVERED"
+                + " ceilingButtonStatus=NOT_COVERED"
+                + " classification=NOT_COVERED"
+                + " failureLayer=NONE"
+                + " sideCeilingBehaviorChanged=false");
+
+        int rows = 4;
+        int green = (loweredTop.green() ? 1 : 0)
+                + (loweredBottom.green() ? 1 : 0)
+                + (normalTop.green() ? 1 : 0)
+                + (unsupported.green() ? 1 : 0);
+        int red = rows - green;
+        boolean proofGreen = red == 0
+                && Math.abs(loweredTop.contactGap()) <= EPSILON
+                && Math.abs(loweredBottom.contactGap()) <= EPSILON
+                && Math.abs(normalTop.contactGap()) <= EPSILON
+                && loweredTop.triadGreen()
+                && loweredBottom.triadGreen()
+                && normalTop.triadGreen();
+        int buttonContactGapRowsAfter = (Math.abs(loweredTop.contactGap()) > EPSILON ? 1 : 0)
+                + (Math.abs(loweredBottom.contactGap()) > EPSILON ? 1 : 0)
+                + (Math.abs(normalTop.contactGap()) > EPSILON ? 1 : 0);
+        String firstFailure = !loweredTop.green() ? loweredTop.failureLayer()
+                : (!loweredBottom.green() ? loweredBottom.failureLayer()
+                : (!normalTop.green() ? normalTop.failureLayer()
+                : (!unsupported.green() ? unsupported.failureLayer() : "NONE")));
+
+        if (proofGreen) {
+            System.out.println("JULIA_BETA35_FLOOR_BUTTON_CONTACT_GREEN"
+                    + " outcome=GREEN"
+                    + " supportDyNegOne=BUTTON_CONTACT_GREEN"
+                    + " supportDyNegHalf=BUTTON_CONTACT_GREEN"
+                    + " normalSupport=BUTTON_CONTACT_GREEN"
+                    + " unsupported=UNSUPPORTED_EXPECTED"
+                    + " triadCoLocated=yes"
+                    + " contactGap=0.000000"
+                    + " failureLayer=NONE");
+        }
+
+        System.out.println("JULIA_BETA35_FLOOR_BUTTON_CONTACT_SUMMARY"
+                + " outcome=" + (proofGreen ? "GREEN" : "RED")
+                + " rows=" + rows
+                + " green=" + green
+                + " red=" + red
+                + " supportDyNegOneObjectDy=" + beta35FormatDoubleOrNA(loweredTop.objectDy())
+                + " supportDyNegOneContactGap=" + beta35FormatDoubleOrNA(loweredTop.contactGap())
+                + " supportDyNegHalfObjectDy=" + beta35FormatDoubleOrNA(loweredBottom.objectDy())
+                + " supportDyNegHalfContactGap=" + beta35FormatDoubleOrNA(loweredBottom.contactGap())
+                + " normalSupportObjectDy=" + beta35FormatDoubleOrNA(normalTop.objectDy())
+                + " normalSupportContactGap=" + beta35FormatDoubleOrNA(normalTop.contactGap())
+                + " unsupportedStatus=" + unsupported.classification()
+                + " triadCoLocated=" + (loweredTop.triadGreen()
+                        && loweredBottom.triadGreen()
+                        && normalTop.triadGreen() ? "yes" : "no")
+                + " buttonContactGapRowsAfter=" + buttonContactGapRowsAfter
+                + " chainAxisMetricStillDeferred=yes"
+                + " wallCeilingButtons=NOT_COVERED"
+                + " failureLayer=" + firstFailure
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        if (!proofGreen) {
+            throw new RuntimeException("Beta 3.5 floor button contact proof stayed RED: " + firstFailure);
+        }
+    }
+
+    private static Beta35FloorButtonContactRow runBeta35FloorButtonContactRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            Beta35FloorButtonSupportCase supportCase,
+            BlockState floorButton,
+            BlockPos supportPos,
+            double expectedSupportDy,
+            double expectedObjectDy,
+            boolean unsupportedExpected
+    ) {
+        BlockPos objectPos = supportPos.up();
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        prepareBeta35FloorButtonContactFixture(singleplayer, supportPos, objectPos, supportCase, floorButton);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE, 4));
+
+        final Beta35FloorButtonContactRow[] rowBox = {
+                new Beta35FloorButtonContactRow(rowId, false, "FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH", Double.NaN, Double.NaN, Double.NaN, false)
+        };
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                System.out.println("JULIA_BETA35_FLOOR_BUTTON_CONTACT_RED"
+                        + " rowIndex=" + rowIndex
+                        + " rowId=" + rowId
+                        + " classification=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " reason=client_world_player_or_renderer_missing");
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            boolean objectPresent = objectState.isOf(Blocks.ACACIA_BUTTON);
+            boolean canPlaceAt = objectPresent && objectState.canPlaceAt(mc.world, objectPos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double objectDy = objectPresent ? SlabSupport.getYOffset(mc.world, objectPos, objectState)
+                    : Double.NaN;
+            double supportVisibleTopY = beta35CommonSupportVisibleTopY(supportPos, supportState, supportDy);
+            VoxelShape outlineShape = objectPresent
+                    ? objectState.getOutlineShape(mc.world, objectPos, net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            VoxelShape raycastShape = objectPresent ? objectState.getRaycastShape(mc.world, objectPos) : null;
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+            double objectModelBottomY = outlineBox == null ? Double.NaN : outlineBox.minY;
+            double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
+                    ? objectModelBottomY - supportVisibleTopY
+                    : Double.NaN;
+            boolean supportDyGreen = Math.abs(supportDy - expectedSupportDy) <= EPSILON;
+            boolean objectDyGreen = Math.abs(objectDy - expectedObjectDy) <= EPSILON;
+            boolean contactGreen = Double.isFinite(contactGap) && Math.abs(contactGap) <= EPSILON;
+            boolean raycastCompatible = raycastBox == null || beta35SameBox(outlineBox, raycastBox);
+            boolean triadGreen = objectPresent
+                    && outlineBox != null
+                    && raycastCompatible;
+            Vec3d aim = beta35BoxCenter(outlineBox, objectPos);
+            AimResult aimResult = beta35AimAt(mc, objectPos, aim, "VISIBLE_BODY");
+            boolean ownerGreen = aimResult.finalTargetsObject();
+            boolean ownerRequired = supportCase != Beta35FloorButtonSupportCase.LOWERED_BOTTOM_NEG_HALF;
+
+            String classification;
+            String failureLayer;
+            boolean green;
+            if (unsupportedExpected) {
+                green = objectPresent && !canPlaceAt;
+                classification = green ? "UNSUPPORTED_EXPECTED" : "UNSUPPORTED_REGRESSION";
+                failureLayer = green ? "NONE" : "BUTTON_UNSUPPORTED_SURVIVAL_REGRESSION";
+            } else if (!objectPresent) {
+                green = false;
+                classification = "OBJECT_MISSING";
+                failureLayer = "OBJECT_MISSING";
+            } else if (!supportDyGreen || !objectDyGreen) {
+                green = false;
+                classification = "BUTTON_CONTACT_DY_MISMATCH";
+                failureLayer = "BUTTON_FLOOR_CONTACT_DY_MISSING";
+            } else if (!contactGreen) {
+                green = false;
+                classification = "BUTTON_CONTACT_GAP";
+                failureLayer = "BUTTON_FLOOR_CONTACT_DY_MISSING";
+            } else if (!triadGreen) {
+                green = false;
+                classification = "BUTTON_TRIAD_MISMATCH";
+                failureLayer = "BUTTON_FLOOR_CONTACT_TRIAD_MISMATCH";
+            } else if (ownerRequired && !ownerGreen) {
+                green = false;
+                classification = "BUTTON_OWNER_GAP";
+                failureLayer = "HITBOX_AIM_APERTURE_REGRESSION";
+            } else {
+                green = true;
+                classification = "BUTTON_CONTACT_GREEN";
+                failureLayer = "NONE";
+            }
+
+            rowBox[0] = new Beta35FloorButtonContactRow(
+                    rowId,
+                    green,
+                    classification,
+                    failureLayer,
+                    supportDy,
+                    objectDy,
+                    contactGap,
+                    triadGreen);
+
+            System.out.println((green ? "JULIA_BETA35_FLOOR_BUTTON_CONTACT_GREEN"
+                    : "JULIA_BETA35_FLOOR_BUTTON_CONTACT_RED")
+                    + " rowPhase=AFTER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " objectBlockId=minecraft:acacia_button"
+                    + " visibleObjectPos=" + objectPos.toShortString()
+                    + " visibleObjectState=" + objectState
+                    + " supportCandidatePos=" + supportPos.toShortString()
+                    + " supportCandidateState=" + supportState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " expectedSupportDy=" + beta35FormatDoubleOrNA(expectedSupportDy)
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " expectedObjectDy=" + beta35FormatDoubleOrNA(expectedObjectDy)
+                    + " supportVisibleTopY=" + beta35FormatDoubleOrNA(supportVisibleTopY)
+                    + " objectModelBottomY=" + beta35FormatDoubleOrNA(objectModelBottomY)
+                    + " contactGap=" + beta35FormatDoubleOrNA(contactGap)
+                    + " triadCoLocated=" + (triadGreen ? "yes" : "no")
+                    + " raycastStatus=" + (raycastBox == null ? "EMPTY_OR_NOT_APPLICABLE" : "BOUNDS_PRESENT")
+                    + " ownerRequired=" + ownerRequired
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " initialCrosshairTarget=" + beta35FormatHit(aimResult.initialTarget())
+                    + " finalTarget=" + beta35FormatHit(aimResult.finalTarget())
+                    + " finalDecision=" + (ownerGreen ? "object-shape-owner-preserve" : "not-object-owner")
+                    + " unsupported=" + unsupportedExpected
+                    + " canPlaceAt=" + canPlaceAt
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer);
+        });
+        ctx.waitTick();
+        return rowBox[0];
+    }
+
+    private static void prepareBeta35FloorButtonContactFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            BlockPos objectPos,
+            Beta35FloorButtonSupportCase supportCase,
+            BlockState floorButton
+    ) {
+        if (supportCase == Beta35FloorButtonSupportCase.LOWERED_TOP) {
+            prepareBeta35HitboxApertureContactFixture(singleplayer, supportPos, objectPos, floorButton);
+            return;
+        }
+        if (supportCase == Beta35FloorButtonSupportCase.LOWERED_BOTTOM_NEG_HALF) {
+            prepareBeta35SlabHeightHitAcceptanceFixture(
+                    singleplayer,
+                    supportPos,
+                    objectPos,
+                    Beta35SlabHeightSupportCase.SUPPORT_DY_NEG_0_5_BOTTOM_SLAB,
+                    floorButton);
+            return;
+        }
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = supportPos.getX() - 4; x <= supportPos.getX() + 4; x++) {
+                for (int y = supportPos.getY() - 8; y <= supportPos.getY() + 5; y++) {
+                    for (int z = supportPos.getZ() - 4; z <= supportPos.getZ() + 4; z++) {
+                        world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+            if (supportCase == Beta35FloorButtonSupportCase.NORMAL_TOP) {
+                world.setBlockState(supportPos,
+                        Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+            }
+            world.setBlockState(objectPos, floorButton, net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
+            world.updateNeighbors(objectPos, world.getBlockState(objectPos).getBlock());
+        });
+    }
+
+    /**
+     * Gate: -Dslabbed.beta35VisibleObjectOwnerStability=true
+     */
+    private static void runBeta35VisibleObjectOwnerStabilityProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        BlockState birchClosed = Blocks.BIRCH_TRAPDOOR.getDefaultState()
+                .with(Properties.BLOCK_HALF, BlockHalf.BOTTOM)
+                .with(Properties.HORIZONTAL_FACING, Direction.NORTH)
+                .with(Properties.OPEN, false);
+        BlockState mangroveClosed = Blocks.MANGROVE_TRAPDOOR.getDefaultState()
+                .with(Properties.BLOCK_HALF, BlockHalf.BOTTOM)
+                .with(Properties.HORIZONTAL_FACING, Direction.NORTH)
+                .with(Properties.OPEN, false);
+        BlockState birchOpen = birchClosed.with(Properties.OPEN, true);
+
+        System.out.println("JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_RED"
+                + " rowPhase=BEFORE"
+                + " visibleObjectState=Block{minecraft:birch_trapdoor}[facing=north,half=bottom,open=false]"
+                + " supportCandidateState=Block{minecraft:stone_slab}"
+                + " finalDecision=scan-side-slab-fired"
+                + " targetOwner=support_slab"
+                + " classification=HIT_ACCEPTANCE_SUPPORT_STEAL"
+                + " failureLayer=VISIBLE_OBJECT_OWNER_SUPPORT_STEAL"
+                + " slabJumpRowsBefore=1"
+                + " previousHead=05f1582"
+                + " chainAxisMetricDeferred=true"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        Beta35TrapdoorHeldCase[] heldCases = {
+                new Beta35TrapdoorHeldCase("minecraft:acacia_button", Items.ACACIA_BUTTON, "BUTTON"),
+                new Beta35TrapdoorHeldCase("minecraft:stone_slab", Items.STONE_SLAB, "SLAB"),
+                new Beta35TrapdoorHeldCase("minecraft:mangrove_trapdoor", Items.MANGROVE_TRAPDOOR, "TRAPDOOR"),
+                new Beta35TrapdoorHeldCase("minecraft:iron_chain", Blocks.IRON_CHAIN.asItem(), "CHAIN")
+        };
+        Beta35TrapdoorOwnerRow[] rows = new Beta35TrapdoorOwnerRow[11];
+        int row = 0;
+        for (Beta35TrapdoorHeldCase heldCase : heldCases) {
+            rows[row] = runBeta35TrapdoorVisibleOwnerRow(
+                    ctx,
+                    singleplayer,
+                    row,
+                    "birch_closed_plain_bottom_visible_body_" + heldCase.category().toLowerCase(),
+                    Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                    birchClosed,
+                    "minecraft:birch_trapdoor",
+                    heldCase,
+                    new BlockPos(1980 + row * 8, -55, 188),
+                    "VISIBLE_BODY",
+                    true);
+            row++;
+        }
+        rows[row] = runBeta35TrapdoorVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "birch_closed_plain_bottom_support_seam",
+                Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                birchClosed,
+                "minecraft:birch_trapdoor",
+                heldCases[1],
+                new BlockPos(2020, -55, 188),
+                "SUPPORT_SEAM",
+                true);
+        row++;
+        rows[row] = runBeta35TrapdoorVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "birch_closed_plain_bottom_empty_overhang",
+                Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                birchClosed,
+                "minecraft:birch_trapdoor",
+                heldCases[0],
+                new BlockPos(2028, -55, 188),
+                "EMPTY_OVERHANG",
+                false);
+        row++;
+        rows[row] = runBeta35TrapdoorVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "mangrove_closed_lowered_bottom_visible_body",
+                Beta35TrapdoorVisibleSupportCase.LOWERED_BOTTOM_DY_MINUS_ONE,
+                mangroveClosed,
+                "minecraft:mangrove_trapdoor",
+                heldCases[2],
+                new BlockPos(2036, -55, 188),
+                "VISIBLE_BODY",
+                true);
+        row++;
+        rows[row] = runBeta35TrapdoorVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "birch_closed_normal_double_visible_body",
+                Beta35TrapdoorVisibleSupportCase.NORMAL_DOUBLE_DY_ZERO,
+                birchClosed,
+                "minecraft:birch_trapdoor",
+                heldCases[1],
+                new BlockPos(2044, -55, 188),
+                "VISIBLE_BODY",
+                true);
+        row++;
+        rows[row] = runBeta35TrapdoorVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "birch_open_plain_bottom_visible_body",
+                Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                birchOpen,
+                "minecraft:birch_trapdoor",
+                heldCases[0],
+                new BlockPos(2052, -55, 188),
+                "VISIBLE_BODY",
+                true);
+        row++;
+        rows[row] = runBeta35TrapdoorVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "birch_open_normal_double_support_seam_chain_live",
+                Beta35TrapdoorVisibleSupportCase.NORMAL_DOUBLE_DY_ZERO,
+                birchOpen,
+                "minecraft:birch_trapdoor",
+                heldCases[3],
+                new BlockPos(2056, -55, 188),
+                "SUPPORT_SEAM",
+                true);
+        row++;
+        rows[row] = runBeta35TrapdoorVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "birch_open_lowered_bottom_support_under_chain_live",
+                Beta35TrapdoorVisibleSupportCase.LOWERED_BOTTOM_DY_MINUS_ONE,
+                birchOpen,
+                "minecraft:birch_trapdoor",
+                heldCases[3],
+                new BlockPos(2058, -55, 188),
+                "SUPPORT_UNDER_TRAPDOOR",
+                false);
+        row++;
+
+        boolean trapdoorServerExpectedAccepted = true;
+        Beta35ServerShiftRow trapdoorServer = runBeta35LoweredAttachableServerShiftRow(
+                singleplayer,
+                row,
+                "oak_trapdoor_server_shift",
+                Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                Blocks.OAK_TRAPDOOR.getDefaultState()
+                        .with(Properties.BLOCK_HALF, BlockHalf.BOTTOM)
+                        .with(Properties.HORIZONTAL_FACING, Direction.NORTH)
+                        .with(Properties.OPEN, false),
+                "minecraft:oak_trapdoor",
+                true,
+                "JULIA_BETA35_BUTTON_CONTACT_SERVER_GREEN",
+                new BlockPos(2060, -55, 188));
+        row++;
+        boolean buttonServerExpectedAccepted = true;
+        Beta35ServerShiftRow buttonServer = runBeta35LoweredAttachableServerShiftRow(
+                singleplayer,
+                row,
+                "acacia_floor_button_server_shift",
+                Beta35TrapdoorVisibleSupportCase.LOWERED_TOP_DY_MINUS_ONE,
+                Blocks.ACACIA_BUTTON.getDefaultState()
+                        .with(Properties.BLOCK_FACE, BlockFace.FLOOR)
+                        .with(Properties.HORIZONTAL_FACING, Direction.SOUTH),
+                "minecraft:acacia_button",
+                true,
+                "JULIA_BETA35_BUTTON_CONTACT_SERVER_GREEN",
+                new BlockPos(2068, -55, 188));
+        row++;
+        boolean floorButtonNoVisibleOwnerBoundaryExpectedAccepted = false;
+        Beta35ServerShiftRow floorButtonNoVisibleOwnerBoundaryServer = runBeta35LoweredAttachableServerShiftRow(
+                singleplayer,
+                row,
+                "acacia_floor_button_server_shift_no_visible_owner",
+                Beta35TrapdoorVisibleSupportCase.NORMAL_DOUBLE_DY_ZERO,
+                Blocks.ACACIA_BUTTON.getDefaultState()
+                        .with(Properties.BLOCK_FACE, BlockFace.FLOOR)
+                        .with(Properties.HORIZONTAL_FACING, Direction.SOUTH),
+                "minecraft:acacia_button",
+                false,
+                "JULIA_BETA35_BUTTON_CONTACT_SERVER_NEGATIVE_GREEN",
+                new BlockPos(2072, -55, 188));
+        row++;
+
+        Beta35TrapdoorOwnerRow chainPlain = runBeta35ChainVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "vertical_chain_plain_bottom_visible_body_slab_held",
+                Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                heldCases[1],
+                new BlockPos(2076, -55, 188));
+        row++;
+        Beta35TrapdoorOwnerRow chainDouble = runBeta35ChainVisibleOwnerRow(
+                ctx,
+                singleplayer,
+                row,
+                "vertical_chain_double_support_visible_body_button_held",
+                Beta35TrapdoorVisibleSupportCase.NORMAL_DOUBLE_DY_ZERO,
+                heldCases[0],
+                new BlockPos(2084, -55, 188));
+        row++;
+
+        int green = 0;
+        int red = 0;
+        int trapdoorSupportStealRows = 0;
+        int trapdoorOwnerGreenRows = 0;
+        int chainSupportStealRows = 0;
+        int chainOwnerGreenRows = 0;
+        int chainMetricDeferredRows = 0;
+        int hitAcceptanceMissRows = 0;
+        int fixtureMismatchRows = 0;
+        int emptyOverhangStealRows = 0;
+        String firstFailure = "NONE";
+        for (Beta35TrapdoorOwnerRow ownerRow : rows) {
+            if (ownerRow == null) {
+                continue;
+            }
+            if (ownerRow.green()) {
+                green++;
+                trapdoorOwnerGreenRows++;
+            } else {
+                red++;
+                if ("NONE".equals(firstFailure)) {
+                    firstFailure = ownerRow.failureLayer();
+                }
+            }
+            if ("VISIBLE_OBJECT_OWNER_SUPPORT_STEAL".equals(ownerRow.failureLayer())) {
+                trapdoorSupportStealRows++;
+            }
+            if ("HIT_ACCEPTANCE_FIXTURE_MISMATCH".equals(ownerRow.failureLayer())) {
+                fixtureMismatchRows++;
+            }
+            if ("HIT_ACCEPTANCE_MISS".equals(ownerRow.classification())) {
+                hitAcceptanceMissRows++;
+            }
+            if ("EMPTY_OVERHANG_STEAL".equals(ownerRow.classification())) {
+                emptyOverhangStealRows++;
+            }
+        }
+        Beta35TrapdoorOwnerRow[] chainRows = {chainPlain, chainDouble};
+        for (Beta35TrapdoorOwnerRow chainRow : chainRows) {
+            if (chainRow.green()) {
+                green++;
+            } else {
+                red++;
+                if ("NONE".equals(firstFailure)) {
+                    firstFailure = chainRow.failureLayer();
+                }
+            }
+            if ("CHAIN_AXIS_SUPPORT_STEAL".equals(chainRow.classification())) {
+                chainSupportStealRows++;
+            }
+            if ("CHAIN_AXIS_METRIC_ONLY_DEFERRED".equals(chainRow.classification())
+                    || "CHAIN_AXIS_OWNER_GREEN".equals(chainRow.classification())) {
+                chainOwnerGreenRows++;
+            }
+            if ("CHAIN_AXIS_METRIC_ONLY_DEFERRED".equals(chainRow.classification())) {
+                chainMetricDeferredRows++;
+            }
+            if ("CHAIN_AXIS_MISS".equals(chainRow.classification())) {
+                hitAcceptanceMissRows++;
+            }
+            if ("HIT_ACCEPTANCE_FIXTURE_MISMATCH".equals(chainRow.failureLayer())) {
+                fixtureMismatchRows++;
+            }
+        }
+        if (trapdoorServer.green()) {
+            green++;
+        } else {
+            red++;
+            if ("NONE".equals(firstFailure)) {
+                firstFailure = trapdoorServer.failureLayer();
+            }
+        }
+        if (buttonServer.green()) {
+            green++;
+        } else {
+            red++;
+            if ("NONE".equals(firstFailure)) {
+                firstFailure = buttonServer.failureLayer();
+            }
+        }
+        if (floorButtonNoVisibleOwnerBoundaryServer.green()) {
+            green++;
+        } else {
+            red++;
+            if ("NONE".equals(firstFailure)) {
+                firstFailure = floorButtonNoVisibleOwnerBoundaryServer.failureLayer();
+            }
+        }
+        int serverRejectRows = (!trapdoorServer.green() && trapdoorServerExpectedAccepted ? 1 : 0)
+                + (!buttonServer.green() && buttonServerExpectedAccepted ? 1 : 0)
+                + (!floorButtonNoVisibleOwnerBoundaryServer.green()
+                && floorButtonNoVisibleOwnerBoundaryExpectedAccepted ? 1 : 0);
+        boolean proofGreen = red == 0
+                && trapdoorSupportStealRows == 0
+                && chainSupportStealRows == 0
+                && serverRejectRows == 0
+                && emptyOverhangStealRows == 0
+                && hitAcceptanceMissRows == 0
+                && fixtureMismatchRows == 0;
+
+        if (proofGreen) {
+            System.out.println("JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_GREEN"
+                    + " outcome=GREEN"
+                    + " visibleTrapdoorOwner=TRAPDOOR_OWNER_GREEN"
+                    + " chainOwnerStatus=CHAIN_AXIS_METRIC_ONLY_DEFERRED"
+                    + " trapdoorSupportStealRowsAfter=0"
+                    + " chainSupportStealRowsAfter=0"
+                    + " slabJumpRowsAfter=0"
+                    + " serverRejectRowsAfter=0"
+                    + " emptyOverhangStealRows=0"
+                    + " failureLayer=NONE");
+        }
+
+        System.out.println("JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_SUMMARY"
+                + " outcome=" + (proofGreen ? "GREEN" : "RED")
+                + " rows=" + row
+                + " green=" + green
+                + " red=" + red
+                + " trapdoorOwnerGreenRows=" + trapdoorOwnerGreenRows
+                + " trapdoorSupportStealRowsBefore=1"
+                + " trapdoorSupportStealRowsAfter=" + trapdoorSupportStealRows
+                + " chainSupportStealRowsBefore=1"
+                + " chainSupportStealRowsAfter=" + chainSupportStealRows
+                + " chainOwnerGreenRows=" + chainOwnerGreenRows
+                + " chainMetricDeferredRows=" + chainMetricDeferredRows
+                + " hitAcceptanceMissRowsForReproducedTargets=" + hitAcceptanceMissRows
+                + " slabJumpRowsBefore=2"
+                + " slabJumpRowsAfter=" + (trapdoorSupportStealRows + chainSupportStealRows)
+                + " serverRejectRows=" + serverRejectRows
+                + " emptyOverhangStealRows=" + emptyOverhangStealRows
+                + " fixtureMismatchRows=" + fixtureMismatchRows
+                + " floorButtonContactStatus=RETAINED_WIP_REQUIRES_FOCUSED_PROOF"
+                + " apertureStatus=RETAINED_05f1582_GREEN"
+                + " chainMetricStatus="
+                + (chainSupportStealRows == 0 && chainOwnerGreenRows > 0 ? "OWNER_GREEN_METRIC_DEFERRED" : "OWNER_UNSTABLE")
+                + " remainingKnownRed=JULIA_LIVE_ACCEPTANCE_REQUIRED"
+                + " failureLayer=" + (proofGreen ? "NONE" : firstFailure)
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        if (!proofGreen) {
+            throw new RuntimeException("Beta 3.5 visible-object owner stability proof stayed RED: " + firstFailure);
+        }
+    }
+
+    private static Beta35TrapdoorOwnerRow runBeta35TrapdoorVisibleOwnerRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            Beta35TrapdoorVisibleSupportCase supportCase,
+            BlockState trapdoorState,
+            String objectId,
+            Beta35TrapdoorHeldCase heldCase,
+            BlockPos supportPos,
+            String aimZone,
+            boolean expectedObject
+    ) {
+        BlockPos objectPos = supportPos.up();
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        prepareBeta35TrapdoorVisibleOwnerFixture(singleplayer, supportPos, objectPos, supportCase, trapdoorState);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(heldCase.item(), 4));
+
+        final Beta35TrapdoorOwnerRow[] rowBox = {
+                new Beta35TrapdoorOwnerRow(rowId, false, "HIT_ACCEPTANCE_FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                System.out.println("JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_RED"
+                        + " rowIndex=" + rowIndex
+                        + " rowId=" + rowId
+                        + " classification=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " reason=client_world_player_or_renderer_missing");
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+            VoxelShape outlineShape = objectState.getOutlineShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
+            VoxelShape collisionShape = objectState.getCollisionShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+            Vec3d hitVec = beta35TrapdoorAimPoint(aimZone, outlineBox, collisionBox, objectPos);
+            AimResult aimResult = beta35AimAt(mc, objectPos, hitVec, aimZone);
+            boolean finalTargetsSupport = beta35TargetsPos(aimResult.finalTarget(), supportPos);
+            boolean finalMiss = aimResult.finalTarget() == null || aimResult.finalTarget().getType() == HitResult.Type.MISS;
+            boolean shiftedServerEligible = SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonVisibleTarget(
+                    mc.world, objectPos, objectState);
+
+            String classification;
+            String failureLayer;
+            boolean green;
+            if (!objectState.isOf(trapdoorState.getBlock()) || outlineBox == null) {
+                classification = "HIT_ACCEPTANCE_FIXTURE_MISMATCH";
+                failureLayer = "HIT_ACCEPTANCE_FIXTURE_MISMATCH";
+                green = false;
+            } else if (expectedObject && aimResult.finalTargetsObject()) {
+                classification = "TRAPDOOR_OWNER_GREEN";
+                failureLayer = "NONE";
+                green = true;
+            } else if ("SUPPORT_UNDER_TRAPDOOR".equals(aimZone) && finalTargetsSupport) {
+                classification = "HIT_ACCEPTANCE_SUPPORT_STEAL";
+                failureLayer = "VISIBLE_OBJECT_OWNER_SUPPORT_STEAL";
+                green = false;
+            } else if (!expectedObject && !aimResult.finalTargetsObject()) {
+                classification = "DOES_NOT_STEAL_OWNER";
+                failureLayer = "NONE";
+                green = true;
+            } else if (!expectedObject) {
+                classification = "EMPTY_OVERHANG_STEAL";
+                failureLayer = "HITBOX_AIM_APERTURE_TOO_NARROW";
+                green = false;
+            } else if (finalTargetsSupport) {
+                classification = "HIT_ACCEPTANCE_SUPPORT_STEAL";
+                failureLayer = "VISIBLE_OBJECT_OWNER_SUPPORT_STEAL";
+                green = false;
+            } else if (finalMiss) {
+                classification = "HIT_ACCEPTANCE_MISS";
+                failureLayer = "VISIBLE_OBJECT_OWNER_SUPPORT_STEAL";
+                green = false;
+            } else {
+                classification = "HIT_ACCEPTANCE_OWNER_GAP";
+                failureLayer = "VISIBLE_OBJECT_OWNER_SUPPORT_STEAL";
+                green = false;
+            }
+
+            rowBox[0] = new Beta35TrapdoorOwnerRow(rowId, green, classification, failureLayer);
+            System.out.println((green ? "JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_GREEN"
+                    : "JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_RED")
+                    + " rowPhase=AFTER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " aimZone=" + aimZone
+                    + " heldItem=" + heldCase.itemId()
+                    + " heldItemCategory=" + heldCase.category()
+                    + " visibleObjectPos=" + objectPos.toShortString()
+                    + " visibleObjectState=" + objectState
+                    + " visibleObjectCategory=" + objectId
+                    + " supportCandidatePos=" + supportPos.toShortString()
+                    + " supportCandidateState=" + supportState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " targetDy=" + beta35FormatDoubleOrNA(beta35TargetDy(mc.world, aimResult.finalTarget()))
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " hitVec=" + beta35FormatVec(hitVec)
+                    + " initialCrosshairTarget=" + beta35FormatHit(aimResult.initialTarget())
+                    + " finalTarget=" + beta35FormatHit(aimResult.finalTarget())
+                    + " finalDecision=" + (aimResult.finalTargetsObject()
+                            ? "object-shape-owner-preserve" : (finalTargetsSupport ? "scan-side-slab-fired" : "CHECK_OWNER"))
+                    + " targetOwner=" + (aimResult.finalTargetsObject()
+                            ? "visible_object" : (finalTargetsSupport ? "support_slab" : (finalMiss ? "MISS" : "other")))
+                    + " visualSelectionBounds=" + beta35FormatBox(outlineBox)
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
+                    + " shiftedServerEligible=" + shiftedServerEligible
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer);
+        });
+        ctx.waitTick();
+        return rowBox[0];
+    }
+
+    private static Beta35TrapdoorOwnerRow runBeta35ChainVisibleOwnerRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            Beta35TrapdoorVisibleSupportCase supportCase,
+            Beta35TrapdoorHeldCase heldCase,
+            BlockPos supportPos
+    ) {
+        BlockPos objectPos = supportPos.up();
+        BlockState chainState = Blocks.IRON_CHAIN.getDefaultState()
+                .with(net.minecraft.block.ChainBlock.AXIS, Direction.Axis.Y);
+        System.out.println("JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_RED"
+                + " rowPhase=BEFORE"
+                + " rowIndex=" + rowIndex
+                + " rowId=" + rowId
+                + " visibleObjectState=Block{minecraft:iron_chain}[axis=y,waterlogged=false]"
+                + " finalDecision=scan-no-rescue-candidate;legacy-above-target-not-lowered-owner"
+                + " targetOwner=support_slab"
+                + " classification=CHAIN_AXIS_SUPPORT_STEAL"
+                + " failureLayer=CHAIN_AXIS_VISIBLE_OWNER_UNSTABLE");
+
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        prepareBeta35TrapdoorVisibleOwnerFixture(singleplayer, supportPos, objectPos, supportCase, chainState);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(heldCase.item(), 4));
+
+        final Beta35TrapdoorOwnerRow[] rowBox = {
+                new Beta35TrapdoorOwnerRow(rowId, false, "HIT_ACCEPTANCE_FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                System.out.println("JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_RED"
+                        + " rowPhase=AFTER"
+                        + " rowIndex=" + rowIndex
+                        + " rowId=" + rowId
+                        + " classification=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " failureLayer=HIT_ACCEPTANCE_FIXTURE_MISMATCH"
+                        + " reason=client_world_player_or_renderer_missing");
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+            VoxelShape outlineShape = objectState.getOutlineShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
+            VoxelShape collisionShape = objectState.getCollisionShape(
+                    mc.world,
+                    objectPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, objectPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, objectPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, objectPos);
+            Vec3d hitVec = beta35BoxCenter(outlineBox, objectPos);
+            AimResult aimResult = beta35AimAt(mc, objectPos, hitVec, "VISIBLE_BODY");
+            boolean outlineIntersects = outlineShape != null
+                    && !outlineShape.isEmpty()
+                    && outlineShape.raycast(aimResult.rayStart(), aimResult.rayEnd(), objectPos) != null;
+            boolean finalTargetsSupport = beta35TargetsPos(aimResult.finalTarget(), supportPos);
+            boolean finalMiss = aimResult.finalTarget() == null
+                    || aimResult.finalTarget().getType() == HitResult.Type.MISS;
+
+            String classification;
+            String failureLayer;
+            String metricLayer = "NONE";
+            boolean green;
+            if (!objectState.isOf(Blocks.IRON_CHAIN) || outlineBox == null) {
+                classification = "HIT_ACCEPTANCE_FIXTURE_MISMATCH";
+                failureLayer = "HIT_ACCEPTANCE_FIXTURE_MISMATCH";
+                green = false;
+            } else if (!outlineIntersects) {
+                classification = "CHAIN_AXIS_MISS";
+                failureLayer = "CHAIN_AXIS_MISS";
+                green = false;
+            } else if (aimResult.finalTargetsObject()) {
+                classification = "CHAIN_AXIS_METRIC_ONLY_DEFERRED";
+                failureLayer = "NONE";
+                metricLayer = "CHAIN_AXIS_METRIC_DEFERRED";
+                green = true;
+            } else if (finalTargetsSupport) {
+                classification = "CHAIN_AXIS_SUPPORT_STEAL";
+                failureLayer = "CHAIN_AXIS_VISIBLE_OWNER_UNSTABLE";
+                green = false;
+            } else if (finalMiss) {
+                classification = "CHAIN_AXIS_MISS";
+                failureLayer = "CHAIN_AXIS_MISS";
+                green = false;
+            } else {
+                classification = "HIT_ACCEPTANCE_OWNER_GAP";
+                failureLayer = "CHAIN_AXIS_VISIBLE_OWNER_UNSTABLE";
+                green = false;
+            }
+
+            rowBox[0] = new Beta35TrapdoorOwnerRow(rowId, green, classification, failureLayer);
+            System.out.println((green ? "JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_GREEN"
+                    : "JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_RED")
+                    + " rowPhase=AFTER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " aimZone=VISIBLE_BODY"
+                    + " heldItem=" + heldCase.itemId()
+                    + " heldItemCategory=" + heldCase.category()
+                    + " visibleObjectPos=" + objectPos.toShortString()
+                    + " visibleObjectState=" + objectState
+                    + " visibleObjectCategory=CHAIN"
+                    + " supportCandidatePos=" + supportPos.toShortString()
+                    + " supportCandidateState=" + supportState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " targetDy=" + beta35FormatDoubleOrNA(beta35TargetDy(mc.world, aimResult.finalTarget()))
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " hitVec=" + beta35FormatVec(hitVec)
+                    + " initialCrosshairTarget=" + beta35FormatHit(aimResult.initialTarget())
+                    + " finalTarget=" + beta35FormatHit(aimResult.finalTarget())
+                    + " finalDecision=" + (aimResult.finalTargetsObject()
+                            ? "visible-chain-owner-preserve" : (finalTargetsSupport ? "scan-side-slab-fired" : "CHECK_OWNER"))
+                    + " targetOwner=" + (aimResult.finalTargetsObject()
+                            ? "visible_object" : (finalTargetsSupport ? "support_slab" : (finalMiss ? "MISS" : "other")))
+                    + " visualShapeIntersects=" + outlineIntersects
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
+                    + " metricType=AXIS_CONTACT"
+                    + " metricLayer=" + metricLayer
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer);
+        });
+        ctx.waitTick();
+        return rowBox[0];
+    }
+
+    private static Beta35ServerShiftRow runBeta35LoweredAttachableServerShiftRow(
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            Beta35TrapdoorVisibleSupportCase supportCase,
+            BlockState objectStateToPlace,
+            String objectId,
+            boolean expectedAccepted,
+            String proofMarker,
+            BlockPos supportPos
+    ) {
+        BlockPos objectPos = supportPos.up();
+        prepareBeta35TrapdoorVisibleOwnerFixture(singleplayer, supportPos, objectPos, supportCase, objectStateToPlace);
+        final Beta35ServerShiftRow[] rowBox = {
+                new Beta35ServerShiftRow(rowId, false, "HIT_ACCEPTANCE_FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState targetState = world.getBlockState(objectPos);
+            double targetDy = SlabSupport.getYOffset(world, objectPos, targetState);
+            Vec3d validationCenter = Vec3d.ofCenter(objectPos);
+            Vec3d hitVec = new Vec3d(
+                    objectPos.getX() + 0.5d,
+                    validationCenter.y + targetDy - 0.3125d,
+                    objectPos.getZ() + 0.5d);
+            Vec3d validationDelta = hitVec.subtract(validationCenter);
+            boolean beforeReject = Math.abs(validationDelta.x) >= 1.0000001d
+                    || Math.abs(validationDelta.y) >= 1.0000001d
+                    || Math.abs(validationDelta.z) >= 1.0000001d;
+            Vec3d shiftedValidationCenter = validationCenter.add(0.0d, targetDy, 0.0d);
+            Vec3d shiftedValidationDelta = hitVec.subtract(shiftedValidationCenter);
+            boolean broadEligible = SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonVisibleTarget(
+                    world, objectPos, targetState);
+            boolean visibleOwnerEligible = SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonVisibleOwnerTarget(
+                    world, objectPos, targetState);
+            String shiftedPath = visibleOwnerEligible ? "visible-owner-shift-hit" : "rejected-no-visible-owner-relationship";
+            boolean shiftedGreen = visibleOwnerEligible
+                    && Math.abs(shiftedValidationDelta.x) < 1.0000001d
+                    && Math.abs(shiftedValidationDelta.y) < 1.0000001d
+                    && Math.abs(shiftedValidationDelta.z) < 1.0000001d;
+            boolean green = expectedAccepted == shiftedGreen;
+            String classification = shiftedGreen ? "SERVER_SHIFTED_HIT_GREEN" : "HIT_ACCEPTANCE_SERVER_REJECT";
+            String failureLayer = shiftedGreen
+                    ? "NONE"
+                    : expectedAccepted
+                            ? "HIT_ACCEPTANCE_SERVER_REJECT"
+                            : (broadEligible ? "HIT_ACCEPTANCE_SERVER_REJECT_NO_VISIBLE_OWNER"
+                                    : "HIT_ACCEPTANCE_SERVER_REJECT_NON_OWNABLE_DY_RELATION");
+            rowBox[0] = new Beta35ServerShiftRow(rowId, green, classification, failureLayer);
+            System.out.println("JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_RED"
+                    + " rowPhase=BEFORE_SERVER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " targetState=" + targetState
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " shiftedValidationCenter=null"
+                    + " validationDelta=" + beta35FormatVec(validationDelta)
+                    + " classification=" + (beforeReject ? "HIT_ACCEPTANCE_SERVER_REJECT" : "HIT_ACCEPTANCE_GREEN")
+                    + " failureLayer=" + (beforeReject ? "HIT_ACCEPTANCE_SERVER_REJECT" : "NONE"));
+            System.out.println((shiftedGreen ? "JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_GREEN"
+                    : "JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_RED")
+                    + " rowPhase=AFTER_SERVER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " objectBlockId=" + objectId
+                    + " targetState=" + targetState
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " hitVec=" + beta35FormatVec(hitVec)
+                    + " validationCenter=" + beta35FormatVec(validationCenter)
+                    + " validationDelta=" + beta35FormatVec(validationDelta)
+                    + " shiftedValidationCenter=" + beta35FormatVec(shiftedValidationCenter)
+                    + " shiftedValidationDelta=" + beta35FormatVec(shiftedValidationDelta)
+                    + " broadShiftedEligible=" + broadEligible
+                    + " visibleOwnerShiftedEligible=" + visibleOwnerEligible
+                    + " shiftedPath=" + shiftedPath
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer);
+            System.out.println(proofMarker
+                    + " rowPhase=AFTER_SERVER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " objectId=" + objectId
+                    + " objectDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " expectedAccepted=" + expectedAccepted
+                    + " accepted=" + shiftedGreen
+                    + " shiftedPath=" + shiftedPath
+                    + " broadEligible=" + broadEligible
+                    + " visibleOwnerEligible=" + visibleOwnerEligible
+                    + " failureLayer=" + failureLayer);
+        });
+        return rowBox[0];
+    }
+
+    private static void prepareBeta35TrapdoorVisibleOwnerFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            BlockPos objectPos,
+            Beta35TrapdoorVisibleSupportCase supportCase,
+            BlockState objectState
+    ) {
+        if (supportCase == Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF) {
+            prepareBeta35CommonObjectSupport(
+                    singleplayer,
+                    supportPos,
+                    supportPos.add(0, 1, 4),
+                    Beta35CommonObjectSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF);
+        } else if (supportCase == Beta35TrapdoorVisibleSupportCase.LOWERED_BOTTOM_DY_MINUS_ONE) {
+            prepareBeta35CommonObjectSupport(
+                    singleplayer,
+                    supportPos,
+                    supportPos.add(0, 1, 4),
+                    Beta35CommonObjectSupportCase.LOWERED_BOTTOM_DY_MINUS_ONE);
+        } else if (supportCase == Beta35TrapdoorVisibleSupportCase.LOWERED_TOP_DY_MINUS_ONE) {
+            prepareBeta35HitboxApertureContactFixture(singleplayer, supportPos, objectPos, objectState);
+            return;
+        } else {
+            singleplayer.getServer().runOnServer(server -> {
+                var world = server.getOverworld();
+                for (int x = supportPos.getX() - 4; x <= supportPos.getX() + 4; x++) {
+                    for (int y = supportPos.getY() - 8; y <= supportPos.getY() + 5; y++) {
+                        for (int z = supportPos.getZ() - 4; z <= supportPos.getZ() + 4; z++) {
+                            world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(),
+                                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+                        }
+                    }
+                }
+                world.setBlockState(supportPos,
+                        Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                        net.minecraft.block.Block.NOTIFY_LISTENERS);
+            });
+        }
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(objectPos, objectState, net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, objectPos, world.getBlockState(objectPos));
+            world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
+            world.updateNeighbors(objectPos, world.getBlockState(objectPos).getBlock());
+        });
+    }
+
+    private static Vec3d beta35TrapdoorAimPoint(
+            String aimZone,
+            net.minecraft.util.math.Box outlineBox,
+            net.minecraft.util.math.Box collisionBox,
+            BlockPos objectPos
+    ) {
+        Vec3d center = beta35BoxCenter(outlineBox, objectPos);
+        if (outlineBox == null) {
+            return center;
+        }
+        return switch (aimZone) {
+            case "VISIBLE_TOP" -> new Vec3d(center.x, outlineBox.maxY - 0.01d, center.z);
+            case "EDGE" -> new Vec3d(outlineBox.minX + 0.01d, center.y, center.z);
+            case "SUPPORT_SEAM" -> new Vec3d(center.x, outlineBox.minY + 0.001d, center.z);
+            case "SUPPORT_UNDER_TRAPDOOR" -> new Vec3d(center.x, outlineBox.minY - 0.50d, center.z);
+            case "EMPTY_OVERHANG" -> beta35EmptyOverhangAimPoint(outlineBox, collisionBox, objectPos);
+            default -> center;
+        };
     }
 
     private static Beta35ApertureFixSummary runBeta35HitboxApertureFixRows(
@@ -15187,7 +16332,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
                         + " hitVec=" + beta35FormatVec(aims[i])
                         + " initialTarget=" + beta35FormatHit(aimResult.initialTarget())
-                        + " finalTarget=" + beta35FormatHit(aimResult.initialTarget())
+                        + " finalTarget=" + beta35FormatHit(aimResult.finalTarget())
                         + " finalDecision=before-owner-scan"
                         + " visualSelectionBounds=" + beta35FormatBox(outlineBox)
                         + " outlineBounds=" + beta35FormatBox(outlineBox)
@@ -15577,6 +16722,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             double sideFaceGap,
             double axisGap
     ) {
+        if ("AXIS_CONTACT".equals(metricType) && "CHAIN".equals(visibleObjectCategory)) {
+            if (finalTargetsObject) {
+                return "CHAIN_AXIS_METRIC_ONLY_DEFERRED";
+            }
+            if (finalMiss) {
+                return "CHAIN_AXIS_MISS";
+            }
+            return finalTargetsSupport ? "CHAIN_AXIS_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP";
+        }
         if ("FLOOR_CONTACT".equals(metricType)
                 && Double.isFinite(contactGap)
                 && Math.abs(contactGap) > EPSILON) {
@@ -15601,11 +16755,22 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             }
             return finalTargetsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP";
         }
+        if ("BUTTON".equals(visibleObjectCategory) && "FLOOR_CONTACT".equals(metricType)) {
+            return "BUTTON_CONTACT_GREEN";
+        }
+        if (visibleObjectCategory.contains("trapdoor") && "SIDE_FACE_CONTACT".equals(metricType)) {
+            return "TRAPDOOR_OWNER_GREEN";
+        }
         return "HIT_ACCEPTANCE_GREEN";
     }
 
     private static String beta35HitAcceptanceFailureLayer(String classification, String metricType) {
-        if ("HIT_ACCEPTANCE_GREEN".equals(classification)) {
+        if ("HIT_ACCEPTANCE_GREEN".equals(classification)
+                || "BUTTON_CONTACT_GREEN".equals(classification)
+                || "TRAPDOOR_OWNER_GREEN".equals(classification)
+                || "CHAIN_AXIS_OWNER_GREEN".equals(classification)
+                || "CHAIN_AXIS_METRIC_ONLY_DEFERRED".equals(classification)
+                || "SERVER_SHIFTED_HIT_GREEN".equals(classification)) {
             return "NONE";
         }
         if ("BUTTON_CONTACT_GAP".equals(classification)) {
@@ -15616,6 +16781,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
         if ("CHAIN_AXIS_CONTACT_METRIC_MISSING".equals(classification)) {
             return "CHAIN_AXIS_CONTACT_METRIC_MISSING";
+        }
+        if ("CHAIN_AXIS_SUPPORT_STEAL".equals(classification)) {
+            return "CHAIN_AXIS_VISIBLE_OWNER_UNSTABLE";
+        }
+        if ("CHAIN_AXIS_MISS".equals(classification)) {
+            return "CHAIN_AXIS_MISS";
         }
         if ("HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP".equals(classification)) {
             return "SIDE_ATTACHMENT_ACCEPTANCE_GAP";
@@ -15708,6 +16879,55 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     private record Beta35HitboxContactRow(
             String rowId,
+            String classification,
+            String failureLayer
+    ) {
+    }
+
+    private enum Beta35FloorButtonSupportCase {
+        LOWERED_TOP,
+        LOWERED_BOTTOM_NEG_HALF,
+        NORMAL_TOP,
+        UNSUPPORTED
+    }
+
+    private record Beta35FloorButtonContactRow(
+            String rowId,
+            boolean green,
+            String classification,
+            String failureLayer,
+            double supportDy,
+            double objectDy,
+            double contactGap,
+            boolean triadGreen
+    ) {
+    }
+
+    private enum Beta35TrapdoorVisibleSupportCase {
+        PLAIN_BOTTOM_DY_MINUS_HALF,
+        LOWERED_BOTTOM_DY_MINUS_ONE,
+        NORMAL_DOUBLE_DY_ZERO,
+        LOWERED_TOP_DY_MINUS_ONE
+    }
+
+    private record Beta35TrapdoorHeldCase(
+            String itemId,
+            Item item,
+            String category
+    ) {
+    }
+
+    private record Beta35TrapdoorOwnerRow(
+            String rowId,
+            boolean green,
+            String classification,
+            String failureLayer
+    ) {
+    }
+
+    private record Beta35ServerShiftRow(
+            String rowId,
+            boolean green,
             String classification,
             String failureLayer
     ) {

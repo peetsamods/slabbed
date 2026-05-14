@@ -20,8 +20,9 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current savepoint: Beta 3.5 visible hit aperture fix at `save/beta35-hitbox-aperture-fix`
-- Previous operating base for this slice: `48550c7` / `save/beta35-hitbox-aperture-contact-red`
+- Current savepoint: Beta 3.5 visible object owner stability at `save/beta35-visible-object-owner-stability`
+- Previous committed base for this slice: `05f1582` / `save/beta35-hitbox-aperture-fix`
+- Previous aperture proof base: `48550c7` / `save/beta35-hitbox-aperture-contact-red`
 - Prior slab-height generic hit-acceptance RED tracer: `63a0e32` / `save/beta35-slab-height-hit-acceptance-red`
 - Prior fence/wall visual-hitbox base: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`
 - Previous fence/wall stack-contact base: `5f94ed5` / `save/beta35-fence-wall-stack-contact`
@@ -37,6 +38,28 @@ Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it 
 
 Tracked tree is clean.
 `tmp/` may remain intentionally untracked and must not be staged.
+
+## Current Beta 3.5 visible object owner stability status
+
+Operating base before this continuation: `05f1582` / `save/beta35-hitbox-aperture-fix` on `integrate/phase19-into-side-slab-top-support`. This started from a stopped dirty WIP for floor-button contact and continued the same WIP into visible-object owner stability.
+
+Julia's 2026-05-13 live co-test after the aperture fix showed the remaining player-visible blocker was not server hit distance and not contact gap: trapdoors/chains/thin visible objects could lose final target ownership to the slab/support layer, producing target jumps and misplacement feel. Primary classification for this continuation was `VISIBLE_OBJECT_OWNER_SUPPORT_STEAL`; secondary chain classification was `CHAIN_AXIS_VISIBLE_OWNER_UNSTABLE`.
+
+Narrow production change: `GameRendererCrosshairRetargetMixin` now gives proven lowered visible-owner candidates priority before slab/support rescue can return support ownership. The central candidate helper in `SlabSupport` is limited to the proven families in this slice: lowered floor buttons, lowered bottom trapdoors, and lowered vertical chains. The ray must intersect the visible outline/raycast shape; empty overhang still does not own. This is not all-item support, not standing signs/rails/redstone, not global tolerance, not global collision lowering, and not a solidity/sturdy-face lie.
+
+Diagnostic split: `Beta35SlabHeightHitAcceptanceRecorder` now logs `rayIntersectsVisibleObject`. A support-owned target with no visible-object ray intersection is `HIT_ACCEPTANCE_SUPPORT_AIM failureLayer=NONE`, not a support-steal failure; chain rows are `CHAIN_AXIS_METRIC_ONLY_DEFERRED failureLayer=NONE` when owner is stable and only become `CHAIN_AXIS_VISIBLE_OWNER_UNSTABLE` if support wins despite a chain-shape intersection.
+
+Focused proof flag: `-Dslabbed.beta35VisibleObjectOwnerStability=true -Dslabbed.beta35SlabHeightHitAcceptance=true`. Current summary: `JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_SUMMARY outcome=GREEN rows=16 green=16 red=0 trapdoorSupportStealRowsBefore=1 trapdoorSupportStealRowsAfter=0 chainSupportStealRowsBefore=1 chainSupportStealRowsAfter=0 chainOwnerGreenRows=2 chainMetricDeferredRows=2 hitAcceptanceMissRowsForReproducedTargets=0 slabJumpRowsBefore=2 slabJumpRowsAfter=0 serverRejectRows=0 emptyOverhangStealRows=0 floorButtonContactStatus=RETAINED_WIP_REQUIRES_FOCUSED_PROOF apertureStatus=RETAINED_05f1582_GREEN chainMetricStatus=OWNER_GREEN_METRIC_DEFERRED remainingKnownRed=JULIA_LIVE_ACCEPTANCE_REQUIRED failureLayer=NONE releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`.
+
+Retained WIP proof: `-Dslabbed.beta35FloorButtonContact=true -Dslabbed.beta35SlabHeightHitAcceptance=true` is GREEN with floor-button `supportDy=-1.0` and `supportDy=-0.5` contact gaps at `0.000000`; wall/ceiling buttons remain `NOT_COVERED`.
+
+Corrected RED proof after this continuation: `JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=NOT_REPRODUCED rows=8 green=8 red=0 buttonContactGapRows=0 chainMetricGapRows=0 apertureTooNarrowRows=0 firstFailureLayer=NONE buttonContactGapStillDeferred=no chainAxisMetricStillDeferred=no apertureFixApplied=true floorButtonContactFixApplied=true releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`.
+
+Regression gates run for this continuation: compile, focused visible-owner proof, floor-button proof, corrected RED proof, aperture proof, fence/wall owner-server proof, fence/wall stack-contact proof, fence/wall visual-hitbox stack-aim proof, and the common-object matrix covering floor_torch/candle/flower_pot. The common-object matrix remains GREEN: `rows=27 greenAlreadyInherits=27 contactGap=0 triadMismatch=0`.
+
+Run-client startup smoke emitted beta35 hit-acceptance markers and owner-stable trapdoor/chain rows; the refreshed smoke extract had `CHAIN_AXIS_METRIC_ONLY_DEFERRED failureLayer=NONE` rows and no `CHAIN_AXIS_VISIBLE_OWNER_UNSTABLE` or `HIT_ACCEPTANCE_SUPPORT_STEAL` rows before intentional termination.
+
+Beta 3.5 release audit remains paused. Julia live acceptance is still required after sleep. No release audit was run, no release tag was moved, and no release-ready or all-item gameplay claim is made.
 
 ## Current Beta 3.5 fence/wall visual hitbox stack-aim status
 
