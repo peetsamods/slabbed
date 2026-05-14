@@ -115,8 +115,9 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 : Double.NaN;
         double supportVisibleTopY = supportVisibleTopY(supportCandidatePos, supportCandidateState, supportDy);
         ShapeContext shapeContext = player == null ? ShapeContext.absent() : ShapeContext.of(player);
-        Box objectBox = worldBox(visibleObjectState.getOutlineShape(world, visibleObjectPos, shapeContext),
-                visibleObjectPos);
+        VoxelShape objectShape = visibleObjectState.getOutlineShape(world, visibleObjectPos, shapeContext);
+        Box objectBox = worldBox(objectShape, visibleObjectPos);
+        boolean rayIntersectsVisibleObject = rayIntersectsShape(objectShape, visibleObjectPos, eye, rayEnd);
         double objectModelBottomY = objectBox == null ? Double.NaN : objectBox.minY;
         double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
                 ? objectModelBottomY - supportVisibleTopY
@@ -139,10 +140,12 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 miss,
                 visibleObjectCategory,
                 metricType,
+                rayIntersectsVisibleObject,
                 contactGap,
                 sideFaceGap,
                 axisGap);
         String failureLayer = failureLayerFor(classification, visibleObjectCategory, metricType);
+        String metricLayer = metricLayerFor(classification, metricType);
         String slabHeightCategory = slabHeightCategory(supportCandidateState, supportDy, objectDy);
         String targetOwner = finalIsObject ? "visible_object"
                 : (finalIsSupport ? "support_slab" : (miss ? "MISS" : "unrelated_neighbor"));
@@ -175,6 +178,8 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                         + " objectDy=" + fmt(objectDy)
                         + " slabHeightCategory=" + slabHeightCategory
                         + " metricType=" + metricType
+                        + " metricLayer=" + metricLayer
+                        + " rayIntersectsVisibleObject=" + rayIntersectsVisibleObject
                         + " contactGap=" + fmt(contactGap)
                         + " sideFaceGap=" + fmt(sideFaceGap)
                         + " axisGap=" + fmt(axisGap)
@@ -205,7 +210,7 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 && Math.abs(shiftedDelta.x) < SERVER_HIT_TOLERANCE
                 && Math.abs(shiftedDelta.y) < SERVER_HIT_TOLERANCE
                 && Math.abs(shiftedDelta.z) < SERVER_HIT_TOLERANCE;
-        String classification = shiftedGreen ? "HIT_ACCEPTANCE_GREEN"
+        String classification = shiftedGreen ? "SERVER_SHIFTED_HIT_GREEN"
                 : (tooFar ? "HIT_ACCEPTANCE_SERVER_REJECT" : "HIT_ACCEPTANCE_GREEN");
         String failureLayer = tooFar && !shiftedGreen ? "HIT_ACCEPTANCE_SERVER_REJECT" : "NONE";
         BlockState targetState = world.getBlockState(hit.getBlockPos());
@@ -393,10 +398,23 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
             boolean miss,
             String visibleObjectCategory,
             String metricType,
+            boolean rayIntersectsVisibleObject,
             double contactGap,
             double sideFaceGap,
             double axisGap
     ) {
+        if ("AXIS_CONTACT".equals(metricType) && "CHAIN".equals(visibleObjectCategory)) {
+            if (finalIsObject) {
+                return "CHAIN_AXIS_METRIC_ONLY_DEFERRED";
+            }
+            if (!rayIntersectsVisibleObject) {
+                return "CHAIN_AXIS_MISS";
+            }
+            if (miss) {
+                return "CHAIN_AXIS_MISS";
+            }
+            return finalIsSupport ? "CHAIN_AXIS_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP";
+        }
         if ("FLOOR_CONTACT".equals(metricType)
                 && Double.isFinite(contactGap)
                 && Math.abs(contactGap) > EPSILON) {
@@ -416,16 +434,32 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
             }
         }
         if (!finalIsObject) {
+            if (!rayIntersectsVisibleObject && finalIsSupport) {
+                return "HIT_ACCEPTANCE_SUPPORT_AIM";
+            }
             if (miss) {
                 return "HIT_ACCEPTANCE_MISS";
             }
             return finalIsSupport ? "HIT_ACCEPTANCE_SUPPORT_STEAL" : "HIT_ACCEPTANCE_OWNER_GAP";
         }
+        if ("BUTTON".equals(visibleObjectCategory) && "FLOOR_CONTACT".equals(metricType)) {
+            return "BUTTON_CONTACT_GREEN";
+        }
+        if (visibleObjectCategory.contains("trapdoor") && "SIDE_FACE_CONTACT".equals(metricType)) {
+            return "TRAPDOOR_OWNER_GREEN";
+        }
         return "HIT_ACCEPTANCE_GREEN";
     }
 
     private static String failureLayerFor(String classification, String visibleObjectCategory, String metricType) {
-        if ("HIT_ACCEPTANCE_GREEN".equals(classification)) {
+        if ("HIT_ACCEPTANCE_GREEN".equals(classification)
+                || "BUTTON_CONTACT_GREEN".equals(classification)
+                || "TRAPDOOR_OWNER_GREEN".equals(classification)
+                || "CHAIN_AXIS_OWNER_GREEN".equals(classification)
+                || "CHAIN_AXIS_METRIC_ONLY_DEFERRED".equals(classification)
+                || "CHAIN_AXIS_MISS".equals(classification)
+                || "HIT_ACCEPTANCE_SUPPORT_AIM".equals(classification)
+                || "SERVER_SHIFTED_HIT_GREEN".equals(classification)) {
             return "NONE";
         }
         if ("BUTTON_CONTACT_GAP".equals(classification)) {
@@ -437,6 +471,9 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         if ("CHAIN_AXIS_CONTACT_METRIC_MISSING".equals(classification)) {
             return "CHAIN_AXIS_CONTACT_METRIC_MISSING";
         }
+        if ("CHAIN_AXIS_SUPPORT_STEAL".equals(classification)) {
+            return "CHAIN_AXIS_VISIBLE_OWNER_UNSTABLE";
+        }
         if ("HIT_ACCEPTANCE_SIDE_ATTACHMENT_GAP".equals(classification)) {
             return "SIDE_ATTACHMENT_ACCEPTANCE_GAP";
         }
@@ -444,6 +481,13 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
             return "TRACER_METRIC_NOISE";
         }
         return classification;
+    }
+
+    private static String metricLayerFor(String classification, String metricType) {
+        if ("CHAIN_AXIS_METRIC_ONLY_DEFERRED".equals(classification)) {
+            return "CHAIN_AXIS_METRIC_DEFERRED";
+        }
+        return "AXIS_CONTACT".equals(metricType) ? "AXIS_CONTACT_NOT_DEFERRED" : "NONE";
     }
 
     private static String slabHeightCategory(BlockState supportState, double supportDy, double objectDy) {
@@ -492,6 +536,10 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
             return null;
         }
         return shape.getBoundingBox().offset(pos);
+    }
+
+    private static boolean rayIntersectsShape(VoxelShape shape, BlockPos pos, Vec3d eye, Vec3d rayEnd) {
+        return shape != null && !shape.isEmpty() && shape.raycast(eye, rayEnd, pos) != null;
     }
 
     private static String heldItemId(ItemStack stack) {

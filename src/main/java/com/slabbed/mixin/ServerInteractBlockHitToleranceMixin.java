@@ -196,6 +196,9 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (SlabSupport.isBeta35FenceWallVariantContactObject(targetState) || targetState.isOf(net.minecraft.block.Blocks.ANVIL)) {
             return true;
         }
+        if (SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonVisibleOwnerTarget(world, pos, targetState)) {
+            return true;
+        }
         if (SlabSupport.isBeta35FenceWallVariantContactObject(objectState) || objectState.isOf(net.minecraft.block.Blocks.ANVIL)) {
             return true;
         }

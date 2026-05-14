@@ -52,3 +52,19 @@ Those buckets were not fixed in this slice.
 ## Scope
 
 No button contact fix. No chain axis metric fix. No global hit tolerance widening. No server accept bypass. No global collision lowering. No solidity or sturdy-face lies. No broad all-item gameplay claim. No release audit run. No release tag moved.
+
+## Continuation: Visible Owner Stability
+
+At `05f1582` / `save/beta35-hitbox-aperture-fix`, Julia's live co-test showed the aperture slice was not enough: visible trapdoors/chains could still lose ownership to the slab/support target, causing target jumps and misplacement feel.
+
+The follow-up automated-proof continuation keeps the aperture proof green, retains the floor-button contact WIP, and adds a visible-owner-before-support rule for the proven current families: lowered floor buttons, lowered bottom trapdoors, and lowered vertical chains.
+
+Visible-owner focused summary:
+
+`JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_SUMMARY outcome=GREEN rows=16 green=16 red=0 trapdoorSupportStealRowsAfter=0 chainSupportStealRowsAfter=0 chainOwnerGreenRows=2 chainMetricDeferredRows=2 slabJumpRowsAfter=0 serverRejectRows=0 failureLayer=NONE`
+
+Retained aperture summary:
+
+`JULIA_BETA35_HITBOX_APERTURE_FIX_SUMMARY outcome=GREEN rows=6 apertureTooNarrowRowsAfter=0 emptyOverhangStealRows=0 failureLayer=NONE`
+
+The continuation is automated-proof green only. Julia live acceptance remains required.

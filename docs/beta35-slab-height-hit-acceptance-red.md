@@ -45,3 +45,23 @@ The current gameplay change is limited to the visible-target aim aperture: visib
 ## Scope
 
 No button contact fix was implemented. No chain axis metric fix was implemented. No global hit tolerance was widened. No server accept bypass was added. No global solidity or sturdy-face behavior was changed. No broad all-item support claim was made. No release audit was run, and no release tag was moved.
+
+## Continuation: Visible Owner Stability
+
+Continuation base: `05f1582` / `save/beta35-hitbox-aperture-fix`.
+
+The next live blocker after the aperture fix was visible-object ownership, not server distance or contact gap. Live rows showed trapdoors/chains at the problematic slab height losing final target ownership to `support_slab`, producing slab target jumps and misplacement risk.
+
+The continuation proof adds `-Dslabbed.beta35VisibleObjectOwnerStability=true` and reports:
+
+`JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_SUMMARY outcome=GREEN rows=16 green=16 red=0 trapdoorSupportStealRowsBefore=1 trapdoorSupportStealRowsAfter=0 chainSupportStealRowsBefore=1 chainSupportStealRowsAfter=0 chainOwnerGreenRows=2 chainMetricDeferredRows=2 hitAcceptanceMissRowsForReproducedTargets=0 slabJumpRowsBefore=2 slabJumpRowsAfter=0 serverRejectRows=0 failureLayer=NONE`
+
+The recorder now distinguishes support aim from owner steal with `rayIntersectsVisibleObject`; no-intersection support targets log `HIT_ACCEPTANCE_SUPPORT_AIM failureLayer=NONE`.
+
+Floor-button contact is retained green:
+
+`JULIA_BETA35_FLOOR_BUTTON_CONTACT_SUMMARY outcome=GREEN rows=4 green=4 red=0 supportDyNegOneContactGap=0.000000 supportDyNegHalfContactGap=0.000000 failureLayer=NONE`
+
+The common-object matrix remains green for floor_torch/candle/flower_pot representatives: `JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=27 contactGap=0 triadMismatch=0`.
+
+Release audit remains paused. Julia live acceptance remains required. No release tag moved.

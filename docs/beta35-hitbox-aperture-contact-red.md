@@ -55,3 +55,21 @@ Deferred known REDs remain:
 ## Scope
 
 The original `48550c7` slice was diagnostics-only. The follow-up aperture slice changes only visible-target owner acceptance for the proven slab-height aperture fixture. No button contact fix was implemented. No chain axis metric fix was implemented. No global hit tolerance was widened. No server accept bypass was added. No global collision, solidity, or sturdy-face behavior was changed. No broad all-item support claim was made. No release audit was run, and no release tag was moved.
+
+## Continuation: Visible Owner Stability
+
+Continuation base: `05f1582` / `save/beta35-hitbox-aperture-fix`.
+
+The stopped WIP after `05f1582` retained the floor-button contact fix and added the next live-blocker proof: visible-object owner stability for trapdoor and vertical-chain rows where the slab/support target previously stole ownership.
+
+Current corrected RED proof after the continuation:
+
+`JULIA_BETA35_HITBOX_APERTURE_CONTACT_SUMMARY outcome=NOT_REPRODUCED rows=8 green=8 red=0 buttonContactGapRows=0 chainMetricGapRows=0 apertureTooNarrowRows=0 firstFailureLayer=NONE buttonContactGapStillDeferred=no chainAxisMetricStillDeferred=no apertureFixApplied=true floorButtonContactFixApplied=true releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`
+
+Visible-owner proof:
+
+`JULIA_BETA35_VISIBLE_OBJECT_OWNER_STABILITY_SUMMARY outcome=GREEN trapdoorSupportStealRowsAfter=0 chainSupportStealRowsAfter=0 chainOwnerGreenRows=2 chainMetricDeferredRows=2 slabJumpRowsAfter=0 serverRejectRows=0 failureLayer=NONE`
+
+Chain axis metric is now owner-green/deferred bookkeeping for the reproduced rows, not a support-steal owner failure.
+
+This continuation still does not run a release audit, move release tags, or claim all-item support. Julia live acceptance is still required.
