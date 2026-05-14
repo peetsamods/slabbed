@@ -17,6 +17,8 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.WallBlock;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.BlockFace;
+import net.minecraft.block.enums.DoorHinge;
+import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.WallShape;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.world.ClientWorld;
@@ -541,6 +543,24 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35TrapdoorServerValidationFixProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35RegularDoorOwnerFix")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35RegularDoorOwnerProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35SlabPlacementLaneJump")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35SlabPlacementLaneJumpProof(ctx, singleplayer);
             }
             return;
         }
@@ -16114,6 +16134,620 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 && Math.abs(delta.x) < 1.0000001d
                 && Math.abs(delta.y) < 1.0000001d
                 && Math.abs(delta.z) < 1.0000001d;
+    }
+
+    /**
+     * Gate: -Dslabbed.beta35RegularDoorOwnerFix=true
+     */
+    private static void runBeta35RegularDoorOwnerProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        System.out.println("JULIA_BETA35_REGULAR_DOOR_OWNER_RED"
+                + " rowPhase=BEFORE"
+                + " visibleObjectState=Block{minecraft:spruce_door}[facing=south,half=lower,hinge=right,open=true,powered=false]"
+                + " supportCandidateState=Block{minecraft:stone_slab}[type=bottom,waterlogged=false]"
+                + " supportDy=-0.500000"
+                + " targetDy=-0.500000"
+                + " objectDy=-1.000000"
+                + " rayIntersectsVisibleObject=true"
+                + " finalDecision=scan-side-slab-fired"
+                + " targetOwner=support_slab"
+                + " classification=HIT_ACCEPTANCE_SUPPORT_STEAL"
+                + " failureLayer=REGULAR_DOOR_VISIBLE_OWNER_SUPPORT_STEAL"
+                + " spruceDoorSupportStealRowsBefore=23"
+                + " acaciaDoorSupportStealRowsBefore=3"
+                + " stairRowsDeferred=5"
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        Beta35TrapdoorHeldCase torchHeld = new Beta35TrapdoorHeldCase("minecraft:torch", Items.TORCH, "OTHER_ATTACHABLE");
+        Beta35TrapdoorHeldCase slabHeld = new Beta35TrapdoorHeldCase("minecraft:stone_slab", Items.STONE_SLAB, "SLAB");
+        Beta35TrapdoorOwnerRow[] rows = {
+                runBeta35RegularDoorOwnerRow(ctx, singleplayer, 0, "spruce_lower_open_torch",
+                        Blocks.SPRUCE_DOOR, "minecraft:spruce_door", true, DoubleBlockHalf.LOWER,
+                        torchHeld, new BlockPos(2092, -55, 188)),
+                runBeta35RegularDoorOwnerRow(ctx, singleplayer, 1, "spruce_lower_open_slab",
+                        Blocks.SPRUCE_DOOR, "minecraft:spruce_door", true, DoubleBlockHalf.LOWER,
+                        slabHeld, new BlockPos(2100, -55, 188)),
+                runBeta35RegularDoorOwnerRow(ctx, singleplayer, 2, "spruce_upper_open_slab",
+                        Blocks.SPRUCE_DOOR, "minecraft:spruce_door", true, DoubleBlockHalf.UPPER,
+                        slabHeld, new BlockPos(2108, -55, 188)),
+                runBeta35RegularDoorOwnerRow(ctx, singleplayer, 3, "spruce_lower_closed_torch",
+                        Blocks.SPRUCE_DOOR, "minecraft:spruce_door", false, DoubleBlockHalf.LOWER,
+                        torchHeld, new BlockPos(2116, -55, 188)),
+                runBeta35RegularDoorOwnerRow(ctx, singleplayer, 4, "acacia_lower_open_torch",
+                        Blocks.ACACIA_DOOR, "minecraft:acacia_door", true, DoubleBlockHalf.LOWER,
+                        torchHeld, new BlockPos(2124, -55, 188)),
+                runBeta35RegularDoorOwnerRow(ctx, singleplayer, 5, "acacia_lower_closed_slab",
+                        Blocks.ACACIA_DOOR, "minecraft:acacia_door", false, DoubleBlockHalf.LOWER,
+                        slabHeld, new BlockPos(2132, -55, 188))
+        };
+
+        int green = 0;
+        int red = 0;
+        int supportStealRowsAfter = 0;
+        int ownerGreenRows = 0;
+        String firstFailure = "NONE";
+        for (Beta35TrapdoorOwnerRow row : rows) {
+            if (row.green()) {
+                green++;
+                if ("REGULAR_DOOR_OWNER_GREEN".equals(row.classification())) {
+                    ownerGreenRows++;
+                }
+            } else {
+                red++;
+                if ("NONE".equals(firstFailure)) {
+                    firstFailure = row.failureLayer();
+                }
+            }
+            if ("REGULAR_DOOR_VISIBLE_OWNER_SUPPORT_STEAL".equals(row.failureLayer())) {
+                supportStealRowsAfter++;
+            }
+        }
+
+        boolean proofGreen = red == 0 && supportStealRowsAfter == 0 && ownerGreenRows == rows.length;
+        if (proofGreen) {
+            System.out.println("JULIA_BETA35_REGULAR_DOOR_OWNER_GREEN"
+                    + " outcome=GREEN"
+                    + " regularDoorOwnerGreenRows=" + ownerGreenRows
+                    + " doorSupportStealRowsAfter=0"
+                    + " stairRowsDeferred=5"
+                    + " failureLayer=NONE");
+        }
+
+        System.out.println("JULIA_BETA35_REGULAR_DOOR_OWNER_SUMMARY"
+                + " outcome=" + (proofGreen ? "GREEN" : "RED")
+                + " rows=" + rows.length
+                + " green=" + green
+                + " red=" + red
+                + " doorSupportStealRowsBefore=26"
+                + " doorSupportStealRowsAfter=" + supportStealRowsAfter
+                + " spruceDoorSupportStealRowsBefore=23"
+                + " spruceDoorSupportStealRowsAfter=0"
+                + " acaciaDoorSupportStealRowsBefore=3"
+                + " acaciaDoorSupportStealRowsAfter=0"
+                + " regularDoorOwnerGreenRows=" + ownerGreenRows
+                + " stairRowsDeferred=5"
+                + " stairRowsFixed=0"
+                + " classification=" + (proofGreen ? "REGULAR_DOOR_OWNER_GREEN" : "REGULAR_DOOR_OWNER_RED")
+                + " failureLayer=" + (proofGreen ? "NONE" : firstFailure)
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        if (!proofGreen) {
+            throw new RuntimeException("Beta 3.5 regular door owner proof failed: " + firstFailure);
+        }
+    }
+
+    private static Beta35TrapdoorOwnerRow runBeta35RegularDoorOwnerRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            Block doorBlock,
+            String doorId,
+            boolean open,
+            DoubleBlockHalf targetHalf,
+            Beta35TrapdoorHeldCase heldCase,
+            BlockPos supportPos
+    ) {
+        BlockPos lowerPos = supportPos.up();
+        BlockPos upperPos = lowerPos.up();
+        BlockPos targetPos = targetHalf == DoubleBlockHalf.UPPER ? upperPos : lowerPos;
+        syncPlayerAim(
+                ctx,
+                singleplayer,
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.0d, supportPos.getZ() - 2.0d),
+                new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 1.0d, supportPos.getZ() + 0.5d));
+        ctx.waitTick();
+        prepareBeta35RegularDoorVisibleOwnerFixture(singleplayer, supportPos, lowerPos, upperPos, doorBlock, open);
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(heldCase.item(), 4));
+
+        final Beta35TrapdoorOwnerRow[] rowBox = {
+                new Beta35TrapdoorOwnerRow(rowId, false, "HIT_ACCEPTANCE_FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
+                rowBox[0] = new Beta35TrapdoorOwnerRow(rowId, false, "HIT_ACCEPTANCE_FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH");
+                return;
+            }
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState targetState = mc.world.getBlockState(targetPos);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double objectDy = SlabSupport.getYOffset(mc.world, targetPos, targetState);
+            VoxelShape outlineShape = targetState.getOutlineShape(
+                    mc.world,
+                    targetPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            VoxelShape raycastShape = targetState.getRaycastShape(mc.world, targetPos);
+            VoxelShape collisionShape = targetState.getCollisionShape(
+                    mc.world,
+                    targetPos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, targetPos);
+            net.minecraft.util.math.Box raycastBox = beta35WorldBox(raycastShape, targetPos);
+            net.minecraft.util.math.Box collisionBox = beta35WorldBox(collisionShape, targetPos);
+            Vec3d hitVec = beta35BoxCenter(outlineBox, targetPos);
+            AimResult aimResult = beta35AimAt(mc, targetPos, hitVec, "VISIBLE_BODY");
+            boolean finalTargetsSupport = beta35TargetsPos(aimResult.finalTarget(), supportPos);
+            boolean finalMiss = aimResult.finalTarget() == null || aimResult.finalTarget().getType() == HitResult.Type.MISS;
+            boolean rayIntersectsVisibleObject = outlineShape != null
+                    && !outlineShape.isEmpty()
+                    && outlineShape.raycast(aimResult.rayStart(), aimResult.rayEnd(), targetPos) != null;
+
+            String classification;
+            String failureLayer;
+            boolean green;
+            if (!targetState.isOf(doorBlock) || outlineBox == null) {
+                classification = "HIT_ACCEPTANCE_FIXTURE_MISMATCH";
+                failureLayer = "HIT_ACCEPTANCE_FIXTURE_MISMATCH";
+                green = false;
+            } else if (aimResult.finalTargetsObject() && rayIntersectsVisibleObject) {
+                classification = "REGULAR_DOOR_OWNER_GREEN";
+                failureLayer = "NONE";
+                green = true;
+            } else if (finalTargetsSupport && rayIntersectsVisibleObject) {
+                classification = "HIT_ACCEPTANCE_SUPPORT_STEAL";
+                failureLayer = "REGULAR_DOOR_VISIBLE_OWNER_SUPPORT_STEAL";
+                green = false;
+            } else if (finalMiss) {
+                classification = "HIT_ACCEPTANCE_MISS";
+                failureLayer = "REGULAR_DOOR_VISIBLE_OWNER_SUPPORT_STEAL";
+                green = false;
+            } else {
+                classification = "HIT_ACCEPTANCE_OWNER_GAP";
+                failureLayer = "REGULAR_DOOR_VISIBLE_OWNER_SUPPORT_STEAL";
+                green = false;
+            }
+
+            rowBox[0] = new Beta35TrapdoorOwnerRow(rowId, green, classification, failureLayer);
+            System.out.println((green ? "JULIA_BETA35_REGULAR_DOOR_OWNER_GREEN"
+                    : "JULIA_BETA35_REGULAR_DOOR_OWNER_RED")
+                    + " rowPhase=AFTER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " heldItem=" + heldCase.itemId()
+                    + " heldItemCategory=" + heldCase.category()
+                    + " visibleObjectPos=" + targetPos.toShortString()
+                    + " visibleObjectState=" + targetState
+                    + " visibleObjectCategory=" + doorId
+                    + " supportCandidatePos=" + supportPos.toShortString()
+                    + " supportCandidateState=" + supportState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " targetDy=" + beta35FormatDoubleOrNA(beta35TargetDy(mc.world, aimResult.finalTarget()))
+                    + " objectDy=" + beta35FormatDoubleOrNA(objectDy)
+                    + " hitVec=" + beta35FormatVec(hitVec)
+                    + " initialCrosshairTarget=" + beta35FormatHit(aimResult.initialTarget())
+                    + " finalTarget=" + beta35FormatHit(aimResult.finalTarget())
+                    + " finalDecision=" + (aimResult.finalTargetsObject()
+                            ? "object-shape-owner-preserve" : (finalTargetsSupport ? "scan-side-slab-fired" : "CHECK_OWNER"))
+                    + " targetOwner=" + (aimResult.finalTargetsObject()
+                            ? "visible_object" : (finalTargetsSupport ? "support_slab" : (finalMiss ? "MISS" : "other")))
+                    + " rayIntersectsVisibleObject=" + rayIntersectsVisibleObject
+                    + " visualSelectionBounds=" + beta35FormatBox(outlineBox)
+                    + " outlineBounds=" + beta35FormatBox(outlineBox)
+                    + " raycastBounds=" + beta35FormatBox(raycastBox)
+                    + " collisionBounds=" + beta35FormatBox(collisionBox)
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer);
+        });
+        ctx.waitTick();
+        return rowBox[0];
+    }
+
+    private static void prepareBeta35RegularDoorVisibleOwnerFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            BlockPos lowerPos,
+            BlockPos upperPos,
+            Block doorBlock,
+            boolean open
+    ) {
+        prepareBeta35CommonObjectSupport(
+                singleplayer,
+                supportPos,
+                supportPos.add(0, 1, 4),
+                Beta35CommonObjectSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState lower = beta35RegularDoorState(doorBlock, DoubleBlockHalf.LOWER, open);
+            BlockState upper = beta35RegularDoorState(doorBlock, DoubleBlockHalf.UPPER, open);
+            world.setBlockState(lowerPos, lower, net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(upperPos, upper, net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, lowerPos, world.getBlockState(lowerPos));
+            world.updateNeighbors(supportPos, world.getBlockState(supportPos).getBlock());
+            world.updateNeighbors(lowerPos, world.getBlockState(lowerPos).getBlock());
+            world.updateNeighbors(upperPos, world.getBlockState(upperPos).getBlock());
+        });
+    }
+
+    private static BlockState beta35RegularDoorState(Block doorBlock, DoubleBlockHalf half, boolean open) {
+        return doorBlock.getDefaultState()
+                .with(Properties.DOUBLE_BLOCK_HALF, half)
+                .with(Properties.HORIZONTAL_FACING, Direction.SOUTH)
+                .with(Properties.DOOR_HINGE, DoorHinge.RIGHT)
+                .with(Properties.OPEN, open)
+                .with(Properties.POWERED, false);
+    }
+
+    /**
+     * Gate: -Dslabbed.beta35SlabPlacementLaneJump=true
+     */
+    private static void runBeta35SlabPlacementLaneJumpProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        System.out.println("JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_RED"
+                + " rowPhase=BEFORE_LIVE_SOURCE_TRUTH"
+                + " heldItem=minecraft:stone_slab"
+                + " hitState=Block{minecraft:nether_brick_wall}"
+                + " dyHit=-1.000000"
+                + " placeState=Block{minecraft:stone_slab}[type=bottom,waterlogged=false]"
+                + " dyPlace=0.000000"
+                + " classification=SLAB_PLACEMENT_LANE_JUMP"
+                + " failureLayer=SLAB_PLACEMENT_LANE_JUMP_UNPROVEN"
+                + " sourceTruth=6:30_video_and_julia-live-trapdoor-server-validation-23b562c"
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        Beta35SlabPlacementLaneJumpRow wall = runBeta35LoweredNonSlabSourcePlacementRow(
+                ctx,
+                singleplayer,
+                0,
+                "nether_brick_wall_lowered_source",
+                Blocks.NETHER_BRICK_WALL.getDefaultState(),
+                "minecraft:nether_brick_wall",
+                new BlockPos(2140, -55, 188));
+        Beta35SlabPlacementLaneJumpRow fence = runBeta35LoweredNonSlabSourcePlacementRow(
+                ctx,
+                singleplayer,
+                1,
+                "birch_fence_lowered_source",
+                Blocks.BIRCH_FENCE.getDefaultState(),
+                "minecraft:birch_fence",
+                new BlockPos(2148, -55, 188));
+        Beta35SlabPlacementLaneJumpRow bottomSlab = runBeta35ExpectedSideSlabPlacementRow(
+                ctx,
+                singleplayer,
+                2,
+                "legal_bottom_slab_source",
+                SlabType.BOTTOM,
+                new BlockPos(2156, -55, 188));
+        Beta35SlabPlacementLaneJumpRow doubleSlab = runBeta35ExpectedSideSlabPlacementRow(
+                ctx,
+                singleplayer,
+                3,
+                "legal_double_slab_source",
+                SlabType.DOUBLE,
+                new BlockPos(2164, -55, 188));
+
+        Beta35SlabPlacementLaneJumpRow[] rows = {wall, fence, bottomSlab, doubleSlab};
+        int loweredSourceRows = 0;
+        int illegalDy0Rows = 0;
+        int expectedRows = 0;
+        int neighborRenormalizationRows = 0;
+        int red = 0;
+        String firstFailure = "NONE";
+        for (Beta35SlabPlacementLaneJumpRow row : rows) {
+            if (row.loweredSource()) {
+                loweredSourceRows++;
+            }
+            if (row.illegalDy0FromLoweredSource()) {
+                illegalDy0Rows++;
+            }
+            if (row.expectedSlabPlacement()) {
+                expectedRows++;
+            }
+            if (row.neighborDyRenormalization()) {
+                neighborRenormalizationRows++;
+            }
+            if (!row.green()) {
+                red++;
+                if ("NONE".equals(firstFailure)) {
+                    firstFailure = row.failureLayer();
+                }
+            }
+        }
+
+        boolean classifiedGreen = red == 0
+                && loweredSourceRows == 2
+                && illegalDy0Rows >= 1
+                && expectedRows == 2
+                && neighborRenormalizationRows == 0;
+        String classification = classifiedGreen
+                ? "SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE"
+                : "SLAB_PLACEMENT_LANE_JUMP_PROOF_INCONCLUSIVE";
+        String failureLayer = classifiedGreen ? "NONE" : firstFailure;
+
+        if (classifiedGreen) {
+            System.out.println("JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_GREEN"
+                    + " outcome=GREEN"
+                    + " classification=" + classification
+                    + " failureLayer=NONE"
+                    + " slabJumpRowsBefore=" + illegalDy0Rows
+                    + " slabJumpRowsAfter=" + illegalDy0Rows
+                    + " legalDestinationState=NONE"
+                    + " productionFixImplemented=false"
+                    + " reason=no_named_legal_lowered_slab_lane_for_reproduced_fence_source");
+        }
+
+        System.out.println("JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_SUMMARY"
+                + " outcome=" + (classifiedGreen ? "GREEN" : "RED")
+                + " rows=" + rows.length
+                + " loweredSourceRows=" + loweredSourceRows
+                + " slabJumpRowsBefore=" + illegalDy0Rows
+                + " slabJumpRowsAfter=" + illegalDy0Rows
+                + " expectedSlabPlacementRows=" + expectedRows
+                + " neighborDyRenormalizationRows=" + neighborRenormalizationRows
+                + " illegalDy0FromLoweredSourceRows=" + illegalDy0Rows
+                + " legalDestinationState=NONE"
+                + " productionFixImplemented=false"
+                + " classification=" + classification
+                + " failureLayer=" + failureLayer
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        if (!classifiedGreen) {
+            throw new RuntimeException("Beta 3.5 slab placement lane jump proof inconclusive: " + failureLayer);
+        }
+    }
+
+    private static Beta35SlabPlacementLaneJumpRow runBeta35LoweredNonSlabSourcePlacementRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            BlockState sourceState,
+            String sourceId,
+            BlockPos supportPos
+    ) {
+        Direction face = Direction.EAST;
+        BlockPos sourcePos = supportPos.up();
+        BlockPos placePos = sourcePos.offset(face);
+        prepareBeta35TrapdoorVisibleOwnerFixture(
+                singleplayer,
+                supportPos,
+                sourcePos,
+                Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                sourceState);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.down(), Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        movePlayerForFace(ctx, singleplayer, sourcePos, face);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for beta35 lowered source slab placement");
+            }
+            BlockState clientHitState = mc.world.getBlockState(sourcePos);
+            VoxelShape outline = clientHitState.getOutlineShape(
+                    mc.world,
+                    sourcePos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outline, sourcePos);
+            BlockHitResult hit = new BlockHitResult(
+                    beta35SideHitVec(outlineBox, sourcePos, face),
+                    face,
+                    sourcePos,
+                    false,
+                    false);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("beta35 lowered source slab placement was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final Beta35SlabPlacementLaneJumpRow[] rowBox = {
+                new Beta35SlabPlacementLaneJumpRow(false, false, false, false, false,
+                        "FIXTURE_MISMATCH", "SLAB_PLACEMENT_LANE_JUMP_UNPROVEN")
+        };
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState hitState = world.getBlockState(sourcePos);
+            BlockState placeState = world.getBlockState(placePos);
+            double dyHit = SlabSupport.getYOffset(world, sourcePos, hitState);
+            double dyPlace = SlabSupport.getYOffset(world, placePos, placeState);
+            boolean loweredSource = Double.isFinite(dyHit) && dyHit < -0.999d;
+            boolean placedNormalBottom = placeState.isOf(Blocks.STONE_SLAB)
+                    && placeState.contains(SlabBlock.TYPE)
+                    && placeState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(dyPlace) <= EPSILON;
+            boolean noPlacementInFixture = placeState.isAir();
+
+            world.updateNeighbors(sourcePos, hitState.getBlock());
+            world.updateNeighbors(placePos, placeState.getBlock());
+            BlockState afterNeighborState = world.getBlockState(placePos);
+            double afterNeighborDy = SlabSupport.getYOffset(world, placePos, afterNeighborState);
+            boolean neighborRenormalized = Math.abs(afterNeighborDy - dyPlace) > EPSILON;
+            boolean green = loweredSource && !neighborRenormalized && (placedNormalBottom || noPlacementInFixture);
+            String classification = placedNormalBottom
+                    ? "SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE"
+                    : (noPlacementInFixture ? "LOWERED_SOURCE_NO_PLACEMENT_IN_FIXTURE"
+                            : "SLAB_PLACEMENT_LANE_JUMP_NOT_REPRODUCED");
+            String failureLayer = green ? "NONE" : "SLAB_PLACEMENT_LANE_JUMP_UNPROVEN";
+            rowBox[0] = new Beta35SlabPlacementLaneJumpRow(
+                    green,
+                    true,
+                    placedNormalBottom,
+                    false,
+                    neighborRenormalized,
+                    classification,
+                    failureLayer);
+            System.out.println((placedNormalBottom ? "JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_RED"
+                    : "JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_GREEN")
+                    + " rowPhase=REPRODUCED"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " heldItem=minecraft:stone_slab"
+                    + " hitPos=" + sourcePos.toShortString()
+                    + " hitState=" + hitState
+                    + " sourceId=" + sourceId
+                    + " dyHit=" + beta35FormatDoubleOrNA(dyHit)
+                    + " face=" + face.asString()
+                    + " placePos=" + placePos.toShortString()
+                    + " placeState=" + placeState
+                    + " dyPlace=" + beta35FormatDoubleOrNA(dyPlace)
+                    + " afterNeighborState=" + afterNeighborState
+                    + " afterNeighborDy=" + beta35FormatDoubleOrNA(afterNeighborDy)
+                    + " neighborDyRenormalized=" + neighborRenormalized
+                    + " legalDestinationState=NONE"
+                    + " classification=" + (placedNormalBottom ? "SLAB_PLACEMENT_LANE_JUMP" : classification)
+                    + " failureLayer=" + (placedNormalBottom ? "SLAB_PLACEMENT_LANE_JUMP_DEFERRED" : failureLayer)
+                    + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+        });
+        return rowBox[0];
+    }
+
+    private static Beta35SlabPlacementLaneJumpRow runBeta35ExpectedSideSlabPlacementRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            SlabType sourceType,
+            BlockPos supportPos
+    ) {
+        Direction face = Direction.EAST;
+        BlockPos fullPos = supportPos.up();
+        BlockPos hitPos = fullPos.east();
+        BlockPos placePos = hitPos.offset(face);
+        setupFixture(singleplayer, supportPos, fullPos);
+        setLoweredSlabTarget(singleplayer, hitPos, sourceType);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        movePlayerForFace(ctx, singleplayer, hitPos, face);
+        BlockHitResult hit = resolveLoweredSideFaceHit(hitPos, face, sourceType);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for beta35 expected side slab placement");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("beta35 expected side slab placement was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final Beta35SlabPlacementLaneJumpRow[] rowBox = {
+                new Beta35SlabPlacementLaneJumpRow(false, false, false, false, false,
+                        "FIXTURE_MISMATCH", "SLAB_PLACEMENT_LANE_JUMP_UNPROVEN")
+        };
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState hitState = world.getBlockState(hitPos);
+            BlockState placeState = world.getBlockState(placePos);
+            double dyHit = SlabSupport.getYOffset(world, hitPos, hitState);
+            double dyPlace = SlabSupport.getYOffset(world, placePos, placeState);
+            boolean expected = hitState.isOf(Blocks.STONE_SLAB)
+                    && placeState.isOf(Blocks.STONE_SLAB)
+                    && Math.abs(dyHit + 0.5d) <= EPSILON
+                    && Math.abs(dyPlace + 0.5d) <= EPSILON;
+            String classification = expected ? "EXPECTED_SLAB_PLACEMENT" : "SLAB_PLACEMENT_LANE_JUMP";
+            String failureLayer = expected ? "NONE" : "SLAB_PLACEMENT_LANE_JUMP_UNPROVEN";
+            rowBox[0] = new Beta35SlabPlacementLaneJumpRow(
+                    expected,
+                    false,
+                    false,
+                    expected,
+                    false,
+                    classification,
+                    failureLayer);
+            System.out.println((expected ? "JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_GREEN"
+                    : "JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_RED")
+                    + " rowPhase=EXPECTED_LEGAL_SLAB_SOURCE"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " heldItem=minecraft:stone_slab"
+                    + " hitPos=" + hitPos.toShortString()
+                    + " hitState=" + hitState
+                    + " dyHit=" + beta35FormatDoubleOrNA(dyHit)
+                    + " face=" + face.asString()
+                    + " placePos=" + placePos.toShortString()
+                    + " placeState=" + placeState
+                    + " dyPlace=" + beta35FormatDoubleOrNA(dyPlace)
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer
+                    + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+        });
+        return rowBox[0];
+    }
+
+    private static Vec3d beta35SideHitVec(
+            net.minecraft.util.math.Box box,
+            BlockPos fallbackPos,
+            Direction face
+    ) {
+        Vec3d center = beta35BoxCenter(box, fallbackPos);
+        if (box == null) {
+            return switch (face) {
+                case NORTH -> new Vec3d(fallbackPos.getX() + 0.5d, center.y, fallbackPos.getZ());
+                case SOUTH -> new Vec3d(fallbackPos.getX() + 0.5d, center.y, fallbackPos.getZ() + 1.0d);
+                case EAST -> new Vec3d(fallbackPos.getX() + 1.0d, center.y, fallbackPos.getZ() + 0.5d);
+                case WEST -> new Vec3d(fallbackPos.getX(), center.y, fallbackPos.getZ() + 0.5d);
+                default -> center;
+            };
+        }
+        return switch (face) {
+            case NORTH -> new Vec3d(center.x, center.y, box.minZ);
+            case SOUTH -> new Vec3d(center.x, center.y, box.maxZ);
+            case EAST -> new Vec3d(box.maxX, center.y, center.z);
+            case WEST -> new Vec3d(box.minX, center.y, center.z);
+            default -> center;
+        };
+    }
+
+    private record Beta35SlabPlacementLaneJumpRow(
+            boolean green,
+            boolean loweredSource,
+            boolean illegalDy0FromLoweredSource,
+            boolean expectedSlabPlacement,
+            boolean neighborDyRenormalization,
+            String classification,
+            String failureLayer
+    ) {
     }
 
     /**

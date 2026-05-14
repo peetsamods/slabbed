@@ -57,3 +57,27 @@ The open-state proof must report `serverAccepted=true` and `finalStateOpen=true`
 ## Scope
 
 This is an automated-proof green target only. It does not run a release audit, move a release tag, or claim all-item gameplay support.
+
+## Continuation: Regular Door Owner And Slab Lane Classification
+
+Continuation base: `23b562c` / `save/beta35-trapdoor-server-validation`.
+
+Julia's 2026-05-14 6:30 live source truth confirmed that trapdoors, chains, buttons, and torches were much improved after this trapdoor server-validation savepoint. The remaining in-scope failures were regular-door visible-owner support steal and a slab placement lane jump around lowered non-slab sources.
+
+Regular-door proof flag:
+
+`-Dslabbed.beta35RegularDoorOwnerFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+
+Result:
+
+`JULIA_BETA35_REGULAR_DOOR_OWNER_SUMMARY outcome=GREEN rows=6 green=6 red=0 doorSupportStealRowsBefore=26 doorSupportStealRowsAfter=0 spruceDoorSupportStealRowsBefore=23 spruceDoorSupportStealRowsAfter=0 acaciaDoorSupportStealRowsBefore=3 acaciaDoorSupportStealRowsAfter=0 regularDoorOwnerGreenRows=6 stairRowsDeferred=5 stairRowsFixed=0 classification=REGULAR_DOOR_OWNER_GREEN failureLayer=NONE`
+
+Slab-lane proof flag:
+
+`-Dslabbed.beta35SlabPlacementLaneJump=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+
+Result:
+
+`JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_SUMMARY outcome=GREEN rows=4 loweredSourceRows=2 slabJumpRowsBefore=1 slabJumpRowsAfter=1 expectedSlabPlacementRows=2 neighborDyRenormalizationRows=0 illegalDy0FromLoweredSourceRows=1 legalDestinationState=NONE productionFixImplemented=false classification=SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE failureLayer=NONE`
+
+This continuation does not change server validation. It does not reopen trapdoors, chains, buttons, torches, fence/wall, candle, or flower-pot behavior except through regression proof. Release audit remains paused, no release tag moved, and Julia live acceptance is still required.

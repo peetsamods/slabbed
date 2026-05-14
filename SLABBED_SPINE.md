@@ -39,6 +39,22 @@ Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it 
 Tracked tree is clean.
 `tmp/` may remain intentionally untracked and must not be staged.
 
+## Current Beta 3.5 regular door owner and slab placement lane status
+
+Operating base before this continuation: `23b562c` / `save/beta35-trapdoor-server-validation` on `integrate/phase19-into-side-slab-top-support`.
+
+Julia's 2026-05-14 6:30 live source truth after trapdoor server validation is close but not release-ready: trapdoors, chains, buttons, and torches are much improved, while regular doors still lose targeting to the support slab and slab placement/break neighbor updates still visibly jump around the lowered lane. The live support-steal extract had `HIT_ACCEPTANCE_SUPPORT_STEAL=31`: `minecraft:spruce_door=23`, `minecraft:acacia_door=3`, and `minecraft:birch_stairs=5`.
+
+Narrow production change: the Beta 3.5 visible-owner candidate helper now includes lowered regular `DoorBlock` halves when the ray intersects the door's shifted visible outline/raycast shape. The client retarget path preserves that owner before slab/support rescue, and the shifted raycast fallback now covers regular doors rather than only the earlier oak-door special case. This is not held-item based, not all-door unconditional ownership, not global hit tolerance widening, not global collision lowering, and not a solidity/sturdy-face lie.
+
+Focused proof flag: `-Dslabbed.beta35RegularDoorOwnerFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`. Current summary: `JULIA_BETA35_REGULAR_DOOR_OWNER_SUMMARY outcome=GREEN rows=6 green=6 red=0 doorSupportStealRowsBefore=26 doorSupportStealRowsAfter=0 spruceDoorSupportStealRowsBefore=23 spruceDoorSupportStealRowsAfter=0 acaciaDoorSupportStealRowsBefore=3 acaciaDoorSupportStealRowsAfter=0 regularDoorOwnerGreenRows=6 stairRowsDeferred=5 stairRowsFixed=0 classification=REGULAR_DOOR_OWNER_GREEN failureLayer=NONE releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`.
+
+Focused slab-lane proof flag: `-Dslabbed.beta35SlabPlacementLaneJump=true -Dslabbed.beta35SlabHeightHitAcceptance=true`. Current summary: `JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_SUMMARY outcome=GREEN rows=4 loweredSourceRows=2 slabJumpRowsBefore=1 slabJumpRowsAfter=1 expectedSlabPlacementRows=2 neighborDyRenormalizationRows=0 illegalDy0FromLoweredSourceRows=1 legalDestinationState=NONE productionFixImplemented=false classification=SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE failureLayer=NONE releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`. The reproduced wrong transition is the `birch_fence` lowered source: `dyHit=-1.000000` with placed `stone_slab[type=bottom] dyPlace=0.000000`. The `nether_brick_wall` live-source row remains captured as source truth, but the automated fixture did not place a slab for that row. Legal slab-source controls remained expected: bottom/double slab source rows placed at `dyPlace=-0.500000`. No production slab-lane fix was made because no named legal lowered destination state exists for this non-slab source in current grammar.
+
+Regression gates for this continuation are automated-proof green: compile, focused regular-door proof, focused slab-lane classification proof, trapdoor server validation, visible-owner stability, floor-button contact, aperture, fence/wall visual-hitbox stack aim, fence/wall stack contact, fence/wall owner-server hit, candle contact, flower-pot contact, flower-pot survival, common-object matrix, default `runClientGameTest`, `runClient` startup smoke, and `git diff --check`. The run-client smoke emitted the beta35 hit-acceptance startup marker and was intentionally stopped; unrelated Realms authentication warnings are not gameplay validation failures.
+
+Release audit remains paused. Julia live acceptance is still required. No release tag was moved, no release audit was run, and no release-ready or all-item gameplay claim is made.
+
 ## Current Beta 3.5 visible object owner stability status
 
 Operating base before this continuation: `05f1582` / `save/beta35-hitbox-aperture-fix` on `integrate/phase19-into-side-slab-top-support`. This started from a stopped dirty WIP for floor-button contact and continued the same WIP into visible-object owner stability.

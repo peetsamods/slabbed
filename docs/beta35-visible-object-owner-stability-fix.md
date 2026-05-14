@@ -88,3 +88,21 @@ Required green coverage:
 - Open-state proof reports `JULIA_BETA35_TRAPDOOR_OPEN_STATE_GREEN` with `serverAccepted=true` and `finalStateOpen=true`.
 
 The paired slab-neighbor tracer is proof-only. It records side placement, merge placement, and neighbor-update state/dy around the live-shaped slab lane and currently classifies the automated fixture as `EXPECTED_SLAB_PLACEMENT failureLayer=NONE`. No neighbor-update production patch was made.
+
+## 2026-05-14 Continuation: Regular Door Visible Owner
+
+Continuation base: `23b562c` / `save/beta35-trapdoor-server-validation`.
+
+Julia's 6:30 live source truth after trapdoor server validation kept the earlier visible-owner categories mostly green, but regular doors still lost ownership to the support slab even when `rayIntersectsVisibleObject=true`. Door support-steal source counts were `spruce_door=23` and `acacia_door=3`; `birch_stairs=5` remains deferred.
+
+The continuation extends the same visible-owner preservation rule to lowered regular `DoorBlock` halves. The ray must intersect the shifted door outline/raycast shape, and explicit support aim still remains support-owned.
+
+Focused proof:
+
+`JULIA_BETA35_REGULAR_DOOR_OWNER_SUMMARY outcome=GREEN rows=6 green=6 red=0 doorSupportStealRowsBefore=26 doorSupportStealRowsAfter=0 spruceDoorSupportStealRowsBefore=23 spruceDoorSupportStealRowsAfter=0 acaciaDoorSupportStealRowsBefore=3 acaciaDoorSupportStealRowsAfter=0 regularDoorOwnerGreenRows=6 stairRowsDeferred=5 stairRowsFixed=0 classification=REGULAR_DOOR_OWNER_GREEN failureLayer=NONE releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`
+
+The paired slab-lane proof reproduced one lowered non-slab source jump but classified it rather than patching it:
+
+`JULIA_BETA35_SLAB_PLACEMENT_LANE_JUMP_SUMMARY outcome=GREEN rows=4 loweredSourceRows=2 slabJumpRowsBefore=1 slabJumpRowsAfter=1 expectedSlabPlacementRows=2 neighborDyRenormalizationRows=0 illegalDy0FromLoweredSourceRows=1 legalDestinationState=NONE productionFixImplemented=false classification=SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE failureLayer=NONE`
+
+No global tolerance, collision, solidity, or sturdy-face behavior changed. No release audit ran, no release tag moved, and no all-item gameplay claim is made.
