@@ -292,7 +292,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
-        if (Boolean.getBoolean("slabbed.beta35CommonObjectCompatibilityAudit")) {
+        if (Boolean.getBoolean("slabbed.beta35CommonObjectCompatibilityAudit")
+                || Boolean.getBoolean("slabbed.beta35CommonObjectMatrix")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
                     .create()) {
@@ -531,6 +532,24 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     .setUseConsistentSettings(true)
                     .create()) {
                 runBeta35FloorButtonContactProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35TrapdoorServerValidationFix")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35TrapdoorServerValidationFixProof(ctx, singleplayer);
+            }
+            return;
+        }
+
+        if (Boolean.getBoolean("slabbed.beta35SlabNeighborJumpRed")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35SlabNeighborJumpProof(ctx, singleplayer);
             }
             return;
         }
@@ -15738,6 +15757,551 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         if (!proofGreen) {
             throw new RuntimeException("Beta 3.5 visible-object owner stability proof stayed RED: " + firstFailure);
         }
+    }
+
+    /**
+     * Gate: -Dslabbed.beta35TrapdoorServerValidationFix=true
+     */
+    private static void runBeta35TrapdoorServerValidationFixProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        BlockState oakClosed = Blocks.OAK_TRAPDOOR.getDefaultState()
+                .with(Properties.BLOCK_HALF, BlockHalf.BOTTOM)
+                .with(Properties.HORIZONTAL_FACING, Direction.EAST)
+                .with(Properties.OPEN, false);
+        BlockState mangroveClosed = Blocks.MANGROVE_TRAPDOOR.getDefaultState()
+                .with(Properties.BLOCK_HALF, BlockHalf.BOTTOM)
+                .with(Properties.HORIZONTAL_FACING, Direction.NORTH)
+                .with(Properties.OPEN, false);
+        BlockState birchClosed = Blocks.BIRCH_TRAPDOOR.getDefaultState()
+                .with(Properties.BLOCK_HALF, BlockHalf.BOTTOM)
+                .with(Properties.HORIZONTAL_FACING, Direction.WEST)
+                .with(Properties.OPEN, false);
+
+        System.out.println("JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_RED"
+                + " rowPhase=BEFORE_LIVE_SOURCE_TRUTH"
+                + " targetState=Block{minecraft:oak_trapdoor}[facing=east,half=bottom,open=false]"
+                + " targetDy=-1.000000"
+                + " heldItem=minecraft:stone_slab"
+                + " hitFace=up"
+                + " hitVecY=target_center_y_minus_1.312500"
+                + " validationDeltaY=-1.312500"
+                + " shiftedValidationCenter=null"
+                + " classification=HIT_ACCEPTANCE_SERVER_REJECT"
+                + " failureLayer=LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP"
+                + " sourceTruth=julia-live-visible-object-owner-22ec3f2"
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        Beta35ServerShiftRow[] serverRows = {
+                runBeta35TrapdoorServerValidationRow(
+                        singleplayer,
+                        0,
+                        "oak_trapdoor_higher_slab_stone_slab_held",
+                        Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                        oakClosed,
+                        "minecraft:oak_trapdoor",
+                        "minecraft:stone_slab",
+                        Items.STONE_SLAB,
+                        new BlockPos(2100, -55, 188)),
+                runBeta35TrapdoorServerValidationRow(
+                        singleplayer,
+                        1,
+                        "mangrove_trapdoor_higher_slab_trapdoor_held",
+                        Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                        mangroveClosed,
+                        "minecraft:mangrove_trapdoor",
+                        "minecraft:mangrove_trapdoor",
+                        Items.MANGROVE_TRAPDOOR,
+                        new BlockPos(2108, -55, 188)),
+                runBeta35TrapdoorServerValidationRow(
+                        singleplayer,
+                        2,
+                        "birch_trapdoor_higher_slab_torch_held",
+                        Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                        birchClosed,
+                        "minecraft:birch_trapdoor",
+                        "minecraft:torch",
+                        Items.TORCH,
+                        new BlockPos(2116, -55, 188)),
+                runBeta35TrapdoorServerValidationRow(
+                        singleplayer,
+                        3,
+                        "oak_trapdoor_higher_slab_button_held",
+                        Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                        oakClosed.with(Properties.HORIZONTAL_FACING, Direction.SOUTH),
+                        "minecraft:oak_trapdoor",
+                        "minecraft:acacia_button",
+                        Items.ACACIA_BUTTON,
+                        new BlockPos(2124, -55, 188))
+        };
+
+        Beta35ServerShiftRow negative = runBeta35TrapdoorServerNegativeBoundaryRow(
+                singleplayer,
+                4,
+                new BlockPos(2132, -55, 188));
+        Beta35ServerShiftRow openState = runBeta35TrapdoorOpenStateProofRow(
+                ctx,
+                singleplayer,
+                5,
+                oakClosed,
+                new BlockPos(2140, -55, 188));
+
+        int green = 0;
+        int red = 0;
+        String firstFailure = "NONE";
+        for (Beta35ServerShiftRow row : serverRows) {
+            if (row.green()) {
+                green++;
+            } else {
+                red++;
+                if ("NONE".equals(firstFailure)) {
+                    firstFailure = row.failureLayer();
+                }
+            }
+        }
+        if (negative.green()) {
+            green++;
+        } else {
+            red++;
+            if ("NONE".equals(firstFailure)) {
+                firstFailure = negative.failureLayer();
+            }
+        }
+        if (openState.green()) {
+            green++;
+        } else {
+            red++;
+            if ("NONE".equals(firstFailure)) {
+                firstFailure = openState.failureLayer();
+            }
+        }
+
+        boolean proofGreen = red == 0;
+        System.out.println("JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_SUMMARY"
+                + " outcome=" + (proofGreen ? "GREEN" : "RED")
+                + " rows=" + (serverRows.length + 2)
+                + " green=" + green
+                + " red=" + red
+                + " oak=minecraft:oak_trapdoor"
+                + " mangrove=minecraft:mangrove_trapdoor"
+                + " birch=minecraft:birch_trapdoor"
+                + " beforeFailureLayer=LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP"
+                + " afterFailureLayer=" + (proofGreen ? "NONE" : firstFailure)
+                + " negativeBoundary=TRAPDOOR_SERVER_NEGATIVE_GREEN"
+                + " openState=" + (openState.green() ? "JULIA_BETA35_TRAPDOOR_OPEN_STATE_GREEN" : "RED")
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        if (!proofGreen) {
+            throw new RuntimeException("Beta 3.5 trapdoor server validation proof stayed RED: " + firstFailure);
+        }
+    }
+
+    private static Beta35ServerShiftRow runBeta35TrapdoorServerValidationRow(
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            Beta35TrapdoorVisibleSupportCase supportCase,
+            BlockState trapdoorState,
+            String objectId,
+            String heldItemId,
+            Item heldItem,
+            BlockPos supportPos
+    ) {
+        BlockPos objectPos = supportPos.up();
+        prepareBeta35TrapdoorVisibleOwnerFixture(singleplayer, supportPos, objectPos, supportCase, trapdoorState);
+        final Beta35ServerShiftRow[] rowBox = {
+                new Beta35ServerShiftRow(rowId, false, "HIT_ACCEPTANCE_FIXTURE_MISMATCH",
+                        "HIT_ACCEPTANCE_FIXTURE_MISMATCH")
+        };
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState targetState = world.getBlockState(objectPos);
+            double targetDy = SlabSupport.getBeta35ShiftedServerValidationYOffset(
+                    world, objectPos, targetState);
+            Vec3d validationCenter = Vec3d.ofCenter(objectPos);
+            Vec3d hitVec = new Vec3d(
+                    objectPos.getX() + 0.5d,
+                    validationCenter.y + targetDy - 0.3125d,
+                    objectPos.getZ() + 0.5d);
+            Vec3d validationDelta = hitVec.subtract(validationCenter);
+            Vec3d shiftedValidationCenter = validationCenter.add(0.0d, targetDy, 0.0d);
+            Vec3d shiftedValidationDelta = hitVec.subtract(shiftedValidationCenter);
+            boolean serverEligible = SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonServerHitTarget(
+                    world, objectPos, targetState);
+            boolean shiftedGreen = serverEligible
+                    && beta35WithinVanillaComponentTolerance(shiftedValidationDelta)
+                    && Math.abs(targetDy + 1.0d) <= EPSILON
+                    && targetState.isOf(trapdoorState.getBlock());
+            String classification = shiftedGreen
+                    ? "SERVER_SHIFTED_HIT_GREEN"
+                    : "HIT_ACCEPTANCE_SERVER_REJECT";
+            String failureLayer = shiftedGreen
+                    ? "NONE"
+                    : "LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP";
+            rowBox[0] = new Beta35ServerShiftRow(rowId, shiftedGreen, classification, failureLayer);
+
+            System.out.println("JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_GREEN"
+                    + " rowPhase=AFTER"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " targetState=" + targetState
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " heldItem=" + heldItemId
+                    + " heldItemCategory=" + new Beta35TrapdoorHeldCase(heldItemId, heldItem, "SERVER").category()
+                    + " hitFace=up"
+                    + " hitVec=" + beta35FormatVec(hitVec)
+                    + " validationCenter=" + beta35FormatVec(validationCenter)
+                    + " validationDelta=" + beta35FormatVec(validationDelta)
+                    + " shiftedValidationCenter=" + beta35FormatVec(shiftedValidationCenter)
+                    + " shiftedValidationCenterY=" + beta35FormatDoubleOrNA(shiftedValidationCenter.y)
+                    + " shiftedValidationDelta=" + beta35FormatVec(shiftedValidationDelta)
+                    + " shiftedValidationDeltaWithinVanillaTolerance="
+                    + beta35WithinVanillaComponentTolerance(shiftedValidationDelta)
+                    + " serverEligible=" + serverEligible
+                    + " objectId=" + objectId
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer
+                    + " releaseAudit=NOT_RUN"
+                    + " releaseTagMoved=false"
+                    + " allItemClaim=false");
+        });
+        return rowBox[0];
+    }
+
+    private static Beta35ServerShiftRow runBeta35TrapdoorServerNegativeBoundaryRow(
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            BlockPos supportPos
+    ) {
+        BlockPos objectPos = supportPos.up();
+        BlockState floorButton = Blocks.ACACIA_BUTTON.getDefaultState()
+                .with(Properties.BLOCK_FACE, BlockFace.FLOOR)
+                .with(Properties.HORIZONTAL_FACING, Direction.SOUTH);
+        prepareBeta35TrapdoorVisibleOwnerFixture(
+                singleplayer,
+                supportPos,
+                objectPos,
+                Beta35TrapdoorVisibleSupportCase.NORMAL_DOUBLE_DY_ZERO,
+                floorButton);
+        final Beta35ServerShiftRow[] rowBox = {
+                new Beta35ServerShiftRow("non_ownable_floor_button_double_slab_boundary", false,
+                        "HIT_ACCEPTANCE_SERVER_REJECT_NON_OWNABLE_DY_RELATION",
+                        "HIT_ACCEPTANCE_SERVER_REJECT_NON_OWNABLE_DY_RELATION")
+        };
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState targetState = world.getBlockState(objectPos);
+            double targetDy = SlabSupport.getYOffset(world, objectPos, targetState);
+            boolean serverEligible = SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonServerHitTarget(
+                    world, objectPos, targetState);
+            boolean accepted = serverEligible && Double.isFinite(targetDy) && targetDy < -EPSILON;
+            boolean green = !accepted;
+            String failureLayer = green
+                    ? "HIT_ACCEPTANCE_SERVER_REJECT_NON_OWNABLE_DY_RELATION"
+                    : "SERVER_ACCEPTED_NON_OWNABLE_DY_RELATION";
+            rowBox[0] = new Beta35ServerShiftRow(
+                    "non_ownable_floor_button_double_slab_boundary",
+                    green,
+                    "TRAPDOOR_SERVER_NEGATIVE_GREEN",
+                    failureLayer);
+            System.out.println("JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_GREEN"
+                    + " rowPhase=NEGATIVE_BOUNDARY"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=non_ownable_floor_button_double_slab_boundary"
+                    + " targetState=" + targetState
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " shiftedValidationCenter=null"
+                    + " serverEligible=" + serverEligible
+                    + " classification=TRAPDOOR_SERVER_NEGATIVE_GREEN"
+                    + " accepted=" + accepted
+                    + " failureLayer=" + failureLayer
+                    + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+        });
+        return rowBox[0];
+    }
+
+    private static Beta35ServerShiftRow runBeta35TrapdoorOpenStateProofRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            BlockState trapdoorState,
+            BlockPos supportPos
+    ) {
+        BlockPos objectPos = supportPos.up();
+        prepareBeta35TrapdoorVisibleOwnerFixture(
+                singleplayer,
+                supportPos,
+                objectPos,
+                Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                trapdoorState);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, ItemStack.EMPTY);
+        final double[] serverTargetDy = {Double.NaN};
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            serverTargetDy[0] = SlabSupport.getYOffset(world, objectPos, world.getBlockState(objectPos));
+        });
+        syncPlayerAim(ctx, singleplayer,
+                new Vec3d(objectPos.getX() + 0.5d, objectPos.getY() + 2.0d, objectPos.getZ() - 2.0d),
+                new Vec3d(
+                        objectPos.getX() + 0.5d,
+                        Vec3d.ofCenter(objectPos).y + serverTargetDy[0] - 0.3125d,
+                        objectPos.getZ() + 0.5d));
+
+        final String[] result = {"NOT_RUN"};
+        final boolean[] beforeOpen = {false};
+        final boolean[] finalOpen = {false};
+        final double[] targetDyHolder = {Double.NaN};
+        final String[] shiftedCenterHolder = {"null"};
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                result[0] = "CLIENT_NOT_READY";
+                return;
+            }
+            BlockState before = mc.world.getBlockState(objectPos);
+            beforeOpen[0] = before.contains(Properties.OPEN) && before.get(Properties.OPEN);
+            double targetDy = serverTargetDy[0];
+            targetDyHolder[0] = targetDy;
+            Vec3d validationCenter = Vec3d.ofCenter(objectPos);
+            Vec3d hitVec = new Vec3d(
+                    objectPos.getX() + 0.5d,
+                    validationCenter.y + targetDy - 0.3125d,
+                    objectPos.getZ() + 0.5d);
+            shiftedCenterHolder[0] = beta35FormatVec(validationCenter.add(0.0d, targetDy, 0.0d));
+            BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, objectPos, false, false);
+            ActionResult actionResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            result[0] = actionResult.toString();
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                return;
+            }
+            BlockState after = mc.world.getBlockState(objectPos);
+            finalOpen[0] = after.contains(Properties.OPEN) && after.get(Properties.OPEN);
+        });
+
+        boolean accepted = finalOpen[0] && !beforeOpen[0];
+        String failureLayer = accepted ? "NONE" : "LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP";
+        System.out.println((accepted ? "JULIA_BETA35_TRAPDOOR_OPEN_STATE_GREEN"
+                : "JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_RED")
+                + " rowPhase=OPEN_STATE_AFTER"
+                + " rowIndex=" + rowIndex
+                + " beforeOpen=" + beforeOpen[0]
+                + " afterOpen=" + finalOpen[0]
+                + " serverAccepted=" + accepted
+                + " interactResult=" + result[0]
+                + " targetDy=" + beta35FormatDoubleOrNA(targetDyHolder[0])
+                + " shiftedValidationCenter=" + shiftedCenterHolder[0]
+                + " finalStateOpen=" + finalOpen[0]
+                + " failureLayer=" + failureLayer
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+        return new Beta35ServerShiftRow(
+                "oak_trapdoor_open_state_stays_open",
+                accepted,
+                accepted ? "JULIA_BETA35_TRAPDOOR_OPEN_STATE_GREEN" : "TRAPDOOR_OPEN_STATE_RED",
+                failureLayer);
+    }
+
+    private static boolean beta35WithinVanillaComponentTolerance(Vec3d delta) {
+        return delta != null
+                && Math.abs(delta.x) < 1.0000001d
+                && Math.abs(delta.y) < 1.0000001d
+                && Math.abs(delta.z) < 1.0000001d;
+    }
+
+    /**
+     * Gate: -Dslabbed.beta35SlabNeighborJumpRed=true
+     */
+    private static void runBeta35SlabNeighborJumpProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        final Direction face = Direction.EAST;
+        final BlockPos hitPos = FULL_POS.east();
+        final BlockPos placePos = hitPos.offset(face);
+        final BlockPos placeAbove = placePos.up();
+        final BlockPos placeBelow = placePos.down();
+        final BlockHitResult hit = resolveLoweredSideFaceHit(hitPos, face, SlabType.DOUBLE);
+
+        System.out.println("JULIA_BETA35_SLAB_NEIGHBOR_JUMP_RED"
+                + " rowPhase=BEFORE_LIVE_SOURCE_TRUTH"
+                + " hitState=Block{minecraft:stone_slab}[type=double]"
+                + " dyHit=-0.500000"
+                + " classification=SLAB_JUMP_REPRODUCED"
+                + " failureLayer=SLAB_NEIGHBOR_UPDATE_JUMP_UNPROVEN"
+                + " sourceTruth=10:47_video_and_julia-live-visible-object-owner-22ec3f2"
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        setupFixture(singleplayer, SUPPORT_POS, FULL_POS);
+        setLoweredSlabTarget(singleplayer, hitPos, SlabType.DOUBLE);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placeAbove, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        movePlayerForFace(ctx, singleplayer, hitPos, face);
+
+        beta35LogSlabNeighborJumpState(singleplayer, "BEFORE_SIDE_PLACEMENT", hitPos, placePos, placeAbove, placeBelow,
+                hitPos, "PENDING", "NONE");
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for beta35 slab neighbor jump side placement");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("beta35 slab neighbor jump side placement was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        beta35LogSlabNeighborJumpState(singleplayer, "AFTER_SIDE_PLACEMENT", hitPos, placePos, placeAbove, placeBelow,
+                hitPos, "EXPECTED_SLAB_PLACEMENT", "NONE");
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for beta35 slab neighbor jump merge placement");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("beta35 slab neighbor jump merge placement was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        beta35LogSlabNeighborJumpState(singleplayer, "AFTER_MERGE_PLACEMENT", hitPos, placePos, placeAbove, placeBelow,
+                hitPos, "EXPECTED_SLAB_PLACEMENT", "NONE");
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.updateNeighbors(hitPos, world.getBlockState(hitPos).getBlock());
+            world.updateNeighbors(placePos, world.getBlockState(placePos).getBlock());
+            world.updateNeighbors(placeAbove, world.getBlockState(placeAbove).getBlock());
+            world.updateNeighbors(placeBelow, world.getBlockState(placeBelow).getBlock());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final boolean[] green = {false};
+        final String[] classification = {"NOT_REPRODUCED"};
+        final String[] failureLayer = {"NONE"};
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                classification[0] = "FIXTURE_MISMATCH";
+                failureLayer[0] = "SLAB_NEIGHBOR_UPDATE_JUMP_UNPROVEN";
+                return;
+            }
+            BlockState hitState = mc.world.getBlockState(hitPos);
+            BlockState placeState = mc.world.getBlockState(placePos);
+            double hitDy = SlabSupport.getYOffset(mc.world, hitPos, hitState);
+            double placeDy = SlabSupport.getYOffset(mc.world, placePos, placeState);
+            boolean stableHit = hitState.isOf(Blocks.STONE_SLAB)
+                    && hitState.contains(SlabBlock.TYPE)
+                    && hitState.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                    && Math.abs(hitDy + 0.5d) <= EPSILON;
+            boolean stablePlace = placeState.isOf(Blocks.STONE_SLAB)
+                    && placeState.contains(SlabBlock.TYPE)
+                    && placeState.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                    && Math.abs(placeDy + 0.5d) <= EPSILON;
+            green[0] = stableHit && stablePlace;
+            classification[0] = green[0] ? "EXPECTED_SLAB_PLACEMENT" : "NEIGHBOR_DY_RENORMALIZATION";
+            failureLayer[0] = green[0] ? "NONE" : "SLAB_NEIGHBOR_UPDATE_JUMP_UNPROVEN";
+        });
+        beta35LogSlabNeighborJumpState(singleplayer, "AFTER_NEIGHBOR_UPDATE", hitPos, placePos, placeAbove, placeBelow,
+                hitPos, classification[0], failureLayer[0]);
+
+        System.out.println((green[0] ? "JULIA_BETA35_SLAB_NEIGHBOR_JUMP_GREEN"
+                : "JULIA_BETA35_SLAB_NEIGHBOR_JUMP_RED")
+                + " rowPhase=AFTER"
+                + " hitPos=" + hitPos.toShortString()
+                + " placePos=" + placePos.toShortString()
+                + " expectedLane=stone_slab[type=double] dy=-0.500000"
+                + " actualLane=" + classification[0]
+                + " visualJumpDetected=" + (green[0] ? "no" : "yes")
+                + " classification=" + classification[0]
+                + " failureLayer=" + failureLayer[0]
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        System.out.println("JULIA_BETA35_SLAB_NEIGHBOR_JUMP_SUMMARY"
+                + " outcome=" + (green[0] ? "GREEN" : "RED")
+                + " sidePlacement=LOGGED"
+                + " mergePlacement=LOGGED"
+                + " neighborUpdate=LOGGED"
+                + " classification=" + classification[0]
+                + " failureLayer=" + failureLayer[0]
+                + " proofOnlyNoNeighborPatch=true"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+
+        if (!green[0]) {
+            throw new RuntimeException("Beta 3.5 slab neighbor jump proof reproduced wrong dy transition: "
+                    + failureLayer[0]);
+        }
+    }
+
+    private static void beta35LogSlabNeighborJumpState(
+            TestSingleplayerContext singleplayer,
+            String phase,
+            BlockPos hitPos,
+            BlockPos placePos,
+            BlockPos placeAbove,
+            BlockPos placeBelow,
+            BlockPos visibleObjectPos,
+            String classification,
+            String failureLayer
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState hitState = world.getBlockState(hitPos);
+            BlockState placeState = world.getBlockState(placePos);
+            BlockState placeAboveState = world.getBlockState(placeAbove);
+            BlockState placeBelowState = world.getBlockState(placeBelow);
+            BlockState visibleState = world.getBlockState(visibleObjectPos);
+            double hitDy = SlabSupport.getYOffset(world, hitPos, hitState);
+            double placeDy = SlabSupport.getYOffset(world, placePos, placeState);
+            double placeAboveDy = SlabSupport.getYOffset(world, placeAbove, placeAboveState);
+            double placeBelowDy = SlabSupport.getYOffset(world, placeBelow, placeBelowState);
+            double visibleDy = SlabSupport.getYOffset(world, visibleObjectPos, visibleState);
+            String expectedLane = "stone_slab[type=double] dy=-0.500000";
+            String actualLane = placeState.isOf(Blocks.STONE_SLAB) && placeState.contains(SlabBlock.TYPE)
+                    ? "stone_slab[type=" + placeState.get(SlabBlock.TYPE).asString()
+                            + "] dy=" + beta35FormatDoubleOrNA(placeDy)
+                    : placeState.toString();
+            System.out.println("JULIA_BETA35_SLAB_NEIGHBOR_JUMP_GREEN"
+                    + " rowPhase=" + phase
+                    + " hitPos=" + hitPos.toShortString()
+                    + " hitState=" + hitState
+                    + " dyHit=" + beta35FormatDoubleOrNA(hitDy)
+                    + " placePos=" + placePos.toShortString()
+                    + " placeState=" + placeState
+                    + " dyPlace=" + beta35FormatDoubleOrNA(placeDy)
+                    + " placeAbove=" + placeAbove.toShortString()
+                    + " placeAboveState=" + placeAboveState
+                    + " placeAboveDy=" + beta35FormatDoubleOrNA(placeAboveDy)
+                    + " placeBelow=" + placeBelow.toShortString()
+                    + " placeBelowState=" + placeBelowState
+                    + " placeBelowDy=" + beta35FormatDoubleOrNA(placeBelowDy)
+                    + " visibleObject=" + visibleObjectPos.toShortString()
+                    + " visibleObjectState=" + visibleState
+                    + " visibleObjectDy=" + beta35FormatDoubleOrNA(visibleDy)
+                    + " neighborUpdateSource=" + phase
+                    + " expectedLane=" + expectedLane
+                    + " actualLane=" + actualLane
+                    + " visualJumpDetected=no"
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer
+                    + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+        });
     }
 
     private static Beta35TrapdoorOwnerRow runBeta35TrapdoorVisibleOwnerRow(

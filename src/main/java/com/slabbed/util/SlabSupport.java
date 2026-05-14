@@ -225,6 +225,36 @@ public final class SlabSupport {
                 || Double.isFinite(beta35BottomTrapdoorVisibleOwnerDy(world, pos, state));
     }
 
+    public static boolean isBeta35LoweredBottomTrapdoorServerHitTarget(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || !isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
+            return false;
+        }
+        double objectDy = getBeta35ShiftedServerValidationYOffset(world, pos, state);
+        return Double.isFinite(objectDy) && objectDy < -1.0e-6d;
+    }
+
+    public static boolean isBeta35LoweredTrapdoorOrFloorButtonServerHitTarget(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        return isBeta35LoweredTrapdoorOrFloorButtonVisibleOwnerTarget(world, pos, state)
+                || isBeta35LoweredBottomTrapdoorServerHitTarget(world, pos, state);
+    }
+
+    public static double getBeta35ShiftedServerValidationYOffset(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return Double.NaN;
+        }
+        if (isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
+            double visibleOwnerDy = beta35BottomTrapdoorVisibleOwnerDy(world, pos, state);
+            if (Double.isFinite(visibleOwnerDy) && visibleOwnerDy < -1.0e-6d) {
+                return visibleOwnerDy;
+            }
+        }
+        return getYOffset(world, pos, state);
+    }
+
     private static double beta35BottomTrapdoorVisibleOwnerDy(BlockView world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
             return Double.NaN;

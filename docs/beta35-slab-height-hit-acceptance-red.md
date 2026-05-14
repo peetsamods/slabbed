@@ -65,3 +65,28 @@ Floor-button contact is retained green:
 The common-object matrix remains green for floor_torch/candle/flower_pot representatives: `JULIA_BETA35_COMMON_OBJECT_SUMMARY rows=27 greenAlreadyInherits=27 contactGap=0 triadMismatch=0`.
 
 Release audit remains paused. Julia live acceptance remains required. No release tag moved.
+
+## Continuation: Lowered Trapdoor Server Validation And Slab Jump Trace
+
+Continuation base: `22ec3f2` / `save/beta35-visible-object-owner-stability`.
+
+Julia's 10:47 live source truth after the visible-owner savepoint split the remaining issues into two layers:
+
+- `LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP`: trapdoors select correctly client-side, then some legal lowered bottom-trapdoor hits at `targetDy=-1.000000` are rejected server-side because `shiftedValidationCenter=null`.
+- `SLAB_NEIGHBOR_UPDATE_JUMP_UNPROVEN`: Julia still sees slab jump or misplacement around neighbor updates, but this slice requires proof of a wrong dy/state transition before patching neighbor behavior.
+
+The trapdoor continuation keeps validation narrow. Server shifted validation is available only for legal lowered bottom-trapdoor server targets or the existing proven floor-button path, with finite negative target dy and existing shifted vanilla component tolerance. It does not widen global hit tolerance, bypass server validation, lower global collision, add solidity/sturdy-face lies, or claim all-item gameplay support.
+
+Focused trapdoor proof flag:
+
+`-Dslabbed.beta35TrapdoorServerValidationFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+
+Required green result:
+
+`JULIA_BETA35_TRAPDOOR_SERVER_VALIDATION_SUMMARY outcome=GREEN ... beforeFailureLayer=LOWERED_TRAPDOOR_SERVER_SHIFTED_VALIDATION_GAP afterFailureLayer=NONE negativeBoundary=TRAPDOOR_SERVER_NEGATIVE_GREEN openState=JULIA_BETA35_TRAPDOOR_OPEN_STATE_GREEN`
+
+Focused slab-jump tracer flag:
+
+`-Dslabbed.beta35SlabNeighborJumpRed=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+
+The tracer logs `hitPos`, `placePos`, `placeAbove`, `placeBelow`, and `visibleObject` state/dy before side placement, after side placement, after merge placement, and after neighbor update. Current automated fixture status is `EXPECTED_SLAB_PLACEMENT failureLayer=NONE`; no neighbor-update production patch was made in this continuation.
