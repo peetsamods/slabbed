@@ -18,6 +18,20 @@ fabricApi {
     }
 }
 
+sourceSets {
+    gametest {
+        java {
+            // Explicit deferred-client-proof split for MC 1.21.1:
+            // keep client proof classes present in-tree, but compile only the
+            // two server-compatible classes in this source set.
+            setIncludes([
+                    "com/slabbed/test/ChainSurvivalReproTest.java",
+                    "com/slabbed/test/SlabbedLabFixtureTest.java"
+            ])
+        }
+    }
+}
+
 version = project.mod_version
 group = project.maven_group
 

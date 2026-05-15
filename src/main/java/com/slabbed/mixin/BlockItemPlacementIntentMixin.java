@@ -429,12 +429,13 @@ public abstract class BlockItemPlacementIntentMixin {
             return;
         }
 
-        ShapeContext shapeContext = ShapeContext.ofPlacement(player);
+        ShapeContext shapeContext = ShapeContext.of(player);
         if (world.canPlace(state, placePos, shapeContext)) {
             return;
         }
 
-        VoxelShape placementShape = state.getCollisionShape(world, placePos, shapeContext).offset(placePos);
+        VoxelShape placementShape = state.getCollisionShape(world, placePos, shapeContext)
+                .offset(placePos.getX(), placePos.getY(), placePos.getZ());
         if (placementShape.isEmpty()) {
             return;
         }
@@ -580,8 +581,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     remappedHitPos,
                     originalSide,
                     remapDecision.legalLanePos(),
-                    context.hitsInsideBlock(),
-                    false
+                    context.hitsInsideBlock()
             );
             ItemUsageContext remappedContext = new ItemUsageContext(
                     context.getWorld(),
@@ -757,8 +757,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 remappedHitPos,
                 effectiveSide,
                 targetPos,
-                context.hitsInsideBlock(),
-                false
+                context.hitsInsideBlock()
         );
 
         ItemUsageContext remappedContext = new ItemUsageContext(context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit) {

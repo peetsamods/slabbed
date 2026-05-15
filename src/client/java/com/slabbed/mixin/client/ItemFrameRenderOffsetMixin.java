@@ -3,7 +3,6 @@ package com.slabbed.mixin.client;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.entity.ItemFrameEntityRenderer;
-import net.minecraft.client.render.entity.state.ItemFrameEntityRenderState;
 import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -11,7 +10,7 @@ import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Offsets item frame rendering down by 0.5 when the block the frame is attached to
@@ -20,12 +19,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ItemFrameEntityRenderer.class)
 public abstract class ItemFrameRenderOffsetMixin {
 
-    @Inject(method = "updateRenderState(Lnet/minecraft/entity/decoration/ItemFrameEntity;Lnet/minecraft/client/render/entity/state/ItemFrameEntityRenderState;F)V",
-            at = @At("TAIL"))
+    @Inject(method = "getPositionOffset(Lnet/minecraft/entity/decoration/ItemFrameEntity;F)Lnet/minecraft/util/math/Vec3d;",
+            at = @At("RETURN"), cancellable = true)
     private void slabbed$adjustItemFrameOffset(ItemFrameEntity entity,
-                                               ItemFrameEntityRenderState state,
                                                float tickDelta,
-                                               CallbackInfo ci) {
+                                               CallbackInfoReturnable<Vec3d> cir) {
         World world = entity.getEntityWorld();
         if (world == null) {
             return;
@@ -39,12 +37,8 @@ public abstract class ItemFrameRenderOffsetMixin {
         BlockState attachedState = world.getBlockState(attachedPos);
 
         if (SlabSupport.shouldOffset(world, attachedPos, attachedState)) {
-            Vec3d current = state.positionOffset;
-            if (current != null) {
-                state.positionOffset = current.add(0.0, -0.5, 0.0);
-            } else {
-                state.positionOffset = new Vec3d(0.0, -0.5, 0.0);
-            }
+            Vec3d current = cir.getReturnValue();
+            cir.setReturnValue((current == null ? Vec3d.ZERO : current).add(0.0, -0.5, 0.0));
         }
     }
 }

@@ -7,11 +7,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.option.KeyBinding.Category;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.awt.Toolkit;
@@ -37,7 +35,7 @@ public final class ScreenshotCaptureService {
     private static final int MAX_CHAT_FAILURE_LENGTH = 120;
     private static final DateTimeFormatter NAME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")
             .withZone(ZoneId.systemDefault());
-    private static final Category KEY_CATEGORY = Category.create(Identifier.of("slabbed", "dev"));
+    private static final String KEY_CATEGORY = "category.slabbed.dev";
     private static final KeyBinding SCREENSHOT_KEY = KeyBindingHelper.registerKeyBinding(
             new KeyBinding("key.slabbed.screenshot", GLFW.GLFW_KEY_KP_0, KEY_CATEGORY));
     private static CaptureState captureState = CaptureState.IDLE;
@@ -137,24 +135,22 @@ public final class ScreenshotCaptureService {
         Path gameDir = currentCapture.gameDir();
 
         try {
-            ScreenshotRecorder.takeScreenshot(framebuffer, 1, image -> {
-                try (image) {
-                    image.writeTo(outputPath);
-                    ClipboardCopyResult clipboardResult = copyToClipboard(image, outputPath);
-                    String shownPath = gameDir.relativize(outputPath).toString();
-                    String status;
-                    if (clipboardResult.imageCopied()) {
-                        status = " (image copied to clipboard)";
-                    } else if (clipboardResult.pathCopied()) {
-                        status = " (image clipboard failed; path copied)";
-                    } else {
-                        status = " (clipboard failed: " + trimForChat(clipboardResult.failureDetail()) + ")";
-                    }
-                    showMessage(client, Text.literal("[slabdev] Screenshot saved [" + profileTag + "] → " + shownPath + status));
-                } catch (IOException | RuntimeException e) {
-                    showMessage(client, Text.literal("[slabdev] Screenshot failed: " + e.getMessage()));
+            try (NativeImage image = ScreenshotRecorder.takeScreenshot(framebuffer)) {
+                image.writeTo(outputPath);
+                ClipboardCopyResult clipboardResult = copyToClipboard(image, outputPath);
+                String shownPath = gameDir.relativize(outputPath).toString();
+                String status;
+                if (clipboardResult.imageCopied()) {
+                    status = " (image copied to clipboard)";
+                } else if (clipboardResult.pathCopied()) {
+                    status = " (image clipboard failed; path copied)";
+                } else {
+                    status = " (clipboard failed: " + trimForChat(clipboardResult.failureDetail()) + ")";
                 }
-            });
+                showMessage(client, Text.literal("[slabdev] Screenshot saved [" + profileTag + "] → " + shownPath + status));
+            } catch (IOException | RuntimeException e) {
+                showMessage(client, Text.literal("[slabdev] Screenshot failed: " + e.getMessage()));
+            }
         } catch (RuntimeException e) {
             showMessage(client, Text.literal("[slabdev] Screenshot failed: " + e.getMessage()));
         }
@@ -250,7 +246,7 @@ public final class ScreenshotCaptureService {
         BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                bufferedImage.setRGB(x, y, nativeImage.getColorArgb(x, y));
+                bufferedImage.setRGB(x, y, nativeImage.getColor(x, y));
             }
         }
         return bufferedImage;

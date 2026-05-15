@@ -8,10 +8,16 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.WorldChunk;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Schedules a client-side block rerender for every anchored/lowered-carrier
@@ -29,11 +35,22 @@ import net.minecraft.world.chunk.WorldChunk;
  */
 @Environment(EnvType.CLIENT)
 public final class SlabAnchorClientSync {
+    private static final Map<Long, WorldChunk> TRACKED_CHUNKS = new HashMap<>();
+    private static final Map<AttachmentSnapshotKey, LongOpenHashSet> ATTACHMENT_SNAPSHOTS = new HashMap<>();
+    private static boolean initialized;
+
+    private record AttachmentSnapshotKey(long chunkPos, AttachmentType<LongOpenHashSet> attachmentType) {
+    }
 
     private SlabAnchorClientSync() {
     }
 
     public static void init() {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+
         // Bridge: chunk render paths receive ChunkRendererRegion (not a World) and cannot
         // access chunk attachments.  Register a client-world fallback so anchor queries
         // from the model render path resolve correctly after a supporting BS is broken.
@@ -83,9 +100,13 @@ public final class SlabAnchorClientSync {
         };
 
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
+        ClientChunkEvents.CHUNK_UNLOAD.register(SlabAnchorClientSync::onChunkUnload);
+        ClientTickEvents.END_CLIENT_TICK.register(SlabAnchorClientSync::pollAttachmentChanges);
     }
 
-    private static void onChunkLoad(net.minecraft.client.world.ClientWorld world, WorldChunk chunk) {
+    private static void onChunkLoad(ClientWorld world, WorldChunk chunk) {
+        TRACKED_CHUNKS.put(chunk.getPos().toLong(), chunk);
+
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.ANCHOR_TYPE, null,
                 chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE, null,
@@ -101,18 +122,9 @@ public final class SlabAnchorClientSync {
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE, null,
                 chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE));
 
-        // Register listener for future attachment changes (e.g. live anchor add/remove sync).
-        registerRerenderListener(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
-
         // Also handle any attachment value already present at chunk-load time.
         // This covers the case where the chunk attachment sync packet arrived before
-        // CHUNK_LOAD (or together with the initial chunk data), so onAttachedSet never
+        // CHUNK_LOAD (or together with the initial chunk data), so a later poll never
         // fires but the attachment is already populated.
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
@@ -121,6 +133,20 @@ public final class SlabAnchorClientSync {
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+
+        snapshotAttachment(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
+        snapshotAttachment(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+        snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+        snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
+        snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
+        snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
+        snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+    }
+
+    private static void onChunkUnload(ClientWorld world, WorldChunk chunk) {
+        long chunkPos = chunk.getPos().toLong();
+        TRACKED_CHUNKS.remove(chunkPos);
+        ATTACHMENT_SNAPSHOTS.keySet().removeIf(key -> key.chunkPos() == chunkPos);
     }
 
     private static LongOpenHashSet clientAttachmentSet(
@@ -135,19 +161,64 @@ public final class SlabAnchorClientSync {
         return chunk == null ? null : chunk.getAttached(attachmentType);
     }
 
-    private static void registerRerenderListener(
+    private static void pollAttachmentChanges(MinecraftClient mc) {
+        if (mc.world == null) {
+            TRACKED_CHUNKS.clear();
+            ATTACHMENT_SNAPSHOTS.clear();
+            return;
+        }
+        if (mc.worldRenderer == null) {
+            return;
+        }
+
+        for (WorldChunk chunk : new ArrayList<>(TRACKED_CHUNKS.values())) {
+            pollAttachmentChange(mc, chunk, SlabAnchorAttachment.ANCHOR_TYPE);
+            pollAttachmentChange(mc, chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+            pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+            pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
+            pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
+            pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
+            pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        }
+    }
+
+    private static void pollAttachmentChange(
+            MinecraftClient mc,
             WorldChunk chunk,
             AttachmentType<LongOpenHashSet> attachmentType
     ) {
-        chunk.<LongOpenHashSet>onAttachedSet(attachmentType).register((oldSet, newSet) -> {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc.worldRenderer == null) {
-                return;
-            }
-            logReloadJumpSync("attachedSet", chunk, attachmentType, oldSet, newSet);
-            scheduleRerendersForSet(mc, oldSet, attachmentType);
-            scheduleRerendersForSet(mc, newSet, attachmentType);
-        });
+        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType);
+        LongOpenHashSet oldSet = ATTACHMENT_SNAPSHOTS.get(key);
+        LongOpenHashSet newSet = copyAttachmentSet(chunk.getAttached(attachmentType));
+        if (attachmentSetsEqual(oldSet, newSet)) {
+            return;
+        }
+
+        logReloadJumpSync("attachedSetPoll", chunk, attachmentType, oldSet, newSet);
+        scheduleRerendersForSet(mc, oldSet, attachmentType);
+        scheduleRerendersForSet(mc, newSet, attachmentType);
+        ATTACHMENT_SNAPSHOTS.put(key, newSet);
+    }
+
+    private static void snapshotAttachment(
+            WorldChunk chunk,
+            AttachmentType<LongOpenHashSet> attachmentType
+    ) {
+        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType);
+        ATTACHMENT_SNAPSHOTS.put(key, copyAttachmentSet(chunk.getAttached(attachmentType)));
+    }
+
+    private static LongOpenHashSet copyAttachmentSet(LongOpenHashSet set) {
+        return set == null ? null : new LongOpenHashSet(set);
+    }
+
+    private static boolean attachmentSetsEqual(LongOpenHashSet left, LongOpenHashSet right) {
+        boolean leftEmpty = left == null || left.isEmpty();
+        boolean rightEmpty = right == null || right.isEmpty();
+        if (leftEmpty || rightEmpty) {
+            return leftEmpty == rightEmpty;
+        }
+        return left.equals(right);
     }
 
     private static void scheduleInitialRerenders(

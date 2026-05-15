@@ -1,7 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.util.SlabSupport;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.test.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -9,8 +9,10 @@ import net.minecraft.block.ChainBlock;
 import net.minecraft.block.PistonBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
@@ -45,14 +47,16 @@ import net.minecraft.util.math.Direction;
  * suite rather than being faked by direct state replacement.
  */
 public final class ChainSurvivalReproTest {
+    private static final Block CHAIN_BLOCK = Registries.BLOCK.get(Identifier.of("minecraft", "chain"));
+    private static final Block COPPER_CHAIN_BLOCK = Registries.BLOCK.get(Identifier.of("minecraft", "copper_chain"));
 
     private static BlockState copperChainY() {
-        return Blocks.COPPER_CHAINS.unaffected().getDefaultState()
+        return COPPER_CHAIN_BLOCK.getDefaultState()
                 .with(ChainBlock.AXIS, Direction.Axis.Y);
     }
 
     private static BlockState copperChainX() {
-        return Blocks.COPPER_CHAINS.unaffected().getDefaultState()
+        return COPPER_CHAIN_BLOCK.getDefaultState()
                 .with(ChainBlock.AXIS, Direction.Axis.X);
     }
 
@@ -60,7 +64,7 @@ public final class ChainSurvivalReproTest {
      * Y-axis chain hanging from a TOP slab underside must survive an initial
      * recheck — establishes the positive baseline.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainUnderTopSlabSurvivesInitialRecheck(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -70,18 +74,15 @@ public final class ChainSurvivalReproTest {
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
 
         BlockState chainState = world.getBlockState(chainPos);
-        ctx.assertTrue(chainState.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(chainState.isOf(CHAIN_BLOCK),
                 "chain not placed at " + chainPos.toShortString()
                 + ", found: " + chainState.getBlock().getTranslationKey());
 
-        BlockState result = chainState.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.UP,
-                slabPos, world.getBlockState(slabPos),
-                world.getRandom());
+        BlockState result = chainState.getStateForNeighborUpdate(Direction.UP, world.getBlockState(slabPos), world, chainPos, slabPos);
         ctx.assertTrue(!result.isAir(),
                 "chain under TOP slab must survive initial recheck; got AIR"
                 + " (slabbed$hasAxisSupport misreporting TOP slab underside)");
@@ -96,7 +97,7 @@ public final class ChainSurvivalReproTest {
      * <p>Asserts that after support removal, both world state and forced
      * recheck still keep chain state non-air under vanilla floating policy.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainUnderTopSlabRemainsWhenSlabRemoved(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -106,11 +107,11 @@ public final class ChainSurvivalReproTest {
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
 
         // Sanity: chain is placed.
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "chain not placed at " + chainPos.toShortString());
 
         // Remove the TOP slab. Under vanilla floating policy, support loss
@@ -120,10 +121,7 @@ public final class ChainSurvivalReproTest {
         BlockState afterPropagation = world.getBlockState(chainPos);
 
         // Fallback: force the recheck path directly.
-        BlockState forced = afterPropagation.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.UP,
-                slabPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = afterPropagation.getStateForNeighborUpdate(Direction.UP, Blocks.AIR.getDefaultState(), world, chainPos, slabPos);
         ctx.assertTrue(!forced.isAir(),
                 "chain should remain after TOP slab removed under vanilla floating policy; world state="
                 + afterPropagation.getBlock().getTranslationKey()
@@ -143,7 +141,7 @@ public final class ChainSurvivalReproTest {
      * {@code isCeilingSupportBottomSurface}. Removal must still drop the
      * chain.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainUnderDoubleSlabRemainsWhenSlabRemoved(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -153,20 +151,17 @@ public final class ChainSurvivalReproTest {
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
                 Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
 
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "chain not placed at " + chainPos.toShortString());
 
         world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState afterPropagation = world.getBlockState(chainPos);
 
-        BlockState forced = afterPropagation.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.UP,
-                slabPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = afterPropagation.getStateForNeighborUpdate(Direction.UP, Blocks.AIR.getDefaultState(), world, chainPos, slabPos);
         ctx.assertTrue(!forced.isAir(),
                 "chain should remain after DOUBLE slab removed under vanilla floating policy; world state="
                 + afterPropagation.getBlock().getTranslationKey()
@@ -194,7 +189,7 @@ public final class ChainSurvivalReproTest {
      *   y:    air
      * </pre>
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainUnderTopSlabSurvivesUnrelatedNeighborRemoval(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -207,19 +202,19 @@ public final class ChainSurvivalReproTest {
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
         world.setBlockState(sideNeighborPos,
                 Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
 
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "chain not placed at " + chainPos.toShortString());
 
         // Remove the unrelated neighbor.
         world.setBlockState(sideNeighborPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState after = world.getBlockState(chainPos);
-        ctx.assertTrue(after.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(after.isOf(CHAIN_BLOCK),
                 "chain must survive removal of unrelated west neighbor; found "
                 + after.getBlock().getTranslationKey()
                 + " (slabbed$hasAxisSupport wrongly dropped chain when a"
@@ -227,10 +222,7 @@ public final class ChainSurvivalReproTest {
 
         // Explicitly force the recheck with direction=WEST, neighborPos=sideNeighborPos.
         // This is the exact per-direction call the world makes.
-        BlockState forced = after.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.WEST,
-                sideNeighborPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = after.getStateForNeighborUpdate(Direction.WEST, Blocks.AIR.getDefaultState(), world, chainPos, sideNeighborPos);
         ctx.assertTrue(!forced.isAir(),
                 "chain survival recheck (direction=WEST) must not return AIR"
                 + " when TOP slab is still above; got AIR"
@@ -254,38 +246,35 @@ public final class ChainSurvivalReproTest {
      * the TOP slab immediately at y+4 → {@code isCeilingSupportBottomSurface}
      * returns true → upper chain survives.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainStackUnderTopSlabSurvivesLowerChainRemoval(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos lowerChainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
         BlockPos upperChainPos = lowerChainPos.up();
         BlockPos slabPos = upperChainPos.up();
 
-        BlockState chainY = Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y);
+        BlockState chainY = CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y);
         BlockState topSlab = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP);
 
         world.setBlockState(slabPos, topSlab, Block.NOTIFY_ALL);
         world.setBlockState(upperChainPos, chainY, Block.NOTIFY_ALL);
         world.setBlockState(lowerChainPos, chainY, Block.NOTIFY_ALL);
 
-        ctx.assertTrue(world.getBlockState(upperChainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(upperChainPos).isOf(CHAIN_BLOCK),
                 "upper chain not placed at " + upperChainPos.toShortString());
-        ctx.assertTrue(world.getBlockState(lowerChainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(lowerChainPos).isOf(CHAIN_BLOCK),
                 "lower chain not placed at " + lowerChainPos.toShortString());
 
         // Remove the lower chain.
         world.setBlockState(lowerChainPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState after = world.getBlockState(upperChainPos);
-        ctx.assertTrue(after.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(after.isOf(CHAIN_BLOCK),
                 "upper chain must survive lower-chain removal (TOP slab still above); found "
                 + after.getBlock().getTranslationKey());
 
         // Force recheck from below.
-        BlockState forced = after.getStateForNeighborUpdate(
-                world, world, upperChainPos, Direction.DOWN,
-                lowerChainPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = after.getStateForNeighborUpdate(Direction.DOWN, Blocks.AIR.getDefaultState(), world, upperChainPos, lowerChainPos);
         ctx.assertTrue(!forced.isAir(),
                 "upper chain forced recheck must not return AIR; TOP slab above"
                 + " should satisfy isCeilingSupportBottomSurface via Y-axis walk up");
@@ -297,23 +286,20 @@ public final class ChainSurvivalReproTest {
      * Vanilla floating-chain policy: free-floating Y-axis chain (no support
      * anywhere) survives forced recheck.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainWithoutAnySupportSurvivesOnRecheck(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
 
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
 
         BlockState state = world.getBlockState(chainPos);
-        ctx.assertTrue(state.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(state.isOf(CHAIN_BLOCK),
                 "chain not placed at " + chainPos.toShortString());
 
-        BlockState forced = state.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.UP,
-                chainPos.up(), world.getBlockState(chainPos.up()),
-                world.getRandom());
+        BlockState forced = state.getStateForNeighborUpdate(Direction.UP, world.getBlockState(chainPos.up()), world, chainPos, chainPos.up());
         ctx.assertTrue(!forced.isAir(),
                 "unsupported chain forced recheck must remain non-AIR under vanilla floating policy; got "
                 + forced.getBlock().getTranslationKey()
@@ -340,7 +326,7 @@ public final class ChainSurvivalReproTest {
      * X-axis chain supported only by a stone on its east end must survive an
      * initial recheck. Positive baseline for the horizontal axis walk.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void xAxisChainWithStoneEastSupportSurvives(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -348,17 +334,14 @@ public final class ChainSurvivalReproTest {
 
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
                 Block.NOTIFY_ALL);
 
         BlockState chainState = world.getBlockState(chainPos);
-        ctx.assertTrue(chainState.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(chainState.isOf(CHAIN_BLOCK),
                 "X-axis chain not placed at " + chainPos.toShortString());
 
-        BlockState forced = chainState.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.EAST,
-                supportPos, world.getBlockState(supportPos),
-                world.getRandom());
+        BlockState forced = chainState.getStateForNeighborUpdate(Direction.EAST, world.getBlockState(supportPos), world, chainPos, supportPos);
         ctx.assertTrue(!forced.isAir(),
                 "X-axis chain with stone east must survive recheck; got AIR"
                 + " (horizontal axis walk isSideSolidFullSquare(WEST) failed)");
@@ -370,7 +353,7 @@ public final class ChainSurvivalReproTest {
      * Vanilla floating-chain policy: X-axis chain remains when its sole
      * east-end support is removed.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void xAxisChainRemainsWhenSoleSupportRemoved(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -378,18 +361,15 @@ public final class ChainSurvivalReproTest {
 
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
                 Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "X-axis chain not placed");
 
         world.setBlockState(supportPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState after = world.getBlockState(chainPos);
-        BlockState forced = after.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.EAST,
-                supportPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = after.getStateForNeighborUpdate(Direction.EAST, Blocks.AIR.getDefaultState(), world, chainPos, supportPos);
         ctx.assertTrue(!forced.isAir(),
                 "X-axis chain must remain after sole east support removed under vanilla floating policy; world="
                 + after.getBlock().getTranslationKey()
@@ -404,7 +384,7 @@ public final class ChainSurvivalReproTest {
      * headless match for the "removing a nearby block pops my chain" live
      * class, applied to horizontal axis.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void xAxisChainSurvivesUnrelatedNeighborRemoval(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -414,24 +394,21 @@ public final class ChainSurvivalReproTest {
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(unrelatedPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.X),
                 Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "X-axis chain not placed");
 
         world.setBlockState(unrelatedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState after = world.getBlockState(chainPos);
-        ctx.assertTrue(after.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(after.isOf(CHAIN_BLOCK),
                 "X-axis chain must survive NORTH-neighbor removal when east"
                 + " support is still present; found "
                 + after.getBlock().getTranslationKey());
 
         // Force the exact per-direction recheck the world makes.
-        BlockState forced = after.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.NORTH,
-                unrelatedPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = after.getStateForNeighborUpdate(Direction.NORTH, Blocks.AIR.getDefaultState(), world, chainPos, unrelatedPos);
         ctx.assertTrue(!forced.isAir(),
                 "X-axis chain forced recheck (direction=NORTH) must not drop"
                 + " chain; east stone still provides axis support");
@@ -444,7 +421,7 @@ public final class ChainSurvivalReproTest {
      * neighbor). Symmetric to the X-axis unrelated-neighbor-removal test;
      * guards against axis-direction-specific bugs in slabbed$hasAxisSupport.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void zAxisChainSurvivesUnrelatedNeighborRemoval(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -454,23 +431,20 @@ public final class ChainSurvivalReproTest {
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(unrelatedPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Z),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Z),
                 Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "Z-axis chain not placed");
 
         world.setBlockState(unrelatedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState after = world.getBlockState(chainPos);
-        ctx.assertTrue(after.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(after.isOf(CHAIN_BLOCK),
                 "Z-axis chain must survive EAST-neighbor removal when south"
                 + " support is still present; found "
                 + after.getBlock().getTranslationKey());
 
-        BlockState forced = after.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.EAST,
-                unrelatedPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = after.getStateForNeighborUpdate(Direction.EAST, Blocks.AIR.getDefaultState(), world, chainPos, unrelatedPos);
         ctx.assertTrue(!forced.isAir(),
                 "Z-axis chain forced recheck (direction=EAST) must not drop"
                 + " chain; south stone still provides axis support");
@@ -498,7 +472,7 @@ public final class ChainSurvivalReproTest {
      * surface path (e.g., adding BOTTOM to {@code isCeilingSupportBottomSurface})
      * cannot silently change semantics.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void bottomSlabAboveCeilingContract(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -508,7 +482,7 @@ public final class ChainSurvivalReproTest {
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                 Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
 
         // Claim 1: internal ceiling-support contract.
@@ -520,13 +494,10 @@ public final class ChainSurvivalReproTest {
         // Claim 2: chain still survives (bottom slab's DOWN face is a full
         // solid square under vanilla semantics — its y=0 plane IS solid).
         BlockState chainState = world.getBlockState(chainPos);
-        ctx.assertTrue(chainState.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(chainState.isOf(CHAIN_BLOCK),
                 "chain under bottom slab not placed");
 
-        BlockState forced = chainState.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.UP,
-                slabPos, world.getBlockState(slabPos),
-                world.getRandom());
+        BlockState forced = chainState.getStateForNeighborUpdate(Direction.UP, world.getBlockState(slabPos), world, chainPos, slabPos);
         ctx.assertTrue(!forced.isAir(),
                 "Y-axis chain under BOTTOM slab must survive via generic"
                 + " isSideSolidFullSquare(DOWN) — slab's y=0 face is a full"
@@ -542,31 +513,27 @@ public final class ChainSurvivalReproTest {
      * axis walk traverses the intermediate same-axis chain to reach stone
      * support 2 blocks away.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void xAxisThroughChainWalkReachesDistantSupport(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainA = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
         BlockPos chainB = chainA.offset(Direction.EAST);
         BlockPos supportPos = chainB.offset(Direction.EAST);
 
-        BlockState chainX = Blocks.IRON_CHAIN.getDefaultState()
+        BlockState chainX = CHAIN_BLOCK.getDefaultState()
                 .with(ChainBlock.AXIS, Direction.Axis.X);
 
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainB, chainX, Block.NOTIFY_ALL);
         world.setBlockState(chainA, chainX, Block.NOTIFY_ALL);
 
-        ctx.assertTrue(world.getBlockState(chainA).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainA).isOf(CHAIN_BLOCK),
                 "chainA not placed");
-        ctx.assertTrue(world.getBlockState(chainB).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainB).isOf(CHAIN_BLOCK),
                 "chainB not placed");
 
         BlockState stateA = world.getBlockState(chainA);
-        BlockState forced = stateA.getStateForNeighborUpdate(
-                world, world, chainA, Direction.WEST,
-                chainA.offset(Direction.WEST),
-                world.getBlockState(chainA.offset(Direction.WEST)),
-                world.getRandom());
+        BlockState forced = stateA.getStateForNeighborUpdate(Direction.WEST, world.getBlockState(chainA.offset(Direction.WEST)), world, chainA, chainA.offset(Direction.WEST));
         ctx.assertTrue(!forced.isAir(),
                 "X-axis chainA must survive recheck via through-chain walk"
                 + " to stone at chainA+2×east; got AIR"
@@ -580,7 +547,7 @@ public final class ChainSurvivalReproTest {
      * Oxidizable/copper chain mirror of the vanilla TOP-slab positive
      * baseline: copper chain under TOP slab must survive initial recheck.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void copperChainUnderTopSlabSurvivesInitialRecheck(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -592,14 +559,11 @@ public final class ChainSurvivalReproTest {
         world.setBlockState(chainPos, copperChainY(), Block.NOTIFY_ALL);
 
         BlockState chainState = world.getBlockState(chainPos);
-        ctx.assertTrue(chainState.isOf(Blocks.COPPER_CHAINS.unaffected()),
+        ctx.assertTrue(chainState.isOf(COPPER_CHAIN_BLOCK),
                 "copper chain not placed at " + chainPos.toShortString()
                 + ", found: " + chainState.getBlock().getTranslationKey());
 
-        BlockState result = chainState.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.UP,
-                slabPos, world.getBlockState(slabPos),
-                world.getRandom());
+        BlockState result = chainState.getStateForNeighborUpdate(Direction.UP, world.getBlockState(slabPos), world, chainPos, slabPos);
         ctx.assertTrue(!result.isAir(),
                 "copper chain under TOP slab must survive initial recheck; got AIR"
                 + " (possible uncovered OxidizableChainBlock path)");
@@ -611,7 +575,7 @@ public final class ChainSurvivalReproTest {
      * Oxidizable/copper mirror of vanilla floating-chain policy:
      * X-axis copper chain remains when sole support is removed.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void copperChainRemainsWhenSoleSupportRemoved(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -619,17 +583,14 @@ public final class ChainSurvivalReproTest {
 
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainPos, copperChainX(), Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.COPPER_CHAINS.unaffected()),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(COPPER_CHAIN_BLOCK),
                 "X-axis copper chain not placed");
 
         world.setBlockState(supportPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState after = world.getBlockState(chainPos);
 
-        BlockState forced = after.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.EAST,
-                supportPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = after.getStateForNeighborUpdate(Direction.EAST, Blocks.AIR.getDefaultState(), world, chainPos, supportPos);
         ctx.assertTrue(!forced.isAir(),
                 "X-axis copper chain must remain after sole support removed under vanilla floating policy; world="
                 + after.getBlock().getTranslationKey()
@@ -642,7 +603,7 @@ public final class ChainSurvivalReproTest {
      * Oxidizable/copper chain mirror of unrelated-neighbor stability:
      * with east support intact, removing unrelated north neighbor must not pop.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void copperChainSurvivesUnrelatedNeighborRemoval(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -652,20 +613,17 @@ public final class ChainSurvivalReproTest {
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(unrelatedPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainPos, copperChainX(), Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.COPPER_CHAINS.unaffected()),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(COPPER_CHAIN_BLOCK),
                 "X-axis copper chain not placed");
 
         world.setBlockState(unrelatedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState after = world.getBlockState(chainPos);
-        ctx.assertTrue(after.isOf(Blocks.COPPER_CHAINS.unaffected()),
+        ctx.assertTrue(after.isOf(COPPER_CHAIN_BLOCK),
                 "X-axis copper chain must survive unrelated NORTH update with"
                 + " east support intact; found " + after.getBlock().getTranslationKey());
 
-        BlockState forced = after.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.NORTH,
-                unrelatedPos, Blocks.AIR.getDefaultState(),
-                world.getRandom());
+        BlockState forced = after.getStateForNeighborUpdate(Direction.NORTH, Blocks.AIR.getDefaultState(), world, chainPos, unrelatedPos);
         ctx.assertTrue(!forced.isAir(),
                 "X-axis copper chain forced recheck(direction=NORTH) must not drop"
                 + " when east support remains");
@@ -687,7 +645,7 @@ public final class ChainSurvivalReproTest {
      *       non-air.</li>
      * </ol>
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainSurvivesMultiNeighborBurstSameTick(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -701,9 +659,9 @@ public final class ChainSurvivalReproTest {
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "chain not placed at " + chainPos.toShortString());
 
         // Same-tick neighbor burst: place/remove around chain while support
@@ -718,14 +676,11 @@ public final class ChainSurvivalReproTest {
         world.setBlockState(west, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState finalState = world.getBlockState(chainPos);
-        ctx.assertTrue(finalState.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(finalState.isOf(CHAIN_BLOCK),
                 "chain popped after same-tick multi-neighbor burst with TOP slab"
                 + " support intact; final=" + finalState.getBlock().getTranslationKey());
 
-        BlockState forced = finalState.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.NORTH,
-                north, world.getBlockState(north),
-                world.getRandom());
+        BlockState forced = finalState.getStateForNeighborUpdate(Direction.NORTH, world.getBlockState(north), world, chainPos, north);
         ctx.assertTrue(!forced.isAir(),
                 "forced recheck after same-tick neighbor burst returned AIR"
                 + " despite TOP slab support remaining");
@@ -741,7 +696,7 @@ public final class ChainSurvivalReproTest {
      * remove temporary scaffolding, then pulse another nearby update.
      * Chain should remain because axis support (top slab) is still valid.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainPlacementOrderLikeGameplayStaysStable(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos chainPos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
@@ -759,9 +714,9 @@ public final class ChainSurvivalReproTest {
 
         // Step 3: place chain in supported position.
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "chain not placed in gameplay-order scenario");
 
         // Step 4: remove temporary scaffold (common live action).
@@ -772,14 +727,11 @@ public final class ChainSurvivalReproTest {
         world.setBlockState(pulsePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState finalState = world.getBlockState(chainPos);
-        ctx.assertTrue(finalState.isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(finalState.isOf(CHAIN_BLOCK),
                 "chain popped during gameplay-like placement/removal ordering; final="
                 + finalState.getBlock().getTranslationKey());
 
-        BlockState forced = finalState.getStateForNeighborUpdate(
-                world, world, chainPos, Direction.WEST,
-                scaffoldPos, world.getBlockState(scaffoldPos),
-                world.getRandom());
+        BlockState forced = finalState.getStateForNeighborUpdate(Direction.WEST, world.getBlockState(scaffoldPos), world, chainPos, scaffoldPos);
         ctx.assertTrue(!forced.isAir(),
                 "forced recheck after gameplay-like ordering returned AIR"
                 + " with TOP slab support still above");
@@ -796,7 +748,7 @@ public final class ChainSurvivalReproTest {
      * transitions only (final block states + forced neighbor recheck). It
      * does not introspect the internal vanilla BlockEvent queue directly.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainUnderTopSlabSurvivesNearbyPistonExtendRetract(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
 
@@ -811,7 +763,7 @@ public final class ChainSurvivalReproTest {
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
 
         world.setBlockState(pistonPos,
@@ -819,7 +771,7 @@ public final class ChainSurvivalReproTest {
                 Block.NOTIFY_ALL);
         world.setBlockState(movablePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
 
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "chain not placed before nearby piston pulse");
 
         // Tick 1: extend piston.
@@ -831,14 +783,11 @@ public final class ChainSurvivalReproTest {
         // Tick 8: chain should still be present; support above never changed.
         ctx.runAtTick(8, () -> {
             BlockState finalState = world.getBlockState(chainPos);
-            ctx.assertTrue(finalState.isOf(Blocks.IRON_CHAIN),
+            ctx.assertTrue(finalState.isOf(CHAIN_BLOCK),
                     "chain popped after nearby piston extend/retract with TOP slab support intact; final="
                     + finalState.getBlock().getTranslationKey());
 
-            BlockState forced = finalState.getStateForNeighborUpdate(
-                    world, world, chainPos, Direction.WEST,
-                    chainPos.west(), world.getBlockState(chainPos.west()),
-                    world.getRandom());
+            BlockState forced = finalState.getStateForNeighborUpdate(Direction.WEST, world.getBlockState(chainPos.west()), world, chainPos, chainPos.west());
             ctx.assertTrue(!forced.isAir(),
                     "forced recheck after nearby piston pulse returned AIR despite TOP slab support");
 
@@ -850,7 +799,7 @@ public final class ChainSurvivalReproTest {
      * Cross-system (piston) support removal under vanilla floating policy:
      * piston moves the TOP slab support away; chain still remains.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainRemainsWhenPistonMovesTopSlabSupportAway(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
 
@@ -860,7 +809,7 @@ public final class ChainSurvivalReproTest {
         BlockPos powerPos = pistonPos.west();
 
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
         world.setBlockState(slabPos,
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
@@ -869,7 +818,7 @@ public final class ChainSurvivalReproTest {
                 Blocks.PISTON.getDefaultState().with(PistonBlock.FACING, Direction.EAST),
                 Block.NOTIFY_ALL);
 
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "chain not placed before piston-driven support move");
 
         // Tick 1: power piston; slab above chain is pushed east off support spot.
@@ -878,14 +827,11 @@ public final class ChainSurvivalReproTest {
         // Tick 6: chain should remain under vanilla floating policy.
         ctx.runAtTick(6, () -> {
             BlockState after = world.getBlockState(chainPos);
-            ctx.assertTrue(after.isOf(Blocks.IRON_CHAIN),
+            ctx.assertTrue(after.isOf(CHAIN_BLOCK),
                     "chain should remain after piston moved TOP slab support away under vanilla floating policy; found "
                     + after.getBlock().getTranslationKey());
 
-            BlockState forced = after.getStateForNeighborUpdate(
-                    world, world, chainPos, Direction.UP,
-                    slabPos, world.getBlockState(slabPos),
-                    world.getRandom());
+            BlockState forced = after.getStateForNeighborUpdate(Direction.UP, world.getBlockState(slabPos), world, chainPos, slabPos);
             ctx.assertTrue(!forced.isAir(),
                     "chain should remain after piston moved TOP slab support away under vanilla floating policy; world="
                     + after.getBlock().getTranslationKey()
@@ -900,7 +846,7 @@ public final class ChainSurvivalReproTest {
      * nearby observer receives two deterministic block changes across ticks.
      * Chain must survive this pulse ordering while TOP slab support stays intact.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void chainUnderTopSlabSurvivesNearbyObserverPulseOrdering(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
 
@@ -914,14 +860,14 @@ public final class ChainSurvivalReproTest {
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_ALL);
         world.setBlockState(chainPos,
-                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                CHAIN_BLOCK.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
                 Block.NOTIFY_ALL);
 
         world.setBlockState(observerPos,
                 Blocks.OBSERVER.getDefaultState().with(net.minecraft.state.property.Properties.FACING, Direction.WEST),
                 Block.NOTIFY_ALL);
 
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(Blocks.IRON_CHAIN),
+        ctx.assertTrue(world.getBlockState(chainPos).isOf(CHAIN_BLOCK),
                 "chain not placed before observer pulse ordering");
 
         // Deterministic nearby pulse ordering: two observed block mutations.
@@ -930,14 +876,11 @@ public final class ChainSurvivalReproTest {
 
         ctx.runAtTick(8, () -> {
             BlockState finalState = world.getBlockState(chainPos);
-            ctx.assertTrue(finalState.isOf(Blocks.IRON_CHAIN),
+            ctx.assertTrue(finalState.isOf(CHAIN_BLOCK),
                     "chain popped during nearby observer pulse ordering with TOP slab support intact; final="
                     + finalState.getBlock().getTranslationKey());
 
-            BlockState forced = finalState.getStateForNeighborUpdate(
-                    world, world, chainPos, Direction.WEST,
-                    observerPos, world.getBlockState(observerPos),
-                    world.getRandom());
+            BlockState forced = finalState.getStateForNeighborUpdate(Direction.WEST, world.getBlockState(observerPos), world, chainPos, observerPos);
             ctx.assertTrue(!forced.isAir(),
                     "forced recheck after observer pulse ordering returned AIR despite TOP slab support");
 

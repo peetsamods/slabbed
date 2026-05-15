@@ -122,7 +122,15 @@ public final class LoweredSideLiveHitRemapRuntimeAudit {
 
             if (frame.remapGuardMatched && frame.targetBlockPos != null && frame.effectiveRemapFace != null) {
                 BlockPos target = parseBlockPos(frame.targetBlockPos);
-                Direction face = Direction.byId(frame.effectiveRemapFace);
+                int remapFaceId;
+                try {
+                    remapFaceId = Integer.parseInt(frame.effectiveRemapFace);
+                } catch (NumberFormatException ex) {
+                    frame.verdict = "guard_matched_bad_effective_remap_face:" + frame.effectiveRemapFace;
+                    writeJson(frame);
+                    return;
+                }
+                Direction face = Direction.byId(remapFaceId);
                 if (target != null && face != null) {
                     BlockPos expected = target.offset(face);
                     frame.verdict = expected.equals(placedPos)

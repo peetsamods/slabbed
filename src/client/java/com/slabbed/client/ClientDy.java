@@ -4,7 +4,6 @@ import com.slabbed.util.SlabSupport;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.BlockView;
 
@@ -21,7 +20,7 @@ public final class ClientDy {
         }
 
         Block block = state.getBlock();
-        if (block instanceof CarpetBlock || block instanceof PaleMossCarpetBlock) {
+        if (block instanceof CarpetBlock) {
             // Carpet special case: simple geometric check without anchor logic
             return SlabSupport.hasBottomSlabBelow(world, pos) ? -0.5 : 0.0;
         }

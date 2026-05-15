@@ -20,7 +20,6 @@ import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.HangingRootsBlock;
 import net.minecraft.block.HangingSignBlock;
 import net.minecraft.block.LeverBlock;
-import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PointedDripstoneBlock;
 import net.minecraft.block.SlabBlock;
@@ -40,11 +39,13 @@ import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.Entity;
+import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.WorldView;
@@ -69,7 +70,11 @@ public final class SlabSupport {
         Block block = state.getBlock();
         return block instanceof SnowBlock
                 || block instanceof CarpetBlock
-                || block instanceof PaleMossCarpetBlock;
+                || isPaleMossCarpet(block);
+    }
+
+    private static boolean isPaleMossCarpet(Block block) {
+        return block == Registries.BLOCK.get(Identifier.of("minecraft", "pale_moss_carpet"));
     }
 
     /**

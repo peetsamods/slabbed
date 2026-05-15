@@ -1,11 +1,11 @@
 package com.slabbed.client;
 
 import com.slabbed.util.SlabSupport;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayers;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
@@ -35,16 +35,16 @@ public final class GapFillerOverlay {
         World world = client.world;
         if (world == null) return;
 
-        Vec3d camPos = client.gameRenderer.getCamera().getCameraPos();
+        Vec3d camPos = client.gameRenderer.getCamera().getPos();
         int camX = (int) Math.floor(camPos.x);
         int camY = (int) Math.floor(camPos.y);
         int camZ = (int) Math.floor(camPos.z);
 
-        MatrixStack matrices = context.matrices();
+        MatrixStack matrices = context.matrixStack();
         VertexConsumerProvider consumers = context.consumers();
         if (matrices == null || consumers == null) return;
 
-        VertexConsumer lines = consumers.getBuffer(RenderLayers.LINES);
+        VertexConsumer lines = consumers.getBuffer(RenderLayer.getLines());
         Matrix4f mat = matrices.peek().getPositionMatrix();
 
         int checked = 0;
@@ -106,7 +106,7 @@ public final class GapFillerOverlay {
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         if (len == 0) return;
         nx /= len; ny /= len; nz /= len;
-        lines.vertex(mat, x0, y0, z0).color(R, G, B, A).normal(nx, ny, nz).lineWidth(LINE_WIDTH);
-        lines.vertex(mat, x1, y1, z1).color(R, G, B, A).normal(nx, ny, nz).lineWidth(LINE_WIDTH);
+        lines.vertex(mat, x0, y0, z0).color(R, G, B, A).normal(nx, ny, nz);
+        lines.vertex(mat, x1, y1, z1).color(R, G, B, A).normal(nx, ny, nz);
     }
 }
