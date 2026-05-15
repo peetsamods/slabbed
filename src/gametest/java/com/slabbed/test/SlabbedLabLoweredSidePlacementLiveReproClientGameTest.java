@@ -583,6 +583,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35SlabJumpSourceTruth")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35SlabJumpSourceTruthProof(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35VisibleObjectOwnerStability")
                 || Boolean.getBoolean("slabbed.beta35TrapdoorVisibleOwnerFix")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
@@ -22349,5 +22358,381 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " categoryScope=floor_torch_only"
                     + " productionGameplayFixApplied=true");
         }
+    }
+
+    /**
+     * Gate: -Dslabbed.beta35SlabJumpSourceTruth=true
+     *
+     * <p>Audit-only. Traces every anchor/marker mutation around place/break actions
+     * on lowered slab structures and classifies which source-truth path is responsible
+     * for any visual jump. No production fix applied.
+     */
+    private static void runBeta35SlabJumpSourceTruthProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        System.out.println("JULIA_BETA35_SLAB_JUMP_SOURCE_TRUTH rowPhase=BEGIN audit=beta35SlabJumpSourceTruth"
+                + " sourceTruth=julia-live-trapdoor-server-validation-0512f50"
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        Beta35SlabJumpSourceTruthRow[] rows = new Beta35SlabJumpSourceTruthRow[3];
+        rows[0] = runBeta35SlabJumpPlacementAuthorRow(
+                ctx, singleplayer, 0, "placement_lowered_fence_source",
+                Blocks.BIRCH_FENCE.getDefaultState(),
+                "minecraft:birch_fence",
+                new BlockPos(2240, -55, 188));
+        rows[1] = runBeta35SlabJumpSourceBreakRow(
+                ctx, singleplayer, 1, "break_legal_double_slab_source",
+                SlabType.DOUBLE,
+                new BlockPos(2250, -55, 188));
+        rows[2] = runBeta35SlabJumpSourceBreakRow(
+                ctx, singleplayer, 2, "break_legal_bottom_slab_source",
+                SlabType.BOTTOM,
+                new BlockPos(2260, -55, 188));
+
+        int sourceMarkerRemovedRows = 0;
+        int adjacentDependentLostSourceTruthRows = 0;
+        int placementAuthoredNormalLaneRows = 0;
+        int neighborDyRenormalizationRows = 0;
+        int expectedPlacementRows = 0;
+        int noJumpRows = 0;
+        for (Beta35SlabJumpSourceTruthRow row : rows) {
+            switch (row.classification()) {
+                case "SOURCE_MARKER_REMOVED_AT_REPLACED_POS" -> sourceMarkerRemovedRows++;
+                case "ADJACENT_DEPENDENT_LOST_SOURCE_TRUTH" -> adjacentDependentLostSourceTruthRows++;
+                case "PLACEMENT_AUTHORED_NORMAL_LANE_FROM_LOWERED_SOURCE" -> placementAuthoredNormalLaneRows++;
+                case "NEIGHBOR_DY_RENORMALIZATION" -> neighborDyRenormalizationRows++;
+                case "EXPECTED_SLAB_PLACEMENT" -> expectedPlacementRows++;
+                case "NO_JUMP_REPRODUCED" -> noJumpRows++;
+                default -> { }
+            }
+        }
+
+        String recommendedNextFix;
+        boolean releaseBlocking;
+        if (sourceMarkerRemovedRows > 0 || adjacentDependentLostSourceTruthRows > 0) {
+            recommendedNextFix = "investigate_source_truth_persistence_across_break";
+            releaseBlocking = true;
+        } else if (neighborDyRenormalizationRows > 0) {
+            recommendedNextFix = "investigate_derived_dependent_dy_after_source_break_no_named_lane";
+            releaseBlocking = false;
+        } else if (placementAuthoredNormalLaneRows > 0) {
+            recommendedNextFix = "defer_no_named_legal_lane_for_placement_from_lowered_non_slab_source";
+            releaseBlocking = false;
+        } else {
+            recommendedNextFix = "no_action_required";
+            releaseBlocking = false;
+        }
+
+        com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logSummary(
+                rows.length,
+                sourceMarkerRemovedRows,
+                adjacentDependentLostSourceTruthRows,
+                placementAuthoredNormalLaneRows,
+                neighborDyRenormalizationRows,
+                expectedPlacementRows,
+                noJumpRows,
+                recommendedNextFix,
+                releaseBlocking);
+
+        System.out.println("JULIA_BETA35_SLAB_JUMP_SUMMARY"
+                + " rows=" + rows.length
+                + " sourceMarkerRemovedRows=" + sourceMarkerRemovedRows
+                + " adjacentDependentLostSourceTruthRows=" + adjacentDependentLostSourceTruthRows
+                + " placementAuthoredNormalLaneRows=" + placementAuthoredNormalLaneRows
+                + " neighborDyRenormalizationRows=" + neighborDyRenormalizationRows
+                + " expectedPlacementRows=" + expectedPlacementRows
+                + " noJumpRows=" + noJumpRows
+                + " recommendedNextFix=" + recommendedNextFix
+                + " releaseBlocking=" + (releaseBlocking ? "yes" : "no")
+                + " releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        if (rows.length == 0) {
+            throw new RuntimeException("Beta 3.5 slab jump source truth audit produced zero rows");
+        }
+    }
+
+    private record Beta35SlabJumpSourceTruthRow(String rowId, String classification, String reason) {
+    }
+
+    private static Beta35SlabJumpSourceTruthRow runBeta35SlabJumpPlacementAuthorRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            BlockState sourceState,
+            String sourceId,
+            BlockPos supportPos
+    ) {
+        Direction face = Direction.EAST;
+        BlockPos sourcePos = supportPos.up();
+        BlockPos placePos = sourcePos.offset(face);
+        prepareBeta35TrapdoorVisibleOwnerFixture(
+                singleplayer,
+                supportPos,
+                sourcePos,
+                Beta35TrapdoorVisibleSupportCase.PLAIN_BOTTOM_DY_MINUS_HALF,
+                sourceState);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.down(), Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        movePlayerForFace(ctx, singleplayer, sourcePos, face);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.clear();
+        com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.setReason("placement");
+
+        final com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample[] beforeBox = new com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample[3];
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            beforeBox[0] = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, sourcePos, "hit");
+            beforeBox[1] = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, placePos, "place");
+            beforeBox[2] = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, supportPos, "support");
+        });
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for beta35 slab jump source truth placement row");
+            }
+            BlockState clientHitState = mc.world.getBlockState(sourcePos);
+            VoxelShape outline = clientHitState.getOutlineShape(
+                    mc.world,
+                    sourcePos,
+                    net.minecraft.block.ShapeContext.of(mc.player));
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outline, sourcePos);
+            BlockHitResult hit = new BlockHitResult(
+                    beta35SideHitVec(outlineBox, sourcePos, face),
+                    face,
+                    sourcePos,
+                    false,
+                    false);
+            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final String[] classificationBox = {"FIXTURE_MISMATCH"};
+        final String[] reasonBox = {"unknown"};
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample afterHit =
+                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, sourcePos, "hit");
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample afterPlace =
+                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, placePos, "place");
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample afterSupport =
+                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, supportPos, "support");
+
+            BlockState placeState = world.getBlockState(placePos);
+            boolean loweredSource = Double.isFinite(beforeBox[0].dy()) && beforeBox[0].dy() < -0.999d;
+            boolean placedNormalBottom = placeState.isOf(Blocks.STONE_SLAB)
+                    && placeState.contains(SlabBlock.TYPE)
+                    && placeState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                    && Math.abs(afterPlace.dy()) <= EPSILON;
+            boolean noPlacement = placeState.isAir();
+
+            String classification;
+            String reason;
+            if (loweredSource && placedNormalBottom) {
+                classification = "PLACEMENT_AUTHORED_NORMAL_LANE_FROM_LOWERED_SOURCE";
+                reason = "lowered_non_slab_source_authored_dy0_slab";
+            } else if (loweredSource && noPlacement) {
+                classification = "NO_JUMP_REPRODUCED";
+                reason = "fixture_rejected_placement";
+            } else if (Math.abs(afterPlace.dy() - beforeBox[1].dy()) > EPSILON) {
+                classification = "NEIGHBOR_DY_RENORMALIZATION";
+                reason = "place_pos_dy_changed_unexpectedly";
+            } else {
+                classification = "EXPECTED_SLAB_PLACEMENT";
+                reason = "no_anomaly";
+            }
+            classificationBox[0] = classification;
+            reasonBox[0] = reason;
+
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logDySample(
+                    "AFTER_PLACEMENT", rowId, beforeBox[0], afterHit,
+                    classification, "lowered_lane_or_no_named_legal", "see_dy",
+                    classification.equals("PLACEMENT_AUTHORED_NORMAL_LANE_FROM_LOWERED_SOURCE"));
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logDySample(
+                    "AFTER_PLACEMENT", rowId, beforeBox[1], afterPlace,
+                    classification, "lowered_lane_or_no_named_legal", "see_dy",
+                    classification.equals("PLACEMENT_AUTHORED_NORMAL_LANE_FROM_LOWERED_SOURCE"));
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logDySample(
+                    "AFTER_PLACEMENT", rowId, beforeBox[2], afterSupport,
+                    classification, "lowered_lane_or_no_named_legal", "see_dy", false);
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logRow(
+                    "PLACEMENT_AUTHOR", rowId, placePos, placePos, classification, reason,
+                    classification.equals("PLACEMENT_AUTHORED_NORMAL_LANE_FROM_LOWERED_SOURCE"));
+
+            System.out.println("JULIA_BETA35_SLAB_JUMP_SOURCE_TRUTH"
+                    + " rowPhase=PLACEMENT_AUTHOR"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " sourceId=" + sourceId
+                    + " hitPos=" + sourcePos.toShortString()
+                    + " placePos=" + placePos.toShortString()
+                    + " dyHit=" + beta35FormatDoubleOrNA(beforeBox[0].dy())
+                    + " dyPlaceBefore=" + beta35FormatDoubleOrNA(beforeBox[1].dy())
+                    + " dyPlaceAfter=" + beta35FormatDoubleOrNA(afterPlace.dy())
+                    + " placeState=" + placeState
+                    + " classification=" + classification
+                    + " reason=" + reason);
+        });
+
+        return new Beta35SlabJumpSourceTruthRow(rowId, classificationBox[0], reasonBox[0]);
+    }
+
+    private static Beta35SlabJumpSourceTruthRow runBeta35SlabJumpSourceBreakRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            int rowIndex,
+            String rowId,
+            SlabType sourceType,
+            BlockPos supportPos
+    ) {
+        Direction face = Direction.EAST;
+        BlockPos fullPos = supportPos.up();
+        BlockPos hitPos = fullPos.east();
+        BlockPos placePos = hitPos.offset(face);
+        setupFixture(singleplayer, supportPos, fullPos);
+        setLoweredSlabTarget(singleplayer, hitPos, sourceType);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(placePos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 8));
+        movePlayerForFace(ctx, singleplayer, hitPos, face);
+        BlockHitResult hit = resolveLoweredSideFaceHit(hitPos, face, sourceType);
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+                throw new RuntimeException("client not ready for beta35 slab jump source break placement");
+            }
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            if (!result.isAccepted()) {
+                throw new RuntimeException("beta35 slab jump source break placement was not accepted: " + result);
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample[] beforeBox = new com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample[4];
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            beforeBox[0] = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, hitPos, "sourceHit");
+            beforeBox[1] = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, placePos, "neighborPlace");
+            beforeBox[2] = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, fullPos, "fullBlock");
+            beforeBox[3] = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, supportPos, "supportBottomSlab");
+        });
+
+        com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.clear();
+        com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.setReason("onStateReplaced");
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(hitPos, Blocks.AIR.getDefaultState(), net.minecraft.block.Block.NOTIFY_ALL);
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        var events = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.snapshotEvents();
+
+        final String[] classificationBox = {"FIXTURE_MISMATCH"};
+        final String[] reasonBox = {"unknown"};
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample afterHit =
+                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, hitPos, "sourceHit");
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample afterPlace =
+                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, placePos, "neighborPlace");
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample afterFull =
+                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, fullPos, "fullBlock");
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.DySample afterSupport =
+                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.sample(world, supportPos, "supportBottomSlab");
+
+            boolean removedAtBrokenPos = events.stream()
+                    .anyMatch(e -> e.action() == com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.REMOVE
+                            && e.packedPos() == hitPos.asLong());
+            boolean removedAtAdjacent = events.stream()
+                    .anyMatch(e -> e.action() == com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.REMOVE
+                            && e.packedPos() != hitPos.asLong());
+            boolean neighborJumped = Math.abs(afterPlace.dy() - beforeBox[1].dy()) > EPSILON;
+            boolean fullJumped = Math.abs(afterFull.dy() - beforeBox[2].dy()) > EPSILON;
+
+            String classification;
+            String reason;
+            if (removedAtBrokenPos && (neighborJumped || fullJumped)) {
+                classification = "SOURCE_MARKER_REMOVED_AT_REPLACED_POS";
+                reason = "broken_pos_carried_marker_and_dependents_renormalized";
+            } else if (removedAtAdjacent && (neighborJumped || fullJumped)) {
+                classification = "ADJACENT_DEPENDENT_LOST_SOURCE_TRUTH";
+                reason = "marker_removed_on_neighbor_pos_after_break";
+            } else if (neighborJumped || fullJumped) {
+                classification = "NEIGHBOR_DY_RENORMALIZATION";
+                reason = "dependent_dy_changed_without_marker_event";
+            } else if (removedAtBrokenPos) {
+                classification = "NO_JUMP_REPRODUCED";
+                reason = "marker_removed_but_no_visible_jump";
+            } else {
+                classification = "NO_JUMP_REPRODUCED";
+                reason = "no_marker_event_and_no_jump";
+            }
+            classificationBox[0] = classification;
+            reasonBox[0] = reason;
+
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logDySample(
+                    "AFTER_BREAK", rowId, beforeBox[0], afterHit, classification,
+                    "lowered_lane_or_air", "see_dy", removedAtBrokenPos && (neighborJumped || fullJumped));
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logDySample(
+                    "AFTER_BREAK", rowId, beforeBox[1], afterPlace, classification,
+                    "stable_lowered_lane", "see_dy", neighborJumped);
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logDySample(
+                    "AFTER_BREAK", rowId, beforeBox[2], afterFull, classification,
+                    "stable_lowered_lane", "see_dy", fullJumped);
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logDySample(
+                    "AFTER_BREAK", rowId, beforeBox[3], afterSupport, classification,
+                    "stable_lowered_lane", "see_dy", false);
+
+            int removeEvents = (int) events.stream()
+                    .filter(e -> e.action() == com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.REMOVE)
+                    .count();
+            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.logRow(
+                    "SOURCE_BREAK", rowId, hitPos,
+                    neighborJumped ? placePos : (fullJumped ? fullPos : hitPos),
+                    classification, reason, neighborJumped || fullJumped);
+
+            System.out.println("JULIA_BETA35_SLAB_JUMP_SOURCE_TRUTH"
+                    + " rowPhase=SOURCE_BREAK"
+                    + " rowIndex=" + rowIndex
+                    + " rowId=" + rowId
+                    + " sourceType=" + sourceType.asString()
+                    + " brokenPos=" + hitPos.toShortString()
+                    + " neighborPos=" + placePos.toShortString()
+                    + " fullPos=" + fullPos.toShortString()
+                    + " dyHitBefore=" + beta35FormatDoubleOrNA(beforeBox[0].dy())
+                    + " dyHitAfter=" + beta35FormatDoubleOrNA(afterHit.dy())
+                    + " dyNeighborBefore=" + beta35FormatDoubleOrNA(beforeBox[1].dy())
+                    + " dyNeighborAfter=" + beta35FormatDoubleOrNA(afterPlace.dy())
+                    + " dyFullBefore=" + beta35FormatDoubleOrNA(beforeBox[2].dy())
+                    + " dyFullAfter=" + beta35FormatDoubleOrNA(afterFull.dy())
+                    + " removeEvents=" + removeEvents
+                    + " removedAtBrokenPos=" + removedAtBrokenPos
+                    + " removedAtAdjacent=" + removedAtAdjacent
+                    + " neighborJumped=" + neighborJumped
+                    + " fullJumped=" + fullJumped
+                    + " classification=" + classification
+                    + " reason=" + reason);
+        });
+
+        return new Beta35SlabJumpSourceTruthRow(rowId, classificationBox[0], reasonBox[0]);
     }
 }
