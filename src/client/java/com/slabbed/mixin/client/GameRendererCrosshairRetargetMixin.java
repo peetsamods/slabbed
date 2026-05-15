@@ -1010,8 +1010,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 lowerFrontHit.getPos(),
                 lowerFrontHit.getSide(),
                 ownerPos,
-                lowerFrontHit.isInsideBlock(),
-                false);
+                lowerFrontHit.isInsideBlock());
     }
 
     private boolean slabbed$isAboveAngleLowerFrontSlabOverAnchoredOwner(
@@ -1203,7 +1202,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
                     double dist2 = hit.getPos().squaredDistanceTo(eye);
                     if (dist2 <= 36.0d + 1.0e-6d && dist2 < bestDist2) {
                         bestDist2 = dist2;
-                        best = new BlockHitResult(hit.getPos(), hit.getSide(), pos, hit.isInsideBlock(), false);
+                        best = new BlockHitResult(hit.getPos(), hit.getSide(), pos, hit.isInsideBlock());
                     }
                 }
             }

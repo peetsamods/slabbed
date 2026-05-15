@@ -14,9 +14,9 @@ import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.registry.Registries;
 import net.minecraft.util.math.Direction;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
@@ -287,7 +287,7 @@ public final class SlabAnchorAttachment {
             // Trigger getStateForNeighborUpdate(DOWN) on the block above so any stale floor
             // torch that was placed before this compound mark is written gets revalidated and
             // removed by TorchBlockMixin.getStateForNeighborUpdate.
-            world.replaceWithStateForNeighborUpdate(Direction.DOWN, pos.up(), pos, state, Block.NOTIFY_ALL, 512);
+            world.replaceWithStateForNeighborUpdate(Direction.DOWN, state, pos.up(), pos, Block.NOTIFY_ALL, 512);
         }
     }
 
@@ -345,7 +345,7 @@ public final class SlabAnchorAttachment {
         boolean added = addToAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
         if (added) {
-            world.replaceWithStateForNeighborUpdate(Direction.DOWN, pos.up(), pos, state, Block.NOTIFY_ALL, 512);
+            world.replaceWithStateForNeighborUpdate(Direction.DOWN, state, pos.up(), pos, Block.NOTIFY_ALL, 512);
         }
     }
 
@@ -777,7 +777,7 @@ public final class SlabAnchorAttachment {
         if (block instanceof SlabBlock) {
             return false;
         }
-        if (block instanceof CarpetBlock || block instanceof PaleMossCarpetBlock) {
+        if (block instanceof CarpetBlock || isPaleMossCarpet(block)) {
             return false;
         }
         if (SlabSupport.isThinTopLayer(state)) {
@@ -796,6 +796,10 @@ public final class SlabAnchorAttachment {
             return false;
         }
         return true;
+    }
+
+    private static boolean isPaleMossCarpet(Block block) {
+        return block == Registries.BLOCK.get(Identifier.of("minecraft", "pale_moss_carpet"));
     }
 
     public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {

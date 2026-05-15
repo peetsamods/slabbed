@@ -4,60 +4,42 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.runtime.ModelDyTranslateTraceBridge;
 import com.slabbed.util.SlabSupport;
-import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
-import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
+import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
+import net.fabricmc.fabric.api.renderer.v1.model.ForwardingBakedModel;
+import net.fabricmc.fabric.api.renderer.v1.render.RenderContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
-import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.WallBlock;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.model.BlockModelPart;
-import net.minecraft.client.render.model.BlockStateModel;
-import net.minecraft.client.texture.Sprite;
+import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
 import net.minecraft.world.World;
 
-import java.util.List;
-import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
- * Wraps a FabricBlockStateModel to apply a vertical offset to emitted quads
+ * Wraps a BakedModel to apply a vertical offset to emitted quads
  * (e.g., torches on bottom slabs) without relying on MatrixStack hacks.
  */
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
-public final class OffsetBlockStateModel implements BlockStateModel, FabricBlockStateModel {
+public final class OffsetBlockStateModel extends ForwardingBakedModel {
     private static volatile BlockPos slabbed$tracePos = null;
     private static volatile RenderOffsetTrace slabbed$lastTrace = RenderOffsetTrace.missing();
     private static volatile BlockPos slabbed$modelDyOwnerTracePos = null;
     private static volatile ModelDyOwnerTrace slabbed$modelDyOwnerLastTrace = ModelDyOwnerTrace.missing();
 
-    private final BlockStateModel wrapped;
-    private final FabricBlockStateModel fabricWrapped;
-
-    public OffsetBlockStateModel(BlockStateModel wrapped) {
+    public OffsetBlockStateModel(BakedModel wrapped) {
         this.wrapped = wrapped;
-        this.fabricWrapped = (FabricBlockStateModel) wrapped;
     }
 
     @Override
-    public void addParts(Random random, List<BlockModelPart> parts) {
-        wrapped.addParts(random, parts);
-    }
-
-    @Override
-    public List<BlockModelPart> getParts(Random random) {
-        return wrapped.getParts(random);
-    }
-
-    @Override
-    public Sprite particleSprite() {
-        return wrapped.particleSprite();
+    public boolean isVanillaAdapter() {
+        return false;
     }
 
     public record RenderOffsetTrace(
@@ -112,10 +94,10 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
      * Fabric renderer entry point used by Indigo/Sodium+Indium.
      */
     @Override
-    public void emitQuads(QuadEmitter emitter, BlockRenderView view, BlockPos pos, BlockState state, Random random,
-                          Predicate<Direction> cullTest) {
+    public void emitBlockQuads(BlockRenderView view, BlockState state, BlockPos pos, Supplier<Random> randomSupplier,
+                               RenderContext context) {
         float dy;
-        if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof PaleMossCarpetBlock) {
+        if (state.getBlock() instanceof CarpetBlock) {
             dy = (float) ClientDy.dyFor(view, pos, state);
         } else {
             dy = (float) SlabSupport.getYOffset(view, pos, state);
@@ -178,8 +160,33 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
             }
         }
 
-        QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
-        fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
+        if (dy == 0.0f) {
+            emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
+            return;
+        }
+
+        final float yOffset = dy;
+        context.pushTransform(quad -> {
+            for (int i = 0; i < 4; i++) {
+                quad.pos(i, quad.x(i), quad.y(i) + yOffset, quad.z(i));
+            }
+            return true;
+        });
+        try {
+            emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
+        } finally {
+            context.popTransform();
+        }
+    }
+
+    private void emitWrappedBlockQuads(BlockRenderView view, BlockState state, BlockPos pos,
+                                       Supplier<Random> randomSupplier, RenderContext context) {
+        if (wrapped instanceof FabricBakedModel fabricWrapped) {
+            fabricWrapped.emitBlockQuads(view, state, pos, randomSupplier, context);
+            return;
+        }
+
+        context.bakedModelConsumer().accept(wrapped, state);
     }
 
     private static void slabbed$logCompoundVisibleRenderTraceModelDy(
