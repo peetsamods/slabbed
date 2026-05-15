@@ -52,8 +52,8 @@ public abstract class WallTorchParticleMixin {
         // Particle field is on TorchBlock (parent); read via accessor since Mixin
         // @Shadow does not traverse class hierarchy.
         SimpleParticleType particle = ((TorchParticleAccessor) (Object) this).slabbed$getParticle();
-        world.addParticleClient(ParticleTypes.SMOKE, x, y, z, 0.0, 0.0, 0.0);
-        world.addParticleClient(particle, x, y, z, 0.0, 0.0, 0.0);
+        world.addParticle(ParticleTypes.SMOKE, x, y, z, 0.0, 0.0, 0.0);
+        world.addParticle(particle, x, y, z, 0.0, 0.0, 0.0);
         ci.cancel();
     }
 }

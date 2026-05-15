@@ -16,13 +16,13 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.Vec3i;
+import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -62,7 +62,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return;
         }
 
-        ServerWorld world = player.getEntityWorld();
+        World world = player.getEntityWorld();
         BlockState state = world.getBlockState(pos);
         BlockState mergedState = state.with(SlabBlock.TYPE, SlabType.DOUBLE);
         System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
@@ -167,7 +167,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             PlayerInteractBlockC2SPacket packet,
             Vec3d center
     ) {
-        ServerWorld world = player.getEntityWorld();
+        World world = player.getEntityWorld();
         BlockHitResult hit = packet.getBlockHitResult();
         if (world == null || hit == null || center == null || !pos.equals(hit.getBlockPos())) {
             return null;
@@ -186,7 +186,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     }
 
     private boolean slabbed$isBeta35ShiftedHitTarget(
-            ServerWorld world,
+            World world,
             BlockPos pos,
             PlayerInteractBlockC2SPacket packet
     ) {
@@ -228,7 +228,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (!Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN)) {
             return;
         }
-        ServerWorld world = player.getEntityWorld();
+        World world = player.getEntityWorld();
         BlockHitResult hit = packet.getBlockHitResult();
         BlockState state = world == null ? null : world.getBlockState(pos);
         ItemStack heldStack = player.getStackInHand(packet.getHand());
@@ -252,7 +252,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             BlockPos pos,
             PlayerInteractBlockC2SPacket packet
     ) {
-        ServerWorld world = player.getEntityWorld();
+        World world = player.getEntityWorld();
         BlockHitResult hit = packet.getBlockHitResult();
         BlockState state = world == null ? null : world.getBlockState(pos);
         ItemStack heldStack = player.getStackInHand(packet.getHand());
@@ -295,7 +295,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     }
 
     private boolean slabbed$isLegalCompoundFullBlockVisualHit(BlockPos pos, PlayerInteractBlockC2SPacket packet) {
-        ServerWorld world = player.getEntityWorld();
+        World world = player.getEntityWorld();
         BlockHitResult hit = packet.getBlockHitResult();
         if (world == null || hit == null || !pos.equals(hit.getBlockPos())) {
             slabbed$logHitValidityBridge(world, pos, hit, null, false, false, false,
@@ -360,7 +360,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     }
 
     private void slabbed$logHitValidityBridge(
-            ServerWorld world,
+            World world,
             BlockPos pos,
             BlockHitResult hit,
             ItemStack heldStack,
@@ -399,7 +399,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                 bridgeAccepted ? "none" : rejectionReason);
     }
 
-    private static boolean slabbed$isHeldOrdinaryFullBlock(ServerWorld world, BlockPos pos, ItemStack stack) {
+    private static boolean slabbed$isHeldOrdinaryFullBlock(World world, BlockPos pos, ItemStack stack) {
         if (!(stack.getItem() instanceof BlockItem blockItem)
                 || blockItem.getBlock() instanceof SlabBlock) {
             return false;
@@ -408,7 +408,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     }
 
     private static boolean slabbed$isHeldLegalCompoundSlabRemap(
-            ServerWorld world,
+            World world,
             BlockPos pos,
             BlockState state,
             BlockHitResult hit,
@@ -422,7 +422,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         return SlabSupport.findLegalCompoundSlabRemap(world, pos, state, hit.getSide(), hit.getPos()).legal();
     }
 
-    private static boolean slabbed$isOrdinaryFullBlock(ServerWorld world, BlockPos pos, BlockState state) {
+    private static boolean slabbed$isOrdinaryFullBlock(World world, BlockPos pos, BlockState state) {
         return state != null
                 && !state.isAir()
                 && !(state.getBlock() instanceof SlabBlock)

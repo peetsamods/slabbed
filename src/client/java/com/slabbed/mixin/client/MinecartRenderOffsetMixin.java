@@ -3,11 +3,11 @@ package com.slabbed.mixin.client;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractRailBlock;
 import net.minecraft.block.BlockState;
-import net.minecraft.client.render.entity.AbstractMinecartEntityRenderer;
-import net.minecraft.client.render.entity.state.MinecartEntityRenderState;
+import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.entity.MinecartEntityRenderer;
+import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -18,14 +18,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * Offsets minecart rendering down by 0.5 when the minecart sits on a rail
  * visually anchored to a bottom slab.
  */
-@Mixin(AbstractMinecartEntityRenderer.class)
+@Mixin(MinecartEntityRenderer.class)
 public abstract class MinecartRenderOffsetMixin {
 
-    @Inject(method = "updateRenderState(Lnet/minecraft/entity/vehicle/AbstractMinecartEntity;Lnet/minecraft/client/render/entity/state/MinecartEntityRenderState;F)V",
-            at = @At("TAIL"))
+    @Inject(method = "render(Lnet/minecraft/entity/vehicle/AbstractMinecartEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V",
+            at = @At("HEAD"))
     private void slabbed$adjustMinecartOffset(AbstractMinecartEntity entity,
-                                              MinecartEntityRenderState state,
+                                              float yaw,
                                               float tickDelta,
+                                              MatrixStack matrices,
+                                              VertexConsumerProvider vertexConsumers,
+                                              int light,
                                               CallbackInfo ci) {
         World world = entity.getEntityWorld();
         if (world == null) {
@@ -40,12 +43,7 @@ public abstract class MinecartRenderOffsetMixin {
         }
 
         if (SlabSupport.shouldOffset(world, pos, blockState)) {
-            Vec3d current = state.positionOffset;
-            if (current != null) {
-                state.positionOffset = current.add(0.0, -0.5, 0.0);
-            } else {
-                state.positionOffset = new Vec3d(0.0, -0.5, 0.0);
-            }
+            matrices.translate(0.0, -0.5, 0.0);
         }
     }
 }

@@ -4,7 +4,7 @@ import com.slabbed.dev.SlabbedLabFixtures;
 import com.slabbed.dev.SlabbedLabFixtures.LaneStatus;
 import com.slabbed.dev.SlabbedLabFixtures.PlaceResult;
 import com.slabbed.util.SlabSupport;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.test.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -37,7 +37,7 @@ public final class SlabbedLabFixtureTest {
      * <p>Uses {@code fabric-gametest-api-v1:empty} (built-in 8×8×8 all-air structure).
      * Fixture footprint: X=0..4, Y=0..1, Z=0..1 (pulse at Z=1) — fits within bounds.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void labSupportCycle(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         // Map structure-relative (0,0,0) to the absolute world position for the fixture origin.
@@ -110,7 +110,7 @@ public final class SlabbedLabFixtureTest {
      * at minY=0.0. This test fails against that regressed state and passes
      * once parity is restored.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void outlineRaycastParity(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
@@ -158,7 +158,7 @@ public final class SlabbedLabFixtureTest {
      * helper restores them via an explicit {@code BlockEntityProvider}
      * category check without re-opening the generic solid-cube fallback.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void blockEntityFullCubeSitsOnSlab(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
@@ -198,7 +198,7 @@ public final class SlabbedLabFixtureTest {
      * onto slabs. The previous selective-only policy that excluded solid cubes
      * has been retired.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void solidCubeLowersOverSlab(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
@@ -236,7 +236,7 @@ public final class SlabbedLabFixtureTest {
      * This test fails against double-offset state (minY == -1.0) and trivially
      * confirms the server path produces 0.0 post-dedupe.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void carpetOutlineNotDoubled(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);

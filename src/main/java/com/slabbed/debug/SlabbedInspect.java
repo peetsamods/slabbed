@@ -324,7 +324,7 @@ public final class SlabbedInspect {
                 + " anchored=" + SlabAnchorAttachment.isAnchored(world, pos)
                 + " lowered=" + (dy != 0.0d)
                 + " solid=" + state.isSolidBlock(world, pos)
-                + " fullCube=" + state.isOpaqueFullCube()
+                + " fullCube=" + state.isOpaqueFullCube(world, pos)
                 + warning(state, dy);
     }
 
