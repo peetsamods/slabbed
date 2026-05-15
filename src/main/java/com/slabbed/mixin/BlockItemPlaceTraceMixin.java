@@ -31,18 +31,17 @@ public abstract class BlockItemPlaceTraceMixin {
     private static final ThreadLocal<TraceCtx> SLABBED$INSPECT_USE_TRACE = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> SLABBED$INSPECT_PLACE_CALLED = new ThreadLocal<>();
 
-    private static boolean slabbed$isTracedBlock(Block block) {
-        return block instanceof SlabBlock || block instanceof CarpetBlock || block.getDefaultState().isOpaqueFullCube();
+    private static boolean slabbed$isTracedBlock(Block block, World world, BlockPos pos) {
+        return block instanceof SlabBlock || block instanceof CarpetBlock || block.getDefaultState().isOpaqueFullCube(world, pos);
     }
 
     @Inject(method = "place", at = @At("HEAD"))
     private void slabbed$tracePlaceHead(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
         BlockItem self = (BlockItem) (Object) this;
-        if (!slabbed$isTracedBlock(self.getBlock())) return;
-
         World world = ctx.getWorld();
         Direction face = ctx.getSide();
         BlockPos placePos = ctx.getBlockPos();
+        if (!slabbed$isTracedBlock(self.getBlock(), world, placePos)) return;
         BlockPos hitPos = placePos.offset(face.getOpposite());
         String side = world.isClient() ? "CLIENT" : "SERVER";
         Identifier itemId = Registries.ITEM.getId(self);
@@ -96,7 +95,7 @@ public abstract class BlockItemPlaceTraceMixin {
         if (inspectTrace != null) {
             try {
                 BlockItem self = (BlockItem) (Object) this;
-                if (slabbed$isTracedBlock(self.getBlock())) {
+                if (slabbed$isTracedBlock(self.getBlock(), ctx.getWorld(), inspectTrace.placePos())) {
                     RuntimeDiagnostics.logInspectPlacement(
                             "RETURN",
                             ctx.getWorld(),
@@ -112,7 +111,7 @@ public abstract class BlockItemPlaceTraceMixin {
         }
 
         BlockItem recorderSelf = (BlockItem) (Object) this;
-        if (slabbed$isTracedBlock(recorderSelf.getBlock())) {
+        if (slabbed$isTracedBlock(recorderSelf.getBlock(), ctx.getWorld(), ctx.getBlockPos())) {
             Identifier itemId = Registries.ITEM.getId(recorderSelf);
             boolean heldIsSlab = recorderSelf.getBlock() instanceof SlabBlock;
             RuntimeDiagnostics.recordPlace(
@@ -137,7 +136,7 @@ public abstract class BlockItemPlaceTraceMixin {
 
         try {
             BlockItem self = (BlockItem) (Object) this;
-            if (!slabbed$isTracedBlock(self.getBlock())) return;
+            if (!slabbed$isTracedBlock(self.getBlock(), ctx.getWorld(), trace.placePos())) return;
 
             World world = ctx.getWorld();
             BlockPos placePos = trace.placePos();
@@ -165,10 +164,10 @@ public abstract class BlockItemPlaceTraceMixin {
     @Inject(method = "useOnBlock", at = @At("HEAD"))
     private void slabbed$traceUseOnBlockHead(ItemUsageContext context, CallbackInfoReturnable<ActionResult> cir) {
         BlockItem self = (BlockItem) (Object) this;
-        if (!slabbed$isTracedBlock(self.getBlock())) {
+        if (context == null || context.getWorld() == null) {
             return;
         }
-        if (context == null || context.getWorld() == null) {
+        if (!slabbed$isTracedBlock(self.getBlock(), context.getWorld(), context.getBlockPos())) {
             return;
         }
         Identifier itemId = Registries.ITEM.getId(self);

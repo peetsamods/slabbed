@@ -115,7 +115,7 @@ public class CategoryAuditRunner {
                         } else {
                             // --- NEIGHBOR-UPDATE VERDICT ---
                             world.setBlockState(supportPos, supportState, Block.NOTIFY_ALL);
-                            world.updateNeighborsAlways(candidatePos, supportState.getBlock(), null);
+                            world.updateNeighborsAlways(candidatePos, supportState.getBlock());
                             boolean stillPresent = world.getBlockState(candidatePos).isOf(probeState.getBlock());
                             boolean stillValid = stillPresent && probe.survivesAfterPlacement(world, candidatePos, probeState);
                             neighborUpdatePass = stillPresent && stillValid;

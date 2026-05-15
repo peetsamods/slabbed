@@ -34,8 +34,8 @@ public abstract class TorchParticleMixin {
         double x = pos.getX() + 0.5;
         double y = pos.getY() + 0.7 + dy;
         double z = pos.getZ() + 0.5;
-        world.addParticleClient(ParticleTypes.SMOKE, x, y, z, 0.0, 0.0, 0.0);
-        world.addParticleClient(this.particle, x, y, z, 0.0, 0.0, 0.0);
+        world.addParticle(ParticleTypes.SMOKE, x, y, z, 0.0, 0.0, 0.0);
+        world.addParticle(this.particle, x, y, z, 0.0, 0.0, 0.0);
         ci.cancel();
     }
 }

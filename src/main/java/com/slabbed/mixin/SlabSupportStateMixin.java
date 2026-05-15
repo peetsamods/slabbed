@@ -14,7 +14,9 @@ import net.minecraft.block.TorchBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.DoubleBlockHalf;
+import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Properties;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
@@ -301,7 +303,7 @@ public abstract class SlabSupportStateMixin {
 
         // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
         Block block = self.getBlock();
-        if (block instanceof net.minecraft.block.CarpetBlock || block instanceof net.minecraft.block.PaleMossCarpetBlock) {
+        if (block instanceof net.minecraft.block.CarpetBlock || isPaleMossCarpet(block)) {
             return;
         }
 
@@ -331,5 +333,9 @@ public abstract class SlabSupportStateMixin {
         if (changed) {
             cir.setReturnValue(shape);
         }
+    }
+
+    private static boolean isPaleMossCarpet(Block block) {
+        return block == Registries.BLOCK.get(Identifier.of("minecraft", "pale_moss_carpet"));
     }
 }
