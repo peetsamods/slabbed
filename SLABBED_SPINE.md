@@ -39,6 +39,18 @@ Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it 
 Tracked tree is clean.
 `tmp/` may remain intentionally untracked and must not be staged.
 
+## Current Beta 3.5 slab jump source-truth audit status
+
+Operating base before this audit: `0512f50` / `save/beta35-door-half-server-validation` on `integrate/phase19-into-side-slab-top-support`.
+
+Doors, trapdoors, buttons, chains, torches, fences, and walls are now proof-good or live-good at this base. The remaining live blocker is a slab placement/break jump where neighbor lowered slabs visibly shift toward `dy=0.0` after the carrier source is broken. This slice added a gated audit tracer at `-Dslabbed.beta35SlabJumpSourceTruth=true` that records every `SlabAnchorAttachment` ADD/REMOVE event across all seven marker types and probes `dy`/marker flags before and after place/break actions.
+
+The audit summary is `JULIA_BETA35_SLAB_JUMP_SUMMARY rows=3 sourceMarkerRemovedRows=0 adjacentDependentLostSourceTruthRows=0 placementAuthoredNormalLaneRows=1 neighborDyRenormalizationRows=2 expectedPlacementRows=0 noJumpRows=0 recommendedNextFix=investigate_derived_dependent_dy_after_source_break_no_named_lane releaseBlocking=no releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`. In both break rows `removeEvents=0` for the broken slab itself — the broken position never carried a tracked marker, so `onStateReplaced` did not clear authored source truth. The dependent slab's lowered `dy` is derived from its (now-removed) carrier rather than stored, so it renormalizes to `dy=0.0` without any anchor mutation. The placement row reproduces the existing `SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE` from a lowered non-slab source.
+
+No production behavior was changed in this slice. No `SlabBlock` neighbor-update override was added. No `dy=-1` lane grammar was introduced. No global solidity/sturdy-face change was made. The tracer is off by default. Doors/trapdoors/buttons/chains/fences/walls remain proof-good or live-good. The remaining slab jump is now narrowly classified as a derived-dependent renormalization issue with no named legal lowered lane to fall back to; this is a deeper audit-only result and a fix is not attempted here. See `docs/beta35-slab-jump-source-truth-audit.md` for the full classification table.
+
+Regression gates for this audit slice: compile, focused source-truth tracer proof, default `runClientGameTest` rerun green, and `git diff --check` clean. Release audit remains paused. Julia live acceptance is still required. No release tag was moved, no release audit was run, and no release-ready or all-item gameplay claim is made.
+
 ## Current Beta 3.5 regular door owner and slab placement lane status
 
 Operating base before latest continuation: `e23c62a` / `save/beta35-door-owner-slab-jump` on `integrate/phase19-into-side-slab-top-support`.

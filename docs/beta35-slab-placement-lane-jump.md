@@ -54,3 +54,18 @@ Current slab status remains:
 The door-half proof summary carries the same status:
 
 `slabJumpStatus=SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE`
+
+## 2026-05-14 Continuation: Slab Jump Source-Truth Audit
+
+Continuation base: `0512f50` / `save/beta35-door-half-server-validation`.
+
+Doors, trapdoors, buttons, chains, torches, fences, and walls are now proof-good or
+live-good. The remaining slab jump observed on Julia live was traced through every
+`SlabAnchorAttachment` mutation under
+`-Dslabbed.beta35SlabJumpSourceTruth=true`. The audit confirmed that the place-time
+jump matches the existing `SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE`
+classification and that the break-time jump is **not** caused by marker removal at
+the broken position. Instead the dependent lowered slab next door renormalizes
+because its lowered state was derived from the now-removed carrier, not stored as a
+marker. See `docs/beta35-slab-jump-source-truth-audit.md` for the full classification
+and recommended next step.
