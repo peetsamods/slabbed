@@ -1,11 +1,11 @@
 # Beta 3.5 SBSBS Held-Item Acceptance Audit
 
-- auditHead: `c869e92`
-- expectedTagAtHead: `save/beta35-slab-jump-source-truth-audit`
+- auditHead: `9278cd3`
+- expectedTagAtHead: `save/beta35-sbsbs-held-item-acceptance-audit`
 - branch: `integrate/phase19-into-side-slab-top-support`
 - evidenceFolder: `tmp/beta35-sbsbs-held-item-acceptance-audit-c869e92`
 - proofFlag: `-Dslabbed.beta35SbsbsHeldItemAcceptance=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
-- status: audit/proof only; no gameplay fix; no release finalization; no release tag movement; no all-item claim
+- status: release-ready with limitations; no gameplay fix; no all-item claim
 
 ## Source Truth
 

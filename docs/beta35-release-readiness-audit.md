@@ -1,9 +1,9 @@
-# Beta 3.5 Release Readiness Audit (HEAD c869e92)
+# Beta 3.5 Release Readiness Audit (HEAD 9278cd3)
 
-- auditHead: c869e92
+- auditHead: 9278cd3
 - scope: `trapdoor`, `door`, `door-half`, `visible-object-owner`, `floor-button`, `hitbox-aperture`, `fence/wall visual-hitbox stack aim`, `fence/wall stack-contact`, `fence/wall owner`, `candle`, `flower-pot`, `common-object matrix`, `default gametest`, `clean build`
 - notCovered: `lantern`, `wall_torch`, `signs`, `chains`, `redstone_wire`, `rails`
-- evidenceFolder: `tmp/beta35-release-readiness-audit-c869e92`
+- evidenceFolder: `tmp/beta4-final-release-9278cd3`
 - compile: PASS (`compileJava compileGametestJava`)
 - trapdoor focused proof: PASS
   - `-Dslabbed.beta35TrapdoorServerValidationFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
@@ -43,8 +43,9 @@
 - version/changelog readiness: `gradle.properties` still `mod_version=0.2.0-beta.4`; no release metadata edits in this audit-only slice
 - docs readiness: updated `SLABBED_SPINE.md` for this slice; kept changelog/release docs unchanged
 - known limitation: `SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE` remains
-- release blockers: none from closure verification; release is blocked only if Julia rejects the deferred lane-jump scope decision.
-- next recommended slice: A) final release version/changelog/tag slice, if Julia accepts the deferred lane-jump decision and current tracer artifacts.
+- release blockers: none from closure verification; SBSBS matrix is `RELEASE_WITH_LIMITATIONS`.
+- release-readiness status: **required for public beta.4 release metadata/tags**.
+- next recommended slice: final metadata/tagging if the preserved known limitations are accepted.
 
 ## SBSBS Held-Item Acceptance Addendum
 
