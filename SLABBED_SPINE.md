@@ -20,8 +20,9 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current savepoint: Beta 3.5 SBSBS held-item acceptance audit
+- Current savepoint: Beta 3.5 public beta.4 release finalization slice
 - Previous committed base for this slice: `c869e92` / `save/beta35-slab-jump-source-truth-audit`
+- Current HEAD for release metadata: `9278cd3`
 - Previous aperture proof base: `48550c7` / `save/beta35-hitbox-aperture-contact-red`
 - Prior slab-height generic hit-acceptance RED tracer: `63a0e32` / `save/beta35-slab-height-hit-acceptance-red`
 - Prior fence/wall visual-hitbox base: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`
@@ -33,6 +34,16 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 - Stale, provenance-confusing release tag for this issue: `release/0.2.0-beta.4`
 
 Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it remains historical failed evidence.
+
+## Beta 3.5 public beta.4 finalization status
+
+- Release metadata expected version: `0.2.0-beta.4`
+- Release artifact target: `build/libs/slabbed-0.2.0-beta.4.jar`
+- Release recommendation: `RELEASE_WITH_LIMITATIONS`
+- Known non-covered limitations preserved:
+  - `SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE`
+  - panes/carpet/thin top layers are not covered by SBSBS matrix
+  - no all-item support claim
 
 ## Current tracked tree state
 
