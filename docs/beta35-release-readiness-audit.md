@@ -1,25 +1,62 @@
-# Beta 3.5 Release Readiness Audit (HEAD f9d2987)
+# Beta 3.5 Release Readiness Audit (HEAD c869e92)
 
-- auditHead: f9d2987
-- scope: `floor_torch`, `candle`, `flower_pot`
-- notCovered: `wall_torch`, `lantern`, `wall_sign`, `hanging_sign`, `chains`, `redstone_wire`, `rail`
-- commandsRun:
-  - `compileJava compileGametestJava`
-  - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35LiveTorchDualTrace=true -Dslabbed.beta35FloorTorchLoweredSlabPlacement=true" ./gradlew --no-daemon runClientGameTest --console plain`
-  - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35CandleFloorTopContact=true" ./gradlew --no-daemon runClientGameTest --console plain`
-  - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35FlowerPotFloorTopContact=true" ./gradlew --no-daemon runClientGameTest --console plain`
-  - `JAVA_TOOL_OPTIONS="-Dslabbed.beta35FloorTopObjectFamilyAudit=true" ./gradlew --no-daemon runClientGameTest --console plain`
-  - `./gradlew --no-daemon runClientGameTest --console plain`
-  - `./gradlew --no-daemon clean build`
-- evidenceFolder: `tmp/beta35-release-readiness-audit-f9d2987`
-- compile: PASS
-- floor torch proof: PASS (`JULIA_BETA35_FLOOR_TORCH_LOWERED_SLAB_PLACEMENT_SUMMARY`/`FLOOR_TORCH_V2_CONTACT_FIX_GREEN`, failureLayer=NONE)
-- candle proof: PASS (`JULIA_BETA35_CANDLE_FLOOR_TOP_CONTACT_*`, failureLayer=NONE)
-- flower pot proof: PASS (`JULIA_BETA35_FLOWER_POT_FLOOR_TOP_CONTACT_*`, failureLayer=NONE)
-- floor/top object family audit: PASS (`JULIA_BETA35_FLOOR_TOP_OBJECT_MATRIX_START` and `..._SUMMARY` with CONTACT_GAP only for `standing_oak_sign`)
-- default gametest: PASS
-- jar scan: main jar contains trace/debug classes under opt-in beta35 recorder paths only (`Beta35LiveTorchCaptureMixin`, `Beta35LiveTorchDualTraceInteractionMixin`, `Beta35LiveTorchCaptureRecorder`); no unexpected gameplay logic paths surfaced.
-- jdeps scan: same opt-in recorder classes referenced by runtime paths; no direct dev/debug/gametest package-class hard dependency in main logic beyond beta35 tracer/capture classes.
-- release-audit decision: PASS (scoped to `floor_torch + candle + flower_pot`)
-- expanded scope note: this document is a scoped audit; it should not be treated as release authorization for the expanded common-object scope.
-- nextSlice: Beta 3.5 common-object compatibility audit from the next clean savepoint (release finalization remains pending)
+- auditHead: c869e92
+- scope: `trapdoor`, `door`, `door-half`, `visible-object-owner`, `floor-button`, `hitbox-aperture`, `fence/wall visual-hitbox stack aim`, `fence/wall stack-contact`, `fence/wall owner`, `candle`, `flower-pot`, `common-object matrix`, `default gametest`, `clean build`
+- notCovered: `lantern`, `wall_torch`, `signs`, `chains`, `redstone_wire`, `rails`
+- evidenceFolder: `tmp/beta35-release-readiness-audit-c869e92`
+- compile: PASS (`compileJava compileGametestJava`)
+- trapdoor focused proof: PASS
+  - `-Dslabbed.beta35TrapdoorServerValidationFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+- door-half focused proof: PASS
+  - `-Dslabbed.beta35DoorHalfServerValidationFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+- regular-door owner focused proof: PASS
+  - `-Dslabbed.beta35RegularDoorOwnerFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+- visible-object-owner stability focused proof: PASS on rerun
+  - `-Dslabbed.beta35VisibleObjectOwnerStability=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+  - Previous failure was `NetworkSynchronizer` assertion in Fabric client gametest after server shutdown; rerun on this pass is green.
+- floor-button contact proof: PASS
+  - `-Dslabbed.beta35FloorButtonContact=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+- hitbox aperture proof: PASS
+  - `-Dslabbed.beta35HitboxApertureFix=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+- fence/wall visual-hitbox stack-aim proof: PASS
+  - `-Dslabbed.beta35FenceWallVisualHitboxStackAim=true -Dslabbed.beta35FenceWallLiveInspect=true`
+- fence/wall stack-contact proof: PASS
+  - `-Dslabbed.beta35FenceWallStackContact=true -Dslabbed.beta35FenceWallLiveInspect=true`
+- fence/wall owner proof: PASS
+  - `-Dslabbed.beta35FenceWallOwnerServerHit=true -Dslabbed.beta35FenceWallLiveInspect=true`
+- candle floor-top proof: PASS
+  - `-Dslabbed.beta35CandleFloorTopContact=true`
+- flower-pot floor-top proof: PASS
+  - `-Dslabbed.beta35FlowerPotFloorTopContact=true`
+- flower-pot survival proof: PASS
+  - `-Dslabbed.beta35FlowerPotFloorTopSurvival=true`
+- common-object matrix proof: PASS
+  - `-Dslabbed.beta35CommonObjectMatrix=true`
+- default gametest: PASS (`./gradlew --no-daemon runClientGameTest --console plain`)
+- clean build: PASS (`./gradlew --no-daemon clean build`)
+- jar path/version: `build/libs/slabbed-0.2.0-beta.4.jar`
+- jar contents scan result: broad token grep reports `93` matches under the requested pattern due general jar entry names (assets/classes/ `com/` paths); notable matches include feature-class names (`Beta35...`, `...Recorder`) that are part of release runtime logic for targeted proof instrumentation.
+- jdeps hard-reference scan result: `Beta35`/`Recorder` hard references are present in runtime classes (`com.slabbed.anchor`, `com.slabbed.client.runtime`, `com.slabbed.util`) such as `Beta35SlabJumpSourceTruthRecorder`, `Beta35FenceWallLiveInspectRecorder`, `Beta35SlabHeightHitAcceptanceRecorder`, `Beta35LiveTorchCaptureRecorder`; no `slabbed.debug` package or test-fixture package appears.
+- recorder hard-reference decision: **acceptable**. These recorders are part of runtime-provenance features gated by existing debug flags and do not cross-link test/dev mixin packages.
+- git diff check result: clean (no whitespace or conflict markers)
+- tree state: tracked tree clean; `tmp/` intentionally untracked
+- version/changelog readiness: `gradle.properties` still `mod_version=0.2.0-beta.4`; no release metadata edits in this audit-only slice
+- docs readiness: updated `SLABBED_SPINE.md` for this slice; kept changelog/release docs unchanged
+- known limitation: `SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE` remains
+- release blockers: none from closure verification; release is blocked only if Julia rejects the deferred lane-jump scope decision.
+- next recommended slice: A) final release version/changelog/tag slice, if Julia accepts the deferred lane-jump decision and current tracer artifacts.
+
+## SBSBS Held-Item Acceptance Addendum
+
+- sourceTruth: Julia's 2026-05-14 9:29 PM video paused release finalization because SBSBS-style held-item acceptance looked inconsistent.
+- status: audit/proof only; no gameplay fix; no release finalization; no release tag movement; no all-item support claim.
+- proofFlag: `-Dslabbed.beta35SbsbsHeldItemAcceptance=true -Dslabbed.beta35SlabHeightHitAcceptance=true`
+- evidenceFolder: `tmp/beta35-sbsbs-held-item-acceptance-audit-c869e92`
+- fixture: repeatable SBSBS/BS-FB-0.5S top-visible-support stack: bottom slab, lowered full block, persistent lowered carrier slab, lowered full block, visible support slab.
+- matrixSummary: `rows=16 greenRows=14 redRows=0 notCoveredRows=2 supportStealRows=0 missRows=0 serverRejectRows=0 placementRejectRows=0 survivalPopRows=0 contactGapRows=0 sideAttachmentGapRows=0 axisDeferredRows=0 deferredNoNamedLaneRows=0 recommendedNextAction=RELEASE_WITH_LIMITATIONS`
+- greenCategories: `stone`, `stone_slab`, `stone_stairs`, `birch_trapdoor`, `spruce_door`, `acacia_button`, `torch`, `candle`, `flower_pot`, `iron_chain`, `oak_fence`, `cobblestone_wall`, `oak_fence_gate`, `lantern`
+- redCategories: none reproduced in this top-visible-support matrix
+- notCoveredCategories: `glass_pane`/pane, `white_carpet`/thin top layer
+- interpretation: no generic SBSBS top-surface visible-target owner rule is proven missing by this matrix. This addendum supersedes the earlier release-readiness `notCovered` line only for this exact top-visible-support fixture: `iron_chain` and `lantern` are now audited green here, while broader chain/lantern surfaces and `wall_torch`, `signs`, `redstone_wire`, and `rails` remain outside the release-readiness all-surface claim. If the live video failure was a side/against-face action or a different fixture, the next safe slice is a side-face/against-face SBSBS matrix before any gameplay fix.
+- releaseBlockerFromThisMatrix: no reproduced RED rows, but release finalization remains paused until Julia accepts this limitation boundary.
+- validation: compile, focused SBSBS matrix, trapdoor server validation, door-half server validation, regular-door owner, visible-object owner stability, floor-button contact, hitbox aperture, fence/wall visual-hitbox stack aim, fence/wall stack contact, fence/wall owner-server hit, candle contact, floor-torch lowered-slab placement, flower-pot contact, flower-pot survival, common-object matrix, default gametest, `git diff --check`, and `runClient` startup smoke passed.
