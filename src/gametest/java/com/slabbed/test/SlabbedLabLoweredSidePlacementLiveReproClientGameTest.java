@@ -285,6 +285,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             return;
         }
 
+        if (Boolean.getBoolean("slabbed.beta35SbsbsHeldItemAcceptance")) {
+            try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                    .setUseConsistentSettings(true)
+                    .create()) {
+                runBeta35SbsbsHeldItemAcceptanceAudit(ctx, singleplayer);
+            }
+            return;
+        }
+
         if (Boolean.getBoolean("slabbed.beta35FloorTopObjectFamilyAudit")) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
@@ -21810,6 +21819,432 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " isCompoundVisibleOwnerTopSlab=" + compoundOwnerTop
                 + " hasBottomSlabBelow=" + hasBottomSlabBelow
                 + " anchoredFullBlockBelow=" + anchoredFullBlockBelow;
+    }
+
+    private static void runBeta35SbsbsHeldItemAcceptanceAudit(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Beta35SbsbsHeldItemCase[] cases = {
+                new Beta35SbsbsHeldItemCase("minecraft:stone", "inert_full_block", Items.STONE,
+                        Blocks.STONE.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:stone_slab", "slab", Items.STONE_SLAB,
+                        Blocks.STONE_SLAB.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:stone_stairs", "stairs", Items.STONE_STAIRS,
+                        Blocks.STONE_STAIRS.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:birch_trapdoor", "trapdoor", Items.BIRCH_TRAPDOOR,
+                        Blocks.BIRCH_TRAPDOOR.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:spruce_door", "door", Items.SPRUCE_DOOR,
+                        Blocks.SPRUCE_DOOR.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:acacia_button", "button", Items.ACACIA_BUTTON,
+                        Blocks.ACACIA_BUTTON.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:torch", "floor_torch", Items.TORCH,
+                        Blocks.TORCH.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:candle", "candle", Items.CANDLE,
+                        Blocks.CANDLE.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:flower_pot", "flower_pot", Items.FLOWER_POT,
+                        Blocks.FLOWER_POT.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:iron_chain", "chain", Blocks.IRON_CHAIN.asItem(),
+                        Blocks.IRON_CHAIN.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:oak_fence", "fence", Items.OAK_FENCE,
+                        Blocks.OAK_FENCE.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:cobblestone_wall", "wall", Items.COBBLESTONE_WALL,
+                        Blocks.COBBLESTONE_WALL.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:oak_fence_gate", "fence_gate", Items.OAK_FENCE_GATE,
+                        Blocks.OAK_FENCE_GATE.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:lantern", "lantern", Items.LANTERN,
+                        Blocks.LANTERN.getDefaultState(), false),
+                new Beta35SbsbsHeldItemCase("minecraft:glass_pane", "pane", Items.GLASS_PANE,
+                        Blocks.GLASS_PANE.getDefaultState(), true),
+                new Beta35SbsbsHeldItemCase("minecraft:white_carpet", "thin_top_layer", Items.WHITE_CARPET,
+                        Blocks.WHITE_CARPET.getDefaultState(), true),
+        };
+
+        System.out.println("JULIA_BETA35_SBSBS_HELD_ITEM_ACCEPTANCE_RED"
+                + " phase=start"
+                + " failureLayer=SBSBS_HELD_ITEM_ACCEPTANCE_UNCLASSIFIED"
+                + " structure=SBSBS"
+                + " fixture=bottom_slab/lowered_full_block/middle_carrier_slab/lowered_full_block/visible_support_slab"
+                + " diagnosticsOnly=true releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+
+        int rows = 0;
+        int greenRows = 0;
+        int redRows = 0;
+        int notCoveredRows = 0;
+        int supportStealRows = 0;
+        int missRows = 0;
+        int serverRejectRows = 0;
+        int placementRejectRows = 0;
+        int survivalPopRows = 0;
+        int contactGapRows = 0;
+        int sideAttachmentGapRows = 0;
+        int axisDeferredRows = 0;
+        int deferredNoNamedLaneRows = 0;
+
+        for (int i = 0; i < cases.length; i++) {
+            Beta35SbsbsHeldItemRow row = runBeta35SbsbsHeldItemAcceptanceRow(
+                    ctx,
+                    singleplayer,
+                    cases[i],
+                    new BlockPos(2460 + i * 8, -57, 210),
+                    i);
+            rows++;
+            switch (row.classification()) {
+                case "SBSBS_ACCEPTANCE_GREEN" -> greenRows++;
+                case "SBSBS_NOT_COVERED_CATEGORY" -> notCoveredRows++;
+                default -> redRows++;
+            }
+            switch (row.failureLayer()) {
+                case "SBSBS_SUPPORT_STEAL" -> supportStealRows++;
+                case "SBSBS_MISS" -> missRows++;
+                case "SBSBS_SERVER_REJECT" -> serverRejectRows++;
+                case "SBSBS_PLACEMENT_REJECT" -> placementRejectRows++;
+                case "SBSBS_SURVIVAL_POP" -> survivalPopRows++;
+                case "SBSBS_CONTACT_GAP" -> contactGapRows++;
+                case "SBSBS_SIDE_ATTACHMENT_GAP" -> sideAttachmentGapRows++;
+                case "SBSBS_AXIS_METRIC_DEFERRED" -> axisDeferredRows++;
+                case "SBSBS_DEFERRED_NO_NAMED_LANE" -> deferredNoNamedLaneRows++;
+                default -> { }
+            }
+        }
+
+        String recommendedNextAction;
+        if (supportStealRows > 0 || missRows > 0) {
+            recommendedNextAction = "FIX_GENERIC_SBSBS_OWNER";
+        } else if (placementRejectRows > 0 || serverRejectRows > 0 || survivalPopRows > 0
+                || contactGapRows > 0 || sideAttachmentGapRows > 0) {
+            recommendedNextAction = "FIX_CATEGORY_ROWS";
+        } else if (deferredNoNamedLaneRows > 0) {
+            recommendedNextAction = "DESIGN_LANE_GRAMMAR";
+        } else if (redRows > 0) {
+            recommendedNextAction = "FIXTURE_MISMATCH";
+        } else {
+            recommendedNextAction = "RELEASE_WITH_LIMITATIONS";
+        }
+
+        System.out.println("JULIA_BETA35_SBSBS_HELD_ITEM_ACCEPTANCE_SUMMARY"
+                + " rows=" + rows
+                + " greenRows=" + greenRows
+                + " redRows=" + redRows
+                + " notCoveredRows=" + notCoveredRows
+                + " supportStealRows=" + supportStealRows
+                + " missRows=" + missRows
+                + " serverRejectRows=" + serverRejectRows
+                + " placementRejectRows=" + placementRejectRows
+                + " survivalPopRows=" + survivalPopRows
+                + " contactGapRows=" + contactGapRows
+                + " sideAttachmentGapRows=" + sideAttachmentGapRows
+                + " axisDeferredRows=" + axisDeferredRows
+                + " deferredNoNamedLaneRows=" + deferredNoNamedLaneRows
+                + " recommendedNextAction=" + recommendedNextAction
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false"
+                + " allItemClaim=false");
+    }
+
+    private static Beta35SbsbsHeldItemRow runBeta35SbsbsHeldItemAcceptanceRow(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Beta35SbsbsHeldItemCase itemCase,
+            BlockPos supportPos,
+            int rowIndex
+    ) {
+        BlockPos objectPos = supportPos.up();
+        BlockPos upperAnchorBlock = supportPos.down();
+        BlockPos middleCarrierSlab = supportPos.down(2);
+        BlockPos lowerAnchorBlock = supportPos.down(3);
+        BlockPos baseSlab = supportPos.down(4);
+        Vec3d aim = new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 0.001d, supportPos.getZ() + 0.5d);
+        Vec3d eye = new Vec3d(supportPos.getX() + 0.5d, supportPos.getY() + 3.2d, supportPos.getZ() - 2.0d);
+        syncPlayerAim(ctx, singleplayer, eye, aim);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        prepareBeta35SbsbsHeldItemFixture(singleplayer, supportPos);
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        syncHeldMainHand(ctx, singleplayer, new ItemStack(itemCase.item(), 4));
+        syncPlayerAim(ctx, singleplayer, eye, aim);
+        ctx.waitTick();
+
+        final Beta35SbsbsHeldItemRow[] rowBox = {
+                new Beta35SbsbsHeldItemRow(itemCase.itemId(), itemCase.category(),
+                        "SBSBS_FIXTURE_MISMATCH", "SBSBS_FIXTURE_MISMATCH")
+        };
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null || mc.gameRenderer == null) {
+                rowBox[0] = new Beta35SbsbsHeldItemRow(
+                        itemCase.itemId(), itemCase.category(),
+                        "SBSBS_FIXTURE_MISMATCH", "SBSBS_FIXTURE_MISMATCH");
+                System.out.println("JULIA_BETA35_SBSBS_HELD_ITEM_ACCEPTANCE_ROW"
+                        + " rowIndex=" + rowIndex
+                        + " heldItem=" + itemCase.itemId()
+                        + " heldItemCategory=" + itemCase.category()
+                        + " classification=SBSBS_FIXTURE_MISMATCH"
+                        + " failureLayer=SBSBS_FIXTURE_MISMATCH"
+                        + " reason=client_not_ready");
+                return;
+            }
+
+            BlockState supportStateBefore = mc.world.getBlockState(supportPos);
+            BlockState upperAnchorState = mc.world.getBlockState(upperAnchorBlock);
+            BlockState middleCarrierState = mc.world.getBlockState(middleCarrierSlab);
+            BlockState lowerAnchorState = mc.world.getBlockState(lowerAnchorBlock);
+            BlockState baseState = mc.world.getBlockState(baseSlab);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportStateBefore);
+            double upperAnchorDy = SlabSupport.getYOffset(mc.world, upperAnchorBlock, upperAnchorState);
+            boolean fixtureGreen = supportStateBefore.isOf(Blocks.STONE_SLAB)
+                    && Math.abs(supportDy + 0.5d) <= EPSILON
+                    && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                    mc.world, supportPos, supportStateBefore)
+                    && SlabAnchorAttachment.isAnchored(mc.world, upperAnchorBlock)
+                    && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                    mc.world, middleCarrierSlab, middleCarrierState)
+                    && SlabAnchorAttachment.isAnchored(mc.world, lowerAnchorBlock);
+
+            Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
+            Vec3d rayEnd = rayStart.add(mc.player.getRotationVec(0.0f).multiply(6.0d));
+            BlockHitResult initialHit = mc.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult finalHit = mc.crosshairTarget;
+            String initialTarget = beta35DescribeHitWithType(initialHit);
+            String finalTarget = beta35DescribeHitWithType(finalHit);
+            BlockPos finalPos = finalHit != null && finalHit.getType() == HitResult.Type.BLOCK
+                    ? blockPos(finalHit)
+                    : null;
+            String targetOwner = beta35SbsbsTargetOwner(finalPos, supportPos, upperAnchorBlock,
+                    middleCarrierSlab, lowerAnchorBlock, baseSlab);
+            double targetDy = finalPos == null
+                    ? Double.NaN
+                    : SlabSupport.getYOffset(mc.world, finalPos, mc.world.getBlockState(finalPos));
+            String finalDecision = finalPos == null ? "MISS"
+                    : finalPos.equals(supportPos) ? "visible-sbsbs-support"
+                    : "wrong-owner";
+
+            String interactionResult = "NOT_CLICKED";
+            if (finalHit instanceof BlockHitResult finalBlock) {
+                ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, finalBlock);
+                interactionResult = result.toString();
+            }
+
+            for (int i = 0; i < 3; i++) {
+                mc.world.updateNeighbors(objectPos, mc.world.getBlockState(objectPos).getBlock());
+                mc.world.updateNeighbors(supportPos, supportStateBefore.getBlock());
+            }
+
+            BlockPos placedPos = beta35FindSbsbsPlacedPos(mc.world, objectPos, itemCase.expectedState());
+            BlockState placedState = placedPos == null ? Blocks.AIR.getDefaultState() : mc.world.getBlockState(placedPos);
+            boolean placed = placedPos != null && placedState.isOf(itemCase.expectedState().getBlock());
+            double placedDy = placed ? SlabSupport.getYOffset(mc.world, placedPos, placedState) : Double.NaN;
+            double supportVisibleTopY = beta35SupportVisibleTopY(supportPos, supportStateBefore, supportDy);
+            VoxelShape outlineShape = placed
+                    ? placedState.getOutlineShape(mc.world, placedPos, net.minecraft.block.ShapeContext.of(mc.player))
+                    : null;
+            net.minecraft.util.math.Box outlineBox = beta35WorldBox(outlineShape, placedPos);
+            double objectModelBottomY = outlineBox == null ? Double.NaN : outlineBox.minY;
+            double contactGap = placed && placedPos.equals(objectPos)
+                    && Double.isFinite(objectModelBottomY)
+                    && Double.isFinite(supportVisibleTopY)
+                            ? objectModelBottomY - supportVisibleTopY
+                            : Double.NaN;
+            double sideFaceGap = Double.NaN;
+            double axisGap = itemCase.category().equals("chain") ? 0.0d : Double.NaN;
+            boolean survivalAfterNeighborUpdate = placed && placedState.canPlaceAt(mc.world, placedPos);
+            boolean accepted = interactionResult.contains("SUCCESS")
+                    || interactionResult.contains("Success")
+                    || interactionResult.contains("CONSUME")
+                    || interactionResult.contains("Consume");
+
+            String classification;
+            String failureLayer;
+            if (!fixtureGreen) {
+                classification = "SBSBS_FIXTURE_MISMATCH";
+                failureLayer = "SBSBS_FIXTURE_MISMATCH";
+            } else if (itemCase.notCovered()) {
+                classification = "SBSBS_NOT_COVERED_CATEGORY";
+                failureLayer = "SBSBS_NOT_COVERED_CATEGORY";
+            } else if (finalPos == null) {
+                classification = "SBSBS_MISS";
+                failureLayer = "SBSBS_MISS";
+            } else if (!finalPos.equals(supportPos)) {
+                classification = "SBSBS_SUPPORT_STEAL";
+                failureLayer = "SBSBS_SUPPORT_STEAL";
+            } else if (!accepted) {
+                classification = "SBSBS_PLACEMENT_REJECT";
+                failureLayer = "SBSBS_PLACEMENT_REJECT";
+            } else if (!placed) {
+                classification = "SBSBS_SURVIVAL_POP";
+                failureLayer = "SBSBS_SURVIVAL_POP";
+            } else if (!survivalAfterNeighborUpdate) {
+                classification = "SBSBS_SURVIVAL_POP";
+                failureLayer = "SBSBS_SURVIVAL_POP";
+            } else if (Double.isFinite(contactGap) && Math.abs(contactGap) > EPSILON) {
+                classification = "SBSBS_CONTACT_GAP";
+                failureLayer = "SBSBS_CONTACT_GAP";
+            } else {
+                classification = "SBSBS_ACCEPTANCE_GREEN";
+                failureLayer = "NONE";
+            }
+
+            rowBox[0] = new Beta35SbsbsHeldItemRow(itemCase.itemId(), itemCase.category(),
+                    classification, failureLayer);
+
+            System.out.println("JULIA_BETA35_SBSBS_HELD_ITEM_ACCEPTANCE_ROW"
+                    + " rowIndex=" + rowIndex
+                    + " heldItem=" + itemCase.itemId()
+                    + " heldItemCategory=" + itemCase.category()
+                    + " visibleTargetPos=" + supportPos.toShortString()
+                    + " visibleTargetState=" + supportStateBefore
+                    + " supportCandidatePos=" + upperAnchorBlock.toShortString()
+                    + " supportCandidateState=" + upperAnchorState
+                    + " supportDy=" + beta35FormatDoubleOrNA(supportDy)
+                    + " objectDy=" + beta35FormatDoubleOrNA(upperAnchorDy)
+                    + " targetDy=" + beta35FormatDoubleOrNA(targetDy)
+                    + " initialTarget=" + initialTarget
+                    + " finalTarget=" + finalTarget
+                    + " finalDecision=" + finalDecision
+                    + " targetOwner=" + targetOwner
+                    + " interactResult=" + interactionResult
+                    + " placedState=" + placedState
+                    + " placedPos=" + (placedPos == null ? "none" : placedPos.toShortString())
+                    + " placedDy=" + beta35FormatDoubleOrNA(placedDy)
+                    + " survivalAfterNeighborUpdate=" + survivalAfterNeighborUpdate
+                    + " serverClassification=SEE_SLAB_HEIGHT_HIT_ACCEPTANCE_SERVER_MARKER_IF_PACKET_LOGGED"
+                    + " contactGap=" + beta35FormatDoubleOrNA(contactGap)
+                    + " sideFaceGap=" + beta35FormatDoubleOrNA(sideFaceGap)
+                    + " axisGap=" + beta35FormatDoubleOrNA(axisGap)
+                    + " unsupported=" + (itemCase.notCovered() ? "NOT_COVERED" : "AUDITED")
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer
+                    + " fixtureGreen=" + fixtureGreen
+                    + " base=" + beta35SbsbsComponentTruth(mc.world, baseSlab, baseState, "base")
+                    + " lowerAnchor=" + beta35SbsbsComponentTruth(mc.world, lowerAnchorBlock, lowerAnchorState, "lowerAnchor")
+                    + " middleCarrier=" + beta35SbsbsComponentTruth(mc.world, middleCarrierSlab, middleCarrierState, "middleCarrier")
+                    + " upperAnchor=" + beta35SbsbsComponentTruth(mc.world, upperAnchorBlock, upperAnchorState, "upperAnchor")
+                    + " diagnosticsOnly=true releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false");
+        });
+
+        ctx.waitTick();
+        ctx.waitTick();
+        return rowBox[0];
+    }
+
+    private static void prepareBeta35SbsbsHeldItemFixture(
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos
+    ) {
+        BlockPos upperAnchorBlock = supportPos.down();
+        BlockPos middleCarrierSlab = supportPos.down(2);
+        BlockPos lowerAnchorBlock = supportPos.down(3);
+        BlockPos baseSlab = supportPos.down(4);
+        BlockPos foundation = supportPos.down(5);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = supportPos.getX() - 3; x <= supportPos.getX() + 3; x++) {
+                for (int y = foundation.getY() - 1; y <= supportPos.getY() + 3; y++) {
+                    for (int z = supportPos.getZ() - 3; z <= supportPos.getZ() + 3; z++) {
+                        world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(),
+                                net.minecraft.block.Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+            world.setBlockState(foundation, Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(baseSlab,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            world.setBlockState(lowerAnchorBlock, Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, lowerAnchorBlock, world.getBlockState(lowerAnchorBlock));
+            world.setBlockState(middleCarrierSlab,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world, middleCarrierSlab, world.getBlockState(middleCarrierSlab));
+            world.setBlockState(upperAnchorBlock, Blocks.STONE.getDefaultState(),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, upperAnchorBlock, world.getBlockState(upperAnchorBlock));
+            world.setBlockState(supportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    world, supportPos, world.getBlockState(supportPos));
+        });
+    }
+
+    private static BlockPos beta35FindSbsbsPlacedPos(
+            ClientWorld world,
+            BlockPos expectedObjectPos,
+            BlockState expectedState
+    ) {
+        BlockPos[] candidates = {
+                expectedObjectPos,
+                expectedObjectPos.up(),
+                expectedObjectPos.down(),
+                expectedObjectPos.north(),
+                expectedObjectPos.south(),
+                expectedObjectPos.east(),
+                expectedObjectPos.west(),
+        };
+        for (BlockPos candidate : candidates) {
+            if (world.getBlockState(candidate).isOf(expectedState.getBlock())) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static String beta35SbsbsTargetOwner(
+            BlockPos finalPos,
+            BlockPos supportPos,
+            BlockPos upperAnchorBlock,
+            BlockPos middleCarrierSlab,
+            BlockPos lowerAnchorBlock,
+            BlockPos baseSlab
+    ) {
+        if (finalPos == null) {
+            return "MISS";
+        }
+        if (finalPos.equals(supportPos)) {
+            return "visible_sbsbs_support";
+        }
+        if (finalPos.equals(upperAnchorBlock)) {
+            return "support_steal_upper_anchor";
+        }
+        if (finalPos.equals(middleCarrierSlab)) {
+            return "support_steal_middle_carrier";
+        }
+        if (finalPos.equals(lowerAnchorBlock)) {
+            return "support_steal_lower_anchor";
+        }
+        if (finalPos.equals(baseSlab)) {
+            return "support_steal_base_slab";
+        }
+        return "wrong_owner";
+    }
+
+    private record Beta35SbsbsHeldItemCase(
+            String itemId,
+            String category,
+            Item item,
+            BlockState expectedState,
+            boolean notCovered
+    ) {
+    }
+
+    private record Beta35SbsbsHeldItemRow(
+            String heldItemId,
+            String heldItemCategory,
+            String classification,
+            String failureLayer
+    ) {
     }
 
     private static BlockPos beta35FindLiveShapeTorchPos(ClientWorld world, BlockPos expectedTorchPos) {

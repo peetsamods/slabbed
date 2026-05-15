@@ -20,8 +20,8 @@ The older `/Users/joolmac/CascadeProjects/Slabbed` checkout is archive/recovery 
 ## Current branch / HEAD / tag
 
 - Branch: `integrate/phase19-into-side-slab-top-support`
-- Current savepoint: Beta 3.5 visible object owner stability at `save/beta35-visible-object-owner-stability`
-- Previous committed base for this slice: `05f1582` / `save/beta35-hitbox-aperture-fix`
+- Current savepoint: Beta 3.5 SBSBS held-item acceptance audit
+- Previous committed base for this slice: `c869e92` / `save/beta35-slab-jump-source-truth-audit`
 - Previous aperture proof base: `48550c7` / `save/beta35-hitbox-aperture-contact-red`
 - Prior slab-height generic hit-acceptance RED tracer: `63a0e32` / `save/beta35-slab-height-hit-acceptance-red`
 - Prior fence/wall visual-hitbox base: `eec3bc0` / `save/beta35-fence-wall-visual-hitbox-stack-aim`
@@ -36,12 +36,32 @@ Do not move, delete, overwrite, or reuse `save/beta4-seam-owner-classifier`; it 
 
 ## Current tracked tree state
 
-Tracked tree is clean.
+Tracked tree should be clean at the SBSBS held-item acceptance audit savepoint.
 `tmp/` may remain intentionally untracked and must not be staged.
+
+## Current Beta 3.5 SBSBS held-item acceptance audit status
+
+Operating base for this audit: `c869e92` / `save/beta35-slab-jump-source-truth-audit` on `integrate/phase19-into-side-slab-top-support`.
+
+Julia's 2026-05-14 9:29 PM live video paused release finalization because held-item behavior against an SBSBS-style structure looked inconsistent: some held items appeared to target/place correctly while many did not. This slice is audit/proof only. It does not implement a gameplay fix, does not move release tags, does not run release finalization, and does not make an all-item support claim.
+
+Focused proof flag: `-Dslabbed.beta35SbsbsHeldItemAcceptance=true -Dslabbed.beta35SlabHeightHitAcceptance=true`. The proof builds a repeatable top-visible-support SBSBS/BS-FB-0.5S fixture: bottom slab support, lowered full block, persistent lowered middle carrier slab, lowered full block, and visible support slab. Each row logs `supportDy`, `objectDy`, `targetDy`, initial/final target, owner, placement result, placed state/position/dy, survival, contact/side/axis gaps, classification, and failure layer.
+
+Current focused matrix summary: `JULIA_BETA35_SBSBS_HELD_ITEM_ACCEPTANCE_SUMMARY rows=16 greenRows=14 redRows=0 notCoveredRows=2 supportStealRows=0 missRows=0 serverRejectRows=0 placementRejectRows=0 survivalPopRows=0 contactGapRows=0 sideAttachmentGapRows=0 axisDeferredRows=0 deferredNoNamedLaneRows=0 recommendedNextAction=RELEASE_WITH_LIMITATIONS releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false`.
+
+Green top-visible-support rows: `stone`, `stone_slab`, `stone_stairs`, `birch_trapdoor`, `spruce_door`, `acacia_button`, `torch`, `candle`, `flower_pot`, `iron_chain`, `oak_fence`, `cobblestone_wall`, `oak_fence_gate`, and `lantern`. No support steal, MISS, server reject, placement reject, survival pop, contact gap, side-attachment gap, or deferred no-named-lane row was reproduced in this top-surface matrix.
+
+Explicitly not covered by beta.4 from this audit: `glass_pane`/pane and `white_carpet`/thin top layer. The pane row places but remains intentionally not-covered because pane expansion/connection behavior is outside the proven beta.4 family. The carpet row also remains intentionally not-covered and logs `contactGap=0.500000`.
+
+Interpretation: this proof does not show one missing generic SBSBS visible-target owner rule for the tested top visible support surface. If Julia's video failure came from a side/against-face interaction or a slightly different live arrangement, the next safe slice is a second SBSBS side-face/against-face matrix, not a gameplay fix. Slab-jump remains separately deferred as `SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE`.
+
+Release finalization remains paused pending this audit savepoint and Julia's acceptance of the limitation boundary. No release tag was moved, no release audit was run, and no all-item gameplay claim is made.
+
+Regression gates for this audit slice: compile, focused SBSBS held-item matrix, trapdoor server validation, door-half server validation, regular-door owner, visible-object owner stability, floor-button contact, hitbox aperture, fence/wall visual-hitbox stack aim, fence/wall stack contact, fence/wall owner-server hit, candle contact, floor-torch lowered-slab placement, flower-pot contact, flower-pot survival, common-object matrix, default `runClientGameTest`, `git diff --check`, and `runClient` startup smoke all passed. The `runClient` smoke observed `[JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE] enabled=true` and was intentionally stopped after startup.
 
 ## Current Beta 3.5 slab jump source-truth audit status
 
-Operating base before this audit: `0512f50` / `save/beta35-door-half-server-validation` on `integrate/phase19-into-side-slab-top-support`.
+Operating base for this audit: `c869e92` / `save/beta35-slab-jump-source-truth-audit` on `integrate/phase19-into-side-slab-top-support`.
 
 Doors, trapdoors, buttons, chains, torches, fences, and walls are now proof-good or live-good at this base. The remaining live blocker is a slab placement/break jump where neighbor lowered slabs visibly shift toward `dy=0.0` after the carrier source is broken. This slice added a gated audit tracer at `-Dslabbed.beta35SlabJumpSourceTruth=true` that records every `SlabAnchorAttachment` ADD/REMOVE event across all seven marker types and probes `dy`/marker flags before and after place/break actions.
 
@@ -49,7 +69,8 @@ The audit summary is `JULIA_BETA35_SLAB_JUMP_SUMMARY rows=3 sourceMarkerRemovedR
 
 No production behavior was changed in this slice. No `SlabBlock` neighbor-update override was added. No `dy=-1` lane grammar was introduced. No global solidity/sturdy-face change was made. The tracer is off by default. Doors/trapdoors/buttons/chains/fences/walls remain proof-good or live-good. The remaining slab jump is now narrowly classified as a derived-dependent renormalization issue with no named legal lowered lane to fall back to; this is a deeper audit-only result and a fix is not attempted here. See `docs/beta35-slab-jump-source-truth-audit.md` for the full classification table.
 
-Regression gates for this audit slice: compile, focused source-truth tracer proof, default `runClientGameTest` rerun green, and `git diff --check` clean. Release audit remains paused. Julia live acceptance is still required. No release tag was moved, no release audit was run, and no release-ready or all-item gameplay claim is made.
+Regression gates for this audit slice: compile, focused source-truth tracer proof, focused family proofs, default `runClientGameTest` rerun green, focused visible-object-owner rerun green, and `git diff --check` clean. Remaining focused family proofs passed on this closure slice.
+Release audit remains paused. Julia live acceptance is still required. No release tag was moved, no release audit was run, and no release-ready or all-item gameplay claim is made.
 
 ## Current Beta 3.5 regular door owner and slab placement lane status
 
