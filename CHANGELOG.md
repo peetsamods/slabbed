@@ -3,15 +3,24 @@
 ## [0.2.0-beta.4] — Slabbed 0.2.0 Beta 4 / Beta 4
 
 ### Highlights
-- Compound lowered full-block lane support.
-- Ordinary full blocks can persist/use the authored compound lane at `dy=-1.0`.
-- Full-block side/top placements from compound full blocks preserve the compound lane.
-- Source/support changes no longer silently jump the compound full block.
-- Slab placement from compound lowered full blocks cleanly rejects for this beta instead of flickering or creating ghost slabs.
-- Release jar artifact hard-reference cleanup completed.
+- Major slab-supported object targeting/contact stability pass covering:
+  - floor torch
+  - candle
+  - flower pot
+  - button
+  - trapdoor
+  - door
+  - fence
+  - wall
+  - fence gate
+  - chain
+  - lantern
+- This final public beta.4 slice locks the beta.4 runtime/metadata on `0.2.0-beta.4` after non-blocking final proof checks.
 
 ### Known limitation
-"Compound lowered full-block lanes support ordinary full-block placement and persistence. Slab placement from compound lowered full blocks is intentionally rejected in this beta while deeper compound slab-lane grammar is designed."
+- `SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE`
+- panes/carpet/thin top layers are not covered by SBSBS matrix
+- No all-item support claim is made for beta.4
 
 ### Credit
 Special thanks to Steve (@steve6472) for the extensive PR investigation into hitbox selection, ghost rendering, slab placement edge cases, and bounded slabbed-depth behavior. The PR was not merged directly, but it helped shape the Beta 4 compound-lane decisions and release guardrails. PR: https://github.com/joolbits/slabbed/pull/8
