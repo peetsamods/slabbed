@@ -299,6 +299,13 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
+        // In 1.21.1, getOutlineShape is called by light/opacity workers (Worker-Main, ForkJoinPool)
+        // during spawn-prep. SlabSupport.getYOffset accesses chunk/anchor state and can block via
+        // CompletableFuture.join, deadlocking the server. Return vanilla shape on those threads.
+        if (slabbed$isUnsafeAsyncShapeContext()) {
+            return;
+        }
+
         BlockState self = (BlockState) (Object) this;
 
         // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
@@ -333,6 +340,11 @@ public abstract class SlabSupportStateMixin {
         if (changed) {
             cir.setReturnValue(shape);
         }
+    }
+
+    private static boolean slabbed$isUnsafeAsyncShapeContext() {
+        String name = Thread.currentThread().getName();
+        return name.startsWith("Worker-Main") || name.contains("ForkJoinPool");
     }
 
     private static boolean isPaleMossCarpet(Block block) {
