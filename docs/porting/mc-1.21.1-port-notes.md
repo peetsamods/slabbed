@@ -352,3 +352,219 @@
 - Compile gate result (post-fix): PASS (`compileJava`, `compileClientJava`, `compileGametestJava`).
 - runClient smoke result (post-fix): launch PASS; mixin applies successfully (`Mixing MinecartRenderOffsetMixin ... MinecartEntityRenderer`), no `InvalidInjectionException`/`MixinApplyError` for minecart target, runtime reached active local world session before manual termination.
 - Next blocker in this slice: none from minecart target path; client proof route still deferred and release-blocking.
+
+## 2026-05-15 - Julia live screenshot visual parity audit (5887009)
+- Evidence dir:
+  - `tmp/mc1211-beta4-live-visual-parity-5887009`
+- Trigger:
+  - Julia's live screenshot showed the 1.21.1 port behaving visually like a pre-Beta-4 lowered-stack state, with blocks appearing separated/floating after compile+launch smoke.
+- Compile gate:
+  - PASS: `compileJava`, `compileClientJava`, `compileGametestJava`.
+- Runtime trace:
+  - `runClient` launched with `-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.bsfb.live.trace=true`.
+  - Model wrapper registration was observed: `[Slabbed] ModelLoadingPlugin init: registering baked model wrapper`.
+  - The closest exercised lowered stack row reported a lowered full-block owner at `21, 91, -24` with `dy=-0.500`, `outline=90.500..91.500`, `anchored=true`, `lowered=true`, and target/raycast hitting that same owner.
+  - The adjacent lowered slab at `21, 91, -23` reported `dy=-0.500`, `outline=90.500..91.000`.
+- Finding:
+  - The screenshot failure was not reproduced by this run.
+  - The exercised row did not prove model-only drift or triad-wide drift; model/outline/raycast appeared co-located for the row captured in logs.
+  - Primary classification for this slice: `proof gap`.
+- Patch result:
+  - No patch applied. The failing layer was not mechanically proven.
+- Client proof route:
+  - Still release-blocking. Launch smoke and this manual-ish traced run do not replace a deterministic client visual parity proof for the Beta 4 lowered stack condition.
+- Explicit non-changes:
+  - no SlabSupport semantics change
+  - no ClientDy authority change
+  - no rescue priority change
+  - no placement/collision/survival change
+  - no release prep
+- Port readiness:
+  - Not release-ready.
+
+## 2026-05-15 - Deterministic client visual proof route (5887009)
+
+- Evidence dir:
+  - `tmp/mc1211-deterministic-client-visual-proof-5887009`
+- Chosen route:
+  - B: add a tiny gated runtime diagnostic marker that logs model/outline/raycast parity for watched client positions.
+- Diagnostic gate:
+  - `-Dslabbed.mc1211.visualParityProof=true`
+  - optional watch override: `-Dslabbed.mc1211.visualParityProofWatch=x,y,z`
+  - default off.
+- Files changed:
+  - `src/client/java/com/slabbed/client/SlabbedClient.java`
+  - `src/client/java/com/slabbed/client/debug/Mc1211VisualParityProofClient.java`
+  - `docs/porting/mc-1.21.1-port-notes.md`
+  - `docs/porting/mc-1.21.1-proof-harness-strategy.md`
+- Marker names:
+  - `[MC1211_VISUAL_PARITY_START]`
+  - `[MC1211_VISUAL_PARITY_ROW]`
+  - `[MC1211_VISUAL_PARITY_SUMMARY]`
+- Row fields:
+  - `pos`, `state`, `clientDy`, `modelDy`, `outlineDy`, `targetDy`, `targetOwner`, `anchorClient`, `loweredCarrierClient`, `loweredBottomCarrierClient`, `renderViewBridgeSeen`, `targetMatchesCrosshair`, `modelTraceSeen`, `modelTraceView`, `result`.
+- Compile gate:
+  - PASS before and after route implementation: `compileJava`, `compileClientJava`, `compileGametestJava`.
+- Runtime route smoke:
+  - `runClient` launched with `-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.bsfb.live.trace=true -Dslabbed.mc1211.visualParityProof=true`.
+  - The marker route emitted rows and observed the non-World model render path: `modelTraceView=net.minecraft.client.render.chunk.ChunkRendererRegion`, `renderViewBridgeSeen=true`.
+  - Captured rows were vanilla terrain (`short_grass` / `grass_block`) with zero dy, not Julia's exact lowered-stack fixture.
+- Result:
+  - `INCONCLUSIVE` for Julia screenshot condition.
+  - The route is installed and observable, but the exact lowered-stack fixture still needs a manual/dev runtime pass with a nonzero-dy target row.
+- Release blocker status:
+  - Client proof route remains release-blocking until the Beta 4 lowered-stack rows are captured and classified.
+- Explicit non-changes:
+  - no SlabSupport semantics change
+  - no ClientDy authority change
+  - no rescue priority change
+  - no placement/collision/survival change
+  - no release prep
+- Port readiness:
+  - Not release-ready.
+
+## 2026-05-15 - Lowered-stack visual proof run (5887009)
+
+- Evidence dir:
+  - `tmp/mc1211-lowered-stack-visual-proof-5887009`
+- Runtime result:
+  - `INCONCLUSIVE`
+- Why:
+  - the route emitted `[MC1211_VISUAL_PARITY_ROW]` / summary rows, but the capture did not reach Julia's suspicious lowered-stack fixture.
+  - observed rows were normal terrain (`short_grass`, `grass_block`, `tall_grass`) with `dy=0.000000`.
+- Nonzero-dy suspicious row:
+  - not captured.
+- Model/outline/raycast:
+  - agreed for captured normal rows only.
+- Render-view bridge:
+  - observed as `renderViewBridgeSeen=true` on captured rows.
+- Release blocker status:
+  - client proof route remains release-blocking until a real lowered-stack target row is captured.
+- Explicit non-changes:
+  - no SlabSupport semantics change
+  - no ClientDy authority change
+  - no rescue priority change
+  - no placement/collision/survival change
+  - no release prep
+- Port readiness:
+  - Not release-ready.
+
+## 2026-05-15 - Big-dig visual and quit diagnosis (5887009)
+
+- Evidence dir:
+  - `tmp/mc1211-big-dig-visual-and-quit-5887009`
+- Compile gate:
+  - PASS before runtime diagnosis: `compileJava`, `compileClientJava`, `compileGametestJava`.
+- Quit/loading A/B:
+  - Baseline no-proof-flags rerun reproduced a stuck/hanging dev client process.
+  - Diagnostic proof-flags run also reproduced a stuck/hanging dev client process and visibly stalled during loading/spawn-prep.
+  - Both runs required thread/process evidence capture and `SIGKILL` cleanup.
+  - Classification: `BOTH_HANG`; likely shutdown/runtime or loading blocker, not diagnostic-only.
+- Scan helper decision/result:
+  - No scan helper was added in this slice.
+  - Reason: runtime/loading is blocked before a trustworthy visual candidate scan can be validated.
+  - Diagnostic proof-flag run did not emit `[MC1211_VISUAL_PARITY_START]`, so the helper was not proven to reach world-ready tick observation.
+- Nonzero-dy candidate result:
+  - none captured.
+  - suspicious candidate pos/state list: none.
+- Visual diagnosis:
+  - `INCONCLUSIVE`.
+  - Model/outline/raycast agreement for actual nonzero-dy candidates was not tested in this big-dig run.
+  - Block-model vs block-entity vs entity-renderer classification remains `UNKNOWN`.
+- Release blocker status:
+  - port remains not release-ready.
+  - next smallest slice is shutdown/loading-only diagnosis before visual scan work.
+- Explicit non-changes:
+  - no SlabSupport semantics change
+  - no ClientDy authority change
+  - no rescue priority change
+  - no placement/collision/survival change
+  - no release prep
+
+## 2026-05-15 — Shutdown/loading hang diagnosis (5887009)
+
+- Evidence dir:
+  - `tmp/mc1211-shutdown-loading-diagnosis-5887009`
+- Compile gate (dirty WIP main worktree):
+  - PASS: `compileJava`, `compileClientJava`, `compileGametestJava`.
+- Compile gate (clean 5887009 worktree, no dirty WIP):
+  - PASS: `compileJava`, `compileClientJava`, `compileGametestJava`.
+- Phase 1 — dirty WIP no-flag run result:
+  - `HANG_REPRO` (sourced from prior big-dig baseline rerun; process left alive, SIGKILL required).
+- Phase 2 — clean worktree client run result:
+  - Not executed interactively; classification established from thread dump analysis.
+- Classification:
+  - `PORT_SAVEPOINT_CAUSED`
+  - The hang is in committed code at 5887009. Dirty WIP is not the cause.
+- Root cause identified (thread dump — `thread-dump-baseline-hang-rerun.txt`):
+  - **`SlabSupportStateMixin.slabbed$offsetOutline`** (`SlabSupportStateMixin.java:298`) calls `SlabSupport.getYOffset` for every `getOutlineShape` call.
+  - `getYOffset` → `getYOffsetInner` → `SlabAnchorAttachment.isAnchored:564` calls `World.getChunk` (blocking `CompletableFuture.join()` via `ServerChunkManager.getChunk:120`).
+  - In 1.21.1, `getOutlineShape` is called from ForkJoin light computation threads during world load/`prepareStartRegion`. Blocking `getChunk` from that thread stalls against the Server thread, which is also waiting in `ServerChunkManager.getChunk` during `prepareStartRegion` — mutual-wait stall. World never finishes loading. Render thread + Server thread (both non-daemon) keep the JVM alive after quit attempt.
+  - None of the dirty WIP files (`SlabbedClient.java`, `Mc1211VisualParityProofClient.java`) appear on the hanging thread stacks.
+- Non-daemon threads keeping JVM alive:
+  - `Render thread` — `TIMED_WAITING` in `MinecraftClient.startIntegratedServer:2182` (polling loop).
+  - `Server thread` — `TIMED_WAITING` in `ServerChunkManager.getChunk:137` during `prepareStartRegion`.
+- Slabbed classes on hanging stack:
+  - `SlabAnchorAttachment.isAnchored:564`
+  - `SlabSupport.getYOffsetInner:1455`
+  - `SlabSupport.getYOffset:817`
+  - `SlabSupportStateMixin.slabbed$offsetOutline` (mixin on `AbstractBlock$AbstractBlockState.getOutlineShape`)
+- Dirty WIP implication:
+  - Not implicated. Hang is in committed server-side Slabbed outline mixin code, not in the client-side diagnostic WIP.
+- Temporary clean worktree:
+  - Created: `../Slabbed-mc1211-clean-smoke-5887009`
+  - Status: compile gate passed; no client process running; kept for Julia review.
+  - Remove with: `git worktree remove ../Slabbed-mc1211-clean-smoke-5887009`
+- Next smallest patch slice:
+  - Guard `slabbed$offsetOutline` in `SlabSupportStateMixin.java:300` to skip `SlabSupport.getYOffset` when called from a non-server-thread ForkJoin context (light computation worker), returning the unmodified shape without triggering blocking chunk access.
+  - Alternative: guard `SlabAnchorAttachment.isAnchored:564` to check chunk cache without forcing a blocking load.
+  - Constraint: fix must preserve all SlabSupport semantics when called from the server main thread or render/client thread; only the cross-thread ForkJoin light path must be made non-blocking.
+  - Allowed files for next slice: `SlabSupportStateMixin.java` or `SlabAnchorAttachment.java`.
+  - Forbidden: `SlabSupport.java`, `ClientDy.java`, gameplay/placement/survival/rescue code.
+- Port readiness:
+  - Not release-ready. Loading/shutdown stall not yet patched. Visual proof route remains blocked.
+- Explicit non-changes:
+  - no gameplay behavior changed
+  - no SlabSupport semantics changed
+  - no ClientDy authority changed
+  - no rescue/retarget priority changed
+  - no placement/collision/survival changed
+  - no visual parity patched
+  - no release/changelog files touched
+
+## 2026-05-15 — Outline worker-thread guard fix (5887009)
+
+- Evidence dir:
+  - `tmp/mc1211-outline-worker-thread-guard-5887009`
+- Root cause (from prior diagnosis slice, thread dump `thread-dump-baseline-hang-rerun.txt`):
+  - `SlabSupportStateMixin.slabbed$offsetOutline` called `SlabSupport.getYOffset` on every `getOutlineShape` invocation.
+  - In 1.21.1, `getOutlineShape` is also called by light/opacity ForkJoin workers (`Worker-Main-*`) during `prepareStartRegion` spawn-prep.
+  - `SlabSupport.getYOffset` → `SlabAnchorAttachment.isAnchored` → `World.getChunk` (blocking `CompletableFuture.join` via `ServerChunkManager.getChunk`).
+  - Worker thread blocked on chunk load → mutual-wait stall against Server thread → world never finished loading → Render thread + Server thread (non-daemon) kept JVM alive after quit.
+- Fix applied:
+  - File: `src/main/java/com/slabbed/mixin/SlabSupportStateMixin.java`
+  - Added `slabbed$isUnsafeAsyncShapeContext()` helper: checks thread name for `Worker-Main` prefix or `ForkJoinPool` substring (matches 1.21.1 light/opacity worker thread names seen in thread dump).
+  - Added early `return` guard at top of `slabbed$offsetOutline`, before any world access or `SlabSupport.getYOffset` call, that fires only when the above helper returns true.
+  - On unsafe threads, method returns without setting `cir`, so vanilla shape is returned unchanged.
+  - All normal gameplay paths (Render thread, Server thread, main client tick) are unaffected.
+- Compile gate result:
+  - PASS: `compileJava`, `compileClientJava`, `compileGametestJava` — `BUILD SUCCESSFUL`. Zero errors.
+- Load/spawn-prep result:
+  - PASS. World loaded without stall. `[MC1211_VISUAL_PARITY_START]` / SBSB-TRACE logs emitted on Render thread indicating slab contact logic ran normally through normal gameplay paths.
+- Quit result:
+  - **CLEAN_EXIT**. Log sequence: `Saving and pausing game...` → `Stopping server` → all chunks saved → `Stopping!` (Render thread) → `BUILD SUCCESSFUL in 3m 5s`. No residual `devlaunchinjector.Main` or Minecraft JVM process. No SIGKILL required.
+- Prior blocking chain:
+  - **ABSENT**. Raw game log contains zero occurrences of `getChunk`, `CompletableFuture`, `SlabAnchorAttachment`, `isAnchored`, `ServerChunkManager`, or `getYOffset` on Worker-Main threads. Worker-Main log lines are exclusively class-loading mixin transforms at startup.
+- Behavior semantics changed:
+  - NO. Guard fires only on Worker-Main / ForkJoinPool threads. All Render thread / Server thread outline/dy lookups proceed as before. Visual Triad, ClientDy authority, SlabSupport semantics, placement, collision, survival, and rescue/retarget behavior are unchanged.
+- Explicit non-changes:
+  - no SlabSupport semantics change
+  - no ClientDy authority change
+  - no rescue/retarget priority change
+  - no placement/collision/survival change
+  - no release/changelog files touched
+  - no client visual proof route changes
+- Visual proof status:
+  - Still unproven and release-blocking. Client visual parity for Beta 4 lowered-stack fixture has not been deterministically confirmed.
+- Port readiness:
+  - Not release-ready. Outline worker-thread hang resolved. Visual/client proof route remains the next blocking slice.
