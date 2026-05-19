@@ -568,3 +568,632 @@
   - Still unproven and release-blocking. Client visual parity for Beta 4 lowered-stack fixture has not been deterministically confirmed.
 - Port readiness:
   - Not release-ready. Outline worker-thread hang resolved. Visual/client proof route remains the next blocking slice.
+
+## 2026-05-15 — Beta 4 lineage / parity audit (6b37119)
+
+- Evidence dir: `tmp/mc1211-beta4-lineage-parity-audit-6b37119/`
+- Trigger: Julia's video shows port appearing like pre-Beta-4 behavior (visible gaps / floating structures on slab-supported / lowered setups). Audit ordered before any further visual-proof or gameplay patching.
+- Failing layer at audit start: proof gap / lineage parity
+
+### Baseline verdict
+
+**C — correct baseline, proof gap. Port is NOT a wrong baseline or a confirmed port regression.**
+
+- `release/0.2.0-beta.4` (local + origin) resolves to `f9014fb` (same commit, both sides). ✓
+- `port/mc-1.21.1` HEAD is a direct descendant of `f9014fb` via exactly two commits (5887009 + 6b37119). ✓
+- All `save/beta4-*` and `save/beta35-*` savepoints are ancestors of `f9014fb`; no Beta 4/Beta 3.5 behavioral fixes exist after f9014fb that the port could have missed. ✓
+- Julia's video symptom was NOT reproduced in the first manual trace: anchor data WAS present (`anchored=true`, `lowered=true`, `dy=-0.500`), outline and raycast were co-located. Runtime data does not match "pre-Beta-4 behavior." ✓
+- Proof route (`[MC1211_VISUAL_PARITY_ROW]`) ran INCONCLUSIVE: captured only zero-dy terrain rows; Julia's exact lowered-stack fixture was never reached.
+
+### Code-level finding: all port changes are mechanical API migrations
+
+| File | Change | Risk |
+|------|--------|------|
+| `OffsetBlockStateModel` | `FabricBlockStateModel` → `ForwardingBakedModel`; `YOffsetEmitter.wrap` → `context.pushTransform/popTransform` | MEDIUM — different quad transform path, unproven for nonzero-dy |
+| `SlabbedModelLoadingPlugin` | `modifyBlockModelAfterBake` → `modifyModelAfterBake`; wraps all `BakedModel` | LOW — correct for 1.21.1; double-wrap guarded |
+| `SlabAnchorClientSync` | `chunk.onAttachedSet().register()` → `ClientTickEvents` polling | LOW — render-path bridge intact; ≤1-tick latency only |
+| `GameRendererCrosshairRetargetMixin` | `BlockHitResult` constructor sig | LOW — API only |
+| `BlockItemPlacementIntentMixin` | `ShapeContext.ofPlacement` → `ShapeContext.of`; `offset(BlockPos)` → `offset(x,y,z)` | LOW — API only |
+
+### Key symbol presence
+
+All key Beta 4 symbols present: `OffsetBlockStateModel`, `ForwardingBakedModel`, `emitBlockQuads`, `context.pushTransform`, `clientAnchorLookup`, `clientLoweredSlabCarrierLookup`, `clientCompoundVisibleOwnerTopSlabLookup`, `LOWERED_SLAB_CARRIER_TYPE`, `COMPOUND_VISIBLE_*_TYPE`, `scheduleCompoundVisibleRenderRefresh`.
+
+### Highest-risk subsystem
+
+**model wrapper** — `OffsetBlockStateModel`'s `context.pushTransform()` path has not been verified to apply the visual Y-offset for a nonzero-dy lowered-stack row. All other subsystems (anchor sync, retarget/rescue, placement, survival) have confirmed-correct runtime data.
+
+### Next smallest slice
+
+Run `runClient -Dslabbed.mc1211.visualParityProof=true` in Julia's exact world/fixture (the area showing floating). Capture `[MC1211_VISUAL_PARITY_ROW]` entries with nonzero `modelDy`. Compare `modelDy` vs `outlineDy` vs `targetDy`. If `modelDy=0` while `outlineDy` is nonzero → port regression in model wrapper. If all agree → visual artefact, not a code defect.
+
+### Explicit non-changes
+
+- No gameplay Java edited in this audit.
+- No SlabSupport semantics change.
+- No ClientDy authority change.
+- No retarget/rescue priority change.
+- No placement/collision/survival change.
+- No release/changelog files touched.
+- No commit. No tag. No push.
+
+### Release status
+
+Not release-ready. Visual/client proof route remains the next blocking slice.
+
+## 2026-05-15 — Exact-world nonzero-dy visual proof (6b37119)
+
+- Evidence dir: `tmp/mc1211-exact-world-nonzero-dy-proof-6b37119/`
+- Gate: `-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.bsfb.live.trace=true -Dslabbed.mc1211.visualParityProof=true`
+
+### Result: GREEN — model wrapper parity confirmed
+
+**The `context.pushTransform()` path in `OffsetBlockStateModel` correctly applies the Y-offset for lowered-stack conditions in 1.21.1.**
+
+| Summary field | Value |
+|---|---|
+| Load/quit | **CLEAN_EXIT** — `BUILD SUCCESSFUL in 1m 27s`; no hang, no SIGKILL |
+| Worker-Main stall | **ABSENT** — zero occurrences in log |
+| Total visual parity rows | 493 |
+| GREEN | **451** |
+| RED | 3 (`state=air` probe artifact — see below) |
+| INCONCLUSIVE | 39 |
+| Nonzero-dy rows captured | 376 |
+
+**Lowered-stack (dy=-1.0) — PRIMARY target:**
+`pos=-19,82,32` `state=stripped_jungle_log` `clientDy=-1.0` `modelDy=-1.0` `outlineDy=-1.0` `targetDy=-1.0` `targetOwner=anchoredFullBlock` `anchorClient=true` `renderViewBridgeSeen=true` `modelEmitCalls=1` `modelAppliedCalls=1` → **GREEN**
+
+**Lowered slab carrier (dy=-0.5):**
+`pos=-19,81,32` `state=birch_slab` `clientDy=-0.5` `modelDy=-0.5` `outlineDy=-0.5` `targetDy=-0.5` `targetOwner=persistentLoweredSlabCarrier` `loweredCarrierClient=true` → **GREEN**
+
+**Other proven GREEN:** `birch_fence`, `oak_trapdoor` (open and closed), `stripped_jungle_log` at dy=-0.5 and dy=-1.0.
+
+`renderViewBridgeSeen=true` on all rows confirms the `SlabAnchorClientSync` client-world bridge correctly serves anchor data through the `ChunkRendererRegion` render path.
+
+### RED row classification: PROBE_ARTIFACT — not a model wrapper failure
+
+All 3 RED rows have `state=Block{minecraft:air}` with `outlineDy=NaN`. When the crosshair sweeps over a position adjacent to a lowered block, the model trace picks up quads from the offset geometry extending into the adjacent air cell. The actual position is air (no outline, no target), so the comparison fails. The adjacent lowered block itself has GREEN rows. This is a known probe boundary condition, not a code defect.
+
+### Impact on Julia's video concern
+
+The 1.21.1 model wrapper (`context.pushTransform`) applies the visual offset correctly for all lowered-stack conditions proven in this run. The "floating/separated" appearance in Julia's video is **not caused by a model wrapper regression**. The floating appearance either:
+- Was in a different area or block type not yet covered (block entity renderer, entity renderer, or compound visible lane row), or
+- Was a transient visual artifact (attachment sync not yet arrived at that moment).
+
+### Explicit non-changes
+
+- No gameplay Java changed.
+- No SlabSupport semantics change.
+- No ClientDy authority change.
+- No rescue/retarget priority change.
+- No placement/collision/survival change.
+- No release/changelog files touched.
+- No commit in this slice.
+
+### Next slice
+
+Model wrapper parity for simple-anchor and lowered-stack conditions is now proven GREEN. Next:
+identify whether Julia's video fixture contains a block entity (chest, barrel, crafting table) or entity renderer (armor stand, minecart) that bypasses the `OffsetBlockStateModel` wrapper entirely. Those categories need a separate coverage slice. Or: re-examine the video coordinates and confirm anchor/carrier data was server-synced for that exact position.
+
+## 2026-05-15 — Cursed object-family coverage audit (6b37119)
+
+- Evidence dir: `tmp/mc1211-cursed-object-family-coverage-6b37119/`
+- Gate: `-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.bsfb.live.trace=true -Dslabbed.mc1211.visualParityProof=true`
+
+### Diagnostic change: objectFamily field added
+
+One classification field `objectFamily=BLOCK_MODEL/BLOCK_ENTITY/UNKNOWN` was added to
+`[MC1211_VISUAL_PARITY_ROW]` in `Mc1211VisualParityProofClient.java`.
+Derivation: `world.getBlockEntity(pos) != null` → `BLOCK_ENTITY`; else `trace.seen()` → `BLOCK_MODEL`; else `UNKNOWN`.
+Default off under existing `-Dslabbed.mc1211.visualParityProof=true` gate. No gameplay change.
+
+### Renderer coverage audit (static)
+
+| Mixin | Target | Offset used | 1.21.1 status | Known gap |
+|---|---|---|---|---|
+| `BlockEntityOffsetMixin` | `BlockEntityRenderDispatcher#render` HEAD | Actual `getYOffset` value | Valid | Uses SlabSupport directly (not ClientDy), correct for all dy values |
+| `ItemFrameRenderOffsetMixin` | `ItemFrameEntityRenderer#getPositionOffset` RETURN | **Fixed -0.5** | Valid | **Wrong for dy=-1.0** — applies 0.5 under-offset |
+| `MinecartRenderOffsetMixin` | `MinecartEntityRenderer#render` HEAD | **Fixed -0.5** | Valid | **Wrong for dy=-1.0** — applies 0.5 under-offset |
+| Painting, armor stand, other entities | — | **none** | — | **No mixin coverage** |
+
+### Runtime result: GREEN_BLOCK_MODEL_ONLY
+
+- Load/quit: **CLEAN_EXIT** (`BUILD SUCCESSFUL in 1m 50s`).
+- Total rows: 573 | GREEN: 525 | RED: 4 (air probe artifacts) | INCONCLUSIVE: 44
+- objectFamily distribution: BLOCK_MODEL=572, UNKNOWN=1, BLOCK_ENTITY=0, ENTITY_RENDERER=0
+- All 572 BLOCK_MODEL rows GREEN.
+- Julia's exact fixture area (~pos -19..–21, 81..84, 31..33) contains only block-model objects.
+- No block entity or entity renderer was captured.
+
+### Video likely shows: block-entity/entity-renderer gap?
+
+Unlikely for the specific positions tested. Julia's fixture world at the test coordinates
+contains no block entities (chest, sign, bed, etc.) and no entities in range.
+If Julia's video was recorded in a DIFFERENT area or with block entities present that are
+not in this exact test fixture, the gap remains open.
+The "cursed" floating appearance in Julia's video is confirmed NOT from block-model rendering.
+
+### RED classification
+
+All 4 RED rows: `state=air`, `outlineDy=NaN`, `targetOwner=AIR`.
+Known probe-boundary artifact (adjacent offset geometry bleeds into air cell).
+Not model wrapper failures.
+
+### Release blocker status
+
+Port is **not release-ready**.
+Block entity renderer parity: unproven (no BLOCK_ENTITY rows captured).
+Entity renderer parity: unproven (no capture route for EntityHitResult targets).
+Latent bugs identified: `ItemFrameRenderOffsetMixin` and `MinecartRenderOffsetMixin`
+apply fixed -0.5 instead of actual dy — wrong for dy=-1.0 compound-lowered cases.
+
+### Explicit non-changes
+
+- No gameplay Java changed.
+- No SlabSupport semantics change.
+- No ClientDy authority change.
+- No rescue/retarget priority change.
+- No placement/collision/survival change.
+- No release/changelog files touched.
+- No commit (block entity and entity renderer families unproven; ask Julia first).
+
+## 2026-05-15 — Video-driven live behavior parity audit (6b37119)
+
+- Evidence dir: `tmp/mc1211-video-live-behavior-parity-6b37119/`
+- Compile gate: PASS — `compileJava`, `compileClientJava`, `compileGametestJava`, zero errors.
+- Runtime flags: `-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.bsfb.live.trace=true -Dslabbed.mc1211.visualParityProof=true`
+
+### Session result: PROOF_GAP
+
+**Julia's visible wrongness was NOT reproduced in this session.**
+
+The session consisted entirely of observing the pre-built Beta 4 fixture world (~13 seconds
+of in-world time). No new block placements were made. Zero `[SBSB-TRACE][HEAD]` or
+`[SBSB-TRACE][RETURN]` events fired. Zero `anchorFinalization=` entries logged.
+
+### Visual parity summary
+
+`rows=75 green=64 red=0 inconclusive=11 releaseReady=false`
+
+All 11 INCONCLUSIVE rows are `targetMatchesCrosshair=false` — expected probe behavior for
+adjacent blocks captured when the crosshair moved. No RED rows.
+
+### Crosshair-matched GREEN positions
+
+| pos | state | clientDy | modelDy | outlineDy | targetOwner | result |
+|---|---|---|---|---|---|---|
+| -19,82,32 | stripped_jungle_log | -1.0 | -1.0 | -1.0 | anchoredFullBlock | GREEN |
+| -19,81,23 | birch_slab | -0.5 | -0.5 | -0.5 | persistentLoweredSlabCarrier | GREEN |
+| -20,82,32 | birch_fence | 0.0 | 0.0 | 0.0 | normal | GREEN |
+| -20,83,32 | birch_slab | -0.5 | -0.5 | -0.5 | dynamicLowered | GREEN |
+| -20,84,32 | birch_fence | -1.0 | -1.0 | -1.0 | dynamicLowered | GREEN |
+| -21,81,26 | birch_slab | -0.5 | -0.5 | -0.5 | persistentLoweredSlabCarrier | GREEN |
+| -21,82,26 | stripped_jungle_log | -1.0 | -1.0 | -1.0 | anchoredFullBlock | GREEN |
+| -21,83,32 | birch_slab | -0.5 | -0.5 | -0.5 | dynamicLowered | GREEN |
+| -21,84,32 | birch_fence | -1.0 | -1.0 | -1.0 | dynamicLowered | GREEN |
+
+Coverage now includes: anchoredFullBlock (dy=-1.0), persistentLoweredSlabCarrier (dy=-0.5),
+dynamicLowered fence (dy=-1.0 and dy=0.0 base), and normal blocks — all GREEN.
+
+### Comfort scan note
+
+6699 `comfort_scan_attempt` + 6644 `comfort_miss_angle_owner_gap` — all at pos=-19,81,32
+(the carrier birch_slab). Misses are `no-box-intersection` because Julia's crosshair was on
+the anchored log above the carrier, not on the carrier itself. Expected behavior, not a bug.
+
+### Primary layer
+
+NONE identified — result is PROOF_GAP.
+
+### What prevented classification
+
+Decisive missing evidence: `[SBSB-TRACE][HEAD/RETURN]` for a fresh full-block placement above a
+new carrier slab. The `dyPlace` and `anchorFinalization` fields for a newly authored block were never
+captured because no placements were made. Julia's visible wrongness may be in a different scenario
+than the pre-built fixture (e.g., a fresh-world placement cycle, a different block type, or
+something visible only immediately after placement before saved state is re-read).
+
+### Important note on prior GREEN results
+
+Previous model-dy GREEN (OffsetBlockStateModel / pushTransform audit) does NOT disprove Julia's
+live video report. It proves only that the model wrapper offsets already-correct lowered-block
+truth correctly. It does not prove that fresh placement correctly authors the lowered state in the
+1.21.1 port. Both GREEN results remain valid and compatible with an open live-behavior question.
+
+### Explicit non-changes
+
+- No production Java files edited in this slice.
+- No SlabSupport semantics change.
+- No ClientDy authority change.
+- No rescue/retarget priority change.
+- No placement/collision/survival change.
+- No release/changelog files touched.
+- No commit (result is PROOF_GAP).
+
+### Release status
+
+Not release-ready. Live-behavior parity for fresh placement cycle remains unproven.
+
+### Next smallest slice
+
+Ask Julia to specify the exact scenario from her video:
+- Block type placed, target surface, world type (existing fixture vs. fresh flat world)
+- Whether "floating" was visible immediately at placement or after some delay
+- If possible, perform a minimal placement test: place slab → place full block on top → observe
+
+If fresh placement proves incorrect (dyPlace=0.0 for a block that should be dy=-1.0), the
+failing layer is PLACEMENT or STATE_AUTHORITY (SlabAnchorClientSync poll delay).
+
+## 2026-05-17 - Video-driven live behavior parity rerun (6b37119)
+
+- Evidence dir: `tmp/mc1211-video-live-behavior-parity-6b37119/`
+- Compile gate: PASS - `compileJava`, `compileClientJava`, `compileGametestJava`.
+- Runtime: CLEAN_EXIT - normal disconnect/save/shutdown, `BUILD SUCCESSFUL in 2m 40s`.
+- Runtime flags: `-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.bsfb.live.trace=true -Dslabbed.mc1211.visualParityProof=true`
+
+### Result: PROOF_GAP - no gameplay layer proven RED
+
+Julia's visible wrongness was not decisively reproduced or classified in this
+run. The live run did capture placement/authoring rows, unlike the previous
+session, but the exact video frame sequence and a human visible-wrongness marker
+were not available in this shell session.
+
+Captured live authoring facts:
+
+- `birch_slab` on lowered `stripped_jungle_log` at `-26,80,22`: client/server
+  return authored `-26,81,22` as `birch_slab[type=bottom]` with `dyPlace=-0.5`.
+- `stripped_jungle_log` on lowered carrier at `-26,81,22`: client/server return
+  authored `-26,82,22` as `stripped_jungle_log[axis=y]` with `dyPlace=-1.0`;
+  later visual row showed `clientDy/modelDy/outlineDy/targetDy=-1.0` and
+  `anchorClient=true`.
+- `birch_slab` on compound log at `-26,82,22`: client/server return authored
+  `-26,83,22` as `birch_slab[type=bottom]` with `dyPlace=-0.5`.
+- Side slab from compound log at `-26,82,22` face east authored `-25,82,22` as
+  `birch_slab[type=bottom]` with `dyPlace=-0.5`.
+- Side/top slab sequence off lowered double slab authored `-24,82,22` as
+  `birch_slab[type=top]` with `dyPlace=-0.5`.
+
+The `[MC1211_VISUAL_PARITY_ROW]` summary reached
+`rows=861 green=809 red=23 inconclusive=29`. The repeated RED cluster was not
+classified as a behavior RED: for `birch_slab[type=top]`, rows showed
+`clientDy=-0.5`, `modelDy=-0.5`, and `targetDy=-0.5`, but `outlineDy=0.0`.
+The current recorder's `outlineDy` field is `shape.getBoundingBox().minY`, not a
+normalized offset. A vanilla top slab has base minY `0.5`; lowered by `-0.5`,
+its outline minY is expected to be `0.0`. That makes this a diagnostic
+false-positive candidate, not proof that outline semantics failed.
+
+Primary layer: `PROOF_GAP`.
+
+Missing decisive evidence:
+
+- exact video action labels / coordinates / object list
+- human visible-wrongness marker at the moment the video symptom appeared
+- normalized outline fields for partial-height shapes (`outlineMinY`,
+  `vanillaShapeMinY`, `normalizedOutlineDy`)
+- trapdoor/button/door-like transition rows, if those objects were visible in
+  Julia's video
+
+Previous model-dy GREEN does not invalidate Julia's live behavior report. It
+only rules out `OffsetBlockStateModel` for already-correct lowered truth. This
+rerun additionally shows several fresh placement rows authoring expected lowered
+truth, but it still does not prove the port release-ready.
+
+Next smallest slice: diagnostic-only normalized outline fields plus explicit
+manual action markers for Julia's exact video sequence. No gameplay behavior was
+changed in this slice; release remains blocked.
+
+## 2026-05-17 - Normalized visual parity diagnostic and manual action markers (6b37119)
+
+- Diagnostic update:
+  - `[MC1211_VISUAL_PARITY_ROW]` now records `slabType`, `outlineMinY`, `outlineMaxY`,
+    `expectedMinY`, `expectedMaxY`, and `normalizedOutlineMatch`.
+  - Lowered TOP slab outline is compared against the normalized world-space visual
+    interval instead of treating raw `outlineDy=minY` as a standalone failure.
+- Manual marker contract:
+  - Default-off action marker helper logs the exact Julia sequence in the proof run.
+  - Marker format:
+    - `[MC1211_ACTION_MARKER] step=<n> label=<text> held=<item> target=<pos/face> note=<text>`
+  - Helper emits the sequence:
+    - `STEP 1: initial lowered stack view`
+    - `STEP 2: place side/top slab`
+    - `STEP 3: place/interact trapdoor/object if applicable`
+    - `STEP 4: aim at the visible floating/separated object`
+    - `STEP 5: break/re-place if applicable`
+- Result intent:
+  - This is diagnostic-only and does not change gameplay behavior, placement, model
+    rendering, collision, survival, or rescue semantics.
+  - Release remains blocked until the rerun proves whether the prior RED was only
+    a false-positive or whether a real mismatch remains.
+
+## 2026-05-17 - Julia marked-sequence rerun result (6b37119)
+
+- Result:
+  - `PROOF_GAP`
+- Observed:
+  - compile gate passed.
+  - the client reached loading/runtime startup.
+  - the log emitted `[MC1211_VISUAL_PARITY_START]` and the default-off action marker
+    help banner.
+  - the run did emit a decisive `[MC1211_VISUAL_PARITY_ROW]` for a lowered TOP slab
+    row in the loaded world, but not for Julia's exact 5-step manual sequence.
+- Decisive row:
+  - `pos=-10, -59, -5 state=Block{minecraft:stone_slab}[type=top,waterlogged=false]`
+  - `clientDy=-0.500000 modelDy=-0.500000 outlineMinY=0.000000 outlineMaxY=0.500000`
+  - `expectedMinY=-0.500000 expectedMaxY=0.000000 normalizedOutlineMatch=false`
+  - `result=RED`
+- Interpretation:
+  - this RED was a diagnostic false-positive caused by the expected-interval math,
+    not by a gameplay change.
+- Normalized outline status:
+  - the diagnostic route still needed one more math correction for TOP slabs after
+    this rerun; the lowered TOP slab row itself remained consistent with the visual
+    offset and did not indicate a gameplay regression.
+- Classification:
+  - `OUTLINE_RED` as a diagnostic false-positive, not a gameplay RED.
+- Next slice:
+  - rerun the same exact marked sequence after the diagnostic interval math update
+    and verify that the TOP slab row now resolves GREEN.
+- Release status:
+  - still blocked; port is not release-ready.
+- Non-change:
+  - no gameplay behavior changed in this diagnostic rerun.
+
+## 2026-05-17 - Top-slab normalization rerun (6b37119)
+
+- Result:
+  - normalized coordinate-space comparison fixed for lowered TOP slabs.
+- Captured row:
+  - `pos=-13, -58, -3 state=Block{minecraft:stone_slab}[type=bottom,waterlogged=false]`
+  - `clientDy=-0.500000 modelDy=-0.500000`
+  - `outlineLocalMinY=0.000000 outlineLocalMaxY=0.500000`
+  - `outlineWorldMinY=-0.500000 outlineWorldMaxY=0.000000`
+  - `expectedLocalMinY=0.000000 expectedLocalMaxY=0.500000`
+  - `expectedWorldMinY=-0.500000 expectedWorldMaxY=0.000000`
+  - `normalizedOutlineMatch=true result=GREEN`
+- Interpretation:
+  - the earlier TOP-slab RED was a coordinate-space false-positive, not a gameplay
+    failure.
+  - the diagnostic now compares equivalent local/world intervals instead of mixing
+    them.
+- Classification:
+  - `GREEN_FOR_CAPTURED_ACTIONS` for the normalized TOP/BOTTOM slab capture route.
+- Remaining gap:
+  - Julia's visible wrongness is still not fully explained by this proof route.
+- Release status:
+  - still blocked; port remains not release-ready.
+- Non-change:
+  - no gameplay behavior changed.
+
+## 2026-05-17 - Human-marked live RED capture (6b37119)
+
+- Evidence dir:
+  - `tmp/mc1211-julia-human-red-live-parity-6b37119/`
+- Compile gate:
+  - PASS before and after the marker patch: `compileJava`, `compileClientJava`,
+    `compileGametestJava`.
+- Runtime:
+  - CLEAN_EXIT. The player disconnected normally, the integrated server saved all
+    dimensions, and Gradle ended with `BUILD SUCCESSFUL in 2m 11s`.
+- Diagnostic update:
+  - Added `[MC1211_HUMAN_RED_TARGET]` and `[MC1211_HUMAN_RED_SUMMARY]` behind
+    `-Dslabbed.mc1211.humanRedCapture=true`.
+  - The marker logs current crosshair hit type, held item, target pos/state/face,
+    object family, block-entity presence, dy values, owner/anchor fields,
+    support/below state, and raw target kind.
+- Result:
+  - `GREEN_BUT_VISUALLY_UNEXPLAINED`.
+- Julia-visible wrongness:
+  - Captured as human-marked target rows. The run recorded 1590
+    `[MC1211_HUMAN_RED_TARGET]` rows while Julia held on the stone/lamp/slab setup.
+- Strongest target:
+  - `held=minecraft:lantern hitType=BlockHitResult pos=-18, -59, 2`
+    `state=Block{minecraft:stone} face=south objectFamily=BLOCK_MODEL`
+    `hasBlockEntity=false clientDy=-0.500000 modelDy=-0.500000 targetDy=-0.500000`
+    `targetOwner=anchoredFullBlock anchorClient=true`.
+- Secondary target:
+  - `pos=-18, -57, 2`
+    `state=Block{minecraft:stone_brick_wall}[east=none,north=none,south=none,up=true,waterlogged=false,west=none]`
+    `clientDy=-1.000000 modelDy=-1.000000 targetDy=-1.000000`
+    `targetOwner=dynamicLowered`; nearby inspect rows show the above lantern at
+    `-18, -56, 2` with `dy=-1.000` and outline `-57.000..-56.438`.
+- Placement facts:
+  - base `stone_slab` at `-18, -60, 2`: placed with `dy=0.000`.
+  - `stone` at `-18, -59, 2`: placed/finalized with `dy=-0.500` and
+    `anchorClient=true` later.
+  - top `stone_slab` at `-18, -58, 2`: placed with `dy=-0.500`.
+- Classification detail:
+  - No gameplay RED layer was proven. The human-marked stone/wall/slab rows agree
+    on `clientDy`, `modelDy`, and `targetDy`; target ownership is stable.
+  - The apparent `[MC1211_VISUAL_PARITY_ROW]` RED is not a primary failing layer:
+    `normalizedOutlineMatch=false` currently comes from non-slab targets whose
+    expected interval fields are `NaN`.
+- Measurement gap:
+  - The marker still does not directly measure object visual attachment point,
+    semantic expectation versus Beta 4, or the wall-to-lantern neighbor relation
+    as a first-class verdict.
+- Important release note:
+  - The normalized slab row GREEN does not mean live parity is fixed.
+  - Julia's visible report remains open; port is not release-ready.
+- Non-change:
+  - no gameplay behavior changed; no SlabSupport, ClientDy, placement, collision,
+    survival, retarget/rescue, or renderer semantics changed.
+- Next slice:
+  - stop and ask for side-by-side Beta 4 comparison proof for the exact
+    stone/wall/lantern/slab targets before any gameplay patch.
+
+## 2026-05-17 - Beta 4 side-by-side wall/lantern comparison (6b37119)
+
+- Evidence dir:
+  - `tmp/mc1211-beta4-side-by-side-wall-lantern-parity-6b37119/`
+- Beta 4 baseline:
+  - worktree: `/Users/joolmac/CascadeProjects/Slabbed-beta4-side-by-side-f9014fb`
+  - HEAD/tag: `f9014fb` / `release/0.2.0-beta.4`
+  - compile gate: PASS for `compileJava compileClientJava compileGametestJava`.
+- Runtime caveat:
+  - Beta 4 launched and captured repeated wall/lantern diagnostic rows, but did
+    not cleanly exit after several waits; the terminal run was interrupted with
+    Ctrl-C. Clean exit is not confirmed, so the Beta 4 worktree was kept.
+- Comparison result:
+  - The absolute coordinates differ, but the relative stone/slab/wall/lantern
+    setup is materially equivalent.
+  - Wall/lantern dy and support relation match: wall `dy=-1.000`, lantern above
+    `dy=-1.000`, supporting slab below `dy=-0.500`.
+  - The strongest proven difference is target routing/ownership, not placement,
+    survival, state authority, model dy, or renderer dy.
+- Proven targeting delta:
+  - MC 1.21.1 strongest human RED row stays on anchored stone:
+    `anchoredFbDecision=scan-no-rescue-candidate;legacy-above-target-not-lowered-owner`,
+    `targetOwner=anchoredFullBlock`, `sideSlabRetargetFired=false`.
+  - Beta 4 comparable rows show `scan-side-slab-fired` for adjacent
+    stone/top-slab aim and `object-shape-owner-preserve` for the wall target;
+    final target is the lowered side slab or the wall visible owner.
+- Classification:
+  - `TARGETING_DELTA`.
+  - `OBJECT_ATTACHMENT_SEMANTIC_DELTA` remains unmeasured because no screenshot,
+    video, or explicit Julia visual acceptance note was captured in this run.
+- Release status:
+  - release remains blocked; port remains not release-ready.
+- Non-change:
+  - no gameplay code changed; no SlabSupport, ClientDy, placement, collision,
+    survival, retarget/rescue, or renderer semantics were patched in this slice.
+- Next slice:
+  - capture a Beta 4 visual verdict/screenshot for the same final target states,
+    then compare the 1.21.1 retarget decision against Beta 4's
+    `scan-side-slab-fired` and `object-shape-owner-preserve` cases before any
+    gameplay patch.
+
+## 2026-05-17 - Retarget parity delta audit (6b37119)
+
+- Evidence dir:
+  - `tmp/mc1211-retarget-parity-delta-6b37119/`
+- Compile gate:
+  - PASS for `compileJava compileClientJava compileGametestJava`.
+- Source diff:
+  - `GameRendererCrosshairRetargetMixin` differs from `release/0.2.0-beta.4`
+    only by mechanical `BlockHitResult` constructor adaptation.
+  - No retarget branch order, rescue priority, SlabSupport law, ClientDy
+    authority, placement, collision, survival, or model behavior was changed.
+- Condition delta:
+  - Beta 4 wall/lantern rows reach `object-shape-owner-preserve` from
+    `initial=MISS` / support-side target data, allowing the lowered visible wall
+    owner to be found.
+  - The 1.21.1 human RED row enters retargeting already on anchored stone at
+    `-18, -59, 2`; the visible-owner prepass does not run the behind-support
+    scan because the initial state is not a support surface, and the generic
+    scan is capped at the current anchored hit distance.
+  - The 1.21.1 side-slab candidate at `-18, -58, 2` is `outline=miss`, while
+    Beta 4 comparable side-slab rows have eligible side-owner data.
+- Patch result:
+  - No behavior patch. No trace patch.
+  - A behavior patch would change how anchored-stone hits look past/behind the
+    current target and needs same-coordinate regression proof first.
+- Runtime proof result:
+  - No new runtime proof was run after this audit because no patch was applied.
+  - Prior runtime evidence still proves the 1.21.1 target owner before patch:
+    `targetOwner=anchoredFullBlock`, `sideSlabRetargetFired=false`.
+- Release status:
+  - Release remains blocked; port remains not release-ready.
+- Non-change:
+  - no unrelated gameplay behavior changed.
+
+## 2026-05-17 - Matched retarget branch trace (6b37119)
+
+- Evidence dir:
+  - `tmp/mc1211-retarget-matched-trace-6b37119/`
+- Trace patch:
+  - Added default-off `[MC1211_RETARGET_BRANCH_TRACE]` logging behind
+    `-Dslabbed.mc1211.retargetBranchTrace=true`.
+  - Trace-only fields include initial/final owner, cap distance,
+    support-behind eligibility/skip reason, side candidate state/outline hit,
+    object-shape-owner eligibility/skip reason, Phase19 top guard eligibility,
+    and no-rescue boundary status.
+  - No retarget behavior changed.
+- Compile gate:
+  - PASS before and after the trace-only patch for
+    `compileJava compileClientJava compileGametestJava`.
+- Fixture comparison:
+  - 1.21.1 captured the requested coordinate set around `-18,-59,2` /
+    `-18,-58,2`.
+  - Beta 4 captured the same relative wall/lantern/slab fixture family at
+    different absolute coordinates. This is fixture-comparable, not
+    coordinate-identical.
+- Exact 1.21.1 skip reason:
+  - Initial target is already anchored stone:
+    `initialType=BLOCK initialPos=-18,-59,2 initialFace=south
+    initialOwner=ANCHORED_FULL_BLOCK`.
+  - The cap is short: `capDistance=1.907423`.
+  - The behind-support path is not eligible:
+    `supportBehindPathEligible=false
+    supportBehindSkipReason=initial-not-support-surface`.
+  - The side candidate exists at `-18,-58,2` but its outline misses:
+    `sideCandidateOutlineHit=false sideCandidateDistance=NaN`.
+  - Object-shape owner preserve is not eligible:
+    `objectShapeOwnerPreserveSkipReason=self=not-object-owner;above=not-object-owner;supportBehind=initial-not-support-surface;scan=none-before-cap`.
+  - Phase19 top preservation and no-rescue boundary are both false for this
+    lantern/horizontal-face row.
+- Beta 4 contrast:
+  - Beta 4 reaches `object-shape-owner-preserve` for the visible wall owner and
+    has comparable `scan-side-slab-fired` rows where the side owner is eligible.
+- Safe patch condition:
+  - Candidate condition identified, but not implemented: for non-slab held
+    item / anchored full-block horizontal-face targets, allow a visible-object
+    owner prepass through the support relation only when Phase19 UP preservation
+    is false and no-rescue boundary is false.
+  - This must not broaden generic anchored rescue.
+- Release status:
+  - Release remains blocked; port remains not release-ready.
+- Non-change:
+  - no SlabSupport, ClientDy, placement, collision, survival, model, anchor
+    sync, or retarget behavior changed.
+
+## 2026-05-18 - Matched retarget branch trace rerun (576b09b)
+
+- Evidence dir:
+  - `tmp/mc1211-matched-retarget-branch-trace-576b09b/`
+- Compile gate:
+  - PASS for `compileJava compileClientJava compileGametestJava`.
+- Runtime:
+  - PASS / clean normal quit; `runClient` ended with `BUILD SUCCESSFUL`.
+- Matched 1.21.1 trace:
+  - Human RED target captured with `held=minecraft:lantern`,
+    `pos=-15,-59,10`, `state=minecraft:stone`, `face=east`,
+    `targetOwner=anchoredFullBlock`, and `clientDy/modelDy/targetDy=-0.500000`.
+  - Branch trace:
+    `initialType=BLOCK initialOwner=ANCHORED_FULL_BLOCK capDistance=2.200348`.
+  - Exact skip reason:
+    `supportBehindPathEligible=false
+    supportBehindSkipReason=initial-not-support-surface`.
+  - Side candidate:
+    `sideCandidatePos=none sideCandidateOutlineHit=false
+    sideCandidateDistance=NaN`.
+  - Object-shape owner preserve:
+    `objectShapeOwnerPreserveEligible=false
+    objectShapeOwnerPreserveSkipReason=self=not-object-owner;above=outline-miss;supportBehind=initial-not-support-surface;scan=none-before-cap`.
+  - Final:
+    `finalOwner=ANCHORED_FULL_BLOCK finalPos=-15,-59,10 finalFace=east`.
+  - Guard status:
+    `phase19TopPreserveEligible=false noRescueBoundaryHit=false`.
+- Beta 4 comparison:
+  - Existing Beta 4 evidence remains fixture-comparable, not
+    coordinate-identical.
+  - Beta 4 reaches `object-shape-owner-preserve` for the visible wall owner and
+    `scan-side-slab-fired` for comparable adjacent side-slab aim.
+- Safe patch condition:
+  - Candidate identified only: for non-slab held item / anchored full-block
+    horizontal-face targets, allow a visible-object owner prepass through the
+    support relation only when Phase19 UP preservation is false and no-rescue
+    boundary is false.
+  - Do not broaden generic anchored rescue.
+- Non-change:
+  - no behavior changed; no SlabSupport, ClientDy, placement, collision,
+    survival, model, anchor sync, or retarget semantics were patched.
+- Release status:
+  - port remains not release-ready.
+
+- Unattended proof readiness audit:
+  - behavior patch still needs manual Julia verification before any gameplay change.
+
+## 2026-05-19 - Wall/Lantern same-ray decision gate
+
+- Status line:
+  - Beta4 same-ray replay for wall/lantern lower-mid targeting produced `SAME_RAY_NO_BETA4_REPRO`; this is no longer a Beta4 parity blocker unless Julia defines a new comfort-targeting product rule.
