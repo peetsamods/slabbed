@@ -20,6 +20,9 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Repo contract
+AGENTS.md
+
 # Gallery exports
 Gallery/
 src/main/Gallery/
