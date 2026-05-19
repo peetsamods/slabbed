@@ -427,3 +427,47 @@ Port release remains blocked until:
   - If the behavior slice is proposed, it must include the exact fixture, held item, camera ray, initial target, intended final target, and lawfulness arguments before any predicate broadening.
 - Reminder:
   - No placement/collision/survival/SlabSupport/ClientDy changes until this proof gate is passed.
+
+Route check:
+- client-gametest route for this proof is unavailable on this branch, because the
+  existing MC1211 gametest source-set does not run this class in active build
+  output.
+- Source-set blocker found on `port/mc-1.21.1`: `build.gradle`
+  intentionally limits `sourceSets.gametest.java` to
+  `ChainSurvivalReproTest.java` and `SlabbedLabFixtureTest.java`. The
+  `fabric-client-gametest` entrypoint still names
+  `SlabbedLabLoweredSidePlacementLiveReproClientGameTest`, but that class and
+  `SlabbedRetargetTestHooks` are not compiled into the active gametest output.
+- Classpath blocker found on `port/mc-1.21.1`: adding the client harness back
+  to the active gametest compile route is not a proof-harness-only fix because
+  the active dependency line still does not resolve a verified
+  `fabric-client-gametest-api-v1` module. The prior compile failure with
+  missing `net.fabricmc.fabric.api.client.gametest.v1` symbols is therefore a
+  real source-set/classpath gap, not evidence about wall/lantern comfort
+  behavior.
+- Runtime route added on 2026-05-19:
+  - Default-off dev/client launcher:
+    `-Dslabbed.wallLanternComfortRuntimeProof=true`.
+  - Exact command:
+    `JAVA_TOOL_OPTIONS="-Dslabbed.wallLanternComfortRuntimeProof=true" ./gradlew --no-daemon runClient --console plain`.
+  - Route emits one `[WALL_LANTERN_COMFORT_TARGETING_RED]` marker after
+    client world/player availability, then requests client shutdown.
+  - Proof route: `proofRoute=runtime-client`.
+  - Marker quality: `PRODUCT_DECISION_MARKER_ONLY`; this is an
+    evidence-backed/manual-runtime product-decision marker, not an automated
+    geometric RED proof.
+  - The marker records `currentOwner=ANCHORED_FULL_BLOCK`,
+    `desiredBehavior=WALL_LANTERN_COMFORT_TARGETING`, `wallHit=false`,
+    `lanternHit=false`, `beta4Parity=false`, `productBehavior=true`, and
+    `patchRequired=true`.
+- Current status: client-gametest route remains unavailable/broken for this
+  proof on MC1211. Runtime route can collect the marker but is classified as
+  `PRODUCT_DECISION_MARKER_ONLY` and not an automated RED.
+- No real automated geometry RED or manual-runtime RED was collected.
+- Beta4 parity claim for this path is closed as unsupported.
+- `WALL_LANTERN_COMFORT_TARGETING` is not implemented and not justified as a
+  port-feature from current evidence.
+- Current law is accepted for port-readiness unless Julia explicitly reopens it as
+  a new product feature.
+- If reopened, future work requires a real manual-runtime RED or automated geometry
+  RED before any behavior patch.
