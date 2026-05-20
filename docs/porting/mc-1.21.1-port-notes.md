@@ -1197,3 +1197,29 @@ changed in this slice; release remains blocked.
 
 - Status line:
   - Beta4 same-ray replay for wall/lantern lower-mid targeting produced `SAME_RAY_NO_BETA4_REPRO`; this is no longer a Beta4 parity blocker unless Julia defines a new comfort-targeting product rule.
+
+## Wall/Lantern Current Law Closure — b1a2d71
+
+Julia live acceptance:
+"This works finally. No more merging issue. The only thing is the SBSBS is limited, but I can excuse that for now."
+
+Accepted law:
+- `save/mc1211-wall-lantern-current-law` (commit `b1a2d71`).
+
+Beta4 same-ray replay conclusion:
+- No MC1211 behavior patch is justified from same-ray evidence. Beta4 low/mid same-ray stayed `ANCHORED_FULL_BLOCK` at `-10,-59,-6` with `supportBehindSkipReason=initial-not-support-surface`, wall/lantern candidates missed, `scanSideSlabFired=false`, and final owner remained `ANCHORED_FULL_BLOCK`.
+- Prior Beta4 useful behavior observations were fixture/ray mismatch or not same-ray enough.
+
+SBSBS status:
+- Deferred/accepted as limited. No SBSBS patch now.
+
+Evidence captured:
+- `tmp/mc1211-wall-lantern-current-law-closure-b1a2d71/current-law-closure-summary.txt`
+- `tmp/mc1211-wall-lantern-current-law-closure-b1a2d71/beta4-evidence-preserved/beta4-same-ray-semantic-capture-summary.txt`
+- `tmp/mc1211-wall-lantern-current-law-closure-b1a2d71/beta4-evidence-preserved/log-extracts/`
+
+Rule for future work:
+- Do not reopen SBSBS or wall/lantern targeting changes without a fresh red proof, a named legal lane, and explicit owner/triad predicate evidence.
+
+Bug Blaster:
+- Not needed now; this is acceptance/closure, not a new mechanism+patch+proof savepoint.
