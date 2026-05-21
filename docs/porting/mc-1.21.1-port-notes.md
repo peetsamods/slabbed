@@ -352,6 +352,30 @@
   - no ClientDy change
   - no placement/collision/survival change
   - no release claim
+
+## 2026-05-21 - MC1211 overlap row expectation alignment (358dbb7)
+
+- Scope:
+  - proof/docs expectation alignment only; no gameplay behavior change.
+- Decision:
+  - `LOWERED_TOP_SLAB_SIDE_LANE_STACK` is deferred/illegal for current MC1211
+    release scope, not an active legal lane to fix in this slice.
+- Harness expectation/result policy:
+  - row marker carries deferred status using
+    `LOWERED_TOP_SLAB_SIDE_LANE_STACK_DEFERRED` policy language.
+  - lane status is logged as `deferred_illegal-for-current-release`.
+  - the row remains diagnostic and continues to surface
+    `serverOverlap=0.500000` when present.
+  - summary distinguishes `green` legal rows from `deferred` rows.
+- Release-readiness interpretation:
+  - current-law wall/lantern behavior and goblin replacement route remain in
+    scope.
+  - broad compound `dy=-1` slab lanes remain deferred.
+  - this row is no longer release-blocking under current policy because that
+    lane is not legalized for current release scope.
+- Reopen gate:
+  - requires fresh RED proof, named legal lane grammar, and explicit
+    owner/triad/collision predicate before any behavior implementation slice.
 - Doc-location mismatch handling:
   - AGENTS.md required `00/01/02` docs were absent in this checkout.
   - Julia explicitly approved proceeding with in-repo `SLABBED_SPINE.md` plus uploaded source-pack doctrine context.
