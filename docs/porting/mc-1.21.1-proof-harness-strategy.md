@@ -556,3 +556,23 @@ Route check:
   - The active MC1211 executed replacement route is the gametest-side client
     bootstrap canary, not a claim that the old Fabric client-gametest API is
     healthy on 1.21.1.
+
+## 2026-05-21 overlap deferred-row policy alignment (358dbb7)
+
+- Scope: proof/docs expectation alignment only. No gameplay behavior changes.
+- Row reclassification:
+  - `LOWERED_TOP_SLAB_SIDE_LANE_STACK` is now treated as
+    `LOWERED_TOP_SLAB_SIDE_LANE_STACK_DEFERRED`.
+  - Lane status for this row is `deferred / illegal-for-current-release`.
+  - Policy reason: compound `dy=-1.0` top-slab side-lane behavior is not
+    legalized for current MC1211 release scope.
+- Diagnostic preservation:
+  - The row remains in the overlap matrix output and still logs overlap facts,
+    including `serverOverlap=0.500000` when observed.
+  - The matrix summary now distinguishes legal blocking RED rows from DEFERRED
+    rows.
+- Release-readiness interpretation for this row:
+  - This deferred row is not counted as a legal-lane GREEN and is not a
+    release-blocking RED under current policy.
+  - Reopening requires fresh RED proof, named legal lane grammar, and explicit
+    owner/triad/collision predicate.
