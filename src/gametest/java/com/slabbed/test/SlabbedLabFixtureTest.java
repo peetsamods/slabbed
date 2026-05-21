@@ -1,15 +1,21 @@
 package com.slabbed.test;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.dev.SlabbedLabFixtures;
 import com.slabbed.dev.SlabbedLabFixtures.LaneStatus;
 import com.slabbed.dev.SlabbedLabFixtures.PlaceResult;
 import com.slabbed.util.SlabSupport;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.test.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.SlabType;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
@@ -29,6 +35,7 @@ import net.minecraft.util.shape.VoxelShape;
  *   5. neighbor-update pulse on FULL → assert FULL support still matches post-pulse
  */
 public final class SlabbedLabFixtureTest {
+    private static final double MC1211_SERVER_STATE_EPSILON = 1.0e-6d;
 
     /**
      * Exercises the basic fixture lifecycle on all three lanes (placement assertions)
@@ -90,6 +97,202 @@ public final class SlabbedLabFixtureTest {
                 "FULL support should still match after pulse: expected "
                         + postPulse.expectedSupport() + ", got " + postPulse.actualSupport());
 
+        ctx.complete();
+    }
+
+    /**
+     * Server-state-only MC 1.21.1 proof: deterministic authored lanes must resolve
+     * to legal server dy / attachment state without full-block vertical overlap.
+     *
+     * <p>This deliberately does not measure model dy, renderer dy, outline,
+     * raycast, client attachment sync, render-view bridge lookup, or reload.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void mc1211ServerStateOverlapMatrix(TestContext ctx) {
+        boolean goblinOnly = Boolean.getBoolean("slabbed.mc1211.goblinOnly");
+        boolean overlapOnly = Boolean.getBoolean("slabbed.mc1211.overlapMatrixOnly");
+        if (goblinOnly && !overlapOnly) {
+            System.out.println("[MC1211_SERVER_STATE_OVERLAP_MATRIX_SKIPPED]"
+                    + " route=runClientGameTest"
+                    + " reason=goblin_only"
+                    + " property=slabbed.mc1211.goblinOnly");
+            ctx.complete();
+            return;
+        }
+
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        List<ServerStateOverlapRow> rows = new ArrayList<>();
+
+        BlockPos bottomSupport = origin.add(0, 0, 0);
+        BlockPos bottomObject = bottomSupport.up();
+        world.setBlockState(bottomSupport, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        authorBlock(world, bottomObject, Blocks.STONE.getDefaultState());
+        rows.add(measureServerStateRow(
+                world,
+                "A_ordinary_bottom_slab_full_block",
+                bottomSupport,
+                bottomObject,
+                "DIRECT_BOTTOM_SLAB_ANCHORED_FULL_BLOCK",
+                -0.5d,
+                true,
+                false,
+                true,
+                false,
+                false,
+                true,
+                "bottom_slab_authors_ordinary_full_block_anchor"));
+
+        BlockPos topSupport = origin.add(2, 0, 0);
+        BlockPos topObject = topSupport.up();
+        world.setBlockState(topSupport, slab(SlabType.TOP), Block.NOTIFY_ALL);
+        authorBlock(world, topObject, Blocks.STONE.getDefaultState());
+        rows.add(measureServerStateRow(
+                world,
+                "B_top_slab_full_block",
+                topSupport,
+                topObject,
+                "VANILLA_TOP_SLAB_FULL_BLOCK",
+                0.0d,
+                false,
+                true,
+                false,
+                true,
+                false,
+                true,
+                "top_slab_must_not_author_lowered_anchor"));
+
+        BlockPos doubleSupport = origin.add(4, 0, 0);
+        BlockPos doubleObject = doubleSupport.up();
+        world.setBlockState(doubleSupport, slab(SlabType.DOUBLE), Block.NOTIFY_ALL);
+        authorBlock(world, doubleObject, Blocks.STONE.getDefaultState());
+        rows.add(measureServerStateRow(
+                world,
+                "C_double_slab_full_block",
+                doubleSupport,
+                doubleObject,
+                "VANILLA_DOUBLE_SLAB_FULL_BLOCK",
+                0.0d,
+                false,
+                true,
+                false,
+                true,
+                false,
+                true,
+                "double_slab_must_not_author_lowered_anchor"));
+
+        BlockPos loweredCarrier = authorLoweredBottomCarrier(world, origin.add(0, 0, 2));
+        BlockPos compoundObject = loweredCarrier.up();
+        authorBlock(world, compoundObject, Blocks.STONE.getDefaultState());
+        rows.add(measureServerStateRow(
+                world,
+                "D_lowered_bottom_carrier_full_block",
+                loweredCarrier,
+                compoundObject,
+                "COMPOUND_DY_NEG_1_FULL_BLOCK_ON_LOWERED_BOTTOM_CARRIER",
+                -1.0d,
+                true,
+                false,
+                true,
+                false,
+                true,
+                true,
+                "lowered_bottom_carrier_authors_compound_full_block_lane"));
+
+        BlockPos persistedCarrier = authorLoweredBottomCarrier(world, origin.add(2, 0, 2));
+        BlockPos persistedObject = persistedCarrier.up();
+        authorBlock(world, persistedObject, Blocks.STONE.getDefaultState());
+        world.setBlockState(persistedCarrier, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        rows.add(measureServerStateRow(
+                world,
+                "E_compound_dy_neg_1_full_block_persisted_after_source_removed",
+                persistedCarrier,
+                persistedObject,
+                "PERSISTED_COMPOUND_DY_NEG_1_FULL_BLOCK",
+                -1.0d,
+                true,
+                false,
+                false,
+                false,
+                true,
+                false,
+                "compound_full_block_anchor_must_preserve_dy_without_live_source_slab"));
+
+        BlockPos sideBase = origin.add(4, 0, 2);
+        world.setBlockState(sideBase, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        BlockPos sideLoweredFull = sideBase.up();
+        authorBlock(world, sideLoweredFull, Blocks.STONE.getDefaultState());
+        BlockPos sideLaneSupport = sideLoweredFull.east();
+        world.setBlockState(sideLaneSupport, slab(SlabType.DOUBLE), Block.NOTIFY_ALL);
+        SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, sideLaneSupport,
+                world.getBlockState(sideLaneSupport));
+        BlockPos sideLaneObject = sideLaneSupport.up();
+        authorBlock(world, sideLaneObject, Blocks.STONE.getDefaultState());
+        rows.add(measureServerStateRow(
+                world,
+                "F_lowered_slab_lane_carrier_stack",
+                sideLaneSupport,
+                sideLaneObject,
+                "LOWERED_SIDE_LANE_DOUBLE_CARRIER_STACK",
+                -0.5d,
+                true,
+                false,
+                true,
+                false,
+                false,
+                true,
+                "lowered_side_lane_double_carrier_supports_full_block_stack"));
+
+        BlockPos decorativeCarrier = authorLoweredBottomCarrier(world, origin.add(0, 0, 5));
+        BlockPos wallPos = decorativeCarrier.up();
+        world.setBlockState(wallPos, Blocks.COBBLESTONE_WALL.getDefaultState(), Block.NOTIFY_ALL);
+        BlockPos lanternPos = wallPos.up();
+        world.setBlockState(lanternPos, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_ALL);
+        rows.add(measureServerStateRow(
+                world,
+                "G_wall_lantern_decorative_stack_state",
+                wallPos,
+                lanternPos,
+                "DECORATIVE_WALL_LANTERN_CURRENT_SERVER_LAW",
+                -1.0d,
+                false,
+                true,
+                false,
+                false,
+                false,
+                false,
+                "decorative_state_only_no_model_outline_raycast_targeting_claim"));
+
+        int green = 0;
+        int red = 0;
+        int inconclusive = 0;
+        ServerStateOverlapRow firstRed = null;
+        for (ServerStateOverlapRow row : rows) {
+            System.out.println(row.toMarkerLine());
+            if ("GREEN".equals(row.result())) {
+                green++;
+            } else if ("RED".equals(row.result())) {
+                red++;
+                if (firstRed == null) {
+                    firstRed = row;
+                }
+            } else {
+                inconclusive++;
+            }
+        }
+
+        System.out.println("[MC1211_SERVER_STATE_OVERLAP_MATRIX_SUMMARY]"
+                + " totalRows=" + rows.size()
+                + " green=" + green
+                + " red=" + red
+                + " inconclusive=" + inconclusive
+                + " surfacesNotCovered=model/render,outline,raycast,client_sync_render_view_bridge,reload"
+                + " proofScope=server_placement_state_authority_only");
+
+        ctx.assertTrue(red == 0,
+                "MC1211 server-state overlap matrix has RED rows; firstRed="
+                        + (firstRed == null ? "none" : firstRed.scenario() + ":" + firstRed.reason()));
         ctx.complete();
     }
 
@@ -264,5 +467,193 @@ public final class SlabbedLabFixtureTest {
                 + ". If -0.5: server-side offset still active. If -1.0: double-offset.");
 
         ctx.complete();
+    }
+
+    private static BlockState slab(SlabType type) {
+        return Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, type);
+    }
+
+    private static BlockState authorBlock(ServerWorld world, BlockPos pos, BlockState state) {
+        world.setBlockState(pos, state, Block.NOTIFY_ALL);
+        state.getBlock().onPlaced(world, pos, state, null, ItemStack.EMPTY);
+        return world.getBlockState(pos);
+    }
+
+    private static BlockPos authorLoweredBottomCarrier(ServerWorld world, BlockPos baseSlabPos) {
+        world.setBlockState(baseSlabPos, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        BlockPos loweredFullPos = baseSlabPos.up();
+        authorBlock(world, loweredFullPos, Blocks.STONE.getDefaultState());
+        BlockPos carrierPos = loweredFullPos.up();
+        world.setBlockState(carrierPos, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, carrierPos,
+                world.getBlockState(carrierPos));
+        return carrierPos;
+    }
+
+    private static ServerStateOverlapRow measureServerStateRow(
+            ServerWorld world,
+            String scenario,
+            BlockPos supportPos,
+            BlockPos objectPos,
+            String expectedLaneName,
+            double expectedServerDy,
+            boolean requireAnchor,
+            boolean forbidAnchor,
+            boolean requireCarrier,
+            boolean forbidCarrier,
+            boolean requireCompoundAnchor,
+            boolean requireFullBlockNoOverlap,
+            String baseReason
+    ) {
+        BlockState supportState = world.getBlockState(supportPos);
+        BlockState objectState = world.getBlockState(objectPos);
+        double serverDy = objectState.isAir() ? Double.NaN : SlabSupport.getYOffset(world, objectPos, objectState);
+        double supportDy = supportState.isAir() ? Double.NaN : SlabSupport.getYOffset(world, supportPos, supportState);
+        double supportSurfaceOffset = supportSurfaceOffset(supportState);
+        double supportTopWorldY = Double.isFinite(supportDy) && Double.isFinite(supportSurfaceOffset)
+                ? supportPos.getY() + supportDy + supportSurfaceOffset
+                : Double.NaN;
+        double objectBottomWorldY = Double.isFinite(serverDy)
+                ? objectPos.getY() + serverDy
+                : Double.NaN;
+        double serverOverlap = Double.isFinite(supportTopWorldY) && Double.isFinite(objectBottomWorldY)
+                ? supportTopWorldY - objectBottomWorldY
+                : Double.NaN;
+        boolean anchorServer = SlabAnchorAttachment.isAnchored(world, objectPos);
+        boolean compoundAnchorServer = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, objectPos);
+        boolean carrierServer = supportState.getBlock() instanceof SlabBlock
+                && (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, supportPos, supportState)
+                || SlabSupport.isLoweredSideLaneSlabCarrier(world, supportPos, supportState));
+
+        List<String> failures = new ArrayList<>();
+        if (!near(serverDy, expectedServerDy)) {
+            failures.add("serverDy_expected_" + text(expectedServerDy) + "_got_" + text(serverDy));
+        }
+        if (requireAnchor && !anchorServer) {
+            failures.add("anchorServer_absent");
+        }
+        if (forbidAnchor && anchorServer) {
+            failures.add("anchorServer_unexpected");
+        }
+        if (requireCarrier && !carrierServer) {
+            failures.add("carrierServer_absent");
+        }
+        if (forbidCarrier && carrierServer) {
+            failures.add("carrierServer_unexpected");
+        }
+        if (requireCompoundAnchor && !compoundAnchorServer) {
+            failures.add("compoundAnchorServer_absent");
+        }
+        if (requireFullBlockNoOverlap) {
+            if (!Double.isFinite(serverOverlap)) {
+                failures.add("serverOverlap_unreadable");
+            } else if (serverOverlap > MC1211_SERVER_STATE_EPSILON) {
+                failures.add("serverOverlap_positive_" + text(serverOverlap));
+            }
+        }
+
+        boolean laneLegal = failures.isEmpty();
+        String result = laneLegal ? "GREEN" : "RED";
+        String reason = failures.isEmpty() ? baseReason : baseReason + ";failures=" + String.join(",", failures);
+
+        return new ServerStateOverlapRow(
+                scenario,
+                supportPos,
+                supportState.toString(),
+                slabTypeName(supportState),
+                objectPos,
+                objectState.toString(),
+                expectedLaneName,
+                serverDy,
+                supportDy,
+                supportSurfaceOffset,
+                supportTopWorldY,
+                objectBottomWorldY,
+                serverOverlap,
+                anchorServer,
+                compoundAnchorServer,
+                carrierServer,
+                laneLegal,
+                result,
+                reason);
+    }
+
+    private static double supportSurfaceOffset(BlockState supportState) {
+        if (supportState == null || supportState.isAir()) {
+            return Double.NaN;
+        }
+        if (supportState.getBlock() instanceof SlabBlock && supportState.contains(SlabBlock.TYPE)) {
+            return SlabSupport.getSupportYOffset(supportState);
+        }
+        return 1.0d;
+    }
+
+    private static String slabTypeName(BlockState state) {
+        if (state != null && state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE)) {
+            return state.get(SlabBlock.TYPE).name();
+        }
+        return "n/a";
+    }
+
+    private static boolean near(double actual, double expected) {
+        return Double.isFinite(actual)
+                && Double.isFinite(expected)
+                && Math.abs(actual - expected) <= MC1211_SERVER_STATE_EPSILON;
+    }
+
+    private static String text(double value) {
+        if (!Double.isFinite(value)) {
+            return Double.toString(value);
+        }
+        return String.format(java.util.Locale.ROOT, "%.6f", value);
+    }
+
+    private record ServerStateOverlapRow(
+            String scenario,
+            BlockPos supportPos,
+            String supportState,
+            String supportSlabType,
+            BlockPos objectPos,
+            String objectState,
+            String expectedLaneName,
+            double serverDy,
+            double supportDy,
+            double supportSurfaceOffset,
+            double supportTopWorldY,
+            double objectBottomWorldY,
+            double serverOverlap,
+            boolean anchorServer,
+            boolean compoundAnchorServer,
+            boolean carrierServer,
+            boolean laneLegal,
+            String result,
+            String reason
+    ) {
+        private String toMarkerLine() {
+            return "[MC1211_SERVER_STATE_OVERLAP_MATRIX_ROW]"
+                    + " scenario=" + scenario
+                    + " supportPos=" + supportPos.toShortString()
+                    + " supportState=" + compact(supportState)
+                    + " supportSlabType=" + supportSlabType
+                    + " objectPos=" + objectPos.toShortString()
+                    + " objectState=" + compact(objectState)
+                    + " expectedLaneName=" + expectedLaneName
+                    + " serverDy=" + text(serverDy)
+                    + " supportDy=" + text(supportDy)
+                    + " supportSurfaceOffset=" + text(supportSurfaceOffset)
+                    + " supportTopWorldY=" + text(supportTopWorldY)
+                    + " objectBottomWorldY=" + text(objectBottomWorldY)
+                    + " serverOverlap=" + text(serverOverlap)
+                    + " anchorServer=" + anchorServer
+                    + " compoundAnchorServer=" + compoundAnchorServer
+                    + " carrierServer=" + carrierServer
+                    + " laneLegal=" + laneLegal
+                    + " result=" + result
+                    + " reason=" + compact(reason);
+        }
+
+        private static String compact(String value) {
+            return value == null ? "null" : value.replace(' ', '_');
+        }
     }
 }
