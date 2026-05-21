@@ -50,13 +50,21 @@ public final class ChainSurvivalReproTest {
     private static final Block CHAIN_BLOCK = Registries.BLOCK.get(Identifier.of("minecraft", "chain"));
     private static final Block COPPER_CHAIN_BLOCK = Registries.BLOCK.get(Identifier.of("minecraft", "copper_chain"));
 
+    private static Block preferredChainBlock() {
+        return COPPER_CHAIN_BLOCK == Blocks.AIR ? CHAIN_BLOCK : COPPER_CHAIN_BLOCK;
+    }
+
+    private static boolean isPreferredChain(BlockState state) {
+        return state.isOf(preferredChainBlock());
+    }
+
     private static BlockState copperChainY() {
-        return COPPER_CHAIN_BLOCK.getDefaultState()
+        return preferredChainBlock().getDefaultState()
                 .with(ChainBlock.AXIS, Direction.Axis.Y);
     }
 
     private static BlockState copperChainX() {
-        return COPPER_CHAIN_BLOCK.getDefaultState()
+        return preferredChainBlock().getDefaultState()
                 .with(ChainBlock.AXIS, Direction.Axis.X);
     }
 
@@ -559,8 +567,8 @@ public final class ChainSurvivalReproTest {
         world.setBlockState(chainPos, copperChainY(), Block.NOTIFY_ALL);
 
         BlockState chainState = world.getBlockState(chainPos);
-        ctx.assertTrue(chainState.isOf(COPPER_CHAIN_BLOCK),
-                "copper chain not placed at " + chainPos.toShortString()
+        ctx.assertTrue(isPreferredChain(chainState),
+                "preferred chain not placed at " + chainPos.toShortString()
                 + ", found: " + chainState.getBlock().getTranslationKey());
 
         BlockState result = chainState.getStateForNeighborUpdate(Direction.UP, world.getBlockState(slabPos), world, chainPos, slabPos);
@@ -583,8 +591,8 @@ public final class ChainSurvivalReproTest {
 
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainPos, copperChainX(), Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(COPPER_CHAIN_BLOCK),
-                "X-axis copper chain not placed");
+        ctx.assertTrue(isPreferredChain(world.getBlockState(chainPos)),
+                "X-axis preferred chain not placed");
 
         world.setBlockState(supportPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
@@ -613,14 +621,14 @@ public final class ChainSurvivalReproTest {
         world.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(unrelatedPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(chainPos, copperChainX(), Block.NOTIFY_ALL);
-        ctx.assertTrue(world.getBlockState(chainPos).isOf(COPPER_CHAIN_BLOCK),
-                "X-axis copper chain not placed");
+        ctx.assertTrue(isPreferredChain(world.getBlockState(chainPos)),
+                "X-axis preferred chain not placed");
 
         world.setBlockState(unrelatedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
         BlockState after = world.getBlockState(chainPos);
-        ctx.assertTrue(after.isOf(COPPER_CHAIN_BLOCK),
-                "X-axis copper chain must survive unrelated NORTH update with"
+        ctx.assertTrue(isPreferredChain(after),
+                "X-axis preferred chain must survive unrelated NORTH update with"
                 + " east support intact; found " + after.getBlock().getTranslationKey());
 
         BlockState forced = after.getStateForNeighborUpdate(Direction.NORTH, Blocks.AIR.getDefaultState(), world, chainPos, unrelatedPos);
