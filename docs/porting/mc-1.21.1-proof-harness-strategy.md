@@ -471,3 +471,88 @@ Route check:
   a new product feature.
 - If reopened, future work requires a real manual-runtime RED or automated geometry
   RED before any behavior patch.
+
+## 2026-05-20 deterministic overlap reload phase (b1a2d71)
+
+- Status: proof-only extension to the existing default-off MC1211 deterministic
+  overlap fixture matrix. No gameplay behavior changes.
+- Baseline matrix: `tmp/mc1211-deterministic-overlap-fixture-matrix-b1a2d71/`
+  (36 GREEN / 0 RED / 0 INCONCLUSIVE across 9 scenarios x 4 tick phases).
+- Reload-phase evidence: `tmp/mc1211-deterministic-overlap-reload-b1a2d71/`.
+- Mode: two-run protocol with persisted signature file. Run A authors or verifies
+  the fixture and writes a signature file with all preReload measurements.
+  User saves and quits to title. Run B reads the signature, lets the chunk warm,
+  and emits postReload + delta rows comparing every scenario.
+- Property gates (default off):
+  - `slabbed.mc1211.fullBlockSlabOverlapProof=true`
+  - `slabbed.mc1211.exactFixtureOverlapProof=true`
+  - `slabbed.mc1211.deterministicOverlapFixtureMatrix=true`
+  - `slabbed.mc1211.deterministicOverlapReloadProof=true`
+  - `slabbed.mc1211.deterministicOverlapReloadPhase=preReload|postReload`
+  - `slabbed.mc1211.overlapFixtureOrigin=0,-48,33` (pinned)
+  - `slabbed.mc1211.deterministicOverlapReloadSignaturePath=<absolute path>`
+- Run A command:
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.bsfb.live.trace=true -Dslabbed.mc1211.fullBlockSlabOverlapProof=true -Dslabbed.mc1211.exactFixtureOverlapProof=true -Dslabbed.mc1211.deterministicOverlapFixtureMatrix=true -Dslabbed.mc1211.deterministicOverlapReloadProof=true -Dslabbed.mc1211.deterministicOverlapReloadPhase=preReload -Dslabbed.mc1211.overlapFixtureOrigin=0,-48,33 -Dslabbed.mc1211.deterministicOverlapReloadSignaturePath=/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate/tmp/mc1211-deterministic-overlap-reload-b1a2d71/fixture-signature.txt" ./gradlew --no-daemon runClient --console plain`
+- Run B command (same flags, phase swapped):
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.inspect=true -Dslabbed.target.trace=true -Dslabbed.bsfb.live.trace=true -Dslabbed.mc1211.fullBlockSlabOverlapProof=true -Dslabbed.mc1211.exactFixtureOverlapProof=true -Dslabbed.mc1211.deterministicOverlapFixtureMatrix=true -Dslabbed.mc1211.deterministicOverlapReloadProof=true -Dslabbed.mc1211.deterministicOverlapReloadPhase=postReload -Dslabbed.mc1211.overlapFixtureOrigin=0,-48,33 -Dslabbed.mc1211.deterministicOverlapReloadSignaturePath=/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate/tmp/mc1211-deterministic-overlap-reload-b1a2d71/fixture-signature.txt" ./gradlew --no-daemon runClient --console plain`
+- Markers added (default off):
+  - `[MC1211_DETERMINISTIC_OVERLAP_RELOAD_START]`
+  - `[MC1211_DETERMINISTIC_OVERLAP_RELOAD_ROW] phase=preReload|postReload|delta`
+  - `[MC1211_DETERMINISTIC_OVERLAP_RELOAD_SIGNATURE_WRITTEN]`
+  - `[MC1211_DETERMINISTIC_OVERLAP_RELOAD_SIGNATURE_READ]`
+  - `[MC1211_DETERMINISTIC_OVERLAP_RELOAD_SAVE_AND_QUIT_INSTRUCTION]`
+  - `[MC1211_DETERMINISTIC_OVERLAP_RELOAD_SUMMARY]`
+- Verdict rules (delta classification):
+  - RED on lane name change, lane legality flip, dy / supportTopWorldY /
+    objectVisualBottomWorldY delta exceeding 1e-6 (when both finite),
+    overlap becoming finite-positive, or persistence-truth disappearance
+    (anchorClient / loweredCarrierClient / compoundFullBlockAnchorClient /
+    compoundVisibleSideUpperSlabClient pre=true && post=false), or postReload
+    row red on its own merits.
+  - INCONCLUSIVE for NaN scalar fields, missing baseline, missing signature,
+    missing fixture, chunk-load budget exceeded, or render-view bridge flip
+    (treated as INCONCLUSIVE per safer interpretation since the harness cannot
+    confirm both phases had identical render observation opportunity).
+  - GREEN otherwise.
+- Release status:
+  - The reload extension is proof-only; no release tag moves on this slice.
+  - The MC1211 port remains release-blocked.
+
+## 2026-05-20 MC1211 goblin route repair (cdb7fe3)
+
+- Status: harness-route repair only. No gameplay behavior change.
+- Problem: `runClientGameTest` could emit the overlap-route canary and
+  server-state overlap rows without proving that the intended goblin route
+  executed, because the legacy
+  `SlabbedLabUltraGoblin2StressClientGameTest.java` class remains a deferred
+  `FabricClientGameTest` obligation outside the active compiled MC1211
+  gametest set.
+- Repair:
+  - Added `Mc1211GoblinRouteClientEntrypoint` as an explicit gametest-side
+    `client` entrypoint gated by `slabbed.mc1211.goblinOnly=true`.
+  - Added server-compatible `Mc1211GoblinRouteCanaryGameTest` to the active
+    `fabric-gametest` route so the replacement route also compiles/registers
+    inside the active MC1211 gametest source set.
+  - The executed goblin replacement route emits:
+    - `[MC1211_GOBLIN_ROUTE_CANARY]`
+    - `[MC1211_GOBLIN_START]`
+    - `[MC1211_GOBLIN_ROW]`
+    - `[MC1211_GOBLIN_SUMMARY]`
+    - `[MC1211_GOBLIN_GREEN]`
+  - The row payload names the legacy UltraGoblin phase and proof ids so the
+    replacement route proves execution reached the intended goblin body under
+    `runClientGameTest` even though the old Fabric client-gametest API remains
+    deferred on MC1211.
+  - `SlabbedLabFixtureTest.mc1211ServerStateOverlapMatrix` now skips only when
+    `slabbed.mc1211.goblinOnly=true` and `slabbed.mc1211.overlapMatrixOnly` is
+    not also true, preserving the overlap matrix by default.
+- Goblin-only command:
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.mc1211.goblinOnly=true" ./gradlew --no-daemon runClientGameTest --console plain`
+- Overlap-only command:
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.mc1211.overlapMatrixOnly=true" ./gradlew --no-daemon runClientGameTest --console plain`
+- Legacy class status:
+  - `SlabbedLabUltraGoblin2StressClientGameTest.java` remains in-tree as the
+    deferred client-only proof obligation.
+  - The active MC1211 executed replacement route is the gametest-side client
+    bootstrap canary, not a claim that the old Fabric client-gametest API is
+    healthy on 1.21.1.

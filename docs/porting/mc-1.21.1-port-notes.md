@@ -308,6 +308,50 @@
   - no release prep
 
 ## 2026-05-15 - Runtime mixin smoke (f9014fb)
+
+## 2026-05-20 - Goblin route repair on active MC1211 gametest set (cdb7fe3)
+- Status: harness-route repair only; no behavior patch.
+- Evidence dir: `tmp/mc1211-goblin-route-repair-cdb7fe3`
+- Route issue:
+  - `runClientGameTest` could prove only the overlap matrix/debug route.
+  - The intended goblin class
+    `SlabbedLabUltraGoblin2StressClientGameTest.java` remained outside the active
+    compiled MC1211 gametest set, so its presence in debug registration was not
+    execution proof.
+- Repair:
+  - Added `src/gametest/java/com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java`
+    as a `client` entrypoint for the gametest mod, gated by
+    `slabbed.mc1211.goblinOnly=true`, so `runClientGameTest` emits explicit
+    goblin route markers before unrelated overlap diagnostics can preempt the run.
+  - Added `src/gametest/java/com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java`
+    to the active server-compatible `fabric-gametest` route so the replacement
+    route also compiles/registers inside the active MC1211 gametest source set.
+  - Added explicit goblin-only/overlap-only routing flags:
+    - `slabbed.mc1211.goblinOnly=true`
+    - `slabbed.mc1211.overlapMatrixOnly=true`
+  - `SlabbedLabFixtureTest.mc1211ServerStateOverlapMatrix` skips only for
+    goblin-only runs, so the old overlap proof still exists and remains the
+    default behavior when no goblin-only flag is set.
+- Goblin-proof markers:
+  - `[MC1211_GOBLIN_ROUTE_CANARY]`
+  - `[MC1211_GOBLIN_START]`
+  - `[MC1211_GOBLIN_ROW]`
+  - `[MC1211_GOBLIN_SUMMARY]`
+  - `[MC1211_GOBLIN_GREEN]`
+- Route proof shape:
+  - `Mc1211GoblinRouteClientEntrypoint` is the executed replacement route under
+    `runClientGameTest`.
+  - `Mc1211GoblinRouteCanaryGameTest` is compile/register evidence under the
+    active `fabric-gametest` source set.
+- Exact goblin route command:
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.mc1211.goblinOnly=true" ./gradlew --no-daemon runClientGameTest --console plain`
+- Exact overlap-only command:
+  - `JAVA_TOOL_OPTIONS="-Dslabbed.mc1211.overlapMatrixOnly=true" ./gradlew --no-daemon runClientGameTest --console plain`
+- Explicit non-changes:
+  - no SlabSupport change
+  - no ClientDy change
+  - no placement/collision/survival change
+  - no release claim
 - Doc-location mismatch handling:
   - AGENTS.md required `00/01/02` docs were absent in this checkout.
   - Julia explicitly approved proceeding with in-repo `SLABBED_SPINE.md` plus uploaded source-pack doctrine context.

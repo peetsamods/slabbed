@@ -5,7 +5,11 @@
   "name": "Slabbed GameTest",
   "environment": "*",
   "entrypoints": {
+    "client": [
+      "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint"
+    ],
     "fabric-gametest": [
+      "com.slabbed.test.Mc1211GoblinRouteCanaryGameTest",
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest"
     ],
