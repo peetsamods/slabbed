@@ -10,6 +10,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.resource.DataConfiguration;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
@@ -19,6 +20,12 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.GameMode;
+import net.minecraft.world.GameRules;
+import net.minecraft.world.gen.GeneratorOptions;
+import net.minecraft.world.gen.WorldPresets;
+import net.minecraft.world.level.LevelInfo;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.OffsetBlockStateModel;
@@ -41,6 +48,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static final String LEGACY_CLASS =
             "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest";
     private static final String ROUTE = "runClientGameTest";
+    private static final int SIDE_PLACE_READINESS_TIMEOUT_TICKS = 2400;
     private static boolean initialized;
     private static boolean emitted;
     private static int hostTicks;
@@ -76,6 +84,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static int sidePlaceRetainedSampleTicks;
     private static String sidePlaceSampledStates = "not_sampled";
     private static boolean sidePlaceRetainedServerStoneObserved;
+    private static boolean sidePlaceProgrammaticWorldStartRequested;
+    private static String sidePlaceProgrammaticWorldName = "not_requested";
+    private static String sidePlaceProgrammaticWorldPath = "not_requested";
 
     @Override
     public void onInitializeClient() {
@@ -157,16 +168,18 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                     + " route=" + ROUTE
                     + " worldReady=" + (client != null && client.world != null)
                     + " playerReady=" + (client != null && client.player != null)
+                    + " programmaticClientWorldPath=IntegratedServerLoader.createAndStart"
                     + " property=" + SIDE_PLACE_STONE_LOWERING_ONLY_PROPERTY);
         }
 
+        requestProgrammaticSidePlaceWorldIfNeeded(client);
         String readinessGap = sidePlaceReadinessGap(client);
         if (readinessGap != null) {
             if (!sidePlaceReadyRowEmitted || sidePlaceTicks % 1200 == 0) {
                 emitSidePlaceReadyRow(client, "WAITING", readinessGap);
                 sidePlaceReadyRowEmitted = true;
             }
-            if (sidePlaceTicks < 240) {
+            if (sidePlaceTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
                 return;
             }
             emitSidePlaceReadyRow(client, "TIMEOUT", readinessGap);
@@ -242,47 +255,92 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         client.scheduleStop();
     }
 
-    private static String sidePlaceReadinessGap(MinecraftClient client) {
-        if (client == null || client.world == null) {
-            return "TRACE_GAP_CLIENT_WORLD_NOT_READY";
+    private static void requestProgrammaticSidePlaceWorldIfNeeded(MinecraftClient client) {
+        if (sidePlaceProgrammaticWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
         }
-        if (client.player == null) {
+        sidePlaceProgrammaticWorldStartRequested = true;
+        sidePlaceProgrammaticWorldPath = "IntegratedServerLoader.createAndStart";
+        sidePlaceProgrammaticWorldName = "slabbed-mc1211-side-place-harness";
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 Side Place Harness",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        System.out.println("[MC1211_SIDE_PLACE_STONE_PROGRAMMATIC_WORLD_START]"
+                + " path=" + sidePlaceProgrammaticWorldPath
+                + " worldName=" + sidePlaceProgrammaticWorldName
+                + " gameMode=creative"
+                + " difficulty=peaceful"
+                + " uiAutomation=false"
+                + " manualWorldCreationRequired=false");
+        client.createIntegratedServerLoader().createAndStart(
+                sidePlaceProgrammaticWorldName,
+                levelInfo,
+                generatorOptions,
+                WorldPresets::createDemoOptions,
+                null);
+    }
+
+    private static String sidePlaceReadinessGap(MinecraftClient client) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(client);
+        if (!readiness.clientBootstrapReady) {
+            return "TRACE_GAP_CLIENT_BOOTSTRAP_NOT_FINISHED";
+        }
+        if (!readiness.clientWorldReady) {
+            return sidePlaceProgrammaticWorldStartRequested
+                    ? "TRACE_GAP_PROGRAMMATIC_CLIENT_WORLD_PENDING"
+                    : "TRACE_GAP_PROGRAMMATIC_WORLD_START_PENDING";
+        }
+        if (!readiness.clientPlayerReady) {
             return "TRACE_GAP_CLIENT_PLAYER_NOT_READY";
         }
-        MinecraftServer server = client.getServer();
-        if (server == null) {
-            return "TRACE_GAP_SERVER_NOT_READY";
+        if (!readiness.integratedServerReady) {
+            return "TRACE_GAP_INTEGRATED_SERVER_NOT_READY";
         }
-        if (server.getPlayerManager().getPlayerList().isEmpty()) {
+        if (!readiness.serverWorldReady) {
+            return "TRACE_GAP_SERVER_WORLD_NOT_READY";
+        }
+        if (!readiness.serverPlayerReady) {
             return "TRACE_GAP_SERVER_PLAYER_NOT_READY";
         }
-        if (client.interactionManager == null) {
+        if (!readiness.interactionManagerReady) {
             return "TRACE_GAP_INTERACTION_MANAGER_NOT_READY";
         }
         return null;
     }
 
     private static void emitSidePlaceReadyRow(MinecraftClient client, String phase, String reason) {
-        MinecraftServer server = client == null ? null : client.getServer();
-        boolean clientWorldReady = client != null && client.world != null;
-        boolean clientPlayerReady = client != null && client.player != null;
-        boolean serverReady = server != null;
-        boolean serverPlayerReady = serverReady && !server.getPlayerManager().getPlayerList().isEmpty();
-        boolean interactionManagerReady = client != null && client.interactionManager != null;
-        String clientHeld = clientPlayerReady
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(client);
+        MinecraftServer server = readiness.server;
+        String clientHeld = readiness.clientPlayerReady
                 ? client.player.getStackInHand(Hand.MAIN_HAND).toString()
                 : "UNAVAILABLE";
-        String serverHeld = serverPlayerReady
+        String serverHeld = readiness.serverPlayerReady
                 ? server.getPlayerManager().getPlayerList().get(0).getStackInHand(Hand.MAIN_HAND).toString()
                 : "UNAVAILABLE";
         System.out.println("[MC1211_SIDE_PLACE_STONE_LOWERING_READY_ROW]"
                 + " phase=" + phase
                 + " tick=" + sidePlaceTicks
-                + " clientWorldReady=" + clientWorldReady
-                + " clientPlayerReady=" + clientPlayerReady
-                + " serverReady=" + serverReady
-                + " serverPlayerReady=" + serverPlayerReady
-                + " interactionManagerReady=" + interactionManagerReady
+                + " clientBootstrapReady=" + readiness.clientBootstrapReady
+                + " clientWorldReady=" + readiness.clientWorldReady
+                + " clientPlayerReady=" + readiness.clientPlayerReady
+                + " integratedServerReady=" + readiness.integratedServerReady
+                + " serverReady=" + readiness.integratedServerReady
+                + " serverWorldReady=" + readiness.serverWorldReady
+                + " serverPlayerReady=" + readiness.serverPlayerReady
+                + " interactionManagerReady=" + readiness.interactionManagerReady
+                + " programmaticWorldStartRequested=" + sidePlaceProgrammaticWorldStartRequested
+                + " programmaticWorldName=" + sidePlaceProgrammaticWorldName
+                + " programmaticClientWorldPath=" + sidePlaceProgrammaticWorldPath
                 + " heldItemSynced=" + sidePlaceHeldItemSynced
                 + " playerPositionSynced=" + sidePlacePlayerPositionSynced
                 + " clientHeldItem=" + clientHeld
@@ -611,6 +669,60 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         emitted = true;
         if (clientReadyForStop()) {
             MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static final class SidePlaceReadiness {
+        final MinecraftServer server;
+        final boolean clientBootstrapReady;
+        final boolean clientWorldReady;
+        final boolean clientPlayerReady;
+        final boolean integratedServerReady;
+        final boolean serverWorldReady;
+        final boolean serverPlayerReady;
+        final boolean interactionManagerReady;
+
+        private SidePlaceReadiness(
+                MinecraftServer server,
+                boolean clientBootstrapReady,
+                boolean clientWorldReady,
+                boolean clientPlayerReady,
+                boolean integratedServerReady,
+                boolean serverWorldReady,
+                boolean serverPlayerReady,
+                boolean interactionManagerReady
+        ) {
+            this.server = server;
+            this.clientBootstrapReady = clientBootstrapReady;
+            this.clientWorldReady = clientWorldReady;
+            this.clientPlayerReady = clientPlayerReady;
+            this.integratedServerReady = integratedServerReady;
+            this.serverWorldReady = serverWorldReady;
+            this.serverPlayerReady = serverPlayerReady;
+            this.interactionManagerReady = interactionManagerReady;
+        }
+
+        static SidePlaceReadiness capture(MinecraftClient client) {
+            MinecraftServer server = client == null ? null : client.getServer();
+            boolean clientBootstrapReady = client != null && client.isFinishedLoading();
+            boolean clientWorldReady = client != null && client.world != null;
+            boolean clientPlayerReady = client != null && client.player != null;
+            boolean integratedServerReady = server != null;
+            boolean serverWorldReady = integratedServerReady
+                    && clientWorldReady
+                    && server.getWorld(client.world.getRegistryKey()) != null;
+            boolean serverPlayerReady = integratedServerReady
+                    && !server.getPlayerManager().getPlayerList().isEmpty();
+            boolean interactionManagerReady = client != null && client.interactionManager != null;
+            return new SidePlaceReadiness(
+                    server,
+                    clientBootstrapReady,
+                    clientWorldReady,
+                    clientPlayerReady,
+                    integratedServerReady,
+                    serverWorldReady,
+                    serverPlayerReady,
+                    interactionManagerReady);
         }
     }
 
