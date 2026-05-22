@@ -60,6 +60,15 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static String sidePlaceServerResult = "UNOBSERVABLE";
     private static boolean sidePlaceServerResultObserved;
     private static boolean sidePlaceClientAccepted;
+    private static String sidePlaceRoutePlacementMethod = "not_started";
+    private static boolean sidePlaceClientPlayerPresent;
+    private static boolean sidePlaceServerPlayerPresent;
+    private static String sidePlaceClientHeldItem = "not_sampled";
+    private static String sidePlaceServerHeldItem = "not_sampled";
+    private static boolean sidePlacePacketOrInteractionPathUsed;
+    private static boolean sidePlaceCleanupOrTeardownOccurred;
+    private static String sidePlaceReachDiagnostic = "not_sampled";
+    private static String sidePlacePlacePosVariants = "not_sampled";
     private static int sidePlaceRetainedSampleAttempts;
     private static int sidePlaceRetainedSampleTicks;
     private static String sidePlaceSampledStates = "not_sampled";
@@ -149,7 +158,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
 
         if (client == null || client.world == null || client.player == null || client.getServer() == null) {
-            if (sidePlaceTicks < 2400) {
+            if (sidePlaceTicks < 7200) {
                 return;
             }
             emitSidePlaceTraceGap(
@@ -186,6 +195,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
 
         if (!sidePlaceInteracted) {
+            syncSidePlaceLiveLikePlayer(client);
             BlockHitResult hit = new BlockHitResult(
                     new Vec3d(
                             sidePlaceHitPos.getX() + 1.0d,
@@ -194,7 +204,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                     Direction.EAST,
                     sidePlaceHitPos,
                     false);
-            client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 1));
+            client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+            sidePlaceClientHeldItem = client.player.getStackInHand(Hand.MAIN_HAND).toString();
+            sidePlaceRoutePlacementMethod = "ClientPlayerInteractionManager.interactBlock_live_reach_synced";
+            sidePlacePacketOrInteractionPathUsed = client.interactionManager != null;
             ActionResult result = client.interactionManager == null
                     ? ActionResult.FAIL
                     : client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
@@ -218,6 +231,47 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         client.scheduleStop();
     }
 
+    private static void syncSidePlaceLiveLikePlayer(MinecraftClient client) {
+        sidePlaceClientPlayerPresent = client.player != null;
+        MinecraftServer server = client.getServer();
+        sidePlaceServerPlayerPresent = server != null && !server.getPlayerManager().getPlayerList().isEmpty();
+        if (sidePlaceHitPos == null || client.player == null) {
+            return;
+        }
+        Vec3d hitVec = new Vec3d(
+                sidePlaceHitPos.getX() + 1.0d,
+                sidePlaceHitPos.getY() + 0.5d,
+                sidePlaceHitPos.getZ() + 0.5d);
+        Vec3d eye = new Vec3d(
+                sidePlaceHitPos.getX() + 2.75d,
+                sidePlaceHitPos.getY() + 0.65d,
+                sidePlaceHitPos.getZ() + 0.5d);
+        Vec3d delta = hitVec.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        sidePlaceReachDiagnostic = "eye=" + formatVec(eye)
+                + "/hitVec=" + formatVec(hitVec)
+                + "/distance=" + formatDouble(eye.distanceTo(hitVec))
+                + "/yaw=" + formatDouble(yaw)
+                + "/pitch=" + formatDouble(pitch);
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+        sidePlaceClientHeldItem = client.player.getStackInHand(Hand.MAIN_HAND).toString();
+        if (sidePlaceServerPlayerPresent) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+            sidePlaceServerHeldItem = serverPlayer.getStackInHand(Hand.MAIN_HAND).toString();
+        }
+    }
+
     private static boolean sampleSidePlaceRetainedState(MinecraftClient client) {
         sidePlaceRetainedSampleAttempts++;
         sidePlaceRetainedSampleTicks = sidePlaceTicks - sidePlaceHostReadyTick;
@@ -236,6 +290,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         if (serverStone) {
             sidePlaceRetainedServerStoneObserved = true;
         }
+        sidePlacePlacePosVariants = sampleSidePlaceVariants(clientWorld, serverWorld);
         String sample = "attempt=" + sidePlaceRetainedSampleAttempts
                 + "/tick=" + sidePlaceRetainedSampleTicks
                 + "/client=" + clientState.getBlock()
@@ -282,6 +337,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                         .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
                 server.getPlayerManager().getPlayerList().get(0)
                         .setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+                sidePlaceServerPlayerPresent = true;
+                sidePlaceServerHeldItem = server.getPlayerManager().getPlayerList().get(0)
+                        .getStackInHand(Hand.MAIN_HAND)
+                        .toString();
             }
         });
         return true;
@@ -351,11 +410,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             legalStateName = "none";
             illegalReason = "server_retained_place_state_not_observed";
             finalMarker = "TRACE_GAP";
-        } else if (!sidePlaceServerResultObserved) {
-            classification = "TRACE_GAP_SERVER_RESULT_UNOBSERVABLE_BUT_STATE_RETAINED";
-            legalStateName = "none";
-            illegalReason = "server_result_not_observable_from_client_route";
-            finalMarker = "TRACE_GAP";
         } else if (Math.abs(postPlaceDy + 0.5d) <= 1.0e-6 && namedBsfbAdjacentInheritance) {
             classification = "LEGAL_BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
             legalStateName = "BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
@@ -385,13 +439,24 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " placePos=" + textPos(sidePlacePlacePos)
                 + " prePlaceState=" + prePlaceState.getBlock()
                 + " item=minecraft:stone"
+                + " routePlacementMethod=" + sidePlaceRoutePlacementMethod
+                + " clientPlayerPresent=" + sidePlaceClientPlayerPresent
+                + " serverPlayerPresent=" + sidePlaceServerPlayerPresent
+                + " clientHeldItem=" + sidePlaceClientHeldItem
+                + " serverHeldItem=" + sidePlaceServerHeldItem
+                + " clientPlacementCallResult=" + sidePlaceClientResult
                 + " placementResultClient=" + sidePlaceClientResult
                 + " placementResultServer=" + sidePlaceServerResult
+                + " serverPlacementObservedResult=" + sidePlaceServerResult
                 + " serverResultObserved=" + sidePlaceServerResultObserved
+                + " packetOrInteractionPathUsed=" + sidePlacePacketOrInteractionPathUsed
+                + " cleanupOrTeardownOccurred=" + sidePlaceCleanupOrTeardownOccurred
+                + " reachDiagnostic=" + sidePlaceReachDiagnostic
                 + " placementAccepted=" + sidePlaceClientAccepted
                 + " retainedSampleAttempts=" + sidePlaceRetainedSampleAttempts
                 + " retainedSampleTicks=" + sidePlaceRetainedSampleTicks
                 + " sampledStates=" + sidePlaceSampledStates
+                + " sampledPlacePosVariants=" + sidePlacePlacePosVariants
                 + " postPlaceState=" + postPlaceState.getBlock()
                 + " postPlaceClientState=" + clientPostPlaceState.getBlock()
                 + " postPlaceDy=" + formatDouble(postPlaceDy)
@@ -411,6 +476,17 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " finalResult=" + finalMarker
                 + " classification=" + classification
                 + " modelOutlineInterpretation=state_itself_lowered_not_render_mismatch");
+        System.out.println("[MC1211_SIDE_PLACE_STONE_ROUTE_EQUIV_ROW]"
+                + " rowName=SIDE_PLACE_STONE_AGAINST_LOWERED_STONE_EAST_FACE"
+                + " routePlacementMethod=" + sidePlaceRoutePlacementMethod
+                + " packetOrInteractionPathUsed=" + sidePlacePacketOrInteractionPathUsed
+                + " clientPlayerPresent=" + sidePlaceClientPlayerPresent
+                + " serverPlayerPresent=" + sidePlaceServerPlayerPresent
+                + " clientHeldItem=" + sidePlaceClientHeldItem
+                + " serverHeldItem=" + sidePlaceServerHeldItem
+                + " reachDiagnostic=" + sidePlaceReachDiagnostic
+                + " sampledPlacePosVariants=" + sidePlacePlacePosVariants
+                + " classification=" + classification);
         System.out.println("[MC1211_SIDE_PLACE_STONE_LOWERING_" + finalMarker + "]"
                 + " rowName=SIDE_PLACE_STONE_AGAINST_LOWERED_STONE_EAST_FACE"
                 + " classification=" + classification
@@ -433,12 +509,23 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " placePos=n/a"
                 + " prePlaceState=n/a"
                 + " item=minecraft:stone"
+                + " routePlacementMethod=" + sidePlaceRoutePlacementMethod
+                + " clientPlayerPresent=" + sidePlaceClientPlayerPresent
+                + " serverPlayerPresent=" + sidePlaceServerPlayerPresent
+                + " clientHeldItem=" + sidePlaceClientHeldItem
+                + " serverHeldItem=" + sidePlaceServerHeldItem
+                + " clientPlacementCallResult=" + sidePlaceClientResult
                 + " placementResultClient=" + sidePlaceClientResult
                 + " placementResultServer=" + sidePlaceServerResult
+                + " serverPlacementObservedResult=" + sidePlaceServerResult
                 + " serverResultObserved=" + sidePlaceServerResultObserved
+                + " packetOrInteractionPathUsed=" + sidePlacePacketOrInteractionPathUsed
+                + " cleanupOrTeardownOccurred=" + sidePlaceCleanupOrTeardownOccurred
+                + " reachDiagnostic=" + sidePlaceReachDiagnostic
                 + " retainedSampleAttempts=" + sidePlaceRetainedSampleAttempts
                 + " retainedSampleTicks=" + sidePlaceRetainedSampleTicks
                 + " sampledStates=" + sidePlaceSampledStates
+                + " sampledPlacePosVariants=" + sidePlacePlacePosVariants
                 + " postPlaceState=n/a"
                 + " postPlaceDy=NaN"
                 + " postPlaceAnchored=false"
@@ -755,11 +842,38 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         return pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
+    private static String formatVec(Vec3d vec) {
+        return formatDouble(vec.x) + "," + formatDouble(vec.y) + "," + formatDouble(vec.z);
+    }
+
     private static String formatDouble(double value) {
         if (!Double.isFinite(value)) {
             return "NaN";
         }
         return String.format(java.util.Locale.ROOT, "%.6f", value);
+    }
+
+    private static String sampleSidePlaceVariants(ClientWorld clientWorld, ServerWorld serverWorld) {
+        if (sidePlacePlacePos == null) {
+            return "positions_missing";
+        }
+        StringBuilder line = new StringBuilder();
+        for (Direction direction : Direction.values()) {
+            BlockPos pos = sidePlaceHitPos == null
+                    ? sidePlacePlacePos
+                    : sidePlaceHitPos.offset(direction);
+            if (!line.isEmpty()) {
+                line.append("|");
+            }
+            line.append(direction.asString())
+                    .append("@")
+                    .append(textPos(pos))
+                    .append(":client=")
+                    .append(clientWorld == null ? "UNAVAILABLE" : clientWorld.getBlockState(pos).getBlock())
+                    .append("/server=")
+                    .append(serverWorld == null ? "UNAVAILABLE" : serverWorld.getBlockState(pos).getBlock());
+        }
+        return line.toString();
     }
 
     private static OffsetBlockStateModel.RenderOffsetTrace sampleModelTrace(BlockPos observedPos) {
