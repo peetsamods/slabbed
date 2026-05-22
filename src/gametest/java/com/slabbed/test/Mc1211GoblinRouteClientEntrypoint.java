@@ -57,7 +57,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static BlockPos sidePlaceHitPos;
     private static BlockPos sidePlacePlacePos;
     private static String sidePlaceClientResult = "notCaptured";
+    private static String sidePlaceServerResult = "UNOBSERVABLE";
+    private static boolean sidePlaceServerResultObserved;
     private static boolean sidePlaceClientAccepted;
+    private static int sidePlaceRetainedSampleAttempts;
+    private static int sidePlaceRetainedSampleTicks;
+    private static String sidePlaceSampledStates = "not_sampled";
+    private static boolean sidePlaceRetainedServerStoneObserved;
 
     @Override
     public void onInitializeClient() {
@@ -143,10 +149,12 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
 
         if (client == null || client.world == null || client.player == null || client.getServer() == null) {
-            if (sidePlaceTicks < 1200) {
+            if (sidePlaceTicks < 2400) {
                 return;
             }
-            emitSidePlaceTraceGap("ROUTE_READINESS", "client_world_player_or_integrated_server_not_ready");
+            emitSidePlaceTraceGap(
+                    "ROUTE_READINESS",
+                    "TRACE_GAP_NOT_VIDEO_EQUIVALENT_client_world_player_or_integrated_server_not_ready");
             return;
         }
 
@@ -201,9 +209,43 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             return;
         }
 
+        if (!sampleSidePlaceRetainedState(client)) {
+            return;
+        }
+
         emitSidePlaceStoneLoweringRow(client);
         emitted = true;
         client.scheduleStop();
+    }
+
+    private static boolean sampleSidePlaceRetainedState(MinecraftClient client) {
+        sidePlaceRetainedSampleAttempts++;
+        sidePlaceRetainedSampleTicks = sidePlaceTicks - sidePlaceHostReadyTick;
+        ClientWorld clientWorld = client.world;
+        MinecraftServer server = client.getServer();
+        ServerWorld serverWorld = server == null || clientWorld == null
+                ? null
+                : server.getWorld(clientWorld.getRegistryKey());
+        BlockState clientState = clientWorld == null || sidePlacePlacePos == null
+                ? Blocks.AIR.getDefaultState()
+                : clientWorld.getBlockState(sidePlacePlacePos);
+        BlockState serverState = serverWorld == null || sidePlacePlacePos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sidePlacePlacePos);
+        boolean serverStone = serverState.isOf(Blocks.STONE);
+        if (serverStone) {
+            sidePlaceRetainedServerStoneObserved = true;
+        }
+        String sample = "attempt=" + sidePlaceRetainedSampleAttempts
+                + "/tick=" + sidePlaceRetainedSampleTicks
+                + "/client=" + clientState.getBlock()
+                + "/server=" + (serverWorld == null ? "UNAVAILABLE" : serverState.getBlock());
+        if ("not_sampled".equals(sidePlaceSampledStates)) {
+            sidePlaceSampledStates = sample;
+        } else if (sidePlaceRetainedSampleAttempts <= 8 || sidePlaceRetainedSampleAttempts % 10 == 0 || serverStone) {
+            sidePlaceSampledStates = sidePlaceSampledStates + "," + sample;
+        }
+        return serverStone || sidePlaceRetainedSampleAttempts >= 80;
     }
 
     private static boolean authorSidePlaceStoneLoweringShape(MinecraftClient client, BlockPos origin) {
@@ -238,6 +280,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             if (!server.getPlayerManager().getPlayerList().isEmpty()) {
                 server.getPlayerManager().getPlayerList().get(0)
                         .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+                server.getPlayerManager().getPlayerList().get(0)
+                        .setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
             }
         });
         return true;
@@ -255,18 +299,30 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
 
         BlockState hitState = clientWorld.getBlockState(sidePlaceHitPos);
-        BlockState postPlaceState = clientWorld.getBlockState(sidePlacePlacePos);
+        BlockState clientPostPlaceState = clientWorld.getBlockState(sidePlacePlacePos);
+        BlockState postPlaceState = clientPostPlaceState;
+        if (serverWorld != null) {
+            postPlaceState = serverWorld.getBlockState(sidePlacePlacePos);
+        }
         BlockState prePlaceState = Blocks.AIR.getDefaultState();
         double hitDy = SlabSupport.getYOffset(clientWorld, sidePlaceHitPos, hitState);
-        double postPlaceDy = SlabSupport.getYOffset(clientWorld, sidePlacePlacePos, postPlaceState);
+        double postPlaceDy = serverWorld == null
+                ? SlabSupport.getYOffset(clientWorld, sidePlacePlacePos, postPlaceState)
+                : SlabSupport.getYOffset(serverWorld, sidePlacePlacePos, postPlaceState);
         boolean hitAnchored = SlabAnchorAttachment.isAnchored(clientWorld, sidePlaceHitPos);
-        boolean postPlaceAnchored = SlabAnchorAttachment.isAnchored(clientWorld, sidePlacePlacePos);
+        boolean postPlaceAnchored = serverWorld == null
+                ? SlabAnchorAttachment.isAnchored(clientWorld, sidePlacePlacePos)
+                : SlabAnchorAttachment.isAnchored(serverWorld, sidePlacePlacePos);
         boolean hitFullHeightLoweredCarrier =
                 SlabSupport.isFullHeightLoweredCarrier(clientWorld, sidePlaceHitPos, hitState);
         boolean postPlaceFullHeightLoweredCarrier =
-                SlabSupport.isFullHeightLoweredCarrier(clientWorld, sidePlacePlacePos, postPlaceState);
+                serverWorld == null
+                        ? SlabSupport.isFullHeightLoweredCarrier(clientWorld, sidePlacePlacePos, postPlaceState)
+                        : SlabSupport.isFullHeightLoweredCarrier(serverWorld, sidePlacePlacePos, postPlaceState);
         boolean hitHasBottomSlabBelow = SlabSupport.hasBottomSlabBelow(clientWorld, sidePlaceHitPos);
-        boolean postPlaceHasBottomSlabBelow = SlabSupport.hasBottomSlabBelow(clientWorld, sidePlacePlacePos);
+        boolean postPlaceHasBottomSlabBelow = serverWorld == null
+                ? SlabSupport.hasBottomSlabBelow(clientWorld, sidePlacePlacePos)
+                : SlabSupport.hasBottomSlabBelow(serverWorld, sidePlacePlacePos);
         double postPlaceServerDy = Double.NaN;
         boolean postPlaceServerAnchored = false;
         if (serverWorld != null) {
@@ -290,10 +346,15 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         String legalStateName;
         String illegalReason;
         String finalMarker;
-        if (!sidePlaceClientAccepted || !postPlaceState.isOf(Blocks.STONE)) {
-            classification = "TRACE_GAP_NOT_VIDEO_EQUIVALENT";
+        if (!sidePlaceRetainedServerStoneObserved || !postPlaceState.isOf(Blocks.STONE)) {
+            classification = "TRACE_GAP_SERVER_RETAINED_STATE_NOT_OBSERVED";
             legalStateName = "none";
-            illegalReason = "placement_not_accepted_or_stone_not_present";
+            illegalReason = "server_retained_place_state_not_observed";
+            finalMarker = "TRACE_GAP";
+        } else if (!sidePlaceServerResultObserved) {
+            classification = "TRACE_GAP_SERVER_RESULT_UNOBSERVABLE_BUT_STATE_RETAINED";
+            legalStateName = "none";
+            illegalReason = "server_result_not_observable_from_client_route";
             finalMarker = "TRACE_GAP";
         } else if (Math.abs(postPlaceDy + 0.5d) <= 1.0e-6 && namedBsfbAdjacentInheritance) {
             classification = "LEGAL_BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
@@ -325,9 +386,14 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " prePlaceState=" + prePlaceState.getBlock()
                 + " item=minecraft:stone"
                 + " placementResultClient=" + sidePlaceClientResult
-                + " placementResultServer=notCaptured"
+                + " placementResultServer=" + sidePlaceServerResult
+                + " serverResultObserved=" + sidePlaceServerResultObserved
                 + " placementAccepted=" + sidePlaceClientAccepted
+                + " retainedSampleAttempts=" + sidePlaceRetainedSampleAttempts
+                + " retainedSampleTicks=" + sidePlaceRetainedSampleTicks
+                + " sampledStates=" + sidePlaceSampledStates
                 + " postPlaceState=" + postPlaceState.getBlock()
+                + " postPlaceClientState=" + clientPostPlaceState.getBlock()
                 + " postPlaceDy=" + formatDouble(postPlaceDy)
                 + " postPlaceServerDy=" + formatDouble(postPlaceServerDy)
                 + " postPlaceAnchored=" + postPlaceAnchored
@@ -368,7 +434,11 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " prePlaceState=n/a"
                 + " item=minecraft:stone"
                 + " placementResultClient=" + sidePlaceClientResult
-                + " placementResultServer=notCaptured"
+                + " placementResultServer=" + sidePlaceServerResult
+                + " serverResultObserved=" + sidePlaceServerResultObserved
+                + " retainedSampleAttempts=" + sidePlaceRetainedSampleAttempts
+                + " retainedSampleTicks=" + sidePlaceRetainedSampleTicks
+                + " sampledStates=" + sidePlaceSampledStates
                 + " postPlaceState=n/a"
                 + " postPlaceDy=NaN"
                 + " postPlaceAnchored=false"
