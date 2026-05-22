@@ -11,6 +11,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.shape.VoxelShape;
 import com.slabbed.client.ClientDy;
+import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.SlabSupport;
 
 /**
@@ -33,6 +34,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static int hostTicks;
     private static boolean hostReady;
     private static BlockPos hostedOrigin;
+    private static int hostReadyTick;
 
     @Override
     public void onInitializeClient() {
@@ -141,6 +143,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
 
         if (!hostReady) {
             hostReady = true;
+            hostReadyTick = hostTicks;
             hostedOrigin = client.player.getBlockPos().add(3, 0, 3).toImmutable();
             System.out.println("[MC1211_MODEL_VS_OUTLINE_HOST_READY]"
                     + " route=" + ROUTE
@@ -170,6 +173,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                     false,
                     false);
             client.scheduleStop();
+            return;
+        }
+        if (hostTicks - hostReadyTick < 20) {
             return;
         }
 
@@ -250,13 +256,53 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 ? "NaN..NaN"
                 : formatDouble(outlineShape.getBoundingBox().minY) + ".."
                 + formatDouble(outlineShape.getBoundingBox().maxY);
-        String reason = "TRACE_GAP_NO_MODEL_OBSERVER";
-        boolean modelEqualsOutline = false;
-        boolean modelLowerThanOutline = false;
-        boolean traceGap = true;
-        String modelDy = "NaN";
-        String modelBounds = "NaN..NaN";
+        OffsetBlockStateModel.RenderOffsetTrace trace = sampleModelTrace(fullPos);
+        String reason;
+        boolean modelEqualsOutline;
+        boolean modelLowerThanOutline;
+        boolean traceGap;
+        String modelDy;
+        String modelBounds;
+        String modelObserverKind;
+        String modelDyProxy;
+        String modelVisualEquivalence;
         String targetDyText = formatDouble(targetDy);
+        if (!trace.seen()) {
+            reason = "TRACE_GAP_RENDER_MODEL_PATH_NOT_OBSERVABLE_FROM_GAMETEST";
+            modelEqualsOutline = false;
+            modelLowerThanOutline = false;
+            traceGap = true;
+            modelDy = "NaN";
+            modelBounds = "NaN..NaN";
+            modelObserverKind = "not_observable";
+            modelDyProxy = "NaN";
+            modelVisualEquivalence = "no";
+        } else {
+            double tracedModelDy = trace.modelDy();
+            double modelDyDelta = tracedModelDy - outlineDy;
+            String inferredModelBounds = inferShiftedBounds(outlineShape, modelDyDelta);
+            double modelMin = shiftedMinY(outlineShape, modelDyDelta);
+            double outlineMin = outlineShape.isEmpty() ? Double.NaN : outlineShape.getBoundingBox().minY;
+            modelLowerThanOutline = Double.isFinite(modelMin)
+                    && Double.isFinite(outlineMin)
+                    && modelMin < outlineMin - 1.0e-6;
+            modelEqualsOutline = Math.abs(modelDyDelta) <= 1.0e-6;
+            modelDy = formatDouble(tracedModelDy);
+            modelBounds = inferredModelBounds;
+            modelObserverKind = "gametest_hook";
+            modelDyProxy = modelDy;
+            modelVisualEquivalence = "proxy_only";
+            if (modelLowerThanOutline) {
+                reason = "MODEL_LOWER_THAN_OUTLINE";
+                traceGap = false;
+            } else if (!modelEqualsOutline) {
+                reason = "MODEL_DY_MISMATCH";
+                traceGap = true;
+            } else {
+                reason = "TRACE_GAP_MODEL_PROXY_ONLY_NOT_VISUAL_MESH";
+                traceGap = true;
+            }
+        }
 
         System.out.println("[MC1211_MODEL_VS_OUTLINE_ROW]"
                 + " row=" + rowName
@@ -269,14 +315,17 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " fullBlockPos=" + textPos(fullPos)
                 + " fullBlockState=" + fullState
                 + " modelDy=" + modelDy
+                + " modelDyProxy=" + modelDyProxy
+                + " modelObserverKind=" + modelObserverKind
                 + " outlineDy=" + formatDouble(outlineDy)
                 + " targetDy=" + targetDyText
                 + " modelBoundsY=" + modelBounds
                 + " outlineBoundsY=" + outlineBounds
                 + " modelEqualsOutline=" + modelEqualsOutline
                 + " modelLowerThanOutline=" + modelLowerThanOutline
+                + " modelVisualEquivalence=" + modelVisualEquivalence
                 + " reason=" + reason
-                + " result=TRACE_GAP");
+                + " result=" + (traceGap ? "TRACE_GAP" : "RED"));
         return new RowResult(traceGap, modelLowerThanOutline);
     }
 
@@ -312,12 +361,15 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " fullBlockPos=" + fullPos
                 + " fullBlockState=" + fullState
                 + " modelDy=" + modelDy
+                + " modelDyProxy=NaN"
+                + " modelObserverKind=not_observable"
                 + " outlineDy=" + outlineDy
                 + " targetDy=" + targetDy
                 + " modelBoundsY=" + modelBounds
                 + " outlineBoundsY=" + outlineBounds
                 + " modelEqualsOutline=" + modelEqualsOutline
                 + " modelLowerThanOutline=" + modelLowerThanOutline
+                + " modelVisualEquivalence=no"
                 + " reason=" + reason
                 + " result=TRACE_GAP");
         System.out.println("[MC1211_MODEL_VS_OUTLINE_SUMMARY]"
@@ -342,6 +394,30 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             return "NaN";
         }
         return String.format(java.util.Locale.ROOT, "%.6f", value);
+    }
+
+    private static OffsetBlockStateModel.RenderOffsetTrace sampleModelTrace(BlockPos observedPos) {
+        System.setProperty("slabbed.render.offset.trace", "true");
+        OffsetBlockStateModel.resetRenderOffsetTrace(observedPos);
+        OffsetBlockStateModel.RenderOffsetTrace trace = OffsetBlockStateModel.snapshotRenderOffsetTrace();
+        System.clearProperty("slabbed.render.offset.trace");
+        return trace;
+    }
+
+    private static String inferShiftedBounds(VoxelShape outlineShape, double modelDyDelta) {
+        if (outlineShape.isEmpty()) {
+            return "NaN..NaN";
+        }
+        return formatDouble(outlineShape.getBoundingBox().minY + modelDyDelta)
+                + ".."
+                + formatDouble(outlineShape.getBoundingBox().maxY + modelDyDelta);
+    }
+
+    private static double shiftedMinY(VoxelShape outlineShape, double modelDyDelta) {
+        if (outlineShape.isEmpty()) {
+            return Double.NaN;
+        }
+        return outlineShape.getBoundingBox().minY + modelDyDelta;
     }
 
     private record RowResult(boolean traceGap, boolean modelLowerThanOutline) {
