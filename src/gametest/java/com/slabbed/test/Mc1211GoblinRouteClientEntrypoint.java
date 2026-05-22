@@ -69,6 +69,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static boolean sidePlaceCleanupOrTeardownOccurred;
     private static String sidePlaceReachDiagnostic = "not_sampled";
     private static String sidePlacePlacePosVariants = "not_sampled";
+    private static boolean sidePlaceHeldItemSynced;
+    private static boolean sidePlacePlayerPositionSynced;
+    private static boolean sidePlaceReadyRowEmitted;
     private static int sidePlaceRetainedSampleAttempts;
     private static int sidePlaceRetainedSampleTicks;
     private static String sidePlaceSampledStates = "not_sampled";
@@ -157,14 +160,22 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                     + " property=" + SIDE_PLACE_STONE_LOWERING_ONLY_PROPERTY);
         }
 
-        if (client == null || client.world == null || client.player == null || client.getServer() == null) {
-            if (sidePlaceTicks < 7200) {
+        String readinessGap = sidePlaceReadinessGap(client);
+        if (readinessGap != null) {
+            if (!sidePlaceReadyRowEmitted || sidePlaceTicks % 1200 == 0) {
+                emitSidePlaceReadyRow(client, "WAITING", readinessGap);
+                sidePlaceReadyRowEmitted = true;
+            }
+            if (sidePlaceTicks < 240) {
                 return;
             }
-            emitSidePlaceTraceGap(
-                    "ROUTE_READINESS",
-                    "TRACE_GAP_NOT_VIDEO_EQUIVALENT_client_world_player_or_integrated_server_not_ready");
+            emitSidePlaceReadyRow(client, "TIMEOUT", readinessGap);
+            emitSidePlaceTraceGap("ROUTE_READINESS", readinessGap);
             return;
+        }
+        if (!sidePlaceReadyRowEmitted) {
+            emitSidePlaceReadyRow(client, "READY", "none");
+            sidePlaceReadyRowEmitted = true;
         }
 
         if (sidePlaceOrigin == null) {
@@ -231,6 +242,54 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         client.scheduleStop();
     }
 
+    private static String sidePlaceReadinessGap(MinecraftClient client) {
+        if (client == null || client.world == null) {
+            return "TRACE_GAP_CLIENT_WORLD_NOT_READY";
+        }
+        if (client.player == null) {
+            return "TRACE_GAP_CLIENT_PLAYER_NOT_READY";
+        }
+        MinecraftServer server = client.getServer();
+        if (server == null) {
+            return "TRACE_GAP_SERVER_NOT_READY";
+        }
+        if (server.getPlayerManager().getPlayerList().isEmpty()) {
+            return "TRACE_GAP_SERVER_PLAYER_NOT_READY";
+        }
+        if (client.interactionManager == null) {
+            return "TRACE_GAP_INTERACTION_MANAGER_NOT_READY";
+        }
+        return null;
+    }
+
+    private static void emitSidePlaceReadyRow(MinecraftClient client, String phase, String reason) {
+        MinecraftServer server = client == null ? null : client.getServer();
+        boolean clientWorldReady = client != null && client.world != null;
+        boolean clientPlayerReady = client != null && client.player != null;
+        boolean serverReady = server != null;
+        boolean serverPlayerReady = serverReady && !server.getPlayerManager().getPlayerList().isEmpty();
+        boolean interactionManagerReady = client != null && client.interactionManager != null;
+        String clientHeld = clientPlayerReady
+                ? client.player.getStackInHand(Hand.MAIN_HAND).toString()
+                : "UNAVAILABLE";
+        String serverHeld = serverPlayerReady
+                ? server.getPlayerManager().getPlayerList().get(0).getStackInHand(Hand.MAIN_HAND).toString()
+                : "UNAVAILABLE";
+        System.out.println("[MC1211_SIDE_PLACE_STONE_LOWERING_READY_ROW]"
+                + " phase=" + phase
+                + " tick=" + sidePlaceTicks
+                + " clientWorldReady=" + clientWorldReady
+                + " clientPlayerReady=" + clientPlayerReady
+                + " serverReady=" + serverReady
+                + " serverPlayerReady=" + serverPlayerReady
+                + " interactionManagerReady=" + interactionManagerReady
+                + " heldItemSynced=" + sidePlaceHeldItemSynced
+                + " playerPositionSynced=" + sidePlacePlayerPositionSynced
+                + " clientHeldItem=" + clientHeld
+                + " serverHeldItem=" + serverHeld
+                + " reason=" + reason);
+    }
+
     private static void syncSidePlaceLiveLikePlayer(MinecraftClient client) {
         sidePlaceClientPlayerPresent = client.player != null;
         MinecraftServer server = client.getServer();
@@ -261,6 +320,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         client.player.setSneaking(false);
         client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
         sidePlaceClientHeldItem = client.player.getStackInHand(Hand.MAIN_HAND).toString();
+        sidePlacePlayerPositionSynced = true;
         if (sidePlaceServerPlayerPresent) {
             var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
             serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
@@ -269,6 +329,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
             serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
             sidePlaceServerHeldItem = serverPlayer.getStackInHand(Hand.MAIN_HAND).toString();
+            sidePlaceHeldItemSynced = sidePlaceClientHeldItem.contains("minecraft:stone")
+                    && sidePlaceServerHeldItem.contains("minecraft:stone");
         }
     }
 
@@ -495,6 +557,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     }
 
     private static void emitSidePlaceTraceGap(String row, String reason) {
+        String classification = reason.startsWith("TRACE_GAP_")
+                ? reason
+                : "TRACE_GAP_ROUTE_NOT_VIDEO_EQUIVALENT";
         System.out.println("[MC1211_SIDE_PLACE_STONE_LOWERING_START]"
                 + " rowName=SIDE_PLACE_STONE_AGAINST_LOWERED_STONE_EAST_FACE"
                 + " rows=1");
@@ -533,12 +598,12 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " legalStateName=none"
                 + " illegalReason=" + reason
                 + " visualRelation=unknown"
-                + " classification=TRACE_GAP_NOT_VIDEO_EQUIVALENT");
+                + " classification=" + classification);
         System.out.println("[MC1211_SIDE_PLACE_STONE_LOWERING_SUMMARY]"
                 + " rowName=SIDE_PLACE_STONE_AGAINST_LOWERED_STONE_EAST_FACE"
                 + " rows=1"
                 + " finalResult=TRACE_GAP"
-                + " classification=TRACE_GAP_NOT_VIDEO_EQUIVALENT"
+                + " classification=" + classification
                 + " reason=" + reason);
         System.out.println("[MC1211_SIDE_PLACE_STONE_LOWERING_TRACE_GAP]"
                 + " rowName=SIDE_PLACE_STONE_AGAINST_LOWERED_STONE_EAST_FACE"
