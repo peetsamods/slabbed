@@ -117,12 +117,15 @@ public final class SlabbedLabFixtureTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void mc1211ServerStateOverlapMatrix(TestContext ctx) {
         boolean goblinOnly = Boolean.getBoolean("slabbed.mc1211.goblinOnly");
+        boolean sidePlaceStoneLoweringOnly = Boolean.getBoolean("slabbed.mc1211.sidePlaceStoneLoweringOnly");
         boolean overlapOnly = Boolean.getBoolean("slabbed.mc1211.overlapMatrixOnly");
-        if (goblinOnly && !overlapOnly) {
+        if ((goblinOnly || sidePlaceStoneLoweringOnly) && !overlapOnly) {
             System.out.println("[MC1211_SERVER_STATE_OVERLAP_MATRIX_SKIPPED]"
                     + " route=runClientGameTest"
-                    + " reason=goblin_only"
-                    + " property=slabbed.mc1211.goblinOnly");
+                    + " reason=client_route_only"
+                    + " property=" + (sidePlaceStoneLoweringOnly
+                    ? "slabbed.mc1211.sidePlaceStoneLoweringOnly"
+                    : "slabbed.mc1211.goblinOnly"));
             ctx.complete();
             return;
         }
