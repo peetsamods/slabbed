@@ -36,6 +36,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * <p>Client-side raycast retarget for lowered owners placed on bottom slabs.
  *
@@ -62,9 +65,21 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
     @Shadow @Final private MinecraftClient client;
     private static final long BETA4_FINAL_TARGET_TRACE_MIN_INTERVAL_NANOS = 1_000_000_000L;
+    private static final String MC1211_LIVE_OUTLINE_TARGET_TRACE_PROPERTY =
+            "slabbed.mc1211.liveOutlineTargetTrace";
+    private static final int MC1211_LIVE_OUTLINE_TARGET_TRACE_SUMMARY_INTERVAL = 20;
     private static final double BETA35_VISIBLE_OWNER_SUPPORT_OVERRUN = 0.75d;
     private static String slabbed$beta4FinalTargetTraceLastSignature;
     private static long slabbed$beta4FinalTargetTraceLastLogNanos;
+    private static final Set<String> slabbed$mc1211LiveOutlineTargetTraceSignatures = ConcurrentHashMap.newKeySet();
+    private static boolean slabbed$mc1211LiveOutlineTargetTraceCanaryLogged;
+    private static int slabbed$mc1211LiveOutlineTargetTraceRows;
+    private static int slabbed$mc1211LiveOutlineTargetTraceSkipped;
+    private static int slabbed$mc1211LiveOutlineTargetTraceTargetMatchesAnchored;
+    private static int slabbed$mc1211LiveOutlineTargetTraceTargetAboveAnchored;
+    private static int slabbed$mc1211LiveOutlineTargetTraceDifferentOwner;
+    private static int slabbed$mc1211LiveOutlineTargetTraceAirOrMiss;
+    private static int slabbed$mc1211LiveOutlineTargetTraceNoRecentAnchor;
     private static boolean slabbed$beta4LiveRetargetRecorderStartLogged;
     private static boolean slabbed$beta4ReloadJumpRecorderStartLogged;
     private static ClientWorld slabbed$beta4ReloadJumpRecorderWorld;
@@ -83,6 +98,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
     @Inject(method = "updateCrosshairTarget", at = @At("TAIL"))
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
+        HitResult slabbed$mc1211LiveOutlineTargetTraceInitialTarget = client.crosshairTarget;
+        try {
         slabbed$logBeta4LiveRetargetRecorderStart();
         slabbed$recordBeta4ReloadJumpRecorder(tickProgress);
         slabbed$recordBeta4OutlineRecorder(tickProgress);
@@ -365,6 +382,251 @@ public abstract class GameRendererCrosshairRetargetMixin {
         client.crosshairTarget = chestHit;
         slabbed$traceTargeting(tickProgress, initialTarget,
                 "scan-no-rescue-candidate;legacy-retarget-fired", false);
+        } finally {
+            slabbed$traceMc1211LiveOutlineTarget(
+                    tickProgress,
+                    slabbed$mc1211LiveOutlineTargetTraceInitialTarget);
+        }
+    }
+
+    private void slabbed$traceMc1211LiveOutlineTarget(float tickProgress, HitResult initialTarget) {
+        if (!Boolean.getBoolean(MC1211_LIVE_OUTLINE_TARGET_TRACE_PROPERTY)) {
+            return;
+        }
+
+        if (!slabbed$mc1211LiveOutlineTargetTraceCanaryLogged) {
+            slabbed$mc1211LiveOutlineTargetTraceCanaryLogged = true;
+            Slabbed.LOGGER.info(
+                    "[MC1211_LIVE_OUTLINE_TARGET_TRACE_CANARY] enabled=true property={}",
+                    MC1211_LIVE_OUTLINE_TARGET_TRACE_PROPERTY);
+        }
+
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            slabbed$mc1211LiveOutlineTargetTraceSkipped++;
+            return;
+        }
+
+        HitResult target = client.crosshairTarget;
+        BlockHitResult blockTarget = target instanceof BlockHitResult blockHit
+                && target.getType() == HitResult.Type.BLOCK
+                ? blockHit
+                : null;
+        BlockPos targetPos = blockTarget == null ? null : blockTarget.getBlockPos();
+        BlockState targetState = targetPos == null ? null : world.getBlockState(targetPos);
+        BlockPos playerPos = client.player == null ? null : client.player.getBlockPos();
+        BlockPos anchoredPos = slabbed$findMc1211LiveAnchoredStone(world, targetPos, playerPos);
+        BlockState anchoredState = anchoredPos == null ? null : world.getBlockState(anchoredPos);
+        boolean targetIsTraceBlock = targetState != null
+                && (targetState.getBlock() == Blocks.STONE || targetState.getBlock() instanceof SlabBlock);
+        boolean targetAirOrMiss = target == null
+                || target.getType() == HitResult.Type.MISS
+                || targetState == null
+                || targetState.isAir();
+
+        if (!targetIsTraceBlock && !targetAirOrMiss && anchoredPos == null) {
+            slabbed$mc1211LiveOutlineTargetTraceSkipped++;
+            return;
+        }
+
+        boolean targetEqualsAnchored = targetPos != null && targetPos.equals(anchoredPos);
+        boolean targetAboveAnchored = targetPos != null && anchoredPos != null && targetPos.equals(anchoredPos.up());
+        double anchoredDy = anchoredPos == null || anchoredState == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(world, anchoredPos, anchoredState);
+        String outlineMatchesVisibleModel = slabbed$mc1211OutlineMatchesVisibleModel(
+                world,
+                cam,
+                targetPos,
+                targetState,
+                anchoredPos,
+                anchoredDy);
+        String reason = slabbed$mc1211LiveOutlineTargetReason(
+                targetAirOrMiss,
+                anchoredPos,
+                targetEqualsAnchored,
+                targetAboveAnchored);
+        slabbed$countMc1211LiveOutlineTargetReason(reason);
+
+        String signature = (target == null ? "null" : target.getType().toString())
+                + '|'
+                + (targetPos == null ? "none" : targetPos.toShortString())
+                + '|'
+                + (blockTarget == null ? "none" : blockTarget.getSide().toString())
+                + '|'
+                + (anchoredPos == null ? "none" : anchoredPos.toShortString())
+                + '|'
+                + reason;
+        if (!slabbed$mc1211LiveOutlineTargetTraceSignatures.add(signature)) {
+            slabbed$mc1211LiveOutlineTargetTraceSkipped++;
+            return;
+        }
+
+        slabbed$mc1211LiveOutlineTargetTraceRows++;
+        ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
+        Vec3d cameraPos = cam.getCameraPosVec(tickProgress);
+        StringBuilder line = new StringBuilder(2048);
+        line.append("[MC1211_LIVE_OUTLINE_TARGET_TRACE_ROW]");
+        line.append(" tick=").append(world.getTime());
+        line.append(" row=").append(slabbed$mc1211LiveOutlineTargetTraceRows);
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" cameraPos=").append(slabbed$formatVec(cameraPos));
+        line.append(" playerPos=").append(client.player == null
+                ? "none"
+                : slabbed$formatVec(new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ())));
+        line.append(" initialTarget=").append(slabbed$formatHit(initialTarget));
+        line.append(" crosshairTargetType=").append(target == null ? "null" : target.getType());
+        line.append(" crosshairTargetPos=").append(targetPos == null ? "none" : targetPos.toShortString());
+        line.append(" crosshairTargetFace=").append(blockTarget == null ? "none" : blockTarget.getSide());
+        line.append(" crosshairTargetHit=").append(blockTarget == null ? "none" : slabbed$formatVec(blockTarget.getPos()));
+        line.append(" targetState=").append(targetState == null ? "none" : targetState);
+        line.append(" targetDy=").append(targetState == null
+                ? "NaN"
+                : slabbed$formatDouble(SlabSupport.getYOffset(world, targetPos, targetState)));
+        line.append(" targetClientDy=").append(targetState == null
+                ? "NaN"
+                : slabbed$formatDouble(ClientDy.dyFor(world, targetPos, targetState)));
+        line.append(" targetOutlineBounds=").append(targetState == null
+                ? "none"
+                : slabbed$shapeBounds(world, cam, targetPos, targetState, true));
+        line.append(" selectedShapeBounds=").append(targetState == null
+                ? "none"
+                : slabbed$shapeBounds(world, cam, targetPos, targetState, true));
+        line.append(" modelTraceCandidatePos=").append(anchoredState != null && anchoredState.getBlock() == Blocks.STONE
+                ? anchoredPos.toShortString()
+                : "none");
+        line.append(" knownAnchoredFullBlockPos=").append(anchoredPos == null ? "none" : anchoredPos.toShortString());
+        line.append(" knownAnchoredFullBlockState=").append(anchoredState == null ? "none" : anchoredState);
+        line.append(" knownAnchoredFullBlockDy=").append(Double.isNaN(anchoredDy)
+                ? "NaN"
+                : slabbed$formatDouble(anchoredDy));
+        line.append(" targetEqualsAnchoredFullBlock=").append(targetEqualsAnchored);
+        line.append(" targetOneAboveAnchoredFullBlock=").append(targetAboveAnchored);
+        line.append(" selectedOutlineBoundsMatchVisibleModelBounds=").append(outlineMatchesVisibleModel);
+        line.append(" reason=").append(reason);
+        Slabbed.LOGGER.info(line.toString());
+
+        if (slabbed$mc1211LiveOutlineTargetTraceRows % MC1211_LIVE_OUTLINE_TARGET_TRACE_SUMMARY_INTERVAL == 0) {
+            slabbed$logMc1211LiveOutlineTargetTraceSummary();
+        }
+    }
+
+    private static BlockPos slabbed$findMc1211LiveAnchoredStone(
+            ClientWorld world,
+            BlockPos targetPos,
+            BlockPos playerPos
+    ) {
+        BlockPos first = slabbed$findMc1211LiveAnchoredStoneNear(world, targetPos, targetPos);
+        if (first != null) {
+            return first;
+        }
+        return slabbed$findMc1211LiveAnchoredStoneNear(world, playerPos, targetPos);
+    }
+
+    private static BlockPos slabbed$findMc1211LiveAnchoredStoneNear(
+            ClientWorld world,
+            BlockPos center,
+            BlockPos distanceOrigin
+    ) {
+        if (world == null || center == null) {
+            return null;
+        }
+        BlockPos best = null;
+        double bestDist2 = Double.POSITIVE_INFINITY;
+        int radius = 4;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    BlockPos pos = center.add(dx, dy, dz);
+                    BlockState state = world.getBlockState(pos);
+                    if (state.getBlock() != Blocks.STONE) {
+                        continue;
+                    }
+                    if (!SlabAnchorAttachment.isAnchored(world, pos)) {
+                        continue;
+                    }
+                    if (SlabSupport.getYOffset(world, pos, state) != -0.5d) {
+                        continue;
+                    }
+                    double dist2 = distanceOrigin == null ? 0.0d : pos.getSquaredDistance(distanceOrigin);
+                    if (best == null || dist2 < bestDist2) {
+                        best = pos.toImmutable();
+                        bestDist2 = dist2;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    private static String slabbed$mc1211OutlineMatchesVisibleModel(
+            ClientWorld world,
+            Entity cam,
+            BlockPos targetPos,
+            BlockState targetState,
+            BlockPos anchoredPos,
+            double anchoredDy
+    ) {
+        if (targetPos == null || targetState == null || anchoredPos == null || !targetPos.equals(anchoredPos)) {
+            return "unknown";
+        }
+        try {
+            VoxelShape outline = targetState.getOutlineShape(world, targetPos, ShapeContext.of(cam));
+            if (outline == null || outline.isEmpty()) {
+                return "false";
+            }
+            Box bounds = outline.getBoundingBox();
+            return Boolean.toString(
+                    Math.abs(bounds.minY - anchoredDy) < 1.0e-6
+                            && Math.abs(bounds.maxY - (anchoredDy + 1.0d)) < 1.0e-6);
+        } catch (Throwable t) {
+            return "error:" + t.getClass().getSimpleName();
+        }
+    }
+
+    private static String slabbed$mc1211LiveOutlineTargetReason(
+            boolean targetAirOrMiss,
+            BlockPos anchoredPos,
+            boolean targetEqualsAnchored,
+            boolean targetAboveAnchored
+    ) {
+        if (targetAirOrMiss) {
+            return "TARGET_AIR_OR_MISS";
+        }
+        if (anchoredPos == null) {
+            return "TRACE_NO_RECENT_ANCHORED_BLOCK";
+        }
+        if (targetEqualsAnchored) {
+            return "TARGET_MATCHES_ANCHORED_MODEL";
+        }
+        if (targetAboveAnchored) {
+            return "TARGET_ABOVE_VISIBLE_MODEL";
+        }
+        return "TARGET_DIFFERENT_OWNER";
+    }
+
+    private static void slabbed$countMc1211LiveOutlineTargetReason(String reason) {
+        switch (reason) {
+            case "TARGET_MATCHES_ANCHORED_MODEL" -> slabbed$mc1211LiveOutlineTargetTraceTargetMatchesAnchored++;
+            case "TARGET_ABOVE_VISIBLE_MODEL" -> slabbed$mc1211LiveOutlineTargetTraceTargetAboveAnchored++;
+            case "TARGET_DIFFERENT_OWNER" -> slabbed$mc1211LiveOutlineTargetTraceDifferentOwner++;
+            case "TARGET_AIR_OR_MISS" -> slabbed$mc1211LiveOutlineTargetTraceAirOrMiss++;
+            case "TRACE_NO_RECENT_ANCHORED_BLOCK" -> slabbed$mc1211LiveOutlineTargetTraceNoRecentAnchor++;
+            default -> { }
+        }
+    }
+
+    private static void slabbed$logMc1211LiveOutlineTargetTraceSummary() {
+        Slabbed.LOGGER.info(
+                "[MC1211_LIVE_OUTLINE_TARGET_TRACE_SUMMARY] rows={} skipped={} targetMatchesAnchored={} targetAboveAnchored={} differentOwner={} airOrMiss={} noRecentAnchoredBlock={}",
+                slabbed$mc1211LiveOutlineTargetTraceRows,
+                slabbed$mc1211LiveOutlineTargetTraceSkipped,
+                slabbed$mc1211LiveOutlineTargetTraceTargetMatchesAnchored,
+                slabbed$mc1211LiveOutlineTargetTraceTargetAboveAnchored,
+                slabbed$mc1211LiveOutlineTargetTraceDifferentOwner,
+                slabbed$mc1211LiveOutlineTargetTraceAirOrMiss,
+                slabbed$mc1211LiveOutlineTargetTraceNoRecentAnchor);
     }
 
     /**
