@@ -1291,3 +1291,9 @@ Rule for future work:
 
 Bug Blaster:
 - Not needed now; this is acceptance/closure, not a new mechanism+patch+proof savepoint.
+
+## 2026-05-22 - MC1211 side-adjacent full-block law decision
+
+- MC1211 side-adjacent full-block lowered inheritance is proven current law but
+  rejected for the release shape; see
+  `docs/porting/mc-1.21.1-side-adjacent-fullblock-law.md`.
