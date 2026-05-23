@@ -336,6 +336,7 @@ Category expansion is paused until the Slabbed Core Building Contract is stable.
 ## Superpowers plugin workflow
 
 If the Superpowers plugin is available, invoke `superpowers:using-superpowers` before task-specific skills.
+For slice work with independent subtasks, use `@Superpowers` explicitly to dispatch simultaneous tasks.
 
 Resolve Superpowers skills through the active registry or tool output. Do not hard-code plugin cache paths.
 
