@@ -1131,8 +1131,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 && hitFullHeightLoweredCarrier
                 && !postPlaceHasBottomSlabBelow
                 && Math.abs(postPlaceDy + 0.5d) <= 1.0e-6;
-        boolean rejectedSameYSideAdjacentFullBlockLowering = sameLaneSideAdjacent
-                && namedBsfbAdjacentInheritance;
         String visualRelation = sameLaneSideAdjacent ? "sameLaneSideAdjacent"
                 : (Math.abs(postPlaceDy) <= 1.0e-6 ? "normalVanilla" : "unknown");
         String classification;
@@ -1144,11 +1142,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             legalStateName = "none";
             illegalReason = "server_retained_place_state_not_observed";
             finalMarker = "TRACE_GAP";
-        } else if (rejectedSameYSideAdjacentFullBlockLowering) {
-            classification = "ILLEGAL_REJECTED_BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
-            legalStateName = "none";
-            illegalReason = "same_y_side_adjacent_full_block_inherited_lowered_lane";
-            finalMarker = "RED";
         } else if (Math.abs(postPlaceDy + 0.5d) <= 1.0e-6 && namedBsfbAdjacentInheritance) {
             classification = "LEGAL_BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
             legalStateName = "BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
@@ -1160,10 +1153,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             illegalReason = "postPlaceDy=-0.5_without_named_side_adjacent_source_truth";
             finalMarker = "RED";
         } else {
-            classification = "LEGAL_VANILLA_SIDE_PLACEMENT";
-            legalStateName = "VANILLA_SIDE_ADJACENT_FULL_BLOCK";
-            illegalReason = "none";
-            finalMarker = "GREEN";
+            classification = "ILLEGAL_REJECTED_BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
+            legalStateName = "none";
+            illegalReason = "same_y_side_adjacent_full_block_failed_to_inherit_lowered_lane";
+            finalMarker = "RED";
         }
 
         System.out.println("[MC1211_SIDE_PLACE_STONE_LOWERING_ROW]"
