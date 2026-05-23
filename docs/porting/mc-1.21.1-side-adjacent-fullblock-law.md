@@ -31,19 +31,23 @@
 
 ## Product Verdict
 
-Julia rejects this release behavior because it reads as a full block merging
-into a slab lane. The release promise favors visible physical coherence over
-preserving this broad side-adjacent inheritance.
+Superseded by Julia's latest live outline/target/model trace at `f98a9d9`: the
+prior rejection was too broad for the actual release shape.
+
+Direct slab→stone anchoring is healthy. The remaining player-facing failure is
+the next same-Y side placement against that anchored lowered stone: the placed
+stone stayed vanilla `dy=0.0` after the b7576fb-side law change, so it no longer
+sat in the coherent slab-supported row.
 
 ## Law Decision
 
-Narrow side-adjacent full-block lowered inheritance for MC1211 release. Same-Y
-horizontal placement of an ordinary full block against a lowered ordinary full
-block must not automatically inherit `dy=-0.5` unless a future named lane rule
-proves the visual relationship is coherent.
+Same-Y horizontal placement of an ordinary full block against a valid
+anchored/lowered ordinary full-block source must inherit `dy=-0.5` when that
+source is part of the coherent slab-supported row Julia is building.
 
-This decision does not blindly delete the entire inheritance concept. It keeps
-space for cases where the relationship is visually coherent, named, and proven.
+This restores/narrows ordinary side-adjacent inheritance for the proven live
+shape. It does not authorize model/render/retarget fixes, compound `dy=-1.0`
+changes, arbitrary side lowering, or unnamed hybrid lanes.
 
 ## Protected Existing Law
 
@@ -58,9 +62,9 @@ Do not regress:
 - any already proven BSFB case that is not same-Y side-adjacent ordinary
   full-block inheritance
 
-## Rejected Shape
+## Accepted Shape
 
-Exact rejected row:
+Exact accepted row:
 
 `SIDE_PLACE_STONE_AGAINST_LOWERED_STONE_EAST_FACE`
 
@@ -71,26 +75,23 @@ Shape fields:
 - `hitFace=east` or equivalent horizontal face
 - `placePos` is same-Y and side-adjacent to the hit block
 - placed item is `minecraft:stone` or another ordinary full block
-- `postPlaceDy=-0.500000`
+- expected `postPlaceDy=-0.500000`
 - legal label is `LEGAL_BSFB_ADJACENT_FULLBLOCK_INHERITANCE`
-- Julia-visible result appears merged into the slab lane
+- Julia-visible result continues the coherent slab-supported row
 
-Expected future result:
+Rejected current-bug result:
 
-- either `postPlaceDy=0.0` as legal vanilla side placement
-- or placement reject/defer if the vanilla relation is impossible
-- but not `postPlaceDy=-0.5` under broad
-  `LEGAL_BSFB_ADJACENT_FULLBLOCK_INHERITANCE`
+- `postPlaceDy=0.0`
+- `postPlaceAnchored=false`
+- classification formerly treated as `LEGAL_VANILLA_SIDE_PLACEMENT`
+- visible result remains vanilla height beside the lowered source
 
 ## Next Implementation Slice
 
-- Add RED proof by changing the expected classification for the existing route:
-  current old-law GREEN becomes new-law RED.
-- Then patch only the narrow authoring, anchor, or lowering qualifier.
-- Likely target after grep:
-  `SlabAnchorAttachment`, `BlockItemPlacementIntentMixin`, or a specific BSFB
-  adjacent inheritance helper.
-- Do not touch model, render, or retarget.
+- Correct the focused side-place proof so vanilla-height side placement is RED.
+- Narrow the side-adjacent anchor qualifier so ordinary lowered full-block sources
+  at `dy=-0.5` can qualify through existing source predicates.
+- Do not touch model, render, retarget, outline, or `ClientDy`.
 
 ## Stop Conditions
 

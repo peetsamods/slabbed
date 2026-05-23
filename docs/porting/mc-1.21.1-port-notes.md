@@ -1294,6 +1294,8 @@ Bug Blaster:
 
 ## 2026-05-22 - MC1211 side-adjacent full-block law decision
 
-- MC1211 side-adjacent full-block lowered inheritance is proven current law but
-  rejected for the release shape; see
+- MC1211 side-adjacent full-block lowered inheritance remains accepted for the
+  proven same-Y ordinary full-block row when the source is a valid anchored /
+  lowered slab-supported full block. The previous rejection note is superseded by
+  Julia's latest live trace; see
   `docs/porting/mc-1.21.1-side-adjacent-fullblock-law.md`.

@@ -1153,10 +1153,6 @@ public final class SlabAnchorAttachment {
             return false;
         }
         double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
-        if (isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                && Math.abs(sourceDy + 0.5d) <= 1.0e-6d) {
-            return false;
-        }
         return sourceDy < 0.0d;
     }
 
