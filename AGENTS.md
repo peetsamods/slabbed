@@ -336,6 +336,7 @@ Category expansion is paused until the Slabbed Core Building Contract is stable.
 ## Superpowers plugin workflow
 
 If the Superpowers plugin is available, every task must start by using `@Superpowers` and invoking the `superpowers:using-superpowers` skill first.
+Delegate work through Superpowers subagents so they can brainstorm together, cooperate on the slice, and deliver results.
 
 Then, before implementation or proof work, explicitly call every applicable Superpowers agent in this order:
 
@@ -345,7 +346,7 @@ Then, before implementation or proof work, explicitly call every applicable Supe
 4. `superpowers:verification-before-completion` before final acceptance language.
 5. `superpowers:finishing-a-development-branch` before saving a finished branch.
 
-For independent subtasks, call `@Superpowers` with the dispatch skill (`superpowers:dispatching-parallel-agents`) and route distinct evidence slices to separate workers.
+For independent subtasks, call `@Superpowers` with the dispatch skill (`superpowers:dispatching-parallel-agents`) and route distinct evidence slices to separate subagents.
 
 Resolve Superpowers skills through the active registry or tool output. Do not hard-code plugin cache paths.
 
