@@ -10,6 +10,8 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.DynamicRegistryManager;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.resource.DataConfiguration;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
@@ -23,6 +25,7 @@ import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
+import net.minecraft.world.dimension.DimensionOptionsRegistryHolder;
 import net.minecraft.world.gen.GeneratorOptions;
 import net.minecraft.world.gen.WorldPresets;
 import net.minecraft.world.level.LevelInfo;
@@ -79,6 +82,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static String sidePlacePlacePosVariants = "not_sampled";
     private static boolean sidePlaceHeldItemSynced;
     private static boolean sidePlacePlayerPositionSynced;
+    private static int sidePlaceLiveSyncTick = -1;
     private static boolean sidePlaceReadyRowEmitted;
     private static int sidePlaceRetainedSampleAttempts;
     private static int sidePlaceRetainedSampleTicks;
@@ -219,7 +223,14 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
 
         if (!sidePlaceInteracted) {
-            syncSidePlaceLiveLikePlayer(client);
+            if (sidePlaceLiveSyncTick < 0) {
+                syncSidePlaceLiveLikePlayer(client);
+                sidePlaceLiveSyncTick = sidePlaceTicks;
+                return;
+            }
+            if (sidePlaceTicks - sidePlaceLiveSyncTick < 2) {
+                return;
+            }
             BlockHitResult hit = new BlockHitResult(
                     new Vec3d(
                             sidePlaceHitPos.getX() + 1.0d,
@@ -228,7 +239,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                     Direction.EAST,
                     sidePlaceHitPos,
                     false);
-            client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
             sidePlaceClientHeldItem = client.player.getStackInHand(Hand.MAIN_HAND).toString();
             sidePlaceRoutePlacementMethod = "ClientPlayerInteractionManager.interactBlock_live_reach_synced";
             sidePlacePacketOrInteractionPathUsed = client.interactionManager != null;
@@ -278,6 +288,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         System.out.println("[MC1211_SIDE_PLACE_STONE_PROGRAMMATIC_WORLD_START]"
                 + " path=" + sidePlaceProgrammaticWorldPath
                 + " worldName=" + sidePlaceProgrammaticWorldName
+                + " worldType=superflat"
                 + " gameMode=creative"
                 + " difficulty=peaceful"
                 + " uiAutomation=false"
@@ -286,8 +297,14 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 sidePlaceProgrammaticWorldName,
                 levelInfo,
                 generatorOptions,
-                WorldPresets::createDemoOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
                 null);
+    }
+
+    private static DimensionOptionsRegistryHolder createSuperflatDimensionOptions(DynamicRegistryManager registries) {
+        return registries.get(RegistryKeys.WORLD_PRESET)
+                .getOrThrow(WorldPresets.FLAT)
+                .createDimensionsRegistryHolder();
     }
 
     private static String sidePlaceReadinessGap(MinecraftClient client) {
@@ -519,6 +536,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 && hitFullHeightLoweredCarrier
                 && !postPlaceHasBottomSlabBelow
                 && Math.abs(postPlaceDy + 0.5d) <= 1.0e-6;
+        boolean rejectedSameYSideAdjacentFullBlockLowering = sameLaneSideAdjacent
+                && namedBsfbAdjacentInheritance;
         String visualRelation = sameLaneSideAdjacent ? "sameLaneSideAdjacent"
                 : (Math.abs(postPlaceDy) <= 1.0e-6 ? "normalVanilla" : "unknown");
         String classification;
@@ -530,6 +549,11 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             legalStateName = "none";
             illegalReason = "server_retained_place_state_not_observed";
             finalMarker = "TRACE_GAP";
+        } else if (rejectedSameYSideAdjacentFullBlockLowering) {
+            classification = "ILLEGAL_REJECTED_BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
+            legalStateName = "none";
+            illegalReason = "same_y_side_adjacent_full_block_inherited_lowered_lane";
+            finalMarker = "RED";
         } else if (Math.abs(postPlaceDy + 0.5d) <= 1.0e-6 && namedBsfbAdjacentInheritance) {
             classification = "LEGAL_BSFB_ADJACENT_FULLBLOCK_INHERITANCE";
             legalStateName = "BSFB_ADJACENT_FULLBLOCK_INHERITANCE";

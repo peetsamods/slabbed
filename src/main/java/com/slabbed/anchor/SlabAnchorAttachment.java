@@ -1152,7 +1152,12 @@ public final class SlabAnchorAttachment {
         if (dy != 0 || dx + dz != 1) {
             return false;
         }
-        return SlabSupport.getYOffset(world, sourcePos, sourceState) < 0.0d;
+        double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
+        if (isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
+                && Math.abs(sourceDy + 0.5d) <= 1.0e-6d) {
+            return false;
+        }
+        return sourceDy < 0.0d;
     }
 
     private static boolean qualifiesForSideAdjacentCompoundFullAnchor(
