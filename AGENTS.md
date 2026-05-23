@@ -40,7 +40,7 @@ If the tree is dirty, inspect only the files relevant to the intended slice befo
 
 ## Scope Discipline
 
-- When performing a slice and multiple independent tasks are identified, use `@Superpowers` explicitly to direct agents to execute those tasks in parallel for efficiency.
+- When performing a slice and multiple independent tasks are identified, use `@Superpowers` explicitly and direct each relevant Superpowers agent to the task it is best suited to complete, in parallel when possible, instead of handling the work serially yourself.
 
 - Work one port slice only.
 - Prefer mapping/tooling/classpath proof before source migration.
