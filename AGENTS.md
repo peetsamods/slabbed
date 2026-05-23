@@ -335,8 +335,9 @@ Category expansion is paused until the Slabbed Core Building Contract is stable.
 
 ## Superpowers plugin workflow
 
-If the Superpowers plugin is available, every task must start by using `@Superpowers` and invoking the `superpowers:using-superpowers` skill first.
+If the Superpowers plugin is available, every turn must start by using `@Superpowers` and invoking the `superpowers:using-superpowers` skill first.
 Delegate work through Superpowers subagents so they can brainstorm together, cooperate on the slice, and deliver results.
+Treat any parallelizable work as subagent work on the same turn rather than keeping it monolithic.
 
 Then, before implementation or proof work, explicitly call every applicable Superpowers agent in this order:
 
