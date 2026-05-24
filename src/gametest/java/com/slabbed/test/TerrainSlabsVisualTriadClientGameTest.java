@@ -17,6 +17,7 @@ import net.minecraft.block.enums.SlabType;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
@@ -126,6 +127,23 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                                 + " hitPos=" + hit.getBlockPos()
                                 + " hitY=" + hit.getPos().y);
                     }
+
+                    if (shouldProveLiveCrosshairTarget(id)) {
+                        Vec3d eye = new Vec3d(slabPos.getX() + 1.25d, slabPos.getY() - 0.25d, slabPos.getZ() + 0.5d);
+                        Vec3d target = new Vec3d(slabPos.getX() + 0.25d, slabPos.getY() - 0.25d, slabPos.getZ() + 0.5d);
+                        aimPlayerRaycastFromEye(mc, eye, target);
+                        mc.player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
+                        mc.gameRenderer.updateCrosshairTarget(0.0f);
+                        HitResult crosshair = mc.crosshairTarget;
+                        if (!(crosshair instanceof BlockHitResult hit) || !hit.getBlockPos().equals(slabPos)) {
+                            throw new AssertionError("live crosshair target at lowered height for " + id
+                                    + " hit " + describeHit(crosshair) + " instead of " + slabPos);
+                        }
+                        System.out.println("TERRAIN_SLABS_VISUAL_TRIAD_CROSSHAIR id=" + id
+                                + " source=GameRendererCrosshairRetargetMixin"
+                                + " hitPos=" + hit.getBlockPos()
+                                + " hitY=" + hit.getPos().y);
+                    }
                 }
 
                 for (Identifier id : deniedIds) {
@@ -168,6 +186,10 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
     private static boolean shouldProveActualSideRaycast(Identifier id) {
         String path = id.getPath();
         return "grass_slab".equals(path) || "terrain_stone_slab".equals(path);
+    }
+
+    private static boolean shouldProveLiveCrosshairTarget(Identifier id) {
+        return "grass_slab".equals(id.getPath());
     }
 
     private static List<Identifier> nonSlabTerrainIds() {
@@ -234,5 +256,26 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
         if (Math.abs(expected - actual) > 1.0e-6d) {
             throw new AssertionError(label + " expected " + expected + " but was " + actual);
         }
+    }
+
+    private static void aimPlayerRaycastFromEye(
+            net.minecraft.client.MinecraftClient mc, Vec3d eye, Vec3d target
+    ) {
+        Vec3d delta = target.subtract(eye);
+        double horizontal = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horizontal)));
+        double feetY = eye.y - mc.player.getStandingEyeHeight();
+        mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+    }
+
+    private static String describeHit(HitResult hit) {
+        if (hit == null) {
+            return "null";
+        }
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return hit.getType().toString();
+        }
+        return hit.getType() + " " + blockHit.getBlockPos() + " hitY=" + blockHit.getPos().y;
     }
 }
