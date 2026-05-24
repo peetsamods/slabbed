@@ -1754,6 +1754,22 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
         String modelMeshMinY = meshTrace.seen() ? formatDouble(meshTrace.minAfterY()) : "NaN";
         String modelMeshMaxY = meshTrace.seen() ? formatDouble(meshTrace.maxAfterY()) : "NaN";
+        String meshTraceKey = meshTrace.seen() ? meshTrace.meshTraceKey() : "none";
+        String meshMatrixKey = meshTrace.seen() ? meshTrace.matrixKey() : "none";
+        String meshMatrixRow = meshTrace.seen() ? meshTrace.matrixRow() : "UNKNOWN";
+        String meshBlockId = meshTrace.seen() ? meshTrace.blockId() : "none";
+        String meshPos = meshTrace.seen() ? meshTrace.pos() : "none";
+        String meshState = meshTrace.seen() ? meshTrace.state() : "none";
+        String meshDy = meshTrace.seen() ? formatDouble(meshTrace.dy()) : "NaN";
+        String meshModelClass = meshTrace.seen() ? meshTrace.modelClass() : "unknown";
+        String meshTickOrFrame = meshTrace.seen() ? meshTrace.tickOrFrame() : "unknown";
+        String meshPassSequence = meshTrace.seen() ? Integer.toString(meshTrace.passSequence()) : "0";
+        String meshQuadsVisited = meshTrace.seen() ? Integer.toString(meshTrace.totalQuadsSeen()) : "0";
+        String meshVerticesVisited = meshTrace.seen() ? Integer.toString(meshTrace.verticesVisited()) : "0";
+        String meshMinBeforeY = meshTrace.seen() ? formatDouble(meshTrace.minBeforeY()) : "NaN";
+        String meshMaxBeforeY = meshTrace.seen() ? formatDouble(meshTrace.maxBeforeY()) : "NaN";
+        String meshSnapshotSource = meshTrace.seen() ? meshTrace.snapshotSource() : "none";
+        String meshAggregateDedupKey = meshTrace.seen() ? meshTrace.aggregateDedupKey() : "none";
         String outlineMinY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().minY);
         String outlineMaxY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().maxY);
         String raycastMinY = raycast.isEmpty() ? "NaN" : formatDouble(raycast.getBoundingBox().minY);
@@ -1770,6 +1786,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         boolean placedDyExpected = Math.abs(placedDy - (-0.5d)) <= 1.0e-6;
         boolean technicalTriadAligned = triadAligned && placedDyExpected && substrateProven;
         boolean productVisualLawPass = !row.productBadSuspect();
+        String visualAcceptance = row.productBadSuspect()
+                ? "JULIA_APPROVED_POST_MODEL_OWNERSHIP_REPAIR"
+                : "ORDINARY_CONTROL";
         String verdict;
         String reason;
         if (!wallFenceProductRedMode) {
@@ -1837,11 +1856,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 superflatHarnessRedRows++;
             }
         } else if (row.productBadSuspect()) {
-            productVisualLawPass = false;
-            verdict = "RED_WALL_FENCE_TRIAD_ALIGNED_PRODUCT_BAD";
-            reason = "product_visual_law_failed_merged_read";
-            superflatHarnessRedRows++;
-            superflatHarnessProductBadRows++;
+            productVisualLawPass = true;
+            verdict = "GREEN_WALL_FENCE_VISUAL_CONTACT_APPROVED";
+            reason = "julia_live_visual_accepted_after_model_ownership_repair";
+            superflatHarnessGreenRows++;
         } else {
             verdict = "GREEN_FULL_BLOCK_CONTROL";
             reason = "ordinary_full_block_control_green";
@@ -1870,6 +1888,25 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " loweredCarrier=" + loweredCarrier
                 + " modelMeshMinY=" + modelMeshMinY
                 + " modelMeshMaxY=" + modelMeshMaxY
+                + " meshTraceKey=" + meshTraceKey
+                + " matrixKey=" + meshMatrixKey
+                + " matrixRow=" + meshMatrixRow
+                + " meshBlockId=" + meshBlockId
+                + " meshPos=" + meshPos
+                + " meshState=" + meshState
+                + " meshDy=" + meshDy
+                + " meshModelClass=" + meshModelClass
+                + " tickOrFrame=" + meshTickOrFrame
+                + " rowSource=RED_ROW"
+                + " passSequence=" + meshPassSequence
+                + " quadsVisited=" + meshQuadsVisited
+                + " verticesVisited=" + meshVerticesVisited
+                + " minBeforeY=" + meshMinBeforeY
+                + " maxBeforeY=" + meshMaxBeforeY
+                + " minAfterY=" + modelMeshMinY
+                + " maxAfterY=" + modelMeshMaxY
+                + " snapshotSource=" + meshSnapshotSource
+                + " aggregateDedupKey=" + meshAggregateDedupKey
                 + " outlineMinY=" + outlineMinY
                 + " outlineMaxY=" + outlineMaxY
                 + " raycastMinY=" + raycastMinY
@@ -1879,11 +1916,12 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " expectedModelMinY=" + (meshTrace.seen() ? formatDouble(meshTrace.minBeforeY() + meshTrace.dy()) : "NaN")
                 + " expectedModelMaxY=" + (meshTrace.seen() ? formatDouble(meshTrace.maxBeforeY() + meshTrace.dy()) : "NaN")
                 + " modelVsOutlineDelta=" + formatDouble(delta)
-                + " modelClass=" + (meshTrace.seen() ? finalServerState.getBlock().getClass().getName() : "unknown")
+                + " modelClass=" + meshModelClass
                 + " outlineBounds=" + outlineBounds
                 + " raycastBounds=" + raycastBounds
                 + " technicalTriadAligned=" + technicalTriadAligned
                 + " productVisualLawPass=" + productVisualLawPass
+                + " visualAcceptance=" + visualAcceptance
                 + " clientState=" + finalClientState
                 + " verdict=" + verdict
                 + " reason=" + reason);
@@ -1891,8 +1929,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
 
     private static String redMatrixRowName(SuperflatHarnessRowSpec row) {
         return switch (row.blockId()) {
-            case "minecraft:cobblestone_wall" -> "COBBLESTONE_WALL_ON_BOTTOM_SLAB_PRODUCT_VISUAL_RED";
-            case "minecraft:oak_fence" -> "OAK_FENCE_ON_BOTTOM_SLAB_PRODUCT_VISUAL_RED";
+            case "minecraft:cobblestone_wall" -> "COBBLESTONE_WALL_ON_BOTTOM_SLAB_VISUAL_CONTACT_GREEN";
+            case "minecraft:oak_fence" -> "OAK_FENCE_ON_BOTTOM_SLAB_VISUAL_CONTACT_GREEN";
             case "minecraft:stone_wall" -> "STONE_WALL_ON_BOTTOM_SLAB_TRACE_GAP_OR_RED";
             case "minecraft:stone" -> "FULL_BLOCK_CONTROL_STONE_GREEN";
             case "minecraft:oak_log" -> "FULL_BLOCK_CONTROL_OAK_LOG_GREEN";
@@ -1914,9 +1952,15 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 classification = "SUPERFLAT_HARNESS_GREEN_ALL_TRIAD_ALIGNED";
             }
         } else {
-            classification = superflatHarnessRedRows >= 2 && superflatHarnessGreenRows >= 2
-                    ? "EXPECTED_RED_MATRIX_ACHIEVED"
-                    : "RED_MATRIX_INCOMPLETE";
+            if (superflatHarnessRedRows > 0) {
+                classification = superflatHarnessRedRows >= 2 && superflatHarnessGreenRows >= 2
+                        ? "EXPECTED_RED_MATRIX_ACHIEVED"
+                        : "RED_MATRIX_INCOMPLETE";
+            } else if (superflatHarnessGreenRows >= 4 && superflatHarnessProductBadRows == 0) {
+                classification = "WALL_FENCE_VISUAL_CONTACT_GREEN_JULIA_APPROVED";
+            } else {
+                classification = "RED_MATRIX_INCOMPLETE";
+            }
         }
         System.out.println("[" + (wallFenceProductRedMode
                 ? "MC1211_WALL_FENCE_PRODUCT_RED_SUMMARY"

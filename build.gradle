@@ -88,6 +88,21 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+def slabbedForwardedRunPropertyArgs = {
+    System.properties.findAll { key, value ->
+        key instanceof String
+                && value != null
+                && (key.startsWith("slabbed.mc1211.")
+                || key == "slabbed.bsfb.live.trace")
+    }.collect { key, value -> "-D${key}=${value}" }
+}
+
+tasks.withType(JavaExec).configureEach {
+    doFirst {
+        jvmArgs slabbedForwardedRunPropertyArgs()
+    }
+}
+
 jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}"}
