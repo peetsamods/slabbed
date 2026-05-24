@@ -333,23 +333,47 @@ Do not propose hooks or code before the research summary is complete.
 
 Category expansion is paused until the Slabbed Core Building Contract is stable.
 
-## Superpowers plugin workflow
+## When to Use Superpowers / Subagents
 
-If the Superpowers plugin is available, every turn must start by using `@Superpowers` and invoking the `superpowers:using-superpowers` skill first.
-Delegate work through Superpowers subagents so they can brainstorm together, cooperate on the slice, and deliver results.
-Treat any parallelizable work as subagent work on the same turn rather than keeping it monolithic.
+Use subagents when the work can be decomposed into independent units with bounded context.
 
-Then, before implementation or proof work, explicitly call every applicable Superpowers agent in this order:
+### Use subagents when:
+- The task can be split into **2 or more independent slices** with minimal or no shared mutable state.
+- Each slice has a **clear contract**: inputs, expected outputs, constraints, and acceptance criteria.
+- The work benefits from **parallel execution** or **separate review passes**.
+- The amount of context needed per slice is much smaller than the full session context.
+- A **fresh context** is valuable to reduce contamination from previous reasoning, false starts, or unrelated history.
+- The task includes a **natural review boundary** such as:
+  - spec compliance
+  - correctness review
+  - code quality review
+  - regression check
+- The cost of coordination overhead is lower than the cost of keeping the entire problem in one context.
 
-1. `superpowers:writing-plans` for task-scoped plans.
-2. `superpowers:test-driven-development` before feature or bugfix code changes.
-3. `superpowers:systematic-debugging` when cause-finding is required.
-4. `superpowers:verification-before-completion` before final acceptance language.
-5. `superpowers:finishing-a-development-branch` before saving a finished branch.
+### Do not use subagents when:
+- The work is **tightly coupled** and requires continuous shared state across steps.
+- The task is **small enough** that subagent setup and review overhead would dominate the total effort.
+- The next step depends on information that is only available after the previous step completes, with no meaningful parallelism.
+- The task requires **frequent interactive back-and-forth** with the user to resolve ambiguity before progress can be made.
+- The task requires a single coherent reasoning chain where splitting context would reduce accuracy.
+- The scope is unstable and cannot yet be decomposed into well-defined slices.
+- The result depends on subtle cross-file or cross-system interactions that one agent must hold in working memory at once.
 
-For independent subtasks, call `@Superpowers` with the dispatch skill (`superpowers:dispatching-parallel-agents`) and route distinct evidence slices to separate subagents.
+### Preferred pattern
+- Use one subagent per independent problem domain.
+- Give each subagent a narrow scope and explicit deliverable.
+- Keep the main agent as coordinator only.
+- Review outputs at the boundaries, not continuously.
+- Re-dispatch with corrected context if a subagent reports `NEEDS_CONTEXT` or `BLOCKED`.
 
-Resolve Superpowers skills through the active registry or tool output. Do not hard-code plugin cache paths.
+### Cost/benefit rule
+Use subagents only when at least one of the following is true:
+- they enable parallelism,
+- they materially reduce context size,
+- they improve review isolation,
+- or they reduce the chance of cross-contamination in reasoning.
+
+Otherwise, execute directly in the main context.
 
 Superpowers defaults are lower priority than:
 
