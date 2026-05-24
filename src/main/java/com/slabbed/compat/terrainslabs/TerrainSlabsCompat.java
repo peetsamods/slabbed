@@ -1,6 +1,7 @@
 package com.slabbed.compat.terrainslabs;
 
 import com.slabbed.compat.CompatHooks;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -35,8 +36,16 @@ public final class TerrainSlabsCompat {
         return id != null && MOD_ID.equals(id.getNamespace());
     }
 
+    public static void registerDebugDump() {
+        if (!Boolean.getBoolean("slabbed.terrainSlabsCompatDump")) {
+            return;
+        }
+
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> debugDumpTerrainSlabsBlocks());
+    }
+
     public static void debugDumpTerrainSlabsBlocks() {
-        if (!Boolean.getBoolean("slabbed.terrainSlabsCompatDump") || runtimeDumped) {
+        if (runtimeDumped) {
             return;
         }
 
