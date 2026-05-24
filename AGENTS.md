@@ -38,9 +38,47 @@ Hard stop unless the root is:
 
 If the tree is dirty, inspect only the files relevant to the intended slice before editing. Do not auto-stash, clean, reset, or revert unrelated work.
 
-## Scope Discipline
+## When to Use Superpowers / Subagents
 
-- On every turn, when work can be split, spawn subagents through the `@Superpowers` plugin and direct each relevant Superpowers agent to the task it is best suited to complete, in parallel when possible, instead of handling the work serially yourself.
+Use subagents when the work can be decomposed into independent units with bounded context.
+
+### Use subagents when:
+- The task can be split into **2 or more independent slices** with minimal or no shared mutable state.
+- Each slice has a **clear contract**: inputs, expected outputs, constraints, and acceptance criteria.
+- The work benefits from **parallel execution** or **separate review passes**.
+- The amount of context needed per slice is much smaller than the full session context.
+- A **fresh context** is valuable to reduce contamination from previous reasoning, false starts, or unrelated history.
+- The task includes a **natural review boundary** such as:
+  - spec compliance
+  - correctness review
+  - code quality review
+  - regression check
+- The cost of coordination overhead is lower than the cost of keeping the entire problem in one context.
+
+### Do not use subagents when:
+- The work is **tightly coupled** and requires continuous shared state across steps.
+- The task is **small enough** that subagent setup and review overhead would dominate the total effort.
+- The next step depends on information that is only available after the previous step completes, with no meaningful parallelism.
+- The task requires **frequent interactive back-and-forth** with the user to resolve ambiguity before progress can be made.
+- The task requires a single coherent reasoning chain where splitting context would reduce accuracy.
+- The scope is unstable and cannot yet be decomposed into well-defined slices.
+- The result depends on subtle cross-file or cross-system interactions that one agent must hold in working memory at once.
+
+### Preferred pattern
+- Use one subagent per independent problem domain.
+- Give each subagent a narrow scope and explicit deliverable.
+- Keep the main agent as coordinator only.
+- Review outputs at the boundaries, not continuously.
+- Re-dispatch with corrected context if a subagent reports `NEEDS_CONTEXT` or `BLOCKED`.
+
+### Cost/benefit rule
+Use subagents only when at least one of the following is true:
+- they enable parallelism,
+- they materially reduce context size,
+- they improve review isolation,
+- or they reduce the chance of cross-contamination in reasoning.
+
+Otherwise, execute directly in the main context.
 
 - Work one port slice only.
 - Prefer mapping/tooling/classpath proof before source migration.
