@@ -336,6 +336,7 @@ Category expansion is paused until the Slabbed Core Building Contract is stable.
 ## When to Use Superpowers / Subagents
 
 Use subagents when the work can be decomposed into independent units with bounded context.
+Use the Superpowers plugin to delegate suitable work to subagents, including spawning subagents when appropriate.
 
 ### Use subagents when:
 - The task can be split into **2 or more independent slices** with minimal or no shared mutable state.
