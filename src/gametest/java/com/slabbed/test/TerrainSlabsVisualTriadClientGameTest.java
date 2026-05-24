@@ -19,6 +19,10 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.shape.VoxelShape;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
 /**
  * Client-side proof that runtime Terrain Slabs slab blocks use Slabbed's same
  * lowered visual-triad authority as vanilla-supported blocks.
@@ -26,11 +30,8 @@ import net.minecraft.util.shape.VoxelShape;
 public final class TerrainSlabsVisualTriadClientGameTest implements FabricClientGameTest {
     private static final String MOD_ID = "terrainslabs";
     private static final BlockPos ORIGIN = new BlockPos(24, 200, 0);
-    private static final String[] ALLOWED_SLAB_IDS = {
-            "grass_slab",
-            "sand_slab",
-            "terrain_stone_slab"
-    };
+    private static final int GRID_SPACING = 4;
+    private static final int GRID_WIDTH = 8;
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
@@ -42,10 +43,16 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
+            List<Identifier> slabIds = terrainSlabIds();
+            List<Identifier> deniedIds = nonSlabTerrainIds();
+            if (slabIds.isEmpty()) {
+                throw new AssertionError("no Terrain Slabs SlabBlock ids discovered at runtime");
+            }
+
             singleplayer.getServer().runOnServer(server -> {
                 var world = server.getOverworld();
-                for (int i = 0; i < ALLOWED_SLAB_IDS.length; i++) {
-                    BlockPos supportPos = ORIGIN.add(i * 4, 0, 0);
+                for (int i = 0; i < slabIds.size(); i++) {
+                    BlockPos supportPos = supportPosForIndex(i);
                     BlockPos fullPos = supportPos.up();
                     BlockPos slabPos = fullPos.east();
                     world.setBlockState(slabPos.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -53,11 +60,13 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                             Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                             Block.NOTIFY_LISTENERS);
                     world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
-                    world.setBlockState(slabPos, terrainSlabState(ALLOWED_SLAB_IDS[i]), Block.NOTIFY_LISTENERS);
+                    world.setBlockState(slabPos, terrainSlabState(slabIds.get(i)), Block.NOTIFY_LISTENERS);
                     world.setBlockState(slabPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
                 }
             });
 
+            ctx.waitTick();
+            ctx.waitTick();
             ctx.waitTick();
             singleplayer.getClientWorld().waitForChunksRender();
 
@@ -66,10 +75,9 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                     throw new AssertionError("client world missing for Terrain Slabs visual triad proof");
                 }
 
-                for (int i = 0; i < ALLOWED_SLAB_IDS.length; i++) {
-                    String path = ALLOWED_SLAB_IDS[i];
-                    Identifier id = Identifier.of(MOD_ID, path);
-                    BlockPos slabPos = ORIGIN.add(i * 4, 1, 0).east();
+                for (int i = 0; i < slabIds.size(); i++) {
+                    Identifier id = slabIds.get(i);
+                    BlockPos slabPos = supportPosForIndex(i).up().east();
                     BlockState state = mc.world.getBlockState(slabPos);
                     assertTerrainSlabState(id, state);
 
@@ -98,21 +106,67 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                             + " raycastMinY=" + (raycast.isEmpty() ? "empty" : raycast.getBoundingBox().minY));
                 }
 
-                BlockState onTop = Registries.BLOCK.get(Identifier.of(MOD_ID, "short_grass_on_top")).getDefaultState();
-                assertTrue("short_grass_on_top should remain skipped",
-                        TerrainSlabsCompat.shouldSkipOffset(onTop) && CompatHooks.shouldSkipOffset(onTop));
-                System.out.println("TERRAIN_SLABS_VISUAL_TRIAD denied_id=terrainslabs:short_grass_on_top"
-                        + " terrainSkip=" + TerrainSlabsCompat.shouldSkipOffset(onTop)
-                        + " compatSkip=" + CompatHooks.shouldSkipOffset(onTop));
+                for (Identifier id : deniedIds) {
+                    BlockState deniedState = Registries.BLOCK.get(id).getDefaultState();
+                    boolean terrainSkip = TerrainSlabsCompat.shouldSkipOffset(deniedState);
+                    boolean compatSkip = CompatHooks.shouldSkipOffset(deniedState);
+                    assertTrue(id + " should remain skipped", terrainSkip && compatSkip);
+                    System.out.println("TERRAIN_SLABS_VISUAL_TRIAD denied_id=" + id
+                            + " terrainSkip=" + terrainSkip
+                            + " compatSkip=" + compatSkip);
+                }
+
+                System.out.println("TERRAIN_SLABS_VISUAL_TRIAD totals slabIds=" + slabIds.size()
+                        + " deniedIds=" + deniedIds.size());
             });
         }
     }
 
-    private static BlockState terrainSlabState(String path) {
-        Block block = Registries.BLOCK.get(Identifier.of(MOD_ID, path));
+    private static List<Identifier> terrainSlabIds() {
+        List<Identifier> ids = new ArrayList<>();
+        for (Identifier id : Registries.BLOCK.getIds()) {
+            if (!MOD_ID.equals(id.getNamespace())) {
+                continue;
+            }
+
+            Block block = Registries.BLOCK.get(id);
+            BlockState state = block.getDefaultState();
+            if (block instanceof SlabBlock && state.contains(SlabBlock.TYPE)) {
+                ids.add(id);
+            }
+        }
+        ids.sort(Comparator.comparing(Identifier::toString));
+        return ids;
+    }
+
+    private static List<Identifier> nonSlabTerrainIds() {
+        List<Identifier> ids = new ArrayList<>();
+        for (Identifier id : Registries.BLOCK.getIds()) {
+            if (!MOD_ID.equals(id.getNamespace())) {
+                continue;
+            }
+
+            Block block = Registries.BLOCK.get(id);
+            BlockState state = block.getDefaultState();
+            if (!(block instanceof SlabBlock && state.contains(SlabBlock.TYPE))) {
+                ids.add(id);
+            }
+        }
+        ids.sort(Comparator.comparing(Identifier::toString));
+        return ids;
+    }
+
+    private static BlockPos supportPosForIndex(int index) {
+        int x = (index % GRID_WIDTH) * GRID_SPACING;
+        int z = (index / GRID_WIDTH) * GRID_SPACING;
+        return ORIGIN.add(x, 0, z);
+    }
+
+    private static BlockState terrainSlabState(Identifier id) {
+        Block block = Registries.BLOCK.get(id);
         BlockState state = block.getDefaultState();
         if (!state.contains(SlabBlock.TYPE)) {
-            throw new AssertionError(MOD_ID + ":" + path + " is not a slab state: " + state);
+            throw new AssertionError(id + " is not a slab state: " + state);
         }
         return state.with(SlabBlock.TYPE, SlabType.BOTTOM);
     }
