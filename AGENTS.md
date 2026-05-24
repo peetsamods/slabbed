@@ -40,7 +40,7 @@ If the tree is dirty, inspect only the files relevant to the intended slice befo
 
 ## When to Use Superpowers / Subagents
 
-Use subagents when the work can be decomposed into independent units with bounded context.
+Use the Superpowers plugin to delegate to subagents when the work can be decomposed into independent units with bounded context.
 
 ### Use subagents when:
 - The task can be split into **2 or more independent slices** with minimal or no shared mutable state.
