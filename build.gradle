@@ -12,6 +12,28 @@ loom {
     }
 }
 
+afterEvaluate {
+    tasks.matching { it.name == "runClientGameTest" }.configureEach {
+        doFirst {
+            if (!Boolean.getBoolean("slabbed.terrainSlabsCompatDump")) {
+                return
+            }
+
+            def sourceJar = file("run/mods/countereds_terrain_slabs-2.2.5.jar")
+            if (!sourceJar.exists()) {
+                return
+            }
+
+            def targetDir = file("build/run/clientGameTest/mods")
+            targetDir.mkdirs()
+            copy {
+                from sourceJar
+                into targetDir
+            }
+        }
+    }
+}
+
 fabricApi {
     configureTests {
         createSourceSet = true
