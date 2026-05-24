@@ -346,6 +346,17 @@ Contract note: `docs/beta4-seam-ownership-contract.md`.
 
 ## Latest fixed Bug Blaster
 
+Title: MC1211 Wall/Fence Visual Contact Alignment
+Invariant: Wall/fence-family blocks in legal slab-supported states must render from the same trusted visual-contact source as outline/raycast target, without double-applying dy through composite model wrappers and without breaking ordinary full-block controls.
+Root cause: Composite model ownership was applying the visual-offset contract at the wrong layer. MultipartBakedModel and WeightedBakedModel wrappers were being wrapped as if they should own the dy transform, which could produce double-dy or mismatched mesh evidence for wall/fence-family models. The leaf `BasicBakedModel` should own the dy transform once.
+Fix: Updated model wrapping/ownership so composite MultipartBakedModel / WeightedBakedModel are not wrapped for dy ownership; leaf `BasicBakedModel` owns the transform once. Repaired proof launch/property forwarding and full-mesh trace join before implementation proof.
+Proof savepoint:
+- `63f3c927` / `save/mc1211-wall-fence-visual-contact-alignment`.
+- Focused matrix proof passed with `rows=6`, `greenRows=4`, `redRows=0`, `traceGapRows=2`, `productBadRows=0`, classification `WALL_FENCE_VISUAL_CONTACT_GREEN_JULIA_APPROVED`.
+- `cobblestone_wall` and `oak_fence` rows are green with joined mesh/outline/raycast bounds.
+- Julia live approval recorded: “I approve visuals.”
+Status: Fixed, not yet merged into release; branch pushed and tag pushed at savepoint.
+
 Title: Beta 3.5 Floor Torch Lowered Bottom Slab Source Truth
 Invariant: A floor torch on slab-supported geometry must place through the player path, survive, and visually contact the live support surface with model, outline, and raycast co-located.
 Root cause: Early proofs for floor torch control fixtures were false-green and did not cover Julia’s live SBSBS-style slab-supported structure. The live failure split into two contact layers: lowered bottom slab placement needing `torchDy=-1.5` and plain bottom support needing `torchDy=-1.0` to close contact.
@@ -382,6 +393,7 @@ Status: Fixed / saved.
 
 ## Recent relevant savepoints
 
+- `save/mc1211-wall-fence-visual-contact-alignment` (`63f3c927`): completed MC1211 wall/fence visual-contact alignment proof and Julia approval (`WALL_FENCE_VISUAL_CONTACT_GREEN_JULIA_APPROVED`), including stable full-mesh trace join.
 - `save/lowered-slab-face-placement-inheritance` (`04744e1`): current saved state for lowered slab face placement inheritance, full-block lane inheritance, and post-place anchored-owner targeting.
 - `save/slab-held-retarget-parity-improvements` (`571ba89`): prior slab-held retarget parity savepoint, now documented above as the upstream targeting fix.
 - Pending savepoint: debug helper classpath closure. Packaging/classpath blocker fixed by removing or bridging production/runtime hard-links to excluded debug helpers. `compileJava compileGametestJava`, `runClientGameTest`, `clean build`, release jar leakage scan, `jdeps` hard-reference scan, and source direct-import scan passed. No gameplay behavior was intentionally changed.
