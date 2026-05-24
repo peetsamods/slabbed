@@ -16,7 +16,9 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 
 import java.util.ArrayList;
@@ -55,7 +57,9 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                     BlockPos supportPos = supportPosForIndex(i);
                     BlockPos fullPos = supportPos.up();
                     BlockPos slabPos = fullPos.east();
-                    world.setBlockState(slabPos.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+                    world.setBlockState(slabPos.down(),
+                            requiresGravitySupport(slabIds.get(i)) ? Blocks.STONE.getDefaultState() : Blocks.AIR.getDefaultState(),
+                            Block.NOTIFY_LISTENERS);
                     world.setBlockState(supportPos,
                             Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                             Block.NOTIFY_LISTENERS);
@@ -74,6 +78,10 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                 if (mc.world == null) {
                     throw new AssertionError("client world missing for Terrain Slabs visual triad proof");
                 }
+                if (mc.player == null) {
+                    throw new AssertionError("client player missing for Terrain Slabs visual triad proof");
+                }
+                ShapeContext shapeContext = ShapeContext.of(mc.player);
 
                 for (int i = 0; i < slabIds.size(); i++) {
                     Identifier id = slabIds.get(i);
@@ -85,7 +93,7 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                     boolean compatSkip = CompatHooks.shouldSkipOffset(state);
                     double clientDy = ClientDy.dyFor(mc.world, slabPos, state);
                     double supportDy = SlabSupport.getYOffset(mc.world, slabPos, state);
-                    VoxelShape outline = state.getOutlineShape(mc.world, slabPos, ShapeContext.absent());
+                    VoxelShape outline = state.getOutlineShape(mc.world, slabPos, shapeContext);
                     VoxelShape raycast = state.getRaycastShape(mc.world, slabPos);
 
                     assertFalse("TerrainSlabsCompat should allow " + id, terrainSkip);
@@ -104,6 +112,20 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                             + " slabSupportDy=" + supportDy
                             + " outlineMinY=" + outline.getBoundingBox().minY
                             + " raycastMinY=" + (raycast.isEmpty() ? "empty" : raycast.getBoundingBox().minY));
+
+                    if (shouldProveActualSideRaycast(id)) {
+                        Vec3d start = new Vec3d(slabPos.getX() + 1.25d, slabPos.getY() - 0.25d, slabPos.getZ() + 0.5d);
+                        Vec3d end = new Vec3d(slabPos.getX() + 0.25d, slabPos.getY() - 0.25d, slabPos.getZ() + 0.5d);
+                        BlockHitResult hit = outline.raycast(start, end, slabPos);
+                        if (hit == null || !hit.getBlockPos().equals(slabPos)) {
+                            throw new AssertionError("side raycast at lowered height for " + id
+                                    + " hit " + (hit == null ? "miss" : hit.getBlockPos()) + " instead of " + slabPos);
+                        }
+                        System.out.println("TERRAIN_SLABS_VISUAL_TRIAD_RAYCAST id=" + id
+                                + " source=outlineShape"
+                                + " hitPos=" + hit.getBlockPos()
+                                + " hitY=" + hit.getPos().y);
+                    }
                 }
 
                 for (Identifier id : deniedIds) {
@@ -137,6 +159,15 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
         }
         ids.sort(Comparator.comparing(Identifier::toString));
         return ids;
+    }
+
+    private static boolean requiresGravitySupport(Identifier id) {
+        return Registries.BLOCK.get(id).getClass().getSimpleName().contains("GravityAffected");
+    }
+
+    private static boolean shouldProveActualSideRaycast(Identifier id) {
+        String path = id.getPath();
+        return "grass_slab".equals(path) || "terrain_stone_slab".equals(path);
     }
 
     private static List<Identifier> nonSlabTerrainIds() {
