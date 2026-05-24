@@ -16,6 +16,10 @@ public final class SlabbedLabLoweredSideSlabPlacementClientGameTest implements F
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (Boolean.getBoolean("slabbed.terrainSlabsVisualTriadOnly")) {
+            return;
+        }
+
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
