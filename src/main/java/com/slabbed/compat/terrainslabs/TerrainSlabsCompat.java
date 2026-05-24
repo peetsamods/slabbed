@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.SlabBlock;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import com.slabbed.Slabbed;
@@ -33,7 +34,11 @@ public final class TerrainSlabsCompat {
 
         Block block = state.getBlock();
         Identifier id = Registries.BLOCK.getId(block);
-        return id != null && MOD_ID.equals(id.getNamespace());
+        if (id == null || !MOD_ID.equals(id.getNamespace())) {
+            return false;
+        }
+
+        return !(block instanceof SlabBlock && state.contains(SlabBlock.TYPE));
     }
 
     public static void registerDebugDump() {
