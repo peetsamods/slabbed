@@ -14,9 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Countered Terrain Slabs compatibility: subtractive-only. When the mod is present,
- * skip slab offsets for its blocks to avoid terrain/shape artifacts. Absent the mod,
- * this class is unreachable.
+ * Countered Terrain Slabs compatibility: subtractive-only. Runtime Terrain Slabs
+ * states that are actual {@link SlabBlock} states keep Slabbed's normal slab
+ * support, while non-slab companion blocks remain skipped to avoid terrain/shape
+ * artifacts. Absent the mod, this class is unreachable.
  */
 public final class TerrainSlabsCompat {
     private TerrainSlabsCompat() {
