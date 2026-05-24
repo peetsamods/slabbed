@@ -121,7 +121,8 @@ public final class SlabSupport {
         if (world == null || pos == null) {
             return false;
         }
-        return isBottomSlab(world.getBlockState(pos.down()));
+        BlockState below = safeGetBlockStateForSupportView(world, pos.down());
+        return below != null && isBottomSlab(below);
     }
 
     /**
@@ -359,7 +360,10 @@ public final class SlabSupport {
         }
         for (Direction dir : Direction.Type.HORIZONTAL) {
             BlockPos neighborPos = slabPos.offset(dir);
-            BlockState neighbor = world.getBlockState(neighborPos);
+            BlockState neighbor = safeGetBlockStateForSupportView(world, neighborPos);
+            if (neighbor == null) {
+                continue;
+            }
             if (neighbor.getBlock() instanceof SlabBlock) continue;
             if (!neighbor.isSolidBlock(world, neighborPos)) continue;
             if (hasBottomSlabBelow(world, neighborPos)
@@ -375,7 +379,10 @@ public final class SlabSupport {
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
             BlockPos belowPos = pos.down();
-            BlockState below = world.getBlockState(belowPos);
+            BlockState below = safeGetBlockStateForSupportView(world, belowPos);
+            if (below == null) {
+                return 0.0;
+            }
             Block belowBlock = below.getBlock();
             if (!(belowBlock instanceof SlabBlock) && !below.isAir()
                     && below.getFluidState().isEmpty()
@@ -411,7 +418,10 @@ public final class SlabSupport {
             // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
             // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
             // slab's visual top surface, for a total of -1.0.
-            BlockState belowSlab = world.getBlockState(pos.down());
+            BlockState belowSlab = safeGetBlockStateForSupportView(world, pos.down());
+            if (belowSlab == null) {
+                return 0.0;
+            }
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
                 return -1.0;
             }
@@ -437,7 +447,10 @@ public final class SlabSupport {
             return 0.0;
         }
 
-        BlockState above = world.getBlockState(pos.up());
+        BlockState above = safeGetBlockStateForSupportView(world, pos.up());
+        if (above == null) {
+            return 0.0;
+        }
 
         // direct: ceiling-attached blocks directly under a top slab
         if (isCeilingAttached(state) && isTopSlab(above)) {
@@ -449,7 +462,10 @@ public final class SlabSupport {
         if (isCeilingAttached(state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
-                BlockState cur = world.getBlockState(cursor);
+                BlockState cur = safeGetBlockStateForSupportView(world, cursor);
+                if (cur == null) {
+                    return 0.0;
+                }
                 if (isTopSlab(cur)) {
                     return 0.5;
                 }
@@ -579,7 +595,10 @@ public final class SlabSupport {
     private static boolean hasSlabInColumn(BlockView world, BlockPos pos) {
         BlockPos cursor = pos.down();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
-            BlockState cur = world.getBlockState(cursor);
+            BlockState cur = safeGetBlockStateForSupportView(world, cursor);
+            if (cur == null) {
+                return false;
+            }
             if (isBottomSlab(cur)) {
                 return true;
             }
@@ -601,7 +620,10 @@ public final class SlabSupport {
     private static double slabColumnYOffset(BlockView world, BlockPos pos) {
         BlockPos cursor = pos.down();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
-            BlockState cur = world.getBlockState(cursor);
+            BlockState cur = safeGetBlockStateForSupportView(world, cursor);
+            if (cur == null) {
+                return 0.0;
+            }
             if (cur.getBlock() instanceof SlabBlock
                     && isAdjacentSideSlabLowered(world, cursor, cur)) {
                 return isBottomSlab(cur) ? -1.0 : -0.5;
@@ -615,5 +637,17 @@ public final class SlabSupport {
             cursor = cursor.down();
         }
         return 0.0;
+    }
+
+    /**
+     * Render-region model dy checks may receive partial BlockView windows (e.g. ChunkRendererRegion).
+     * Crossing outside that window can throw bounds exceptions; treat that as unknown support.
+     */
+    private static BlockState safeGetBlockStateForSupportView(BlockView world, BlockPos pos) {
+        try {
+            return world.getBlockState(pos);
+        } catch (IndexOutOfBoundsException ex) {
+            return null;
+        }
     }
 }
