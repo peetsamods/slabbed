@@ -118,14 +118,29 @@ public final class SlabbedLabFixtureTest {
     public void mc1211ServerStateOverlapMatrix(TestContext ctx) {
         boolean goblinOnly = Boolean.getBoolean("slabbed.mc1211.goblinOnly");
         boolean sidePlaceStoneLoweringOnly = Boolean.getBoolean("slabbed.mc1211.sidePlaceStoneLoweringOnly");
+        boolean sidePlaceStoneLiveTruthOnly = Boolean.getBoolean("slabbed.mc1211.sidePlaceStoneLiveTruthOnly");
+        boolean sameSpotAfterSlabBreakOnly = Boolean.getBoolean("slabbed.mc1211.sameSpotAfterSlabBreakOnly");
         boolean slabThenBlockBaselineOnly = Boolean.getBoolean("slabbed.mc1211.slabThenBlockBaselineOnly");
+        boolean wallFenceProductRedOnly = Boolean.getBoolean("slabbed.mc1211.wallFenceProductRedOnly");
         boolean overlapOnly = Boolean.getBoolean("slabbed.mc1211.overlapMatrixOnly");
-        if ((goblinOnly || sidePlaceStoneLoweringOnly || slabThenBlockBaselineOnly) && !overlapOnly) {
+        if ((goblinOnly
+                || sidePlaceStoneLoweringOnly
+                || sidePlaceStoneLiveTruthOnly
+                || sameSpotAfterSlabBreakOnly
+                || slabThenBlockBaselineOnly
+                || wallFenceProductRedOnly)
+                && !overlapOnly) {
             System.out.println("[MC1211_SERVER_STATE_OVERLAP_MATRIX_SKIPPED]"
                     + " route=runClientGameTest"
                     + " reason=client_route_only"
                     + " property=" + (slabThenBlockBaselineOnly
                     ? "slabbed.mc1211.slabThenBlockBaselineOnly"
+                    : wallFenceProductRedOnly
+                    ? "slabbed.mc1211.wallFenceProductRedOnly"
+                    : sameSpotAfterSlabBreakOnly
+                    ? "slabbed.mc1211.sameSpotAfterSlabBreakOnly"
+                    : sidePlaceStoneLiveTruthOnly
+                    ? "slabbed.mc1211.sidePlaceStoneLiveTruthOnly"
                     : sidePlaceStoneLoweringOnly
                     ? "slabbed.mc1211.sidePlaceStoneLoweringOnly"
                     : "slabbed.mc1211.goblinOnly"));
