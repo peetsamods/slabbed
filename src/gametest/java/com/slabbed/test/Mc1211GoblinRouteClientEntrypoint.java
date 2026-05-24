@@ -3,6 +3,7 @@ package com.slabbed.test;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
@@ -11,6 +12,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.DynamicRegistryManager;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.resource.DataConfiguration;
 import net.minecraft.server.MinecraftServer;
@@ -18,6 +20,8 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
@@ -45,10 +49,18 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static final String GOBLIN_ONLY_PROPERTY = "slabbed.mc1211.goblinOnly";
     private static final String SIDE_PLACE_STONE_LOWERING_ONLY_PROPERTY =
             "slabbed.mc1211.sidePlaceStoneLoweringOnly";
+    private static final String SIDE_PLACE_STONE_LIVE_TRUTH_ONLY_PROPERTY =
+            "slabbed.mc1211.sidePlaceStoneLiveTruthOnly";
+    private static final String SAME_SPOT_AFTER_SLAB_BREAK_ONLY_PROPERTY =
+            "slabbed.mc1211.sameSpotAfterSlabBreakOnly";
     private static final String SLAB_THEN_BLOCK_BASELINE_ONLY_PROPERTY =
             "slabbed.mc1211.slabThenBlockBaselineOnly";
     private static final String MODEL_VS_OUTLINE_GOBLIN_HOST_ONLY_PROPERTY =
             "slabbed.mc1211.modelVsOutlineGoblinHostOnly";
+    private static final String SUPERFLAT_MODEL_HITBOX_HARNESS_ONLY_PROPERTY =
+            "slabbed.mc1211.superflatModelHitboxHarnessOnly";
+    private static final String WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY =
+            "slabbed.mc1211.wallFenceProductRedOnly";
     private static final String OVERLAP_ONLY_PROPERTY = "slabbed.mc1211.overlapMatrixOnly";
     private static final String LEGACY_CLASS =
             "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest";
@@ -93,6 +105,45 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static boolean sidePlaceProgrammaticWorldStartRequested;
     private static String sidePlaceProgrammaticWorldName = "not_requested";
     private static String sidePlaceProgrammaticWorldPath = "not_requested";
+    private static int liveTruthTicks;
+    private static int liveTruthPhase;
+    private static int liveTruthPhaseTick;
+    private static boolean liveTruthCanaryEmitted;
+    private static boolean liveTruthWorldStartRequested;
+    private static boolean liveTruthReadyRowEmitted;
+    private static boolean liveTruthStarted;
+    private static boolean liveTruthFinalized;
+    private static BlockPos liveTruthOrigin;
+    private static BlockPos liveTruthGroundPos;
+    private static BlockPos liveTruthSlabPos;
+    private static BlockPos liveTruthFirstStonePos;
+    private static BlockPos liveTruthSideStonePos;
+    private static String liveTruthSlabResult = "not_started";
+    private static String liveTruthFirstStoneResult = "not_started";
+    private static String liveTruthSideStoneResult = "not_started";
+    private static String liveTruthReachDiagnostic = "not_sampled";
+    private static int sameSpotTicks;
+    private static int sameSpotPhase;
+    private static int sameSpotPhaseTick;
+    private static boolean sameSpotCanaryEmitted;
+    private static boolean sameSpotWorldStartRequested;
+    private static boolean sameSpotReadyRowEmitted;
+    private static boolean sameSpotStarted;
+    private static boolean sameSpotFinalized;
+    private static boolean sameSpotBreakRequested;
+    private static volatile String sameSpotBreakResult = "not_started";
+    private static BlockPos sameSpotOrigin;
+    private static BlockPos sameSpotGroundPos;
+    private static BlockPos sameSpotSlabPos;
+    private static BlockPos sameSpotFullPos;
+    private static Vec3d sameSpotAimPoint;
+    private static String sameSpotSlabPlacementResult = "not_started";
+    private static String sameSpotFullPlacementResult = "not_started";
+    private static String sameSpotReachDiagnostic = "not_sampled";
+    private static String sameSpotPreTarget = "not_sampled";
+    private static String sameSpotPostTarget = "not_sampled";
+    private static String sameSpotPreModelTrace = "not_sampled";
+    private static String sameSpotPostModelTrace = "not_sampled";
     private static int slabThenBlockTicks;
     private static int slabThenBlockRowIndex;
     private static int slabThenBlockRowPhase;
@@ -114,6 +165,33 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static String slabThenBlockClientResultSecondSlab = "not_needed";
     private static String slabThenBlockReachDiagnostic = "not_sampled";
     private static String slabThenBlockRows = "";
+    private static int superflatHarnessTicks;
+    private static int superflatHarnessRowIndex;
+    private static int superflatHarnessRowPhase;
+    private static int superflatHarnessPhaseTick;
+    private static boolean superflatHarnessCanaryEmitted;
+    private static boolean superflatHarnessWorldStartRequested;
+    private static boolean superflatHarnessReadyRowEmitted;
+    private static boolean superflatHarnessStarted;
+    private static boolean superflatHarnessFinalized;
+    private static BlockPos superflatHarnessOrigin;
+    private static BlockPos superflatHarnessSlabPos;
+    private static BlockPos superflatHarnessPlacePos;
+    private static String superflatHarnessPlacementMethod = "not_started";
+    private static String superflatHarnessPlacementReturn = "not_started";
+    private static int superflatHarnessInteractAttempts;
+    private static int superflatHarnessGreenRows;
+    private static int superflatHarnessRedRows;
+    private static int superflatHarnessTraceGapRows;
+    private static int superflatHarnessProductBadRows;
+    private static final SuperflatHarnessRowSpec[] SUPERFLAT_HARNESS_ROWS = new SuperflatHarnessRowSpec[] {
+            new SuperflatHarnessRowSpec("STONE_FULL_BLOCK", "minecraft:stone", false),
+            new SuperflatHarnessRowSpec("KNOWN_GOOD_FULL_BLOCK", "minecraft:oak_log", false),
+            new SuperflatHarnessRowSpec("COBBLESTONE_WALL", "minecraft:cobblestone_wall", true),
+            new SuperflatHarnessRowSpec("STONE_WALL", "minecraft:stone_wall", true),
+            new SuperflatHarnessRowSpec("OAK_FENCE", "minecraft:oak_fence", true),
+            new SuperflatHarnessRowSpec("STONE_STAIRS", "minecraft:stone_stairs", false)
+    };
 
     @Override
     public void onInitializeClient() {
@@ -125,12 +203,28 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     }
 
     private static void onEndTick(MinecraftClient client) {
+        if (Boolean.getBoolean(WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY)) {
+            runSuperflatModelHitboxHarnessRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(SUPERFLAT_MODEL_HITBOX_HARNESS_ONLY_PROPERTY)) {
+            runSuperflatModelHitboxHarnessRoute(client);
+            return;
+        }
         if (Boolean.getBoolean(SLAB_THEN_BLOCK_BASELINE_ONLY_PROPERTY)) {
             runSlabThenBlockBaselineRoute(client);
             return;
         }
         if (Boolean.getBoolean(SIDE_PLACE_STONE_LOWERING_ONLY_PROPERTY)) {
             runSidePlaceStoneLoweringRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(SIDE_PLACE_STONE_LIVE_TRUTH_ONLY_PROPERTY)) {
+            runSidePlaceStoneLiveTruthRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(SAME_SPOT_AFTER_SLAB_BREAK_ONLY_PROPERTY)) {
+            runSameSpotAfterSlabBreakRoute(client);
             return;
         }
         if (Boolean.getBoolean(MODEL_VS_OUTLINE_GOBLIN_HOST_ONLY_PROPERTY)) {
@@ -753,6 +847,1146 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " row=" + row
                 + " legacyClass=" + LEGACY_CLASS
                 + " result=GREEN");
+    }
+
+    private static void runSidePlaceStoneLiveTruthRoute(MinecraftClient client) {
+        if (liveTruthFinalized || emitted) {
+            return;
+        }
+        liveTruthTicks++;
+        if (!liveTruthCanaryEmitted) {
+            liveTruthCanaryEmitted = true;
+            System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_ROUTE_CANARY]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + SIDE_PLACE_STONE_LIVE_TRUTH_ONLY_PROPERTY
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticLiveTruthWorldIfNeeded(client);
+        String readinessGap = liveTruthReadinessGap(client);
+        if (readinessGap != null) {
+            if (!liveTruthReadyRowEmitted || liveTruthTicks % 1200 == 0) {
+                emitLiveTruthReadyRow(client, "WAITING", readinessGap);
+                liveTruthReadyRowEmitted = true;
+            }
+            if (liveTruthTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitLiveTruthReadyRow(client, "TIMEOUT", readinessGap);
+            emitLiveTruthTraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+        if (!liveTruthReadyRowEmitted) {
+            emitLiveTruthReadyRow(client, "READY", "none");
+            liveTruthReadyRowEmitted = true;
+        }
+
+        if (!liveTruthStarted) {
+            liveTruthStarted = true;
+            liveTruthOrigin = client.player.getBlockPos().add(9, 0, 7).toImmutable();
+            liveTruthGroundPos = liveTruthOrigin.down();
+            liveTruthSlabPos = liveTruthOrigin;
+            liveTruthFirstStonePos = liveTruthSlabPos.up();
+            liveTruthSideStonePos = liveTruthFirstStonePos.offset(Direction.WEST);
+            prepareLiveTruthFixture(client);
+            liveTruthPhase = 1;
+            liveTruthPhaseTick = liveTruthTicks;
+            System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_START]"
+                    + " rowName=SIDE_PLACE_STONE_LIVE_SOURCE_TRUTH_WEST_FACE"
+                    + " fixtureOrigin=" + textPos(liveTruthOrigin)
+                    + " liveReferenceSideStonePos=-22,-59,64"
+                    + " translatedSideStonePos=" + textPos(liveTruthSideStonePos)
+                    + " placementRoute=ClientPlayerInteractionManager.interactBlock"
+                    + " manualAnchorInjection=false");
+            return;
+        }
+
+        if (liveTruthTicks - liveTruthPhaseTick < 8) {
+            return;
+        }
+        if (liveTruthPhase == 1) {
+            liveTruthSlabResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    liveTruthGroundPos,
+                    Direction.UP,
+                    hitVector(liveTruthGroundPos, Direction.UP));
+            liveTruthReachDiagnostic = slabThenBlockReachDiagnostic;
+            liveTruthPhase = 2;
+            liveTruthPhaseTick = liveTruthTicks;
+            return;
+        }
+        if (liveTruthPhase == 2) {
+            liveTruthFirstStoneResult = clickBlock(
+                    client,
+                    Items.STONE,
+                    liveTruthSlabPos,
+                    Direction.UP,
+                    hitVector(liveTruthSlabPos, Direction.UP));
+            liveTruthReachDiagnostic = slabThenBlockReachDiagnostic;
+            liveTruthPhase = 3;
+            liveTruthPhaseTick = liveTruthTicks;
+            return;
+        }
+        if (liveTruthPhase == 3) {
+            Vec3d sideHit = new Vec3d(
+                    liveTruthFirstStonePos.getX(),
+                    liveTruthFirstStonePos.getY() + 0.5d,
+                    liveTruthFirstStonePos.getZ() + 0.5d);
+            liveTruthSideStoneResult = clickBlock(client, Items.STONE, liveTruthFirstStonePos, Direction.WEST, sideHit);
+            liveTruthReachDiagnostic = slabThenBlockReachDiagnostic;
+            liveTruthPhase = 4;
+            liveTruthPhaseTick = liveTruthTicks;
+            return;
+        }
+        if (liveTruthTicks - liveTruthPhaseTick < 30) {
+            return;
+        }
+        emitLiveTruthRow(client);
+        liveTruthFinalized = true;
+        emitted = true;
+        client.scheduleStop();
+    }
+
+    private static void requestProgrammaticLiveTruthWorldIfNeeded(MinecraftClient client) {
+        if (liveTruthWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
+        }
+        liveTruthWorldStartRequested = true;
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 Side Place Live Truth Harness",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        client.createIntegratedServerLoader().createAndStart(
+                "slabbed-mc1211-side-place-live-truth-harness",
+                levelInfo,
+                generatorOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
+                null);
+    }
+
+    private static String liveTruthReadinessGap(MinecraftClient client) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(client);
+        if (!readiness.clientBootstrapReady) {
+            return "TRACE_GAP_CLIENT_BOOTSTRAP_NOT_FINISHED";
+        }
+        if (!readiness.clientWorldReady) {
+            return liveTruthWorldStartRequested
+                    ? "TRACE_GAP_PROGRAMMATIC_CLIENT_WORLD_PENDING"
+                    : "TRACE_GAP_PROGRAMMATIC_WORLD_START_PENDING";
+        }
+        if (!readiness.clientPlayerReady) {
+            return "TRACE_GAP_CLIENT_PLAYER_NOT_READY";
+        }
+        if (!readiness.integratedServerReady) {
+            return "TRACE_GAP_INTEGRATED_SERVER_NOT_READY";
+        }
+        if (!readiness.serverWorldReady) {
+            return "TRACE_GAP_SERVER_WORLD_NOT_READY";
+        }
+        if (!readiness.serverPlayerReady) {
+            return "TRACE_GAP_SERVER_PLAYER_NOT_READY";
+        }
+        if (!readiness.interactionManagerReady) {
+            return "TRACE_GAP_INTERACTION_MANAGER_NOT_READY";
+        }
+        return null;
+    }
+
+    private static void emitLiveTruthReadyRow(MinecraftClient client, String phase, String reason) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(client);
+        System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_READY_ROW]"
+                + " phase=" + phase
+                + " tick=" + liveTruthTicks
+                + " clientBootstrapReady=" + readiness.clientBootstrapReady
+                + " clientWorldReady=" + readiness.clientWorldReady
+                + " clientPlayerReady=" + readiness.clientPlayerReady
+                + " integratedServerReady=" + readiness.integratedServerReady
+                + " serverWorldReady=" + readiness.serverWorldReady
+                + " serverPlayerReady=" + readiness.serverPlayerReady
+                + " interactionManagerReady=" + readiness.interactionManagerReady
+                + " programmaticWorldStartRequested=" + liveTruthWorldStartRequested
+                + " reason=" + reason);
+    }
+
+    private static void prepareLiveTruthFixture(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || liveTruthOrigin == null) {
+            return;
+        }
+        serverWorld.getServer().execute(() -> {
+            for (int x = liveTruthOrigin.getX() - 3; x <= liveTruthOrigin.getX() + 3; x++) {
+                for (int z = liveTruthOrigin.getZ() - 3; z <= liveTruthOrigin.getZ() + 3; z++) {
+                    for (int y = liveTruthOrigin.getY() - 1; y <= liveTruthOrigin.getY() + 3; y++) {
+                        serverWorld.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+            serverWorld.setBlockState(liveTruthGroundPos, Blocks.STONE.getDefaultState(), 3);
+            if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
+                serverWorld.getServer().getPlayerManager().getPlayerList().get(0)
+                        .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            }
+        });
+    }
+
+    private static void emitLiveTruthRow(MinecraftClient client) {
+        ClientWorld clientWorld = client.world;
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (clientWorld == null || serverWorld == null) {
+            emitLiveTruthTraceGap("ROUTE_ROW_SAMPLE", "TRACE_GAP_WORLD_OR_PLAYER_NOT_READY");
+            return;
+        }
+        BlockState slabState = serverWorld.getBlockState(liveTruthSlabPos);
+        BlockState firstClientState = clientWorld.getBlockState(liveTruthFirstStonePos);
+        BlockState firstServerState = serverWorld.getBlockState(liveTruthFirstStonePos);
+        BlockState sideClientState = clientWorld.getBlockState(liveTruthSideStonePos);
+        BlockState sideServerState = serverWorld.getBlockState(liveTruthSideStonePos);
+        double firstClientDy = SlabSupport.getYOffset(clientWorld, liveTruthFirstStonePos, firstClientState);
+        double firstServerDy = SlabSupport.getYOffset(serverWorld, liveTruthFirstStonePos, firstServerState);
+        double sideClientDy = SlabSupport.getYOffset(clientWorld, liveTruthSideStonePos, sideClientState);
+        double sideServerDy = SlabSupport.getYOffset(serverWorld, liveTruthSideStonePos, sideServerState);
+        boolean firstClientAnchor = SlabAnchorAttachment.isAnchored(clientWorld, liveTruthFirstStonePos);
+        boolean firstServerAnchor = SlabAnchorAttachment.isAnchored(serverWorld, liveTruthFirstStonePos);
+        boolean sideClientAnchor = SlabAnchorAttachment.isAnchored(clientWorld, liveTruthSideStonePos);
+        boolean sideServerAnchor = SlabAnchorAttachment.isAnchored(serverWorld, liveTruthSideStonePos);
+        boolean sideIsStone = sideServerState.isOf(Blocks.STONE);
+        String finalResult;
+        String equivalence;
+        if (!slabState.isOf(Blocks.STONE_SLAB) || !firstServerState.isOf(Blocks.STONE) || !sideIsStone) {
+            finalResult = "TRACE_GAP";
+            equivalence = "TRACE_GAP_MISSING_LIVE_PLACED_STATE";
+        } else if (near(sideServerDy, 0.0d) && !sideServerAnchor) {
+            finalResult = "RED";
+            equivalence = "LIVE_EQUIVALENT";
+        } else if (near(sideServerDy, -0.5d) && sideServerAnchor) {
+            finalResult = "GREEN";
+            equivalence = "NOT_LIVE_EQUIVALENT";
+        } else {
+            finalResult = "TRACE_GAP";
+            equivalence = "TRACE_GAP_MISSING_FINALIZER_DATA";
+        }
+        Vec3d sideHit = new Vec3d(
+                liveTruthFirstStonePos.getX(),
+                liveTruthFirstStonePos.getY() + 0.5d,
+                liveTruthFirstStonePos.getZ() + 0.5d);
+        System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_ROW]"
+                + " rowName=SIDE_PLACE_STONE_LIVE_SOURCE_TRUTH_WEST_FACE"
+                + " fixtureOrigin=" + textPos(liveTruthOrigin)
+                + " liveReferenceSideStonePos=-22,-59,64"
+                + " translatedSideStonePos=" + textPos(liveTruthSideStonePos)
+                + " slabPos=" + textPos(liveTruthSlabPos)
+                + " slabState=" + slabState
+                + " firstStonePos=" + textPos(liveTruthFirstStonePos)
+                + " firstStoneState=" + firstServerState
+                + " firstStoneClientDy=" + formatDouble(firstClientDy)
+                + " firstStoneServerDy=" + formatDouble(firstServerDy)
+                + " firstStoneClientAnchor=" + firstClientAnchor
+                + " firstStoneServerAnchor=" + firstServerAnchor
+                + " sideStoneIntendedPos=" + textPos(liveTruthSideStonePos)
+                + " sideStoneFinalPos=" + textPos(liveTruthSideStonePos)
+                + " sideStoneState=" + sideServerState
+                + " sideStoneClientDy=" + formatDouble(sideClientDy)
+                + " sideStoneServerDy=" + formatDouble(sideServerDy)
+                + " sideStoneClientAnchor=" + sideClientAnchor
+                + " sideStoneServerAnchor=" + sideServerAnchor
+                + " heldItem=minecraft:stone"
+                + " clickedFace=west"
+                + " hitVector=" + formatVec(sideHit)
+                + " placementReturnSlab=" + liveTruthSlabResult
+                + " placementReturnFirstStone=" + liveTruthFirstStoneResult
+                + " placementReturnSideStone=" + liveTruthSideStoneResult
+                + " finalizerInvoked=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " sourcePos=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " sourceState=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " sourceDy=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " sourceAnchor=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " sourceQualifies=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " qualifierRejectReason=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " anchorWrite=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " anchorAfter=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " placedDyAfter=see_MC1211_SIDE_ADJACENT_FINALIZATION_TRACE"
+                + " manualAnchorInjected=false"
+                + " routePlacementMethod=ClientPlayerInteractionManager.interactBlock"
+                + " reachDiagnostic=" + liveTruthReachDiagnostic
+                + " equivalenceVerdict=" + equivalence
+                + " classification=" + finalResult);
+        System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_SUMMARY]"
+                + " rows=1"
+                + " finalResult=" + finalResult
+                + " equivalenceVerdict=" + equivalence
+                + " manualAnchorInjected=false");
+        System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_" + finalResult + "]"
+                + " rowName=SIDE_PLACE_STONE_LIVE_SOURCE_TRUTH_WEST_FACE"
+                + " equivalenceVerdict=" + equivalence
+                + " sideStoneServerDy=" + formatDouble(sideServerDy)
+                + " sideStoneServerAnchor=" + sideServerAnchor);
+    }
+
+    private static void emitLiveTruthTraceGap(String row, String reason) {
+        System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_START]"
+                + " rowName=SIDE_PLACE_STONE_LIVE_SOURCE_TRUTH_WEST_FACE"
+                + " rows=1");
+        System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_ROW]"
+                + " row=" + row
+                + " fixtureOrigin=" + textPos(liveTruthOrigin)
+                + " liveReferenceSideStonePos=-22,-59,64"
+                + " translatedSideStonePos=" + textPos(liveTruthSideStonePos)
+                + " manualAnchorInjected=false"
+                + " equivalenceVerdict=" + reason
+                + " classification=TRACE_GAP");
+        System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_SUMMARY]"
+                + " rows=1"
+                + " finalResult=TRACE_GAP"
+                + " equivalenceVerdict=" + reason);
+        System.out.println("[MC1211_SIDE_PLACE_LIVE_TRUTH_TRACE_GAP]"
+                + " rowName=SIDE_PLACE_STONE_LIVE_SOURCE_TRUTH_WEST_FACE"
+                + " reason=" + reason);
+        liveTruthFinalized = true;
+        emitted = true;
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static void runSameSpotAfterSlabBreakRoute(MinecraftClient client) {
+        if (sameSpotFinalized || emitted) {
+            return;
+        }
+        sameSpotTicks++;
+        if (!sameSpotCanaryEmitted) {
+            sameSpotCanaryEmitted = true;
+            System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_ROUTE_CANARY]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + SAME_SPOT_AFTER_SLAB_BREAK_ONLY_PROPERTY
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticSameSpotWorldIfNeeded(client);
+        String readinessGap = liveTruthReadinessGap(client);
+        if (readinessGap != null) {
+            if (!sameSpotReadyRowEmitted || sameSpotTicks % 1200 == 0) {
+                emitSameSpotReadyRow(client, "WAITING", readinessGap);
+                sameSpotReadyRowEmitted = true;
+            }
+            if (sameSpotTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitSameSpotReadyRow(client, "TIMEOUT", readinessGap);
+            emitSameSpotTraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+        if (!sameSpotReadyRowEmitted) {
+            emitSameSpotReadyRow(client, "READY", "none");
+            sameSpotReadyRowEmitted = true;
+        }
+
+        if (!sameSpotStarted) {
+            sameSpotStarted = true;
+            sameSpotOrigin = client.player.getBlockPos().add(9, 0, 7).toImmutable();
+            sameSpotGroundPos = sameSpotOrigin.down();
+            sameSpotSlabPos = sameSpotOrigin;
+            sameSpotFullPos = sameSpotSlabPos.up();
+            sameSpotAimPoint = new Vec3d(
+                    sameSpotFullPos.getX() + 0.5d,
+                    sameSpotFullPos.getY() - 0.60d,
+                    sameSpotFullPos.getZ() + 0.5d);
+            prepareSameSpotFixture(client);
+            sameSpotPhase = 1;
+            sameSpotPhaseTick = sameSpotTicks;
+            System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_START]"
+                    + " rowName=SAME_SPOT_AFTER_BREAK_LOWER_VISUAL"
+                    + " fixtureOrigin=" + textPos(sameSpotOrigin)
+                    + " slabPos=" + textPos(sameSpotSlabPos)
+                    + " fullPos=" + textPos(sameSpotFullPos)
+                    + " aimPoint=" + formatVec(sameSpotAimPoint)
+                    + " placementRoute=ClientPlayerInteractionManager.interactBlock"
+                    + " breakRoute=serverWorld.breakBlock"
+                    + " manualAnchorInjection=false"
+                    + " sameEyeYawPitchAfterBreak=true");
+            return;
+        }
+
+        if (sameSpotTicks - sameSpotPhaseTick < 8) {
+            return;
+        }
+        if (sameSpotPhase == 1) {
+            sameSpotSlabPlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    sameSpotGroundPos,
+                    Direction.UP,
+                    hitVector(sameSpotGroundPos, Direction.UP));
+            sameSpotPhase = 2;
+            sameSpotPhaseTick = sameSpotTicks;
+            return;
+        }
+        if (sameSpotPhase == 2) {
+            sameSpotFullPlacementResult = clickBlock(
+                    client,
+                    Items.STONE,
+                    sameSpotSlabPos,
+                    Direction.UP,
+                    hitVector(sameSpotSlabPos, Direction.UP));
+            sameSpotPhase = 3;
+            sameSpotPhaseTick = sameSpotTicks;
+            return;
+        }
+        if (sameSpotPhase == 3) {
+            syncSameSpotAim(client);
+            System.setProperty("slabbed.render.offset.trace", "true");
+            OffsetBlockStateModel.resetRenderOffsetTrace(sameSpotFullPos);
+            sameSpotPhase = 4;
+            sameSpotPhaseTick = sameSpotTicks;
+            return;
+        }
+        if (sameSpotPhase == 4) {
+            sameSpotPreTarget = describeCrosshair(client);
+            sameSpotPreModelTrace = describeModelTrace(OffsetBlockStateModel.snapshotRenderOffsetTrace());
+            OffsetBlockStateModel.resetRenderOffsetTrace(sameSpotFullPos);
+            requestSameSpotBreak(client);
+            sameSpotPhase = 5;
+            sameSpotPhaseTick = sameSpotTicks;
+            return;
+        }
+        if (sameSpotPhase == 5 && sameSpotTicks - sameSpotPhaseTick < 20) {
+            return;
+        }
+        if (sameSpotPhase == 5) {
+            sameSpotPostTarget = describeCrosshair(client);
+            sameSpotPostModelTrace = describeModelTrace(OffsetBlockStateModel.snapshotRenderOffsetTrace());
+            System.clearProperty("slabbed.render.offset.trace");
+            emitSameSpotRow(client);
+            sameSpotFinalized = true;
+            emitted = true;
+            client.scheduleStop();
+        }
+    }
+
+    private static void requestProgrammaticSameSpotWorldIfNeeded(MinecraftClient client) {
+        if (sameSpotWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
+        }
+        sameSpotWorldStartRequested = true;
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 Same Spot Break Harness",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        client.createIntegratedServerLoader().createAndStart(
+                "slabbed-mc1211-same-spot-break-harness",
+                levelInfo,
+                generatorOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
+                null);
+    }
+
+    private static void prepareSameSpotFixture(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || sameSpotOrigin == null) {
+            return;
+        }
+        serverWorld.getServer().execute(() -> {
+            for (int x = sameSpotOrigin.getX() - 3; x <= sameSpotOrigin.getX() + 3; x++) {
+                for (int z = sameSpotOrigin.getZ() - 3; z <= sameSpotOrigin.getZ() + 3; z++) {
+                    for (int y = sameSpotOrigin.getY() - 1; y <= sameSpotOrigin.getY() + 3; y++) {
+                        serverWorld.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+            serverWorld.setBlockState(sameSpotGroundPos, Blocks.STONE.getDefaultState(), 3);
+            if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
+                serverWorld.getServer().getPlayerManager().getPlayerList().get(0)
+                        .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            }
+        });
+    }
+
+    private static void syncSameSpotAim(MinecraftClient client) {
+        if (client == null || client.player == null || sameSpotAimPoint == null) {
+            return;
+        }
+        Vec3d eye = sameSpotAimPoint.add(1.75d, 0.35d, 0.0d);
+        Vec3d delta = sameSpotAimPoint.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        sameSpotReachDiagnostic = "eye=" + formatVec(eye)
+                + "/aimPoint=" + formatVec(sameSpotAimPoint)
+                + "/distance=" + formatDouble(eye.distanceTo(sameSpotAimPoint))
+                + "/yaw=" + formatDouble(yaw)
+                + "/pitch=" + formatDouble(pitch);
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        client.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+        }
+    }
+
+    private static void requestSameSpotBreak(MinecraftClient client) {
+        if (sameSpotBreakRequested) {
+            return;
+        }
+        sameSpotBreakRequested = true;
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || sameSpotSlabPos == null) {
+            sameSpotBreakResult = "TRACE_GAP_SERVER_WORLD_OR_SLAB_POS_MISSING";
+            return;
+        }
+        serverWorld.getServer().execute(() -> sameSpotBreakResult =
+                serverWorld.breakBlock(sameSpotSlabPos, false) ? "BROKE" : "NOT_BROKEN");
+    }
+
+    private static void emitSameSpotReadyRow(MinecraftClient client, String phase, String reason) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(client);
+        System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_READY_ROW]"
+                + " phase=" + phase
+                + " tick=" + sameSpotTicks
+                + " clientBootstrapReady=" + readiness.clientBootstrapReady
+                + " clientWorldReady=" + readiness.clientWorldReady
+                + " clientPlayerReady=" + readiness.clientPlayerReady
+                + " integratedServerReady=" + readiness.integratedServerReady
+                + " serverWorldReady=" + readiness.serverWorldReady
+                + " serverPlayerReady=" + readiness.serverPlayerReady
+                + " interactionManagerReady=" + readiness.interactionManagerReady
+                + " programmaticWorldStartRequested=" + sameSpotWorldStartRequested
+                + " reason=" + reason);
+    }
+
+    private static void emitSameSpotRow(MinecraftClient client) {
+        ClientWorld clientWorld = client == null ? null : client.world;
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (clientWorld == null || serverWorld == null) {
+            emitSameSpotTraceGap("ROUTE_ROW_SAMPLE", "TRACE_GAP_WORLD_OR_PLAYER_NOT_READY");
+            return;
+        }
+        BlockState slabClientState = clientWorld.getBlockState(sameSpotSlabPos);
+        BlockState slabServerState = serverWorld.getBlockState(sameSpotSlabPos);
+        BlockState fullClientState = clientWorld.getBlockState(sameSpotFullPos);
+        BlockState fullServerState = serverWorld.getBlockState(sameSpotFullPos);
+        double fullClientDy = SlabSupport.getYOffset(clientWorld, sameSpotFullPos, fullClientState);
+        double fullServerDy = SlabSupport.getYOffset(serverWorld, sameSpotFullPos, fullServerState);
+        boolean fullClientAnchor = SlabAnchorAttachment.isAnchored(clientWorld, sameSpotFullPos);
+        boolean fullServerAnchor = SlabAnchorAttachment.isAnchored(serverWorld, sameSpotFullPos);
+        boolean visualTracePresent = sameSpotPostModelTrace.contains("modelDy=");
+        boolean postTargetHitsFull = sameSpotPostTarget.contains("pos=" + textPos(sameSpotFullPos));
+        boolean postTargetMissOrWrong = sameSpotPostTarget.contains("type=MISS") || !postTargetHitsFull;
+        String classification;
+        String reason;
+        if (!sameSpotSlabPlacementResult.contains("SUCCESS") || !sameSpotFullPlacementResult.contains("SUCCESS")) {
+            classification = "TRACE_GAP";
+            reason = "TRACE_GAP_PLACEMENT_NOT_REPRODUCED";
+        } else if (!slabServerState.isAir()) {
+            classification = "TRACE_GAP";
+            reason = "TRACE_GAP_SLAB_NOT_BROKEN";
+        } else if (!fullServerState.isOf(Blocks.STONE)) {
+            classification = "TRACE_GAP";
+            reason = "TRACE_GAP_FULL_BLOCK_DID_NOT_REMAIN";
+        } else if (postTargetMissOrWrong) {
+            if (visualTracePresent) {
+                classification = "RED";
+                reason = "SAME_AIM_VISUAL_PRESENT_TARGET_NOT_BREAKABLE_FULL_BLOCK";
+            } else {
+                classification = "TRACE_GAP";
+                reason = "TRACE_GAP_MODEL_TRACE_MISSING";
+            }
+        } else {
+            classification = "TRACE_GAP";
+            reason = "TRACE_GAP_ROUTE_NOT_LIVE_EQUIVALENT_TARGET_STILL_HITS_FULL_BLOCK";
+        }
+        System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_ROW]"
+                + " rowName=SAME_SPOT_AFTER_BREAK_LOWER_VISUAL"
+                + " fixtureOrigin=" + textPos(sameSpotOrigin)
+                + " slabPos=" + textPos(sameSpotSlabPos)
+                + " fullPos=" + textPos(sameSpotFullPos)
+                + " slabClientState=" + slabClientState
+                + " slabServerState=" + slabServerState
+                + " fullClientState=" + fullClientState
+                + " fullServerState=" + fullServerState
+                + " fullClientDy=" + formatDouble(fullClientDy)
+                + " fullServerDy=" + formatDouble(fullServerDy)
+                + " fullClientAnchor=" + fullClientAnchor
+                + " fullServerAnchor=" + fullServerAnchor
+                + " aimPoint=" + formatVec(sameSpotAimPoint)
+                + " sameEyeYawPitchAfterBreak=true"
+                + " placementReturnSlab=" + sameSpotSlabPlacementResult
+                + " placementReturnFullBlock=" + sameSpotFullPlacementResult
+                + " breakResult=" + sameSpotBreakResult
+                + " preTarget=" + sameSpotPreTarget
+                + " postTarget=" + sameSpotPostTarget
+                + " preModelTrace=" + sameSpotPreModelTrace
+                + " postModelTrace=" + sameSpotPostModelTrace
+                + " reachDiagnostic=" + sameSpotReachDiagnostic
+                + " classification=" + classification
+                + " reason=" + reason);
+        System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_SUMMARY]"
+                + " rows=1"
+                + " finalResult=" + classification
+                + " reason=" + reason
+                + " behaviorChanged=false");
+        System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_" + classification + "]"
+                + " rowName=SAME_SPOT_AFTER_BREAK_LOWER_VISUAL"
+                + " reason=" + reason);
+    }
+
+    private static void emitSameSpotTraceGap(String row, String reason) {
+        System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_START]"
+                + " rowName=SAME_SPOT_AFTER_BREAK_LOWER_VISUAL"
+                + " rows=1");
+        System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_ROW]"
+                + " row=" + row
+                + " fixtureOrigin=" + textPos(sameSpotOrigin)
+                + " slabPos=" + textPos(sameSpotSlabPos)
+                + " fullPos=" + textPos(sameSpotFullPos)
+                + " classification=TRACE_GAP"
+                + " reason=" + reason);
+        System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_SUMMARY]"
+                + " rows=1"
+                + " finalResult=TRACE_GAP"
+                + " reason=" + reason);
+        System.out.println("[MC1211_SAME_SPOT_AFTER_SLAB_BREAK_TRACE_GAP]"
+                + " rowName=SAME_SPOT_AFTER_BREAK_LOWER_VISUAL"
+                + " reason=" + reason);
+        sameSpotFinalized = true;
+        emitted = true;
+        System.clearProperty("slabbed.render.offset.trace");
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static String describeCrosshair(MinecraftClient client) {
+        if (client == null || client.world == null || client.crosshairTarget == null) {
+            return "type=null";
+        }
+        HitResult target = client.crosshairTarget;
+        if (!(target instanceof BlockHitResult blockHit) || target.getType() != HitResult.Type.BLOCK) {
+            return "type=" + target.getType();
+        }
+        BlockPos pos = blockHit.getBlockPos();
+        BlockState state = client.world.getBlockState(pos);
+        return "type=BLOCK"
+                + "/pos=" + textPos(pos)
+                + "/side=" + blockHit.getSide().asString()
+                + "/hitVec=" + formatVec(blockHit.getPos())
+                + "/state=" + state
+                + "/dy=" + formatDouble(SlabSupport.getYOffset(client.world, pos, state))
+                + "/anchor=" + SlabAnchorAttachment.isAnchored(client.world, pos);
+    }
+
+    private static String describeModelTrace(OffsetBlockStateModel.RenderOffsetTrace trace) {
+        if (trace == null || !trace.seen()) {
+            return "missing";
+        }
+        return "modelDy=" + formatDouble(trace.modelDy())
+                + "/pos=" + trace.pos()
+                + "/state=" + trace.state();
+    }
+
+    private static void runSuperflatModelHitboxHarnessRoute(MinecraftClient client) {
+        boolean wallFenceProductRedMode = Boolean.getBoolean(WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY);
+        if (emitted || superflatHarnessFinalized) {
+            return;
+        }
+        superflatHarnessTicks++;
+        if (!superflatHarnessCanaryEmitted) {
+            superflatHarnessCanaryEmitted = true;
+            System.out.println("[" + (wallFenceProductRedMode
+                    ? "MC1211_WALL_FENCE_PRODUCT_RED_ROUTE_CANARY"
+                    : "MC1211_SUPERFLAT_MODEL_HITBOX_ROUTE_CANARY") + "]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + (wallFenceProductRedMode
+                    ? WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY
+                    : SUPERFLAT_MODEL_HITBOX_HARNESS_ONLY_PROPERTY)
+                    + " worldType=superflat"
+                    + " behaviorChanged=false");
+        }
+        requestProgrammaticSuperflatHarnessWorldIfNeeded(client);
+        String readinessGap = sidePlaceReadinessGap(client);
+        if (readinessGap != null) {
+            if (!superflatHarnessReadyRowEmitted || superflatHarnessTicks % 1200 == 0) {
+                emitSidePlaceReadyRow(client, "WAITING", readinessGap);
+                superflatHarnessReadyRowEmitted = true;
+            }
+            if (superflatHarnessTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitSuperflatHarnessTraceGap("TRACE_GAP_WORLD_NOT_READY", readinessGap);
+            return;
+        }
+        if (!superflatHarnessReadyRowEmitted) {
+            emitSidePlaceReadyRow(client, "READY", "none");
+            superflatHarnessReadyRowEmitted = true;
+        }
+        if (!superflatHarnessStarted) {
+            superflatHarnessStarted = true;
+            superflatHarnessOrigin = client.player.getBlockPos().add(8, 0, 8).toImmutable();
+            System.out.println("[" + (wallFenceProductRedMode
+                    ? "MC1211_WALL_FENCE_PRODUCT_RED_START"
+                    : "MC1211_SUPERFLAT_MODEL_HITBOX_START") + "]"
+                    + " rows=" + SUPERFLAT_HARNESS_ROWS.length
+                    + " fixtureOrigin=" + textPos(superflatHarnessOrigin)
+                    + " supportBlockId=minecraft:stone_slab");
+        }
+        if (superflatHarnessRowIndex >= SUPERFLAT_HARNESS_ROWS.length) {
+            emitSuperflatHarnessSummary(wallFenceProductRedMode);
+            return;
+        }
+        runSuperflatHarnessRow(
+                client,
+                SUPERFLAT_HARNESS_ROWS[superflatHarnessRowIndex],
+                superflatHarnessRowIndex,
+                wallFenceProductRedMode);
+    }
+
+    private static void runSuperflatHarnessRow(
+            MinecraftClient client,
+            SuperflatHarnessRowSpec row,
+            int rowIndex,
+            boolean wallFenceProductRedMode
+    ) {
+        if (client == null || client.world == null || client.player == null) {
+            return;
+        }
+        MinecraftServer server = client.getServer();
+        if (server == null) {
+            return;
+        }
+        ServerWorld serverWorld = server.getWorld(client.world.getRegistryKey());
+        if (serverWorld == null) {
+            return;
+        }
+        if (superflatHarnessRowPhase == 0) {
+            BlockPos rowOrigin = superflatHarnessOrigin.add(rowIndex * 4, 0, 0);
+            superflatHarnessSlabPos = rowOrigin;
+            superflatHarnessPlacePos = rowOrigin.up();
+            superflatHarnessPlacementMethod = "MIXED";
+            superflatHarnessPlacementReturn = "not_started";
+            superflatHarnessInteractAttempts = 0;
+            authorSuperflatHarnessFixture(server, serverWorld, superflatHarnessSlabPos, superflatHarnessPlacePos);
+            syncHarnessPlayerForTopPlace(client, superflatHarnessSlabPos);
+            ItemStack stack = harnessStackForBlock(row.blockId());
+            if (stack != null) {
+                client.player.setStackInHand(Hand.MAIN_HAND, stack);
+                if (!server.getPlayerManager().getPlayerList().isEmpty()
+                        && !server.getPlayerManager().getPlayerList().get(0).isRemoved()) {
+                    server.getPlayerManager().getPlayerList().get(0)
+                            .setStackInHand(Hand.MAIN_HAND, stack.copy());
+                }
+            }
+            OffsetBlockStateModel.resetFullMeshBoundsTrace(superflatHarnessPlacePos);
+            superflatHarnessRowPhase = 1;
+            superflatHarnessPhaseTick = superflatHarnessTicks;
+            return;
+        }
+        if (superflatHarnessRowPhase == 1) {
+            if (superflatHarnessTicks - superflatHarnessPhaseTick < 2) {
+                return;
+            }
+            ItemStack stack = harnessStackForBlock(row.blockId());
+            if (stack == null) {
+                server.execute(() -> serverWorld.setBlockState(superflatHarnessPlacePos, harnessStateForBlock(row.blockId()), 3));
+                superflatHarnessPlacementMethod = "DIRECT_WORLD_TRACE_ONLY";
+                superflatHarnessPlacementReturn = "DIRECT_SETBLOCK_TRACE_ONLY";
+                superflatHarnessRowPhase = 2;
+                superflatHarnessPhaseTick = superflatHarnessTicks;
+                return;
+            }
+            BlockHitResult hit = new BlockHitResult(
+                    new Vec3d(
+                            superflatHarnessSlabPos.getX() + 0.5d,
+                            superflatHarnessSlabPos.getY() + 0.5d,
+                            superflatHarnessSlabPos.getZ() + 0.5d),
+                    Direction.UP,
+                    superflatHarnessSlabPos,
+                    false);
+            ActionResult result = client.interactionManager == null
+                    ? ActionResult.FAIL
+                    : client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+            superflatHarnessInteractAttempts++;
+            superflatHarnessPlacementMethod = "REAL_INTERACT_BLOCK";
+            superflatHarnessPlacementReturn = String.valueOf(result);
+            superflatHarnessRowPhase = 2;
+            superflatHarnessPhaseTick = superflatHarnessTicks;
+            return;
+        }
+        if (superflatHarnessTicks - superflatHarnessPhaseTick < 20) {
+            return;
+        }
+        Block expectedBlock = harnessStateForBlock(row.blockId()).getBlock();
+        BlockState latestServerState = serverWorld.getBlockState(superflatHarnessPlacePos);
+        if (!"DIRECT_WORLD_TRACE_ONLY".equals(superflatHarnessPlacementMethod)
+                && latestServerState.getBlock() != expectedBlock
+                && superflatHarnessInteractAttempts < 3) {
+            syncHarnessPlayerForTopPlace(client, superflatHarnessSlabPos);
+            ItemStack retryStack = harnessStackForBlock(row.blockId());
+            if (retryStack != null) {
+                client.player.setStackInHand(Hand.MAIN_HAND, retryStack);
+                if (!server.getPlayerManager().getPlayerList().isEmpty()
+                        && !server.getPlayerManager().getPlayerList().get(0).isRemoved()) {
+                    server.getPlayerManager().getPlayerList().get(0).setStackInHand(Hand.MAIN_HAND, retryStack.copy());
+                }
+            }
+            superflatHarnessRowPhase = 1;
+            superflatHarnessPhaseTick = superflatHarnessTicks;
+            return;
+        }
+        emitSuperflatHarnessRow(client, serverWorld, row, wallFenceProductRedMode);
+        superflatHarnessRowIndex++;
+        superflatHarnessRowPhase = 0;
+        superflatHarnessPhaseTick = superflatHarnessTicks;
+    }
+
+    private static void requestProgrammaticSuperflatHarnessWorldIfNeeded(MinecraftClient client) {
+        if (superflatHarnessWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
+        }
+        superflatHarnessWorldStartRequested = true;
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 Superflat Model Hitbox Harness",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        client.createIntegratedServerLoader().createAndStart(
+                "slabbed-mc1211-superflat-model-hitbox-harness",
+                levelInfo,
+                generatorOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
+                null);
+    }
+
+    private static void authorSuperflatHarnessFixture(
+            MinecraftServer server,
+            ServerWorld serverWorld,
+            BlockPos slabPos,
+            BlockPos placePos
+    ) {
+        server.execute(() -> {
+            for (int x = slabPos.getX() - 1; x <= slabPos.getX() + 1; x++) {
+                for (int z = slabPos.getZ() - 1; z <= slabPos.getZ() + 1; z++) {
+                    for (int y = slabPos.getY() - 1; y <= slabPos.getY() + 3; y++) {
+                        serverWorld.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+            serverWorld.setBlockState(
+                    slabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    3);
+            serverWorld.setBlockState(placePos, Blocks.AIR.getDefaultState(), 3);
+        });
+    }
+
+    private static void syncHarnessPlayerForTopPlace(MinecraftClient client, BlockPos slabPos) {
+        Vec3d hit = Vec3d.ofCenter(slabPos).add(0.0d, 0.5d, 0.0d);
+        Vec3d eye = hit.add(0.0d, 0.8d, 2.4d);
+        Vec3d delta = hit.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+    }
+
+    private static void emitSuperflatHarnessRow(
+            MinecraftClient client,
+            ServerWorld serverWorld,
+            SuperflatHarnessRowSpec row,
+            boolean wallFenceProductRedMode
+    ) {
+        ClientWorld clientWorld = client.world;
+        BlockState finalClientState = clientWorld.getBlockState(superflatHarnessPlacePos);
+        BlockState finalServerState = serverWorld.getBlockState(superflatHarnessPlacePos);
+        Block expectedBlock = harnessStateForBlock(row.blockId()).getBlock();
+        double placedDy = SlabSupport.getYOffset(serverWorld, superflatHarnessPlacePos, finalServerState);
+        BlockState supportState = serverWorld.getBlockState(superflatHarnessSlabPos);
+        double sourceDy = SlabSupport.getYOffset(serverWorld, superflatHarnessSlabPos, supportState);
+        boolean substrateProven = supportState.isOf(Blocks.STONE_SLAB)
+                && supportState.contains(SlabBlock.TYPE)
+                && supportState.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+        boolean anchored = SlabAnchorAttachment.isAnchored(serverWorld, superflatHarnessPlacePos);
+        boolean loweredCarrier = SlabSupport.isFullHeightLoweredCarrier(serverWorld, superflatHarnessPlacePos, finalServerState);
+        VoxelShape outline = finalServerState.getOutlineShape(serverWorld, superflatHarnessPlacePos);
+        VoxelShape raycast = finalServerState.getRaycastShape(serverWorld, superflatHarnessPlacePos);
+        String outlineBounds = shapeBounds(outline);
+        String raycastBounds = shapeBounds(raycast);
+        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        String modelMeshMinY = meshTrace.seen() ? formatDouble(meshTrace.minAfterY()) : "NaN";
+        String modelMeshMaxY = meshTrace.seen() ? formatDouble(meshTrace.maxAfterY()) : "NaN";
+        String outlineMinY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().minY);
+        String outlineMaxY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().maxY);
+        String raycastMinY = raycast.isEmpty() ? "NaN" : formatDouble(raycast.getBoundingBox().minY);
+        String raycastMaxY = raycast.isEmpty() ? "NaN" : formatDouble(raycast.getBoundingBox().maxY);
+        double delta = (meshTrace.seen() && !outline.isEmpty())
+                ? Math.abs(meshTrace.minAfterY() - outline.getBoundingBox().minY)
+                : Double.NaN;
+        boolean triadBoundsPresent = meshTrace.seen() && !outline.isEmpty() && !raycast.isEmpty();
+        boolean triadAligned = triadBoundsPresent
+                && delta <= 1.0e-6
+                && Math.abs(meshTrace.minAfterY() - raycast.getBoundingBox().minY) <= 1.0e-6
+                && Math.abs(meshTrace.maxAfterY() - outline.getBoundingBox().maxY) <= 1.0e-6
+                && Math.abs(meshTrace.maxAfterY() - raycast.getBoundingBox().maxY) <= 1.0e-6;
+        boolean placedDyExpected = Math.abs(placedDy - (-0.5d)) <= 1.0e-6;
+        boolean technicalTriadAligned = triadAligned && placedDyExpected && substrateProven;
+        boolean productVisualLawPass = !row.productBadSuspect();
+        String verdict;
+        String reason;
+        if (!wallFenceProductRedMode) {
+            if ("DIRECT_WORLD_TRACE_ONLY".equals(superflatHarnessPlacementMethod)) {
+                verdict = "TRACE_GAP_NOT_REAL_PLACEMENT";
+                reason = "direct_world_place_trace_only";
+                superflatHarnessTraceGapRows++;
+            } else if (!superflatHarnessPlacementReturn.contains("SUCCESS")) {
+                verdict = "TRACE_GAP_NOT_REAL_PLACEMENT";
+                reason = "interact_block_not_success";
+                superflatHarnessTraceGapRows++;
+            } else if (!meshTrace.seen()) {
+                verdict = "TRACE_GAP_MODEL_BOUNDS";
+                reason = "full_mesh_trace_missing_for_row";
+                superflatHarnessTraceGapRows++;
+            } else if (outline.isEmpty() || raycast.isEmpty()) {
+                verdict = "TRACE_GAP_OUTLINE_RAYCAST_BOUNDS";
+                reason = "outline_or_raycast_shape_empty";
+                superflatHarnessTraceGapRows++;
+            } else if (delta > 1.0e-6) {
+                verdict = "RED_MODEL_OUTLINE_VERTICAL_MISMATCH";
+                reason = "model_afterY_not_equal_outline_bounds";
+                superflatHarnessRedRows++;
+            } else {
+                verdict = row.productBadSuspect()
+                        ? "GREEN_TRIAD_ALIGNED_PRODUCT_BAD"
+                        : "GREEN_TRIAD_ALIGNED_ACCEPTABLE";
+                reason = row.productBadSuspect() ? "family_visual_reference_mismatch_suspect" : "triad_aligned";
+                if (row.productBadSuspect()) {
+                    superflatHarnessProductBadRows++;
+                } else {
+                    superflatHarnessGreenRows++;
+                }
+            }
+        } else if (!substrateProven) {
+            verdict = "TRACE_GAP_SUBSTRATE_MISSING";
+            reason = "support_not_bottom_stone_slab";
+            superflatHarnessTraceGapRows++;
+        } else if ("DIRECT_WORLD_TRACE_ONLY".equals(superflatHarnessPlacementMethod)) {
+            verdict = "minecraft:stone_wall".equals(row.blockId())
+                    ? "TRACE_GAP_STONE_WALL_DIRECT_WORLD_ONLY"
+                    : "TRACE_GAP_BOUNDS_OR_TRIAD_MISSING";
+            reason = "direct_world_place_trace_only";
+            superflatHarnessTraceGapRows++;
+        } else if (!superflatHarnessPlacementReturn.contains("SUCCESS")) {
+            verdict = "TRACE_GAP_BOUNDS_OR_TRIAD_MISSING";
+            reason = "interact_block_not_success";
+            superflatHarnessTraceGapRows++;
+        } else if (finalServerState.getBlock() != expectedBlock) {
+            verdict = "TRACE_GAP_BOUNDS_OR_TRIAD_MISSING";
+            reason = "interact_success_but_expected_block_missing";
+            superflatHarnessTraceGapRows++;
+        } else if (!triadBoundsPresent) {
+            verdict = "TRACE_GAP_BOUNDS_OR_TRIAD_MISSING";
+            reason = "model_or_outline_or_raycast_missing";
+            superflatHarnessTraceGapRows++;
+        } else if (!technicalTriadAligned) {
+            verdict = row.productBadSuspect()
+                    ? "TRACE_GAP_BOUNDS_OR_TRIAD_MISSING"
+                    : "RED_FULL_BLOCK_CONTROL_REGRESSION";
+            reason = !triadAligned ? "technical_triad_not_aligned" : "placed_dy_or_substrate_not_expected";
+            if (row.productBadSuspect()) {
+                superflatHarnessTraceGapRows++;
+            } else {
+                superflatHarnessRedRows++;
+            }
+        } else if (row.productBadSuspect()) {
+            productVisualLawPass = false;
+            verdict = "RED_WALL_FENCE_TRIAD_ALIGNED_PRODUCT_BAD";
+            reason = "product_visual_law_failed_merged_read";
+            superflatHarnessRedRows++;
+            superflatHarnessProductBadRows++;
+        } else {
+            verdict = "GREEN_FULL_BLOCK_CONTROL";
+            reason = "ordinary_full_block_control_green";
+            superflatHarnessGreenRows++;
+        }
+        String outputRowName = wallFenceProductRedMode ? redMatrixRowName(row) : row.rowName();
+        String rowMarker = wallFenceProductRedMode
+                ? "MC1211_WALL_FENCE_PRODUCT_RED_ROW"
+                : "MC1211_SUPERFLAT_MODEL_HITBOX_ROW";
+        BlockHitResult blockHit = client.crosshairTarget instanceof BlockHitResult b ? b : null;
+        String targetPos = blockHit == null ? "none" : textPos(blockHit.getBlockPos());
+        String targetFace = blockHit == null ? "none" : blockHit.getSide().asString();
+        System.out.println("[" + rowMarker + "]"
+                + " rowName=" + outputRowName
+                + " blockId=" + row.blockId()
+                + " supportBlockId=minecraft:stone_slab"
+                + " slabPos=" + textPos(superflatHarnessSlabPos)
+                + " placedBlockPos=" + textPos(superflatHarnessPlacePos)
+                + " placementMethod=" + superflatHarnessPlacementMethod
+                + " placementReturn=" + superflatHarnessPlacementReturn
+                + " substrateProven=" + substrateProven
+                + " finalState=" + finalServerState
+                + " sourceDy=" + formatDouble(sourceDy)
+                + " placedDy=" + formatDouble(placedDy)
+                + " anchored=" + anchored
+                + " loweredCarrier=" + loweredCarrier
+                + " modelMeshMinY=" + modelMeshMinY
+                + " modelMeshMaxY=" + modelMeshMaxY
+                + " outlineMinY=" + outlineMinY
+                + " outlineMaxY=" + outlineMaxY
+                + " raycastMinY=" + raycastMinY
+                + " raycastMaxY=" + raycastMaxY
+                + " targetPos=" + targetPos
+                + " targetFace=" + targetFace
+                + " expectedModelMinY=" + (meshTrace.seen() ? formatDouble(meshTrace.minBeforeY() + meshTrace.dy()) : "NaN")
+                + " expectedModelMaxY=" + (meshTrace.seen() ? formatDouble(meshTrace.maxBeforeY() + meshTrace.dy()) : "NaN")
+                + " modelVsOutlineDelta=" + formatDouble(delta)
+                + " modelClass=" + (meshTrace.seen() ? finalServerState.getBlock().getClass().getName() : "unknown")
+                + " outlineBounds=" + outlineBounds
+                + " raycastBounds=" + raycastBounds
+                + " technicalTriadAligned=" + technicalTriadAligned
+                + " productVisualLawPass=" + productVisualLawPass
+                + " clientState=" + finalClientState
+                + " verdict=" + verdict
+                + " reason=" + reason);
+    }
+
+    private static String redMatrixRowName(SuperflatHarnessRowSpec row) {
+        return switch (row.blockId()) {
+            case "minecraft:cobblestone_wall" -> "COBBLESTONE_WALL_ON_BOTTOM_SLAB_PRODUCT_VISUAL_RED";
+            case "minecraft:oak_fence" -> "OAK_FENCE_ON_BOTTOM_SLAB_PRODUCT_VISUAL_RED";
+            case "minecraft:stone_wall" -> "STONE_WALL_ON_BOTTOM_SLAB_TRACE_GAP_OR_RED";
+            case "minecraft:stone" -> "FULL_BLOCK_CONTROL_STONE_GREEN";
+            case "minecraft:oak_log" -> "FULL_BLOCK_CONTROL_OAK_LOG_GREEN";
+            case "minecraft:stone_stairs" -> "STONE_STAIRS_CONTROL_GREEN";
+            default -> row.rowName();
+        };
+    }
+
+    private static void emitSuperflatHarnessSummary(boolean wallFenceProductRedMode) {
+        String classification;
+        if (!wallFenceProductRedMode) {
+            if (superflatHarnessRedRows > 0) {
+                classification = "RED_MODEL_HITBOX_MISMATCH_CONFIRMED";
+            } else if (superflatHarnessTraceGapRows > 0) {
+                classification = "TRACE_GAP_BOUNDS_MISSING";
+            } else if (superflatHarnessProductBadRows > 0) {
+                classification = "WALL_FENCE_TRIAD_ALIGNED_PRODUCT_BAD";
+            } else {
+                classification = "SUPERFLAT_HARNESS_GREEN_ALL_TRIAD_ALIGNED";
+            }
+        } else {
+            classification = superflatHarnessRedRows >= 2 && superflatHarnessGreenRows >= 2
+                    ? "EXPECTED_RED_MATRIX_ACHIEVED"
+                    : "RED_MATRIX_INCOMPLETE";
+        }
+        System.out.println("[" + (wallFenceProductRedMode
+                ? "MC1211_WALL_FENCE_PRODUCT_RED_SUMMARY"
+                : "MC1211_SUPERFLAT_MODEL_HITBOX_SUMMARY") + "]"
+                + " rows=" + SUPERFLAT_HARNESS_ROWS.length
+                + " greenRows=" + superflatHarnessGreenRows
+                + " redRows=" + superflatHarnessRedRows
+                + " traceGapRows=" + superflatHarnessTraceGapRows
+                + " productBadRows=" + superflatHarnessProductBadRows
+                + " classification=" + classification);
+        emitted = true;
+        superflatHarnessFinalized = true;
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static void emitSuperflatHarnessTraceGap(String row, String reason) {
+        boolean wallFenceProductRedMode = Boolean.getBoolean(WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY);
+        System.out.println("[" + (wallFenceProductRedMode
+                ? "MC1211_WALL_FENCE_PRODUCT_RED_START"
+                : "MC1211_SUPERFLAT_MODEL_HITBOX_START") + "]"
+                + " rows=" + SUPERFLAT_HARNESS_ROWS.length);
+        System.out.println("[" + (wallFenceProductRedMode
+                ? "MC1211_WALL_FENCE_PRODUCT_RED_ROW"
+                : "MC1211_SUPERFLAT_MODEL_HITBOX_ROW") + "]"
+                + " rowName=" + row
+                + " blockId=none"
+                + " placementMethod=DIRECT_WORLD_TRACE_ONLY"
+                + " placementReturn=FAIL_ROUTE_NOT_READY"
+                + " verdict=TRACE_GAP_WORLD_NOT_READY"
+                + " reason=" + reason);
+        System.out.println("[" + (wallFenceProductRedMode
+                ? "MC1211_WALL_FENCE_PRODUCT_RED_SUMMARY"
+                : "MC1211_SUPERFLAT_MODEL_HITBOX_SUMMARY") + "]"
+                + " rows=0"
+                + " classification=TRACE_GAP_WORLD_NOT_READY"
+                + " reason=" + reason);
+        emitted = true;
+        superflatHarnessFinalized = true;
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static String shapeBounds(VoxelShape shape) {
+        if (shape == null || shape.isEmpty()) {
+            return "NaN..NaN";
+        }
+        return formatDouble(shape.getBoundingBox().minY) + ".." + formatDouble(shape.getBoundingBox().maxY);
+    }
+
+    private static ItemStack harnessStackForBlock(String blockId) {
+        return switch (blockId) {
+            case "minecraft:stone" -> new ItemStack(Items.STONE, 8);
+            case "minecraft:oak_log" -> new ItemStack(Items.OAK_LOG, 8);
+            case "minecraft:oak_planks" -> new ItemStack(Items.OAK_PLANKS, 8);
+            case "minecraft:cobblestone_wall" -> new ItemStack(Items.COBBLESTONE_WALL, 8);
+            case "minecraft:oak_fence" -> new ItemStack(Items.OAK_FENCE, 8);
+            case "minecraft:stone_stairs" -> new ItemStack(Items.STONE_STAIRS, 8);
+            default -> {
+                var item = Registries.ITEM.get(Identifier.of(blockId));
+                yield item == null || item == Items.AIR ? null : new ItemStack(item, 8);
+            }
+        };
+    }
+
+    private static BlockState harnessStateForBlock(String blockId) {
+        var block = Registries.BLOCK.get(Identifier.of(blockId));
+        return block == null ? Blocks.AIR.getDefaultState() : block.getDefaultState();
     }
 
     private static void runSidePlaceStoneLoweringRoute(MinecraftClient client) {
@@ -1687,6 +2921,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             return Double.NaN;
         }
         return outlineShape.getBoundingBox().minY + modelDyDelta;
+    }
+
+    private record SuperflatHarnessRowSpec(
+            String rowName,
+            String blockId,
+            boolean productBadSuspect
+    ) {
     }
 
     private record RowResult(boolean traceGap, boolean modelLowerThanOutline) {
