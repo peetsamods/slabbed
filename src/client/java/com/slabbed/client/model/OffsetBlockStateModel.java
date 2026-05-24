@@ -28,6 +28,7 @@ import net.minecraft.block.ShapeContext;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -40,6 +41,10 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     private static volatile RenderOffsetTrace slabbed$lastTrace = RenderOffsetTrace.missing();
     private static volatile BlockPos slabbed$modelDyOwnerTracePos = null;
     private static volatile ModelDyOwnerTrace slabbed$modelDyOwnerLastTrace = ModelDyOwnerTrace.missing();
+    private static volatile BlockPos slabbed$fullMeshBoundsTracePos = null;
+    private static volatile FullMeshBoundsTrace slabbed$fullMeshBoundsLastTrace = FullMeshBoundsTrace.missing();
+    private static final Set<String> slabbed$mc1211FullMeshBoundsTraceRows = ConcurrentHashMap.newKeySet();
+    private static final AtomicInteger slabbed$mc1211FullMeshBoundsPassSequence = new AtomicInteger();
     private static final Set<String> slabbed$mc1211LiveModelTraceRows = ConcurrentHashMap.newKeySet();
     private static volatile boolean slabbed$mc1211LiveModelTraceCanaryLogged = false;
     private static volatile boolean slabbed$mc1211LiveModelTraceParseFailureLogged = false;
@@ -93,6 +98,55 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
     }
 
+    public record FullMeshBoundsTrace(
+            boolean seen,
+            String meshTraceKey,
+            String matrixKey,
+            String matrixRow,
+            String blockId,
+            String pos,
+            String state,
+            double dy,
+            String modelClass,
+            String tickOrFrame,
+            int passSequence,
+            int totalQuadsSeen,
+            int verticesVisited,
+            double minBeforeY,
+            double maxBeforeY,
+            double minAfterY,
+            double maxAfterY,
+            String reason,
+            String rowSource,
+            String snapshotSource,
+            String aggregateDedupKey
+    ) {
+        static FullMeshBoundsTrace missing() {
+            return new FullMeshBoundsTrace(
+                    false,
+                    "none",
+                    "none",
+                    "UNKNOWN",
+                    "none",
+                    "none",
+                    "none",
+                    Double.NaN,
+                    "none",
+                    "unknown",
+                    0,
+                    0,
+                    0,
+                    Double.NaN,
+                    Double.NaN,
+                    Double.NaN,
+                    Double.NaN,
+                    "missing",
+                    "FULL_MESH_SNAPSHOT",
+                    "missing",
+                    "none");
+        }
+    }
+
     public static void resetRenderOffsetTrace(BlockPos pos) {
         slabbed$tracePos = pos;
         slabbed$lastTrace = RenderOffsetTrace.missing();
@@ -109,6 +163,15 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
 
     public static ModelDyOwnerTrace snapshotModelDyOwnerTrace() {
         return slabbed$modelDyOwnerLastTrace;
+    }
+
+    public static void resetFullMeshBoundsTrace(BlockPos pos) {
+        slabbed$fullMeshBoundsTracePos = pos == null ? null : pos.toImmutable();
+        slabbed$fullMeshBoundsLastTrace = FullMeshBoundsTrace.missing();
+    }
+
+    public static FullMeshBoundsTrace snapshotFullMeshBoundsTrace() {
+        return slabbed$fullMeshBoundsLastTrace;
     }
 
     /**
@@ -190,19 +253,46 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
 
         if (dy == 0.0f) {
+            slabbed$recordMc1211FullMeshBoundsTrace(view, pos, state, wrapped, dy,
+                    0, 0, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
+                    "dy_zero_no_transform");
             emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
             return;
         }
 
         final float yOffset = dy;
+        final BakedModel traceModel = wrapped;
+        final int[] totalQuadsSeen = {0};
+        final int[] verticesVisited = {0};
+        final double[] meshBounds = {
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY};
         context.pushTransform(quad -> {
+            totalQuadsSeen[0]++;
             for (int i = 0; i < 4; i++) {
-                quad.pos(i, quad.x(i), quad.y(i) + yOffset, quad.z(i));
+                verticesVisited[0]++;
+                float beforeY = quad.y(i);
+                float afterY = beforeY + yOffset;
+                meshBounds[0] = Math.min(meshBounds[0], beforeY);
+                meshBounds[1] = Math.max(meshBounds[1], beforeY);
+                meshBounds[2] = Math.min(meshBounds[2], afterY);
+                meshBounds[3] = Math.max(meshBounds[3], afterY);
+                quad.pos(i, quad.x(i), afterY, quad.z(i));
             }
             return true;
         });
         try {
             emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
+            slabbed$recordMc1211FullMeshBoundsTrace(view, pos, state, traceModel, dy,
+                    totalQuadsSeen[0],
+                    verticesVisited[0],
+                    meshBounds[0],
+                    meshBounds[1],
+                    meshBounds[2],
+                    meshBounds[3],
+                    "quad_transform_aggregate");
         } finally {
             context.popTransform();
         }
@@ -356,6 +446,181 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         if (rowCount == 1 || rowCount % 25 == 0) {
             slabbed$logMc1211LiveModelTraceSummary("rows_observed");
         }
+    }
+
+    private static void slabbed$recordMc1211FullMeshBoundsTrace(
+            BlockRenderView view,
+            BlockPos pos,
+            BlockState state,
+            BakedModel model,
+            float dy,
+            int totalQuadsSeen,
+            int verticesVisited,
+            double minBeforeY,
+            double maxBeforeY,
+            double minAfterY,
+            double maxAfterY,
+            String reason
+    ) {
+        String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+        String matrixKey = blockId + "@" + pos.toShortString();
+        String matrixRow = slabbed$mc1211FamilyMatrixRow(blockId);
+        String modelClass = model == null ? "null" : model.getClass().getName();
+        String tickOrFrame = slabbed$mc1211ClientTickOrUnknown();
+        int passSequence = slabbed$mc1211FullMeshBoundsPassSequence.incrementAndGet();
+        String meshTraceKey = matrixKey + "|pass=" + passSequence;
+        BlockPos observedPos = slabbed$fullMeshBoundsTracePos;
+        boolean observedProofRow = observedPos != null && observedPos.equals(pos);
+        String aggregateDedupKey = (observedProofRow ? meshTraceKey : matrixKey)
+                + "|" + slabbed$formatTraceDouble(dy)
+                + "|" + reason;
+        boolean finiteBounds = Double.isFinite(minBeforeY)
+                && Double.isFinite(maxBeforeY)
+                && Double.isFinite(minAfterY)
+                && Double.isFinite(maxAfterY);
+
+        if (observedProofRow) {
+            slabbed$fullMeshBoundsLastTrace = new FullMeshBoundsTrace(
+                    true,
+                    meshTraceKey,
+                    matrixKey,
+                    matrixRow,
+                    blockId,
+                    pos.toShortString(),
+                    state.toString(),
+                    dy,
+                    modelClass,
+                    tickOrFrame,
+                    passSequence,
+                    totalQuadsSeen,
+                    verticesVisited,
+                    finiteBounds ? minBeforeY : Double.NaN,
+                    finiteBounds ? maxBeforeY : Double.NaN,
+                    finiteBounds ? minAfterY : Double.NaN,
+                    finiteBounds ? maxAfterY : Double.NaN,
+                    reason,
+                    "FULL_MESH_SNAPSHOT",
+                    "observed_pos",
+                    aggregateDedupKey);
+            slabbed$logMc1211FullMeshBoundsSnapshotTrace(
+                    slabbed$fullMeshBoundsLastTrace,
+                    state,
+                    finiteBounds);
+        }
+
+        if (!Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace")) {
+            return;
+        }
+        if (!slabbed$shouldLogMc1211FullMeshBoundsTrace(pos, blockId, dy)) {
+            return;
+        }
+        if (!slabbed$mc1211FullMeshBoundsTraceRows.add(aggregateDedupKey)) {
+            return;
+        }
+        double expectedMinAfterY = finiteBounds ? minBeforeY + dy : Double.NaN;
+        double expectedMaxAfterY = finiteBounds ? maxBeforeY + dy : Double.NaN;
+        Slabbed.LOGGER.info(
+                "[MC1211_FULL_MESH_BOUNDS_TRACE] meshTraceKey={} matrixKey={} matrixRow={} blockId={} pos={} state={} dy={} modelClass={} tickOrFrame={} passSequence={} rowSource={} quadsVisited={} verticesVisited={} minBeforeY={} maxBeforeY={} minAfterY={} maxAfterY={} expectedMinAfterY={} expectedMaxAfterY={} viewClass={} reason={} snapshotSource={} aggregateDedupKey={}",
+                meshTraceKey,
+                matrixKey,
+                matrixRow,
+                blockId,
+                pos.toShortString(),
+                state,
+                slabbed$formatTraceDouble(dy),
+                modelClass,
+                tickOrFrame,
+                passSequence,
+                "FULL_MESH_AGGREGATE",
+                totalQuadsSeen,
+                verticesVisited,
+                finiteBounds ? slabbed$formatTraceDouble(minBeforeY) : "NaN",
+                finiteBounds ? slabbed$formatTraceDouble(maxBeforeY) : "NaN",
+                finiteBounds ? slabbed$formatTraceDouble(minAfterY) : "NaN",
+                finiteBounds ? slabbed$formatTraceDouble(maxAfterY) : "NaN",
+                slabbed$formatTraceDouble(expectedMinAfterY),
+                slabbed$formatTraceDouble(expectedMaxAfterY),
+                view.getClass().getName(),
+                reason,
+                "aggregate_emit",
+                aggregateDedupKey);
+    }
+
+    private static void slabbed$logMc1211FullMeshBoundsSnapshotTrace(
+            FullMeshBoundsTrace trace,
+            BlockState state,
+            boolean finiteBounds
+    ) {
+        if (!Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace")) {
+            return;
+        }
+        Slabbed.LOGGER.info(
+                "[MC1211_FULL_MESH_BOUNDS_TRACE] meshTraceKey={} matrixKey={} matrixRow={} blockId={} pos={} state={} dy={} modelClass={} tickOrFrame={} passSequence={} rowSource={} quadsVisited={} verticesVisited={} minBeforeY={} maxBeforeY={} minAfterY={} maxAfterY={} expectedMinAfterY={} expectedMaxAfterY={} viewClass={} reason={} snapshotSource={} aggregateDedupKey={}",
+                trace.meshTraceKey(),
+                trace.matrixKey(),
+                trace.matrixRow(),
+                trace.blockId(),
+                trace.pos(),
+                state,
+                slabbed$formatTraceDouble(trace.dy()),
+                trace.modelClass(),
+                trace.tickOrFrame(),
+                trace.passSequence(),
+                trace.rowSource(),
+                trace.totalQuadsSeen(),
+                trace.verticesVisited(),
+                finiteBounds ? slabbed$formatTraceDouble(trace.minBeforeY()) : "NaN",
+                finiteBounds ? slabbed$formatTraceDouble(trace.maxBeforeY()) : "NaN",
+                finiteBounds ? slabbed$formatTraceDouble(trace.minAfterY()) : "NaN",
+                finiteBounds ? slabbed$formatTraceDouble(trace.maxAfterY()) : "NaN",
+                finiteBounds ? slabbed$formatTraceDouble(trace.minBeforeY() + trace.dy()) : "NaN",
+                finiteBounds ? slabbed$formatTraceDouble(trace.maxBeforeY() + trace.dy()) : "NaN",
+                "snapshot",
+                trace.reason(),
+                trace.snapshotSource(),
+                trace.aggregateDedupKey());
+    }
+
+    private static boolean slabbed$shouldLogMc1211FullMeshBoundsTrace(BlockPos pos, String blockId, float dy) {
+        BlockPos observedPos = slabbed$fullMeshBoundsTracePos;
+        if (observedPos != null && observedPos.equals(pos)) {
+            return true;
+        }
+        return slabbed$isMc1211FamilyMatrixTraceCandidateBlockId(blockId)
+                && Math.abs(dy) > 1.0e-6f;
+    }
+
+    private static boolean slabbed$isMc1211FamilyMatrixTraceCandidateBlockId(String blockId) {
+        return "minecraft:stone".equals(blockId)
+                || "minecraft:oak_log".equals(blockId)
+                || "minecraft:oak_planks".equals(blockId)
+                || "minecraft:crafting_table".equals(blockId)
+                || "minecraft:stone_wall".equals(blockId)
+                || "minecraft:cobblestone_wall".equals(blockId)
+                || "minecraft:stone_stairs".equals(blockId)
+                || "minecraft:oak_fence".equals(blockId)
+                || "minecraft:stone_slab".equals(blockId);
+    }
+
+    private static String slabbed$mc1211FamilyMatrixRow(String blockId) {
+        return switch (blockId) {
+            case "minecraft:stone" -> "STONE";
+            case "minecraft:oak_log", "minecraft:oak_planks" -> "KNOWN_GOOD_1";
+            case "minecraft:crafting_table" -> "KNOWN_GOOD_2";
+            case "minecraft:stone_wall" -> "STONE_WALL";
+            case "minecraft:cobblestone_wall" -> "COBBLESTONE_WALL";
+            case "minecraft:oak_fence" -> "OAK_FENCE";
+            case "minecraft:stone_stairs" -> "STONE_STAIRS";
+            default -> "UNKNOWN";
+        };
+    }
+
+    private static String slabbed$mc1211ClientTickOrUnknown() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null || mc.world == null) {
+            return "unknown";
+        }
+        return Long.toString(mc.world.getTime());
     }
 
     private static void slabbed$logMc1211LiveModelTraceCanary(String blockFilter, BlockPos near, int radius, boolean parseFailed) {
