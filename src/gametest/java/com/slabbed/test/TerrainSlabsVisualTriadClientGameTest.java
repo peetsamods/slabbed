@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.client.ClientDy;
+import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.compat.terrainslabs.TerrainSlabsCompat;
 import com.slabbed.util.SlabSupport;
@@ -11,6 +12,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ChainBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
@@ -19,6 +21,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 
@@ -159,7 +162,176 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                 System.out.println("TERRAIN_SLABS_VISUAL_TRIAD totals slabIds=" + slabIds.size()
                         + " deniedIds=" + deniedIds.size());
             });
+
+            proveGrassSlabSupportedObjectModelDy(ctx, singleplayer, slabIds);
         }
+    }
+
+    private static void proveGrassSlabSupportedObjectModelDy(
+            ClientGameTestContext ctx, TestSingleplayerContext singleplayer, List<Identifier> slabIds
+    ) {
+        Identifier supportId = Identifier.of(MOD_ID, "grass_slab");
+        int supportIndex = slabIds.indexOf(supportId);
+        if (supportIndex < 0) {
+            throw new AssertionError("terrainslabs:grass_slab missing from Terrain Slabs slab ids");
+        }
+
+        BlockPos supportPos = supportPosForIndex(supportIndex).up().east();
+        BlockPos objectPos = supportPos.up();
+        proveSupportedObjectModelDy(
+                ctx,
+                singleplayer,
+                supportId,
+                supportPos,
+                objectPos,
+                "chain_control",
+                Blocks.IRON_CHAIN.getDefaultState().with(ChainBlock.AXIS, Direction.Axis.Y),
+                -1.0d,
+                false);
+        proveSupportedObjectModelDy(
+                ctx,
+                singleplayer,
+                supportId,
+                supportPos,
+                objectPos,
+                "oak_fence",
+                Blocks.OAK_FENCE.getDefaultState(),
+                -1.0d,
+                true);
+    }
+
+    private static void proveSupportedObjectModelDy(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Identifier supportId,
+            BlockPos supportPos,
+            BlockPos objectPos,
+            String lane,
+            BlockState objectToPlace,
+            double expectedDy,
+            boolean requireLiveTarget
+    ) {
+        singleplayer.getServer().runOnServer(server -> server.getOverworld().setBlockState(
+                objectPos,
+                Blocks.AIR.getDefaultState(),
+                Block.NOTIFY_LISTENERS));
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            System.setProperty("slabbed.render.offset.trace", "true");
+            OffsetBlockStateModel.resetRenderOffsetTrace(objectPos);
+        });
+        singleplayer.getServer().runOnServer(server -> server.getOverworld().setBlockState(
+                objectPos,
+                objectToPlace,
+                Block.NOTIFY_LISTENERS));
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new AssertionError("client world missing for Terrain Slabs object model dy proof");
+            }
+            if (mc.player == null) {
+                throw new AssertionError("client player missing for Terrain Slabs object model dy proof");
+            }
+
+            OffsetBlockStateModel.RenderOffsetTrace modelTrace;
+            try {
+                modelTrace = OffsetBlockStateModel.snapshotRenderOffsetTrace();
+            } finally {
+                System.clearProperty("slabbed.render.offset.trace");
+            }
+
+            BlockState supportState = mc.world.getBlockState(supportPos);
+            BlockState objectState = mc.world.getBlockState(objectPos);
+            assertTerrainSlabState(supportId, supportState);
+            if (!objectState.isOf(objectToPlace.getBlock())) {
+                throw new AssertionError("expected " + Registries.BLOCK.getId(objectToPlace.getBlock())
+                        + " object at " + objectPos + " but found " + objectState);
+            }
+
+            ShapeContext shapeContext = ShapeContext.of(mc.player);
+            double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+            double worldDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+            double clientDy = ClientDy.dyFor(mc.world, objectPos, objectState);
+            VoxelShape outline = objectState.getOutlineShape(mc.world, objectPos, shapeContext);
+            VoxelShape raycast = objectState.getRaycastShape(mc.world, objectPos);
+            double outlineMinY = outline.isEmpty() ? Double.NaN : outline.getBoundingBox().minY;
+            double raycastMinY = raycast.isEmpty() ? Double.NaN : raycast.getBoundingBox().minY;
+            double targetY = objectPos.getY() + expectedDy + 0.5d;
+            BlockHitResult outlineHit = outline.isEmpty() ? null : outline.raycast(
+                    new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() + 2.5d),
+                    new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() - 0.5d),
+                    objectPos);
+            Vec3d eye = new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() + 2.5d);
+            Vec3d target = new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() + 0.5d);
+            aimPlayerRaycastFromEye(mc, eye, target);
+            mc.player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
+            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            HitResult liveTarget = mc.crosshairTarget;
+
+            String fields = " lane=" + lane
+                    + " supportId=" + supportId
+                    + " supportPos=" + supportPos.toShortString()
+                    + " objectId=" + Registries.BLOCK.getId(objectState.getBlock())
+                    + " objectPos=" + objectPos.toShortString()
+                    + " expectedDy=" + expectedDy
+                    + " supportDy=" + supportDy
+                    + " worldDy=" + worldDy
+                    + " clientDy=" + clientDy
+                    + " modelSeen=" + modelTrace.seen()
+                    + " modelView=" + modelTrace.viewClass()
+                    + " modelRenderRegion=" + modelTrace.viewClass().contains("ChunkRendererRegion")
+                    + " modelDy=" + modelTrace.modelDy()
+                    + " modelClientDy=" + modelTrace.clientDy()
+                    + " modelSlabSupportDy=" + modelTrace.slabSupportDy()
+                    + " modelExcluded=" + modelTrace.excludedByWrapper()
+                    + " outlineMinY=" + outlineMinY
+                    + " raycastMinY=" + (raycast.isEmpty() ? "empty" : Double.toString(raycastMinY))
+                    + " requireLiveTarget=" + requireLiveTarget
+                    + " outlineTargetHit=" + describeHit(outlineHit)
+                    + " liveTargetHit=" + describeHit(liveTarget);
+
+            String redReason = null;
+            if (Math.abs(supportDy - (-0.5d)) > 1.0e-6d) {
+                redReason = "support_slab_dy_mismatch";
+            } else if (Math.abs(worldDy - expectedDy) > 1.0e-6d) {
+                redReason = "world_dy_mismatch";
+            } else if (Math.abs(clientDy - expectedDy) > 1.0e-6d) {
+                redReason = "client_dy_mismatch";
+            } else if (outline.isEmpty() || Math.abs(outlineMinY - expectedDy) > 1.0e-6d) {
+                redReason = "outline_dy_mismatch";
+            } else if (!raycast.isEmpty() && Math.abs(raycastMinY - expectedDy) > 1.0e-6d) {
+                redReason = "raycast_dy_mismatch";
+            } else if (outlineHit == null || !outlineHit.getBlockPos().equals(objectPos)) {
+                redReason = "outline_target_mismatch";
+            } else if (requireLiveTarget
+                    && (!(liveTarget instanceof BlockHitResult liveHit) || !liveHit.getBlockPos().equals(objectPos))) {
+                redReason = "live_target_mismatch";
+            } else if (!modelTrace.seen()) {
+                redReason = "model_trace_missing";
+            } else if (!modelTrace.viewClass().contains("ChunkRendererRegion")) {
+                redReason = "model_view_not_render_region";
+            } else if (Math.abs(modelTrace.modelDy() - expectedDy) > 1.0e-6d) {
+                redReason = "model_dy_mismatch";
+            } else if (Math.abs(modelTrace.clientDy() - clientDy) > 1.0e-6d) {
+                redReason = "model_client_world_disagree";
+            } else if (Math.abs(modelTrace.slabSupportDy() - worldDy) > 1.0e-6d) {
+                redReason = "model_world_slab_support_disagree";
+            } else if (Math.abs(modelTrace.clientDy() - modelTrace.slabSupportDy()) > 1.0e-6d) {
+                redReason = "model_client_slab_support_disagree";
+            }
+
+            if (redReason != null) {
+                System.out.println("TERRAIN_SLABS_OBJECT_MODEL_DY_RED reason=" + redReason + fields);
+                throw new AssertionError("Terrain Slabs object visual triad split: " + redReason + fields);
+            }
+
+            System.out.println("TERRAIN_SLABS_OBJECT_MODEL_DY_GREEN" + fields);
+        });
     }
 
     private static List<Identifier> terrainSlabIds() {

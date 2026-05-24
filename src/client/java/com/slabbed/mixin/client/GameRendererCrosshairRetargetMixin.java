@@ -7,8 +7,11 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.block.CraftingTableBlock;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.PaneBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.block.WallBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.GameRenderer;
@@ -78,11 +81,17 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (loweredChainHit != null && slabbed$isCloserOrTied(tickProgress, loweredChainHit, chosen)) {
             chosen = loweredChainHit;
         }
+        BlockHitResult topSupportedObjectHit = slabHeld ? null : slabbed$retargetLoweredTopSupportedObject(tickProgress, ht);
+        if (topSupportedObjectHit != null && slabbed$isCloserOrTied(tickProgress, topSupportedObjectHit, chosen)) {
+            chosen = topSupportedObjectHit;
+        }
         if (chosen != null) {
             client.crosshairTarget = chosen;
             boolean sideSlabFired = chosen == loweredSlabHit;
             String decision;
-            if (chosen == loweredChainHit) {
+            if (chosen == topSupportedObjectHit) {
+                decision = "scan-lowered-top-supported-object-fired";
+            } else if (chosen == loweredChainHit) {
                 decision = "scan-lowered-chain-fired";
             } else if (sideSlabFired) {
                 decision = slabHeld
@@ -385,6 +394,82 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 ? outlineHit : null;
     }
 
+    private BlockHitResult slabbed$retargetLoweredTopSupportedObject(float tickProgress, HitResult currentHit) {
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return null;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d dir = cam.getRotationVec(tickProgress);
+        double reach = 6.0;
+        Vec3d end = eye.add(dir.multiply(reach));
+        double currentDist2 = Double.POSITIVE_INFINITY;
+        if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
+            currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
+        }
+        int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
+
+        BlockHitResult bestHit = null;
+        double bestDist2 = currentDist2;
+        for (int i = 1; i <= steps; i++) {
+            double t = reach * i / steps;
+            if (t * t > bestDist2 + 1.0e-6) {
+                break;
+            }
+            Vec3d sample = eye.add(dir.multiply(t));
+            BlockPos samplePos = BlockPos.ofFloored(sample);
+
+            BlockHitResult hit = slabbed$raycastLoweredTopSupportedObject(world, cam, eye, end, samplePos);
+            if (hit != null) {
+                double dist2 = hit.getPos().squaredDistanceTo(eye);
+                if (dist2 <= bestDist2 + 1.0e-6) {
+                    bestHit = hit;
+                    bestDist2 = dist2;
+                }
+            }
+
+            hit = slabbed$raycastLoweredTopSupportedObject(world, cam, eye, end, samplePos.up());
+            if (hit != null) {
+                double dist2 = hit.getPos().squaredDistanceTo(eye);
+                if (dist2 <= bestDist2 + 1.0e-6) {
+                    bestHit = hit;
+                    bestDist2 = dist2;
+                }
+            }
+        }
+
+        return bestHit;
+    }
+
+    private static BlockHitResult slabbed$raycastLoweredTopSupportedObject(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos
+    ) {
+        BlockState state = world.getBlockState(pos);
+        if (!slabbed$isLoweredTopSupportedModelSplitCandidate(state)
+                || SlabSupport.getYOffset(world, pos, state) >= 0.0) {
+            return null;
+        }
+
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (!(supportState.getBlock() instanceof SlabBlock)
+                || !supportState.contains(SlabBlock.TYPE)
+                || supportState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || SlabSupport.getYOffset(world, supportPos, supportState) != -0.5) {
+            return null;
+        }
+
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        BlockHitResult outlineHit = outline.raycast(eye, end, pos);
+        if (outlineHit == null) {
+            return null;
+        }
+        return outlineHit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6
+                ? outlineHit : null;
+    }
+
     private static boolean slabbed$hasAdjacentAnchoredLoweredFullBlock(ClientWorld world, BlockPos supportPos) {
         for (Direction direction : Direction.Type.HORIZONTAL) {
             BlockPos candidatePos = supportPos.offset(direction);
@@ -494,7 +579,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
         String fbCandidate = slabbed$findAnchoredFbCandidate(world, cam, eye, end, vanillaDist2);
         String slabCandidate = slabbed$findLoweredSlabCandidate(world, cam, eye, end, vanillaDist2);
-        if (fbCandidate == null && slabCandidate == null) {
+        String topObjectCandidate = slabbed$findLoweredTopSupportedObjectCandidate(world, cam, eye, end, vanillaDist2);
+        if (fbCandidate == null && slabCandidate == null && topObjectCandidate == null) {
             return;
         }
 
@@ -509,6 +595,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" anchoredFbDecision=").append(anchoredDecision);
         line.append(" fbCandidate=").append(fbCandidate == null ? "none" : fbCandidate);
         line.append(" sideSlabCandidate=").append(slabCandidate == null ? "none" : slabCandidate);
+        line.append(" topSupportedObjectCandidate=").append(topObjectCandidate == null ? "none" : topObjectCandidate);
         line.append(" sideSlabRetargetFired=").append(sideSlabRetargetFired);
         line.append(" final=").append(slabbed$formatHit(client.crosshairTarget));
         Slabbed.LOGGER.info(line.toString());
@@ -552,6 +639,83 @@ public abstract class GameRendererCrosshairRetargetMixin {
             }
         }
         return null;
+    }
+
+    private static String slabbed$findLoweredTopSupportedObjectCandidate(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, double vanillaDist2
+    ) {
+        Vec3d dir = end.subtract(eye).normalize();
+        double reach = end.distanceTo(eye);
+        int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
+        for (int i = 1; i <= steps; i++) {
+            Vec3d sample = eye.add(dir.multiply(reach * i / steps));
+            String candidate = slabbed$loweredTopSupportedObjectCandidateAt(
+                    world, cam, eye, end, BlockPos.ofFloored(sample), vanillaDist2);
+            if (candidate != null) {
+                return candidate;
+            }
+            candidate = slabbed$loweredTopSupportedObjectCandidateAt(
+                    world, cam, eye, end, BlockPos.ofFloored(sample).up(), vanillaDist2);
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static String slabbed$loweredTopSupportedObjectCandidateAt(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos, double vanillaDist2
+    ) {
+        BlockState state = world.getBlockState(pos);
+        if (!slabbed$isLoweredTopSupportedModelSplitCandidate(state)) {
+            return null;
+        }
+
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (dy >= 0.0) {
+            return null;
+        }
+
+        BlockPos supportPos = pos.down();
+        BlockState supportState = world.getBlockState(supportPos);
+        boolean bottomSupport = supportState.getBlock() instanceof SlabBlock
+                && supportState.contains(SlabBlock.TYPE)
+                && supportState.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+        double supportDy = SlabSupport.getYOffset(world, supportPos, supportState);
+        if (!bottomSupport || supportDy != -0.5) {
+            return null;
+        }
+
+        BlockHitResult outlineHit = state.getOutlineShape(world, pos, ShapeContext.of(cam)).raycast(eye, end, pos);
+        if (outlineHit == null) {
+            return "loweredTopSupportedObject{pos=" + pos.toShortString()
+                    + " state=" + state
+                    + " dy=" + String.format("%.3f", dy)
+                    + " supportPos=" + supportPos.toShortString()
+                    + " supportState=" + supportState
+                    + " supportDy=" + String.format("%.3f", supportDy)
+                    + " outline=miss raycast=miss reason=outline-shape-miss}";
+        }
+
+        double outlineDist2 = outlineHit.getPos().squaredDistanceTo(eye);
+        String reason = outlineDist2 > vanillaDist2 + 1.0e-6
+                ? "candidate-farther-than-vanilla-hit"
+                : "eligible";
+        return "loweredTopSupportedObject{pos=" + pos.toShortString()
+                + " state=" + state
+                + " dy=" + String.format("%.3f", dy)
+                + " supportPos=" + supportPos.toShortString()
+                + " supportState=" + supportState
+                + " supportDy=" + String.format("%.3f", supportDy)
+                + " outline=" + slabbed$formatHit(outlineHit)
+                + " raycast=" + slabbed$formatHit(state.getRaycastShape(world, pos).raycast(eye, end, pos))
+                + " reason=" + reason
+                + "}";
+    }
+
+    private static boolean slabbed$isLoweredTopSupportedModelSplitCandidate(BlockState state) {
+        net.minecraft.block.Block block = state.getBlock();
+        return block instanceof FenceBlock || block instanceof WallBlock || block instanceof PaneBlock;
     }
 
     private static String slabbed$anchoredFbCandidateAt(
