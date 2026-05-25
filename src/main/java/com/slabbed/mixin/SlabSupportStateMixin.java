@@ -2,36 +2,39 @@ package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.AbstractBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.DoorBlock;
-import net.minecraft.block.ShapeContext;
-import net.minecraft.block.SideShapeType;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.TorchBlock;
-import net.minecraft.block.WallTorchBlock;
-import net.minecraft.block.enums.BlockHalf;
-import net.minecraft.block.enums.DoubleBlockHalf;
-import net.minecraft.state.property.Properties;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
-import net.minecraft.world.BlockView;
-import net.minecraft.world.WorldView;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.MossyCarpetBlock;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.level.block.SupportType;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.TorchBlock;
+import net.minecraft.world.level.block.WallTorchBlock;
+import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.LevelReader;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Two-part mixin on {@link AbstractBlock.AbstractBlockState}:
+ * Two-part mixin on {@link BlockBehaviour.AbstractBlockState}:
  *
  * <ol>
  *   <li><b>isSideSolid</b> — makes bottom slabs report their UP face as
- *       solid for every {@link SideShapeType}, enabling placement.</li>
+ *       solid for every {@link SupportType}, enabling placement.</li>
  *   <li><b>getOutlineShape</b> — shifts the outline (hit-box wireframe)
  *       down by 0.5 for blocks sitting above a bottom slab so the wireframe
  *       matches the model offset and interactions work at the visual
@@ -43,7 +46,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * from the slab surface (the step-up from slab top to collision bottom
  * exceeds MC's 0.6 step height for full blocks).
  */
-@Mixin(AbstractBlock.AbstractBlockState.class)
+@Mixin(BlockBehaviour.BlockStateBase.class)
 public abstract class SlabSupportStateMixin {
 
     /**
@@ -78,7 +81,7 @@ public abstract class SlabSupportStateMixin {
      * same player-trust precedent.
      */
     private static final VoxelShape SLABBED$COMFORT_TORCH_SHAPE =
-            Block.createCuboidShape(6.0, 0.0, 6.0, 10.0, 10.0, 10.0);
+            Block.box(6.0, 0.0, 6.0, 10.0, 10.0, 10.0);
 
     /**
      * Returns true iff {@code state} is a floor torch (TorchBlock, not WallTorchBlock)
@@ -94,30 +97,30 @@ public abstract class SlabSupportStateMixin {
     }
 
     private static boolean slabbed$isLoweredBeta35FloorTopContactObject(BlockState state, double yOff) {
-        return yOff < 0.0 && state != null && (state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT));
+        return yOff < 0.0 && state != null && (state.is(Blocks.CANDLE) || state.is(Blocks.FLOWER_POT));
     }
 
     private static boolean slabbed$isLoweredBeta35OakTrapdoorContactObject(BlockState state, double yOff) {
         return yOff < 0.0
                 && state != null
-                && state.isOf(Blocks.OAK_TRAPDOOR)
-                && state.contains(Properties.BLOCK_HALF)
-                && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
+                && state.is(Blocks.OAK_TRAPDOOR)
+                && state.hasProperty(BlockStateProperties.HALF)
+                && state.getValue(BlockStateProperties.HALF) == Half.BOTTOM;
     }
 
     private static boolean slabbed$isLoweredBeta35RegularDoorContactObject(BlockState state, double yOff) {
         return yOff < 0.0
                 && state != null
                 && state.getBlock() instanceof DoorBlock
-                && state.contains(Properties.DOUBLE_BLOCK_HALF)
-                && (state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
-                        || state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER);
+                && state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                && (state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
+                        || state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER);
     }
 
     private static boolean slabbed$isLoweredBeta35StandingOakSignContactObject(BlockState state, double yOff) {
         return yOff < 0.0
                 && state != null
-                && state.isOf(Blocks.OAK_SIGN);
+                && state.is(Blocks.OAK_SIGN);
     }
 
     private static boolean slabbed$isLoweredBeta35FenceWallVariantContactObject(BlockState state, double yOff) {
@@ -130,16 +133,16 @@ public abstract class SlabSupportStateMixin {
 
     private static boolean slabbed$isBeta35SpecialFullblockRaycastFallbackObject(BlockState state) {
         return state != null
-                && (state.isOf(Blocks.CHEST)
-                        || state.isOf(Blocks.BARREL)
-                        || state.isOf(Blocks.ENCHANTING_TABLE)
-                        || state.isOf(Blocks.STONECUTTER)
-                        || state.isOf(Blocks.ANVIL)
-                        || state.isOf(Blocks.GRINDSTONE));
+                && (state.is(Blocks.CHEST)
+                        || state.is(Blocks.BARREL)
+                        || state.is(Blocks.ENCHANTING_TABLE)
+                        || state.is(Blocks.STONECUTTER)
+                        || state.is(Blocks.ANVIL)
+                        || state.is(Blocks.GRINDSTONE));
     }
 
     private static boolean slabbed$needsLoweredFullBlockRaycastBasis(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             double yOff,
@@ -152,7 +155,7 @@ public abstract class SlabSupportStateMixin {
             return false;
         }
         return SlabAnchorAttachment.isAnchored(world, pos)
-                || state.isOf(Blocks.FURNACE);
+                || state.is(Blocks.FURNACE);
     }
 
     /**
@@ -163,11 +166,11 @@ public abstract class SlabSupportStateMixin {
      * to the slab's frame the comfort shape sits at Y=(1+torchDy) to (2+torchDy),
      * so we offset {@link #SLABBED$COMFORT_TORCH_SHAPE} by {@code 1.0 + torchDy}.
      */
-    private static VoxelShape slabbed$slabTorchComfortOverlay(BlockView world, BlockPos slabPos) {
+    private static VoxelShape slabbed$slabTorchComfortOverlay(BlockGetter world, BlockPos slabPos) {
         if (world == null || slabPos == null) {
             return null;
         }
-        BlockPos abovePos = slabPos.up();
+        BlockPos abovePos = slabPos.above();
         BlockState above = world.getBlockState(abovePos);
         Block aboveBlock = above.getBlock();
         if (!(aboveBlock instanceof TorchBlock) || aboveBlock instanceof WallTorchBlock) {
@@ -177,62 +180,62 @@ public abstract class SlabSupportStateMixin {
         if (torchDy >= 0.0) {
             return null;
         }
-        return SLABBED$COMFORT_TORCH_SHAPE.offset(0.0, 1.0 + torchDy, 0.0);
+        return SLABBED$COMFORT_TORCH_SHAPE.move(0.0, 1.0 + torchDy, 0.0);
     }
 
     // ── placement / survival support ──────────────────────────────────
 
-    @Inject(method = "canPlaceAt", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "canSurvive", at = @At("HEAD"), cancellable = true)
     private void slabbed$flowerPotFloorTopSurvival(
-            WorldView world,
+            LevelReader world,
             BlockPos pos,
             CallbackInfoReturnable<Boolean> cir
     ) {
         BlockState self = (BlockState) (Object) this;
-        if (!self.isOf(Blocks.FLOWER_POT)) {
+        if (!self.is(Blocks.FLOWER_POT)) {
             return;
         }
-        BlockPos below = pos.down();
+        BlockPos below = pos.below();
         BlockState belowState = world.getBlockState(below);
         cir.setReturnValue(SlabSupport.canTreatAsSolidTopFace(world, below)
-                || belowState.isSideSolidFullSquare(world, below, Direction.UP));
+                || belowState.isFaceSturdy(world, below, Direction.UP));
     }
 
-    @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
-    private void slabbed$slabTopSolid(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "isFaceSturdy(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;Lnet/minecraft/world/level/block/SupportType;)Z", at = @At("HEAD"), cancellable = true)
+    private void slabbed$slabTopSolid(BlockGetter world, BlockPos pos, Direction direction, SupportType shapeType, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
         if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
             cir.setReturnValue(true);
         }
     }
 
-    @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
-    private void slabbed$ceilingSupport(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "isFaceSturdy(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;Lnet/minecraft/world/level/block/SupportType;)Z", at = @At("HEAD"), cancellable = true)
+    private void slabbed$ceilingSupport(BlockGetter world, BlockPos pos, Direction direction, SupportType shapeType, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
         if (SlabSupport.isTopSlabUndersideSupport(self, direction)) {
             cir.setReturnValue(true);
         }
     }
 
-    @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
-    private void slabbed$ceilingSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "isFaceSturdy(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Z", at = @At("HEAD"), cancellable = true)
+    private void slabbed$ceilingSolidFullSquare(BlockGetter world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
         if (SlabSupport.isTopSlabUndersideSupport(self, direction)) {
             cir.setReturnValue(true);
         }
     }
 
-    @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
-    private void slabbed$slabTopSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "isFaceSturdy(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Z", at = @At("HEAD"), cancellable = true)
+    private void slabbed$slabTopSolidFullSquare(BlockGetter world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
         if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
             cir.setReturnValue(true);
         }
     }
 
-    @Inject(method = "getRaycastShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/shape/VoxelShape;",
+    @Inject(method = "getInteractionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
             at = @At("RETURN"), cancellable = true)
-    private void slabbed$offsetRaycast(BlockView world, BlockPos pos,
+    private void slabbed$offsetRaycast(BlockGetter world, BlockPos pos,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
 
@@ -242,66 +245,65 @@ public abstract class SlabSupportStateMixin {
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             } else if (slabbed$isLoweredBeta35FloorTopContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;
             } else if (slabbed$isLoweredBeta35OakTrapdoorContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;
             } else if (slabbed$isLoweredBeta35RegularDoorContactObject(self, yOff)
                     && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;
             } else if (slabbed$isLoweredBeta35StandingOakSignContactObject(self, yOff)
                     && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;
             } else if (yOff < 0.0
                     && slabbed$isBeta35SpecialFullblockRaycastFallbackObject(self)
                     && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;
             } else if (slabbed$isLoweredBeta35FenceWallVariantContactObject(self, yOff)
                     && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;
             } else if (slabbed$isLoweredBeta35FenceGateContactObject(self, yOff)
                     && (shape == null || shape.isEmpty())) {
-                cir.setReturnValue(self.getOutlineShape(world, pos, ShapeContext.absent()));
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;
             } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
-                shape = VoxelShapes.fullCube();
+                shape = Shapes.block();
             }
-            cir.setReturnValue(shape.offset(0.0, yOff, 0.0));
+            cir.setReturnValue(shape.move(0.0, yOff, 0.0));
         }
     }
 
-    @Inject(method = "getCollisionShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/ShapeContext;)Lnet/minecraft/util/shape/VoxelShape;",
+    @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
             at = @At("RETURN"), cancellable = true)
-    private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockView world, BlockPos pos, ShapeContext ctx,
+    private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockGetter world, BlockPos pos, CollisionContext ctx,
                                                               CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
         if (!SlabSupport.isBeta35FenceWallVariantContactObject(self)
                 && !SlabSupport.isBeta35FenceGateContactObject(self)
-                && !self.isOf(Blocks.GRINDSTONE)) {
+                && !self.is(Blocks.GRINDSTONE)) {
             return;
         }
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
-            cir.setReturnValue(cir.getReturnValue().offset(0.0, yOff, 0.0));
+            cir.setReturnValue(cir.getReturnValue().move(0.0, yOff, 0.0));
         }
     }
 
     // ── outline (hit-box) offset ──────────────────────────────────────
 
-    @Inject(method = "getOutlineShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/ShapeContext;)Lnet/minecraft/util/shape/VoxelShape;",
+    @Inject(method = "getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
             at = @At("RETURN"), cancellable = true)
-    private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
+    private void slabbed$offsetOutline(BlockGetter world, BlockPos pos, CollisionContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
 
-        // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
         Block block = self.getBlock();
-        if (block instanceof net.minecraft.block.CarpetBlock || block instanceof net.minecraft.block.PaleMossCarpetBlock) {
+        if (block instanceof CarpetBlock || block instanceof MossyCarpetBlock) {
             return;
         }
 
@@ -313,17 +315,14 @@ public abstract class SlabSupportStateMixin {
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             }
-            shape = shape.offset(0.0, yOff, 0.0);
+            shape = shape.move(0.0, yOff, 0.0);
             changed = true;
         }
 
-        // Slab + lowered floor torch comfort overlay: union the torch comfort column
-        // into the slab's outline so vanilla DDA produces a slab hit; the existing
-        // rescue mixin then retargets that hit to the torch above.
         if (block instanceof SlabBlock) {
             VoxelShape overlay = slabbed$slabTorchComfortOverlay(world, pos);
             if (overlay != null) {
-                shape = VoxelShapes.union(shape, overlay);
+                shape = Shapes.or(shape, overlay);
                 changed = true;
             }
         }

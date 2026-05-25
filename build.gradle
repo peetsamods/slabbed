@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.14-SNAPSHOT'
+    id 'net.fabricmc.fabric-loom' version '1.15.5'
     id 'maven-publish'
 }
 
@@ -36,15 +36,14 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
     // Fabric API. This is technically optional, but you probably want it anyway.
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     // Client-only modules for the client source set when splitEnvironmentSourceSets is enabled.
-    modClientImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modClientImplementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
-    modClientImplementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
+    implementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
 
     // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
     // extended to the gametest source set by configureTests { createSourceSet = true })
@@ -70,6 +69,54 @@ java {
 
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.named("sourcesJar", Jar).configure {
+    // Keep generated release source artifacts aligned with the public runtime jar.
+    exclude("com/slabbed/dev/**")
+    exclude("com/slabbed/debug/**")
+    exclude("com/slabbed/client/debug/**")
+    exclude("com/slabbed/mixin/debug/**")
+    exclude("com/slabbed/util/SlabbedDebug.java")
+    exclude("com/slabbed/util/RuntimeDiagnostics.java")
+    exclude("com/slabbed/util/SlabbedAuditBridge.java")
+    exclude("com/slabbed/util/DebugTraceContext.java")
+    exclude("slabbed.debug.mixins.json")
+}
+
+// 26.1.2 port: optional Countered Terrain Slabs compat is deferred until core Slabbed compiles.
+sourceSets {
+    main {
+        java {
+            exclude("com/slabbed/compat/terrainslabs/**")
+            exclude("com/slabbed/util/Beta4ManualLiveTrace.java")
+            // 26.1.2 port: recorder diagnostics deferred until core compile is restored.
+            exclude("com/slabbed/util/Beta35LiveTorchCaptureRecorder.java")
+            exclude("com/slabbed/util/Beta35SlabHeightHitAcceptanceRecorder.java")
+            exclude("com/slabbed/util/Beta4PlacementAuthorRecorder.java")
+            exclude("com/slabbed/mixin/debug/**")
+        }
+    }
+    client {
+        java {
+            exclude("com/slabbed/mixin/client/Beta4ManualLiveClientTickTraceMixin.java")
+            exclude("com/slabbed/mixin/client/Beta4ManualLiveInteractionTraceMixin.java")
+            // 26.1.2 port: dev-only client diagnostics are deferred from release compile.
+            exclude("com/slabbed/client/GapFillerOverlay.java")
+            exclude("com/slabbed/client/ScreenshotCaptureService.java")
+            exclude("com/slabbed/client/debug/**")
+        }
+    }
+    gametest {
+        java {
+            // 26.1.2 port: the legacy SlabbedLab gametest harness is deferred from release compile.
+            exclude("**/*.java")
+        }
+        resources {
+            // Keep deferred gametest entrypoints from advertising excluded classes at runtime.
+            exclude("fabric.mod.json")
+        }
+    }
 }
 
 jar {
@@ -110,3 +157,27 @@ publishing {
         // fetching dependencies.
     }
 }
+
+// 26.1.2 port: diagnostic recorder cluster is deferred until core Slabbed compiles.
+sourceSets {
+    main {
+        java {
+            exclude 'com/slabbed/util/RuntimeDiagnostics.java'
+            exclude 'com/slabbed/util/Beta35FenceWallLiveInspectRecorder.java'
+            exclude 'com/slabbed/util/Beta35SlabJumpSourceTruthRecorder.java'
+            exclude 'com/slabbed/util/DebugTraceContext.java'
+        }
+    }
+}
+
+// 26.1.2 port: audit bridge is deferred until core Slabbed compiles.
+sourceSets {
+    main {
+        java {
+            exclude 'com/slabbed/util/SlabbedAuditBridge.java'
+        }
+    }
+}
+
+// 26.1.2 port: dev/audit tooling is deferred from core compileJava until core Slabbed compiles.
+sourceSets.main.java.exclude('com/slabbed/dev/**')

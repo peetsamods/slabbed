@@ -3,23 +3,23 @@ package com.slabbed.debug;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.ShapeContext;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -54,9 +54,9 @@ public final class SlabbedInspect {
     private static final double LEGAL_TOP_NEGATIVE_DY = -0.5d;
 
     public static void logClientTarget(
-            World world,
-            Vec3d eye,
-            Vec3d rayEnd,
+            Level world,
+            Vec3 eye,
+            Vec3 rayEnd,
             float yaw,
             float pitch,
             ItemStack held,
@@ -91,16 +91,16 @@ public final class SlabbedInspect {
         }
     }
 
-    public static void logClickPair(ItemUsageContext context, Identifier itemId) {
-        if (!ENABLED || context == null || context.getWorld() == null) return;
+    public static void logClickPair(UseOnContext context, Identifier itemId) {
+        if (!ENABLED || context == null || context.getLevel() == null) return;
         int click = CLICK_IDS.incrementAndGet();
         CURRENT_CLICK.set(click);
 
-        World world = context.getWorld();
+        Level world = context.getLevel();
         TargetSnapshot target = LAST_CLIENT_TARGET.get();
         HitResult previewOwner = target == null ? null : target.finalTarget();
         BlockPos previewOwnerPos = blockPos(previewOwner);
-        BlockPos contextTarget = context.getBlockPos();
+        BlockPos contextTarget = context.getClickedPos();
         BlockPos contextPlacePos = placePos(context);
         boolean previewMatchesTarget = previewOwnerPos != null && previewOwnerPos.equals(contextTarget);
         boolean previewMatchesPlacement = previewOwnerPos != null && previewOwnerPos.equals(contextPlacePos);
@@ -112,13 +112,13 @@ public final class SlabbedInspect {
                 click,
                 side(world),
                 itemId == null ? "unknown" : itemId,
-                item(context.getStack()),
+                item(context.getItemInHand()),
                 hit(previewOwner),
                 target == null ? "none" : target.decision(),
                 target != null && target.sideSlabRetargetFired(),
                 pos(contextTarget),
-                context.getSide(),
-                fmt(context.getHitPos()),
+                context.getClickedFace(),
+                fmt(context.getClickLocation()),
                 block(world, contextTarget),
                 pos(contextPlacePos),
                 block(world, contextPlacePos),
@@ -131,17 +131,17 @@ public final class SlabbedInspect {
         CURRENT_CLICK.remove();
     }
 
-    public static void logIntent(ItemUsageContext incoming, ItemUsageContext outgoing, String reason) {
-        if (!ENABLED || incoming == null || incoming.getWorld() == null) return;
-        World world = incoming.getWorld();
-        BlockPos incomingPos = incoming.getBlockPos();
-        BlockPos outgoingPos = outgoing == null ? null : outgoing.getBlockPos();
+    public static void logIntent(UseOnContext incoming, UseOnContext outgoing, String reason) {
+        if (!ENABLED || incoming == null || incoming.getLevel() == null) return;
+        Level world = incoming.getLevel();
+        BlockPos incomingPos = incoming.getClickedPos();
+        BlockPos outgoingPos = outgoing == null ? null : outgoing.getClickedPos();
         BlockPos incomingPlacePos = placePos(incoming);
         BlockPos outgoingPlacePos = outgoing == null ? null : placePos(outgoing);
         boolean transformed = outgoing != null
                 && (!incomingPos.equals(outgoingPos)
-                || incoming.getSide() != outgoing.getSide()
-                || !incoming.getHitPos().equals(outgoing.getHitPos()));
+                || incoming.getClickedFace() != outgoing.getClickedFace()
+                || !incoming.getClickLocation().equals(outgoing.getClickLocation()));
 
         Slabbed.LOGGER.info("[SLABBED-INSPECT][INTENT] click={} side={} reason={} transformed={} heldItem={} "
                         + "incomingTarget={} incomingFace={} incomingHit={} incomingBlock={} incomingPlacePos={} incomingPlaceBlock={} "
@@ -150,16 +150,16 @@ public final class SlabbedInspect {
                 side(world),
                 reason,
                 transformed,
-                item(incoming.getStack()),
+                item(incoming.getItemInHand()),
                 pos(incomingPos),
-                incoming.getSide(),
-                fmt(incoming.getHitPos()),
+                incoming.getClickedFace(),
+                fmt(incoming.getClickLocation()),
                 block(world, incomingPos),
                 pos(incomingPlacePos),
                 block(world, incomingPlacePos),
                 pos(outgoingPos),
-                outgoing == null ? "none" : outgoing.getSide(),
-                outgoing == null ? "none" : fmt(outgoing.getHitPos()),
+                outgoing == null ? "none" : outgoing.getClickedFace(),
+                outgoing == null ? "none" : fmt(outgoing.getClickLocation()),
                 block(world, outgoingPos),
                 pos(outgoingPlacePos),
                 block(world, outgoingPlacePos));
@@ -171,12 +171,12 @@ public final class SlabbedInspect {
 
     public static void logPlacement(
             String stage,
-            World world,
+            Level world,
             Identifier itemId,
-            ItemPlacementContext ctx,
+            BlockPlaceContext ctx,
             BlockPos hitPos,
             BlockPos placePos,
-            ActionResult result
+            InteractionResult result
     ) {
         if (!ENABLED || world == null || ctx == null) return;
         Slabbed.LOGGER.info("[SLABBED-INSPECT][PLACE_{}] click={} side={} item={} heldItem={} face={} hitPos={} "
@@ -185,14 +185,14 @@ public final class SlabbedInspect {
                 click(),
                 side(world),
                 itemId == null ? "unknown" : itemId,
-                item(ctx.getStack()),
-                ctx.getSide(),
+                item(ctx.getItemInHand()),
+                ctx.getClickedFace(),
                 pos(hitPos),
                 block(world, hitPos),
                 pos(placePos),
                 block(world, placePos),
                 result == null ? "pending" : result,
-                result == null ? "pending" : result.isAccepted());
+                result == null ? "pending" : result.consumesAction());
         logNearby(world, "PLACE_" + stage, hitPos, placePos);
     }
 
@@ -208,7 +208,7 @@ public final class SlabbedInspect {
     }
 
     public static void logPlacementNoReturn(
-            World world,
+            Level world,
             Identifier itemId,
             Direction face,
             BlockPos hitPos,
@@ -243,7 +243,7 @@ public final class SlabbedInspect {
         return click == null ? "none" : click.toString();
     }
 
-    private static void logNearby(World world, String reason, BlockPos targetPos, BlockPos placePos) {
+    private static void logNearby(Level world, String reason, BlockPos targetPos, BlockPos placePos) {
         if (!ENABLED || world == null || (targetPos == null && placePos == null)) return;
         Slabbed.LOGGER.info("[SLABBED-INSPECT][NEARBY] side={} reason={} target={} targetNeighbors={} placePos={} placeNeighbors={}",
                 side(world),
@@ -254,12 +254,12 @@ public final class SlabbedInspect {
                 neighbors(world, placePos));
     }
 
-    private static String neighbors(World world, BlockPos center) {
+    private static String neighbors(Level world, BlockPos center) {
         if (center == null) return "none";
         StringBuilder out = new StringBuilder(768);
         appendNeighbor(out, "self", world, center);
-        appendNeighbor(out, "down", world, center.down());
-        appendNeighbor(out, "up", world, center.up());
+        appendNeighbor(out, "down", world, center.below());
+        appendNeighbor(out, "up", world, center.above());
         appendNeighbor(out, "north", world, center.north());
         appendNeighbor(out, "south", world, center.south());
         appendNeighbor(out, "east", world, center.east());
@@ -267,33 +267,33 @@ public final class SlabbedInspect {
         return out.toString();
     }
 
-    private static void appendNeighbor(StringBuilder out, String label, World world, BlockPos pos) {
+    private static void appendNeighbor(StringBuilder out, String label, Level world, BlockPos pos) {
         if (!out.isEmpty()) {
             out.append(" | ");
         }
         out.append(label).append("=").append(block(world, pos));
     }
 
-    private static BlockPos placePos(ItemUsageContext context) {
-        return context == null ? null : context.getBlockPos().offset(context.getSide());
+    private static BlockPos placePos(UseOnContext context) {
+        return context == null ? null : context.getClickedPos().relative(context.getClickedFace());
     }
 
-    private static boolean isInteresting(World world, BlockPos pos) {
+    private static boolean isInteresting(Level world, BlockPos pos) {
         if (world == null || pos == null) return false;
         BlockState state = world.getBlockState(pos);
         return state.getBlock() instanceof SlabBlock
                 || SlabSupport.getYOffset(world, pos, state) != 0.0d
                 || SlabAnchorAttachment.isAnchored(world, pos)
-                || state.isSolidBlock(world, pos);
+                || state.isRedstoneConductor(world, pos);
     }
 
-    private static String side(World world) {
-        return world.isClient() ? "CLIENT" : "SERVER";
+    private static String side(Level world) {
+        return world.isClientSide() ? "CLIENT" : "SERVER";
     }
 
     private static String item(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return "empty";
-        return Registries.ITEM.getId(stack.getItem()).toString();
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
     private static String hit(HitResult hit) {
@@ -301,8 +301,8 @@ public final class SlabbedInspect {
             return hit == null ? "null" : hit.getType().toString();
         }
         return "BLOCK pos=" + pos(blockHit.getBlockPos())
-                + " face=" + blockHit.getSide().asString()
-                + " vec=" + fmt(blockHit.getPos());
+                + " face=" + blockHit.getDirection().getSerializedName()
+                + " vec=" + fmt(blockHit.getLocation());
     }
 
     private static BlockPos blockPos(HitResult hit) {
@@ -311,42 +311,42 @@ public final class SlabbedInspect {
                 : null;
     }
 
-    private static String block(World world, BlockPos pos) {
+    private static String block(Level world, BlockPos pos) {
         if (world == null || pos == null) return "none";
         BlockState state = world.getBlockState(pos);
         double dy = SlabSupport.getYOffset(world, pos, state);
         return "pos=" + pos(pos)
-                + " id=" + Registries.BLOCK.getId(state.getBlock())
+                + " id=" + BuiltInRegistries.BLOCK.getId(state.getBlock())
                 + " state=" + state
                 + " dy=" + String.format("%.3f", dy)
                 + " outline=" + outline(world, pos, state)
                 + " slabType=" + slabType(state)
                 + " anchored=" + SlabAnchorAttachment.isAnchored(world, pos)
                 + " lowered=" + (dy != 0.0d)
-                + " solid=" + state.isSolidBlock(world, pos)
-                + " fullCube=" + state.isOpaqueFullCube()
+                + " solid=" + state.isRedstoneConductor(world, pos)
+                + " fullCube=" + state.isSolidRender()
                 + warning(state, dy);
     }
 
-    private static String outline(World world, BlockPos pos, BlockState state) {
-        VoxelShape shape = state.getOutlineShape(world, pos, ShapeContext.absent());
+    private static String outline(Level world, BlockPos pos, BlockState state) {
+        VoxelShape shape = state.getShape(world, pos, CollisionContext.empty());
         if (shape.isEmpty()) return "empty";
-        var box = shape.getBoundingBox();
+        var box = shape.bounds();
         return String.format("%.3f..%.3f", pos.getY() + box.minY, pos.getY() + box.maxY);
     }
 
     private static String slabType(BlockState state) {
-        if (state == null || !(state.getBlock() instanceof SlabBlock) || !state.contains(SlabBlock.TYPE)) {
+        if (state == null || !(state.getBlock() instanceof SlabBlock) || !state.hasProperty(SlabBlock.TYPE)) {
             return "none";
         }
-        return state.get(SlabBlock.TYPE).toString();
+        return state.getValue(SlabBlock.TYPE).toString();
     }
 
     private static String warning(BlockState state, double dy) {
-        if (state == null || !(state.getBlock() instanceof SlabBlock) || !state.contains(SlabBlock.TYPE)) {
+        if (state == null || !(state.getBlock() instanceof SlabBlock) || !state.hasProperty(SlabBlock.TYPE)) {
             return "";
         }
-        SlabType type = state.get(SlabBlock.TYPE);
+        SlabType type = state.getValue(SlabBlock.TYPE);
         if (type == SlabType.TOP && dy < 0.0d && Math.abs(dy - LEGAL_TOP_NEGATIVE_DY) > 1.0e-9) {
             return " warning=TOP_SLAB_WITH_UNSUPPORTED_NEGATIVE_DY";
         }
@@ -363,7 +363,7 @@ public final class SlabbedInspect {
         return pos == null ? "none" : pos.toShortString();
     }
 
-    private static String fmt(Vec3d vec) {
+    private static String fmt(Vec3 vec) {
         return vec == null
                 ? "none"
                 : String.format("%.4f,%.4f,%.4f", vec.x, vec.y, vec.z);

@@ -1,13 +1,12 @@
 package com.slabbed.client.model;
 
-import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
 /**
  * Dynamic proxy that shifts vertex Y in pos(...) and delegates all other methods.
- * Avoids brittle hand-written delegation against evolving FRAPI APIs.
  */
 public final class YOffsetEmitter {
     private YOffsetEmitter() {
@@ -22,7 +21,6 @@ public final class YOffsetEmitter {
     }
 
     private static Object invoke(QuadEmitter delegate, Object proxy, Method method, Object[] args, float dy) throws Throwable {
-        // Intercept emit() to translate vertices right before emission (covers models that don't call pos())
         if ("emit".equals(method.getName()) && (args == null || args.length == 0)) {
             for (int i = 0; i < 4; i++) {
                 float x = delegate.x(i);
@@ -33,7 +31,6 @@ public final class YOffsetEmitter {
             return method.invoke(delegate, args);
         }
 
-        // Intercept pos(int, float, float, float)
         if ("pos".equals(method.getName())
                 && args != null
                 && args.length == 4
@@ -47,10 +44,9 @@ public final class YOffsetEmitter {
 
         Object result = method.invoke(delegate, args);
 
-        // Preserve fluent chaining: if delegate returns itself, return proxy instead
         if (result == delegate) {
-            Class<?> rt = method.getReturnType();
-            if (rt.isInterface() && rt.isInstance(proxy)) {
+            Class<?> returnType = method.getReturnType();
+            if (returnType.isInterface() && returnType.isInstance(proxy)) {
                 return proxy;
             }
         }
