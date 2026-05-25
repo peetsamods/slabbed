@@ -2,15 +2,18 @@ package com.slabbed.client.model;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
+import com.slabbed.compat.terrainslabs.TerrainSlabsCompat;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
+import net.minecraft.block.SlabBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.model.BlockModelPart;
 import net.minecraft.client.render.model.BlockStateModel;
+import net.minecraft.registry.Registries;
 import net.minecraft.client.texture.Sprite;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -117,6 +120,25 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         }
 
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
-        fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
+        // Vanilla/model cull predicates are evaluated before Slabbed's dy-shifted quad emission.
+        // Terrain Slabs slab models can therefore lose faces that become exposed only after the shift.
+        Predicate<Direction> effectiveCullTest = shouldBypassCullForShiftedTerrainSlabs(state, dy)
+                ? direction -> false
+                : cullTest;
+        fabricWrapped.emitQuads(out, view, pos, state, random, effectiveCullTest);
+    }
+
+    private static boolean shouldBypassCullForShiftedTerrainSlabs(BlockState state, float modelDy) {
+        if (modelDy == 0.0f) {
+            return false;
+        }
+        if (TerrainSlabsCompat.shouldSkipOffset(state)) {
+            return false;
+        }
+        if (!(state.getBlock() instanceof SlabBlock) || !state.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        var id = Registries.BLOCK.getId(state.getBlock());
+        return id != null && TerrainSlabsCompat.MOD_ID.equals(id.getNamespace());
     }
 }

@@ -8,6 +8,10 @@ import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.renderer.v1.Renderer;
+import net.fabricmc.fabric.api.renderer.v1.mesh.MutableMesh;
+import net.fabricmc.fabric.api.renderer.v1.mesh.QuadView;
+import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -16,6 +20,7 @@ import net.minecraft.block.ChainBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.client.render.model.BlockStateModel;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
@@ -23,6 +28,7 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.random.Random;
 import net.minecraft.util.shape.VoxelShape;
 
 import java.util.ArrayList;
@@ -163,7 +169,122 @@ public final class TerrainSlabsVisualTriadClientGameTest implements FabricClient
                         + " deniedIds=" + deniedIds.size());
             });
 
-            proveGrassSlabSupportedObjectModelDy(ctx, singleplayer, slabIds);
+            boolean missingFaceOnly = Boolean.getBoolean("slabbed.terrainSlabsMissingFaceRedOnly");
+            if (!missingFaceOnly) {
+                proveGrassSlabSupportedObjectModelDy(ctx, singleplayer, slabIds);
+            }
+            proveGrassSlabMissingFaceRed(ctx, slabIds);
+        }
+    }
+
+    private static void proveGrassSlabMissingFaceRed(ClientGameTestContext ctx, List<Identifier> slabIds) {
+        Identifier supportId = Identifier.of(MOD_ID, "grass_slab");
+        int supportIndex = slabIds.indexOf(supportId);
+        if (supportIndex < 0) {
+            throw new AssertionError("terrainslabs:grass_slab missing from Terrain Slabs slab ids");
+        }
+
+        BlockPos slabPos = supportPosForIndex(supportIndex).up().east();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                throw new AssertionError("client world missing for Terrain Slabs missing-face red proof");
+            }
+
+            BlockState state = mc.world.getBlockState(slabPos);
+            assertTerrainSlabState(supportId, state);
+            double dy = SlabSupport.getYOffset(mc.world, slabPos, state);
+            assertClose("SlabSupport dy for missing-face red proof", -0.5d, dy);
+
+            BlockStateModel model = mc.getBlockRenderManager().getModel(state);
+            if (!(model instanceof OffsetBlockStateModel)) {
+                throw new AssertionError("expected OffsetBlockStateModel wrapper for " + supportId
+                        + " but found " + model.getClass().getName());
+            }
+            if (!(model instanceof FabricBlockStateModel fabricModel)) {
+                throw new AssertionError("expected FabricBlockStateModel for " + supportId
+                        + " but found " + model.getClass().getName());
+            }
+
+            QuadProbe noCull = collectGrassSlabQuads(fabricModel, mc.world, slabPos, state, direction -> false);
+            QuadProbe westCulled = collectGrassSlabQuads(fabricModel, mc.world, slabPos, state, direction -> direction == Direction.WEST);
+
+            String fields = " supportId=" + supportId
+                    + " pos=" + slabPos.toShortString()
+                    + " dy=" + dy
+                    + " noCullTotal=" + noCull.totalQuads
+                    + " westCullTotal=" + westCulled.totalQuads
+                    + " noCullWestShifted=" + noCull.westShiftedQuads
+                    + " westCullWestShifted=" + westCulled.westShiftedQuads
+                    + " noCullWestMinY=" + noCull.westMinY
+                    + " noCullWestMaxY=" + noCull.westMaxY
+                    + " westCullWestMinY=" + westCulled.westMinY
+                    + " westCullWestMaxY=" + westCulled.westMaxY;
+
+            if (noCull.westShiftedQuads <= 0) {
+                System.out.println("TERRAIN_SLABS_MISSING_FACE_RED reason=no_unculled_shifted_west_face" + fields);
+                throw new AssertionError("Terrain Slabs missing-face red proof could not observe unculled shifted west face" + fields);
+            }
+            if (westCulled.westShiftedQuads < noCull.westShiftedQuads) {
+                System.out.println("TERRAIN_SLABS_MISSING_FACE_RED reason=pre_offset_cull_dropped_exposed_shifted_face" + fields);
+                throw new AssertionError("Terrain Slabs grass_slab exposed shifted west face was culled before dy shift" + fields);
+            }
+
+            System.out.println("TERRAIN_SLABS_MISSING_FACE_GREEN" + fields);
+        });
+    }
+
+    private static QuadProbe collectGrassSlabQuads(
+            FabricBlockStateModel model,
+            net.minecraft.world.BlockRenderView world,
+            BlockPos pos,
+            BlockState state,
+            java.util.function.Predicate<Direction> cullTest
+    ) {
+        Renderer renderer = Renderer.get();
+        if (renderer == null) {
+            throw new AssertionError("Fabric renderer missing for Terrain Slabs missing-face red proof");
+        }
+
+        MutableMesh mesh = renderer.mutableMesh();
+        model.emitQuads(mesh.emitter(), world, pos, state, Random.create(0x51abbEDL), cullTest);
+        QuadProbe probe = new QuadProbe(mesh.size());
+        mesh.forEach(quad -> probe.accept(quad));
+        return probe;
+    }
+
+    private static final class QuadProbe {
+        final int totalQuads;
+        int westShiftedQuads;
+        double westMinY = Double.NaN;
+        double westMaxY = Double.NaN;
+
+        QuadProbe(int totalQuads) {
+            this.totalQuads = totalQuads;
+        }
+
+        void accept(QuadView quad) {
+            Direction face = quad.cullFace() != null ? quad.cullFace() : quad.nominalFace();
+            if (face != Direction.WEST) {
+                return;
+            }
+
+            double minY = minY(quad);
+            double maxY = maxY(quad);
+            if (maxY > 1.0e-6d) {
+                return;
+            }
+
+            westShiftedQuads++;
+            westMinY = Double.isNaN(westMinY) ? minY : Math.min(westMinY, minY);
+            westMaxY = Double.isNaN(westMaxY) ? maxY : Math.max(westMaxY, maxY);
+        }
+
+        private static double minY(QuadView quad) {
+            return Math.min(Math.min(quad.y(0), quad.y(1)), Math.min(quad.y(2), quad.y(3)));
+        }
+
+        private static double maxY(QuadView quad) {
+            return Math.max(Math.max(quad.y(0), quad.y(1)), Math.max(quad.y(2), quad.y(3)));
         }
     }
 
