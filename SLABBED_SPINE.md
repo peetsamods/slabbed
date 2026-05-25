@@ -21,17 +21,26 @@ Do not update other Slabbed checkouts from this file. The phase19 checkout remai
 ## Current Git Truth
 
 - Branch: `port/mc-26.1.2`
-- HEAD: `f9014fb`
-- Tag at HEAD: `release/0.2.0-beta.4`
+- HEAD / tag at HEAD: verify live with `git rev-parse --short HEAD` and `git tag --points-at HEAD`.
 - Base release provenance: `release/0.2.0-beta.4` / `f9014fbfcb15af2716f090d038762fd8d3d460de`
-- Current tracked tree: dirty with ongoing 26.1.2 port migration edits
-- Current untracked evidence/docs include `docs/porting/` and `tmp/`
+- Current tracked tree after the release savepoint commit should be clean.
+- Current untracked evidence is expected under `tmp/` and is not release payload.
 
-This is not a release-ready tree and not a savepoint unless a later commit/tag/push proves it.
+Do not rely on this file alone for release proof; Git commands, proof logs, the annotated save tag, and pushed refs are authoritative.
 
 ## Current Port Status
 
-The 26.1.2 port is an experimental migration workspace. Work so far has focused on release-base provenance, mapping/tooling/classpath proof, Java 25 / Gradle / Loom compatibility, source-set wiring, and narrow source API probes.
+The 26.1.2 port has reached a placement-proof release candidate for the slab-held visual-target / placement-intent fault. Work so far has focused on release-base provenance, mapping/tooling/classpath proof, Java 25 / Gradle / Loom compatibility, source-set wiring, narrow source API probes, and the slab-held visual-target failure.
+
+Resolved blocker: Julia's 2026-05-23 slab-held recording showed the selection outline/target floating above the visible stone body. The port restores the missing 26.1.2 visible-shape path, preserves the visual triad, and applies the final-target-unknown placement-intent fix through the validated visible lane. Temporary `runner3RowId` / provenance audit instrumentation was removed before release proof.
+
+Fresh placement proof on 2026-05-25:
+
+- Runner3: `tmp/port-26-1-2-normal-runner3-after-debug-log-cleanup-42c3046e/clientGameTest-normal-runner3-after-debug-log-cleanup.log`
+- Runner3 metrics: `NO_PLACE_BUT_SHOULD_PLACE=23`, `PLACED_RELATIVE_TO_RETARGETED_OWNER=113`, `PLACED_ABOVE_VISIBLE_TARGET=3`, `PLACED_BUT_SHOULD_NOT=6`
+- Runtime smoke: `tmp/port-26-1-2-runclient-smoke-after-debug-log-cleanup-42c3046e/runClient-smoke-after-debug-log-cleanup.log`
+- Visual check: Julia accepted the live route as green before final cleanup; no additional manual visual route was available while she was away.
+- Release hygiene: `./gradlew --no-daemon clean build` passed; jar scans found no runner3/gametest/probe/trace/debug/provenance/tmp artifacts.
 
 The preserved blocker note is:
 
@@ -77,3 +86,5 @@ Stop and report if:
 For documentation-only work, keep edits limited to port-local docs.
 
 For code migration work, classify the current dominant compile/source blocker first, then patch exactly the requested file or the smallest proven mechanism. If the result remains unclear after one compile gate, stop with tried/observed/proven/unproven/next-smallest-audit.
+
+For this placement savepoint, the next safe action is final Git hygiene only: review the intended diff, stage intended production files, create one commit, create an annotated `save/...` tag, push branch and tag, and verify final tracked-tree state.

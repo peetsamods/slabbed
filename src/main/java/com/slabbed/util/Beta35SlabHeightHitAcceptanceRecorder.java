@@ -1,32 +1,32 @@
 package com.slabbed.util;
 
 import com.slabbed.Slabbed;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.ChainBlock;
-import net.minecraft.block.FenceBlock;
-import net.minecraft.block.LanternBlock;
-import net.minecraft.block.RedstoneTorchBlock;
-import net.minecraft.block.ShapeContext;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.StairsBlock;
-import net.minecraft.block.TrapdoorBlock;
-import net.minecraft.block.WallBlock;
-import net.minecraft.block.enums.BlockFace;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.state.property.Properties;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChainBlock;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.LanternBlock;
+import net.minecraft.world.level.block.RedstoneTorchBlock;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.WallBlock;
+import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.level.Level;
 
 /**
  * Evidence-only tracer for Julia's Beta 3.5 slab-height hit-acceptance gap.
@@ -49,19 +49,19 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         return Boolean.getBoolean(FLAG);
     }
 
-    public static void logStartup(World world, PlayerEntity player) {
+    public static void logStartup(Level world, Player player) {
         if (!enabled() || startupLogged) {
             return;
         }
         Slabbed.LOGGER.info(
                 "[JULIA_BETA35_SLAB_HEIGHT_HIT_ACCEPTANCE] enabled=true phase=startup flag=-D{}=true world={} player={} scope=generic_held_item_visible_target diagnosticsOnly=true releaseAudit=NOT_RUN releaseTagMoved=false allItemClaim=false",
                 FLAG,
-                world == null ? "null" : world.getRegistryKey().getValue(),
+                world == null ? "null" : world.getResourceKey().getValue(),
                 player == null ? "null" : player.getName().getString());
         startupLogged = true;
     }
 
-    public static void recordNoTarget(World world, PlayerEntity player, HitResult finalTarget) {
+    public static void recordNoTarget(Level world, Player player, HitResult finalTarget) {
         if (!enabled()) {
             return;
         }
@@ -81,11 +81,11 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
     }
 
     public static void recordClientTarget(
-            World world,
+            Level world,
             Entity camera,
-            PlayerEntity player,
-            Vec3d eye,
-            Vec3d rayEnd,
+            Player player,
+            Vec3 eye,
+            Vec3 rayEnd,
             ItemStack held,
             HitResult initialTarget,
             HitResult finalTarget,
@@ -114,11 +114,11 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 ? SlabSupport.getYOffset(world, finalBlock.getBlockPos(), world.getBlockState(finalBlock.getBlockPos()))
                 : Double.NaN;
         double supportVisibleTopY = supportVisibleTopY(supportCandidatePos, supportCandidateState, supportDy);
-        ShapeContext shapeContext = player == null ? ShapeContext.absent() : ShapeContext.of(player);
+        CollisionContext shapeContext = player == null ? CollisionContext.absent() : CollisionContext.of(player);
         VoxelShape objectShape = visibleObjectState.getOutlineShape(world, visibleObjectPos, shapeContext);
-        Box objectBox = worldBox(objectShape, visibleObjectPos);
+        AABB objectAABB = worldAABB(objectShape, visibleObjectPos);
         boolean rayIntersectsVisibleObject = rayIntersectsShape(objectShape, visibleObjectPos, eye, rayEnd);
-        double objectModelBottomY = objectBox == null ? Double.NaN : objectBox.minY;
+        double objectModelBottomY = objectAABB == null ? Double.NaN : objectAABB.minY;
         double contactGap = Double.isFinite(objectModelBottomY) && Double.isFinite(supportVisibleTopY)
                 ? objectModelBottomY - supportVisibleTopY
                 : Double.NaN;
@@ -189,20 +189,20 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
     }
 
     public static void logServerTolerance(
-            World world,
-            PlayerEntity player,
+            Level world,
+            Player player,
             BlockHitResult hit,
             ItemStack held,
-            Vec3d validationCenter,
-            Vec3d shiftedValidationCenter
+            Vec3 validationCenter,
+            Vec3 shiftedValidationCenter
     ) {
         if (!enabled() || world == null || hit == null || validationCenter == null) {
             return;
         }
         logStartup(world, player);
-        Vec3d hitVec = hit.getPos();
-        Vec3d delta = hitVec.subtract(validationCenter);
-        Vec3d shiftedDelta = shiftedValidationCenter == null ? null : hitVec.subtract(shiftedValidationCenter);
+        Vec3 hitVec = hit.getPos();
+        Vec3 delta = hitVec.subtract(validationCenter);
+        Vec3 shiftedDelta = shiftedValidationCenter == null ? null : hitVec.subtract(shiftedValidationCenter);
         boolean tooFar = Math.abs(delta.x) >= SERVER_HIT_TOLERANCE
                 || Math.abs(delta.y) >= SERVER_HIT_TOLERANCE
                 || Math.abs(delta.z) >= SERVER_HIT_TOLERANCE;
@@ -247,8 +247,8 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
     }
 
     private static void logTraceActive(
-            World world,
-            PlayerEntity player,
+            Level world,
+            Player player,
             ItemStack held,
             HitResult initialTarget,
             HitResult finalTarget,
@@ -269,7 +269,7 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 player == null ? "null" : player.getName().getString());
     }
 
-    private static BlockPos resolveVisibleObjectPos(World world, HitResult initialTarget, HitResult finalTarget) {
+    private static BlockPos resolveVisibleObjectPos(Level world, HitResult initialTarget, HitResult finalTarget) {
         BlockPos finalPos = hitBlockPos(finalTarget);
         BlockPos finalAbove = visibleObjectAboveSupport(world, finalPos);
         if (finalAbove != null) {
@@ -295,7 +295,7 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         return null;
     }
 
-    private static BlockPos visibleObjectAboveSupport(World world, BlockPos pos) {
+    private static BlockPos visibleObjectAboveSupport(Level world, BlockPos pos) {
         if (world == null || pos == null) {
             return null;
         }
@@ -326,10 +326,10 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         if (state.getBlock() instanceof SlabBlock) {
             return "SLAB";
         }
-        if (state.getBlock() instanceof StairsBlock) {
+        if (state.getBlock() instanceof StairBlock) {
             return "STAIRS";
         }
-        if (state.getBlock() instanceof TrapdoorBlock) {
+        if (state.getBlock() instanceof TrapDoorBlock) {
             return "TRAPDOOR";
         }
         if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock) {
@@ -371,10 +371,10 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         if (state.getBlock() instanceof ChainBlock) {
             return "CHAIN";
         }
-        if (Registries.BLOCK.getId(state.getBlock()).toString().contains("button")) {
+        if (BuiltInRegistries.BLOCK.getId(state.getBlock()).toString().contains("button")) {
             return "BUTTON";
         }
-        return Registries.BLOCK.getId(state.getBlock()).toString();
+        return BuiltInRegistries.BLOCK.getId(state.getBlock()).toString();
     }
 
     private static String contactMetricType(BlockState state) {
@@ -387,10 +387,10 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         if (state.getBlock() instanceof ChainBlock) {
             return "AXIS_CONTACT";
         }
-        String id = Registries.BLOCK.getId(state.getBlock()).toString();
+        String id = BuiltInRegistries.BLOCK.getId(state.getBlock()).toString();
         if (id.contains("button")) {
-            if (state.contains(Properties.BLOCK_FACE)
-                    && state.get(Properties.BLOCK_FACE) == BlockFace.FLOOR) {
+            if (state.contains(BlockStateProperties.BLOCK_FACE)
+                    && state.get(BlockStateProperties.BLOCK_FACE) == AttachFace.FLOOR) {
                 return "FLOOR_CONTACT";
             }
             return "SIDE_FACE_CONTACT";
@@ -398,7 +398,7 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         if (state.isOf(Blocks.TORCH) || state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT)) {
             return "FLOOR_CONTACT";
         }
-        if (state.getBlock() instanceof TrapdoorBlock) {
+        if (state.getBlock() instanceof TrapDoorBlock) {
             return "SIDE_FACE_CONTACT";
         }
         return "OWNER_ONLY";
@@ -539,8 +539,8 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
             }
         }
         if (supportState != null && supportState.getBlock() instanceof SlabBlock
-                && supportState.contains(Properties.SLAB_TYPE)) {
-            SlabType type = supportState.get(Properties.SLAB_TYPE);
+                && supportState.contains(BlockStateProperties.SLAB_TYPE)) {
+            SlabType type = supportState.get(BlockStateProperties.SLAB_TYPE);
             if (type == SlabType.TOP) {
                 return "LOWERED_TOP";
             }
@@ -567,19 +567,19 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         return supportPos.getY() + supportDy + supportTop;
     }
 
-    private static Box worldBox(VoxelShape shape, BlockPos pos) {
+    private static AABB worldAABB(VoxelShape shape, BlockPos pos) {
         if (shape == null || shape.isEmpty()) {
             return null;
         }
-        return shape.getBoundingBox().offset(pos);
+        return shape.getBoundingAABB().offset(pos);
     }
 
-    private static boolean rayIntersectsShape(VoxelShape shape, BlockPos pos, Vec3d eye, Vec3d rayEnd) {
+    private static boolean rayIntersectsShape(VoxelShape shape, BlockPos pos, Vec3 eye, Vec3 rayEnd) {
         return shape != null && !shape.isEmpty() && shape.raycast(eye, rayEnd, pos) != null;
     }
 
     private static String heldItemId(ItemStack stack) {
-        return stack == null || stack.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(stack.getItem()).toString();
+        return stack == null || stack.isEmpty() ? "minecraft:air" : BuiltInRegistries.ITEM.getId(stack.getItem()).toString();
     }
 
     private static String formatHit(HitResult hit) {
@@ -592,7 +592,7 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
                 + " hitVec=" + formatVec(blockHit.getPos());
     }
 
-    private static String formatVec(Vec3d vec) {
+    private static String formatVec(Vec3 vec) {
         if (vec == null) {
             return "null";
         }

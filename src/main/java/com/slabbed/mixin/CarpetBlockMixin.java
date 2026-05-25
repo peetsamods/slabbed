@@ -1,16 +1,16 @@
 package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.AbstractBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.world.WorldView;
-import net.minecraft.world.tick.ScheduledTickView;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.ScheduledTickAccess;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,26 +19,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(CarpetBlock.class)
 public abstract class CarpetBlockMixin extends Block {
 
-    protected CarpetBlockMixin(AbstractBlock.Settings settings) {
+    protected CarpetBlockMixin(BlockBehaviour.Properties settings) {
         super(settings);
     }
 
-    @Inject(method = "canPlaceAt", at = @At("HEAD"), cancellable = true)
-    private void slabbed$allowOnSlabs(BlockState state, WorldView world, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-        BlockPos below = pos.down();
+    @Inject(method = "canSurvive", at = @At("HEAD"), cancellable = true)
+    private void slabbed$allowOnSlabs(BlockState state, LevelReader world, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
+        BlockPos below = pos.below();
         if (SlabSupport.canTreatAsSolidTopFace(world, below)) {
             cir.setReturnValue(true);
         }
     }
 
-    @Inject(method = "getStateForNeighborUpdate", at = @At("HEAD"), cancellable = true)
-    private void slabbed$stayOnSlabs(BlockState state, WorldView world, ScheduledTickView scheduledTickView, BlockPos pos, Direction direction, BlockPos neighborPos, BlockState neighborState, Random random, CallbackInfoReturnable<BlockState> cir) {
-        if (SlabSupport.canTreatAsSolidTopFace(world, pos.down())) {
+    @Inject(method = "updateShape", at = @At("HEAD"), cancellable = true)
+    private void slabbed$stayOnSlabs(BlockState state, LevelReader world, ScheduledTickAccess scheduledTickView, BlockPos pos, Direction direction, BlockPos neighborPos, BlockState neighborState, RandomSource random, CallbackInfoReturnable<BlockState> cir) {
+        if (SlabSupport.canTreatAsSolidTopFace(world, pos.below())) {
             cir.setReturnValue(state);
             return;
         }
-        if (!state.canPlaceAt(world, pos)) {
-            cir.setReturnValue(Blocks.AIR.getDefaultState());
+        if (!state.canSurvive(world, pos)) {
+            cir.setReturnValue(Blocks.AIR.defaultBlockState());
         }
     }
 

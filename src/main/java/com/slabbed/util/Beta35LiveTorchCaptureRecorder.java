@@ -2,27 +2,27 @@ package com.slabbed.util;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.Slabbed;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.ShapeContext;
-import net.minecraft.block.TorchBlock;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.World;
-import net.minecraft.world.WorldView;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.level.block.TorchBlock;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -59,7 +59,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         return Boolean.getBoolean("slabbed.beta35FloorTorchSbsbsSourceTruthRed");
     }
 
-    public static void recordFrame(World world, Entity camera, PlayerEntity player, HitResult crosshairTarget, float tickProgress) {
+    public static void recordFrame(Level world, Entity camera, Player player, HitResult crosshairTarget, float tickProgress) {
         if (!enabled() || world == null || crosshairTarget == null) {
             return;
         }
@@ -80,7 +80,7 @@ public final class Beta35LiveTorchCaptureRecorder {
             Slabbed.LOGGER.info(
                     "[JULIA_BETA35_LIVE_TORCH_CAPTURE_START] enabled={} world={} player={}",
                     true,
-                    world.getRegistryKey().getValue(),
+                    world.getResourceKey().getValue(),
                     player == null ? "null" : player.getName().getString()
             );
             startLogged = true;
@@ -162,8 +162,8 @@ public final class Beta35LiveTorchCaptureRecorder {
     }
 
     public static PlacementAttemptSnapshot startPlacementAttempt(
-            World world,
-            PlayerEntity player,
+            Level world,
+            Player player,
             ItemStack heldStack,
             BlockHitResult hitResult,
             HitResult crosshairTarget
@@ -199,7 +199,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         );
     }
 
-    public static void finishPlacementAttempt(World world, PlacementAttemptSnapshot snapshot, ActionResult result) {
+    public static void finishPlacementAttempt(Level world, PlacementAttemptSnapshot snapshot, InteractionResult result) {
         if (!dualTraceEnabled() || world == null || snapshot == null) {
             return;
         }
@@ -245,7 +245,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         );
     }
 
-    public static void recordComfortTrace(World world, String reason, BlockPos pos, BlockPos supportPos) {
+    public static void recordComfortTrace(Level world, String reason, BlockPos pos, BlockPos supportPos) {
         if (!dualTraceEnabled() || world == null) {
             return;
         }
@@ -253,7 +253,7 @@ public final class Beta35LiveTorchCaptureRecorder {
                 supportPos == null ? null : supportPos.toImmutable());
     }
 
-    private static CaptureContext capture(World world, HitResult crosshairTarget, PlayerEntity player, Entity cameraEntity) {
+    private static CaptureContext capture(Level world, HitResult crosshairTarget, Player player, Entity cameraEntity) {
         if (crosshairTarget.getType() != HitResult.Type.BLOCK || !(crosshairTarget instanceof BlockHitResult blockHit)) {
             return noTorchTarget(crosshairTarget.getType().name(), player);
         }
@@ -291,14 +291,14 @@ public final class Beta35LiveTorchCaptureRecorder {
     }
 
     private static CaptureContext captureTorch(
-            World world,
+            Level world,
             BlockPos torchPos,
             boolean targetIsTorch,
             String targetType,
             String targetFace,
             String targetStateText,
             String heldItem,
-            PlayerEntity player,
+            Player player,
             Entity cameraEntity
     ) {
         BlockState torchState = world.getBlockState(torchPos);
@@ -394,7 +394,7 @@ public final class Beta35LiveTorchCaptureRecorder {
                 player == null ? "n/a" : formatDouble(player.getYaw()),
                 player == null ? "n/a" : formatDouble(player.getPitch()),
                 cameraEntity == null ? "n/a" : formatVec(cameraEntity.getX(), cameraEntity.getY(), cameraEntity.getZ()),
-                world.getRegistryKey().getValue().toString(),
+                world.getResourceKey().getValue().toString(),
                 "v2",
                 formatDouble(rawSupportTopY),
                 formatDouble(supportVisibleTopYV1),
@@ -416,7 +416,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         return Math.abs(contactGap) > CONTACT_GAP_EPSILON ? "CONTACT_GAP" : "LIVE_CAPTURE_OK";
     }
 
-    private static String existingContactLogLine(World world, HitResult crosshairTarget, PlayerEntity player, Entity camera) {
+    private static String existingContactLogLine(Level world, HitResult crosshairTarget, Player player, Entity camera) {
         if (world == null) {
             return "[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT] classification=NO_TORCH_NEAR_TARGET";
         }
@@ -437,7 +437,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         return existingContactLogLineForTorch(world, nearestTorch.pos(), camera);
     }
 
-    private static String existingContactLogLineForTorch(World world, BlockPos torchPos, Entity camera) {
+    private static String existingContactLogLineForTorch(Level world, BlockPos torchPos, Entity camera) {
         ContactMeasurement measurement = measureContact(world, torchPos, camera);
         return "[JULIA_BETA35_LIVE_TORCH_EXISTING_CONTACT]"
                 + " torchPos=" + shortPos(torchPos)
@@ -461,7 +461,7 @@ public final class Beta35LiveTorchCaptureRecorder {
                 + " classification=" + measurement.classification();
     }
 
-    private static ContactMeasurement measureContact(World world, BlockPos torchPos, Entity camera) {
+    private static ContactMeasurement measureContact(Level world, BlockPos torchPos, Entity camera) {
         if (world == null || torchPos == null) {
             return ContactMeasurement.empty("NO_TORCH_NEAR_TARGET");
         }
@@ -529,16 +529,16 @@ public final class Beta35LiveTorchCaptureRecorder {
         );
     }
 
-    private static String existingContactClassification(World world, BlockPos torchPos) {
+    private static String existingContactClassification(Level world, BlockPos torchPos) {
         return measureContact(world, torchPos, null).classification();
     }
 
-    private static void logDualStartIfNeeded(World world, PlayerEntity player) {
+    private static void logDualStartIfNeeded(Level world, Player player) {
         if (!dualTraceEnabled() || dualStartLogged) {
             return;
         }
         Slabbed.LOGGER.info("[JULIA_BETA35_LIVE_TORCH_DUAL_TRACE] enabled=true world={} player={}",
-                world == null ? "n/a" : world.getRegistryKey().getValue(),
+                world == null ? "n/a" : world.getResourceKey().getValue(),
                 player == null ? "null" : player.getName().getString());
         dualStartLogged = true;
     }
@@ -600,7 +600,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         return intendedTorchPos == null ? targetPos : intendedTorchPos.down();
     }
 
-    private static Set<String> floorTorchPositionsAround(World world, BlockPos center, int radius) {
+    private static Set<String> floorTorchPositionsAround(Level world, BlockPos center, int radius) {
         Set<String> positions = new HashSet<>();
         if (world == null || center == null) {
             return positions;
@@ -618,7 +618,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         return positions;
     }
 
-    private static TorchAppearance findNewOrNearbyTorch(World world, PlacementAttemptSnapshot snapshot) {
+    private static TorchAppearance findNewOrNearbyTorch(Level world, PlacementAttemptSnapshot snapshot) {
         BlockPos center = parseShortPos(snapshot.intendedTorchPos());
         if (center == null) {
             center = parseShortPos(snapshot.interactTargetPos());
@@ -633,7 +633,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         return new TorchAppearance(appeared, nearest.pos(), shortPos, formatState(world.getBlockState(nearest.pos())));
     }
 
-    private static FoundTorch findNearestFloorTorch(WorldView world, BlockPos targetPos, int radius) {
+    private static FoundTorch findNearestFloorTorch(LevelReader world, BlockPos targetPos, int radius) {
         double bestSqDist = Double.POSITIVE_INFINITY;
         BlockPos bestPos = null;
         for (int dx = -radius; dx <= radius; dx++) {
@@ -655,14 +655,14 @@ public final class Beta35LiveTorchCaptureRecorder {
         return new FoundTorch(bestPos, bestSqDist, bestPos != null, "floor_torch_search");
     }
 
-    private static ComfortEvent recentComfortEvent(World world) {
+    private static ComfortEvent recentComfortEvent(Level world) {
         if (world == null || lastComfortEvent == null) {
             return null;
         }
         return world.getTime() - lastComfortEvent.worldTime() <= 5L ? lastComfortEvent : null;
     }
 
-    private static String supportSourceType(World world, BlockPos pos, BlockState state) {
+    private static String supportSourceType(Level world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return "n/a";
         }
@@ -704,7 +704,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         return Double.isFinite(a) && Double.isFinite(b) && Math.abs(a - b) <= CONTACT_GAP_EPSILON;
     }
 
-    private static String formatVec(Vec3d vec) {
+    private static String formatVec(Vec3 vec) {
         return vec == null ? "n/a" : formatVec(vec.x, vec.y, vec.z);
     }
 
@@ -726,7 +726,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         }
     }
 
-    private static String targetSignature(World world, HitResult crosshairTarget, PlayerEntity player) {
+    private static String targetSignature(Level world, HitResult crosshairTarget, Player player) {
         if (crosshairTarget == null) {
             return "null";
         }
@@ -734,7 +734,7 @@ public final class Beta35LiveTorchCaptureRecorder {
             return crosshairTarget.getType() + "|" + (player == null ? "n/a" : player.getName().getString()) + "|" + crosshairTarget;
         }
         return "BLOCK|"
-                + world.getRegistryKey().getValue()
+                + world.getResourceKey().getValue()
                 + "|" + blockHit.getBlockPos().toShortString()
                 + "|" + blockHit.getSide();
     }
@@ -749,7 +749,7 @@ public final class Beta35LiveTorchCaptureRecorder {
         );
     }
 
-    private static FoundTorch findNearestTorch(WorldView world, BlockPos targetPos, int radius) {
+    private static FoundTorch findNearestTorch(LevelReader world, BlockPos targetPos, int radius) {
         double bestSqDist = Double.POSITIVE_INFINITY;
         BlockPos bestPos = null;
         for (int dx = -radius; dx <= radius; dx++) {
@@ -778,15 +778,15 @@ public final class Beta35LiveTorchCaptureRecorder {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    private static VoxelShape safeOutlineShape(World world, BlockPos pos, BlockState state, Entity camera) {
+    private static VoxelShape safeOutlineShape(Level world, BlockPos pos, BlockState state, Entity camera) {
         try {
-            return state.getOutlineShape(world, pos, camera == null ? ShapeContext.absent() : ShapeContext.of(camera));
+            return state.getOutlineShape(world, pos, camera == null ? CollisionContext.absent() : CollisionContext.of(camera));
         } catch (Throwable ignored) {
             return null;
         }
     }
 
-    private static VoxelShape safeRaycastShape(World world, BlockPos pos, BlockState state) {
+    private static VoxelShape safeRaycastShape(Level world, BlockPos pos, BlockState state) {
         try {
             return state.getRaycastShape(world, pos);
         } catch (Throwable ignored) {
@@ -795,12 +795,12 @@ public final class Beta35LiveTorchCaptureRecorder {
     }
 
     private static double shapeMinY(VoxelShape shape) {
-        Box bounds = shape.getBoundingBox();
+        AABB bounds = shape.getBoundingAABB();
         return bounds.minY;
     }
 
     private static double shapeMaxY(VoxelShape shape) {
-        Box bounds = shape.getBoundingBox();
+        AABB bounds = shape.getBoundingAABB();
         return bounds.maxY;
     }
 
@@ -813,7 +813,7 @@ public final class Beta35LiveTorchCaptureRecorder {
             return "empty";
         }
         Item item = stack.getItem();
-        Identifier id = Registries.ITEM.getId(item);
+        Identifier id = BuiltInRegistries.ITEM.getId(item);
         return id == null ? "unknown" : id.toString();
     }
 
@@ -834,7 +834,7 @@ public final class Beta35LiveTorchCaptureRecorder {
                 + " targetFace=" + targetFace + " targetState=" + targetStateText + " held=" + heldItem;
     }
 
-    private static CaptureContext noTorchTarget(String details, PlayerEntity player) {
+    private static CaptureContext noTorchTarget(String details, Player player) {
         return new CaptureContext(
                 "NO_TORCH_TARGET",
                 "MISS",
@@ -1009,7 +1009,7 @@ public final class Beta35LiveTorchCaptureRecorder {
                     "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "no", classification);
         }
 
-        static ContactMeasurement emptyForTorch(World world, BlockPos torchPos, BlockState torchState, String classification) {
+        static ContactMeasurement emptyForTorch(Level world, BlockPos torchPos, BlockState torchState, String classification) {
             double torchDy = SlabSupport.getYOffset(world, torchPos, torchState);
             return new ContactMeasurement(
                     formatState(torchState),

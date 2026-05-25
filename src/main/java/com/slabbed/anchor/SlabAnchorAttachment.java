@@ -4,28 +4,27 @@ import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.RuntimeDiagnostics;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockEntityProvider;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.PaleMossCarpetBlock;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.util.math.Direction;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.state.property.Properties;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.BlockView;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.MossyCarpetBlock;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.core.Direction;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.LevelChunk;
 
 /**
  * Persistent slab-anchor registry.
@@ -36,7 +35,7 @@ import net.minecraft.world.chunk.WorldChunk;
  * support below is later removed. Anchors are cleared when the anchored block itself is
  * broken/replaced.
  *
- * <p>Storage: per-{@link WorldChunk} {@link LongOpenHashSet} of packed {@link BlockPos}
+ * <p>Storage: per-{@link LevelChunk} {@link LongOpenHashSet} of packed {@link BlockPos}
  * longs. Persisted via Fabric data attachment, synced to all watching clients.
  *
  * <p>Scope: ordinary full-block vertical slab chains and accepted lowered slab
@@ -53,7 +52,7 @@ public final class SlabAnchorAttachment {
 
     /**
      * Client-side fallback for anchor queries issued by chunk render paths that
-     * receive a non-{@link World} {@link net.minecraft.world.BlockView}
+     * receive a non-{@link World} {@link net.minecraft.world.BlockGetter}
      * (e.g. {@code ChunkRendererRegion}).  Set by the client entrypoint; always
      * null on a dedicated server.  No {@code MinecraftClient} reference needed
      * in common code.
@@ -66,19 +65,19 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
 
-    private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
+    private static final Identifier ANCHOR_ID = Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "slab_anchors");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
-            Identifier.of(Slabbed.MOD_ID, "lowered_slab_carriers");
+            Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "lowered_slab_carriers");
     private static final Identifier COMPOUND_FULL_BLOCK_ANCHOR_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_full_block_anchors");
+            Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "compound_full_block_anchors");
     private static final Identifier COMPOUND_VISIBLE_SIDE_LOWER_SLAB_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_visible_side_lower_slabs");
+            Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "compound_visible_side_lower_slabs");
     private static final Identifier COMPOUND_VISIBLE_SIDE_UPPER_SLAB_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_visible_side_upper_slabs");
+            Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "compound_visible_side_upper_slabs");
     private static final Identifier COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_visible_side_double_slabs");
+            Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "compound_visible_side_double_slabs");
     private static final Identifier COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
+            Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -86,16 +85,26 @@ public final class SlabAnchorAttachment {
      */
     private static final Codec<LongOpenHashSet> SET_CODEC = Codec.LONG_STREAM.xmap(
             stream -> new LongOpenHashSet(stream.toArray()),
-            set -> java.util.stream.LongStream.of(set.toLongArray())
+            set -> {
+            java.util.stream.LongStream.Builder builder = java.util.stream.LongStream.builder();
+            for (var iterator = set.iterator(); iterator.hasNext();) {
+                builder.add(iterator.nextLong());
+            }
+            return builder.build();
+        }
     );
 
     /**
      * Packet codec for client sync. {@link AttachmentSyncPredicate#all()} is used at
      * registration so anchors travel with the chunk packet automatically.
      */
-    private static final PacketCodec<RegistryByteBuf, LongOpenHashSet> PACKET_CODEC = PacketCodec.of(
-            (set, buf) -> {
-                long[] arr = set.toLongArray();
+    private static final StreamCodec<RegistryFriendlyByteBuf, LongOpenHashSet> PACKET_CODEC = StreamCodec.of(
+            (buf, set) -> {
+                long[] arr = new long[set.size()];
+            int arrIndex = 0;
+            for (var arrIterator = set.iterator(); arrIterator.hasNext();) {
+                arr[arrIndex++] = arrIterator.nextLong();
+            }
                 buf.writeVarInt(arr.length);
                 for (long v : arr) {
                     buf.writeLong(v);
@@ -180,8 +189,8 @@ public final class SlabAnchorAttachment {
      * Records an anchor at {@code pos}. Server-side only; no-op on client world or
      * if {@code pos} does not qualify under {@link #qualifiesForAnchor}.
      */
-    public static void addAnchor(World world, BlockPos pos, BlockState state) {
-        if (world == null || world.isClient()) {
+    public static void addAnchor(Level world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClientSide()) {
             return;
         }
         boolean qualifies = qualifiesForAnchor(world, pos, state);
@@ -196,7 +205,7 @@ public final class SlabAnchorAttachment {
     }
 
     public static void addSideAdjacentLoweredFullAnchor(
-            World world,
+            Level world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -215,7 +224,7 @@ public final class SlabAnchorAttachment {
     }
 
     public static void addTopOfCompoundFullAnchor(
-            World world,
+            Level world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -231,12 +240,9 @@ public final class SlabAnchorAttachment {
         addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
     }
 
-    private static void addAnchorUnchecked(World world, BlockPos pos) {
+    private static void addAnchorUnchecked(Level world, BlockPos pos) {
         boolean added = addToAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (added && RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
-            BlockPos supportPos = pos.down();
-            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
-        }
+        // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
         // Beta4 sidecar: if the position currently satisfies the compound full-block
         // condition (anchored ordinary full block above a lowered bottom slab carrier),
         // also record the authored dy=-1.0 lane so it survives source slab removal.
@@ -251,8 +257,8 @@ public final class SlabAnchorAttachment {
      * Idempotent; no-op if {@code pos} does not satisfy
      * {@link #qualifiesForCompoundFullBlockAnchor}.
      */
-    public static void addCompoundFullBlockAnchor(World world, BlockPos pos, BlockState state) {
-        if (world == null || world.isClient()) {
+    public static void addCompoundFullBlockAnchor(Level world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClientSide()) {
             return;
         }
         if (!qualifiesForCompoundFullBlockAnchor(world, pos, state)) {
@@ -264,18 +270,18 @@ public final class SlabAnchorAttachment {
     /**
      * Clears any beta4 compound full-block anchor at {@code pos}. Server-side only.
      */
-    public static void removeCompoundFullBlockAnchor(World world, BlockPos pos) {
+    public static void removeCompoundFullBlockAnchor(Level world, BlockPos pos) {
         removeFromAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
     }
 
     public static void addCompoundVisibleSideLowerSlab(
-            World world,
+            Level world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
             BlockState sourceState
     ) {
-        if (world == null || world.isClient()) {
+        if (world == null || world.isClientSide()) {
             return;
         }
         if (!qualifiesForCompoundVisibleSideLowerSlab(world, pos, state, sourcePos, sourceState)) {
@@ -287,18 +293,18 @@ public final class SlabAnchorAttachment {
             // Trigger getStateForNeighborUpdate(DOWN) on the block above so any stale floor
             // torch that was placed before this compound mark is written gets revalidated and
             // removed by TorchBlockMixin.getStateForNeighborUpdate.
-            world.replaceWithStateForNeighborUpdate(Direction.DOWN, pos.up(), pos, state, Block.NOTIFY_ALL, 512);
+            world.neighborShapeChanged(Direction.DOWN, pos.above(), pos, state, Block.UPDATE_ALL, 512);
         }
     }
 
     public static void addCompoundVisibleSideUpperSlab(
-            World world,
+            Level world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
             BlockState sourceState
     ) {
-        if (world == null || world.isClient()) {
+        if (world == null || world.isClientSide()) {
             return;
         }
         if (!qualifiesForCompoundVisibleSideUpperSlab(world, pos, state, sourcePos, sourceState)) {
@@ -309,13 +315,13 @@ public final class SlabAnchorAttachment {
     }
 
     public static void addCompoundVisibleSideDoubleSlab(
-            World world,
+            Level world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
             BlockState sourceState
     ) {
-        if (world == null || world.isClient()) {
+        if (world == null || world.isClientSide()) {
             return;
         }
         if (!qualifiesForCompoundVisibleSideDoubleSlab(world, pos, state, sourcePos, sourceState)) {
@@ -330,13 +336,13 @@ public final class SlabAnchorAttachment {
     }
 
     public static void addCompoundVisibleOwnerTopSlab(
-            World world,
+            Level world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
             BlockState sourceState
     ) {
-        if (world == null || world.isClient()) {
+        if (world == null || world.isClientSide()) {
             return;
         }
         if (!qualifiesForCompoundVisibleOwnerTopSlab(world, pos, state, sourcePos, sourceState)) {
@@ -345,12 +351,12 @@ public final class SlabAnchorAttachment {
         boolean added = addToAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
         if (added) {
-            world.replaceWithStateForNeighborUpdate(Direction.DOWN, pos.up(), pos, state, Block.NOTIFY_ALL, 512);
+            world.neighborShapeChanged(Direction.DOWN, pos.above(), pos, state, Block.UPDATE_ALL, 512);
         }
     }
 
-    public static void updatePersistentLoweredSlabCarrier(World world, BlockPos pos, BlockState state) {
-        if (world == null || world.isClient()) {
+    public static void updatePersistentLoweredSlabCarrier(Level world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClientSide()) {
             return;
         }
         boolean qualifies = qualifiesForPersistentLoweredSlabCarrier(world, pos, state);
@@ -367,12 +373,12 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean addToAttachment(
-            World world,
+            Level world,
             BlockPos pos,
             AttachmentType<LongOpenHashSet> type,
             String label
     ) {
-        WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             if (TRACE) {
                 Slabbed.LOGGER.info("[ANCHOR] {} add reject pos={} reason=chunk_null", label, pos.toShortString());
@@ -381,8 +387,7 @@ public final class SlabAnchorAttachment {
         }
         LongOpenHashSet existing = chunk.getAttached(type);
         LongOpenHashSet set = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
-        BlockState stateBefore = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.isEnabled()
-                ? world.getBlockState(pos) : null;
+        BlockState stateBefore = null; // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
         if (set.add(pos.asLong())) {
             // setAttached triggers persistence + auto-sync for synced attachments.
             chunk.setAttached(type, set);
@@ -391,10 +396,7 @@ public final class SlabAnchorAttachment {
                         label, pos.toShortString(), chunk.getPos(), set.size());
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "add", true);
-            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.recordAnchorEvent(
-                    world,
-                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.ADD,
-                    type, pos, stateBefore, stateBefore);
+            // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
             return true;
         }
         return false;
@@ -403,12 +405,9 @@ public final class SlabAnchorAttachment {
     /**
      * Clears any anchor at {@code pos}. Server-side only.
      */
-    public static void removeAnchor(World world, BlockPos pos) {
+    public static void removeAnchor(Level world, BlockPos pos) {
         boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (removed && RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
-            BlockPos supportPos = pos.down();
-            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_REMOVED");
-        }
+        // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
         // Beta4 sidecar travels with the ordinary anchor: when the compound block
         // itself is broken/replaced, clear the authored compound truth too.
         removeFromAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
@@ -422,20 +421,20 @@ public final class SlabAnchorAttachment {
                 "compound_visible_owner_top_slab");
     }
 
-    public static void removePersistentLoweredSlabCarrier(World world, BlockPos pos) {
+    public static void removePersistentLoweredSlabCarrier(Level world, BlockPos pos) {
         removeFromAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
     }
 
     private static boolean removeFromAttachment(
-            World world,
+            Level world,
             BlockPos pos,
             AttachmentType<LongOpenHashSet> type,
             String label
     ) {
-        if (world == null || world.isClient()) {
+        if (world == null || world.isClientSide()) {
             return false;
         }
-        WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return false;
         }
@@ -458,10 +457,7 @@ public final class SlabAnchorAttachment {
                 chunk.setAttached(type, set);
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "remove", false);
-            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.recordAnchorEvent(
-                    world,
-                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.REMOVE,
-                    type, pos, world.getBlockState(pos), world.getBlockState(pos));
+            // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
         }
         return removed;
     }
@@ -503,7 +499,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static void logCompoundVisibleRenderTraceMarkerSet(
-            World world,
+            Level world,
             BlockPos pos,
             AttachmentType<LongOpenHashSet> type,
             String label,
@@ -516,7 +512,7 @@ public final class SlabAnchorAttachment {
         BlockState state = world.getBlockState(pos);
         double dy = SlabSupport.getYOffset(world, pos, state);
         Slabbed.LOGGER.info(
-                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_MARKER_SET] action={} pos={} marker={} label={} serverMarker={} clientMarker=n/a modelViewType=World slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
+                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_MARKER_SET] action={} pos={} marker={} label={} serverMarker={} clientMarker=n/a modelViewType=Level slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
                 action,
                 pos.toShortString(),
                 compoundVisibleAttachmentLabel(type),
@@ -526,7 +522,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static void logCompoundVisibleRenderTraceSupportUpdate(
-            World world,
+            Level world,
             BlockPos pos,
             BlockState state,
             boolean qualifies
@@ -536,7 +532,7 @@ public final class SlabAnchorAttachment {
         }
         double dy = state == null ? 0.0d : SlabSupport.getYOffset(world, pos, state);
         Slabbed.LOGGER.info(
-                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_SUPPORT_UPDATE] pos={} marker=lowered_slab_carrier serverMarker={} clientMarker=n/a modelViewType=World slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
+                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_SUPPORT_UPDATE] pos={} marker=lowered_slab_carrier serverMarker={} clientMarker=n/a modelViewType=Level slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
                 pos.toShortString(),
                 qualifies,
                 dy);
@@ -548,20 +544,20 @@ public final class SlabAnchorAttachment {
      * Returns true if {@code pos} carries a persistent slab-anchor.
      *
      * <p>Safe on both server and client (client mirror is populated via attachment sync).
-     * Returns false for any {@link BlockView} that is not a full {@link World}, so it is
+     * Returns false for any {@link BlockGetter} that is not a full {@link World}, so it is
      * safe to call from shape mixins that may receive partial views during chunk gen.
      */
-    public static boolean isAnchored(BlockView world, BlockPos pos) {
+    public static boolean isAnchored(BlockGetter world, BlockPos pos) {
         if (pos == null) {
             return false;
         }
-        if (!(world instanceof World w)) {
-            // Chunk render paths (e.g. ChunkRendererRegion) are not World instances and
+        if (!(world instanceof Level w)) {
+            // Chunk render paths (e.g. ChunkRendererRegion) are not Level instances and
             // cannot access chunk attachments directly.  Delegate to the client fallback
             // hook so the model render path sees the same anchor state as outline/raycast.
             return clientAnchorLookup != null && clientAnchorLookup.test(pos);
         }
-        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return false;
         }
@@ -569,7 +565,7 @@ public final class SlabAnchorAttachment {
         boolean anchored = set != null && set.contains(pos.asLong());
         if (TRACE && anchored) {
             Slabbed.LOGGER.info("[ANCHOR] query true side={} pos={}",
-                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+                    w.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return anchored;
     }
@@ -581,18 +577,18 @@ public final class SlabAnchorAttachment {
      * compound anchor (ordinary {@code dy=-0.5}). This sidecar is the authored truth
      * for {@code dy=-1.0} compound lane and survives source slab removal.
      *
-     * <p>Mirrors the {@link #isAnchored} dispatch: server World, client World, and
-     * non-World render views via {@link #clientCompoundFullBlockAnchorLookup}.
+     * <p>Mirrors the {@link #isAnchored} dispatch: server Level, client Level, and
+     * non-Level render views via {@link #clientCompoundFullBlockAnchorLookup}.
      */
-    public static boolean isCompoundFullBlockAnchor(BlockView world, BlockPos pos) {
+    public static boolean isCompoundFullBlockAnchor(BlockGetter world, BlockPos pos) {
         if (pos == null) {
             return false;
         }
-        if (!(world instanceof World w)) {
+        if (!(world instanceof Level w)) {
             return clientCompoundFullBlockAnchorLookup != null
                     && clientCompoundFullBlockAnchorLookup.test(pos);
         }
-        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return false;
         }
@@ -600,20 +596,20 @@ public final class SlabAnchorAttachment {
         boolean compound = set != null && set.contains(pos.asLong());
         if (TRACE && compound) {
             Slabbed.LOGGER.info("[ANCHOR] compound_full_block query true side={} pos={}",
-                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+                    w.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return compound;
     }
 
-    public static boolean isCompoundVisibleSideLowerSlab(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isCompoundVisibleSideLowerSlab(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isCompoundVisibleSideLowerSlabState(state) || pos == null) {
             return false;
         }
-        if (!(world instanceof World w)) {
+        if (!(world instanceof Level w)) {
             return clientCompoundVisibleSideLowerSlabLookup != null
                     && clientCompoundVisibleSideLowerSlabLookup.test(pos);
         }
-        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return false;
         }
@@ -621,20 +617,20 @@ public final class SlabAnchorAttachment {
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_lower_slab query true side={} pos={}",
-                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+                    w.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return marked;
     }
 
-    public static boolean isCompoundVisibleSideUpperSlab(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isCompoundVisibleSideUpperSlab(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isCompoundVisibleSideUpperSlabState(state) || pos == null) {
             return false;
         }
-        if (!(world instanceof World w)) {
+        if (!(world instanceof Level w)) {
             return clientCompoundVisibleSideUpperSlabLookup != null
                     && clientCompoundVisibleSideUpperSlabLookup.test(pos);
         }
-        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return false;
         }
@@ -642,20 +638,20 @@ public final class SlabAnchorAttachment {
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_upper_slab query true side={} pos={}",
-                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+                    w.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return marked;
     }
 
-    public static boolean isCompoundVisibleSideDoubleSlab(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isCompoundVisibleSideDoubleSlab(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isCompoundVisibleSideDoubleSlabState(state) || pos == null) {
             return false;
         }
-        if (!(world instanceof World w)) {
+        if (!(world instanceof Level w)) {
             return clientCompoundVisibleSideDoubleSlabLookup != null
                     && clientCompoundVisibleSideDoubleSlabLookup.test(pos);
         }
-        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return false;
         }
@@ -663,20 +659,20 @@ public final class SlabAnchorAttachment {
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_double_slab query true side={} pos={}",
-                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+                    w.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return marked;
     }
 
-    public static boolean isCompoundVisibleOwnerTopSlab(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isCompoundVisibleOwnerTopSlab(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isCompoundVisibleOwnerTopSlabState(state) || pos == null) {
             return false;
         }
-        if (!(world instanceof World w)) {
+        if (!(world instanceof Level w)) {
             return clientCompoundVisibleOwnerTopSlabLookup != null
                     && clientCompoundVisibleOwnerTopSlabLookup.test(pos);
         }
-        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return false;
         }
@@ -684,22 +680,22 @@ public final class SlabAnchorAttachment {
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_owner_top_slab query true side={} pos={}",
-                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+                    w.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return marked;
     }
 
-    public static boolean isPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isPersistentLoweredSlabCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isPersistentLoweredSlabCarrierState(state) || pos == null) {
             return false;
         }
         if (isCompoundVisibleOwnerTopSlab(world, pos, state)) {
             return false;
         }
-        if (!(world instanceof World w)) {
+        if (!(world instanceof Level w)) {
             return clientLoweredSlabCarrierLookup != null && clientLoweredSlabCarrierLookup.test(pos);
         }
-        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
         }
@@ -710,13 +706,13 @@ public final class SlabAnchorAttachment {
         }
         if (TRACE && carrier) {
             Slabbed.LOGGER.info("[ANCHOR] lowered slab carrier query true side={} pos={}",
-                    w.isClient() ? "CLIENT" : "SERVER", pos.toShortString());
+                    w.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString());
         }
         return carrier;
     }
 
     public static boolean isPersistentLoweredBottomSlabCarrierNonRecursive(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state
     ) {
@@ -726,8 +722,8 @@ public final class SlabAnchorAttachment {
         if (isCompoundVisibleOwnerTopSlab(world, pos, state)) {
             return false;
         }
-        if (world instanceof World w) {
-            WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (world instanceof Level w) {
+            LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             if (chunk != null) {
                 LongOpenHashSet set = chunk.getAttached(LOWERED_SLAB_CARRIER_TYPE);
                 if (set != null && set.contains(pos.asLong())) {
@@ -757,19 +753,19 @@ public final class SlabAnchorAttachment {
      * bed/double-half cases, side slabs, carpets, block entities, and non-full blocks
      * remain excluded.
      */
-    public static boolean qualifiesForAnchor(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean qualifiesForAnchor(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)) {
             return false;
         }
         if (SlabSupport.hasBottomSlabBelow(world, pos)) {
             return true;
         }
-        BlockPos belowPos = pos.down();
+        BlockPos belowPos = pos.below();
         BlockState below = world.getBlockState(belowPos);
         return qualifiesAsVerticalChainSupport(world, belowPos, below);
     }
 
-    public static boolean isOrdinaryFullBlockAnchorCandidate(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isOrdinaryFullBlockAnchorCandidate(BlockGetter world, BlockPos pos, BlockState state) {
         if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
             return false;
         }
@@ -777,28 +773,28 @@ public final class SlabAnchorAttachment {
         if (block instanceof SlabBlock) {
             return false;
         }
-        if (block instanceof CarpetBlock || block instanceof PaleMossCarpetBlock) {
+        if (block instanceof CarpetBlock || block instanceof MossyCarpetBlock) {
             return false;
         }
         if (SlabSupport.isThinTopLayer(state)) {
             return false;
         }
-        if (block instanceof BlockEntityProvider) {
+        if (block instanceof EntityBlock) {
             return false;
         }
-        if (state.contains(Properties.BED_PART)) {
+        if (state.hasProperty(BlockStateProperties.BED_PART)) {
             return false;
         }
-        if (state.contains(Properties.DOUBLE_BLOCK_HALF)) {
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
             return false;
         }
-        if (!state.isSolidBlock(world, pos)) {
+        if (!state.isSolidRender()) {
             return false;
         }
         return true;
     }
 
-    public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean qualifiesForDirectAnchor(BlockGetter world, BlockPos pos, BlockState state) {
         return qualifiesForAnchor(world, pos, state) && SlabSupport.hasBottomSlabBelow(world, pos);
     }
 
@@ -814,7 +810,7 @@ public final class SlabAnchorAttachment {
      * scope listed in the beta4 source-mode design.
      */
     public static boolean qualifiesForCompoundFullBlockAnchor(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state
     ) {
@@ -824,13 +820,13 @@ public final class SlabAnchorAttachment {
         if (world == null || pos == null) {
             return false;
         }
-        BlockPos belowPos = pos.down();
+        BlockPos belowPos = pos.below();
         BlockState belowSlab = world.getBlockState(belowPos);
         return SlabSupport.isLoweredCompoundSourceSlab(world, belowPos, belowSlab);
     }
 
     private static boolean qualifiesForTopOfCompoundFullAnchor(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -842,7 +838,7 @@ public final class SlabAnchorAttachment {
         if (world == null || pos == null || sourcePos == null || sourceState == null) {
             return false;
         }
-        if (!sourcePos.equals(pos.down())) {
+        if (!sourcePos.equals(pos.below())) {
             return false;
         }
         if (sourceState.getBlock() instanceof SlabBlock) {
@@ -856,7 +852,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesForCompoundVisibleSideLowerSlab(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -884,7 +880,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesForCompoundVisibleSideUpperSlab(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -912,7 +908,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesForCompoundVisibleSideDoubleSlab(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -939,7 +935,7 @@ public final class SlabAnchorAttachment {
         return dy == 0 && dx + dz == 1;
     }
 
-    public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         return isPersistentLoweredSlabCarrierState(state)
                 && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && (SlabSupport.isLoweredSideLaneSlabCarrier(world, pos, state)
@@ -948,7 +944,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesForCompoundVisibleOwnerTopSlab(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -961,7 +957,7 @@ public final class SlabAnchorAttachment {
                 || sourceState == null) {
             return false;
         }
-        if (!pos.equals(sourcePos.up())) {
+        if (!pos.equals(sourcePos.above())) {
             return false;
         }
         if (!isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
@@ -975,60 +971,60 @@ public final class SlabAnchorAttachment {
     private static boolean isPersistentLoweredSlabCarrierState(BlockState state) {
         return state != null
                 && state.getBlock() instanceof SlabBlock
-                && state.contains(SlabBlock.TYPE)
+                && state.hasProperty(SlabBlock.TYPE)
                 && state.getFluidState().isEmpty();
     }
 
     private static boolean isCompoundVisibleSideLowerSlabState(BlockState state) {
         return state != null
-                && state.isOf(Blocks.STONE_SLAB)
-                && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && state.is(Blocks.STONE_SLAB)
+                && state.hasProperty(SlabBlock.TYPE)
+                && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM
                 && state.getFluidState().isEmpty();
     }
 
     private static boolean isCompoundVisibleSideUpperSlabState(BlockState state) {
         return state != null
-                && state.isOf(Blocks.STONE_SLAB)
-                && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.TOP
+                && state.is(Blocks.STONE_SLAB)
+                && state.hasProperty(SlabBlock.TYPE)
+                && state.getValue(SlabBlock.TYPE) == SlabType.TOP
                 && state.getFluidState().isEmpty();
     }
 
     private static boolean isCompoundVisibleSideDoubleSlabState(BlockState state) {
         return state != null
-                && state.isOf(Blocks.STONE_SLAB)
-                && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                && state.is(Blocks.STONE_SLAB)
+                && state.hasProperty(SlabBlock.TYPE)
+                && state.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
                 && state.getFluidState().isEmpty();
     }
 
     private static boolean isCompoundVisibleOwnerTopSlabState(BlockState state) {
         return state != null
-                && state.isOf(Blocks.STONE_SLAB)
-                && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && state.is(Blocks.STONE_SLAB)
+                && state.hasProperty(SlabBlock.TYPE)
+                && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM
                 && state.getFluidState().isEmpty();
     }
 
     private static boolean isBottomPersistentLoweredSlabCarrierState(BlockState state) {
-        return isPersistentLoweredSlabCarrierState(state) && state.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+        return isPersistentLoweredSlabCarrierState(state) && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 
     private static boolean qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state
     ) {
         if (world == null || pos == null || state == null
                 || !(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.hasProperty(SlabBlock.TYPE)
+                || state.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !state.getFluidState().isEmpty()
                 || SlabSupport.getYOffset(world, pos, state) != -0.5) {
             return false;
         }
-        BlockPos belowPos = pos.down();
+        BlockPos belowPos = pos.below();
         BlockState below = world.getBlockState(belowPos);
         if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
             return false;
@@ -1037,14 +1033,14 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlockNonRecursive(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state
     ) {
         if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
             return false;
         }
-        BlockPos belowPos = pos.down();
+        BlockPos belowPos = pos.below();
         BlockState below = world.getBlockState(belowPos);
         if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
             return false;
@@ -1053,22 +1049,22 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state
     ) {
         if (world == null || pos == null || state == null
                 || !(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.hasProperty(SlabBlock.TYPE)
+                || state.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !state.getFluidState().isEmpty()) {
             return false;
         }
 
-        BlockPos supportY = pos.down();
+        BlockPos supportY = pos.below();
         boolean hasLoweredAnchoredBridgeNeighbor = false;
-        for (var dir : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
-            BlockPos neighborPos = supportY.offset(dir);
+        for (var dir : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            BlockPos neighborPos = supportY.relative(dir);
             BlockState neighbor = world.getBlockState(neighborPos);
             if (!isOrdinaryFullBlockAnchorCandidate(world, neighborPos, neighbor)) {
                 continue;
@@ -1095,17 +1091,17 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupportNonRecursive(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state
     ) {
         if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
             return false;
         }
-        BlockPos supportY = pos.down();
+        BlockPos supportY = pos.below();
         boolean hasLoweredAnchoredBridgeNeighbor = false;
-        for (var dir : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
-            BlockPos neighborPos = supportY.offset(dir);
+        for (var dir : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            BlockPos neighborPos = supportY.relative(dir);
             BlockState neighbor = world.getBlockState(neighborPos);
             if (!isOrdinaryFullBlockAnchorCandidate(world, neighborPos, neighbor)) {
                 continue;
@@ -1127,12 +1123,12 @@ public final class SlabAnchorAttachment {
         return below.isAir();
     }
 
-    private static boolean qualifiesAsVerticalChainSupport(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean qualifiesAsVerticalChainSupport(BlockGetter world, BlockPos pos, BlockState state) {
         return SlabSupport.isFullHeightLoweredCarrier(world, pos, state);
     }
 
     private static boolean qualifiesForSideAdjacentLoweredFullAnchor(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -1152,7 +1148,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesForSideAdjacentCompoundFullAnchor(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             BlockPos sourcePos,
@@ -1178,7 +1174,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean qualifiesAsSideAdjacentLoweredFullAnchorSource(
-            BlockView world,
+            BlockGetter world,
             BlockPos sourcePos,
             BlockState sourceState
     ) {

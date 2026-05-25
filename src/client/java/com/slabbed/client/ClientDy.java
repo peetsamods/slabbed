@@ -1,12 +1,12 @@
 package com.slabbed.client;
 
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.PaleMossCarpetBlock;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.BlockView;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.MossyCarpetBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Client-only dy policy for visual alignment of thin carpet layers on bottom slabs.
@@ -15,13 +15,13 @@ public final class ClientDy {
     private ClientDy() {
     }
 
-    public static double dyFor(BlockView world, BlockPos pos, BlockState state) {
+    public static double dyFor(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return 0.0;
         }
 
         Block block = state.getBlock();
-        if (block instanceof CarpetBlock || block instanceof PaleMossCarpetBlock) {
+        if (block instanceof CarpetBlock || block instanceof MossyCarpetBlock) {
             // Carpet special case: simple geometric check without anchor logic
             return SlabSupport.hasBottomSlabBelow(world, pos) ? -0.5 : 0.0;
         }

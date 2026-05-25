@@ -3,51 +3,53 @@ package com.slabbed.util;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
-import net.minecraft.block.BellBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockEntityProvider;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.ButtonBlock;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.CaveVinesBodyBlock;
-import net.minecraft.block.CaveVinesHeadBlock;
-import net.minecraft.block.ChainBlock;
-import net.minecraft.block.CraftingTableBlock;
-import net.minecraft.block.DoorBlock;
-import net.minecraft.block.FenceBlock;
-import net.minecraft.block.FenceGateBlock;
-import net.minecraft.block.HangingRootsBlock;
-import net.minecraft.block.HangingSignBlock;
-import net.minecraft.block.LeverBlock;
-import net.minecraft.block.PaleMossCarpetBlock;
-import net.minecraft.block.PaneBlock;
-import net.minecraft.block.PointedDripstoneBlock;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.SnowBlock;
-import net.minecraft.block.SporeBlossomBlock;
-import net.minecraft.block.StairsBlock;
-import net.minecraft.block.TrapdoorBlock;
-import net.minecraft.block.WallBannerBlock;
-import net.minecraft.block.WallBlock;
-import net.minecraft.block.WallHangingSignBlock;
-import net.minecraft.block.WallSignBlock;
-import net.minecraft.block.WallTorchBlock;
-import net.minecraft.block.enums.BedPart;
-import net.minecraft.block.enums.BlockFace;
-import net.minecraft.block.enums.DoubleBlockHalf;
-import net.minecraft.block.enums.BlockHalf;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.block.ShapeContext;
-import net.minecraft.entity.Entity;
-import net.minecraft.state.property.Properties;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.BlockView;
-import net.minecraft.world.WorldView;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.BellBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.CaveVinesPlantBlock;
+import net.minecraft.world.level.block.CaveVinesBlock;
+import net.minecraft.world.level.block.ChainBlock;
+import net.minecraft.world.level.block.CraftingTableBlock;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.HangingRootsBlock;
+import net.minecraft.world.level.block.HangingSignBlock;
+import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.MossyCarpetBlock;
+import net.minecraft.world.level.block.IronBarsBlock;
+import net.minecraft.world.level.block.PointedDripstoneBlock;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.SporeBlossomBlock;
+import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TorchBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.WallBannerBlock;
+import net.minecraft.world.level.block.WallBlock;
+import net.minecraft.world.level.block.WallHangingSignBlock;
+import net.minecraft.world.level.block.WallSignBlock;
+import net.minecraft.world.level.block.WallTorchBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayDeque;
 import java.util.HashSet;
@@ -67,20 +69,20 @@ public final class SlabSupport {
      */
     public static boolean isThinTopLayer(BlockState state) {
         Block block = state.getBlock();
-        return block instanceof SnowBlock
+        return block instanceof SnowLayerBlock
                 || block instanceof CarpetBlock
-                || block instanceof PaleMossCarpetBlock;
+                || block instanceof MossyCarpetBlock;
     }
 
     /**
      * Returns true if the block at {@code pos} is a slab whose top face can provide support.
      */
-    public static boolean isSupportingSlab(WorldView world, BlockPos pos) {
+    public static boolean isSupportingSlab(LevelReader world, BlockPos pos) {
         return isSupportingSlab(world.getBlockState(pos));
     }
 
-    /** Overload for BlockView contexts (shapes). */
-    public static boolean isSupportingSlab(BlockView world, BlockPos pos) {
+    /** Overload for BlockGetter contexts (shapes). */
+    public static boolean isSupportingSlab(BlockGetter world, BlockPos pos) {
         return isSupportingSlab(world.getBlockState(pos));
     }
 
@@ -88,17 +90,17 @@ public final class SlabSupport {
      * Returns true if the state is a slab with a defined type.
      */
     public static boolean isSupportingSlab(BlockState state) {
-        return state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE);
+        return state.getBlock() instanceof SlabBlock && state.hasProperty(SlabBlock.TYPE);
     }
 
     /** True if this state is a bottom slab. */
     public static boolean isBottomSlab(BlockState state) {
-        return isSupportingSlab(state) && state.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+        return isSupportingSlab(state) && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 
     /** True if this state is a top slab. */
     public static boolean isTopSlab(BlockState state) {
-        return isSupportingSlab(state) && state.get(SlabBlock.TYPE) == SlabType.TOP;
+        return isSupportingSlab(state) && state.getValue(SlabBlock.TYPE) == SlabType.TOP;
     }
 
     /**
@@ -110,31 +112,31 @@ public final class SlabSupport {
     }
 
     /** True if the block at {@code posAbove} is a top or double slab that can provide ceiling support. */
-    public static boolean isCeilingSupportBottomSurface(WorldView world, BlockPos posAbove) {
+    public static boolean isCeilingSupportBottomSurface(LevelReader world, BlockPos posAbove) {
         BlockState stateAbove = world.getBlockState(posAbove);
         if (!isSupportingSlab(stateAbove)) {
             return false;
         }
-        SlabType type = stateAbove.get(SlabBlock.TYPE);
+        SlabType type = stateAbove.getValue(SlabBlock.TYPE);
         return type == SlabType.TOP || type == SlabType.DOUBLE;
     }
 
     /** Overload for shape/world views. */
-    public static boolean isCeilingSupportBottomSurface(BlockView world, BlockPos posAbove) {
+    public static boolean isCeilingSupportBottomSurface(BlockGetter world, BlockPos posAbove) {
         BlockState stateAbove = world.getBlockState(posAbove);
         if (!isSupportingSlab(stateAbove)) {
             return false;
         }
-        SlabType type = stateAbove.get(SlabBlock.TYPE);
+        SlabType type = stateAbove.getValue(SlabBlock.TYPE);
         return type == SlabType.TOP || type == SlabType.DOUBLE;
     }
 
     /** True if the block immediately below {@code pos} is a bottom slab providing its top face. */
-    public static boolean hasBottomSlabBelow(BlockView world, BlockPos pos) {
+    public static boolean hasBottomSlabBelow(BlockGetter world, BlockPos pos) {
         if (world == null || pos == null) {
             return false;
         }
-        return isBottomSlab(world.getBlockState(pos.down()));
+        return isBottomSlab(world.getBlockState(pos.below()));
     }
 
     /**
@@ -145,7 +147,7 @@ public final class SlabSupport {
         if (!isSupportingSlab(state)) {
             throw new IllegalArgumentException("Not a supporting slab: " + state);
         }
-        SlabType type = state.get(SlabBlock.TYPE);
+        SlabType type = state.getValue(SlabBlock.TYPE);
         return switch (type) {
             case BOTTOM -> 0.5;
             case TOP, DOUBLE -> 1.0;
@@ -155,12 +157,12 @@ public final class SlabSupport {
     /**
      * Primary query: should this slab top face count as solid support.
      */
-    public static boolean canTreatAsSolidTopFace(WorldView world, BlockPos pos) {
+    public static boolean canTreatAsSolidTopFace(LevelReader world, BlockPos pos) {
         return isSupportingSlab(world, pos);
     }
 
     /** Overload for shape/world views. */
-    public static boolean canTreatAsSolidTopFace(BlockView world, BlockPos pos) {
+    public static boolean canTreatAsSolidTopFace(BlockGetter world, BlockPos pos) {
         return isSupportingSlab(world, pos);
     }
 
@@ -169,41 +171,41 @@ public final class SlabSupport {
             return false;
         }
         Block block = state.getBlock();
-        return block instanceof net.minecraft.block.TorchBlock && !(block instanceof WallTorchBlock);
+        return block instanceof TorchBlock && !(block instanceof WallTorchBlock);
     }
 
     private static boolean isBeta35FloorTopContactObject(BlockState state) {
-        return state != null && (state.isOf(Blocks.CANDLE) || state.isOf(Blocks.FLOWER_POT));
+        return state != null && (state.is(Blocks.CANDLE) || state.is(Blocks.FLOWER_POT));
     }
 
     public static boolean isBeta35FloorButtonContactObject(BlockState state) {
         return state != null
                 && state.getBlock() instanceof ButtonBlock
-                && state.contains(Properties.BLOCK_FACE)
-                && state.get(Properties.BLOCK_FACE) == BlockFace.FLOOR;
+                && state.hasProperty(BlockStateProperties.ATTACH_FACE)
+                && state.getValue(BlockStateProperties.ATTACH_FACE) == AttachFace.FLOOR;
     }
 
     public static boolean isBeta35BottomTrapdoorVisibleOwnerObject(BlockState state) {
         return state != null
-                && state.getBlock() instanceof TrapdoorBlock
-                && state.contains(Properties.BLOCK_HALF)
-                && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
+                && state.getBlock() instanceof TrapDoorBlock
+                && state.hasProperty(BlockStateProperties.HALF)
+                && state.getValue(BlockStateProperties.HALF) == Half.BOTTOM;
     }
 
     public static boolean isBeta35VerticalChainVisibleOwnerObject(BlockState state) {
         return state != null
                 && state.getBlock() instanceof ChainBlock
-                && state.contains(Properties.AXIS)
-                && state.get(Properties.AXIS) == Direction.Axis.Y;
+                && state.hasProperty(BlockStateProperties.AXIS)
+                && state.getValue(BlockStateProperties.AXIS) == Direction.Axis.Y;
     }
 
     public static boolean isBeta35RegularDoorVisibleOwnerObject(
-            BlockView world, BlockPos pos, BlockState state
+            BlockGetter world, BlockPos pos, BlockState state
     ) {
         if (world == null || pos == null || state == null) {
             return false;
         }
-        if (!(state.getBlock() instanceof DoorBlock) || !state.contains(Properties.DOUBLE_BLOCK_HALF)) {
+        if (!(state.getBlock() instanceof DoorBlock) || !state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
             return false;
         }
         double objectDy = getYOffset(world, pos, state);
@@ -211,7 +213,7 @@ public final class SlabSupport {
     }
 
     public static boolean isBeta35LoweredRegularDoorServerHitTarget(
-            BlockView world, BlockPos pos, BlockState state
+            BlockGetter world, BlockPos pos, BlockState state
     ) {
         if (!isBeta35RegularDoorVisibleOwnerObject(world, pos, state)) {
             return false;
@@ -224,44 +226,44 @@ public final class SlabSupport {
     }
 
     private static boolean hasConsistentBeta35RegularDoorPair(
-            BlockView world, BlockPos pos, BlockState state
+            BlockGetter world, BlockPos pos, BlockState state
     ) {
         if (world == null || pos == null || state == null
                 || !(state.getBlock() instanceof DoorBlock)
-                || !state.contains(Properties.DOUBLE_BLOCK_HALF)) {
+                || !state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
             return false;
         }
-        DoubleBlockHalf half = state.get(Properties.DOUBLE_BLOCK_HALF);
-        BlockPos pairedPos = half == DoubleBlockHalf.LOWER ? pos.up() : pos.down();
+        DoubleBlockHalf half = state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF);
+        BlockPos pairedPos = half == DoubleBlockHalf.LOWER ? pos.above() : pos.below();
         BlockState pairedState = world.getBlockState(pairedPos);
         if (pairedState == null
                 || pairedState.getBlock() != state.getBlock()
-                || !pairedState.contains(Properties.DOUBLE_BLOCK_HALF)
-                || pairedState.get(Properties.DOUBLE_BLOCK_HALF) == half) {
+                || !pairedState.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                || pairedState.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == half) {
             return false;
         }
-        if (state.contains(Properties.HORIZONTAL_FACING)
-                && pairedState.contains(Properties.HORIZONTAL_FACING)
-                && state.get(Properties.HORIZONTAL_FACING) != pairedState.get(Properties.HORIZONTAL_FACING)) {
+        if (state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)
+                && pairedState.hasProperty(BlockStateProperties.HORIZONTAL_FACING)
+                && state.getValue(BlockStateProperties.HORIZONTAL_FACING) != pairedState.getValue(BlockStateProperties.HORIZONTAL_FACING)) {
             return false;
         }
-        if (state.contains(Properties.DOOR_HINGE)
-                && pairedState.contains(Properties.DOOR_HINGE)
-                && state.get(Properties.DOOR_HINGE) != pairedState.get(Properties.DOOR_HINGE)) {
+        if (state.hasProperty(BlockStateProperties.DOOR_HINGE)
+                && pairedState.hasProperty(BlockStateProperties.DOOR_HINGE)
+                && state.getValue(BlockStateProperties.DOOR_HINGE) != pairedState.getValue(BlockStateProperties.DOOR_HINGE)) {
             return false;
         }
-        if (state.contains(Properties.OPEN)
-                && pairedState.contains(Properties.OPEN)
-                && state.get(Properties.OPEN) != pairedState.get(Properties.OPEN)) {
+        if (state.hasProperty(BlockStateProperties.OPEN)
+                && pairedState.hasProperty(BlockStateProperties.OPEN)
+                && state.getValue(BlockStateProperties.OPEN) != pairedState.getValue(BlockStateProperties.OPEN)) {
             return false;
         }
-        return !state.contains(Properties.POWERED)
-                || !pairedState.contains(Properties.POWERED)
-                || state.get(Properties.POWERED) == pairedState.get(Properties.POWERED);
+        return !state.hasProperty(BlockStateProperties.POWERED)
+                || !pairedState.hasProperty(BlockStateProperties.POWERED)
+                || state.getValue(BlockStateProperties.POWERED) == pairedState.getValue(BlockStateProperties.POWERED);
     }
 
     public static boolean isBeta35LoweredTrapdoorOrFloorButtonVisibleTarget(
-            BlockView world, BlockPos pos, BlockState state
+            BlockGetter world, BlockPos pos, BlockState state
     ) {
         if (world == null || pos == null || state == null) {
             return false;
@@ -277,7 +279,7 @@ public final class SlabSupport {
     }
 
     public static boolean isBeta35LoweredTrapdoorOrFloorButtonVisibleOwnerTarget(
-            BlockView world, BlockPos pos, BlockState state
+            BlockGetter world, BlockPos pos, BlockState state
     ) {
         if (world == null || pos == null || state == null) {
             return false;
@@ -290,7 +292,7 @@ public final class SlabSupport {
     }
 
     public static boolean isBeta35LoweredBottomTrapdoorServerHitTarget(
-            BlockView world, BlockPos pos, BlockState state
+            BlockGetter world, BlockPos pos, BlockState state
     ) {
         if (world == null || pos == null || !isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
             return false;
@@ -300,13 +302,13 @@ public final class SlabSupport {
     }
 
     public static boolean isBeta35LoweredTrapdoorOrFloorButtonServerHitTarget(
-            BlockView world, BlockPos pos, BlockState state
+            BlockGetter world, BlockPos pos, BlockState state
     ) {
         return isBeta35LoweredTrapdoorOrFloorButtonVisibleOwnerTarget(world, pos, state)
                 || isBeta35LoweredBottomTrapdoorServerHitTarget(world, pos, state);
     }
 
-    public static double getBeta35ShiftedServerValidationYOffset(BlockView world, BlockPos pos, BlockState state) {
+    public static double getBeta35ShiftedServerValidationYOffset(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return Double.NaN;
         }
@@ -319,11 +321,11 @@ public final class SlabSupport {
         return getYOffset(world, pos, state);
     }
 
-    private static double beta35BottomTrapdoorVisibleOwnerDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35BottomTrapdoorVisibleOwnerDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35BottomTrapdoorVisibleOwnerObject(state)) {
             return Double.NaN;
         }
-        BlockPos supportPos = pos.down();
+        BlockPos supportPos = pos.below();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -333,7 +335,7 @@ public final class SlabSupport {
     }
 
     public static boolean isBeta35SlabHeightVisibleOwnerObject(
-            BlockView world, BlockPos pos, BlockState state
+            BlockGetter world, BlockPos pos, BlockState state
     ) {
         if (world == null || pos == null || state == null) {
             return false;
@@ -360,26 +362,26 @@ public final class SlabSupport {
 
     private static boolean isBeta35OakTrapdoorContactObject(BlockState state) {
         return state != null
-                && state.isOf(Blocks.OAK_TRAPDOOR)
-                && state.contains(Properties.BLOCK_HALF)
-                && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
+                && state.is(Blocks.OAK_TRAPDOOR)
+                && state.hasProperty(BlockStateProperties.HALF)
+                && state.getValue(BlockStateProperties.HALF) == Half.BOTTOM;
     }
 
     private static boolean isBeta35RegularDoorContactObject(BlockState state) {
         return state != null
                 && state.getBlock() instanceof DoorBlock
-                && state.contains(Properties.DOUBLE_BLOCK_HALF);
+                && state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF);
     }
 
     private static boolean isBeta35StandingOakSignContactObject(BlockState state) {
-        return state != null && state.isOf(Blocks.OAK_SIGN);
+        return state != null && state.is(Blocks.OAK_SIGN);
     }
 
-    private static double beta35FenceWallVariantContactDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35FenceWallVariantContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35FenceWallVariantContactObject(state)) {
             return Double.NaN;
         }
-        BlockPos supportPos = pos.down();
+        BlockPos supportPos = pos.below();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = beta35FenceWallVisibleSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -389,7 +391,7 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35FenceWallVisibleSupportDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35FenceWallVisibleSupportDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null || state.isAir() || !state.getFluidState().isEmpty()) {
             return Double.NaN;
         }
@@ -399,13 +401,13 @@ public final class SlabSupport {
         if (isTopSlab(state) && SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)) {
             return -1.0d;
         }
-        if (state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE)
-                && (state.get(SlabBlock.TYPE) == SlabType.TOP || state.get(SlabBlock.TYPE) == SlabType.DOUBLE)) {
-            if (state.get(SlabBlock.TYPE) == SlabType.DOUBLE
+        if (state.getBlock() instanceof SlabBlock && state.hasProperty(SlabBlock.TYPE)
+                && (state.getValue(SlabBlock.TYPE) == SlabType.TOP || state.getValue(SlabBlock.TYPE) == SlabType.DOUBLE)) {
+            if (state.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
                     && SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)) {
                 return -1.0d;
             }
-            BlockPos belowPos = pos.down();
+            BlockPos belowPos = pos.below();
             BlockState below = world.getBlockState(belowPos);
             if (below.getBlock() instanceof SlabBlock && isLoweredDoubleSlabCarrier(world, belowPos, below)) {
                 return -0.5d;
@@ -426,11 +428,11 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35FenceGateContactDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35FenceGateContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35FenceGateContactObject(state)) {
             return Double.NaN;
         }
-        BlockPos supportPos = pos.down();
+        BlockPos supportPos = pos.below();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -439,11 +441,11 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35FloorButtonContactDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35FloorButtonContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35FloorButtonContactObject(state)) {
             return Double.NaN;
         }
-        BlockPos supportPos = pos.down();
+        BlockPos supportPos = pos.below();
         BlockState supportState = world.getBlockState(supportPos);
         if (!isSupportingSlab(supportState)) {
             return Double.NaN;
@@ -455,11 +457,11 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35OakTrapdoorContactDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35OakTrapdoorContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35OakTrapdoorContactObject(state)) {
             return Double.NaN;
         }
-        BlockPos supportPos = pos.down();
+        BlockPos supportPos = pos.below();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -468,20 +470,20 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35RegularDoorContactDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35RegularDoorContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35RegularDoorContactObject(state)) {
             return Double.NaN;
         }
         BlockPos bottomPos = pos;
-        if (state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
-            bottomPos = pos.down();
+        if (state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
+            bottomPos = pos.below();
             BlockState bottomState = world.getBlockState(bottomPos);
             if (!isBeta35RegularDoorContactObject(bottomState)
-                    || bottomState.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
+                    || bottomState.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
                 return Double.NaN;
             }
         }
-        BlockPos supportPos = bottomPos.down();
+        BlockPos supportPos = bottomPos.below();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -490,11 +492,11 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35StandingOakSignContactDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35StandingOakSignContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35StandingOakSignContactObject(state)) {
             return Double.NaN;
         }
-        BlockPos supportPos = pos.down();
+        BlockPos supportPos = pos.below();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -503,7 +505,7 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static boolean isBeta35OrdinaryFullBlockContactObject(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isBeta35OrdinaryFullBlockContactObject(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock
@@ -511,17 +513,17 @@ public final class SlabSupport {
             return false;
         }
         Block block = state.getBlock();
-        if (!(block instanceof CraftingTableBlock || block instanceof BlockEntityProvider)) {
+        if (!(block instanceof CraftingTableBlock || block instanceof EntityBlock)) {
             return false;
         }
-        return state.isSolidBlock(world, pos);
+        return state.isSolidRender();
     }
 
-    private static double beta35OrdinaryFullBlockContactDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35OrdinaryFullBlockContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isBeta35OrdinaryFullBlockContactObject(world, pos, state)) {
             return Double.NaN;
         }
-        BlockPos supportPos = pos.down();
+        BlockPos supportPos = pos.below();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -546,7 +548,7 @@ public final class SlabSupport {
                 || block == Blocks.GRINDSTONE;
     }
 
-    private static double beta35SpecialFullblockContactDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double beta35SpecialFullblockContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock
@@ -554,7 +556,7 @@ public final class SlabSupport {
                 || !isBeta35SpecialFullblockContactObject(state)) {
             return Double.NaN;
         }
-        BlockPos supportPos = pos.down();
+        BlockPos supportPos = pos.below();
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
@@ -563,7 +565,7 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    public static boolean canTreatAsFloorTorchTopFace(BlockView world, BlockPos supportPos, BlockState torchState) {
+    public static boolean canTreatAsFloorTorchTopFace(BlockGetter world, BlockPos supportPos, BlockState torchState) {
         if (isRejectedFloorTorchTopFace(world, supportPos, torchState)) {
             return false;
         }
@@ -578,7 +580,7 @@ public final class SlabSupport {
     }
 
     public static boolean isLegalFloorTorchLoweredBottomSlabSupport(
-            BlockView world,
+            BlockGetter world,
             BlockPos supportPos,
             BlockState torchState
     ) {
@@ -596,7 +598,7 @@ public final class SlabSupport {
                 && Math.abs(getYOffset(world, supportPos, supportState) - (-1.0d)) <= 1.0e-6;
     }
 
-    public static boolean isRejectedFloorTorchTopFace(BlockView world, BlockPos supportPos, BlockState torchState) {
+    public static boolean isRejectedFloorTorchTopFace(BlockGetter world, BlockPos supportPos, BlockState torchState) {
         if (!isFloorTorch(torchState)) {
             return false;
         }
@@ -630,13 +632,13 @@ public final class SlabSupport {
      */
     public static boolean isCeilingAttached(BlockState state) {
         // HANGING property (lanterns, etc.)
-        if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
+        if (state.hasProperty(BlockStateProperties.HANGING) && state.getValue(BlockStateProperties.HANGING)) {
             return true;
         }
         // Y-axis chains
         if (state.getBlock() instanceof ChainBlock
-                && state.contains(Properties.AXIS)
-                && state.get(Properties.AXIS) == Direction.Axis.Y) {
+                && state.hasProperty(BlockStateProperties.AXIS)
+                && state.getValue(BlockStateProperties.AXIS) == Direction.Axis.Y) {
             return true;
         }
         // Hanging signs
@@ -644,9 +646,9 @@ public final class SlabSupport {
             return true;
         }
         // Top-half trapdoors (ceiling-mounted)
-        if (state.getBlock() instanceof TrapdoorBlock
-                && state.contains(Properties.BLOCK_HALF)
-                && state.get(Properties.BLOCK_HALF) == BlockHalf.TOP) {
+        if (state.getBlock() instanceof TrapDoorBlock
+                && state.hasProperty(BlockStateProperties.HALF)
+                && state.getValue(BlockStateProperties.HALF) == Half.TOP) {
             return true;
         }
         // Bells, levers, buttons (can all be ceiling-mounted)
@@ -660,8 +662,8 @@ public final class SlabSupport {
         if (block instanceof SporeBlossomBlock
                 || block instanceof HangingRootsBlock
                 || block instanceof PointedDripstoneBlock
-                || block instanceof CaveVinesHeadBlock
-                || block instanceof CaveVinesBodyBlock) {
+                || block instanceof CaveVinesBlock
+                || block instanceof CaveVinesPlantBlock) {
             return true;
         }
         return false;
@@ -684,7 +686,7 @@ public final class SlabSupport {
      *
      * @return true if the block should receive a −0.5 Y offset
      */
-    public static boolean shouldOffset(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean shouldOffset(BlockGetter world, BlockPos pos, BlockState state) {
         // never offset slabs themselves
         if (state.getBlock() instanceof SlabBlock) {
             return false;
@@ -702,21 +704,21 @@ public final class SlabSupport {
         // blocks under a top slab that get +0.5 UP via getYOffset should not
         // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
-        if (isCeilingAttached(state) && isTopSlab(world.getBlockState(pos.up()))) {
+        if (isCeilingAttached(state) && isTopSlab(world.getBlockState(pos.above()))) {
             return false;
         }
 
         // ceiling-attached blocks further down a chain of ceiling blocks
         // leading to a top slab also get +0.5 UP; exclude from -0.5
         if (isCeilingAttached(state)) {
-            BlockPos cursor = pos.up();
+            BlockPos cursor = pos.above();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
                 if (isTopSlab(cur)) {
                     return false;
                 }
                 if (isCeilingAttached(cur)) {
-                    cursor = cursor.up();
+                    cursor = cursor.above();
                     continue;
                 }
                 break;
@@ -725,28 +727,28 @@ public final class SlabSupport {
 
         // blocks hanging from above (lanterns, etc.) — don't offset DOWN by slab below
         // (they may get a separate +0.5 UP offset via getYOffset)
-        if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
+        if (state.hasProperty(BlockStateProperties.HANGING) && state.getValue(BlockStateProperties.HANGING)) {
             return false;
         }
 
         // ── bed: either half has a slab ───────────────────────────────
-        if (state.contains(Properties.BED_PART)) {
-            Direction facing = state.get(Properties.HORIZONTAL_FACING);
-            BedPart part = state.get(Properties.BED_PART);
+        if (state.hasProperty(BlockStateProperties.BED_PART)) {
+            Direction facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+            BedPart part = state.getValue(BlockStateProperties.BED_PART);
             BlockPos otherPos;
             if (part == BedPart.FOOT) {
-                otherPos = pos.offset(facing);
+                otherPos = pos.relative(facing);
             } else {
-                otherPos = pos.offset(facing.getOpposite());
+                otherPos = pos.relative(facing.getOpposite());
             }
             return hasSlabInColumn(world, pos) || hasSlabInColumn(world, otherPos);
         }
 
         // ── double-block: upper half checks two blocks down ───────────
-        if (state.contains(Properties.DOUBLE_BLOCK_HALF)) {
-            DoubleBlockHalf half = state.get(Properties.DOUBLE_BLOCK_HALF);
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            DoubleBlockHalf half = state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF);
             if (half == DoubleBlockHalf.UPPER) {
-                return isBottomSlab(world.getBlockState(pos.down(2)));
+                return isBottomSlab(world.getBlockState(pos.below(2)));
             }
             return hasBottomSlabBelow(world, pos);
         }
@@ -762,9 +764,9 @@ public final class SlabSupport {
         Block block = state.getBlock();
         if ((block instanceof WallSignBlock || block instanceof WallBannerBlock
                 || block instanceof WallTorchBlock || block instanceof WallHangingSignBlock)
-                && state.contains(Properties.HORIZONTAL_FACING)) {
-            Direction facing = state.get(Properties.HORIZONTAL_FACING);
-            BlockPos attachedPos = pos.offset(facing.getOpposite());
+                && state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)) {
+            Direction facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+            BlockPos attachedPos = pos.relative(facing.getOpposite());
             if (hasSlabInColumn(world, attachedPos)) {
                 return true;
             }
@@ -781,7 +783,7 @@ public final class SlabSupport {
      *   <li>{@code 0.0} otherwise (no offset).</li>
      * </ul>
      */
-    public static double getYOffset(BlockView world, BlockPos pos, BlockState state) {
+    public static double getYOffset(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null) {
             return 0.0;
         }
@@ -794,17 +796,6 @@ public final class SlabSupport {
 
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
         if (IN_GET_Y_OFFSET.get()) {
-            if (state.getBlock() instanceof SlabBlock
-                    && state.contains(SlabBlock.TYPE)
-                    && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
-                    && isBottomPersistentTracePos(pos)) {
-                System.out.println("[BOTTOM_PERSISTENT] getYOffset early_guard_return pos=" + pos.toShortString()
-                        + " state=" + state
-                        + " slabType=" + state.get(SlabBlock.TYPE)
-                        + " fluidEmpty=" + state.getFluidState().isEmpty()
-                        + " guard=" + IN_GET_Y_OFFSET.get()
-                        + " worldClass=" + world.getClass().getName());
-            }
             return 0.0;
         }
         IN_GET_Y_OFFSET.set(Boolean.TRUE);
@@ -852,11 +843,11 @@ public final class SlabSupport {
     }
 
     public static CompoundSlabRemapDecision findLegalCompoundSlabRemap(
-            BlockView world,
+            BlockGetter world,
             BlockPos sourcePos,
             BlockState sourceState,
             Direction intendedDirection,
-            Vec3d hitPos
+            Vec3 hitPos
     ) {
         if (world == null || sourcePos == null || sourceState == null || intendedDirection == null) {
             return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
@@ -870,7 +861,7 @@ public final class SlabSupport {
                     CompoundSlabRemapDecision.rejected(sourcePos, null, null, "source_not_compound_full_block_dy_-1"));
         }
         if (intendedDirection == Direction.UP) {
-            BlockPos candidatePlacementPos = sourcePos.up();
+            BlockPos candidatePlacementPos = sourcePos.above();
             BlockState candidateState = world.getBlockState(candidatePlacementPos);
             if (!candidateState.isAir()) {
                 return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
@@ -894,12 +885,12 @@ public final class SlabSupport {
                     CompoundSlabRemapDecision.rejected(sourcePos, null, null, "direction_not_horizontal"));
         }
 
-        BlockPos intendedLanePos = sourcePos.offset(intendedDirection);
+        BlockPos intendedLanePos = sourcePos.relative(intendedDirection);
         int legalLaneCount = 0;
         BlockPos legalLanePos = null;
         BlockState legalLaneState = null;
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            BlockPos lanePos = sourcePos.offset(direction);
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos lanePos = sourcePos.relative(direction);
             BlockState laneState = world.getBlockState(lanePos);
             if (isLegalCompoundRemapLane(world, lanePos, laneState)) {
                 legalLaneCount++;
@@ -909,7 +900,7 @@ public final class SlabSupport {
         }
 
         if (legalLaneCount == 1 && intendedLanePos.equals(legalLanePos)) {
-            BlockPos candidatePlacementPos = legalLanePos.offset(intendedDirection);
+            BlockPos candidatePlacementPos = legalLanePos.relative(intendedDirection);
             BlockState candidateState = world.getBlockState(candidatePlacementPos);
             if (!candidateState.isAir()) {
                 return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
@@ -926,7 +917,7 @@ public final class SlabSupport {
                     sourcePos,
                     legalLanePos,
                     candidatePlacementPos,
-                    legalLaneState.get(SlabBlock.TYPE),
+                    legalLaneState.getValue(SlabBlock.TYPE),
                     "COMPOUND_HORIZONTAL_CONTINUATION_LANE"));
         }
 
@@ -989,10 +980,10 @@ public final class SlabSupport {
                     "COMPOUND_VISIBLE_SIDE_UPPER_SLAB"));
         }
 
-        BlockState belowSourceState = world.getBlockState(sourcePos.down());
+        BlockState belowSourceState = world.getBlockState(sourcePos.below());
         BlockPos candidatePlacementPos = intendedLanePos;
         BlockState candidateState = world.getBlockState(candidatePlacementPos);
-        if (legalLaneCount == 0 && isLegalCompoundRemapLane(world, sourcePos.down(), belowSourceState)) {
+        if (legalLaneCount == 0 && isLegalCompoundRemapLane(world, sourcePos.below(), belowSourceState)) {
             if (!candidateState.isAir()) {
                 return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
                         CompoundSlabRemapDecision.rejected(
@@ -1034,23 +1025,23 @@ public final class SlabSupport {
                 CompoundSlabRemapDecision.rejected(
                 sourcePos,
                 legalLanePos,
-                legalLanePos == null ? intendedLanePos : legalLanePos.offset(intendedDirection),
+                legalLanePos == null ? intendedLanePos : legalLanePos.relative(intendedDirection),
                 "legal_lane_count_" + legalLaneCount + "_or_not_in_intended_direction"));
     }
 
     private static CompoundSlabRemapDecision traceCompoundSlabRemap(
-            BlockView world,
+            BlockGetter world,
             BlockPos sourcePos,
             BlockState sourceState,
             Direction intendedDirection,
-            Vec3d hitPos,
+            Vec3 hitPos,
             CompoundSlabRemapDecision decision
     ) {
-        Beta4ManualLiveTrace.logSlabSupportDecision(world, sourcePos, sourceState, intendedDirection, hitPos, decision);
+        // Beta4ManualLiveTrace is deferred for the 26.1.2 port; keep the decision path unchanged.
         return decision;
     }
 
-    private static SlabType compoundBelowLaneResultType(BlockPos sourcePos, Vec3d hitPos) {
+    private static SlabType compoundBelowLaneResultType(BlockPos sourcePos, Vec3 hitPos) {
         if (sourcePos != null && hitPos != null && hitPos.y >= sourcePos.getY()) {
             return SlabType.TOP;
         }
@@ -1058,10 +1049,10 @@ public final class SlabSupport {
     }
 
     private static boolean isCompoundVisibleSideLowerHit(
-            BlockView world,
+            BlockGetter world,
             BlockPos sourcePos,
             BlockState sourceState,
-            Vec3d hitPos
+            Vec3 hitPos
     ) {
         if (world == null || sourcePos == null || sourceState == null || hitPos == null) {
             return false;
@@ -1072,10 +1063,10 @@ public final class SlabSupport {
     }
 
     private static boolean isCompoundVisibleSideUpperHit(
-            BlockView world,
+            BlockGetter world,
             BlockPos sourcePos,
             BlockState sourceState,
-            Vec3d hitPos
+            Vec3 hitPos
     ) {
         if (world == null || sourcePos == null || sourceState == null || hitPos == null) {
             return false;
@@ -1085,40 +1076,40 @@ public final class SlabSupport {
         return localVisibleY >= 0.5d - 1.0e-6d && localVisibleY <= 1.0d + 1.0e-6d;
     }
 
-    private static boolean isMarkedCompoundVisibleSideSlab(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isMarkedCompoundVisibleSideSlab(BlockGetter world, BlockPos pos, BlockState state) {
         return SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state);
     }
 
-    private static boolean isPersistentVisibleCompoundOwner(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isPersistentVisibleCompoundOwner(BlockGetter world, BlockPos pos, BlockState state) {
         return SlabAnchorAttachment.isAnchored(world, pos)
                 && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)
                 && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state)
                 && Math.abs(getYOffset(world, pos, state) + 1.0d) <= 1.0e-6d;
     }
 
-    private static boolean isLegalCompoundRemapLane(BlockView world, BlockPos lanePos, BlockState laneState) {
+    private static boolean isLegalCompoundRemapLane(BlockGetter world, BlockPos lanePos, BlockState laneState) {
         return laneState != null
                 && laneState.getBlock() instanceof SlabBlock
-                && laneState.contains(SlabBlock.TYPE)
-                && laneState.get(SlabBlock.TYPE) != SlabType.DOUBLE
+                && laneState.hasProperty(SlabBlock.TYPE)
+                && laneState.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
                 && laneState.getFluidState().isEmpty()
                 && Math.abs(getYOffset(world, lanePos, laneState) + 0.5d) <= 1.0e-6d
                 && isLoweredSideLaneSlabCarrier(world, lanePos, laneState);
     }
 
     private static boolean isCompatibleLoweredSlabLane(BlockState a, BlockState b) {
-        if (!a.contains(SlabBlock.TYPE) || !b.contains(SlabBlock.TYPE)) {
+        if (!a.hasProperty(SlabBlock.TYPE) || !b.hasProperty(SlabBlock.TYPE)) {
             return false;
         }
-        SlabType aType = a.get(SlabBlock.TYPE);
-        SlabType bType = b.get(SlabBlock.TYPE);
+        SlabType aType = a.getValue(SlabBlock.TYPE);
+        SlabType bType = b.getValue(SlabBlock.TYPE);
         return isCompatibleLoweredSlabLane(aType, bType);
     }
 
-    private static boolean hasLoweredSolidSideSupport(BlockView world, BlockPos slabPos) {
-        for (Direction dir : Direction.Type.HORIZONTAL) {
-            BlockPos neighborPos = slabPos.offset(dir);
+    private static boolean hasLoweredSolidSideSupport(BlockGetter world, BlockPos slabPos) {
+        for (Direction dir : Direction.Plane.HORIZONTAL) {
+            BlockPos neighborPos = slabPos.relative(dir);
             BlockState neighbor = world.getBlockState(neighborPos);
             if (isFullHeightLoweredCarrierForSideSupport(world, neighborPos, neighbor)) {
                 return true;
@@ -1127,21 +1118,21 @@ public final class SlabSupport {
         return false;
     }
 
-    public static boolean isAnchoredLoweredFullBlock(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isAnchoredLoweredFullBlock(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null || state.isAir()
                 || state.getBlock() instanceof SlabBlock
                 || !state.getFluidState().isEmpty()
-                || !state.isSolidBlock(world, pos)) {
+                || !state.isSolidRender()) {
             return false;
         }
         return SlabAnchorAttachment.isAnchored(world, pos);
     }
 
-    public static boolean isLoweredDoubleSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isLoweredDoubleSlabCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || !(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.DOUBLE
+                || !state.hasProperty(SlabBlock.TYPE)
+                || state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
                 || !state.getFluidState().isEmpty()) {
             return false;
         }
@@ -1151,22 +1142,22 @@ public final class SlabSupport {
         return isLoweredCarrier(world, pos, state, MAX_CHAIN_DEPTH);
     }
 
-    public static boolean isFullHeightLoweredCarrier(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isFullHeightLoweredCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         return isLoweredFullBlockCarrier(world, pos, state)
                 || isLoweredDoubleSlabCarrier(world, pos, state);
     }
 
-    public static boolean isLoweredSideLaneDoubleCarrier(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isLoweredSideLaneDoubleCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         return isLoweredSideLaneSlabCarrier(world, pos, state)
-                && state.get(SlabBlock.TYPE) == SlabType.DOUBLE;
+                && state.getValue(SlabBlock.TYPE) == SlabType.DOUBLE;
     }
 
-    public static boolean isLoweredSideLaneSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isLoweredSideLaneSlabCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         return world != null
                 && pos != null
                 && state != null
                 && state.getBlock() instanceof SlabBlock
-                && state.contains(SlabBlock.TYPE)
+                && state.hasProperty(SlabBlock.TYPE)
                 && state.getFluidState().isEmpty()
                 && isAdjacentSideSlabLowered(world, pos, state);
     }
@@ -1180,24 +1171,24 @@ public final class SlabSupport {
      * {@link com.slabbed.anchor.SlabAnchorAttachment#qualifiesForCompoundFullBlockAnchor}
      * can decide sidecar authoring without duplicating the logic.
      */
-    public static boolean isLoweredCompoundSourceSlab(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isLoweredCompoundSourceSlab(BlockGetter world, BlockPos pos, BlockState state) {
         return state != null
                 && isBottomSlab(state)
                 && isAdjacentSideSlabLowered(world, pos, state);
     }
 
-    public static boolean isBottomSlabLoweredByCarrierBelow(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isBottomSlabLoweredByCarrierBelow(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null
                 || pos == null
                 || state == null
                 || !(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.hasProperty(SlabBlock.TYPE)
+                || state.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !state.getFluidState().isEmpty()) {
             return false;
         }
 
-        BlockPos belowPos = pos.down();
+        BlockPos belowPos = pos.below();
         BlockState below = world.getBlockState(belowPos);
         boolean backedByLoweredCarrier = below.getBlock() instanceof SlabBlock
                 ? isLoweredDoubleSlabCarrier(world, belowPos, below)
@@ -1205,12 +1196,12 @@ public final class SlabSupport {
         return backedByLoweredCarrier && getYOffset(world, pos, state) == -0.5d;
     }
 
-    private static boolean isLoweredCarrier(BlockView world, BlockPos pos, BlockState state, int depth) {
+    private static boolean isLoweredCarrier(BlockGetter world, BlockPos pos, BlockState state, int depth) {
         return isLoweredCarrier(world, pos, state, depth, true);
     }
 
     private static boolean isLoweredCarrier(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             int depth,
@@ -1220,8 +1211,8 @@ public final class SlabSupport {
             return false;
         }
         if (state.getBlock() instanceof SlabBlock) {
-            if (!state.contains(SlabBlock.TYPE)
-                    || state.get(SlabBlock.TYPE) != SlabType.DOUBLE
+            if (!state.hasProperty(SlabBlock.TYPE)
+                    || state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
                     || !state.getFluidState().isEmpty()) {
                 return false;
             }
@@ -1231,37 +1222,37 @@ public final class SlabSupport {
             if (allowSideLane && isAdjacentSideSlabLowered(world, pos, state)) {
                 return true;
             }
-            BlockPos belowPos = pos.down();
+            BlockPos belowPos = pos.below();
             return isLoweredCarrier(world, belowPos, world.getBlockState(belowPos), depth - 1, allowSideLane);
         }
         return isLoweredFullBlockCarrier(world, pos, state);
     }
 
-    private static boolean isLoweredDoubleSlabCarrierForSideSupport(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isLoweredDoubleSlabCarrierForSideSupport(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || !(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.DOUBLE
+                || !state.hasProperty(SlabBlock.TYPE)
+                || state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
                 || !state.getFluidState().isEmpty()) {
             return false;
         }
         if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {
             return true;
         }
-        return isLoweredCarrier(world, pos.down(), world.getBlockState(pos.down()), MAX_CHAIN_DEPTH, false);
+        return isLoweredCarrier(world, pos.below(), world.getBlockState(pos.below()), MAX_CHAIN_DEPTH, false);
     }
 
-    private static boolean isFullHeightLoweredCarrierForSideSupport(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isFullHeightLoweredCarrierForSideSupport(BlockGetter world, BlockPos pos, BlockState state) {
         return isLoweredFullBlockCarrier(world, pos, state)
                 || isLoweredDoubleSlabCarrierForSideSupport(world, pos, state);
     }
 
-    private static boolean isLoweredFullBlockCarrier(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isLoweredFullBlockCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock
                 || !state.getFluidState().isEmpty()
-                || !state.isSolidBlock(world, pos)) {
+                || !state.isSolidRender()) {
             return false;
         }
         boolean hasBottomBelow = hasBottomSlabBelow(world, pos);
@@ -1275,12 +1266,12 @@ public final class SlabSupport {
      * Safe to call inside the IN_GET_Y_OFFSET recursion guard: does not delegate to getYOffset.
      * Used exclusively by the floor-torch full-block support branch.
      */
-    private static boolean isOrdinaryFullBlockWithCompoundDy(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isOrdinaryFullBlockWithCompoundDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock
                 || !state.getFluidState().isEmpty()
-                || !state.isSolidBlock(world, pos)) {
+                || !state.isSolidRender()) {
             return false;
         }
         if (!SlabAnchorAttachment.isAnchored(world, pos)) {
@@ -1289,24 +1280,24 @@ public final class SlabSupport {
         if (SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)) {
             return true;
         }
-        BlockState below = world.getBlockState(pos.down());
-        return isBottomSlab(below) && isAdjacentSideSlabLowered(world, pos.down(), below);
+        BlockState below = world.getBlockState(pos.below());
+        return isBottomSlab(below) && isAdjacentSideSlabLowered(world, pos.below(), below);
     }
 
-    private static boolean hasLoweredCarrierBelow(BlockView world, BlockPos pos) {
+    private static boolean hasLoweredCarrierBelow(BlockGetter world, BlockPos pos) {
         if (world == null || pos == null) {
             return false;
         }
-        BlockPos belowPos = pos.down();
+        BlockPos belowPos = pos.below();
         return isLoweredCarrier(world, belowPos, world.getBlockState(belowPos), MAX_CHAIN_DEPTH);
     }
 
-    private static boolean isCompoundVisibleOwnerTopSlab(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isCompoundVisibleOwnerTopSlab(BlockGetter world, BlockPos pos, BlockState state) {
         return SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
     }
 
-    private static boolean hasLoweredSlabLaneSupport(BlockView world, BlockPos slabPos, BlockState slabState) {
-        if (!(slabState.getBlock() instanceof SlabBlock) || !slabState.contains(SlabBlock.TYPE)) {
+    private static boolean hasLoweredSlabLaneSupport(BlockGetter world, BlockPos slabPos, BlockState slabState) {
+        if (!(slabState.getBlock() instanceof SlabBlock) || !slabState.hasProperty(SlabBlock.TYPE)) {
             return false;
         }
         Set<BlockPos> visited = new HashSet<>();
@@ -1323,7 +1314,7 @@ public final class SlabSupport {
             }
 
             BlockState cursorState = world.getBlockState(cursor);
-            if (!(cursorState.getBlock() instanceof SlabBlock) || !cursorState.contains(SlabBlock.TYPE)) {
+            if (!(cursorState.getBlock() instanceof SlabBlock) || !cursorState.hasProperty(SlabBlock.TYPE)) {
                 continue;
             }
             if (!cursor.equals(slabPos)
@@ -1332,8 +1323,8 @@ public final class SlabSupport {
                 return true;
             }
 
-            for (Direction dir : Direction.Type.HORIZONTAL) {
-                BlockPos neighborPos = cursor.offset(dir);
+            for (Direction dir : Direction.Plane.HORIZONTAL) {
+                BlockPos neighborPos = cursor.relative(dir);
                 if (!visited.add(neighborPos)) {
                     continue;
                 }
@@ -1351,7 +1342,7 @@ public final class SlabSupport {
     }
 
     private static boolean isLoweredSlabLaneOwnerForSideInheritance(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state
     ) {
@@ -1359,7 +1350,7 @@ public final class SlabSupport {
                 && pos != null
                 && state != null
                 && state.getBlock() instanceof SlabBlock
-                && state.contains(SlabBlock.TYPE)
+                && state.hasProperty(SlabBlock.TYPE)
                 && state.getFluidState().isEmpty()
                 && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
@@ -1367,8 +1358,8 @@ public final class SlabSupport {
                         || hasLoweredCarrierBelow(world, pos));
     }
 
-    private static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
-        if (!slabState.contains(SlabBlock.TYPE)) {
+    private static boolean isAdjacentSideSlabLowered(BlockGetter world, BlockPos slabPos, BlockState slabState) {
+        if (!slabState.hasProperty(SlabBlock.TYPE)) {
             return false;
         }
         if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, slabPos, slabState)) {
@@ -1377,7 +1368,7 @@ public final class SlabSupport {
         return hasLoweredSlabLaneSupport(world, slabPos, slabState);
     }
 
-    private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
+    private static double getYOffsetInner(BlockGetter world, BlockPos pos, BlockState state) {
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
@@ -1393,33 +1384,13 @@ public final class SlabSupport {
             if (SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
                 return -1.0;
             }
-            if (state.contains(SlabBlock.TYPE)
-                    && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
-                    && isBottomPersistentTracePos(pos)) {
-                boolean persistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state);
-                boolean nonRecursiveBottomCarrier =
-                        SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
-                boolean branchReached = state.getFluidState().isEmpty() && nonRecursiveBottomCarrier;
-                System.out.println("[BOTTOM_PERSISTENT] getYOffsetInner pos=" + pos.toShortString()
-                        + " state=" + state
-                        + " slabType=" + state.get(SlabBlock.TYPE)
-                        + " fluidEmpty=" + state.getFluidState().isEmpty()
-                        + " worldClass=" + world.getClass().getName()
-                        + " guard=" + IN_GET_Y_OFFSET.get()
-                        + " persistentLoweredSlabCarrier=" + persistentCarrier
-                        + " nonRecursiveBottomCarrier=" + nonRecursiveBottomCarrier
-                        + " branchReached=" + branchReached);
-            }
-            if (state.contains(SlabBlock.TYPE)
-                    && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+            if (state.hasProperty(SlabBlock.TYPE)
+                    && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM
                     && state.getFluidState().isEmpty()
                     && SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
-                if (isBottomPersistentTracePos(pos)) {
-                    System.out.println("[BOTTOM_PERSISTENT] branch=return_-0.5 pos=" + pos.toShortString());
-                }
                 return -0.5;
             }
-            BlockPos belowPos = pos.down();
+            BlockPos belowPos = pos.below();
             BlockState below = world.getBlockState(belowPos);
             Block belowBlock = below.getBlock();
             if (belowBlock instanceof SlabBlock) {
@@ -1454,7 +1425,7 @@ public final class SlabSupport {
             // renormalize the authored compound lane.
             if (com.slabbed.anchor.SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)) {
                 if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
-                    String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                    String side = (world instanceof net.minecraft.world.level.Level w && w.isClientSide()) ? "CLIENT" : "SERVER";
                     Slabbed.LOGGER.info("[ANCHOR] compound sidecar dy applied side={} pos={} state={} dy=-1.0",
                             side, pos.toShortString(), state);
                 }
@@ -1469,11 +1440,11 @@ public final class SlabSupport {
             // anchor return -0.5 below collapses the freshly placed compound
             // case (live evidence: BETA4_PLACEMENT_AUTHOR_RECORDER at 9bf3bdc).
             // See docs/beta4-compound-lowered-fullblock-height.md.
-            BlockPos belowPos = pos.down();
+            BlockPos belowPos = pos.below();
             BlockState belowSlab = world.getBlockState(belowPos);
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, belowPos, belowSlab)) {
                 if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
-                    String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                    String side = (world instanceof net.minecraft.world.level.Level w && w.isClientSide()) ? "CLIENT" : "SERVER";
                     Slabbed.LOGGER.info("[ANCHOR] compound dy applied side={} pos={} state={} dy=-1.0 belowSlabPos={} belowSlabState={}",
                             side, pos.toShortString(), state, belowPos.toShortString(), belowSlab);
                 }
@@ -1500,7 +1471,7 @@ public final class SlabSupport {
                 return floorButtonContactDy;
             }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
-                String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                String side = (world instanceof net.minecraft.world.level.Level w && w.isClientSide()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
                         side, pos.toShortString(), state);
             }
@@ -1508,7 +1479,7 @@ public final class SlabSupport {
         }
 
         if (isFloorTorch(state)) {
-            BlockPos supportPos = pos.down();
+            BlockPos supportPos = pos.below();
             BlockState supportState = world.getBlockState(supportPos);
             if (isBottomSlab(supportState)
                     && (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState)
@@ -1533,7 +1504,7 @@ public final class SlabSupport {
         }
 
         if (isBeta35FloorTopContactObject(state)) {
-            BlockPos supportPos = pos.down();
+            BlockPos supportPos = pos.below();
             BlockState supportState = world.getBlockState(supportPos);
             double loweredBottomSupportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
             if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
@@ -1585,8 +1556,8 @@ public final class SlabSupport {
             // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
             // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
             // slab's visual top surface, for a total of -1.0.
-            BlockState belowSlab = world.getBlockState(pos.down());
-            if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
+            BlockState belowSlab = world.getBlockState(pos.below());
+            if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.below(), belowSlab)) {
                 return -1.0;
             }
             double columnDy = slabColumnYOffset(world, pos);
@@ -1600,18 +1571,18 @@ public final class SlabSupport {
         // Note: isSolidBlock is safe here because getYOffset has a recursion guard.
         Block blk = state.getBlock();
         if (blk instanceof SlabBlock
-                || blk instanceof StairsBlock
+                || blk instanceof StairBlock
                 || blk instanceof FenceBlock
                 || blk instanceof WallBlock
-                || blk instanceof PaneBlock
+                || blk instanceof IronBarsBlock
                 || isThinTopLayer(state)
                 || state.isAir()
                 || !state.getFluidState().isEmpty()
-                || state.isSolidBlock(world, pos)) {
+                || state.isSolidRender()) {
             return 0.0;
         }
 
-        BlockState above = world.getBlockState(pos.up());
+        BlockState above = world.getBlockState(pos.above());
 
         // direct: ceiling-attached blocks directly under a top slab
         if (isCeilingAttached(state) && isTopSlab(above)) {
@@ -1621,14 +1592,14 @@ public final class SlabSupport {
         // cascading: ceiling-attached block below other ceiling-attached blocks
         // leading up to a top slab (e.g. 2nd dripstone, 2nd vine segment)
         if (isCeilingAttached(state)) {
-            BlockPos cursor = pos.up();
+            BlockPos cursor = pos.above();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
                 if (isTopSlab(cur)) {
                     return 0.5;
                 }
                 if (isCeilingAttached(cur)) {
-                    cursor = cursor.up();
+                    cursor = cursor.above();
                     continue;
                 }
                 break;
@@ -1638,7 +1609,7 @@ public final class SlabSupport {
         return 0.0;
     }
 
-    private static double floorTorchBottomSlabSupportDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double floorTorchBottomSlabSupportDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null || !isBottomSlab(state) || !state.getFluidState().isEmpty()) {
             return Double.NaN;
         }
@@ -1649,7 +1620,7 @@ public final class SlabSupport {
         if (SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
             return -0.5d;
         }
-        BlockPos belowPos = pos.down();
+        BlockPos belowPos = pos.below();
         BlockState below = world.getBlockState(belowPos);
         if (below.getBlock() instanceof SlabBlock) {
             if (isLoweredDoubleSlabCarrier(world, belowPos, below)) {
@@ -1666,10 +1637,6 @@ public final class SlabSupport {
         return 0.0d;
     }
 
-    private static boolean isBottomPersistentTracePos(BlockPos pos) {
-        return pos != null && pos.getX() == 0 && pos.getY() == 202 && pos.getZ() == 0;
-    }
-
     /**
      * Shared ownership rule for client raycast/outline retargeting of lowered
      * block-entity-style blocks (e.g. chests) sitting above a bottom slab.
@@ -1677,38 +1644,38 @@ public final class SlabSupport {
      * <p>When a block-entity block is visually lowered by -0.5 (its model, via
      * {@code BlockEntityOffsetMixin}, and its outline/raycast shapes, via
      * {@code SlabSupportStateMixin}), the lower half of its visible footprint
-     * overflows into {@code pos.down()}'s voxel. Vanilla DDA raycast traversal
+     * overflows into {@code pos.below()}'s voxel. Vanilla DDA raycast traversal
      * cannot see that overflowed portion at {@code pos} and instead hits the
      * slab below. This helper is the single source of truth for detecting
      * that case so raycast retarget and outline agree.
      *
-     * @return true iff {@code state} is a {@link BlockEntityProvider} block
+     * @return true iff {@code state} is a {@link EntityBlock} block
      *         at {@code pos} whose {@link #getYOffset} is exactly {@code -0.5}.
      */
-    public static boolean isLoweredBlockEntityVisual(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isLoweredBlockEntityVisual(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return false;
         }
-        if (!(state.getBlock() instanceof BlockEntityProvider)) {
+        if (!(state.getBlock() instanceof EntityBlock)) {
             return false;
         }
         return getYOffset(world, pos, state) == -0.5;
     }
 
-    public static boolean isLoweredTorchVisual(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isLoweredTorchVisual(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return false;
         }
         Block block = state.getBlock();
-        if (!(block instanceof net.minecraft.block.TorchBlock
-                || block instanceof net.minecraft.block.WallTorchBlock)) {
+        if (!(block instanceof TorchBlock
+                || block instanceof WallTorchBlock)) {
             return false;
         }
         // compound dy (-1.0) also qualifies: torch above an adjacent-lowered bottom slab
         return getYOffset(world, pos, state) < 0.0;
     }
 
-    public static boolean isCompoundVisibleSlabLaneOwner(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isCompoundVisibleSlabLaneOwner(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return false;
         }
@@ -1722,17 +1689,17 @@ public final class SlabSupport {
     }
 
     public static BlockHitResult findCompoundVisibleSlabLaneOwnerTarget(
-            BlockView world, Entity entity, Vec3d eye, Vec3d end
+            BlockGetter world, Entity entity, Vec3 eye, Vec3 end
     ) {
         if (world == null || eye == null || end == null) {
             return null;
         }
-        Vec3d ray = end.subtract(eye);
+        Vec3 ray = end.subtract(eye);
         double reach = ray.length();
         if (reach <= 0.0d) {
             return null;
         }
-        Vec3d dir = ray.normalize();
+        Vec3 dir = ray.normalize();
         int steps = Math.max(16, (int) Math.ceil(reach / 0.05d));
 
         BlockHitResult best = null;
@@ -1740,57 +1707,57 @@ public final class SlabSupport {
         double maxDist2 = reach * reach + 1.0e-6d;
         for (int i = 1; i <= steps; i++) {
             double t = reach * i / steps;
-            Vec3d sample = eye.add(dir.multiply(t));
-            BlockPos samplePos = BlockPos.ofFloored(sample);
+            Vec3 sample = eye.add(dir.scale(t));
+            BlockPos samplePos = BlockPos.containing(sample);
 
             BlockHitResult candidate = raycastCompoundVisibleSlabLaneOwner(world, entity, eye, end, samplePos);
-            if (candidate != null && candidate.getPos().squaredDistanceTo(eye) <= maxDist2
-                    && candidate.getPos().squaredDistanceTo(eye) < bestDist2 - 1.0e-6d) {
+            if (candidate != null && candidate.getLocation().distanceToSqr(eye) <= maxDist2
+                    && candidate.getLocation().distanceToSqr(eye) < bestDist2 - 1.0e-6d) {
                 best = candidate;
-                bestDist2 = candidate.getPos().squaredDistanceTo(eye);
+                bestDist2 = candidate.getLocation().distanceToSqr(eye);
             }
 
-            candidate = raycastCompoundVisibleSlabLaneOwner(world, entity, eye, end, samplePos.up());
-            if (candidate != null && candidate.getPos().squaredDistanceTo(eye) <= maxDist2
-                    && candidate.getPos().squaredDistanceTo(eye) < bestDist2 - 1.0e-6d) {
+            candidate = raycastCompoundVisibleSlabLaneOwner(world, entity, eye, end, samplePos.above());
+            if (candidate != null && candidate.getLocation().distanceToSqr(eye) <= maxDist2
+                    && candidate.getLocation().distanceToSqr(eye) < bestDist2 - 1.0e-6d) {
                 best = candidate;
-                bestDist2 = candidate.getPos().squaredDistanceTo(eye);
+                bestDist2 = candidate.getLocation().distanceToSqr(eye);
             }
         }
         return best;
     }
 
     private static BlockHitResult raycastCompoundVisibleSlabLaneOwner(
-            BlockView world, Entity entity, Vec3d eye, Vec3d end, BlockPos pos
+            BlockGetter world, Entity entity, Vec3 eye, Vec3 end, BlockPos pos
     ) {
         BlockState state = world.getBlockState(pos);
         if (!isCompoundVisibleSlabLaneOwner(world, pos, state)) {
             return null;
         }
-        ShapeContext context = entity == null ? ShapeContext.absent() : ShapeContext.of(entity);
-        VoxelShape outline = state.getOutlineShape(world, pos, context);
+        CollisionContext context = entity == null ? CollisionContext.empty() : CollisionContext.of(entity);
+        VoxelShape outline = state.getShape(world, pos, context);
         if (outline == null || outline.isEmpty()) {
             return null;
         }
-        return outline.raycast(eye, end, pos);
+        return outline.clip(eye, end, pos);
     }
 
-    public static boolean isLoweredBedVisual(BlockView world, BlockPos pos, BlockState state) {
+    public static boolean isLoweredBedVisual(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return false;
         }
-        return state.getBlock() instanceof net.minecraft.block.BedBlock
-                && state.contains(Properties.BED_PART)
+        return state.getBlock() instanceof BedBlock
+                && state.hasProperty(BlockStateProperties.BED_PART)
                 && getYOffset(world, pos, state) == -0.5;
     }
 
     /**
      * Redstone dust support surface — treat slab tops like valid ground for downward stepping.
      */
-    public static boolean isRedstoneSupportTopSurface(BlockView world, BlockPos pos) {
+    public static boolean isRedstoneSupportTopSurface(BlockGetter world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);
 
-        if (state.isSideSolidFullSquare(world, pos, Direction.UP)) {
+        if (state.isFaceSturdy(world, pos, Direction.UP)) {
             return true;
         }
 
@@ -1804,7 +1771,7 @@ public final class SlabSupport {
      * <p>Returns {@code true} for blocks that should visually sit on slabs
      * when a bottom slab exists somewhere in their column:
      * <ul>
-     *   <li>Every {@link BlockEntityProvider} block — chests, hoppers,
+     *   <li>Every {@link EntityBlock} block — chests, hoppers,
      *       furnaces, jukeboxes, spawners, end portal frames, beacons,
      *       banners, signs (standing), etc. This matches the
      *       {@link #isLoweredBlockEntityVisual} contract and ensures
@@ -1819,15 +1786,15 @@ public final class SlabSupport {
      * cobblestone, sand, gravel, terracotta, …) so natural terrain does not
      * visually drop when a slab happens to sit below it.
      */
-    private static boolean isSlabSitCandidate(BlockView world, BlockPos pos, BlockState state) {
+    private static boolean isSlabSitCandidate(BlockGetter world, BlockPos pos, BlockState state) {
         Block block = state.getBlock();
-        if (block instanceof BlockEntityProvider) {
+        if (block instanceof EntityBlock) {
             return true;
         }
         if (block instanceof CraftingTableBlock) {
             return true;
         }
-        return !state.isSolidBlock(world, pos);
+        return !state.isSolidRender();
     }
 
     /**
@@ -1849,8 +1816,8 @@ public final class SlabSupport {
      * walk false via the slab terminator below. Walk remains bounded by
      * {@link #MAX_CHAIN_DEPTH}.
      */
-    private static boolean hasSlabInColumn(BlockView world, BlockPos pos) {
-        BlockPos cursor = pos.down();
+    private static boolean hasSlabInColumn(BlockGetter world, BlockPos pos) {
+        BlockPos cursor = pos.below();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = world.getBlockState(cursor);
             if (isBottomSlab(cur)) {
@@ -1866,13 +1833,13 @@ public final class SlabSupport {
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return false;
             }
-            cursor = cursor.down();
+            cursor = cursor.below();
         }
         return false;
     }
 
-    private static double slabColumnYOffset(BlockView world, BlockPos pos) {
-        BlockPos cursor = pos.down();
+    private static double slabColumnYOffset(BlockGetter world, BlockPos pos) {
+        BlockPos cursor = pos.below();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = world.getBlockState(cursor);
             if (cur.getBlock() instanceof SlabBlock
@@ -1885,7 +1852,7 @@ public final class SlabSupport {
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return 0.0;
             }
-            cursor = cursor.down();
+            cursor = cursor.below();
         }
         return 0.0;
     }

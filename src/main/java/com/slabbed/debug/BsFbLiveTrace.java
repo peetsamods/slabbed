@@ -3,11 +3,10 @@ package com.slabbed.debug;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * TEMPORARY live diagnostic for BS-FB regression investigation.
@@ -74,14 +73,14 @@ public final class BsFbLiveTrace {
      * @param fullPos position of the full block above the slab
      * @param label trace label (e.g., "BEFORE_BREAK", "AFTER_BREAK", etc.)
      */
-    public static void capture(World world, BlockPos supportPos, BlockPos fullPos, String label) {
+    public static void capture(Level world, BlockPos supportPos, BlockPos fullPos, String label) {
         if (!ENABLED) return;
         if (world == null || supportPos == null || fullPos == null) return;
 
         StringBuilder sb = new StringBuilder();
         sb.append("[BSFB-LIVE-TRACE] ").append(label)
           .append(" tick=").append(tickCounter)
-          .append(" side=").append(world.isClient() ? "CLIENT" : "SERVER");
+          .append(" side=").append(world.isClientSide() ? "CLIENT" : "SERVER");
 
         // 1. supportPos state
         BlockState supportState = world.getBlockState(supportPos);
@@ -95,15 +94,15 @@ public final class BsFbLiveTrace {
 
         // 3. slabPos state (supportPos)
         String slabTypeAtSupport = "none";
-        if (supportState.getBlock() instanceof SlabBlock && supportState.contains(SlabBlock.TYPE)) {
-            slabTypeAtSupport = supportState.get(SlabBlock.TYPE).toString();
+        if (supportState.getBlock() instanceof SlabBlock && supportState.hasProperty(SlabBlock.TYPE)) {
+            slabTypeAtSupport = supportState.getValue(SlabBlock.TYPE).toString();
         }
         sb.append(" | slabTypeAtSupport=").append(slabTypeAtSupport);
 
         // 4. slabPos.up state (fullPos) - if it's a slab
         String slabTypeAtFull = "none";
-        if (fullState.getBlock() instanceof SlabBlock && fullState.contains(SlabBlock.TYPE)) {
-            slabTypeAtFull = fullState.get(SlabBlock.TYPE).toString();
+        if (fullState.getBlock() instanceof SlabBlock && fullState.hasProperty(SlabBlock.TYPE)) {
+            slabTypeAtFull = fullState.getValue(SlabBlock.TYPE).toString();
         }
         sb.append(" | slabTypeAtFull=").append(slabTypeAtFull);
 

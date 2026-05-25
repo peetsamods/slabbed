@@ -42,6 +42,18 @@ If the tree is dirty, inspect only the files relevant to the intended slice befo
 
 Use the Superpowers plugin to delegate to subagents when the work can be decomposed into independent units with bounded context.
 
+### Required invocation sequence
+
+- **Must explicitly invoke** `@Superpowers` before launching any subagent work for this workspace.
+- **Default mode:** when a request can be decomposed into 2+ independent slices and no exception in this section applies, automatically begin that session with `@Superpowers` and proceed with subagent delegation without waiting for additional prompting.
+- After `@Superpowers` is acknowledged, invoke the dispatcher (`@dispatching-parallel-agents` when there are multiple independent slices, or `@systematic-debugging` / other single-specialist skill as needed) in the same turn.
+- Provide each subagent a fixed contract in one message:
+  - Inputs and current file scope.
+  - Expected output.
+  - Hard constraints and non-goals.
+  - Acceptance criteria.
+- Do not proceed with delegated execution until the invocation sequence has happened in order.
+
 ### Use subagents when:
 - The task can be split into **2 or more independent slices** with minimal or no shared mutable state.
 - Each slice has a **clear contract**: inputs, expected outputs, constraints, and acceptance criteria.
