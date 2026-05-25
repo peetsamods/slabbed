@@ -4,11 +4,6 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "Beta35FenceWallLiveInspectTickMixin",
-    "Beta35SlabHeightHitAcceptanceTickMixin",
-    "Beta4ManualLiveInteractionTraceMixin",
-    "Beta4ManualLiveClientTickTraceMixin",
-    "Beta35LiveTorchDualTraceInteractionMixin",
-    "Beta35LiveTorchCaptureMixin",
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
@@ -16,5 +11,7 @@
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin"
   ],
-  "injectors": { "defaultRequire": 1 }
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

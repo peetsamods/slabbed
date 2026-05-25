@@ -2,20 +2,20 @@ package com.slabbed.util;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 
 public final class Beta4PlacementAuthorRecorder {
     private static boolean startLogged;
@@ -31,11 +31,11 @@ public final class Beta4PlacementAuthorRecorder {
         return enabled() || Boolean.getBoolean("slabbed.beta4CompoundLivePathRecorder");
     }
 
-    public static void recordUseHead(Identifier blockItemId, boolean heldIsSlab, ItemUsageContext context) {
+    public static void recordUseHead(Identifier blockItemId, boolean heldIsSlab, UseOnContext context) {
         if (!compoundLivePathEnabled() || context == null || context.getWorld() == null) {
             return;
         }
-        World world = context.getWorld();
+        Level world = context.getWorld();
         Direction clickedFace = context.getSide();
         BlockPos clickedPos = context.getBlockPos();
         BlockPos vanillaPlacePos = clickedPos.offset(clickedFace);
@@ -59,14 +59,14 @@ public final class Beta4PlacementAuthorRecorder {
             String phase,
             Identifier blockItemId,
             boolean heldIsSlab,
-            ItemPlacementContext context,
-            ActionResult result,
+            BlockPlaceContext context,
+            InteractionResult result,
             String finalization
     ) {
         if (!compoundLivePathEnabled() || context == null || context.getWorld() == null) {
             return;
         }
-        World world = context.getWorld();
+        Level world = context.getWorld();
         Direction clickedFace = context.getSide();
         BlockPos finalPlacedPos = context.getBlockPos();
         BlockPos clickedPos = finalPlacedPos.offset(clickedFace.getOpposite());
@@ -89,22 +89,22 @@ public final class Beta4PlacementAuthorRecorder {
     public static void recordAfterTick(
             Identifier blockItemId,
             boolean heldIsSlab,
-            ItemPlacementContext context,
-            ActionResult result,
+            BlockPlaceContext context,
+            InteractionResult result,
             String finalization
     ) {
         if (!compoundLivePathEnabled() || context == null || context.getWorld() == null || context.getWorld().isClient()) {
             return;
         }
-        World world = context.getWorld();
+        Level world = context.getWorld();
         if (world.getServer() == null) {
             return;
         }
         Direction clickedFace = context.getSide();
         BlockPos finalPlacedPos = context.getBlockPos();
         BlockPos clickedPos = finalPlacedPos.offset(clickedFace.getOpposite());
-        Vec3d hitVec = context.getHitPos();
-        PlayerEntity player = context.getPlayer();
+        Vec3 hitVec = context.getHitPos();
+        Player player = context.getPlayer();
         String playerFacts = playerFacts(player);
         world.getServer().execute(() -> record(
                 "BETA4_PLACEMENT_AUTHOR_AFTER_TICK",
@@ -122,7 +122,7 @@ public final class Beta4PlacementAuthorRecorder {
                 finalization));
     }
 
-    public static void logStartIfNeeded(World world) {
+    public static void logStartIfNeeded(Level world) {
         if (!compoundLivePathEnabled() || startLogged) {
             return;
         }
@@ -133,15 +133,15 @@ public final class Beta4PlacementAuthorRecorder {
                 compoundLivePathEnabled(),
                 intProperty("slabbed.beta4PlacementAuthorRecorderTicks", 200),
                 System.getProperty("slabbed.beta4PlacementAuthorRecorderWatch", ""),
-                world == null ? "null" : world.getRegistryKey().getValue());
+                world == null ? "null" : world.getResourceKey().getValue());
     }
 
     public static void recordCompoundFinalization(
             String phase,
             Identifier blockItemId,
             boolean heldIsSlab,
-            ItemPlacementContext context,
-            ActionResult result,
+            BlockPlaceContext context,
+            InteractionResult result,
             String branch,
             BlockPos sourcePos,
             boolean compoundSidecarBefore,
@@ -153,7 +153,7 @@ public final class Beta4PlacementAuthorRecorder {
         if (!compoundLivePathEnabled() || context == null || context.getWorld() == null) {
             return;
         }
-        World world = context.getWorld();
+        Level world = context.getWorld();
         logStartIfNeeded(world);
         BlockPos finalPlacedPos = context.getBlockPos();
         Direction clickedFace = context.getSide();
@@ -196,16 +196,16 @@ public final class Beta4PlacementAuthorRecorder {
     private static void record(
             String marker,
             String phase,
-            World world,
+            Level world,
             Identifier blockItemId,
             boolean heldIsSlab,
-            PlayerEntity player,
+            Player player,
             BlockPos clickedPos,
             Direction clickedFace,
-            Vec3d hitVec,
+            Vec3 hitVec,
             BlockPos vanillaPlacePos,
             BlockPos finalPlacedPos,
-            ActionResult result,
+            InteractionResult result,
             String finalization
     ) {
         record(
@@ -227,16 +227,16 @@ public final class Beta4PlacementAuthorRecorder {
     private static void record(
             String marker,
             String phase,
-            World world,
+            Level world,
             Identifier blockItemId,
             boolean heldIsSlab,
             String playerFacts,
             BlockPos clickedPos,
             Direction clickedFace,
-            Vec3d hitVec,
+            Vec3 hitVec,
             BlockPos vanillaPlacePos,
             BlockPos finalPlacedPos,
-            ActionResult result,
+            InteractionResult result,
             String finalization
     ) {
         logStartIfNeeded(world);
@@ -311,16 +311,16 @@ public final class Beta4PlacementAuthorRecorder {
         }
     }
 
-    private static String playerFacts(PlayerEntity player) {
+    private static String playerFacts(Player player) {
         if (player == null) {
             return "player=null eye=null look=null";
         }
-        return "playerPos=" + formatVec(new Vec3d(player.getX(), player.getY(), player.getZ()))
+        return "playerPos=" + formatVec(new Vec3(player.getX(), player.getY(), player.getZ()))
                 + " eye=" + formatVec(player.getEyePos())
                 + " look=" + formatVec(player.getRotationVec(1.0f));
     }
 
-    private static String facts(World world, BlockPos pos) {
+    private static String facts(Level world, BlockPos pos) {
         if (world == null || pos == null) {
             return "pos=null";
         }
@@ -337,7 +337,7 @@ public final class Beta4PlacementAuthorRecorder {
                 + " sourceMode=" + sourceMode(world, pos, state);
     }
 
-    private static String watchFacts(World world) {
+    private static String watchFacts(Level world) {
         String raw = System.getProperty("slabbed.beta4PlacementAuthorRecorderWatch", "");
         if (raw.isBlank()) {
             return "none";
@@ -372,16 +372,16 @@ public final class Beta4PlacementAuthorRecorder {
         }
     }
 
-    private static boolean persistentFullBlockAnchor(World world, BlockPos pos, BlockState state) {
+    private static boolean persistentFullBlockAnchor(Level world, BlockPos pos, BlockState state) {
         return SlabAnchorAttachment.isAnchored(world, pos)
                 && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state);
     }
 
-    private static boolean compoundFullBlockAnchor(World world, BlockPos pos) {
+    private static boolean compoundFullBlockAnchor(Level world, BlockPos pos) {
         return world != null && pos != null && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos);
     }
 
-    private static String sourceMode(World world, BlockPos pos, BlockState state) {
+    private static String sourceMode(Level world, BlockPos pos, BlockState state) {
         if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {
             return "persistentLoweredSlabCarrier";
         }
@@ -400,7 +400,7 @@ public final class Beta4PlacementAuthorRecorder {
         return pos == null ? "null" : pos.toShortString();
     }
 
-    private static String formatVec(Vec3d vec) {
+    private static String formatVec(Vec3 vec) {
         if (vec == null) {
             return "null";
         }
