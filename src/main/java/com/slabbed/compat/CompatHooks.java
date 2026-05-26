@@ -25,4 +25,15 @@ public final class CompatHooks {
         }
         return false;
     }
+
+    /**
+     * Returns true when a compat block should keep its own slab/support semantics
+     * instead of becoming a Slabbed support source.
+     */
+    public static boolean shouldSkipSlabSupport(BlockState state) {
+        if (isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+            return TerrainSlabsCompat.shouldSkipSlabSupport(state);
+        }
+        return false;
+    }
 }
