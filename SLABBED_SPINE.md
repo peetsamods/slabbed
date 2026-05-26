@@ -34,10 +34,11 @@ The 26.1.2 port has reached a placement-proof release candidate for the slab-hel
 
 Resolved blocker: Julia's 2026-05-23 slab-held recording showed the selection outline/target floating above the visible stone body. The port restores the missing 26.1.2 visible-shape path, preserves the visual triad, applies the final-target-unknown placement-intent fix through the validated visible lane, prevents slab-held compound-visible retargeting from stealing nearer vanilla block hits, rejects non-placeable final-target-unknown visible-lane contexts before APPLY, and narrows lowered-side comfort retargeting so border samples outside the visible face do not remain sticky. Temporary `runner3RowId` / provenance audit instrumentation was removed before release proof.
 
-Fresh placement review fallout proof on 2026-05-25:
+Fresh placement review fallout proof on 2026-05-26:
 
 - Runner3: `tmp/port-26-1-2-placement-review-fallout-proof-98bc0629/clientGameTest-runner3-provenance.log`
 - Runner3 metrics with the synced local runner3 harness: `NO_PLACE_BUT_SHOULD_PLACE=19`, `PLACED_RELATIVE_TO_RETARGETED_OWNER=6`, `PLACED_ABOVE_VISIBLE_TARGET=21`, `PLACED_BUT_SHOULD_NOT=16`, `heldStoneVisibleOwnerRemapRegressionRiskRows=4`
+- Proof environment note: the local shell default Java was 21, so proof was rerun with `JAVA_HOME=$(/usr/libexec/java_home -v 25)` to match the known 26.1.2 classfile/runtime family.
 - Apples-to-apples regression check: removing the two production review-fallout edits under the same synced local runner3 harness produced the same mismatch profile, so the secondary class-count shape is harness-baseline drift rather than a production regression from this patch.
 - Hitbox checkerboard scan: `RUNNER3_HITBOX_SCAN_GREEN specs=20 faces=86 samples=4214 anomalies=0`; prior clipping evidence showed `BORDER_FINAL_STICKY_INTENDED_OWNER=60` before the comfort-retarget narrowing.
 - Runtime smoke: `tmp/port-26-1-2-placement-review-fallout-proof-98bc0629/runClient-smoke.log`
@@ -89,4 +90,4 @@ For documentation-only work, keep edits limited to port-local docs.
 
 For code migration work, classify the current dominant compile/source blocker first, then patch exactly the requested file or the smallest proven mechanism. If the result remains unclear after one compile gate, stop with tried/observed/proven/unproven/next-smallest-audit.
 
-For this placement savepoint, the next safe action is final Git hygiene only: review the intended diff, stage intended production files plus this spine update, create one commit, create an annotated `save/...` tag, push branch and tag, and verify final tracked-tree state.
+The placement review fallout savepoint is the current local baseline. The next safe action is a new narrow slice only after this savepoint is published and the tracked tree is clean.
