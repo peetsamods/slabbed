@@ -129,7 +129,16 @@ public final class SlabSupport {
         if (world == null || pos == null) {
             return false;
         }
-        return isBottomSlab(world.getBlockState(pos.down()));
+        BlockState below = getBlockStateOrNull(world, pos.down());
+        return below != null && isBottomSlab(below);
+    }
+
+    private static BlockState getBlockStateOrNull(BlockView world, BlockPos pos) {
+        try {
+            return world.getBlockState(pos);
+        } catch (IndexOutOfBoundsException e) {
+            return null;
+        }
     }
 
     /**
