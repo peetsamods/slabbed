@@ -28,4 +28,12 @@ public final class TerrainSlabsCompat {
         Identifier id = Registries.BLOCK.getId(block);
         return id != null && MOD_ID.equals(id.getNamespace());
     }
+
+    /**
+     * Terrain Slabs supplies terrain-shaped slab models and culling behavior.
+     * Keep those blocks out of Slabbed's generic support-source rules.
+     */
+    public static boolean shouldSkipSlabSupport(BlockState state) {
+        return shouldSkipOffset(state);
+    }
 }

@@ -93,6 +93,9 @@ public final class SlabSupport {
      * Returns true if the state is a slab with a defined type.
      */
     public static boolean isSupportingSlab(BlockState state) {
+        if (CompatHooks.shouldSkipSlabSupport(state)) {
+            return false;
+        }
         return state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE);
     }
 
