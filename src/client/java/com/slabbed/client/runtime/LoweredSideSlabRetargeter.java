@@ -42,7 +42,7 @@ public final class LoweredSideSlabRetargeter {
         BlockHitResult compoundVisibleOwner =
                 SlabSupport.findCompoundVisibleSlabLaneOwnerTarget(world, cam, eye, end);
         if (compoundVisibleOwner != null
-                && (!slabHeld || compoundVisibleOwner.getLocation().distanceToSqr(eye) <= currentDist2 + 1.0e-6)) {
+                && compoundVisibleOwner.getLocation().distanceToSqr(eye) <= currentDist2 + 1.0e-6) {
             return compoundVisibleOwner;
         }
         int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
