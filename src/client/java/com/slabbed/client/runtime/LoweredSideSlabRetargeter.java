@@ -3,6 +3,7 @@ package com.slabbed.client.runtime;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -34,15 +35,16 @@ public final class LoweredSideSlabRetargeter {
             return null;
         }
         dir = dir.normalize();
+        double currentDist2 = Double.POSITIVE_INFINITY;
+        if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
+            currentDist2 = currentHit.getLocation().distanceToSqr(eye);
+        }
         BlockHitResult compoundVisibleOwner =
                 SlabSupport.findCompoundVisibleSlabLaneOwnerTarget(world, cam, eye, end);
-        if (compoundVisibleOwner != null) {
+        if (compoundVisibleOwner != null
+                && (!slabHeld || compoundVisibleOwner.getLocation().distanceToSqr(eye) <= currentDist2 + 1.0e-6)) {
             return compoundVisibleOwner;
         }
-        double currentDist2 = Double.POSITIVE_INFINITY;
-            if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
-                currentDist2 = currentHit.getLocation().distanceToSqr(eye);
-            }
         int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
 
         BlockHitResult bestHit = null;
@@ -143,25 +145,44 @@ public final class LoweredSideSlabRetargeter {
 
         Vec3 localHit = comfortHit.getLocation().subtract(pos.getX(), pos.getY(), pos.getZ());
         AABB outlineBox = shape.bounds();
+        Direction.Axis normalAxis = comfortHit.getDirection().getAxis();
         double maxAxisDelta = 0.0d;
         if (localHit.x < outlineBox.minX) {
+            if (normalAxis != Direction.Axis.X) {
+                return null;
+            }
             double d = outlineBox.minX - localHit.x;
             maxAxisDelta = Math.max(maxAxisDelta, Math.abs(d));
         } else if (localHit.x > outlineBox.maxX) {
+            if (normalAxis != Direction.Axis.X) {
+                return null;
+            }
             double d = localHit.x - outlineBox.maxX;
             maxAxisDelta = Math.max(maxAxisDelta, Math.abs(d));
         }
         if (localHit.y < outlineBox.minY) {
+            if (normalAxis != Direction.Axis.Y) {
+                return null;
+            }
             double d = outlineBox.minY - localHit.y;
             maxAxisDelta = Math.max(maxAxisDelta, Math.abs(d));
         } else if (localHit.y > outlineBox.maxY) {
+            if (normalAxis != Direction.Axis.Y) {
+                return null;
+            }
             double d = localHit.y - outlineBox.maxY;
             maxAxisDelta = Math.max(maxAxisDelta, Math.abs(d));
         }
         if (localHit.z < outlineBox.minZ) {
+            if (normalAxis != Direction.Axis.Z) {
+                return null;
+            }
             double d = outlineBox.minZ - localHit.z;
             maxAxisDelta = Math.max(maxAxisDelta, Math.abs(d));
         } else if (localHit.z > outlineBox.maxZ) {
+            if (normalAxis != Direction.Axis.Z) {
+                return null;
+            }
             double d = localHit.z - outlineBox.maxZ;
             maxAxisDelta = Math.max(maxAxisDelta, Math.abs(d));
         }
