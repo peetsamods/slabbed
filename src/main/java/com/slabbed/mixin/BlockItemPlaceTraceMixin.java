@@ -1,9 +1,9 @@
 package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
-import com.slabbed.debug.SlabbedInspect;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
+import com.slabbed.util.SlabbedDebugBridge;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
@@ -48,10 +48,10 @@ public abstract class BlockItemPlaceTraceMixin {
         String side = world.isClient() ? "CLIENT" : "SERVER";
         Identifier itemId = Registries.ITEM.getId(self);
 
-        if (SlabbedInspect.ENABLED) {
+        if (SlabbedDebugBridge.inspectEnabled()) {
             SLABBED$INSPECT_TRACE.set(new TraceCtx(side, itemId, face, hitPos, placePos));
             SLABBED$INSPECT_PLACE_CALLED.set(Boolean.TRUE);
-            SlabbedInspect.logPlacement("HEAD", world, itemId, ctx, hitPos, placePos, null);
+            SlabbedDebugBridge.logPlacement("HEAD", world, itemId, ctx, hitPos, placePos, null);
         }
 
         if (!SlabbedAuditBridge.isEnabled()) return;
@@ -89,7 +89,7 @@ public abstract class BlockItemPlaceTraceMixin {
             try {
                 BlockItem self = (BlockItem) (Object) this;
                 if (slabbed$isTracedBlock(self.getBlock())) {
-                    SlabbedInspect.logPlacement(
+                    SlabbedDebugBridge.logPlacement(
                             "RETURN",
                             ctx.getWorld(),
                             inspectTrace.itemId(),
@@ -137,7 +137,7 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "useOnBlock", at = @At("HEAD"))
     private void slabbed$traceUseOnBlockHead(ItemUsageContext context, CallbackInfoReturnable<ActionResult> cir) {
-        if (!SlabbedInspect.ENABLED) {
+        if (!SlabbedDebugBridge.inspectEnabled()) {
             return;
         }
 
@@ -161,7 +161,7 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "useOnBlock", at = @At("RETURN"))
     private void slabbed$traceUseOnBlockReturn(ItemUsageContext context, CallbackInfoReturnable<ActionResult> cir) {
-        if (!SlabbedInspect.ENABLED) {
+        if (!SlabbedDebugBridge.inspectEnabled()) {
             return;
         }
 
@@ -172,7 +172,12 @@ public abstract class BlockItemPlaceTraceMixin {
                     && trace.itemId() != null
                     && context != null
                     && context.getWorld() != null) {
-                SlabbedInspect.logPlacementNoReturn(context.getWorld(), trace.itemId(), trace.face(), trace.hitPos(), trace.placePos());
+                SlabbedDebugBridge.logPlacementNoReturn(
+                        context.getWorld(),
+                        trace.itemId(),
+                        trace.face(),
+                        trace.hitPos(),
+                        trace.placePos());
             }
         } finally {
             SLABBED$INSPECT_USE_TRACE.remove();
