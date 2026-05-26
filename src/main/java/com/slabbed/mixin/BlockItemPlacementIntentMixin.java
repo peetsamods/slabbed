@@ -631,6 +631,16 @@ public abstract class BlockItemPlacementIntentMixin {
                 return null;
             }
 
+            Vec3 expectedHitPos = slabbed$hitPosOnFace(
+                    snapshot.expectedPlacePos(),
+                    side,
+                    snapshot.originalVisibleHit(),
+                    snapshot.originalVisibleHit().y);
+            BlockState expectedPlaceState = context.getLevel().getBlockState(snapshot.expectedPlacePos());
+            boolean expectedPlaceReplaceable =
+                    slabbed$canPlaceInClickedCell(context, snapshot.expectedPlacePos(), side, expectedHitPos);
+            boolean expectedPlaceEmptyOrReplaceable = expectedPlaceState.isAir() || expectedPlaceReplaceable;
+
             if (finalTargetUnknownExpectedPlaceKnown) {
                 UseOnContext visibleLaneContext = slabbed$finalTargetUnknownVisibleLaneContext(
                         context,
@@ -645,6 +655,28 @@ public abstract class BlockItemPlacementIntentMixin {
                     boolean visibleLaneReplaceable =
                             slabbed$canPlaceInClickedCell(context, visibleLanePos, side, visibleLaneHit);
                     boolean visibleLaneEmptyOrReplaceable = visibleLaneState.isAir() || visibleLaneReplaceable;
+                    if (!expectedPlaceEmptyOrReplaceable || !visibleLaneEmptyOrReplaceable) {
+                        PlacementIntentState.auditReject("EXPECTED_PLACE_NOT_REPLACEABLE", snapshot,
+                                slabbed$placementIntentContextDetails(
+                                        context,
+                                        finalOwnerPos,
+                                        finalOwnerState,
+                                        side,
+                                        true,
+                                        true,
+                                        finalTargetValidation,
+                                        finalOwnerOccupiedNonReplaceable,
+                                        snapshot.expectedPlacePos(),
+                                        false,
+                                        "expected_place_not_replaceable",
+                                        "reject=EXPECTED_PLACE_NOT_REPLACEABLE"
+                                                + " expectedPlaceState="
+                                                + slabbed$placementIntentSafe(expectedPlaceState)
+                                                + " visibleLanePos=" + slabbed$placementIntentPos(visibleLanePos)
+                                                + " visibleLaneState=" + slabbed$placementIntentSafe(visibleLaneState)));
+                        clearReason = "VALIDATION_REJECT";
+                        return null;
+                    }
                     valid = true;
                     PlacementIntentState.auditApply(snapshot,
                             slabbed$placementIntentContextDetails(
@@ -670,15 +702,6 @@ public abstract class BlockItemPlacementIntentMixin {
                 }
             }
 
-            Vec3 expectedHitPos = slabbed$hitPosOnFace(
-                    snapshot.expectedPlacePos(),
-                    side,
-                    snapshot.originalVisibleHit(),
-                    snapshot.originalVisibleHit().y);
-            BlockState expectedPlaceState = context.getLevel().getBlockState(snapshot.expectedPlacePos());
-            boolean expectedPlaceReplaceable =
-                    slabbed$canPlaceInClickedCell(context, snapshot.expectedPlacePos(), side, expectedHitPos);
-            boolean expectedPlaceEmptyOrReplaceable = expectedPlaceState.isAir() || expectedPlaceReplaceable;
             if (!expectedPlaceReplaceable) {
                 PlacementIntentState.auditReject("EXPECTED_PLACE_NOT_REPLACEABLE", snapshot,
                         slabbed$placementIntentContextDetails(
