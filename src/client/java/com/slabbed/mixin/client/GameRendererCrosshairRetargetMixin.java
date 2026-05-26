@@ -66,6 +66,16 @@ public abstract class GameRendererCrosshairRetargetMixin {
         HitResult initialTarget = ht;
         boolean slabHeld = slabbed$isSlabPlacementIntent();
 
+        if (slabHeld && ht instanceof BlockHitResult blockHit && blockHit.getSide() == Direction.UP) {
+            ClientWorld world = client.world;
+            BlockPos pos = blockHit.getBlockPos();
+            if (world != null && slabbed$isAnchoredLoweredFullBlock(world, pos, world.getBlockState(pos))) {
+                slabbed$traceTargeting(tickProgress, initialTarget,
+                        "scan-skip-slab-held-anchored-lowered-full-block-up", false);
+                return;
+            }
+        }
+
         // Slab-held intent guard: when vanilla's initial crosshair already
         // sits on a lowered slab face (the same predicate the side-slab
         // retarget uses to recognize candidates), preserve that face. The
@@ -100,11 +110,17 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (loweredChainHit != null && slabbed$isCloserOrTied(tickProgress, loweredChainHit, chosen)) {
             chosen = loweredChainHit;
         }
+        BlockHitResult directCustomHit = slabHeld ? null : slabbed$retargetDirectCustomSupportedObject(tickProgress, ht);
+        if (directCustomHit != null && slabbed$isCloserOrTied(tickProgress, directCustomHit, chosen)) {
+            chosen = directCustomHit;
+        }
         if (chosen != null) {
             client.crosshairTarget = chosen;
             boolean sideSlabFired = chosen == loweredSlabHit;
             String decision;
-            if (chosen == loweredChainHit) {
+            if (chosen == directCustomHit) {
+                decision = "scan-direct-custom-supported-object-fired";
+            } else if (chosen == loweredChainHit) {
                 decision = "scan-lowered-chain-fired";
             } else if (sideSlabFired) {
                 decision = slabHeld
@@ -408,6 +424,73 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 || supportState.get(SlabBlock.TYPE) != SlabType.BOTTOM
                 || SlabSupport.getYOffset(world, supportPos, supportState) != -0.5
                 || !slabbed$hasAdjacentAnchoredLoweredFullBlock(world, supportPos)) {
+            return null;
+        }
+
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        BlockHitResult outlineHit = outline.raycast(eye, end, pos);
+        if (outlineHit == null) {
+            return null;
+        }
+        return outlineHit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6
+                ? outlineHit : null;
+    }
+
+    private BlockHitResult slabbed$retargetDirectCustomSupportedObject(float tickProgress, HitResult currentHit) {
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            return null;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d dir = cam.getRotationVec(tickProgress);
+        double reach = 6.0;
+        Vec3d end = eye.add(dir.multiply(reach));
+        double currentDist2 = Double.POSITIVE_INFINITY;
+        if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
+            currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
+        }
+        int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
+
+        BlockHitResult bestHit = null;
+        double bestDist2 = currentDist2;
+        for (int i = 1; i <= steps; i++) {
+            double t = reach * i / steps;
+            if (t * t > bestDist2 + 1.0e-6) {
+                break;
+            }
+            Vec3d sample = eye.add(dir.multiply(t));
+            BlockPos samplePos = BlockPos.ofFloored(sample);
+
+            BlockHitResult hit = slabbed$raycastDirectCustomSupportedObject(world, cam, eye, end, samplePos);
+            if (hit != null) {
+                double dist2 = hit.getPos().squaredDistanceTo(eye);
+                if (dist2 <= bestDist2 + 1.0e-6) {
+                    bestHit = hit;
+                    bestDist2 = dist2;
+                }
+            }
+
+            hit = slabbed$raycastDirectCustomSupportedObject(world, cam, eye, end, samplePos.up());
+            if (hit != null) {
+                double dist2 = hit.getPos().squaredDistanceTo(eye);
+                if (dist2 <= bestDist2 + 1.0e-6) {
+                    bestHit = hit;
+                    bestDist2 = dist2;
+                }
+            }
+        }
+
+        return bestHit;
+    }
+
+    private static BlockHitResult slabbed$raycastDirectCustomSupportedObject(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos
+    ) {
+        BlockState state = world.getBlockState(pos);
+        if (!SlabSupport.isDirectCustomSlabSupportedObject(world, pos, state)
+                || SlabSupport.getYOffset(world, pos, state) != -0.5) {
             return null;
         }
 

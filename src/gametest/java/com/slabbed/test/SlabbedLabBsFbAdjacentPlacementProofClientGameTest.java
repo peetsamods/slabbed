@@ -23,6 +23,8 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
+import java.util.function.Predicate;
+
 public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements FabricClientGameTest {
 
     private static final BlockPos SUPPORT_POS = new BlockPos(0, 200, 0);
@@ -907,7 +909,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
             world.setBlockState(candidateSupport, Blocks.STONE.getDefaultState(),
                     net.minecraft.block.Block.NOTIFY_LISTENERS);
             SlabAnchorAttachment.addAnchor(world, candidateSupport, world.getBlockState(candidateSupport));
-            SlabbedLabLoweredCarrierSeed.forceAddPersistentLoweredSlabCarrierForTest(
+            forceAddPersistentLoweredSlabCarrierForTest(
                     world, dangerousCandidate, proofName);
         });
         waitForPlacementSync(ctx);
@@ -918,7 +920,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
                 throw new RuntimeException(proofName + " client not ready");
             }
             mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
-            SlabbedLabLoweredCarrierSeed.forceAddPersistentLoweredSlabCarrierForClientTest(
+            forceAddPersistentLoweredSlabCarrierForClientTest(
                     mc.world, dangerousCandidate, proofName);
             var cam = mc.getCameraEntity();
             if (cam == null) {
@@ -1076,6 +1078,39 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
                 Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
                 net.minecraft.block.Block.NOTIFY_LISTENERS);
         SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, carrierPos, world.getBlockState(carrierPos));
+    }
+
+    private static void forceAddPersistentLoweredSlabCarrierForTest(
+            World world,
+            BlockPos carrierPos,
+            String proofName
+    ) {
+        BlockState state = world.getBlockState(carrierPos);
+        if (!state.getBlock().equals(Blocks.AIR)) {
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, carrierPos, state);
+        }
+        if (!SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, carrierPos, state)) {
+            throw new RuntimeException("RED: " + proofName
+                    + " helper failed to seed persistent lowered slab carrier on server for "
+                    + carrierPos.toShortString());
+        }
+    }
+
+    private static void forceAddPersistentLoweredSlabCarrierForClientTest(
+            World world,
+            BlockPos carrierPos,
+            String proofName
+    ) {
+        forceAddPersistentLoweredSlabCarrierForTest(world, carrierPos, proofName);
+        Predicate<BlockPos> previous = SlabAnchorAttachment.clientLoweredSlabCarrierLookup;
+        SlabAnchorAttachment.clientLoweredSlabCarrierLookup = pos -> pos.equals(carrierPos)
+                || previous != null && previous.test(pos);
+        BlockState state = world.getBlockState(carrierPos);
+        if (!SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, carrierPos, state)) {
+            throw new RuntimeException("RED: " + proofName
+                    + " helper failed to seed persistent lowered slab carrier on client for "
+                    + carrierPos.toShortString());
+        }
     }
 
     private static void assertLoweredDoubleCarrier(World world, String label, BlockPos carrierPos) {

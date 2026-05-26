@@ -2,6 +2,7 @@ package com.slabbed.util;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
@@ -79,6 +80,9 @@ public final class SlabSupport {
      * Returns true if the state is a slab with a defined type.
      */
     public static boolean isSupportingSlab(BlockState state) {
+        if (CompatHooks.shouldSkipSlabSupport(state)) {
+            return false;
+        }
         return state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE);
     }
 
@@ -140,6 +144,36 @@ public final class SlabSupport {
         return switch (type) {
             case BOTTOM -> 0.5;
             case TOP, DOUBLE -> 1.0;
+        };
+    }
+
+    public static boolean isDirectObjectSupportSurface(BlockView world, BlockPos pos, BlockState state) {
+        return getDirectObjectSupportTopOffset(state) > 0.0;
+    }
+
+    public static boolean isDirectCustomSlabSupportedObject(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
+            return false;
+        }
+
+        BlockState supportState = world.getBlockState(pos.down());
+        return CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE;
+    }
+
+    public static double getDirectObjectSupportTopOffset(BlockState state) {
+        CompatSlabSurfaceKind customKind = CompatHooks.customSlabSurfaceKind(state);
+        return switch (customKind) {
+            case BOTTOM_LIKE -> 0.5;
+            case TOP_LIKE, DOUBLE_LIKE -> 1.0;
+            case NONE, UNKNOWN -> {
+                if (isBottomSlab(state)) {
+                    yield 0.5;
+                }
+                if (isTopSlab(state) || isSupportingSlab(state) && state.get(SlabBlock.TYPE) == SlabType.DOUBLE) {
+                    yield 1.0;
+                }
+                yield 0.0;
+            }
         };
     }
 
@@ -582,6 +616,11 @@ public final class SlabSupport {
             return -0.5;
         }
 
+        double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
+        if (!Double.isNaN(directCustomSurfaceDy)) {
+            return directCustomSurfaceDy;
+        }
+
         if (shouldOffset(world, pos, state)) {
             // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
             // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
@@ -730,6 +769,31 @@ public final class SlabSupport {
             return true;
         }
         return !state.isSolidBlock(world, pos);
+    }
+
+    private static double directCustomSlabSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (!isDirectCustomSlabSupportedObject(world, pos, state)) {
+            return Double.NaN;
+        }
+
+        return -0.5;
+    }
+
+    private static boolean isDirectCustomSlabSupportSubject(BlockView world, BlockPos pos, BlockState state) {
+        if (state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || isThinTopLayer(state)
+                || !state.getFluidState().isEmpty()
+                || CompatHooks.shouldSkipOffset(state)) {
+            return false;
+        }
+
+        Block block = state.getBlock();
+        if (block instanceof BlockEntityProvider || block instanceof CraftingTableBlock) {
+            return false;
+        }
+
+        return state.isSolidBlock(world, pos);
     }
 
     /**
