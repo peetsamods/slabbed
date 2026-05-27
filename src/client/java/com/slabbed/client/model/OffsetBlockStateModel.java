@@ -1,5 +1,6 @@
 package com.slabbed.client.model;
 
+import com.slabbed.Slabbed;
 import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
@@ -26,6 +27,8 @@ import java.util.function.Predicate;
  */
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
 public final class OffsetBlockStateModel implements BlockStateModel {
+    private static final boolean CULL_TRACE = Boolean.getBoolean("slabbed.render.offset.cullTrace");
+
     private final BlockStateModel wrapped;
     private final FabricBlockStateModel fabricWrapped;
 
@@ -53,8 +56,8 @@ public final class OffsetBlockStateModel implements BlockStateModel {
     public void emitQuads(QuadEmitter emitter, BlockAndTintGetter view, BlockPos pos, BlockState state, RandomSource random,
                           Predicate<Direction> cullTest) {
         float dy = slabbed$modelDy(view, pos, state);
-        QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
-        fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
+        QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy, slabbed$hasMismatchedNeighborDy(view, pos, dy)) : emitter;
+        fabricWrapped.emitQuads(out, view, pos, state, random, slabbed$offsetAwareCullTest(view, pos, state, dy, cullTest));
     }
 
     private static float slabbed$modelDy(BlockAndTintGetter view, BlockPos pos, BlockState state) {
@@ -75,5 +78,53 @@ public final class OffsetBlockStateModel implements BlockStateModel {
             }
         }
         return dy;
+    }
+
+    private static Predicate<Direction> slabbed$offsetAwareCullTest(
+            BlockAndTintGetter view,
+            BlockPos pos,
+            BlockState state,
+            float dy,
+            Predicate<Direction> cullTest
+    ) {
+        return direction -> {
+            if (direction == null || cullTest == null) {
+                return false;
+            }
+            BlockPos neighborPos = pos.relative(direction);
+            BlockState neighborState = view.getBlockState(neighborPos);
+            float neighborDy = slabbed$modelDy(view, neighborPos, neighborState);
+            if (Math.abs(neighborDy - dy) > 1.0e-6f) {
+                if (CULL_TRACE) {
+                    boolean vanillaCull = cullTest.test(direction);
+                    slabbed$traceCullDecision(pos, direction, dy, neighborPos, neighborDy, state, neighborState, vanillaCull);
+                }
+                return false;
+            }
+            return cullTest.test(direction);
+        };
+    }
+
+    private static Predicate<Direction> slabbed$hasMismatchedNeighborDy(BlockAndTintGetter view, BlockPos pos, float dy) {
+        return direction -> {
+            BlockPos neighborPos = pos.relative(direction);
+            BlockState neighborState = view.getBlockState(neighborPos);
+            float neighborDy = slabbed$modelDy(view, neighborPos, neighborState);
+            return Math.abs(neighborDy - dy) > 1.0e-6f;
+        };
+    }
+
+    private static void slabbed$traceCullDecision(
+            BlockPos pos,
+            Direction direction,
+            float dy,
+            BlockPos neighborPos,
+            float neighborDy,
+            BlockState state,
+            BlockState neighborState,
+            boolean vanillaCull
+    ) {
+        Slabbed.LOGGER.info("[slabbed.render.offset.cullTrace] dyMismatch pos={} state={} face={} dy={} neighborPos={} neighborState={} neighborDy={} vanillaCull={} forcedCull=false",
+                pos.toShortString(), state, direction, dy, neighborPos.toShortString(), neighborState, neighborDy, vanillaCull);
     }
 }

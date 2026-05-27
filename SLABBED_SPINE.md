@@ -30,7 +30,7 @@ Do not rely on this file alone for release proof; Git commands, proof logs, the 
 
 ## Current Port Status
 
-The 26.1.2 port has reached a placement-proof release candidate for the slab-held visual-target / placement-intent fault plus the follow-up placement review fallout. Work so far has focused on release-base provenance, mapping/tooling/classpath proof, Java 25 / Gradle / Loom compatibility, source-set wiring, narrow source API probes, the slab-held visual-target failure, and the reviewed placement/retargeting guards.
+The 26.1.2 port has reached a placement/culling closure candidate for the slab-held visual-target / placement-intent fault plus the follow-up placement review fallout. Work so far has focused on release-base provenance, mapping/tooling/classpath proof, Java 25 / Gradle / Loom compatibility, source-set wiring, narrow source API probes, the slab-held visual-target failure, the reviewed placement/retargeting guards, and the post-cull visible-face / partial-collision closure.
 
 Resolved blocker: Julia's 2026-05-23 slab-held recording showed the selection outline/target floating above the visible stone body. The port restores the missing 26.1.2 visible-shape path, preserves the visual triad, applies the final-target-unknown placement-intent fix through the validated visible lane, prevents slab-held compound-visible retargeting from stealing nearer vanilla block hits, rejects non-placeable final-target-unknown visible-lane contexts before APPLY, and narrows lowered-side comfort retargeting so border samples outside the visible face do not remain sticky. Temporary `runner3RowId` / provenance audit instrumentation was removed before release proof.
 
@@ -44,6 +44,16 @@ Fresh placement review fallout proof on 2026-05-26:
 - Runtime smoke: `tmp/port-26-1-2-placement-review-fallout-proof-98bc0629/runClient-smoke.log`
 - Visual check: Julia supplied a live recording showing large/sticky selection clipping. The checkerboard scan reproduced the border-sticky target anomaly and proved it green after the comfort-retarget narrowing; no additional manual visual route was available while she was away.
 - Release hygiene: `./gradlew --no-daemon clean build` passed; jar scans found no runner3/gametest/probe/trace/debug/provenance/tmp artifacts.
+
+Fresh placement/culling closure proof on 2026-05-27:
+
+- Compile: `JAVA_HOME=$(/usr/libexec/java_home -v 25) ./gradlew --no-daemon compileJava compileClientJava --console plain` passed.
+- Runner3: `tmp/port-26-1-2-wip-closure-savepoint-c36611d/final-runner3.log`
+- Runner3 metrics: `mismatches=88`, `NO_PLACE_BUT_SHOULD_PLACE=19`, `PLACED_RELATIVE_TO_RETARGETED_OWNER=6`, `PLACED_ABOVE_VISIBLE_TARGET=3`.
+- Culling proof marker: `classification=CULLING_VISUAL_REPRO_FIXED_CURRENT_ONLY`, not a literal restored-face marker. Existing proof is in `tmp/port-26-1-2-culling-clipping-fix-c36611d/quad-cullface-visual-ab-summary.txt`: `current_vs_baseline_diff_pixels=88200`, `pre_quadfix_current_vs_baseline_diff_pixels=0`, and the mechanism states that quadfix current renders the missing gold face.
+- Collision proof: `tmp/port-26-1-2-wip-closure-savepoint-c36611d/final-hitboxgate.log` has both `oak_fence` and `cobblestone_wall` object rows at `expectedDy=-1.500000` with `raycastCoLocated=yes` and `collisionCoLocated=yes`.
+- Runtime forbidden marker scan across runner3, hitboxgate, and culling visual logs found no `Invalid player data`, `InvalidInjectionException`, `MixinApplyError`, `updateCrosshairTarget`, `onPlayerInteractBlock`, or `Vec3d.ofCenter` markers.
+- Release hygiene: `JAVA_HOME=$(/usr/libexec/java_home -v 25) ./gradlew --no-daemon clean build --console plain` passed; `build/libs/*.jar` leakage scan found no runner3/gametest/probe/trace/debug/provenance/tmp artifacts; `git diff --check` passed.
 
 The preserved blocker note is:
 
@@ -90,4 +100,4 @@ For documentation-only work, keep edits limited to port-local docs.
 
 For code migration work, classify the current dominant compile/source blocker first, then patch exactly the requested file or the smallest proven mechanism. If the result remains unclear after one compile gate, stop with tried/observed/proven/unproven/next-smallest-audit.
 
-The placement review fallout savepoint is the current local baseline. The next safe action is a new narrow slice only after this savepoint is published and the tracked tree is clean.
+The placement/culling closure savepoint is the current local baseline once the annotated save tag is published and the tracked tree is clean. The next safe action is a new narrow slice only after that savepoint is complete.

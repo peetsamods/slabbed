@@ -355,6 +355,9 @@ public abstract class BlockItemPlacementIntentMixin {
         if (!context.getLevel().getBlockState(currentOutwardPos).isAir()) {
             return null;
         }
+        if (context.getLevel().getBlockState(currentOutwardPos.below()).isAir()) {
+            return null;
+        }
 
         BlockPos backAboveOwnerPos = finalOwnerPos.relative(side.getOpposite()).above();
         BlockState backAboveOwnerState = context.getLevel().getBlockState(backAboveOwnerPos);

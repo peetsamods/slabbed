@@ -290,6 +290,10 @@ public abstract class SlabSupportStateMixin {
         }
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
+            if (SlabSupport.isBeta35FenceWallVariantContactObject(self) && yOff < 0.0) {
+                cir.setReturnValue(self.getShape(world, pos, ctx));
+                return;
+            }
             cir.setReturnValue(cir.getReturnValue().move(0.0, yOff, 0.0));
         }
     }
