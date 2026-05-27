@@ -797,12 +797,7 @@ public final class SlabSupport {
             return false;
         }
 
-        Block block = state.getBlock();
-        if (block instanceof BlockEntityProvider || block instanceof CraftingTableBlock) {
-            return false;
-        }
-
-        return state.isSolidBlock(world, pos);
+        return state.isSolidBlock(world, pos) || isSlabSitCandidate(world, pos, state);
     }
 
     /**
