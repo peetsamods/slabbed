@@ -43,6 +43,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     private static final String DIRECT_SUPPORT_RED_ONLY_PROPERTY = "slabbed.terrainSlabsDirectSupportRedOnly";
     private static final BlockPos SUPPORT_POS = new BlockPos(24, 200, 0);
     private static final BlockPos VANILLA_SUPPORT_POS = SUPPORT_POS.add(4, 0, 0);
+    private static final BlockPos OBJECT_SUPPORT_POS = SUPPORT_POS.add(8, 0, 0);
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
@@ -138,6 +139,10 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                     .with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
             world.setBlockState(VANILLA_SUPPORT_POS.up(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(VANILLA_SUPPORT_POS.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(OBJECT_SUPPORT_POS.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(OBJECT_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(OBJECT_SUPPORT_POS.up(), Blocks.TORCH.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(OBJECT_SUPPORT_POS.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
         });
         ctx.waitTick();
         ctx.waitTick();
@@ -234,8 +239,78 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
 
             System.out.println("TERRAIN_SLABS_DIRECT_SUPPORT_GREEN" + fields);
             assertTerrainSlabsCullingOptOutControl(mc, supportState);
+            assertTerrainSlabsLoweredObjectSupport(mc);
             assertVanillaDirectSupportControl(mc);
         });
+    }
+
+    private static void assertTerrainSlabsLoweredObjectSupport(MinecraftClient mc) {
+        BlockPos objectPos = OBJECT_SUPPORT_POS.up();
+        BlockState supportState = mc.world.getBlockState(OBJECT_SUPPORT_POS);
+        BlockState objectState = mc.world.getBlockState(objectPos);
+        if (!objectState.isOf(Blocks.TORCH)) {
+            throw new AssertionError("expected minecraft:torch at " + objectPos + ", found " + objectState);
+        }
+
+        boolean skipOffset = CompatHooks.shouldSkipOffset(supportState);
+        CompatSkipResult skipSupport = compatSkipSlabSupport(supportState);
+        boolean genericSupport = SlabSupport.isSupportingSlab(supportState);
+        boolean directSurface = SlabSupport.isDirectObjectSupportSurface(mc.world, OBJECT_SUPPORT_POS, supportState);
+        boolean directSubject = SlabSupport.isDirectCustomSlabSupportedObject(mc.world, objectPos, objectState);
+        double supportDy = SlabSupport.getYOffset(mc.world, OBJECT_SUPPORT_POS, supportState);
+        double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+        double modelMinY = modelMinY(mc.world, objectPos, objectState);
+        VoxelShape outline = objectState.getOutlineShape(mc.world, objectPos, ShapeContext.of(mc.player));
+        VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
+        double outlineMinY = outline.isEmpty() ? Double.NaN : outline.getBoundingBox().minY;
+        double raycastMinY = raycastShape.isEmpty() ? Double.NaN : raycastShape.getBoundingBox().minY;
+
+        String fields = " supportId=terrainslabs:grass_slab"
+                + " supportState=" + supportState
+                + " supportPos=" + OBJECT_SUPPORT_POS.toShortString()
+                + " subjectId=minecraft:torch"
+                + " subjectPos=" + objectPos.toShortString()
+                + " shouldSkipOffset=" + skipOffset
+                + " shouldSkipSlabSupport=" + skipSupport
+                + " isSupportingSlab=" + genericSupport
+                + " directSurface=" + directSurface
+                + " directSubject=" + directSubject
+                + " supportDy=" + supportDy
+                + " subjectDy=" + objectDy
+                + " modelMinY=" + modelMinY
+                + " outlineMinY=" + outlineMinY
+                + " raycastShapeMinY=" + (raycastShape.isEmpty() ? "empty" : Double.toString(raycastMinY));
+        System.out.println("TERRAIN_SLABS_LOWERED_OBJECT_SUPPORT_TRACE" + fields);
+
+        String redReason = null;
+        if (!skipOffset) {
+            redReason = "terrain_slab_self_offset_not_skipped";
+        } else if (!skipSupport.present() || !skipSupport.value()) {
+            redReason = "terrain_slab_generic_support_not_skipped";
+        } else if (genericSupport) {
+            redReason = "terrain_slab_still_generic_support";
+        } else if (!directSurface) {
+            redReason = "terrain_slab_not_direct_surface";
+        } else if (!directSubject) {
+            redReason = "object_not_direct_custom_supported";
+        } else if (Math.abs(supportDy) > 1.0e-6d) {
+            redReason = "terrain_slab_self_dy_not_zero";
+        } else if (Math.abs(objectDy - (-0.5d)) > 1.0e-6d) {
+            redReason = "object_direct_support_dy_mismatch";
+        } else if (Math.abs(modelMinY - (-0.5d)) > 1.0e-6d) {
+            redReason = "object_model_dy_mismatch";
+        } else if (Math.abs(outlineMinY - (-0.5d)) > 1.0e-6d) {
+            redReason = "object_outline_dy_mismatch";
+        } else if (!raycastShape.isEmpty() && Math.abs(raycastMinY - (-0.5d)) > 1.0e-6d) {
+            redReason = "object_raycast_shape_dy_mismatch";
+        }
+
+        if (redReason != null) {
+            System.out.println("TERRAIN_SLABS_LOWERED_OBJECT_SUPPORT_RED reason=" + redReason + fields);
+            throw new AssertionError("Terrain Slabs lowered object support proof failed: " + redReason + fields);
+        }
+
+        System.out.println("TERRAIN_SLABS_LOWERED_OBJECT_SUPPORT_GREEN" + fields);
     }
 
     private static void assertTerrainSlabsCullingOptOutControl(MinecraftClient mc, BlockState supportState) {
