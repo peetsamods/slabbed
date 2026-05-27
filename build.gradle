@@ -34,6 +34,9 @@ repositories {
 }
 
 dependencies {
+    def terrainSlabsJar = file("${projectDir}/run/mods/countereds_terrain_slabs-2.2.5.jar")
+    def terrainSlabsMidnightLibJar = file("${projectDir}/run/.fabric/processedMods/midnightlib-1.9.2-345c341449172fe2.jar")
+
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
@@ -45,6 +48,13 @@ dependencies {
     modClientImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
+
+    if (terrainSlabsJar.exists()) {
+        modLocalRuntime files(terrainSlabsJar)
+    }
+    if (terrainSlabsMidnightLibJar.exists()) {
+        modLocalRuntime files(terrainSlabsMidnightLibJar)
+    }
 
     // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
     // extended to the gametest source set by configureTests { createSourceSet = true })
