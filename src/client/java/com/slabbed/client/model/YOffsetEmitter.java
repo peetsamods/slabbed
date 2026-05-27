@@ -1,6 +1,7 @@
 package com.slabbed.client.model;
 
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadTransform;
 import net.minecraft.core.Direction;
 
 import java.lang.reflect.Method;
@@ -35,18 +36,31 @@ public final class YOffsetEmitter {
             Predicate<Direction> clearCullFace
     ) throws Throwable {
         if ("emit".equals(method.getName()) && (args == null || args.length == 0)) {
-            Direction cullFace = delegate.cullFace();
-            if (cullFace != null && clearCullFace.test(cullFace)) {
-                delegate.cullFace(null);
-                delegate.nominalFace(cullFace);
+            QuadTransform clearCullTransform = null;
+            if (clearCullFace != null) {
+                clearCullTransform = quad -> {
+                    Direction cullFace = quad.cullFace();
+                    if (cullFace != null && clearCullFace.test(cullFace)) {
+                        quad.cullFace(null);
+                        quad.nominalFace(cullFace);
+                    }
+                    return true;
+                };
+                delegate.pushTransform(clearCullTransform);
             }
-            for (int i = 0; i < 4; i++) {
-                float x = delegate.x(i);
-                float y = delegate.y(i);
-                float z = delegate.z(i);
-                delegate.pos(i, x, y + dy, z);
+            try {
+                for (int i = 0; i < 4; i++) {
+                    float x = delegate.x(i);
+                    float y = delegate.y(i);
+                    float z = delegate.z(i);
+                    delegate.pos(i, x, y + dy, z);
+                }
+                return method.invoke(delegate, args);
+            } finally {
+                if (clearCullTransform != null) {
+                    delegate.popTransform();
+                }
             }
-            return method.invoke(delegate, args);
         }
 
         if ("pos".equals(method.getName())
