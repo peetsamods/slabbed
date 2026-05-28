@@ -37,6 +37,10 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (TerrainSlabsProofFocus.skipUnrelatedClientGameTest(getClass().getSimpleName())) {
+            return;
+        }
+
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {

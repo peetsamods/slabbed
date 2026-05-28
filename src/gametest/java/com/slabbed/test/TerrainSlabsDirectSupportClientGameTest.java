@@ -8,6 +8,7 @@ import com.slabbed.util.TorchParticleTrace;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldBuilder;
 import net.fabricmc.fabric.api.renderer.v1.Renderer;
 import net.fabricmc.fabric.api.renderer.v1.mesh.MutableMesh;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadView;
@@ -17,6 +18,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.DoorBlock;
+import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
@@ -48,11 +50,17 @@ import java.lang.reflect.Method;
 public final class TerrainSlabsDirectSupportClientGameTest implements FabricClientGameTest {
     private static final String COMPAT_DUMP_PROPERTY = "slabbed.terrainSlabsCompatDump";
     private static final String DIRECT_SUPPORT_RED_ONLY_PROPERTY = "slabbed.terrainSlabsDirectSupportRedOnly";
+    private static final String GENERATED_DOUBLE_DIRECT_SUPPORT_RED_ONLY_PROPERTY =
+            "slabbed.terrainSlabsGeneratedDoubleDirectSupportRedOnly";
+    private static final String CULLING_FACE_RED_ONLY_PROPERTY = "slabbed.terrainSlabsCullingFaceRedOnly";
+    private static final String EXACT_SEED_TRACE_PROPERTY = "slabbed.terrainSlabsExactSeedTrace";
     private static final String LIVE_PLACEMENT_PROPERTY = "slabbed.terrainSlabsLivePlacementProof";
     private static final String PARTICLE_PROOF_PROPERTY = "slabbed.terrainSlabsParticleProof";
+    private static final String EXACT_SEED = "681745208735773989";
     private static final BlockPos SUPPORT_POS = new BlockPos(24, 200, 0);
     private static final BlockPos VANILLA_SUPPORT_POS = SUPPORT_POS.add(4, 0, 0);
     private static final BlockPos OBJECT_SUPPORT_POS = SUPPORT_POS.add(8, 0, 0);
+    private static final BlockPos CULLING_TARGET_POS = SUPPORT_POS.add(12, 0, 0);
     private static final BlockPos LIVE_SUPPORT_POS = SUPPORT_POS.add(0, 0, 8);
     private static final double EPSILON = 1.0e-6d;
 
@@ -60,30 +68,47 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     public void runTest(ClientGameTestContext ctx) {
         boolean dump = Boolean.getBoolean(COMPAT_DUMP_PROPERTY);
         boolean proof = Boolean.getBoolean(DIRECT_SUPPORT_RED_ONLY_PROPERTY);
+        boolean generatedDoubleProof = Boolean.getBoolean(GENERATED_DOUBLE_DIRECT_SUPPORT_RED_ONLY_PROPERTY);
+        boolean cullingFaceProof = Boolean.getBoolean(CULLING_FACE_RED_ONLY_PROPERTY);
+        boolean exactSeedTrace = Boolean.getBoolean(EXACT_SEED_TRACE_PROPERTY);
         boolean livePlacement = Boolean.getBoolean(LIVE_PLACEMENT_PROPERTY);
         boolean particleProof = Boolean.getBoolean(PARTICLE_PROOF_PROPERTY);
-        if (!dump && !proof && !livePlacement && !particleProof) {
+        if (!dump && !proof && !generatedDoubleProof && !cullingFaceProof
+                && !exactSeedTrace && !livePlacement && !particleProof) {
             return;
         }
 
         if (!FabricLoader.getInstance().isModLoaded(TerrainSlabsCompat.MOD_ID)) {
             System.out.println("TERRAIN_SLABS_COMPAT_DUMP_BEGIN terrainslabs_not_loaded");
             System.out.println("TERRAIN_SLABS_COMPAT_DUMP_END total=0");
-            if (proof) {
+            if (proof || generatedDoubleProof || cullingFaceProof) {
                 throw new AssertionError("Countered Terrain Slabs mod is not loaded");
             }
             return;
         }
 
-        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
-                .setUseConsistentSettings(true)
-                .create()) {
+        TestWorldBuilder worldBuilder = ctx.worldBuilder().setUseConsistentSettings(true);
+        if (exactSeedTrace) {
+            worldBuilder.setUseConsistentSettings(false)
+                    .adjustSettings(creator -> creator.setSeed(EXACT_SEED));
+        }
+
+        try (TestSingleplayerContext singleplayer = worldBuilder.create()) {
             ctx.waitTick();
+            if (exactSeedTrace) {
+                runExactSeedTrace(ctx);
+            }
             if (dump) {
                 ctx.runOnClient(mc -> dumpTerrainSlabsCompatFacts(mc.world));
             }
             if (proof) {
                 runDirectSupportProof(ctx, singleplayer);
+            }
+            if (generatedDoubleProof) {
+                runGeneratedDoubleDirectSupportProof(ctx, singleplayer);
+            }
+            if (cullingFaceProof) {
+                runCullingFaceProof(ctx, singleplayer);
             }
             if (livePlacement) {
                 runLivePlacementProof(ctx, singleplayer);
@@ -92,6 +117,26 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 runParticleProof(ctx, singleplayer);
             }
         }
+    }
+
+    private static void runExactSeedTrace(ClientGameTestContext ctx) {
+        ctx.waitTicks(40);
+        ctx.runOnClient(mc -> {
+            if (mc.getServer() == null) {
+                throw new AssertionError("exact seed trace server missing");
+            }
+            long seed = mc.getServer().getOverworld().getSeed();
+            String levelName = mc.getServer().getSaveProperties().getLevelName();
+            System.out.println("TERRAIN_SLABS_EXACT_SEED_TRACE"
+                    + " levelName=" + levelName
+                    + " seed=" + seed
+                    + " expectedSeed=" + EXACT_SEED
+                    + " matches=" + Long.toString(seed).equals(EXACT_SEED));
+            if (!Long.toString(seed).equals(EXACT_SEED)) {
+                throw new AssertionError("exact seed trace expected seed " + EXACT_SEED + " but got " + seed);
+            }
+        });
+        ctx.waitTicks(80);
     }
 
     private static void dumpTerrainSlabsCompatFacts(net.minecraft.world.BlockView world) {
@@ -600,6 +645,201 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 true));
     }
 
+    private static void runGeneratedDoubleDirectSupportProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        BlockPos fenceSupportPos = SUPPORT_POS.add(16, 0, 0);
+        BlockPos wallSupportPos = SUPPORT_POS.add(18, 0, 0);
+        BlockPos gateSupportPos = SUPPORT_POS.add(20, 0, 0);
+        BlockPos gateInWallSupportPos = SUPPORT_POS.add(22, 0, 0);
+        BlockPos gateBaselinePos = gateSupportPos.add(0, 1, 4);
+        BlockPos gateInWallBaselinePos = gateInWallSupportPos.add(0, 1, 4);
+        setGeneratedDoubleGrassSupport(ctx, singleplayer, fenceSupportPos);
+        setGeneratedDoubleGrassSupport(ctx, singleplayer, wallSupportPos);
+        setGeneratedDoubleGrassSupport(ctx, singleplayer, gateSupportPos);
+        setGeneratedDoubleGrassSupport(ctx, singleplayer, gateInWallSupportPos);
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(fenceSupportPos.up(), Blocks.SPRUCE_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(fenceSupportPos.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(wallSupportPos.up(), Blocks.ANDESITE_WALL.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(wallSupportPos.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(gateSupportPos.up(), Blocks.SPRUCE_FENCE_GATE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(gateSupportPos.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    gateInWallSupportPos.up(),
+                    Blocks.SPRUCE_FENCE_GATE.getDefaultState().with(FenceGateBlock.IN_WALL, true),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(gateInWallSupportPos.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(gateBaselinePos.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(gateBaselinePos, Blocks.SPRUCE_FENCE_GATE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(gateBaselinePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(gateInWallBaselinePos.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(
+                    gateInWallBaselinePos,
+                    Blocks.SPRUCE_FENCE_GATE.getDefaultState().with(FenceGateBlock.IN_WALL, true),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(gateInWallBaselinePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            StringBuilder failures = new StringBuilder();
+            assertGeneratedDoubleSubjectCase(
+                    mc,
+                    "TERRAIN_SLABS_GENERATED_DOUBLE_SPRUCE_FENCE_DIRECT_SUPPORT",
+                    fenceSupportPos,
+                    "minecraft:spruce_fence",
+                    failures);
+            assertGeneratedDoubleSubjectCase(
+                    mc,
+                    "TERRAIN_SLABS_GENERATED_DOUBLE_ANDESITE_WALL_DIRECT_SUPPORT",
+                    wallSupportPos,
+                    "minecraft:andesite_wall",
+                    failures);
+            assertGeneratedDoubleSubjectCase(
+                    mc,
+                    "TERRAIN_SLABS_GENERATED_DOUBLE_SPRUCE_FENCE_GATE_DIRECT_SUPPORT",
+                    gateSupportPos,
+                    "minecraft:spruce_fence_gate",
+                    gateBaselinePos,
+                    failures);
+            assertGeneratedDoubleSubjectCase(
+                    mc,
+                    "TERRAIN_SLABS_GENERATED_DOUBLE_SPRUCE_FENCE_GATE_IN_WALL_DIRECT_SUPPORT",
+                    gateInWallSupportPos,
+                    "minecraft:spruce_fence_gate",
+                    gateInWallBaselinePos,
+                    failures);
+
+            if (!failures.isEmpty()) {
+                throw new AssertionError("Generated double Terrain Slabs direct support proof failed: " + failures);
+            }
+            System.out.println("TERRAIN_SLABS_GENERATED_DOUBLE_DIRECT_SUPPORT_GREEN"
+                    + " fenceSupportPos=" + fenceSupportPos.toShortString()
+                    + " wallSupportPos=" + wallSupportPos.toShortString()
+                    + " gateSupportPos=" + gateSupportPos.toShortString()
+                    + " gateInWallSupportPos=" + gateInWallSupportPos.toShortString());
+        });
+    }
+
+    private static void assertGeneratedDoubleSubjectCase(
+            MinecraftClient mc,
+            String markerPrefix,
+            BlockPos supportPos,
+            String subjectId,
+            StringBuilder failures
+    ) {
+        assertGeneratedDoubleSubjectCase(mc, markerPrefix, supportPos, subjectId, null, failures);
+    }
+
+    private static void assertGeneratedDoubleSubjectCase(
+            MinecraftClient mc,
+            String markerPrefix,
+            BlockPos supportPos,
+            String subjectId,
+            BlockPos modelBaselinePos,
+            StringBuilder failures
+    ) {
+        try {
+            assertLivePlacedSubject(
+                    mc,
+                    markerPrefix,
+                    "terrainslabs:grass_slab",
+                    supportPos,
+                    subjectId,
+                    supportPos.up(),
+                    true,
+                    true,
+                    modelBaselinePos);
+        } catch (AssertionError error) {
+            if (!failures.isEmpty()) {
+                failures.append(" | ");
+            }
+            failures.append(markerPrefix).append(": ").append(error.getMessage());
+        }
+    }
+
+    private static void runCullingFaceProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        Block terrainSlabBlock = terrainBlock("grass_slab");
+        BlockState terrainSlab = terrainSlabBlock.getDefaultState();
+        if (!terrainSlab.contains(SlabBlock.TYPE)) {
+            throw new AssertionError("terrainslabs:grass_slab has no SlabBlock.TYPE: " + terrainSlab);
+        }
+        terrainSlab = terrainSlab.with(SlabBlock.TYPE, SlabType.BOTTOM);
+
+        BlockPos neighborPos = CULLING_TARGET_POS.up();
+        BlockState finalTerrainSlab = terrainSlab;
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(CULLING_TARGET_POS.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(CULLING_TARGET_POS, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(neighborPos, finalTerrainSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(neighborPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> assertTerrainSlabsCullingFace(mc, CULLING_TARGET_POS, Direction.UP));
+    }
+
+    private static void assertTerrainSlabsCullingFace(MinecraftClient mc, BlockPos targetPos, Direction face) {
+        if (mc.world == null || mc.player == null) {
+            throw new AssertionError("client world/player missing for Terrain Slabs culling face proof");
+        }
+
+        BlockPos neighborPos = targetPos.offset(face);
+        BlockState targetState = mc.world.getBlockState(targetPos);
+        BlockState neighborState = mc.world.getBlockState(neighborPos);
+        boolean shouldDrawSide = Block.shouldDrawSide(targetState, neighborState, face);
+        ModelProbe noCull = modelProbe(mc.world, targetPos, targetState, direction -> false);
+        ModelProbe actualCull = modelProbe(mc.world, targetPos, targetState,
+                direction -> direction == face && !shouldDrawSide);
+
+        String fields = " targetId=minecraft:grass_block"
+                + " targetState=" + targetState
+                + " targetProperties=" + describeProperties(targetState)
+                + " targetPos=" + targetPos.toShortString()
+                + " face=" + face
+                + " neighborId=terrainslabs:grass_slab"
+                + " neighborState=" + neighborState
+                + " neighborProperties=" + describeProperties(neighborState)
+                + " neighborPos=" + neighborPos.toShortString()
+                + " shouldDrawSide=" + shouldDrawSide
+                + " quadsNoCull=" + noCull.quads()
+                + " quadsWithActualCull=" + actualCull.quads()
+                + " modelMinYNoCull=" + noCull.minY()
+                + " modelMinYWithActualCull=" + actualCull.minY();
+        System.out.println("TERRAIN_SLABS_CULLING_FACE_TRACE" + fields);
+
+        String redReason = null;
+        if (!targetState.isOf(Blocks.GRASS_BLOCK)) {
+            redReason = "target_state_mismatch";
+        } else if (Registries.BLOCK.getId(neighborState.getBlock()).equals(Identifier.of(TerrainSlabsCompat.MOD_ID, "grass_slab"))
+                && (!neighborState.contains(SlabBlock.TYPE) || neighborState.get(SlabBlock.TYPE) != SlabType.BOTTOM)) {
+            redReason = "neighbor_not_bottom_terrain_slab";
+        } else if (!Registries.BLOCK.getId(neighborState.getBlock()).equals(Identifier.of(TerrainSlabsCompat.MOD_ID, "grass_slab"))) {
+            redReason = "neighbor_state_mismatch";
+        } else if (!shouldDrawSide || actualCull.quads() < noCull.quads()) {
+            redReason = "terrain_face_culled_by_terrain_slab_neighbor";
+        }
+
+        if (redReason != null) {
+            System.out.println("TERRAIN_SLABS_CULLING_FACE_RED reason=" + redReason + fields);
+            throw new AssertionError("Terrain Slabs culling face proof failed: " + redReason + fields);
+        }
+
+        System.out.println("TERRAIN_SLABS_CULLING_FACE_GREEN" + fields);
+    }
+
     private static void runLivePlacementSurfaceProof(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
@@ -769,6 +1009,29 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
             world.setBlockState(supportPos, generatedGrass, Block.NOTIFY_LISTENERS);
+            world.setBlockState(supportPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(supportPos.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+        singleplayer.getClientWorld().waitForChunksRender();
+        waitForSupportState(ctx, singleplayer, supportPos, "terrainslabs:grass_slab");
+    }
+
+    private static void setGeneratedDoubleGrassSupport(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos
+    ) {
+        Block grassSlab = terrainBlock("grass_slab");
+        BlockState state = grassSlab.getDefaultState();
+        state = state.with(SlabBlock.TYPE, SlabType.DOUBLE);
+        state = withBooleanPropertyIfPresent(state, "generated", true);
+        state = withBooleanPropertyIfPresent(state, "snowy", false);
+        state = withBooleanPropertyIfPresent(state, "waterlogged", false);
+        BlockState generatedDoubleGrass = state;
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(supportPos.down(), Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(supportPos, generatedDoubleGrass, Block.NOTIFY_LISTENERS);
             world.setBlockState(supportPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(supportPos.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
         });
@@ -965,6 +1228,29 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             boolean subjectPlacementAccepted,
             boolean expectCustomSupport
     ) {
+        assertLivePlacedSubject(
+                mc,
+                markerPrefix,
+                supportId,
+                supportPos,
+                subjectId,
+                subjectPos,
+                subjectPlacementAccepted,
+                expectCustomSupport,
+                null);
+    }
+
+    private static void assertLivePlacedSubject(
+            MinecraftClient mc,
+            String markerPrefix,
+            String supportId,
+            BlockPos supportPos,
+            String subjectId,
+            BlockPos subjectPos,
+            boolean subjectPlacementAccepted,
+            boolean expectCustomSupport,
+            BlockPos modelBaselinePos
+    ) {
         if (mc.world == null || mc.player == null) {
             throw new AssertionError("client world/player missing for " + markerPrefix);
         }
@@ -982,6 +1268,15 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
         double subjectDy = SlabSupport.getYOffset(mc.world, subjectPos, subjectState);
         double modelMinY = subjectIsExpected ? modelMinY(mc.world, subjectPos, subjectState) : Double.NaN;
+        BlockState baselineState = modelBaselinePos == null ? null : mc.world.getBlockState(modelBaselinePos);
+        boolean baselineSubjectMatches = modelBaselinePos == null
+                || Registries.BLOCK.getId(baselineState.getBlock()).toString().equals(subjectId);
+        double baselineModelMinY = modelBaselinePos != null && baselineSubjectMatches
+                ? modelMinY(mc.world, modelBaselinePos, baselineState)
+                : Double.NaN;
+        double modelDyDelta = modelBaselinePos != null && subjectIsExpected && baselineSubjectMatches
+                ? modelMinY - baselineModelMinY
+                : Double.NaN;
         VoxelShape outline = subjectState.getOutlineShape(mc.world, subjectPos, ShapeContext.of(mc.player));
         VoxelShape raycastShape = subjectState.getRaycastShape(mc.world, subjectPos);
         double outlineMinY = outline.isEmpty() ? Double.NaN : outline.getBoundingBox().minY;
@@ -1023,6 +1318,10 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 + " supportDy=" + supportDy
                 + " subjectDy=" + subjectDy
                 + " modelMinY=" + modelMinY
+                + " modelBaselinePos=" + (modelBaselinePos == null ? "none" : modelBaselinePos.toShortString())
+                + " modelBaselineState=" + (baselineState == null ? "none" : baselineState.toString())
+                + " modelBaselineMinY=" + baselineModelMinY
+                + " modelDyDelta=" + modelDyDelta
                 + " outlineMinY=" + outlineMinY
                 + " raycastShapeMinY=" + (raycastShape.isEmpty() ? "empty" : Double.toString(raycastMinY))
                 + " outlineTargetHit=" + describeHit(outlineHit)
@@ -1053,7 +1352,11 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             redReason = "subject_not_direct_custom_supported";
         } else if (Math.abs(subjectDy - (-0.5d)) > EPSILON) {
             redReason = "subject_dy_mismatch";
-        } else if (Math.abs(modelMinY - (-0.5d)) > EPSILON) {
+        } else if (modelBaselinePos != null && !baselineSubjectMatches) {
+            redReason = "subject_model_baseline_mismatch";
+        } else if (modelBaselinePos != null && Math.abs(modelDyDelta - subjectDy) > EPSILON) {
+            redReason = "subject_model_dy_delta_mismatch";
+        } else if (modelBaselinePos == null && Math.abs(modelMinY - (-0.5d)) > EPSILON) {
             redReason = "subject_model_dy_mismatch";
         } else if (Math.abs(outlineMinY - (-0.5d)) > EPSILON) {
             redReason = "subject_outline_dy_mismatch";
@@ -1332,6 +1635,15 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     }
 
     private static double modelMinY(net.minecraft.world.BlockRenderView world, BlockPos pos, BlockState state) {
+        return modelProbe(world, pos, state, direction -> false).minY();
+    }
+
+    private static ModelProbe modelProbe(
+            net.minecraft.world.BlockRenderView world,
+            BlockPos pos,
+            BlockState state,
+            java.util.function.Predicate<Direction> cullTest
+    ) {
         BlockStateModel model = net.minecraft.client.MinecraftClient.getInstance()
                 .getBlockRenderManager()
                 .getModel(state);
@@ -1343,13 +1655,13 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             throw new AssertionError("Fabric renderer missing for Terrain Slabs direct support proof");
         }
         MutableMesh mesh = renderer.mutableMesh();
-        fabricModel.emitQuads(mesh.emitter(), world, pos, state, Random.create(0x51abbEDL), direction -> false);
+        fabricModel.emitQuads(mesh.emitter(), world, pos, state, Random.create(0x51abbEDL), cullTest);
         if (mesh.size() <= 0) {
             throw new AssertionError("no model quads emitted for " + state + " at " + pos);
         }
         ModelBounds bounds = new ModelBounds();
         mesh.forEach(bounds::accept);
-        return bounds.minY;
+        return new ModelProbe(bounds.minY, mesh.size());
     }
 
     private static Block terrainBlock(String path) {
@@ -1454,6 +1766,9 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         public String toString() {
             return present ? Boolean.toString(value) : "MISSING";
         }
+    }
+
+    private record ModelProbe(double minY, int quads) {
     }
 
     private static final class ModelBounds {

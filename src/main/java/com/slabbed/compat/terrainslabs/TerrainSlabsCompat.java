@@ -51,9 +51,14 @@ public final class TerrainSlabsCompat {
             return CompatSlabSurfaceKind.NONE;
         }
 
-        return state.get(SlabBlock.TYPE) == SlabType.BOTTOM
-                ? CompatSlabSurfaceKind.BOTTOM_LIKE
-                : CompatSlabSurfaceKind.NONE;
+        SlabType type = state.get(SlabBlock.TYPE);
+        if (type == SlabType.BOTTOM) {
+            return CompatSlabSurfaceKind.BOTTOM_LIKE;
+        }
+        if (type == SlabType.DOUBLE && propertyEquals(state, "generated", "true")) {
+            return CompatSlabSurfaceKind.BOTTOM_LIKE;
+        }
+        return CompatSlabSurfaceKind.NONE;
     }
 
     private static boolean isNamedCustomSlabSurface(Identifier id) {

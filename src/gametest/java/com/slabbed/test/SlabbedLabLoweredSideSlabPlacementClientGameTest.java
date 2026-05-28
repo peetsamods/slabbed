@@ -16,6 +16,10 @@ public final class SlabbedLabLoweredSideSlabPlacementClientGameTest implements F
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (TerrainSlabsProofFocus.skipUnrelatedClientGameTest(getClass().getSimpleName())) {
+            return;
+        }
+
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {

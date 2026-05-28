@@ -29,6 +29,10 @@ public final class SlabbedLabSbMixedStackBreakClientGameTest implements FabricCl
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (TerrainSlabsProofFocus.skipUnrelatedClientGameTest(getClass().getSimpleName())) {
+            return;
+        }
+
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {

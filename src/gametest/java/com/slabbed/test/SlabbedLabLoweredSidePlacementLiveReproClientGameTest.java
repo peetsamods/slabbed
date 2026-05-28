@@ -46,6 +46,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (TerrainSlabsProofFocus.skipUnrelatedClientGameTest(getClass().getSimpleName())) {
+            return;
+        }
+
         // Expand coverage for legal lowered slab targets and explicit merge semantics.
         for (Direction face : FACES_TO_TEST) {
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
