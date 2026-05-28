@@ -1,5 +1,6 @@
 package com.slabbed.mixin;
 
+import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.TorchParticleTrace;
 import net.minecraft.block.BlockState;
@@ -30,10 +31,8 @@ public abstract class RedstoneTorchParticleMixin {
         double z = pos.getZ() + 0.5 + (random.nextDouble() - 0.5) * 0.2;
         if (TorchParticleTrace.enabled()) {
             TorchParticleTrace.recordHook(pos, dy, y);
-            System.out.println("TERRAIN_SLABS_REDSTONE_TORCH_PARTICLE_LIVE_TRACE pos=" + pos.toShortString()
-                    + " dy=" + dy
-                    + " particleY=" + y
-                    + " state=" + state);
+            Slabbed.LOGGER.info("TERRAIN_SLABS_REDSTONE_TORCH_PARTICLE_LIVE_TRACE pos={} dy={} particleY={} state={}",
+                    pos.toShortString(), dy, y, state);
         }
         world.addParticleClient(DustParticleEffect.DEFAULT, x, y, z, 0.0, 0.0, 0.0);
         ci.cancel();
