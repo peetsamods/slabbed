@@ -12,16 +12,6 @@
       "com.slabbed.test.Mc1211GoblinRouteCanaryGameTest",
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest"
-    ],
-    "fabric-client-gametest": [
-      "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",
-      "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest",
-      "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest",
-      "com.slabbed.test.SlabbedLabRenderRegionLoweredCarrierBridgeClientGameTest",
-      "com.slabbed.test.SlabbedLabModelDySingleOwnerAuditClientGameTest",
-      "com.slabbed.test.SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest",
-      "com.slabbed.test.SlabbedLabBeta4CompoundContractMatrixClientGameTest",
-      "com.slabbed.test.SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest"
     ]
   },
   "depends": {

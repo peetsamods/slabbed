@@ -11,6 +11,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.registry.DynamicRegistryManager;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKeys;
@@ -26,6 +27,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
@@ -37,6 +39,10 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.SlabSupport;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Explicit MC1211 goblin route replacement for runClientGameTest on the active port line.
@@ -61,6 +67,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             "slabbed.mc1211.superflatModelHitboxHarnessOnly";
     private static final String WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY =
             "slabbed.mc1211.wallFenceProductRedOnly";
+    private static final String SBBBBS_SLAB_DOWN_SNAP_AUDIT_ONLY_PROPERTY =
+            "slabbed.mc1211.sbbbbsSlabDownSnapAuditOnly";
     private static final String OVERLAP_ONLY_PROPERTY = "slabbed.mc1211.overlapMatrixOnly";
     private static final String LEGACY_CLASS =
             "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest";
@@ -184,12 +192,37 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static int superflatHarnessRedRows;
     private static int superflatHarnessTraceGapRows;
     private static int superflatHarnessProductBadRows;
+    private static int sbbbbsTicks;
+    private static int sbbbbsPhase;
+    private static int sbbbbsStepIndex;
+    private static int sbbbbsPhaseTick;
+    private static boolean sbbbbsCanaryEmitted;
+    private static boolean sbbbbsWorldStartRequested;
+    private static boolean sbbbbsReadyRowEmitted;
+    private static boolean sbbbbsStarted;
+    private static boolean sbbbbsFinalized;
+    private static BlockPos sbbbbsOrigin;
+    private static BlockPos sbbbbsSupportPos;
+    private static BlockPos sbbbbsB1Pos;
+    private static BlockPos sbbbbsB2Pos;
+    private static BlockPos sbbbbsB3Pos;
+    private static BlockPos sbbbbsTopSlabPos;
+    private static final Map<String, SbbbbsSample> sbbbbsPreviousSamples = new LinkedHashMap<>();
+    private static String sbbbbsFirstSnapStep = "";
+    private static String sbbbbsFirstSnapDetails = "";
+    private static String sbbbbsFirstLoweringFailureStep = "";
+    private static String sbbbbsFirstLoweringFailureDetails = "";
+    private static String sbbbbsRows = "";
+    private static String sbbbbsLastHit = "not_started";
+    private static String sbbbbsLastAction = "not_started";
     private static final SuperflatHarnessRowSpec[] SUPERFLAT_HARNESS_ROWS = new SuperflatHarnessRowSpec[] {
             new SuperflatHarnessRowSpec("STONE_FULL_BLOCK", "minecraft:stone", false),
             new SuperflatHarnessRowSpec("KNOWN_GOOD_FULL_BLOCK", "minecraft:oak_log", false),
             new SuperflatHarnessRowSpec("COBBLESTONE_WALL", "minecraft:cobblestone_wall", true),
+            new SuperflatHarnessRowSpec("ANDESITE_WALL", "minecraft:andesite_wall", true),
             new SuperflatHarnessRowSpec("STONE_WALL", "minecraft:stone_wall", true),
             new SuperflatHarnessRowSpec("OAK_FENCE", "minecraft:oak_fence", true),
+            new SuperflatHarnessRowSpec("SPRUCE_FENCE", "minecraft:spruce_fence", true),
             new SuperflatHarnessRowSpec("STONE_STAIRS", "minecraft:stone_stairs", false)
     };
 
@@ -205,6 +238,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static void onEndTick(MinecraftClient client) {
         if (Boolean.getBoolean(WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY)) {
             runSuperflatModelHitboxHarnessRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(SBBBBS_SLAB_DOWN_SNAP_AUDIT_ONLY_PROPERTY)) {
+            runSbbbbsSlabDownSnapAuditRoute(client);
             return;
         }
         if (Boolean.getBoolean(SUPERFLAT_MODEL_HITBOX_HARNESS_ONLY_PROPERTY)) {
@@ -443,6 +480,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
         if (slabThenBlockRowPhase == 3) {
             if (!slabReadyForRow(client, rowIndex)) {
+                if (slabThenBlockTicks - slabThenBlockPhaseTick < 80) {
+                    return;
+                }
                 emitSlabThenBlockTraceGap(rowName(rowIndex), "TRACE_GAP_SLAB_PLACEMENT_NOT_REPRODUCED");
                 return;
             }
@@ -539,6 +579,20 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
         return serverWorld.getBlockState(slabThenBlockPostPlacePos).isAir()
                 && client.world.getBlockState(slabThenBlockPostPlacePos).isAir();
+    }
+
+    private static boolean blockReadyOnClientAndServer(
+            MinecraftClient client,
+            BlockPos pos,
+            Predicate<BlockState> predicate
+    ) {
+        if (client == null || client.world == null || pos == null || predicate == null) {
+            return false;
+        }
+        ServerWorld serverWorld = serverWorldFor(client);
+        return serverWorld != null
+                && predicate.test(serverWorld.getBlockState(pos))
+                && predicate.test(client.world.getBlockState(pos));
     }
 
     private static String clickBlock(
@@ -907,6 +961,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             return;
         }
         if (liveTruthPhase == 1) {
+            if (!blockReadyOnClientAndServer(client, liveTruthGroundPos, state -> state.isOf(Blocks.STONE))) {
+                if (liveTruthTicks - liveTruthPhaseTick < 80) {
+                    return;
+                }
+                emitLiveTruthTraceGap("ROUTE_FIXTURE_SYNC", "TRACE_GAP_GROUND_NOT_VISIBLE_ON_CLIENT_AND_SERVER");
+                return;
+            }
             liveTruthSlabResult = clickBlock(
                     client,
                     Items.STONE_SLAB,
@@ -919,6 +980,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             return;
         }
         if (liveTruthPhase == 2) {
+            if (!blockReadyOnClientAndServer(client, liveTruthSlabPos, state -> state.isOf(Blocks.STONE_SLAB))) {
+                if (liveTruthTicks - liveTruthPhaseTick < 80) {
+                    return;
+                }
+                emitLiveTruthTraceGap("ROUTE_SLAB_SYNC", "TRACE_GAP_SLAB_NOT_VISIBLE_ON_CLIENT_AND_SERVER");
+                return;
+            }
             liveTruthFirstStoneResult = clickBlock(
                     client,
                     Items.STONE,
@@ -931,6 +999,14 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             return;
         }
         if (liveTruthPhase == 3) {
+            if (!blockReadyOnClientAndServer(client, liveTruthFirstStonePos, state -> state.isOf(Blocks.STONE))) {
+                if (liveTruthTicks - liveTruthPhaseTick < 80) {
+                    return;
+                }
+                emitLiveTruthTraceGap("ROUTE_FIRST_STONE_SYNC",
+                        "TRACE_GAP_FIRST_STONE_NOT_VISIBLE_ON_CLIENT_AND_SERVER");
+                return;
+            }
             Vec3d sideHit = new Vec3d(
                     liveTruthFirstStonePos.getX(),
                     liveTruthFirstStonePos.getY() + 0.5d,
@@ -1740,6 +1816,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         BlockState finalServerState = serverWorld.getBlockState(superflatHarnessPlacePos);
         Block expectedBlock = harnessStateForBlock(row.blockId()).getBlock();
         double placedDy = SlabSupport.getYOffset(serverWorld, superflatHarnessPlacePos, finalServerState);
+        double clientDy = ClientDy.dyFor(clientWorld, superflatHarnessPlacePos, finalClientState);
         BlockState supportState = serverWorld.getBlockState(superflatHarnessSlabPos);
         double sourceDy = SlabSupport.getYOffset(serverWorld, superflatHarnessSlabPos, supportState);
         boolean substrateProven = supportState.isOf(Blocks.STONE_SLAB)
@@ -1884,8 +1961,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " finalState=" + finalServerState
                 + " sourceDy=" + formatDouble(sourceDy)
                 + " placedDy=" + formatDouble(placedDy)
+                + " SlabSupportDy=" + formatDouble(placedDy)
+                + " ClientDy=" + formatDouble(clientDy)
+                + " outlineDy=" + formatDouble(clientDy)
+                + " targetDy=" + formatDouble(placedDy)
                 + " anchored=" + anchored
                 + " loweredCarrier=" + loweredCarrier
+                + " modelDy=" + meshDy
                 + " modelMeshMinY=" + modelMeshMinY
                 + " modelMeshMaxY=" + modelMeshMaxY
                 + " meshTraceKey=" + meshTraceKey
@@ -1930,7 +2012,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static String redMatrixRowName(SuperflatHarnessRowSpec row) {
         return switch (row.blockId()) {
             case "minecraft:cobblestone_wall" -> "COBBLESTONE_WALL_ON_BOTTOM_SLAB_VISUAL_CONTACT_GREEN";
+            case "minecraft:andesite_wall" -> "ANDESITE_WALL_ON_BOTTOM_SLAB_VISUAL_CONTACT_GREEN";
             case "minecraft:oak_fence" -> "OAK_FENCE_ON_BOTTOM_SLAB_VISUAL_CONTACT_GREEN";
+            case "minecraft:spruce_fence" -> "SPRUCE_FENCE_ON_BOTTOM_SLAB_VISUAL_CONTACT_GREEN";
             case "minecraft:stone_wall" -> "STONE_WALL_ON_BOTTOM_SLAB_TRACE_GAP_OR_RED";
             case "minecraft:stone" -> "FULL_BLOCK_CONTROL_STONE_GREEN";
             case "minecraft:oak_log" -> "FULL_BLOCK_CONTROL_OAK_LOG_GREEN";
@@ -1971,6 +2055,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " traceGapRows=" + superflatHarnessTraceGapRows
                 + " productBadRows=" + superflatHarnessProductBadRows
                 + " classification=" + classification);
+        if (wallFenceProductRedMode
+                && !"WALL_FENCE_VISUAL_CONTACT_GREEN_JULIA_APPROVED".equals(classification)) {
+            throw new RuntimeException("[MC1211_WALL_FENCE_PRODUCT_RED] classification=" + classification);
+        }
         emitted = true;
         superflatHarnessFinalized = true;
         if (clientReadyForStop()) {
@@ -2019,7 +2107,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             case "minecraft:oak_log" -> new ItemStack(Items.OAK_LOG, 8);
             case "minecraft:oak_planks" -> new ItemStack(Items.OAK_PLANKS, 8);
             case "minecraft:cobblestone_wall" -> new ItemStack(Items.COBBLESTONE_WALL, 8);
+            case "minecraft:andesite_wall" -> new ItemStack(Items.ANDESITE_WALL, 8);
             case "minecraft:oak_fence" -> new ItemStack(Items.OAK_FENCE, 8);
+            case "minecraft:spruce_fence" -> new ItemStack(Items.SPRUCE_FENCE, 8);
             case "minecraft:stone_stairs" -> new ItemStack(Items.STONE_STAIRS, 8);
             default -> {
                 var item = Registries.ITEM.get(Identifier.of(blockId));
@@ -2031,6 +2121,517 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static BlockState harnessStateForBlock(String blockId) {
         var block = Registries.BLOCK.get(Identifier.of(blockId));
         return block == null ? Blocks.AIR.getDefaultState() : block.getDefaultState();
+    }
+
+    private static void runSbbbbsSlabDownSnapAuditRoute(MinecraftClient client) {
+        if (emitted || sbbbbsFinalized) {
+            return;
+        }
+        sbbbbsTicks++;
+        if (!sbbbbsCanaryEmitted) {
+            sbbbbsCanaryEmitted = true;
+            System.out.println("[MC1211_SBBBBS_SLAB_DOWN_SNAP_ROUTE_CANARY]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + SBBBBS_SLAB_DOWN_SNAP_AUDIT_ONLY_PROPERTY
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null)
+                    + " placementMode=live_raycast_south_sweep_targets");
+        }
+
+        requestProgrammaticSbbbbsWorldIfNeeded(client);
+        String readinessGap = sidePlaceReadinessGap(client);
+        if (readinessGap != null) {
+            if (!sbbbbsReadyRowEmitted || sbbbbsTicks % 1200 == 0) {
+                emitSbbbbsReadyRow(client, "WAITING", readinessGap);
+                sbbbbsReadyRowEmitted = true;
+            }
+            if (sbbbbsTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitSbbbbsReadyRow(client, "TIMEOUT", readinessGap);
+            emitSbbbbsTraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+        if (!sbbbbsReadyRowEmitted) {
+            emitSbbbbsReadyRow(client, "READY", "none");
+            sbbbbsReadyRowEmitted = true;
+        }
+
+        if (!sbbbbsStarted) {
+            sbbbbsStarted = true;
+            sbbbbsOrigin = client.player.getBlockPos().add(6, 0, 8).toImmutable();
+            sbbbbsSupportPos = sbbbbsOrigin;
+            sbbbbsB1Pos = sbbbbsSupportPos.up();
+            sbbbbsB2Pos = sbbbbsB1Pos.up();
+            sbbbbsB3Pos = sbbbbsB2Pos.up();
+            sbbbbsTopSlabPos = sbbbbsB3Pos.up();
+            sbbbbsPhase = 0;
+            sbbbbsPhaseTick = sbbbbsTicks;
+            sbbbbsStepIndex = 0;
+            sbbbbsPreviousSamples.clear();
+            prepareSbbbbsFixture(client);
+            System.out.println("[MC1211_SBBBBS_SLAB_DOWN_SNAP_START]"
+                    + " rows=4"
+                    + " fixtureOrigin=" + textPos(sbbbbsOrigin)
+                    + " tower=S>B>B>B>S"
+                    + " supportPos=" + textPos(sbbbbsSupportPos)
+                    + " b1Pos=" + textPos(sbbbbsB1Pos)
+                    + " b2Pos=" + textPos(sbbbbsB2Pos)
+                    + " b3Pos=" + textPos(sbbbbsB3Pos)
+                    + " topSlabPos=" + textPos(sbbbbsTopSlabPos));
+            return;
+        }
+
+        if (sbbbbsPhase == 0) {
+            if (sbbbbsTicks - sbbbbsPhaseTick < 20) {
+                return;
+            }
+            emitSbbbbsStep(client, 0);
+            sbbbbsStepIndex = 1;
+            sbbbbsPhase = 1;
+            sbbbbsPhaseTick = sbbbbsTicks;
+            return;
+        }
+
+        if (sbbbbsStepIndex <= 3 && sbbbbsPhase == 1) {
+            performSbbbbsSidePlacement(client, sbbbbsStepIndex);
+            sbbbbsPhase = 2;
+            sbbbbsPhaseTick = sbbbbsTicks;
+            return;
+        }
+
+        if (sbbbbsStepIndex <= 3 && sbbbbsPhase == 2) {
+            if (sbbbbsTicks - sbbbbsPhaseTick < 20) {
+                return;
+            }
+            emitSbbbbsStep(client, sbbbbsStepIndex);
+            sbbbbsStepIndex++;
+            sbbbbsPhase = 1;
+            sbbbbsPhaseTick = sbbbbsTicks;
+            return;
+        }
+
+        emitSbbbbsSummary(client);
+    }
+
+    private static void requestProgrammaticSbbbbsWorldIfNeeded(MinecraftClient client) {
+        if (sbbbbsWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
+        }
+        sbbbbsWorldStartRequested = true;
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 SBBBBS Snap Harness",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        client.createIntegratedServerLoader().createAndStart(
+                "slabbed-mc1211-sbbbbs-snap-harness",
+                levelInfo,
+                generatorOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
+                null);
+    }
+
+    private static void emitSbbbbsReadyRow(MinecraftClient client, String phase, String reason) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(client);
+        System.out.println("[MC1211_SBBBBS_SLAB_DOWN_SNAP_READY_ROW]"
+                + " phase=" + phase
+                + " tick=" + sbbbbsTicks
+                + " clientBootstrapReady=" + readiness.clientBootstrapReady
+                + " clientWorldReady=" + readiness.clientWorldReady
+                + " clientPlayerReady=" + readiness.clientPlayerReady
+                + " integratedServerReady=" + readiness.integratedServerReady
+                + " serverWorldReady=" + readiness.serverWorldReady
+                + " serverPlayerReady=" + readiness.serverPlayerReady
+                + " interactionManagerReady=" + readiness.interactionManagerReady
+                + " programmaticWorldStartRequested=" + sbbbbsWorldStartRequested
+                + " reason=" + reason);
+    }
+
+    private static void prepareSbbbbsFixture(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null) {
+            return;
+        }
+        serverWorld.getServer().execute(() -> {
+            for (int x = sbbbbsOrigin.getX() - 4; x <= sbbbbsOrigin.getX() + 4; x++) {
+                for (int y = sbbbbsOrigin.getY() - 1; y <= sbbbbsOrigin.getY() + 6; y++) {
+                    for (int z = sbbbbsOrigin.getZ() - 4; z <= sbbbbsOrigin.getZ() + 4; z++) {
+                        serverWorld.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+            serverWorld.setBlockState(
+                    sbbbbsSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    3);
+            serverWorld.setBlockState(sbbbbsB1Pos, Blocks.STONE.getDefaultState(), 3);
+            serverWorld.setBlockState(sbbbbsB2Pos, Blocks.STONE.getDefaultState(), 3);
+            serverWorld.setBlockState(sbbbbsB3Pos, Blocks.STONE.getDefaultState(), 3);
+            serverWorld.setBlockState(
+                    sbbbbsTopSlabPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    3);
+            if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
+                var serverPlayer = serverWorld.getServer().getPlayerManager().getPlayerList().get(0);
+                serverPlayer.changeGameMode(GameMode.CREATIVE);
+                serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 16));
+            }
+        });
+        if (client.player != null) {
+            client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 16));
+        }
+    }
+
+    private static void performSbbbbsSidePlacement(MinecraftClient client, int stepIndex) {
+        if (client == null || client.world == null || client.player == null || client.interactionManager == null) {
+            sbbbbsLastHit = "BLOCKED_WORLD_PLAYER_OR_INTERACTION_MANAGER";
+            sbbbbsLastAction = "not_run";
+            return;
+        }
+        BlockPos sidePos = sbbbbsSidePos(stepIndex);
+        Vec3d eye = sbbbbsEye(stepIndex);
+        Vec3d target = sbbbbsTarget(stepIndex);
+        Vec3d delta = target.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        client.player.setNoGravity(true);
+        client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 16));
+        client.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.Full(
+                eye.x,
+                feetY,
+                eye.z,
+                yaw,
+                pitch,
+                client.player.isOnGround()));
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setNoGravity(true);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(GameMode.CREATIVE);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 16));
+        }
+        BlockHitResult hit;
+        if (stepIndex == 1) {
+            hit = new BlockHitResult(target, Direction.UP, sbbbbsB3Pos, false);
+        } else {
+            HitResult resolved = client.world.raycast(new RaycastContext(
+                    eye,
+                    target,
+                    RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.NONE,
+                    client.player));
+            if (!(resolved instanceof BlockHitResult blockHit)) {
+                sbbbbsLastHit = "MISS target=" + formatVec(target) + " sidePos=" + textPos(sidePos);
+                sbbbbsLastAction = "MISS_NO_CLICK";
+                return;
+            }
+            hit = blockHit;
+        }
+        if (hit == null) {
+            sbbbbsLastHit = "MISS target=" + formatVec(target) + " sidePos=" + textPos(sidePos);
+            sbbbbsLastAction = "MISS_NO_CLICK";
+            return;
+        }
+        ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+        sbbbbsLastHit = "BLOCK blockPos=" + textPos(hit.getBlockPos())
+                + " face=" + hit.getSide().asString()
+                + " hitY=" + formatDouble(hit.getPos().y)
+                + " targetSidePos=" + textPos(sidePos);
+        sbbbbsLastAction = result.toString();
+    }
+
+    private static void emitSbbbbsStep(MinecraftClient client, int stepIndex) {
+        Map<String, SbbbbsSample> current = captureSbbbbsSamples(client);
+        String addedId = sbbbbsAddedId(stepIndex);
+        String drift = stepIndex == 0 ? "" : findSbbbbsDrift(current, addedId);
+        String loweringFailure = stepIndex == 0 ? "" : sbbbbsLoweringFailure(current, addedId);
+        if (sbbbbsFirstSnapStep.isEmpty() && !drift.isEmpty()) {
+            sbbbbsFirstSnapStep = sbbbbsStepLabel(stepIndex);
+            sbbbbsFirstSnapDetails = drift;
+        }
+        if (sbbbbsFirstLoweringFailureStep.isEmpty() && !loweringFailure.isEmpty()) {
+            sbbbbsFirstLoweringFailureStep = sbbbbsStepLabel(stepIndex);
+            sbbbbsFirstLoweringFailureDetails = loweringFailure;
+        }
+        String classification = drift.isEmpty() && loweringFailure.isEmpty() ? "GREEN" : "RED";
+        String row = sbbbbsStepLabel(stepIndex) + "=" + classification;
+        sbbbbsRows = sbbbbsRows.isEmpty() ? row : sbbbbsRows + "," + row;
+        System.out.println("[MC1211_SBBBBS_SLAB_DOWN_SNAP_ROW]"
+                + " step=" + stepIndex
+                + " rowName=" + sbbbbsStepLabel(stepIndex)
+                + " addedId=" + (addedId.isEmpty() ? "none" : addedId)
+                + " liveHit=" + sbbbbsLastHit.replace(' ', '_')
+                + " liveAction=" + sbbbbsLastAction
+                + " changedPrior=" + (drift.isEmpty() ? "none" : drift.replace(' ', '_'))
+                + " loweringFailure=" + (loweringFailure.isEmpty() ? "none" : loweringFailure.replace(' ', '_'))
+                + " samples=" + formatSbbbbsSamples(current).replace(' ', '_')
+                + " classification=" + classification);
+        sbbbbsPreviousSamples.clear();
+        sbbbbsPreviousSamples.putAll(current);
+        sbbbbsLastHit = "not_started";
+        sbbbbsLastAction = "not_started";
+    }
+
+    private static Map<String, SbbbbsSample> captureSbbbbsSamples(MinecraftClient client) {
+        Map<String, SbbbbsSample> samples = new LinkedHashMap<>();
+        if (client == null || client.world == null) {
+            return samples;
+        }
+        putSbbbbsSample(samples, client, "support", sbbbbsSupportPos);
+        putSbbbbsSample(samples, client, "tower_b1", sbbbbsB1Pos);
+        putSbbbbsSample(samples, client, "tower_b2", sbbbbsB2Pos);
+        putSbbbbsSample(samples, client, "tower_b3", sbbbbsB3Pos);
+        putSbbbbsSample(samples, client, "top_slab", sbbbbsTopSlabPos);
+        putSbbbbsSample(samples, client, "side_top_east", sbbbbsSideTopEastPos());
+        putSbbbbsSample(samples, client, "side_mid_south", sbbbbsSideMidSouthPos());
+        putSbbbbsSample(samples, client, "side_low_west", sbbbbsSideLowWestPos());
+        return samples;
+    }
+
+    private static void putSbbbbsSample(
+            Map<String, SbbbbsSample> samples,
+            MinecraftClient client,
+            String id,
+            BlockPos pos
+    ) {
+        BlockState state = client.world.getBlockState(pos);
+        double dy = SlabSupport.getYOffset(client.world, pos, state);
+        VoxelShape outline = state.getOutlineShape(client.world, pos);
+        String visualY = "empty";
+        if (!outline.isEmpty()) {
+            visualY = formatDouble(pos.getY() + outline.getBoundingBox().minY)
+                    + ".." + formatDouble(pos.getY() + outline.getBoundingBox().maxY);
+        }
+        samples.put(id, new SbbbbsSample(textPos(pos), state.toString(), formatSbbbbsDy(dy), visualY));
+    }
+
+    private static String findSbbbbsDrift(Map<String, SbbbbsSample> current, String addedId) {
+        StringBuilder drift = new StringBuilder();
+        sbbbbsPreviousSamples.forEach((id, previous) -> {
+            if (id.equals(addedId)) {
+                return;
+            }
+            SbbbbsSample now = current.get(id);
+            if (now == null) {
+                appendSbbbbsFinding(drift, id + " missing");
+            } else if (!previous.equals(now)) {
+                appendSbbbbsFinding(drift, id + " " + previous.describe() + "->" + now.describe());
+            }
+        });
+        return drift.toString();
+    }
+
+    private static String sbbbbsLoweringFailure(Map<String, SbbbbsSample> current, String addedId) {
+        if (addedId.isEmpty()) {
+            return "";
+        }
+        SbbbbsSample added = current.get(addedId);
+        BlockPos addedPos = sbbbbsTrackedPos(addedId);
+        if (added == null || addedPos == null) {
+            return addedId + " sample_missing";
+        }
+        boolean addedIsBottomSlab = added.state().contains("minecraft:stone_slab")
+                && added.state().contains("type=bottom");
+        boolean addedLowered = "-0.5".equals(added.dy());
+        String expectedVisualY = formatDouble(addedPos.getY() - 0.5d)
+                + ".." + formatDouble(addedPos.getY());
+        boolean visualMatches = expectedVisualY.equals(added.visualY());
+        if (!addedIsBottomSlab || !addedLowered || !visualMatches) {
+            return addedId
+                    + " state=" + added.state()
+                    + " dy=" + added.dy()
+                    + " visualY=" + added.visualY()
+                    + " expectedVisualY=" + expectedVisualY;
+        }
+        return "";
+    }
+
+    private static void appendSbbbbsFinding(StringBuilder out, String finding) {
+        if (!out.isEmpty()) {
+            out.append(';');
+        }
+        out.append(finding);
+    }
+
+    private static String formatSbbbbsSamples(Map<String, SbbbbsSample> samples) {
+        StringBuilder out = new StringBuilder();
+        samples.forEach((id, sample) -> {
+            if (!out.isEmpty()) {
+                out.append(';');
+            }
+            out.append(id).append('{').append(sample.describe()).append('}');
+        });
+        return out.toString();
+    }
+
+    private static void emitSbbbbsSummary(MinecraftClient client) {
+        String finalMarker;
+        String verdict;
+        if (!sbbbbsFirstLoweringFailureStep.isEmpty()) {
+            finalMarker = "RED";
+            verdict = "added_side_slab_did_not_lower step=" + sbbbbsFirstLoweringFailureStep
+                    + " details=" + sbbbbsFirstLoweringFailureDetails;
+        } else if (!sbbbbsFirstSnapStep.isEmpty()) {
+            finalMarker = "RED";
+            verdict = "snap_detected step=" + sbbbbsFirstSnapStep
+                    + " details=" + sbbbbsFirstSnapDetails;
+        } else {
+            finalMarker = "GREEN";
+            verdict = "each_added_side_slab_lowered_immediately_and_tracked_tower_slab_dy_visualY_stayed_stable";
+        }
+        System.out.println("[MC1211_SBBBBS_SLAB_DOWN_SNAP_SUMMARY]"
+                + " rows=4"
+                + " finalResult=" + finalMarker
+                + " rowSummary=" + sbbbbsRows
+                + " firstSnapStep=" + (sbbbbsFirstSnapStep.isEmpty() ? "none" : sbbbbsFirstSnapStep)
+                + " firstLoweringFailureStep=" + (sbbbbsFirstLoweringFailureStep.isEmpty()
+                ? "none" : sbbbbsFirstLoweringFailureStep)
+                + " verdict=" + verdict.replace(' ', '_'));
+        System.out.println("[MC1211_SBBBBS_SLAB_DOWN_SNAP_" + finalMarker + "]"
+                + " rows=4"
+                + " rowSummary=" + sbbbbsRows);
+        sbbbbsFinalized = true;
+        emitted = true;
+        if (client != null && client.player != null) {
+            client.player.setNoGravity(false);
+        }
+        if (!"GREEN".equals(finalMarker)) {
+            throw new RuntimeException("[MC1211_SBBBBS_SLAB_DOWN_SNAP] " + verdict);
+        }
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static void emitSbbbbsTraceGap(String row, String reason) {
+        System.out.println("[MC1211_SBBBBS_SLAB_DOWN_SNAP_ROW]"
+                + " rowName=" + row
+                + " classification=TRACE_GAP"
+                + " reason=" + reason);
+        System.out.println("[MC1211_SBBBBS_SLAB_DOWN_SNAP_SUMMARY]"
+                + " rows=0"
+                + " finalResult=TRACE_GAP"
+                + " reason=" + reason);
+        sbbbbsFinalized = true;
+        emitted = true;
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static String sbbbbsStepLabel(int stepIndex) {
+        return switch (stepIndex) {
+            case 0 -> "sbbbbs_step0_initial_tower";
+            case 1 -> "sbbbbs_step1_add_side_top_east";
+            case 2 -> "sbbbbs_step2_add_side_mid_south";
+            case 3 -> "sbbbbs_step3_add_side_low_west";
+            default -> "sbbbbs_step_unknown";
+        };
+    }
+
+    private static String sbbbbsAddedId(int stepIndex) {
+        return switch (stepIndex) {
+            case 1 -> "side_top_east";
+            case 2 -> "side_mid_south";
+            case 3 -> "side_low_west";
+            default -> "";
+        };
+    }
+
+    private static BlockPos sbbbbsTrackedPos(String id) {
+        return switch (id) {
+            case "support" -> sbbbbsSupportPos;
+            case "tower_b1" -> sbbbbsB1Pos;
+            case "tower_b2" -> sbbbbsB2Pos;
+            case "tower_b3" -> sbbbbsB3Pos;
+            case "top_slab" -> sbbbbsTopSlabPos;
+            case "side_top_east" -> sbbbbsSideTopEastPos();
+            case "side_mid_south" -> sbbbbsSideMidSouthPos();
+            case "side_low_west" -> sbbbbsSideLowWestPos();
+            default -> null;
+        };
+    }
+
+    private static BlockPos sbbbbsSidePos(int stepIndex) {
+        return switch (stepIndex) {
+            case 1 -> sbbbbsSideTopEastPos();
+            case 2 -> sbbbbsSideMidSouthPos();
+            case 3 -> sbbbbsSideLowWestPos();
+            default -> sbbbbsSupportPos;
+        };
+    }
+
+    private static BlockPos sbbbbsSideTopEastPos() {
+        return sbbbbsB3Pos.east();
+    }
+
+    private static BlockPos sbbbbsSideMidSouthPos() {
+        return sbbbbsB2Pos.south();
+    }
+
+    private static BlockPos sbbbbsSideLowWestPos() {
+        return sbbbbsB1Pos.west();
+    }
+
+    private static Vec3d sbbbbsEye(int stepIndex) {
+        return switch (stepIndex) {
+            case 1 -> new Vec3d(sbbbbsB3Pos.getX() + 3.20d, sbbbbsB3Pos.getY() + 2.15d,
+                    sbbbbsB3Pos.getZ() + 0.65d);
+            case 2 -> new Vec3d(sbbbbsB2Pos.getX() + 0.65d, sbbbbsB2Pos.getY() + 2.05d,
+                    sbbbbsB2Pos.getZ() + 3.05d);
+            case 3 -> new Vec3d(sbbbbsB1Pos.getX() - 0.70d, sbbbbsB1Pos.getY() + 1.85d,
+                    sbbbbsB1Pos.getZ() + 2.65d);
+            default -> Vec3d.ofCenter(sbbbbsSupportPos);
+        };
+    }
+
+    private static Vec3d sbbbbsTarget(int stepIndex) {
+        return switch (stepIndex) {
+            case 1 -> new Vec3d(sbbbbsB3Pos.getX() + 0.98d, sbbbbsB3Pos.getY() + 0.50d,
+                    sbbbbsB3Pos.getZ() + 0.50d);
+            case 2 -> new Vec3d(sbbbbsB2Pos.getX() + 0.50d, sbbbbsB2Pos.getY() + 0.14d,
+                    sbbbbsB2Pos.getZ() + 0.98d);
+            case 3 -> new Vec3d(sbbbbsB1Pos.getX() + 0.02d, sbbbbsB1Pos.getY() + 0.18d,
+                    sbbbbsB1Pos.getZ() + 0.42d);
+            default -> Vec3d.ofCenter(sbbbbsSupportPos);
+        };
+    }
+
+    private static String formatSbbbbsDy(double dy) {
+        if (Math.abs(dy + 0.5d) <= 1.0e-6d) {
+            return "-0.5";
+        }
+        if (Math.abs(dy + 1.0d) <= 1.0e-6d) {
+            return "-1.0";
+        }
+        if (Math.abs(dy) <= 1.0e-6d) {
+            return "0.0";
+        }
+        return formatDouble(dy);
+    }
+
+    private record SbbbbsSample(String pos, String state, String dy, String visualY) {
+        String describe() {
+            return "pos=" + pos + "/state=" + state + "/dy=" + dy + "/visualY=" + visualY;
+        }
     }
 
     private static void runSidePlaceStoneLoweringRoute(MinecraftClient client) {
@@ -2096,6 +2697,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
 
         if (!sidePlaceInteracted) {
+            if (!blockReadyOnClientAndServer(client, sidePlaceHitPos, state -> state.isOf(Blocks.STONE))) {
+                if (sidePlaceTicks - sidePlaceHostReadyTick < 120) {
+                    return;
+                }
+                emitSidePlaceTraceGap("ROUTE_SOURCE_SYNC", "TRACE_GAP_SOURCE_STONE_NOT_VISIBLE_ON_CLIENT_AND_SERVER");
+                return;
+            }
             if (sidePlaceLiveSyncTick < 0) {
                 syncSidePlaceLiveLikePlayer(client);
                 sidePlaceLiveSyncTick = sidePlaceTicks;

@@ -803,7 +803,16 @@ public final class SlabAnchorAttachment {
     }
 
     public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {
-        return qualifiesForAnchor(world, pos, state) && SlabSupport.hasBottomSlabBelow(world, pos);
+        if (!qualifiesForAnchor(world, pos, state)) {
+            return false;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState belowState = world.getBlockState(belowPos);
+        if (belowState.getBlock() instanceof SlabBlock
+                && SlabSupport.isAdjacentSideSlabLowered(world, belowPos, belowState)) {
+            return false;
+        }
+        return SlabSupport.hasBottomSlabBelow(world, pos);
     }
 
     /**
