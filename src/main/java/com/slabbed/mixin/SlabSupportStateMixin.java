@@ -112,10 +112,17 @@ public abstract class SlabSupportStateMixin {
 
     // ── placement / survival support ──────────────────────────────────
 
+    private static boolean slabbed$isDirectCompatObjectSupportSurface(BlockView world, BlockPos pos, BlockState state) {
+        return !SlabSupport.isSupportingSlab(state)
+                && SlabSupport.isDirectObjectSupportSurface(world, pos, state);
+    }
+
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolid(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
+        if (direction == Direction.UP
+                && (SlabSupport.isBottomSlab(self)
+                || slabbed$isDirectCompatObjectSupportSurface(world, pos, self))) {
             cir.setReturnValue(true);
         }
     }
@@ -139,7 +146,9 @@ public abstract class SlabSupportStateMixin {
     @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
+        if (direction == Direction.UP
+                && (SlabSupport.isBottomSlab(self)
+                || slabbed$isDirectCompatObjectSupportSurface(world, pos, self))) {
             cir.setReturnValue(true);
         }
     }

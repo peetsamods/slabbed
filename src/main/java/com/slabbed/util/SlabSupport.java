@@ -165,7 +165,19 @@ public final class SlabSupport {
             return false;
         }
 
-        BlockState supportState = world.getBlockState(pos.down());
+        BlockPos supportPos = pos.down();
+        if (state.contains(Properties.DOUBLE_BLOCK_HALF)
+                && state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
+            BlockState lowerState = world.getBlockState(pos.down());
+            if (lowerState.getBlock() != state.getBlock()
+                    || !lowerState.contains(Properties.DOUBLE_BLOCK_HALF)
+                    || lowerState.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
+                return false;
+            }
+            supportPos = pos.down(2);
+        }
+
+        BlockState supportState = world.getBlockState(supportPos);
         return CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE;
     }
 

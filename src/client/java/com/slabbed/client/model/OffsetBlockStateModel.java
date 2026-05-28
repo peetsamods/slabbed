@@ -93,8 +93,12 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         } else {
             dy = (float) SlabSupport.getYOffset(view, pos, state);
             if (dy != 0.0f) {
-                // Prevent visual connection offsets for fences/walls/panes
-                if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof PaneBlock) {
+                // Preserve the legacy generic-slab connection guard, but do not
+                // block named custom slab direct-support surfaces.
+                if (!SlabSupport.isDirectCustomSlabSupportedObject(view, pos, state)
+                        && (state.getBlock() instanceof FenceBlock
+                        || state.getBlock() instanceof WallBlock
+                        || state.getBlock() instanceof PaneBlock)) {
                     dy = 0.0f;
                 }
             }
