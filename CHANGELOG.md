@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+## [0.2.0-beta.4.1] — Terrain Slabs Compatibility Update
+
+### Fixed
+- Added compatibility with Countered's Terrain Slabs custom bottom-slab surfaces.
+- Preserved lowered object support on valid named Terrain Slabs surfaces.
+- Kept live placement support for doors, fences, full blocks, torches, and redstone torch particles.
+
+### Preserved
+- Terrain Slabs remain out of generic Slabbed support and culling-sensitive paths.
+- The release keeps the proven Terrain Slabs live-placement and debug-hook hygiene closures intact.
+
 ## [0.2.0-beta.2] — Side-Slab Torch Stability
 
 ### Fixed
