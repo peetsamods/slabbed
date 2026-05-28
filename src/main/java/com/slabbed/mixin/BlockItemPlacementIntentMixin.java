@@ -35,6 +35,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BlockItemPlacementIntentMixin {
 
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
+    private static final double UP_FACE_EDGE_BAND = 0.20d;
     private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
     private static final ThreadLocal<CompoundVisibleSideLowerIntent> COMPOUND_VISIBLE_SIDE_LOWER_INTENT =
             new ThreadLocal<>();
@@ -101,6 +102,36 @@ public abstract class BlockItemPlacementIntentMixin {
         return SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)
                 && (SlabAnchorAttachment.isAnchored(world, belowPos)
                 || SlabSupport.getYOffset(world, belowPos, below) < 0.0d);
+    }
+
+    private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
+        double localX = hitPos.x - targetPos.getX();
+        double localZ = hitPos.z - targetPos.getZ();
+        if (localX < 0.0d || localX > 1.0d || localZ < 0.0d || localZ > 1.0d) {
+            return null;
+        }
+
+        double distWest = localX;
+        double distEast = 1.0d - localX;
+        double distNorth = localZ;
+        double distSouth = 1.0d - localZ;
+
+        double min = distWest;
+        Direction nearest = Direction.WEST;
+        if (distEast < min) {
+            min = distEast;
+            nearest = Direction.EAST;
+        }
+        if (distNorth < min) {
+            min = distNorth;
+            nearest = Direction.NORTH;
+        }
+        if (distSouth < min) {
+            min = distSouth;
+            nearest = Direction.SOUTH;
+        }
+
+        return min <= UP_FACE_EDGE_BAND ? nearest : null;
     }
 
     private static boolean slabbed$isCompoundVisibleOwnerTopSlabResult(
@@ -483,7 +514,17 @@ public abstract class BlockItemPlacementIntentMixin {
         Direction originalSide = context.getSide();
         Vec3d originalHitPos = context.getHitPos();
         Direction effectiveSide = originalSide;
-        String remapMode = originalSide.getAxis().isHorizontal() ? "horizontal_face" : "top_face";
+        boolean inferredUpFaceLoweredSide = false;
+        if (originalSide == Direction.UP) {
+            Direction inferred = slabbed$inferLoweredSideFromUpFaceHit(originalHitPos, context.getBlockPos());
+            if (inferred != null) {
+                effectiveSide = inferred;
+                inferredUpFaceLoweredSide = true;
+            }
+        }
+        String remapMode = inferredUpFaceLoweredSide
+                ? "up_face_edge"
+                : originalSide.getAxis().isHorizontal() ? "horizontal_face" : "top_face";
 
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
@@ -594,7 +635,8 @@ public abstract class BlockItemPlacementIntentMixin {
         }
         boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
         boolean targetIsLoweredSlab = slabbed$isLoweredSlab(targetState, context.getWorld(), targetPos);
-        boolean targetSupportsTopMerge = targetState.getBlock() instanceof SlabBlock
+        boolean targetSupportsTopMerge = !inferredUpFaceLoweredSide
+                && targetState.getBlock() instanceof SlabBlock
                 && targetState.get(SlabBlock.TYPE) == SlabType.TOP
                 && originalSide == Direction.UP;
         if (targetSupportsTopMerge) {
@@ -728,14 +770,15 @@ public abstract class BlockItemPlacementIntentMixin {
             remappedY = slabbed$placementYForType(targetPos, expectedType);
         } else {
             double loweredVisualMidline = targetPos.getY() + yOffset + 0.5d;
+            double upperHalfIntentThreshold = targetPos.getY() + yOffset + 0.75d;
             double loweredVisualUpperBoundary = targetPos.getY() + yOffset + 1.0d;
             boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
                     <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-            boolean upperHalfIntent = originalHitPos.y >= loweredVisualMidline && !exactLoweredVisualBoundary;
+            boolean upperHalfIntent = originalHitPos.y >= upperHalfIntentThreshold && !exactLoweredVisualBoundary;
             expectedType = upperHalfIntent ? SlabType.TOP : SlabType.BOTTOM;
             remappedY = slabbed$placementYForType(targetPos, expectedType);
         }
-        if (originalSide == Direction.UP && expectedType == SlabType.BOTTOM) {
+        if (originalSide == Direction.UP && !inferredUpFaceLoweredSide && expectedType == SlabType.BOTTOM) {
             remappedY = targetPos.getY() + 0.501d;
         }
         Vec3d remappedHitPos = new Vec3d(originalHitPos.x, remappedY, originalHitPos.z);

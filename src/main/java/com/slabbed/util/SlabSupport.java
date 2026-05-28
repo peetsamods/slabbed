@@ -1261,7 +1261,19 @@ public final class SlabSupport {
 
     private static boolean isFullHeightLoweredCarrierForSideSupport(BlockView world, BlockPos pos, BlockState state) {
         return isLoweredFullBlockCarrier(world, pos, state)
+                || isColumnLoweredFullBlockForSideSupport(world, pos, state)
                 || isLoweredDoubleSlabCarrierForSideSupport(world, pos, state);
+    }
+
+    private static boolean isColumnLoweredFullBlockForSideSupport(BlockView world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && state != null
+                && !state.isAir()
+                && !(state.getBlock() instanceof SlabBlock)
+                && state.getFluidState().isEmpty()
+                && state.isSolidBlock(world, pos)
+                && hasSlabInColumn(world, pos);
     }
 
     private static boolean isLoweredFullBlockCarrier(BlockView world, BlockPos pos, BlockState state) {
@@ -1375,7 +1387,7 @@ public final class SlabSupport {
                         || hasLoweredCarrierBelow(world, pos));
     }
 
-    private static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
+    public static boolean isAdjacentSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
         if (!slabState.contains(SlabBlock.TYPE)) {
             return false;
         }

@@ -21,9 +21,6 @@ fabricApi {
 sourceSets {
     gametest {
         java {
-            // Explicit deferred-client-proof split for MC 1.21.1:
-            // keep client proof classes present in-tree, but compile only the
-            // two server-compatible classes in this source set.
             setIncludes([
                     "com/slabbed/test/ChainSurvivalReproTest.java",
                     "com/slabbed/test/SlabbedLabFixtureTest.java",
@@ -89,12 +86,20 @@ java {
 }
 
 def slabbedForwardedRunPropertyArgs = {
-    System.properties.findAll { key, value ->
+    def forwarded = System.properties.findAll { key, value ->
         key instanceof String
                 && value != null
                 && (key.startsWith("slabbed.mc1211.")
-                || key == "slabbed.bsfb.live.trace")
+                || key == "slabbed.bsfb.live.trace"
+                || key == "slabbed.loweredSide.proofFilter")
     }.collect { key, value -> "-D${key}=${value}" }
+    def proofFilter = System.getProperty("slabbed.loweredSide.proofFilter")
+    if (proofFilter == "fence_wall_model_dy") {
+        forwarded.add("-Dslabbed.mc1211.wallFenceProductRedOnly=true")
+    } else if (proofFilter == "sbbbbs_slab_down_snap_audit") {
+        forwarded.add("-Dslabbed.mc1211.sbbbbsSlabDownSnapAuditOnly=true")
+    }
+    return forwarded
 }
 
 tasks.withType(JavaExec).configureEach {

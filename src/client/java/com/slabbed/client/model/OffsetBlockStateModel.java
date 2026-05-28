@@ -9,7 +9,6 @@ import net.fabricmc.fabric.api.renderer.v1.model.ForwardingBakedModel;
 import net.fabricmc.fabric.api.renderer.v1.render.RenderContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.ChainBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.WallBlock;
@@ -222,11 +221,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
 
         if (Boolean.getBoolean("slabbed.render.offset.trace")
-                && state.getBlock() instanceof ChainBlock
                 && pos.equals(slabbed$tracePos)) {
-            boolean excluded = state.getBlock() instanceof FenceBlock
-                    || state.getBlock() instanceof WallBlock
-                    || state.getBlock() instanceof PaneBlock;
+            boolean excluded = state.getBlock() instanceof PaneBlock;
             slabbed$lastTrace = new RenderOffsetTrace(
                     true,
                     view.getClass().getName(),
