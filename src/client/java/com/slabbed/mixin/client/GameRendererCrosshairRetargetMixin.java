@@ -443,6 +443,18 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
             currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
         }
+        if (currentHit instanceof BlockHitResult currentBlockHit
+                && currentHit.getType() == HitResult.Type.BLOCK) {
+            BlockHitResult supportOwnerHit = slabbed$raycastDirectCustomSupportOwner(
+                    world,
+                    cam,
+                    eye,
+                    end,
+                    currentBlockHit.getBlockPos());
+            if (supportOwnerHit != null) {
+                return supportOwnerHit;
+            }
+        }
         int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
 
         BlockHitResult bestHit = null;
@@ -554,6 +566,29 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
 
         return bestHit;
+    }
+
+    private static BlockHitResult slabbed$raycastDirectCustomSupportOwner(
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos supportPos
+    ) {
+        BlockState supportState = world.getBlockState(supportPos);
+        if (!SlabSupport.isDirectObjectSupportSurface(world, supportPos, supportState)) {
+            return null;
+        }
+        BlockPos subjectPos = supportPos.up();
+        BlockState subjectState = world.getBlockState(subjectPos);
+        if (!SlabSupport.isDirectCustomSlabSupportedObject(world, subjectPos, subjectState)
+                || SlabSupport.getYOffset(world, subjectPos, subjectState) != -0.5) {
+            return null;
+        }
+
+        VoxelShape outline = subjectState.getOutlineShape(world, subjectPos, ShapeContext.of(cam));
+        BlockHitResult outlineHit = outline.raycast(eye, end, subjectPos);
+        if (outlineHit == null) {
+            return null;
+        }
+        return outlineHit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6
+                ? outlineHit : null;
     }
 
     private static BlockHitResult slabbed$raycastDirectCustomSupportedObject(

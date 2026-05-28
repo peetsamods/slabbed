@@ -1,13 +1,26 @@
 ## [Unreleased]
 
-## [0.2.0-beta.4.1] — Terrain Slabs Compatibility Update
+## [0.2.0-beta.4.1] - Terrain Slabs Live Blocker Fix
 
 ### Fixed
+- Lowered generated Terrain Slabs double surfaces for direct-supported fences, walls, and fence gates.
+- Restored crosshair ownership for lowered direct-supported objects when the support block is the vanilla raycast hit.
+- Kept terrain top faces visible against direct Terrain Slabs bottom-like support.
+
+### Preserved
+- The earlier `release/0.2.0-beta.4.1` tag was a blocked, undistributed candidate from private testing and has been superseded before release.
+- Terrain Slabs compatibility remains direct-only and does not broaden into generic Slabbed support.
+
+## Superseded private beta 4.1 candidate notes
+
+The original `release/0.2.0-beta.4.1` tag covered this private candidate, was blocked by live Terrain Slabs testing, and was superseded before distribution.
+
+### Fixed in the superseded candidate
 - Added compatibility with Countered's Terrain Slabs custom bottom-slab surfaces.
 - Preserved lowered object support on valid named Terrain Slabs surfaces.
 - Kept live placement support for doors, fences, full blocks, torches, and redstone torch particles.
 
-### Preserved
+### Preserved in the superseded candidate
 - Terrain Slabs remain out of generic Slabbed support and culling-sensitive paths.
 - The release keeps the proven Terrain Slabs live-placement and debug-hook hygiene closures intact.
 

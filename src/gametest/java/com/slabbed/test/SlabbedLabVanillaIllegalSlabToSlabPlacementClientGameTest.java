@@ -54,6 +54,10 @@ public final class SlabbedLabVanillaIllegalSlabToSlabPlacementClientGameTest imp
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        if (TerrainSlabsProofFocus.skipUnrelatedClientGameTest(getClass().getSimpleName())) {
+            return;
+        }
+
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
