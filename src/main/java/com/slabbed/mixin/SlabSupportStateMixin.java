@@ -131,6 +131,58 @@ public abstract class SlabSupportStateMixin {
         return yOff < 0.0 && SlabSupport.isBeta35FenceGateContactObject(state);
     }
 
+    private static boolean slabbed$isLawfulLoweredSlabInteractionSurface(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state,
+            double yOff
+    ) {
+        if (yOff >= 0.0
+                || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.hasProperty(SlabBlock.TYPE)
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        return SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
+    }
+
+    private static boolean slabbed$isUnnamedDy0VanillaSlabInteractionSurface(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state,
+            double yOff
+    ) {
+        if (yOff != 0.0
+                || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.hasProperty(SlabBlock.TYPE)
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        return !SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
+                && !SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
+                && !SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)
+                && !SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
+                && !SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
+    }
+
+    private static VoxelShape slabbed$vanillaCompatibleSlabInteractionShape(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        VoxelShape collisionShape = state.getCollisionShape(world, pos, CollisionContext.empty());
+        if (collisionShape != null && !collisionShape.isEmpty()) {
+            return collisionShape;
+        }
+        return state.getShape(world, pos, CollisionContext.empty());
+    }
+
     private static boolean slabbed$isBeta35SpecialFullblockRaycastFallbackObject(BlockState state) {
         return state != null
                 && (state.is(Blocks.CHEST)
@@ -240,8 +292,13 @@ public abstract class SlabSupportStateMixin {
         BlockState self = (BlockState) (Object) this;
 
         double yOff = SlabSupport.getYOffset(world, pos, self);
+        VoxelShape shape = cir.getReturnValue();
+        if (slabbed$isUnnamedDy0VanillaSlabInteractionSurface(world, pos, self, yOff)
+                && (shape == null || shape.isEmpty())) {
+            cir.setReturnValue(slabbed$vanillaCompatibleSlabInteractionShape(world, pos, self));
+            return;
+        }
         if (yOff != 0.0) {
-            VoxelShape shape = cir.getReturnValue();
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             } else if (slabbed$isLoweredBeta35FloorTopContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
@@ -268,6 +325,10 @@ public abstract class SlabSupportStateMixin {
                 cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;
             } else if (slabbed$isLoweredBeta35FenceGateContactObject(self, yOff)
+                    && (shape == null || shape.isEmpty())) {
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
+                return;
+            } else if (slabbed$isLawfulLoweredSlabInteractionSurface(world, pos, self, yOff)
                     && (shape == null || shape.isEmpty())) {
                 cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
                 return;

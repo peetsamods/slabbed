@@ -247,7 +247,9 @@ public final class SlabAnchorAttachment {
         // condition (anchored ordinary full block above a lowered bottom slab carrier),
         // also record the authored dy=-1.0 lane so it survives source slab removal.
         BlockState state = world.getBlockState(pos);
-        if (qualifiesForCompoundFullBlockAnchor(world, pos, state)) {
+        BlockPos belowPos = pos.below();
+        if (qualifiesForCompoundFullBlockAnchor(world, pos, state)
+                || qualifiesForTopOfCompoundFullAnchor(world, pos, state, belowPos, world.getBlockState(belowPos))) {
             addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
         }
     }
@@ -356,13 +358,29 @@ public final class SlabAnchorAttachment {
     }
 
     public static void updatePersistentLoweredSlabCarrier(Level world, BlockPos pos, BlockState state) {
-        if (world == null || world.isClientSide()) {
+        updatePersistentLoweredSlabCarrier(world, pos, state, false);
+    }
+
+    public static void updateClientPredictedPersistentLoweredSlabCarrier(Level world, BlockPos pos, BlockState state) {
+        if (world == null || !world.isClientSide()) {
+            return;
+        }
+        updatePersistentLoweredSlabCarrier(world, pos, state, true);
+    }
+
+    private static void updatePersistentLoweredSlabCarrier(
+            Level world,
+            BlockPos pos,
+            BlockState state,
+            boolean allowClient
+    ) {
+        if (world == null || (world.isClientSide() && !allowClient)) {
             return;
         }
         boolean qualifies = qualifiesForPersistentLoweredSlabCarrier(world, pos, state);
         if (TRACE) {
-            Slabbed.LOGGER.info("[ANCHOR] lowered slab carrier update side=SERVER pos={} state={} qualifies={}",
-                    pos.toShortString(), state, qualifies);
+            Slabbed.LOGGER.info("[ANCHOR] lowered slab carrier update side={} pos={} state={} qualifies={}",
+                    world.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString(), state, qualifies);
         }
         if (qualifies) {
             addToAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");

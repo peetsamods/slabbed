@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.PlacementIntentState;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.world.level.block.EntityBlock;
@@ -29,6 +30,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.LinkedHashMap;
 
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
@@ -100,6 +103,37 @@ public abstract class BlockItemPlacementIntentMixin {
         return SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)
                 && (SlabAnchorAttachment.isAnchored(world, belowPos)
                 || SlabSupport.getYOffset(world, belowPos, below) < 0.0d);
+    }
+
+    private static boolean slabbed$isPersistentLoweredSideSlabCarrierCandidate(
+            BlockPlaceContext context,
+            BlockPos placePos,
+            BlockState placedState
+    ) {
+        if (context.getClickedFace().getAxis().isVertical()
+                || !(placedState.getBlock() instanceof SlabBlock)
+                || !placedState.hasProperty(SlabBlock.TYPE)
+                || !placedState.getFluidState().isEmpty()) {
+            return false;
+        }
+        Level world = context.getLevel();
+        BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
+        BlockState sourceState = world.getBlockState(sourcePos);
+        if (!(sourceState.getBlock() instanceof SlabBlock)
+                || !sourceState.hasProperty(SlabBlock.TYPE)
+                || !sourceState.getFluidState().isEmpty()
+                || !SlabSupport.isCompatibleLoweredSlabLane(
+                sourceState.getValue(SlabBlock.TYPE),
+                placedState.getValue(SlabBlock.TYPE))) {
+            return false;
+        }
+        boolean sourceNamedLoweredSideLane =
+                SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, sourcePos, sourceState)
+                        || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, sourcePos, sourceState)
+                        || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, sourcePos, sourceState)
+                        || SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, sourcePos, sourceState);
+        return sourceNamedLoweredSideLane
+                && SlabAnchorAttachment.qualifiesForPersistentLoweredSlabCarrier(world, placePos, placedState);
     }
 
     private static boolean slabbed$isCompoundVisibleOwnerTopSlabResult(
@@ -1352,6 +1386,7 @@ public abstract class BlockItemPlacementIntentMixin {
         boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
         if (!cir.getReturnValue().consumesAction()) {
             // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
+            slabbed$recordLiveCursorIntentPlacementAction(context, cir.getReturnValue());
             return;
         }
 
@@ -1400,16 +1435,23 @@ public abstract class BlockItemPlacementIntentMixin {
                 boolean markerAfter = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, placePos,
                         placedState);
                 // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
-            } else if (slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
+            } else if (slabbed$isPersistentLoweredSideSlabCarrierCandidate(context, placePos, placedState)
+                    || slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
                 boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
                 boolean persistentBefore = SlabAnchorAttachment.isAnchored(world, placePos);
-                SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, placePos, placedState);
+                if (world.isClientSide()) {
+                    SlabAnchorAttachment.updateClientPredictedPersistentLoweredSlabCarrier(world, placePos,
+                            placedState);
+                } else {
+                    SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, placePos, placedState);
+                }
                 boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
                 boolean persistentAfter = SlabAnchorAttachment.isAnchored(world, placePos);
                 // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
             } else {
                 // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
             }
+            slabbed$recordLiveCursorIntentPlacementAction(context, cir.getReturnValue());
             COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
             COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
             COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
@@ -1427,17 +1469,20 @@ public abstract class BlockItemPlacementIntentMixin {
             boolean compoundAnchorAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
             if (compoundAnchorAfter) {
                 // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
+                slabbed$recordLiveCursorIntentPlacementAction(context, cir.getReturnValue());
                 return;
             }
         }
 
         if (context.getClickedFace().getAxis().isVertical()) {
             // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
+            slabbed$recordLiveCursorIntentPlacementAction(context, cir.getReturnValue());
             return;
         }
 
         if (!SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, placePos, placedState)) {
             // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
+            slabbed$recordLiveCursorIntentPlacementAction(context, cir.getReturnValue());
             return;
         }
 
@@ -1449,5 +1494,71 @@ public abstract class BlockItemPlacementIntentMixin {
         boolean anchorAfter = SlabAnchorAttachment.isAnchored(world, placePos);
         boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
         // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
+        slabbed$recordLiveCursorIntentPlacementAction(context, cir.getReturnValue());
+    }
+
+    private static void slabbed$recordLiveCursorIntentPlacementAction(
+            BlockPlaceContext context,
+            InteractionResult result
+    ) {
+        if (!LiveCursorIntentRecorder.enabled() || context == null || context.getLevel() == null) {
+            return;
+        }
+        Level world = context.getLevel();
+        BlockPos placePos = context.getClickedPos();
+        Direction clickedFace = context.getClickedFace();
+        BlockPos clickedOwnerPos = placePos.relative(clickedFace.getOpposite());
+        BlockState beforeState = world.getBlockState(clickedOwnerPos);
+        BlockState afterState = world.getBlockState(placePos);
+        LinkedHashMap<String, String> row = new LinkedHashMap<>();
+        row.put("actionType", result != null && result.consumesAction() ? "place_block" : "use_block");
+        row.put("heldItem", BuiltInRegistries.ITEM.getKey(context.getItemInHand().getItem()).toString());
+        row.put("clickedOwnerPos", clickedOwnerPos.toShortString());
+        row.put("clickedFace", clickedFace.toString());
+        row.put("clickedHitVec", slabbed$placementIntentVec(context.getClickLocation()));
+        row.put("placementPos", placePos.toShortString());
+        row.put("beforeState", beforeState.toString());
+        row.put("beforeDy", String.format("%.6f", SlabSupport.getYOffset(world, clickedOwnerPos, beforeState)));
+        row.put("beforeLaneKind", slabbed$liveCursorLaneKind(world, clickedOwnerPos, beforeState));
+        row.put("beforeAttachments", slabbed$liveCursorAttachmentFacts(world, clickedOwnerPos, beforeState));
+        row.put("clickedOwnerLaneKind", slabbed$liveCursorLaneKind(world, clickedOwnerPos, beforeState));
+        row.put("afterState", afterState.toString());
+        row.put("afterDy", String.format("%.6f", SlabSupport.getYOffset(world, placePos, afterState)));
+        row.put("afterLaneKind", slabbed$liveCursorLaneKind(world, placePos, afterState));
+        row.put("afterPersistentLoweredSlabCarrier",
+                Boolean.toString(SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, afterState)));
+        row.put("actualResult", result == null ? "null" : result.toString());
+        LiveCursorIntentRecorder.recordAction(row);
+    }
+
+    private static String slabbed$liveCursorAttachmentFacts(Level world, BlockPos pos, BlockState state) {
+        return "anchored=" + SlabAnchorAttachment.isAnchored(world, pos)
+                + ",compoundFullBlockAnchor=" + SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)
+                + ",persistentLoweredSlabCarrier="
+                + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
+                + ",persistentLoweredBottomSlabCarrier="
+                + SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
+    }
+
+    private static String slabbed$liveCursorLaneKind(Level world, BlockPos pos, BlockState state) {
+        if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {
+            return "persistent_lowered_slab_carrier";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)) {
+            return "compound_visible_side_lower_slab";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)) {
+            return "compound_visible_side_upper_slab";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)) {
+            return "compound_visible_side_double_slab";
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
+            return "compound_visible_owner_top_slab";
+        }
+        if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            return "anchored_full_block";
+        }
+        return state.getBlock() instanceof SlabBlock ? "unnamed_or_vanilla_slab" : "none";
     }
 }
