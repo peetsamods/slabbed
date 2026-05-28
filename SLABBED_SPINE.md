@@ -30,6 +30,17 @@ Do not rely on this file alone for release proof; Git commands, proof logs, the 
 
 ## Current Port Status
 
+Fresh dy1.5-2.0 live-recorder closure proof on 2026-05-28:
+
+- Savepoint intent: `save/port-26.1.2-dy0-slab-shape-dispatch`.
+- Active resolved blocker: the live-recorder RED at `4,-60,30` where unnamed vanilla dy0 `minecraft:stone_slab[type=bottom]` had outline/collision bounds but empty interaction/raycast shape.
+- Mechanism: `SlabSupportStateMixin` now lets unnamed dy0 vanilla slabs with empty native interaction shape expose vanilla-compatible slab bounds from collision shape, falling back to outline shape. The row remains dy0, unnamed, non-persistent, and non-compound.
+- Exact branch-client recorder proof: `tmp/dy15-20-dy0-slab-shape-dispatch-65f9ce54/live-validation-160618-clean-control/exact-pose-player365` has `outlineRaycastSplitRows=0`, `ghostSurfaceRows=0`, `hiddenOwnerRows=0`, `6513` exact target rows for `4,-60,30`, and `LIVE_GREEN_CURSOR_TRIAD`.
+- Focused dy15 proof stayed green for the required counts: `liveFailUnauthorizedDyRows=0`, `renderBridgeMismatchRows=0`, `targetBlockNoSurfaceReplayRows=0`, `hiddenOwnerPlacementRows=0`, `loweredSideSlabPlacementVanillaDyRows=0`, `legalLoweredSlabSurfaceMismatchRows=0`.
+- Lowered side-slab placement remains green: live recorder action evidence under `tmp/dy15-20-dy0-slab-shape-dispatch-65f9ce54/live-validation-152432/routes/lowered-carrier-placement-window/window-actions.tsv` has `LIVE_GREEN_PLACEMENT_AUTHORING` with `afterDy=-0.500000` and `persistent_lowered_slab_carrier`.
+- Fresh gates in `tmp/dy15-20-dy0-slab-shape-dispatch-65f9ce54/final-savepoint-audit-162706/`: compile passed, runner3 passed with `RUNNER3_SUMMARY rows=260 placeRows=260 traceMismatches=44 placeMismatches=44 mismatches=88`, hitbox gate passed, culling visual passed with screenshots, default `runClientGameTest` passed, live-cursor recorder contract passed, and `git diff --check` passed.
+- Tracked residual: focused dy15 proof still reports `legalObjectTriadMismatchRows=2` for `dy15_oak_fence_object` and `dy15_cobblestone_wall_object`. This is classified as separate from the `4,-60,30` dy0 slab dispatch regression because those are legal dynamic fence/wall object rows, not unnamed dy0 slabs; hitbox gate separately proves their raycast/collision co-location.
+
 The 26.1.2 port has reached a placement/culling closure candidate for the slab-held visual-target / placement-intent fault plus the follow-up placement review fallout. Work so far has focused on release-base provenance, mapping/tooling/classpath proof, Java 25 / Gradle / Loom compatibility, source-set wiring, narrow source API probes, the slab-held visual-target failure, the reviewed placement/retargeting guards, and the post-cull visible-face / partial-collision closure.
 
 Resolved blocker: Julia's 2026-05-23 slab-held recording showed the selection outline/target floating above the visible stone body. The port restores the missing 26.1.2 visible-shape path, preserves the visual triad, applies the final-target-unknown placement-intent fix through the validated visible lane, prevents slab-held compound-visible retargeting from stealing nearer vanilla block hits, rejects non-placeable final-target-unknown visible-lane contexts before APPLY, and narrows lowered-side comfort retargeting so border samples outside the visible face do not remain sticky. Temporary `runner3RowId` / provenance audit instrumentation was removed before release proof.
@@ -100,4 +111,4 @@ For documentation-only work, keep edits limited to port-local docs.
 
 For code migration work, classify the current dominant compile/source blocker first, then patch exactly the requested file or the smallest proven mechanism. If the result remains unclear after one compile gate, stop with tried/observed/proven/unproven/next-smallest-audit.
 
-The placement/culling closure savepoint is the current local baseline once the annotated save tag is published and the tracked tree is clean. The next safe action is a new narrow slice only after that savepoint is complete.
+After the dy0 slab shape-dispatch savepoint, the next safe technical slice is to classify whether `legalObjectTriadMismatchRows=2` is accepted fence/wall visual-vs-collision overhang or a real dy1.5 legal-object triad bug. Do not reopen the `4,-60,30` unnamed dy0 slab dispatch path unless a fresh recorder RED reproduces it.

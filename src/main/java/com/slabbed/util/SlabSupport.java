@@ -1139,7 +1139,7 @@ public final class SlabSupport {
         if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {
             return true;
         }
-        return isLoweredCarrier(world, pos, state, MAX_CHAIN_DEPTH);
+        return SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state);
     }
 
     public static boolean isFullHeightLoweredCarrier(BlockGetter world, BlockPos pos, BlockState state) {
@@ -1309,13 +1309,15 @@ public final class SlabSupport {
         while (!queue.isEmpty() && explored < MAX_CHAIN_DEPTH) {
             BlockPos cursor = queue.removeFirst();
             explored++;
-            if (hasLoweredSolidSideSupport(world, cursor)) {
-                return true;
-            }
 
             BlockState cursorState = world.getBlockState(cursor);
             if (!(cursorState.getBlock() instanceof SlabBlock) || !cursorState.hasProperty(SlabBlock.TYPE)) {
                 continue;
+            }
+            if (cursor.equals(slabPos)
+                    && hasLoweredSolidSideSupport(world, cursor)
+                    && canUseDirectLoweredSolidSideSupportForSlabLane(world, cursor, cursorState)) {
+                return true;
             }
             if (!cursor.equals(slabPos)
                     && isCompatibleLoweredSlabLane(slabState, cursorState)
@@ -1341,6 +1343,26 @@ public final class SlabSupport {
         return false;
     }
 
+    private static boolean canUseDirectLoweredSolidSideSupportForSlabLane(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (state == null || !(state.getBlock() instanceof SlabBlock) || !state.hasProperty(SlabBlock.TYPE)) {
+            return false;
+        }
+        return state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM
+                || isNamedLoweredSlabLane(world, pos, state);
+    }
+
+    private static boolean isNamedLoweredSlabLane(BlockGetter world, BlockPos pos, BlockState state) {
+        return SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
+    }
+
     private static boolean isLoweredSlabLaneOwnerForSideInheritance(
             BlockGetter world,
             BlockPos pos,
@@ -1353,9 +1375,7 @@ public final class SlabSupport {
                 && state.hasProperty(SlabBlock.TYPE)
                 && state.getFluidState().isEmpty()
                 && !isCompoundVisibleOwnerTopSlab(world, pos, state)
-                && (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
-                        || hasLoweredSolidSideSupport(world, pos)
-                        || hasLoweredCarrierBelow(world, pos));
+                && isNamedLoweredSlabLane(world, pos, state);
     }
 
     private static boolean isAdjacentSideSlabLowered(BlockGetter world, BlockPos slabPos, BlockState slabState) {
@@ -1389,6 +1409,9 @@ public final class SlabSupport {
                     && state.getFluidState().isEmpty()
                     && SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
                 return -0.5;
+            }
+            if (!canUseInheritedSlabLaneYOffset(world, pos, state)) {
+                return 0.0;
             }
             BlockPos belowPos = pos.below();
             BlockState below = world.getBlockState(belowPos);
@@ -1607,6 +1630,15 @@ public final class SlabSupport {
         }
 
         return 0.0;
+    }
+
+    private static boolean canUseInheritedSlabLaneYOffset(BlockGetter world, BlockPos pos, BlockState state) {
+        return state != null
+                && state.getBlock() instanceof SlabBlock
+                && state.hasProperty(SlabBlock.TYPE)
+                && state.getFluidState().isEmpty()
+                && (isNamedLoweredSlabLane(world, pos, state)
+                        || SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state));
     }
 
     private static double floorTorchBottomSlabSupportDy(BlockGetter world, BlockPos pos, BlockState state) {
