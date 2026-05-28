@@ -47,8 +47,7 @@ public final class TerrainSlabsCompat {
         Identifier id = Registries.BLOCK.getId(block);
         if (!isNamedCustomSlabSurface(id)
                 || !state.getFluidState().isEmpty()
-                || !propertyEquals(state, "generated", "false")
-                || !propertyEquals(state, "snowy", "false")) {
+                || propertyEquals(state, "snowy", "true")) {
             return CompatSlabSurfaceKind.NONE;
         }
 
