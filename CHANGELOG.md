@@ -1,6 +1,13 @@
 ## [Unreleased]
 
-## [0.2.0-beta.4.1] - Terrain Slabs Live Blocker Fix
+## [0.2.0-beta.4.1] - Deprecated (Blocked, Unreleased)
+
+This beta 4.1 candidate is blocked and not approved for release.
+
+### Blockers
+- Live gameplay still shows excessive culled faces in Terrain Slabs scenarios.
+- The current candidate is considered game-breaking and deprecated until a fix is proven live.
+- This build has not been released or distributed publicly.
 
 ### Fixed
 - Lowered generated Terrain Slabs double surfaces for direct-supported fences, walls, and fence gates.
