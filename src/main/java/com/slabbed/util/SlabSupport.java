@@ -333,6 +333,9 @@ public final class SlabSupport {
         }
         BlockPos supportPos = pos.down();
         BlockState supportState = world.getBlockState(supportPos);
+        if (isAnchoredLoweredFullBlock(world, supportPos, supportState)) {
+            return SlabAnchorAttachment.isCompoundFullBlockAnchor(world, supportPos) ? -1.0d : -0.5d;
+        }
         double supportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
             return supportDy - 0.5d;
