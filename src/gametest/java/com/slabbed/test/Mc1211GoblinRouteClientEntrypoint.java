@@ -5453,8 +5453,15 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         boolean loweredCarrier = SlabSupport.isFullHeightLoweredCarrier(serverWorld, superflatHarnessPlacePos, finalServerState);
         VoxelShape outline = finalServerState.getOutlineShape(serverWorld, superflatHarnessPlacePos);
         VoxelShape raycast = finalServerState.getRaycastShape(serverWorld, superflatHarnessPlacePos);
+        // Vanilla crosshair targeting uses the OUTLINE shape. getRaycastShape is empty by
+        // default for most blocks (e.g. stairs) and vanilla defers to the outline when it is
+        // empty, so an empty raycast shape is NOT a targeting defect. Treat an empty raycast
+        // shape as inheriting the outline so the triad reflects real player targeting instead
+        // of a false "raycast shape empty" trace gap. rawRaycastShapeEmpty is logged for audit.
+        boolean rawRaycastShapeEmpty = raycast == null || raycast.isEmpty();
+        VoxelShape effectiveRaycast = rawRaycastShapeEmpty ? outline : raycast;
         String outlineBounds = shapeBounds(outline);
-        String raycastBounds = shapeBounds(raycast);
+        String raycastBounds = shapeBounds(effectiveRaycast);
         OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
         String modelMeshMinY = meshTrace.seen() ? formatDouble(meshTrace.minAfterY()) : "NaN";
         String modelMeshMaxY = meshTrace.seen() ? formatDouble(meshTrace.maxAfterY()) : "NaN";
@@ -5476,17 +5483,17 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         String meshAggregateDedupKey = meshTrace.seen() ? meshTrace.aggregateDedupKey() : "none";
         String outlineMinY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().minY);
         String outlineMaxY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().maxY);
-        String raycastMinY = raycast.isEmpty() ? "NaN" : formatDouble(raycast.getBoundingBox().minY);
-        String raycastMaxY = raycast.isEmpty() ? "NaN" : formatDouble(raycast.getBoundingBox().maxY);
+        String raycastMinY = effectiveRaycast.isEmpty() ? "NaN" : formatDouble(effectiveRaycast.getBoundingBox().minY);
+        String raycastMaxY = effectiveRaycast.isEmpty() ? "NaN" : formatDouble(effectiveRaycast.getBoundingBox().maxY);
         double delta = (meshTrace.seen() && !outline.isEmpty())
                 ? Math.abs(meshTrace.minAfterY() - outline.getBoundingBox().minY)
                 : Double.NaN;
-        boolean triadBoundsPresent = meshTrace.seen() && !outline.isEmpty() && !raycast.isEmpty();
+        boolean triadBoundsPresent = meshTrace.seen() && !outline.isEmpty() && !effectiveRaycast.isEmpty();
         boolean triadAligned = triadBoundsPresent
                 && delta <= 1.0e-6
-                && Math.abs(meshTrace.minAfterY() - raycast.getBoundingBox().minY) <= 1.0e-6
+                && Math.abs(meshTrace.minAfterY() - effectiveRaycast.getBoundingBox().minY) <= 1.0e-6
                 && Math.abs(meshTrace.maxAfterY() - outline.getBoundingBox().maxY) <= 1.0e-6
-                && Math.abs(meshTrace.maxAfterY() - raycast.getBoundingBox().maxY) <= 1.0e-6;
+                && Math.abs(meshTrace.maxAfterY() - effectiveRaycast.getBoundingBox().maxY) <= 1.0e-6;
         boolean placedDyExpected = Math.abs(placedDy - (-0.5d)) <= 1.0e-6;
         boolean technicalTriadAligned = triadAligned && placedDyExpected && substrateProven;
         boolean productVisualLawPass = !row.productBadSuspect();
@@ -5508,7 +5515,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 verdict = "TRACE_GAP_MODEL_BOUNDS";
                 reason = "full_mesh_trace_missing_for_row";
                 superflatHarnessTraceGapRows++;
-            } else if (outline.isEmpty() || raycast.isEmpty()) {
+            } else if (outline.isEmpty() || effectiveRaycast.isEmpty()) {
                 verdict = "TRACE_GAP_OUTLINE_RAYCAST_BOUNDS";
                 reason = "outline_or_raycast_shape_empty";
                 superflatHarnessTraceGapRows++;
@@ -5623,6 +5630,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " modelClass=" + meshModelClass
                 + " outlineBounds=" + outlineBounds
                 + " raycastBounds=" + raycastBounds
+                + " rawRaycastShapeEmpty=" + rawRaycastShapeEmpty
                 + " technicalTriadAligned=" + technicalTriadAligned
                 + " productVisualLawPass=" + productVisualLawPass
                 + " visualAcceptance=" + visualAcceptance
