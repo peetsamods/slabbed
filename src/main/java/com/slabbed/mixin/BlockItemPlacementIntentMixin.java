@@ -250,12 +250,7 @@ public abstract class BlockItemPlacementIntentMixin {
             return SlabType.BOTTOM;
         }
         if (targetType == SlabType.TOP) {
-            double yOffset = SlabSupport.getYOffset(world, targetPos, targetState);
-            double visualLowerY = targetPos.getY() + yOffset + 0.5d;
-            double visualMidY = visualLowerY + 0.25d;
-            return hitPos.y <= visualMidY + LOWERED_VISUAL_BOUNDARY_EPSILON
-                    ? SlabType.BOTTOM
-                    : SlabType.TOP;
+            return SlabType.TOP;
         }
         return SlabType.TOP;
     }
