@@ -52,7 +52,6 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     private static final String DIRECT_SUPPORT_RED_ONLY_PROPERTY = "slabbed.terrainSlabsDirectSupportRedOnly";
     private static final String GENERATED_DOUBLE_DIRECT_SUPPORT_RED_ONLY_PROPERTY =
             "slabbed.terrainSlabsGeneratedDoubleDirectSupportRedOnly";
-    private static final String CULLING_FACE_RED_ONLY_PROPERTY = "slabbed.terrainSlabsCullingFaceRedOnly";
     private static final String EXACT_SEED_TRACE_PROPERTY = "slabbed.terrainSlabsExactSeedTrace";
     private static final String LIVE_PLACEMENT_PROPERTY = "slabbed.terrainSlabsLivePlacementProof";
     private static final String PARTICLE_PROOF_PROPERTY = "slabbed.terrainSlabsParticleProof";
@@ -60,7 +59,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     private static final BlockPos SUPPORT_POS = new BlockPos(24, 200, 0);
     private static final BlockPos VANILLA_SUPPORT_POS = SUPPORT_POS.add(4, 0, 0);
     private static final BlockPos OBJECT_SUPPORT_POS = SUPPORT_POS.add(8, 0, 0);
-    private static final BlockPos CULLING_TARGET_POS = SUPPORT_POS.add(12, 0, 0);
+    private static final BlockPos CRAFTING_SUPPORT_POS = SUPPORT_POS.add(8, 0, 4);
     private static final BlockPos LIVE_SUPPORT_POS = SUPPORT_POS.add(0, 0, 8);
     private static final double EPSILON = 1.0e-6d;
 
@@ -69,11 +68,10 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         boolean dump = Boolean.getBoolean(COMPAT_DUMP_PROPERTY);
         boolean proof = Boolean.getBoolean(DIRECT_SUPPORT_RED_ONLY_PROPERTY);
         boolean generatedDoubleProof = Boolean.getBoolean(GENERATED_DOUBLE_DIRECT_SUPPORT_RED_ONLY_PROPERTY);
-        boolean cullingFaceProof = Boolean.getBoolean(CULLING_FACE_RED_ONLY_PROPERTY);
         boolean exactSeedTrace = Boolean.getBoolean(EXACT_SEED_TRACE_PROPERTY);
         boolean livePlacement = Boolean.getBoolean(LIVE_PLACEMENT_PROPERTY);
         boolean particleProof = Boolean.getBoolean(PARTICLE_PROOF_PROPERTY);
-        if (!dump && !proof && !generatedDoubleProof && !cullingFaceProof
+        if (!dump && !proof && !generatedDoubleProof
                 && !exactSeedTrace && !livePlacement && !particleProof) {
             return;
         }
@@ -81,7 +79,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         if (!FabricLoader.getInstance().isModLoaded(TerrainSlabsCompat.MOD_ID)) {
             System.out.println("TERRAIN_SLABS_COMPAT_DUMP_BEGIN terrainslabs_not_loaded");
             System.out.println("TERRAIN_SLABS_COMPAT_DUMP_END total=0");
-            if (proof || generatedDoubleProof || cullingFaceProof) {
+            if (proof || generatedDoubleProof) {
                 throw new AssertionError("Countered Terrain Slabs mod is not loaded");
             }
             return;
@@ -106,9 +104,6 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             }
             if (generatedDoubleProof) {
                 runGeneratedDoubleDirectSupportProof(ctx, singleplayer);
-            }
-            if (cullingFaceProof) {
-                runCullingFaceProof(ctx, singleplayer);
             }
             if (livePlacement) {
                 runLivePlacementProof(ctx, singleplayer);
@@ -207,6 +202,10 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             world.setBlockState(OBJECT_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
             world.setBlockState(OBJECT_SUPPORT_POS.up(), Blocks.TORCH.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(OBJECT_SUPPORT_POS.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(CRAFTING_SUPPORT_POS.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(CRAFTING_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(CRAFTING_SUPPORT_POS.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(CRAFTING_SUPPORT_POS.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
         });
         ctx.waitTick();
         ctx.waitTick();
@@ -223,9 +222,17 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 throw new AssertionError("expected minecraft:stone at " + objectPos + ", found " + objectState);
             }
 
+            // Terrain Slabs compat contract: an opaque full cube (stone) placed on a
+            // custom Terrain Slabs bottom surface must NOT be lowered. The slab stays a
+            // valid direct-support SURFACE (so non-opaque objects still lower onto it),
+            // but the opaque cube opts out of the -0.5 dy so its culling shape and model
+            // stay in the same voxel — no see-through / missing-face terrain.
             boolean skipOffset = CompatHooks.shouldSkipOffset(supportState);
             CompatSkipResult skipSupport = compatSkipSlabSupport(supportState);
             boolean genericSupport = SlabSupport.isSupportingSlab(supportState);
+            boolean directSurface = SlabSupport.isDirectObjectSupportSurface(mc.world, SUPPORT_POS, supportState);
+            boolean directSubject = SlabSupport.isDirectCustomSlabSupportedObject(mc.world, objectPos, objectState);
+            boolean opaqueFullCube = objectState.isOpaqueFullCube();
             double supportDy = SlabSupport.getYOffset(mc.world, SUPPORT_POS, supportState);
             double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
             double modelMinY = modelMinY(mc.world, objectPos, objectState);
@@ -233,40 +240,24 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             VoxelShape raycastShape = objectState.getRaycastShape(mc.world, objectPos);
             double outlineMinY = outline.isEmpty() ? Double.NaN : outline.getBoundingBox().minY;
             double raycastMinY = raycastShape.isEmpty() ? Double.NaN : raycastShape.getBoundingBox().minY;
-            double targetY = objectPos.getY() - 0.25d;
-            BlockHitResult outlineHit = outline.isEmpty() ? null : outline.raycast(
-                    new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() + 2.5d),
-                    new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() - 0.5d),
-                    objectPos);
-            HitResult worldHit = mc.world.raycast(new RaycastContext(
-                    new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() + 2.5d),
-                    new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() - 0.5d),
-                    RaycastContext.ShapeType.OUTLINE,
-                    RaycastContext.FluidHandling.NONE,
-                    mc.player));
-            Vec3d liveEye = new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() + 2.5d);
-            Vec3d liveTarget = new Vec3d(objectPos.getX() + 0.5d, targetY, objectPos.getZ() + 0.5d);
-            aimPlayerRaycastFromEye(mc, liveEye, liveTarget, 6.0d);
-            mc.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
-            HitResult liveCrosshairHit = mc.crosshairTarget;
 
             String fields = " supportId=terrainslabs:grass_slab"
                     + " supportState=" + supportState
                     + " supportPos=" + SUPPORT_POS.toShortString()
                     + " subjectId=minecraft:stone"
                     + " subjectPos=" + objectPos.toShortString()
+                    + " policy=opaque_fullcube_opt_out"
+                    + " opaqueFullCube=" + opaqueFullCube
                     + " shouldSkipOffset=" + skipOffset
                     + " shouldSkipSlabSupport=" + skipSupport
                     + " isSupportingSlab=" + genericSupport
+                    + " directSurface=" + directSurface
+                    + " directSubject=" + directSubject
                     + " supportDy=" + supportDy
                     + " subjectDy=" + objectDy
                     + " modelMinY=" + modelMinY
                     + " outlineMinY=" + outlineMinY
-                    + " raycastShapeMinY=" + (raycastShape.isEmpty() ? "empty" : Double.toString(raycastMinY))
-                    + " outlineTargetHit=" + describeHit(outlineHit)
-                    + " worldRaycastHit=" + describeHit(worldHit)
-                    + " liveCrosshairHit=" + describeHit(liveCrosshairHit);
+                    + " raycastShapeMinY=" + (raycastShape.isEmpty() ? "empty" : Double.toString(raycastMinY));
             System.out.println("TERRAIN_SLABS_DIRECT_SUPPORT_TRACE" + fields);
 
             String redReason = null;
@@ -280,20 +271,20 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 redReason = "terrain_slab_still_generic_support";
             } else if (Math.abs(supportDy) > 1.0e-6d) {
                 redReason = "terrain_slab_self_dy_not_zero";
-            } else if (Math.abs(objectDy - (-0.5d)) > 1.0e-6d) {
-                redReason = "subject_direct_support_dy_mismatch";
-            } else if (Math.abs(modelMinY - (-0.5d)) > 1.0e-6d) {
-                redReason = "subject_model_dy_mismatch";
-            } else if (Math.abs(outlineMinY - (-0.5d)) > 1.0e-6d) {
-                redReason = "subject_outline_dy_mismatch";
-            } else if (!raycastShape.isEmpty() && Math.abs(raycastMinY - (-0.5d)) > 1.0e-6d) {
-                redReason = "subject_raycast_shape_dy_mismatch";
-            } else if (outlineHit == null || !outlineHit.getBlockPos().equals(objectPos)) {
-                redReason = "subject_outline_target_mismatch";
-            } else if (!(liveCrosshairHit instanceof BlockHitResult liveBlockHit)
-                    || liveCrosshairHit.getType() != HitResult.Type.BLOCK
-                    || !liveBlockHit.getBlockPos().equals(objectPos)) {
-                redReason = "subject_live_target_mismatch";
+            } else if (!directSurface) {
+                redReason = "terrain_slab_not_direct_surface";
+            } else if (!opaqueFullCube) {
+                redReason = "subject_not_opaque_full_cube";
+            } else if (directSubject) {
+                redReason = "opaque_subject_unexpectedly_direct_supported";
+            } else if (Math.abs(objectDy) > 1.0e-6d) {
+                redReason = "opaque_subject_dy_not_zero";
+            } else if (Math.abs(modelMinY) > 1.0e-6d) {
+                redReason = "opaque_subject_model_dy_not_zero";
+            } else if (!outline.isEmpty() && Math.abs(outlineMinY) > 1.0e-6d) {
+                redReason = "opaque_subject_outline_dy_not_zero";
+            } else if (!raycastShape.isEmpty() && Math.abs(raycastMinY) > 1.0e-6d) {
+                redReason = "opaque_subject_raycast_shape_dy_not_zero";
             }
 
             if (redReason != null) {
@@ -303,7 +294,9 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
 
             System.out.println("TERRAIN_SLABS_DIRECT_SUPPORT_GREEN" + fields);
             assertTerrainSlabsCullingOptOutControl(mc, supportState);
-            assertTerrainSlabsLoweredObjectSupport(mc);
+            assertTerrainSlabsLoweredObjectSupport(mc, OBJECT_SUPPORT_POS, Blocks.TORCH, "minecraft:torch");
+            assertTerrainSlabsLoweredObjectSupport(mc, CRAFTING_SUPPORT_POS, Blocks.CRAFTING_TABLE,
+                    "minecraft:crafting_table");
             assertVanillaDirectSupportControl(mc);
         });
     }
@@ -582,15 +575,14 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 new ItemStack(Items.STONE, 8),
                 supportPos,
                 "minecraft:stone");
-        ctx.runOnClient(mc -> assertLivePlacedSubject(
+        ctx.runOnClient(mc -> assertLivePlacedOpaqueOptOut(
                 mc,
                 "TERRAIN_SLABS_LIVE_PLACEMENT_GENERATED_GRASS_FULL",
                 "terrainslabs:grass_slab",
                 supportPos,
                 "minecraft:stone",
                 supportPos.up(),
-                stonePlacementAccepted,
-                true));
+                stonePlacementAccepted));
 
         BlockPos torchSupportPos = supportPos.add(0, 0, 2);
         setGeneratedGrassSupport(ctx, singleplayer, torchSupportPos);
@@ -764,82 +756,6 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         }
     }
 
-    private static void runCullingFaceProof(
-            ClientGameTestContext ctx,
-            TestSingleplayerContext singleplayer
-    ) {
-        Block terrainSlabBlock = terrainBlock("grass_slab");
-        BlockState terrainSlab = terrainSlabBlock.getDefaultState();
-        if (!terrainSlab.contains(SlabBlock.TYPE)) {
-            throw new AssertionError("terrainslabs:grass_slab has no SlabBlock.TYPE: " + terrainSlab);
-        }
-        terrainSlab = terrainSlab.with(SlabBlock.TYPE, SlabType.BOTTOM);
-
-        BlockPos neighborPos = CULLING_TARGET_POS.up();
-        BlockState finalTerrainSlab = terrainSlab;
-        singleplayer.getServer().runOnServer(server -> {
-            var world = server.getOverworld();
-            world.setBlockState(CULLING_TARGET_POS.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
-            world.setBlockState(CULLING_TARGET_POS, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
-            world.setBlockState(neighborPos, finalTerrainSlab, Block.NOTIFY_LISTENERS);
-            world.setBlockState(neighborPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
-        });
-        ctx.waitTick();
-        ctx.waitTick();
-        singleplayer.getClientWorld().waitForChunksRender();
-
-        ctx.runOnClient(mc -> assertTerrainSlabsCullingFace(mc, CULLING_TARGET_POS, Direction.UP));
-    }
-
-    private static void assertTerrainSlabsCullingFace(MinecraftClient mc, BlockPos targetPos, Direction face) {
-        if (mc.world == null || mc.player == null) {
-            throw new AssertionError("client world/player missing for Terrain Slabs culling face proof");
-        }
-
-        BlockPos neighborPos = targetPos.offset(face);
-        BlockState targetState = mc.world.getBlockState(targetPos);
-        BlockState neighborState = mc.world.getBlockState(neighborPos);
-        boolean shouldDrawSide = Block.shouldDrawSide(targetState, neighborState, face);
-        ModelProbe noCull = modelProbe(mc.world, targetPos, targetState, direction -> false);
-        ModelProbe actualCull = modelProbe(mc.world, targetPos, targetState,
-                direction -> direction == face && !shouldDrawSide);
-
-        String fields = " targetId=minecraft:grass_block"
-                + " targetState=" + targetState
-                + " targetProperties=" + describeProperties(targetState)
-                + " targetPos=" + targetPos.toShortString()
-                + " face=" + face
-                + " neighborId=terrainslabs:grass_slab"
-                + " neighborState=" + neighborState
-                + " neighborProperties=" + describeProperties(neighborState)
-                + " neighborPos=" + neighborPos.toShortString()
-                + " shouldDrawSide=" + shouldDrawSide
-                + " quadsNoCull=" + noCull.quads()
-                + " quadsWithActualCull=" + actualCull.quads()
-                + " modelMinYNoCull=" + noCull.minY()
-                + " modelMinYWithActualCull=" + actualCull.minY();
-        System.out.println("TERRAIN_SLABS_CULLING_FACE_TRACE" + fields);
-
-        String redReason = null;
-        if (!targetState.isOf(Blocks.GRASS_BLOCK)) {
-            redReason = "target_state_mismatch";
-        } else if (Registries.BLOCK.getId(neighborState.getBlock()).equals(Identifier.of(TerrainSlabsCompat.MOD_ID, "grass_slab"))
-                && (!neighborState.contains(SlabBlock.TYPE) || neighborState.get(SlabBlock.TYPE) != SlabType.BOTTOM)) {
-            redReason = "neighbor_not_bottom_terrain_slab";
-        } else if (!Registries.BLOCK.getId(neighborState.getBlock()).equals(Identifier.of(TerrainSlabsCompat.MOD_ID, "grass_slab"))) {
-            redReason = "neighbor_state_mismatch";
-        } else if (!shouldDrawSide || actualCull.quads() < noCull.quads()) {
-            redReason = "terrain_face_culled_by_terrain_slab_neighbor";
-        }
-
-        if (redReason != null) {
-            System.out.println("TERRAIN_SLABS_CULLING_FACE_RED reason=" + redReason + fields);
-            throw new AssertionError("Terrain Slabs culling face proof failed: " + redReason + fields);
-        }
-
-        System.out.println("TERRAIN_SLABS_CULLING_FACE_GREEN" + fields);
-    }
-
     private static void runLivePlacementSurfaceProof(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
@@ -856,15 +772,14 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 "minecraft:stone");
 
         BlockPos stonePos = supportPos.up();
-        ctx.runOnClient(mc -> assertLivePlacedSubject(
+        ctx.runOnClient(mc -> assertLivePlacedOpaqueOptOut(
                 mc,
                 "TERRAIN_SLABS_LIVE_PLACEMENT_FULL",
                 "terrainslabs:" + terrainPath,
                 supportPos,
                 "minecraft:stone",
                 stonePos,
-                stonePlacementAccepted,
-                true));
+                stonePlacementAccepted));
 
         BlockPos torchSupportPos = supportPos.add(0, 0, 2);
         placeSupportByItem(ctx, singleplayer, terrainSlabBlock, torchSupportPos, "terrainslabs:" + terrainPath);
@@ -1378,6 +1293,112 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         System.out.println(markerPrefix + "_GREEN" + fields);
     }
 
+    /**
+     * Live-placement proof for the Terrain Slabs opaque-full-cube opt-out: an opaque
+     * full cube (e.g. minecraft:stone) placed on a custom Terrain Slabs bottom surface
+     * must stay at grid height (dy=0) and must NOT be a direct custom-supported subject,
+     * while the slab remains a valid direct-support surface for non-opaque objects.
+     * This is what keeps lowered opaque cubes from producing see-through / missing-face
+     * terrain (the beta 4.1 culling blocker).
+     */
+    private static void assertLivePlacedOpaqueOptOut(
+            MinecraftClient mc,
+            String markerPrefix,
+            String supportId,
+            BlockPos supportPos,
+            String subjectId,
+            BlockPos subjectPos,
+            boolean subjectPlacementAccepted
+    ) {
+        if (mc.world == null || mc.player == null) {
+            throw new AssertionError("client world/player missing for " + markerPrefix);
+        }
+
+        BlockState supportState = mc.world.getBlockState(supportPos);
+        BlockState subjectState = mc.world.getBlockState(subjectPos);
+        boolean supportIsExpected = Registries.BLOCK.getId(supportState.getBlock()).toString().equals(supportId);
+        boolean subjectIsExpected = Registries.BLOCK.getId(subjectState.getBlock()).toString().equals(subjectId);
+        boolean skipOffset = CompatHooks.shouldSkipOffset(supportState);
+        CompatSkipResult skipSupport = compatSkipSlabSupport(supportState);
+        CompatSlabSurfaceKind surfaceKind = CompatHooks.customSlabSurfaceKind(supportState);
+        boolean genericSupport = SlabSupport.isSupportingSlab(supportState);
+        boolean directSurface = SlabSupport.isDirectObjectSupportSurface(mc.world, supportPos, supportState);
+        boolean directSubject = SlabSupport.isDirectCustomSlabSupportedObject(mc.world, subjectPos, subjectState);
+        boolean opaqueFullCube = subjectIsExpected && subjectState.isOpaqueFullCube();
+        double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
+        double subjectDy = SlabSupport.getYOffset(mc.world, subjectPos, subjectState);
+        double modelMinY = subjectIsExpected ? modelMinY(mc.world, subjectPos, subjectState) : Double.NaN;
+        VoxelShape outline = subjectState.getOutlineShape(mc.world, subjectPos, ShapeContext.of(mc.player));
+        VoxelShape raycastShape = subjectState.getRaycastShape(mc.world, subjectPos);
+        double outlineMinY = outline.isEmpty() ? Double.NaN : outline.getBoundingBox().minY;
+        double raycastMinY = raycastShape.isEmpty() ? Double.NaN : raycastShape.getBoundingBox().minY;
+
+        String fields = " supportId=" + supportId
+                + " supportState=" + supportState
+                + " supportProperties=" + describeProperties(supportState)
+                + " supportPos=" + supportPos.toShortString()
+                + " subjectId=" + subjectId
+                + " subjectState=" + subjectState
+                + " subjectPos=" + subjectPos.toShortString()
+                + " policy=opaque_fullcube_opt_out"
+                + " subjectPlacementAccepted=" + subjectPlacementAccepted
+                + " supportMatches=" + supportIsExpected
+                + " subjectMatches=" + subjectIsExpected
+                + " opaqueFullCube=" + opaqueFullCube
+                + " customSlabSurfaceKind=" + surfaceKind
+                + " shouldSkipOffset=" + skipOffset
+                + " shouldSkipSlabSupport=" + skipSupport
+                + " isSupportingSlab=" + genericSupport
+                + " directSurface=" + directSurface
+                + " directSubject=" + directSubject
+                + " supportDy=" + supportDy
+                + " subjectDy=" + subjectDy
+                + " modelMinY=" + modelMinY
+                + " outlineMinY=" + outlineMinY
+                + " raycastShapeMinY=" + (raycastShape.isEmpty() ? "empty" : Double.toString(raycastMinY));
+        System.out.println(markerPrefix + "_TRACE" + fields);
+
+        String redReason = null;
+        if (!supportIsExpected) {
+            redReason = "support_placement_state_mismatch";
+        } else if (!subjectPlacementAccepted) {
+            redReason = "subject_placement_rejected";
+        } else if (!subjectIsExpected) {
+            redReason = "subject_placement_state_mismatch";
+        } else if (!opaqueFullCube) {
+            redReason = "subject_not_opaque_full_cube";
+        } else if (!skipOffset) {
+            redReason = "terrain_slab_self_offset_not_skipped";
+        } else if (!skipSupport.present() || !skipSupport.value()) {
+            redReason = "terrain_slab_generic_support_not_skipped";
+        } else if (genericSupport) {
+            redReason = "terrain_slab_still_generic_support";
+        } else if (surfaceKind != CompatSlabSurfaceKind.BOTTOM_LIKE) {
+            redReason = "support_not_bottom_like_custom_surface";
+        } else if (!directSurface) {
+            redReason = "support_not_direct_surface";
+        } else if (Math.abs(supportDy) > 1.0e-6d) {
+            redReason = "support_dy_not_zero";
+        } else if (directSubject) {
+            redReason = "opaque_subject_unexpectedly_direct_supported";
+        } else if (Math.abs(subjectDy) > 1.0e-6d) {
+            redReason = "opaque_subject_dy_not_zero";
+        } else if (Math.abs(modelMinY) > 1.0e-6d) {
+            redReason = "opaque_subject_model_dy_not_zero";
+        } else if (!outline.isEmpty() && Math.abs(outlineMinY) > 1.0e-6d) {
+            redReason = "opaque_subject_outline_dy_not_zero";
+        } else if (!raycastShape.isEmpty() && Math.abs(raycastMinY) > 1.0e-6d) {
+            redReason = "opaque_subject_raycast_shape_dy_not_zero";
+        }
+
+        if (redReason != null) {
+            System.out.println(markerPrefix + "_RED reason=" + redReason + fields);
+            throw new AssertionError(markerPrefix + " failed: " + redReason + fields);
+        }
+
+        System.out.println(markerPrefix + "_GREEN" + fields);
+    }
+
     private static void assertLivePlacedDoorSubject(
             MinecraftClient mc,
             String markerPrefix,
@@ -1489,20 +1510,21 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         System.out.println(markerPrefix + "_GREEN" + fields);
     }
 
-    private static void assertTerrainSlabsLoweredObjectSupport(MinecraftClient mc) {
-        BlockPos objectPos = OBJECT_SUPPORT_POS.up();
-        BlockState supportState = mc.world.getBlockState(OBJECT_SUPPORT_POS);
+    private static void assertTerrainSlabsLoweredObjectSupport(
+            MinecraftClient mc, BlockPos supportPos, Block expectedBlock, String subjectId) {
+        BlockPos objectPos = supportPos.up();
+        BlockState supportState = mc.world.getBlockState(supportPos);
         BlockState objectState = mc.world.getBlockState(objectPos);
-        if (!objectState.isOf(Blocks.TORCH)) {
-            throw new AssertionError("expected minecraft:torch at " + objectPos + ", found " + objectState);
+        if (!objectState.isOf(expectedBlock)) {
+            throw new AssertionError("expected " + subjectId + " at " + objectPos + ", found " + objectState);
         }
 
         boolean skipOffset = CompatHooks.shouldSkipOffset(supportState);
         CompatSkipResult skipSupport = compatSkipSlabSupport(supportState);
         boolean genericSupport = SlabSupport.isSupportingSlab(supportState);
-        boolean directSurface = SlabSupport.isDirectObjectSupportSurface(mc.world, OBJECT_SUPPORT_POS, supportState);
+        boolean directSurface = SlabSupport.isDirectObjectSupportSurface(mc.world, supportPos, supportState);
         boolean directSubject = SlabSupport.isDirectCustomSlabSupportedObject(mc.world, objectPos, objectState);
-        double supportDy = SlabSupport.getYOffset(mc.world, OBJECT_SUPPORT_POS, supportState);
+        double supportDy = SlabSupport.getYOffset(mc.world, supportPos, supportState);
         double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
         double modelMinY = modelMinY(mc.world, objectPos, objectState);
         VoxelShape outline = objectState.getOutlineShape(mc.world, objectPos, ShapeContext.of(mc.player));
@@ -1512,8 +1534,8 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
 
         String fields = " supportId=terrainslabs:grass_slab"
                 + " supportState=" + supportState
-                + " supportPos=" + OBJECT_SUPPORT_POS.toShortString()
-                + " subjectId=minecraft:torch"
+                + " supportPos=" + supportPos.toShortString()
+                + " subjectId=" + subjectId
                 + " subjectPos=" + objectPos.toShortString()
                 + " shouldSkipOffset=" + skipOffset
                 + " shouldSkipSlabSupport=" + skipSupport
