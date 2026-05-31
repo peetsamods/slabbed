@@ -67,6 +67,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static final long BETA4_FINAL_TARGET_TRACE_MIN_INTERVAL_NANOS = 1_000_000_000L;
     private static final String MC1211_LIVE_OUTLINE_TARGET_TRACE_PROPERTY =
             "slabbed.mc1211.liveOutlineTargetTrace";
+    private static final String MC1211_TRAPDOOR_SEAM_MP4_RED_PROPERTY =
+            "slabbed.mc1211.trapdoorLoweredSeamMp4Red";
     private static final int MC1211_LIVE_OUTLINE_TARGET_TRACE_SUMMARY_INTERVAL = 20;
     private static final double BETA35_VISIBLE_OWNER_SUPPORT_OVERRUN = 0.75d;
     private static String slabbed$beta4FinalTargetTraceLastSignature;
@@ -80,6 +82,16 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static int slabbed$mc1211LiveOutlineTargetTraceDifferentOwner;
     private static int slabbed$mc1211LiveOutlineTargetTraceAirOrMiss;
     private static int slabbed$mc1211LiveOutlineTargetTraceNoRecentAnchor;
+    private static final Set<String> slabbed$mc1211TrapdoorSeamMp4ManualRedSignatures =
+            ConcurrentHashMap.newKeySet();
+    private static boolean slabbed$mc1211TrapdoorSeamMp4ManualStartLogged;
+    private static int slabbed$mc1211TrapdoorSeamMp4ManualRedRows;
+    private static final Set<String> slabbed$manualSideRescueVerdictSignatures =
+            ConcurrentHashMap.newKeySet();
+    private static boolean slabbed$manualSideRescueVerdictStartLogged;
+    private static int slabbed$manualSideRescueVerdictRows;
+    private static int slabbed$manualSideRescueVerdictGreenRows;
+    private static int slabbed$manualSideRescueVerdictRedRows;
     private static boolean slabbed$beta4LiveRetargetRecorderStartLogged;
     private static boolean slabbed$beta4ReloadJumpRecorderStartLogged;
     private static ClientWorld slabbed$beta4ReloadJumpRecorderWorld;
@@ -115,7 +127,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
             slabbed$traceTargeting(tickProgress, initialTarget, "object-shape-owner-preserve", false);
             return;
         }
-
         // Slab-held intent guard: when vanilla's initial crosshair already
         // sits on an intended placement target (anchored/lowered full-block
         // UP hit, lowered slab face, or lowered full-block placement-intent
@@ -663,9 +674,36 @@ public abstract class GameRendererCrosshairRetargetMixin {
         double slabDist2 = slab.getPos().squaredDistanceTo(eye);
         final double eps = 1.0e-6;
         if (slabHeld) {
+            if (slabbed$slabHeldStealsAnchoredUpOwner(anchored, slab)) {
+                return anchored;
+            }
             return (slabDist2 <= anchoredDist2 + eps) ? slab : anchored;
         }
         return (anchoredDist2 <= slabDist2 + eps) ? anchored : slab;
+    }
+
+    private boolean slabbed$slabHeldStealsAnchoredUpOwner(
+            BlockHitResult anchored,
+            BlockHitResult slab
+    ) {
+        if (anchored == null || slab == null || anchored.getSide() != Direction.UP) {
+            return false;
+        }
+        ClientWorld world = client.world;
+        if (world == null) {
+            return false;
+        }
+        BlockPos anchoredPos = anchored.getBlockPos();
+        BlockState anchoredState = world.getBlockState(anchoredPos);
+        if (!slabbed$isAnchoredLoweredFullBlock(world, anchoredPos, anchoredState)) {
+            return false;
+        }
+        if (slab.getSide().getAxis() == Direction.Axis.Y) {
+            return false;
+        }
+        BlockPos slabPos = slab.getBlockPos();
+        BlockState slabState = world.getBlockState(slabPos);
+        return slabbed$isVisibleUpperLoweredSlabOwner(world, slabPos, slabState);
     }
 
     private static boolean slabbed$isDistinctOwner(BlockHitResult initialHit, BlockHitResult candidate) {
@@ -801,6 +839,14 @@ public abstract class GameRendererCrosshairRetargetMixin {
             }
 
             hit = slabbed$raycastBeta35HitboxOwnerObject(world, cam, eye, end, samplePos.up(2), bestDist2);
+            if (hit != null) {
+                bestHit = hit;
+                bestDist2 = hit.getPos().squaredDistanceTo(eye);
+            }
+
+            // Slab-held MISS manual evidence shows some lowered underside owners
+            // sit just below the sampled voxel band; include one step down.
+            hit = slabbed$raycastBeta35HitboxOwnerObject(world, cam, eye, end, samplePos.down(), bestDist2);
             if (hit != null) {
                 bestHit = hit;
                 bestDist2 = hit.getPos().squaredDistanceTo(eye);
@@ -1057,12 +1103,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
         String classification;
         if (sideOwner == null) {
             classification = "noCandidate";
-        } else if (topHit
-                && initialAnchored
-                && initialLowered
-                && initialFullBlock
-                && visibleUpperSideCandidate) {
-            classification = "visibleUpperSideFaceOwner";
         } else if (topHit && initialAnchored && initialLowered && initialFullBlock) {
             classification = "anchoredUpPreserve";
         } else if (topInterior) {
@@ -1246,7 +1286,162 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" nonSlabWouldProduceScanSideSlabFired=").append(nonSlabComparisonCandidate != null);
         line.append(" classification=").append(classification);
         Slabbed.LOGGER.info(line.toString());
+        slabbed$emitManualSideRescueVerdict(
+                classification,
+                held,
+                initialTarget,
+                exitReason,
+                slabHeldCandidate,
+                reportCandidate,
+                nonSlabComparisonCandidate,
+                candidateReason,
+                eye,
+                end);
+        slabbed$emitMc1211TrapdoorSeamMp4ManualRed(
+                classification,
+                held,
+                initialTarget,
+                exitReason,
+                slabHeldCandidate,
+                reportCandidate,
+                nonSlabComparisonCandidate,
+                candidateReason,
+                eye,
+                end);
         return slabHeldCandidate != null ? slabHeldCandidate : null;
+    }
+
+    private void slabbed$emitMc1211TrapdoorSeamMp4ManualRed(
+            String classification,
+            ItemStack held,
+            HitResult initialTarget,
+            String exitReason,
+            BlockHitResult slabHeldCandidate,
+            BlockHitResult reportCandidate,
+            BlockHitResult nonSlabComparisonCandidate,
+            String candidateReason,
+            Vec3d eye,
+            Vec3d end
+    ) {
+        if (!Boolean.getBoolean(MC1211_TRAPDOOR_SEAM_MP4_RED_PROPERTY)
+                || (!"trueMiss".equals(classification) && !"noCandidate".equals(classification))) {
+            return;
+        }
+        if (!slabbed$mc1211TrapdoorSeamMp4ManualStartLogged) {
+            slabbed$mc1211TrapdoorSeamMp4ManualStartLogged = true;
+            System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_RED_START]"
+                    + " route=runClient"
+                    + " property=" + MC1211_TRAPDOOR_SEAM_MP4_RED_PROPERTY
+                    + " sourceTruth=manual-live-recorder"
+                    + " gameplayPatch=false");
+        }
+        String signature = classification
+                + "|initial=" + slabbed$formatHit(initialTarget)
+                + "|exitReason=" + exitReason
+                + "|candidateReason=" + candidateReason;
+        if (!slabbed$mc1211TrapdoorSeamMp4ManualRedSignatures.add(signature)) {
+            return;
+        }
+        slabbed$mc1211TrapdoorSeamMp4ManualRedRows++;
+        System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_RED]"
+                + " row=" + slabbed$mc1211TrapdoorSeamMp4ManualRedRows
+                + " finalResult=RED"
+                + " classification=MP4_MANUAL_LIVE_TARGETING_RED"
+                + " liveClassification=" + classification
+                + " failureLayer=raycast/rescue"
+                + " heldItem=" + (held.isEmpty() ? "empty" : held.getItem().getTranslationKey())
+                + " heldIsSlab=" + slabbed$isSlabPlacementIntent()
+                + " initial=" + slabbed$formatHit(initialTarget)
+                + " exitReason=" + exitReason
+                + " sideScanCandidateReason=" + candidateReason
+                + " sideScanCandidate=" + slabbed$formatHit(reportCandidate)
+                + " slabHeldCandidate=" + slabbed$formatHit(slabHeldCandidate)
+                + " nonSlabComparisonCandidate=" + slabbed$formatHit(nonSlabComparisonCandidate)
+                + " eye=" + slabbed$formatVec(eye)
+                + " end=" + slabbed$formatVec(end)
+                + " gameplayPatch=false");
+        System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_SUMMARY]"
+                + " rows=" + slabbed$mc1211TrapdoorSeamMp4ManualRedRows
+                + " finalResult=RED"
+                + " classification=MP4_MANUAL_LIVE_TARGETING_RED"
+                + " failureLayer=raycast/rescue"
+                + " patchAllowedNext=false"
+                + " gameplayPatch=false");
+    }
+
+    private void slabbed$emitManualSideRescueVerdict(
+            String classification,
+            ItemStack held,
+            HitResult initialTarget,
+            String exitReason,
+            BlockHitResult slabHeldCandidate,
+            BlockHitResult reportCandidate,
+            BlockHitResult nonSlabComparisonCandidate,
+            String candidateReason,
+            Vec3d eye,
+            Vec3d end
+    ) {
+        if (!Boolean.getBoolean("slabbed.beta4ManualLiveTrace")) {
+            return;
+        }
+        if (!slabbed$manualSideRescueVerdictStartLogged) {
+            slabbed$manualSideRescueVerdictStartLogged = true;
+            Slabbed.LOGGER.info(
+                    "[SLAB_HELD_BLOCK_LOWERED_FACE_SIDE_RESCUE_START] route=runClient property=slabbed.beta4ManualLiveTrace sourceTruth=manual-live-recorder gameplayPatch=false");
+        }
+
+        String finalResult = switch (classification) {
+            case "sideOwnerWouldWin", "visibleUpperSideFaceOwner" -> "GREEN";
+            case "suppressedByAboveAngleAnchoredOwner", "suppressedBySlabHeld", "trueMiss", "noCandidate" -> "RED";
+            default -> "TRACE_GAP";
+        };
+        String failureLayer = "GREEN".equals(finalResult) ? "NONE"
+                : ("TRACE_GAP".equals(finalResult) ? "proof gap" : "raycast/rescue");
+        String signature = classification
+                + "|initial=" + slabbed$formatHit(initialTarget)
+                + "|exitReason=" + exitReason
+                + "|candidateReason=" + candidateReason
+                + "|final=" + finalResult;
+        if (!slabbed$manualSideRescueVerdictSignatures.add(signature)) {
+            return;
+        }
+
+        slabbed$manualSideRescueVerdictRows++;
+        if ("GREEN".equals(finalResult)) {
+            slabbed$manualSideRescueVerdictGreenRows++;
+        } else if ("RED".equals(finalResult)) {
+            slabbed$manualSideRescueVerdictRedRows++;
+        }
+
+        Slabbed.LOGGER.info(
+                "[SLAB_HELD_BLOCK_LOWERED_FACE_SIDE_RESCUE] row={} finalResult={} classification={} liveClassification={} failureLayer={} heldItem={} heldIsSlab={} initial={} exitReason={} sideScanCandidateReason={} sideScanCandidate={} slabHeldCandidate={} nonSlabComparisonCandidate={} eye={} end={} sourceTruth=manual-live-recorder gameplayPatch=false",
+                slabbed$manualSideRescueVerdictRows,
+                finalResult,
+                "GREEN".equals(finalResult)
+                        ? "SLAB_HELD_BLOCK_LOWERED_FACE_SIDE_RESCUE_GREEN"
+                        : ("RED".equals(finalResult)
+                        ? "SLAB_HELD_BLOCK_LOWERED_FACE_SIDE_RESCUE_RED"
+                        : "SLAB_HELD_BLOCK_LOWERED_FACE_SIDE_RESCUE_TRACE_GAP"),
+                classification,
+                failureLayer,
+                held.isEmpty() ? "empty" : held.getItem().getTranslationKey(),
+                slabbed$isSlabPlacementIntent(),
+                slabbed$formatHit(initialTarget),
+                exitReason,
+                candidateReason,
+                slabbed$formatHit(reportCandidate),
+                slabbed$formatHit(slabHeldCandidate),
+                slabbed$formatHit(nonSlabComparisonCandidate),
+                slabbed$formatVec(eye),
+                slabbed$formatVec(end));
+        Slabbed.LOGGER.info(
+                "[SLAB_HELD_BLOCK_LOWERED_FACE_SIDE_RESCUE_SUMMARY] rows={} greenRows={} redRows={} finalResult={} liveClassification={} failureLayer={} gameplayPatch=false",
+                slabbed$manualSideRescueVerdictRows,
+                slabbed$manualSideRescueVerdictGreenRows,
+                slabbed$manualSideRescueVerdictRedRows,
+                finalResult,
+                classification,
+                failureLayer);
     }
 
     private boolean slabbed$isAboveAngleAnchoredOwnerSideSlabSteal(
