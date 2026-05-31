@@ -5,7 +5,6 @@ final class TerrainSlabsProofFocus {
             "slabbed.terrainSlabsCompatDump",
             "slabbed.terrainSlabsDirectSupportRedOnly",
             "slabbed.terrainSlabsGeneratedDoubleDirectSupportRedOnly",
-            "slabbed.terrainSlabsCullingFaceRedOnly",
             "slabbed.terrainSlabsExactSeedTrace",
             "slabbed.terrainSlabsLivePlacementProof",
             "slabbed.terrainSlabsParticleProof",
