@@ -2,10 +2,11 @@ package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
-import net.minecraft.block.ConnectingBlock;
-import net.minecraft.block.FenceBlock;
+import net.minecraft.block.WallBlock;
+import net.minecraft.block.enums.WallShape;
 import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.state.property.BooleanProperty;
+import net.minecraft.state.property.EnumProperty;
+import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.random.Random;
@@ -19,23 +20,16 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Fences must not connect to a horizontally-adjacent fence that sits at a
- * different visual height.
+ * Walls must not connect to a horizontally-adjacent wall at a different visual height
+ * (one lowered onto a slab, the other at grid height) — the same single-post rule as
+ * {@code FencePaneSlabConnectionMixin}.
  *
- * <p>When fences are placed consecutively down a run of slabs (one fence
- * lowered onto a slab surface, the neighbour at grid height), vanilla would
- * still connect them and draw two connector arms at mismatched heights — a
- * broken-looking join. Suppressing the connection keeps them as clean single
- * posts. A flat fence run at a uniform height (e.g. all on the same slab
- * surface, or all on the ground) still connects normally.
- *
- * <p>Height is compared using the fence's <em>visual</em> dy, mirroring
- * {@code OffsetBlockStateModel}: fences are only visually lowered on custom
- * (Terrain Slabs) direct-support surfaces, not on vanilla slab supports, so
- * the rule stays consistent for both vanilla and custom slabs.
+ * <p>Walls use {@code WallShape} side properties, so a broken side is set to
+ * {@link WallShape#NONE}. Whenever a side is broken the centre post ({@code UP}) is
+ * forced on so the wall never renders a floating gap where the connection used to be.
  */
-@Mixin(FenceBlock.class)
-public abstract class FenceSlabConnectionMixin {
+@Mixin(WallBlock.class)
+public abstract class WallSlabConnectionMixin {
 
     @Inject(method = "getStateForNeighborUpdate", at = @At("RETURN"), cancellable = true)
     private void slabbed$breakSteppedNeighborConnection(
@@ -76,29 +70,17 @@ public abstract class FenceSlabConnectionMixin {
     private static BlockState slabbed$breakConnection(
             BlockView world, BlockPos pos, BlockState state, Direction direction,
             BlockPos neighborPos, BlockState neighborState) {
-        BooleanProperty prop = ConnectingBlock.FACING_PROPERTIES.get(direction);
-        if (prop == null || !state.contains(prop) || !state.get(prop)) {
+        EnumProperty<WallShape> prop = WallBlock.WALL_SHAPE_PROPERTIES_BY_DIRECTION.get(direction);
+        if (prop == null || !state.contains(prop) || state.get(prop) == WallShape.NONE) {
             return state;
         }
-        // Only break fence-to-fence joins; fence-to-solid-block connections are left alone.
-        if (!(neighborState.getBlock() instanceof FenceBlock)) {
-            return state;
-        }
-        double selfDy = slabbed$visualDy(world, pos, state);
-        double neighborDy = slabbed$visualDy(world, neighborPos, neighborState);
-        if (Math.abs(selfDy - neighborDy) > 1.0e-6) {
-            return state.with(prop, false);
+        if (SlabSupport.isSteppedConnectingNeighbor(world, pos, state, neighborPos, neighborState)) {
+            BlockState broken = state.with(prop, WallShape.NONE);
+            if (broken.contains(Properties.UP)) {
+                broken = broken.with(Properties.UP, true);
+            }
+            return broken;
         }
         return state;
-    }
-
-    @Unique
-    private static double slabbed$visualDy(BlockView world, BlockPos pos, BlockState state) {
-        double dy = SlabSupport.getYOffset(world, pos, state);
-        if (dy != 0.0 && !SlabSupport.isDirectCustomSlabSupportedObject(world, pos, state)) {
-            // fence on a vanilla slab support is not visually lowered (matches OffsetBlockStateModel)
-            return 0.0;
-        }
-        return dy;
     }
 }
