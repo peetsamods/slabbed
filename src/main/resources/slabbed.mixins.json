@@ -8,7 +8,7 @@
     "torch.TorchBlockMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
-    "TerrainSlabsFaceCullingMixin",
+    "FenceSlabConnectionMixin",
     "TorchParticleAccessor",
     "TorchParticleMixin",
     "WallTorchParticleMixin",
