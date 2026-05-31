@@ -809,7 +809,18 @@ public final class SlabSupport {
             return false;
         }
 
-        return state.isSolidBlock(world, pos) || isSlabSitCandidate(world, pos, state);
+        // Terrain Slabs compat: lower the same "objects" that sit on vanilla slabs —
+        // block entities (chests, furnaces, jukeboxes, hoppers, …), the crafting table,
+        // and every non-full-cube block (fences, walls, panes, torches, doors, signs,
+        // lanterns, …). isSlabSitCandidate deliberately EXCLUDES plain solid world cubes
+        // (dirt, grass, stone, sand, …): lowering those opaque full cubes would tear
+        // see-through holes, because Slabbed shifts only the model while vanilla
+        // face-culling stays at the un-shifted voxel (the half-height Terrain Slabs side
+        // faces are cullface-tagged). Keeping natural terrain at grid height is what
+        // fixes the beta 4.1 culling blocker, while objects still lower exactly as they
+        // do on vanilla slabs. Terrain-Slabs-only: vanilla slab behaviour and generic
+        // Slabbed support are untouched.
+        return isSlabSitCandidate(world, pos, state);
     }
 
     /**
