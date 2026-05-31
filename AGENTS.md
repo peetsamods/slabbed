@@ -4,27 +4,44 @@
 
 Use repo docs and code as the default source of truth. Do not rely on chat memory when repo docs are available.
 
-Read order before non-trivial work:
+Repo-local authority order:
 
-1. `00_SLABBED_SOURCE_INDEX.md`
-2. `01_SLABBED_CANONICAL_DOCTRINE.md`
-3. `02_SLABBED_ACTIVE_STATUS.md`
-4. Relevant workflow, skill, research note, Bug Blaster, issue, PR, or handoff named in the active prompt.
+1. `AGENTS.md`
+2. `SLABBED_SPINE.md`
+3. `docs/codex/00-authority-order.md`
+4. The narrow relevant guide under `docs/codex/`
+5. `docs/codex/source-pack/` only when explicitly needed as archive-only reference
+6. repo docs and code when a doc points there
 
 If docs conflict, cite exact file paths and sections. Follow documented superseding rules. If no superseding rule exists, stop and report the conflict before editing.
 
-Current active Slabbed source pack:
+Current repo-local focus docs:
 
-- `00_SLABBED_SOURCE_INDEX.md`
-- `01_SLABBED_CANONICAL_DOCTRINE.md`
-- `02_SLABBED_ACTIVE_STATUS.md`
-- `03_SLABBED_BUG_BLASTERS.md`
-- `04_SLABBED_WORKFLOWS.md`
-- `05_SLABBED_SKILLS_AND_COMMANDS.md`
-- `06_SLABBED_RESEARCH.md`
-- `07_SLABBED_ARCHIVE_AND_PRUNE_MAP.md`
+- `docs/codex/00-authority-order.md`
+- `docs/codex/01-canon-law-purpose.md`
+- `docs/codex/02-legal-state-grammar.md`
+- `docs/codex/03-visual-triad.md`
+- `docs/codex/04-slice-contracts.md`
+- `docs/codex/05-preflight-savepoint.md`
+- `docs/codex/06-bug-blaster-case-law.md`
+- `docs/codex/07-live-test-log-recipes.md`
+- `docs/codex/08-compat-contracts.md`
+- `docs/codex/09-release-gate.md`
+- `docs/codex/10-troubleshooting-when-stuck.md`
+- `docs/codex/11-model-thread-policy.md`
+- `docs/codex/12-goal-mode.md`
 
-Old duplicated source files are historical only unless explicitly named by the active prompt.
+Archive-only source pack:
+
+- `docs/codex/source-pack/00_SLABBED_SOURCE_INDEX.md`
+- `docs/codex/source-pack/01_SLABBED_CANONICAL_DOCTRINE.md`
+- `docs/codex/source-pack/03_SLABBED_BUG_BLASTERS_UPDATED_2026-05-07.md`
+- `docs/codex/source-pack/04_SLABBED_WORKFLOWS.md`
+- `docs/codex/source-pack/05_SLABBED_SKILLS_AND_COMMANDS.md`
+- `docs/codex/source-pack/06_SLABBED_RESEARCH.md`
+- `docs/codex/source-pack/07_SLABBED_ARCHIVE_AND_PRUNE_MAP.md`
+
+Archive-only source files are historical only unless explicitly named by the active prompt.
 
 ## Canonical repo and preflight
 

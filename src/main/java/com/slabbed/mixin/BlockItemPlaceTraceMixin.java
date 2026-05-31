@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
+import com.slabbed.util.Mc1211TrapdoorUnderBottomRecorder;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.Block;
@@ -30,6 +31,9 @@ public abstract class BlockItemPlaceTraceMixin {
     private static final ThreadLocal<TraceCtx> SLABBED$INSPECT_TRACE = new ThreadLocal<>();
     private static final ThreadLocal<TraceCtx> SLABBED$INSPECT_USE_TRACE = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> SLABBED$INSPECT_PLACE_CALLED = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_USE = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_PLACE_CALLED =
+            new ThreadLocal<>();
 
     private static boolean slabbed$isTracedBlock(Block block, World world, BlockPos pos) {
         return block instanceof SlabBlock || block instanceof CarpetBlock || block.getDefaultState().isOpaqueFullCube(world, pos);
@@ -41,10 +45,13 @@ public abstract class BlockItemPlaceTraceMixin {
         World world = ctx.getWorld();
         Direction face = ctx.getSide();
         BlockPos placePos = ctx.getBlockPos();
+        Identifier itemId = Registries.ITEM.getId(self);
+        if (Mc1211TrapdoorUnderBottomRecorder.recordPlaceHead(ctx, itemId)) {
+            SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_PLACE_CALLED.set(Boolean.TRUE);
+        }
         if (!slabbed$isTracedBlock(self.getBlock(), world, placePos)) return;
         BlockPos hitPos = placePos.offset(face.getOpposite());
         String side = world.isClient() ? "CLIENT" : "SERVER";
-        Identifier itemId = Registries.ITEM.getId(self);
         boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
 
         RuntimeDiagnostics.recordPlace(
@@ -111,18 +118,19 @@ public abstract class BlockItemPlaceTraceMixin {
         }
 
         BlockItem recorderSelf = (BlockItem) (Object) this;
+        Identifier recorderItemId = Registries.ITEM.getId(recorderSelf);
+        Mc1211TrapdoorUnderBottomRecorder.recordPlaceReturn(ctx, recorderItemId, cir.getReturnValue());
         if (slabbed$isTracedBlock(recorderSelf.getBlock(), ctx.getWorld(), ctx.getBlockPos())) {
-            Identifier itemId = Registries.ITEM.getId(recorderSelf);
             boolean heldIsSlab = recorderSelf.getBlock() instanceof SlabBlock;
             RuntimeDiagnostics.recordPlace(
                     "place-return",
-                    itemId,
+                    recorderItemId,
                     heldIsSlab,
                     ctx,
                     cir.getReturnValue(),
                     "anchorFinalization=deferred_to_finalization_mixin");
             RuntimeDiagnostics.recordAfterTick(
-                    itemId,
+                    recorderItemId,
                     heldIsSlab,
                     ctx,
                     cir.getReturnValue(),
@@ -167,10 +175,14 @@ public abstract class BlockItemPlaceTraceMixin {
         if (context == null || context.getWorld() == null) {
             return;
         }
+        Identifier itemId = Registries.ITEM.getId(self);
+        SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_PLACE_CALLED.remove();
+        if (Mc1211TrapdoorUnderBottomRecorder.recordUseHead(context, itemId)) {
+            SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_USE.set(Boolean.TRUE);
+        }
         if (!slabbed$isTracedBlock(self.getBlock(), context.getWorld(), context.getBlockPos())) {
             return;
         }
-        Identifier itemId = Registries.ITEM.getId(self);
         RuntimeDiagnostics.recordUseHead(itemId, self.getBlock() instanceof SlabBlock, context);
 
         if (!RuntimeDiagnostics.isInspectEnabled()) {
@@ -191,6 +203,22 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "useOnBlock", at = @At("RETURN"))
     private void slabbed$traceUseOnBlockReturn(ItemUsageContext context, CallbackInfoReturnable<ActionResult> cir) {
+        try {
+            if (Boolean.TRUE.equals(SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_USE.get())
+                    && context != null
+                    && context.getWorld() != null) {
+                BlockItem self = (BlockItem) (Object) this;
+                Mc1211TrapdoorUnderBottomRecorder.recordUseReturn(
+                        context,
+                        Registries.ITEM.getId(self),
+                        cir.getReturnValue(),
+                        Boolean.TRUE.equals(SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_PLACE_CALLED.get()));
+            }
+        } finally {
+            SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_USE.remove();
+            SLABBED$MC1211_TRAPDOOR_UNDER_BOTTOM_PLACE_CALLED.remove();
+        }
+
         if (!RuntimeDiagnostics.isInspectEnabled()) {
             return;
         }
