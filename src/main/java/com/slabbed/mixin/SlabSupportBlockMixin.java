@@ -20,10 +20,15 @@ public abstract class SlabSupportBlockMixin {
 
     @Inject(method = "sideCoversSmallSquare", at = @At("HEAD"), cancellable = true)
     private static void slabbed$slabTopSupport(WorldView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(world.getBlockState(pos))) {
+        net.minecraft.block.BlockState state = world.getBlockState(pos);
+        if (direction == Direction.UP && SlabSupport.isBottomSlab(state)) {
             cir.setReturnValue(true);
         }
-        if (direction == Direction.DOWN && SlabSupport.isTopSlab(world.getBlockState(pos))) {
+        // Lowered-lane bottom slabs visually expose an underside support face
+        // at the lowered elevation; allow underside small-square support there.
+        if (direction == Direction.DOWN
+                && (SlabSupport.isTopSlab(state)
+                || (SlabSupport.isBottomSlab(state) && SlabSupport.getYOffset(world, pos, state) < 0.0d))) {
             cir.setReturnValue(true);
         }
     }

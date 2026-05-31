@@ -15,6 +15,7 @@ public final class SlabbedClient implements ClientModInitializer {
         SlabAnchorClientSync.init();
         RuntimeDiagnostics.initBsFbLiveTraceClient();
         initGapFillerOverlay();
+        initTargetDyOverlay();
         initScreenshotCaptureService();
     }
 
@@ -25,6 +26,15 @@ public final class SlabbedClient implements ClientModInitializer {
         invokeStaticInit(
                 "com.slabbed.client.GapFillerOverlay",
                 "gap filler overlay");
+    }
+
+    private static void initTargetDyOverlay() {
+        if (!SlabbedClientFlags.TARGET_DY_OVERLAY) {
+            return;
+        }
+        invokeStaticInit(
+                "com.slabbed.client.TargetDyOverlay",
+                "target dy overlay");
     }
 
     private static void initScreenshotCaptureService() {

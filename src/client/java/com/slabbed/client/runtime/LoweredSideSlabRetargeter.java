@@ -12,6 +12,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
@@ -40,9 +41,15 @@ public final class LoweredSideSlabRetargeter {
             return compoundVisibleOwner;
         }
         double currentDist2 = Double.POSITIVE_INFINITY;
-            if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
-                currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
+        if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
+            currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
+            if (slabHeld
+                    && currentHit instanceof BlockHitResult currentBlockHit
+                    && currentBlockHit.getSide().getAxis() != Direction.Axis.Y
+                    && isLoweredSideSlabCandidate(world, currentBlockHit.getBlockPos())) {
+                return currentBlockHit;
             }
+        }
         int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
 
         BlockHitResult bestHit = null;
@@ -77,14 +84,20 @@ public final class LoweredSideSlabRetargeter {
         return bestHit;
     }
 
+    private static boolean isLoweredSideSlabCandidate(ClientWorld world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        return state.getBlock() instanceof SlabBlock
+                && state.contains(SlabBlock.TYPE)
+                && (state.get(SlabBlock.TYPE) == SlabType.BOTTOM || state.get(SlabBlock.TYPE) == SlabType.DOUBLE)
+                && state.getFluidState().isEmpty()
+                && SlabSupport.getYOffset(world, pos, state) == -0.5;
+    }
+
     private static BlockHitResult raycastLoweredSideSlab(
             ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos, boolean slabHeld, HitResult currentHit
     ) {
         BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || (state.get(SlabBlock.TYPE) != SlabType.BOTTOM && state.get(SlabBlock.TYPE) != SlabType.DOUBLE)
-                || SlabSupport.getYOffset(world, pos, state) != -0.5) {
+        if (!isLoweredSideSlabCandidate(world, pos)) {
             return null;
         }
 
@@ -118,16 +131,52 @@ public final class LoweredSideSlabRetargeter {
         if (hit == null) {
             return null;
         }
+        // MISS-path owner guard: if a real visible object above the support
+        // slab is on-ray, do not steal ownership to the support slab.
+        if (currentHit != null
+                && currentHit.getType() == HitResult.Type.MISS
+                && slabbed$hasVisibleOwnerAboveSupport(world, cam, eye, end, supportPos, hit)) {
+            return null;
+        }
         if (slabHeld
                 && currentHit instanceof BlockHitResult currentBlockHit
                 && state.getRaycastShape(world, pos).raycast(eye, end, pos) == null) {
-            // Keep slab-held face stability on the same block, but do not
-            // suppress legitimate retargeting to a different lowered owner.
-            if (currentBlockHit.getBlockPos().equals(pos)) {
+            // Keep vertical same-block stability, but allow visible lowered
+            // side faces to be confirmed as the side-slab owner.
+            if (currentBlockHit.getBlockPos().equals(pos)
+                    && currentBlockHit.getSide().getAxis() == Direction.Axis.Y) {
                 return null;
             }
         }
         return hit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6 ? hit : null;
+    }
+
+    private static boolean slabbed$hasVisibleOwnerAboveSupport(
+            ClientWorld world,
+            Entity cam,
+            Vec3d eye,
+            Vec3d end,
+            BlockPos supportPos,
+            BlockHitResult supportHit
+    ) {
+        BlockPos ownerPos = supportPos.up();
+        BlockState ownerState = world.getBlockState(ownerPos);
+        if (ownerState.isAir()
+                || ownerState.getBlock() instanceof SlabBlock
+                || SlabSupport.isSupportingSlab(ownerState)) {
+            return false;
+        }
+        VoxelShape ownerOutline = ownerState.getOutlineShape(world, ownerPos, ShapeContext.of(cam));
+        if (ownerOutline == null || ownerOutline.isEmpty()) {
+            return false;
+        }
+        BlockHitResult ownerHit = ownerOutline.raycast(eye, end, ownerPos);
+        if (ownerHit == null) {
+            return false;
+        }
+        double ownerDist2 = ownerHit.getPos().squaredDistanceTo(eye);
+        double supportDist2 = supportHit.getPos().squaredDistanceTo(eye);
+        return ownerDist2 <= supportDist2 + 1.0e-6d;
     }
 
     private static BlockHitResult comfortRaycastLoweredSideSlab(
