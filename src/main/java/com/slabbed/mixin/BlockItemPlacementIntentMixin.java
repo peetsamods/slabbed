@@ -10,6 +10,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
@@ -67,6 +68,50 @@ public abstract class BlockItemPlacementIntentMixin {
     private static boolean slabbed$isLoweredSlab(BlockState state, World world, BlockPos pos) {
         return state.getBlock() instanceof SlabBlock
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d;
+    }
+
+    private static boolean slabbed$isLoweredBottomSlabUndersideBand(
+            ItemUsageContext context,
+            BlockPos targetPos,
+            BlockState targetState
+    ) {
+        if (context.getSide().getAxis().isVertical()
+                || !(targetState.getBlock() instanceof SlabBlock)
+                || !targetState.contains(SlabBlock.TYPE)
+                || targetState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !targetState.getFluidState().isEmpty()
+                || Math.abs(SlabSupport.getYOffset(context.getWorld(), targetPos, targetState) + 0.5d)
+                > LOWERED_VISUAL_BOUNDARY_EPSILON) {
+            return false;
+        }
+        double hitY = context.getHitPos().y;
+        return hitY >= targetPos.getY() - 0.5d - LOWERED_VISUAL_BOUNDARY_EPSILON
+                && hitY <= targetPos.getY() + LOWERED_VISUAL_BOUNDARY_EPSILON;
+    }
+
+    private static ItemUsageContext slabbed$remapTrapdoorLoweredBottomSlabUnderside(ItemUsageContext context) {
+        BlockPos targetPos = context.getBlockPos();
+        BlockState targetState = context.getWorld().getBlockState(targetPos);
+        if (!slabbed$isLoweredBottomSlabUndersideBand(context, targetPos, targetState)) {
+            return context;
+        }
+        Vec3d originalHit = context.getHitPos();
+        Vec3d remappedHitPos = new Vec3d(
+                originalHit.x,
+                targetPos.getY() - 0.001d,
+                originalHit.z);
+        BlockHitResult remappedHit = new BlockHitResult(
+                remappedHitPos,
+                Direction.DOWN,
+                targetPos,
+                context.hitsInsideBlock());
+        return new ItemUsageContext(
+                context.getWorld(),
+                context.getPlayer(),
+                context.getHand(),
+                context.getStack(),
+                remappedHit) {
+        };
     }
 
     private static boolean slabbed$isCompoundSideHit(ItemUsageContext context, BlockPos pos, BlockState state) {
@@ -191,13 +236,28 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
 
-    private static SlabType slabbed$getExpectedLoweredSidePlacementType(BlockState targetState) {
+    private static SlabType slabbed$getExpectedLoweredSidePlacementType(
+            World world,
+            BlockPos targetPos,
+            BlockState targetState,
+            Vec3d hitPos
+    ) {
         if (!targetState.contains(SlabBlock.TYPE)) {
             return SlabType.BOTTOM;
         }
-        return targetState.get(SlabBlock.TYPE) == SlabType.BOTTOM
-                ? SlabType.BOTTOM
-                : SlabType.TOP;
+        SlabType targetType = targetState.get(SlabBlock.TYPE);
+        if (targetType == SlabType.BOTTOM) {
+            return SlabType.BOTTOM;
+        }
+        if (targetType == SlabType.TOP) {
+            double yOffset = SlabSupport.getYOffset(world, targetPos, targetState);
+            double visualLowerY = targetPos.getY() + yOffset + 0.5d;
+            double visualMidY = visualLowerY + 0.25d;
+            return hitPos.y <= visualMidY + LOWERED_VISUAL_BOUNDARY_EPSILON
+                    ? SlabType.BOTTOM
+                    : SlabType.TOP;
+        }
+        return SlabType.TOP;
     }
 
     private static SlabType slabbed$getLoweredDoubleHitIntentType(BlockPos targetPos, Vec3d hitPos) {
@@ -461,8 +521,36 @@ public abstract class BlockItemPlacementIntentMixin {
         COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
         COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
         COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
-        boolean itemIsSlab = ((BlockItem) (Object) this).getBlock() instanceof SlabBlock;
+        BlockItem self = (BlockItem) (Object) this;
+        boolean itemIsSlab = self.getBlock() instanceof SlabBlock;
         if (!itemIsSlab) {
+            if (self.getBlock() instanceof TrapdoorBlock) {
+                ItemUsageContext remappedTrapdoorContext =
+                        slabbed$remapTrapdoorLoweredBottomSlabUnderside(context);
+                if (remappedTrapdoorContext != context) {
+                    slabbed$recordRemapAttempt(
+                            context,
+                            false,
+                            true,
+                            false,
+                            false,
+                            false,
+                            SlabSupport.getYOffset(
+                                    context.getWorld(),
+                                    context.getBlockPos(),
+                                    context.getWorld().getBlockState(context.getBlockPos())),
+                            false,
+                            true,
+                            "trapdoor_lowered_bottom_slab_underside",
+                            remappedTrapdoorContext.getHitPos(),
+                            Direction.DOWN,
+                            "trapdoor_lowered_bottom_slab_underside");
+                    return slabbed$inspectReturn(
+                            context,
+                            remappedTrapdoorContext,
+                            "trapdoor_lowered_bottom_slab_underside");
+                }
+            }
             slabbed$recordRemapAttempt(
                     context,
                     false,
@@ -723,7 +811,11 @@ public abstract class BlockItemPlacementIntentMixin {
                     && effectiveSide.getAxis().isHorizontal()) {
                 expectedType = slabbed$getLoweredDoubleHitIntentType(targetPos, originalHitPos);
             } else {
-                expectedType = slabbed$getExpectedLoweredSidePlacementType(targetState);
+                expectedType = slabbed$getExpectedLoweredSidePlacementType(
+                        context.getWorld(),
+                        targetPos,
+                        targetState,
+                        originalHitPos);
             }
             remappedY = slabbed$placementYForType(targetPos, expectedType);
         } else {
@@ -737,6 +829,14 @@ public abstract class BlockItemPlacementIntentMixin {
         }
         if (originalSide == Direction.UP && expectedType == SlabType.BOTTOM) {
             remappedY = targetPos.getY() + 0.501d;
+        }
+        BlockPos remappedBlockPos = targetPos;
+        if (targetState.getBlock() instanceof SlabBlock
+                && targetState.contains(SlabBlock.TYPE)
+                && targetState.get(SlabBlock.TYPE) == SlabType.TOP
+                && expectedType == SlabType.BOTTOM
+                && effectiveSide.getAxis().isHorizontal()) {
+            remappedBlockPos = targetPos.offset(effectiveSide);
         }
         Vec3d remappedHitPos = new Vec3d(originalHitPos.x, remappedY, originalHitPos.z);
         slabbed$recordRemapAttempt(
@@ -756,7 +856,7 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockHitResult remappedHit = new BlockHitResult(
                 remappedHitPos,
                 effectiveSide,
-                targetPos,
+                remappedBlockPos,
                 context.hitsInsideBlock()
         );
 

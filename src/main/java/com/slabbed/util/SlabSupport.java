@@ -352,11 +352,48 @@ public final class SlabSupport {
         if (!isBeta35FloorButtonContactObject(state)
                 && !isBeta35BottomTrapdoorVisibleOwnerObject(state)
                 && !isBeta35VerticalChainVisibleOwnerObject(state)
-                && !isBeta35RegularDoorVisibleOwnerObject(world, pos, state)) {
+                && !isBeta35RegularDoorVisibleOwnerObject(world, pos, state)
+                && !isBeta35LoweredSlabUndersideVisibleOwnerObject(world, pos, state)) {
             return false;
         }
         double objectDy = getYOffset(world, pos, state);
         return Double.isFinite(objectDy) && objectDy < -1.0e-6d;
+    }
+
+    private static boolean isPaleHangingMossBlock(BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        Identifier id = Registries.BLOCK.getId(state.getBlock());
+        if (id == null || !"minecraft".equals(id.getNamespace())) {
+            return false;
+        }
+        String path = id.getPath();
+        return "pale_hanging_moss".equals(path) || "pale_hanging_moss_tip".equals(path);
+    }
+
+    private static boolean isBeta35LoweredSlabUndersideVisibleOwnerObject(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null || state.isAir() || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        Block block = state.getBlock();
+        boolean supportedCeilingObject = state.isOf(Blocks.LANTERN)
+                || state.isOf(Blocks.SOUL_LANTERN)
+                || block instanceof SporeBlossomBlock
+                || block instanceof HangingRootsBlock
+                || isPaleHangingMossBlock(state);
+        if (!supportedCeilingObject) {
+            return false;
+        }
+        BlockPos supportPos = pos.up();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (!(supportState.getBlock() instanceof SlabBlock) || !supportState.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        double supportDy = loweredSlabUndersideSupportDy(world, supportPos, supportState);
+        return Double.isFinite(supportDy) && supportDy < -1.0e-6d;
     }
 
     public static boolean isBeta35FenceWallVariantContactObject(BlockState state) {
@@ -384,6 +421,27 @@ public final class SlabSupport {
 
     private static boolean isBeta35StandingOakSignContactObject(BlockState state) {
         return state != null && state.isOf(Blocks.OAK_SIGN);
+    }
+
+    private static double loweredSlabUndersideSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE) || !state.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        if (SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
+            return -1.0d;
+        }
+        SlabType type = state.get(SlabBlock.TYPE);
+        if (type == SlabType.BOTTOM) {
+            return floorTorchBottomSlabSupportDy(world, pos, state);
+        }
+        if (isAdjacentSideSlabLowered(world, pos, state)) {
+            return -0.5d;
+        }
+        return 0.0d;
     }
 
     private static double beta35FenceWallVariantContactDy(BlockView world, BlockPos pos, BlockState state) {
@@ -841,7 +899,9 @@ public final class SlabSupport {
     public static boolean isCompatibleLoweredSlabLane(SlabType existingType, SlabType incomingType) {
         return existingType == incomingType
                 || existingType == SlabType.DOUBLE
-                || incomingType == SlabType.DOUBLE;
+                || incomingType == SlabType.DOUBLE
+                || (existingType == SlabType.TOP && incomingType == SlabType.BOTTOM)
+                || (existingType == SlabType.BOTTOM && incomingType == SlabType.TOP);
     }
 
     public record CompoundSlabRemapDecision(
@@ -1606,6 +1666,36 @@ public final class SlabSupport {
             }
             return -0.5;
         }
+
+        // Top-half trapdoors under lowered slab undersides should follow the
+        // support lane height, not force vanilla top-slab +0.5.
+        if (state.getBlock() instanceof TrapdoorBlock
+                && state.contains(Properties.BLOCK_HALF)
+                && state.get(Properties.BLOCK_HALF) == BlockHalf.TOP) {
+            BlockPos supportPos = pos.up();
+            BlockState supportState = world.getBlockState(supportPos);
+            if (supportState.getBlock() instanceof SlabBlock && supportState.contains(SlabBlock.TYPE)) {
+                SlabType supportType = supportState.get(SlabBlock.TYPE);
+                if (supportType == SlabType.TOP || supportType == SlabType.BOTTOM || supportType == SlabType.DOUBLE) {
+                    double supportDy = loweredSlabUndersideSupportDy(world, supportPos, supportState);
+                    if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+                        return supportType == SlabType.TOP ? supportDy + 0.5d : supportDy;
+                    }
+                }
+            }
+        }
+
+        // Ceiling-attached visual owners under lowered slab undersides inherit
+        // the slab lane dy directly to stay attached and avoid merging upward.
+        if (isBeta35LoweredSlabUndersideVisibleOwnerObject(world, pos, state)) {
+            BlockPos supportPos = pos.up();
+            BlockState supportState = world.getBlockState(supportPos);
+            double supportDy = loweredSlabUndersideSupportDy(world, supportPos, supportState);
+            if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+                return supportDy;
+            }
+        }
+
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
         // Only explicit ceiling-mounted cases may float into the slab space.
         // Note: isSolidBlock is safe here because getYOffset has a recursion guard.

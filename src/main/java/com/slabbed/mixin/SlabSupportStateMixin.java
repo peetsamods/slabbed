@@ -11,9 +11,11 @@ import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TorchBlock;
+import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.DoubleBlockHalf;
+import net.minecraft.block.enums.SlabType;
 import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
@@ -105,6 +107,25 @@ public abstract class SlabSupportStateMixin {
                 && state.isOf(Blocks.OAK_TRAPDOOR)
                 && state.contains(Properties.BLOCK_HALF)
                 && state.get(Properties.BLOCK_HALF) == BlockHalf.BOTTOM;
+    }
+
+    private static boolean slabbed$isTopHalfTrapdoor(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof TrapdoorBlock
+                && state.contains(Properties.BLOCK_HALF)
+                && state.get(Properties.BLOCK_HALF) == BlockHalf.TOP;
+    }
+
+    private static boolean slabbed$coherentNonEmptyTriadBasis(VoxelShape outline, VoxelShape collision) {
+        if (outline == null || collision == null || outline.isEmpty() || collision.isEmpty()) {
+            return false;
+        }
+        return Math.abs(outline.getBoundingBox().minX - collision.getBoundingBox().minX) <= 1.0e-6
+                && Math.abs(outline.getBoundingBox().minY - collision.getBoundingBox().minY) <= 1.0e-6
+                && Math.abs(outline.getBoundingBox().minZ - collision.getBoundingBox().minZ) <= 1.0e-6
+                && Math.abs(outline.getBoundingBox().maxX - collision.getBoundingBox().maxX) <= 1.0e-6
+                && Math.abs(outline.getBoundingBox().maxY - collision.getBoundingBox().maxY) <= 1.0e-6
+                && Math.abs(outline.getBoundingBox().maxZ - collision.getBoundingBox().maxZ) <= 1.0e-6;
     }
 
     private static boolean slabbed$isLoweredBeta35RegularDoorContactObject(BlockState state, double yOff) {
@@ -200,6 +221,30 @@ public abstract class SlabSupportStateMixin {
                 || belowState.isSideSolidFullSquare(world, below, Direction.UP));
     }
 
+    @Inject(method = "canPlaceAt", at = @At("HEAD"), cancellable = true)
+    private void slabbed$lanternLoweredSlabUndersideSurvival(
+            WorldView world,
+            BlockPos pos,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        BlockState self = (BlockState) (Object) this;
+        if ((!self.isOf(Blocks.LANTERN) && !self.isOf(Blocks.SOUL_LANTERN))
+                || !self.contains(Properties.HANGING)
+                || !self.get(Properties.HANGING)) {
+            return;
+        }
+        BlockPos supportPos = pos.up();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (supportState.getBlock() instanceof SlabBlock
+                && supportState.contains(SlabBlock.TYPE)
+                && supportState.getFluidState().isEmpty()
+                && (supportState.get(SlabBlock.TYPE) == SlabType.TOP
+                || supportState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                || supportState.get(SlabBlock.TYPE) == SlabType.DOUBLE)) {
+            cir.setReturnValue(true);
+        }
+    }
+
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolid(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
@@ -237,10 +282,18 @@ public abstract class SlabSupportStateMixin {
     private void slabbed$offsetRaycast(BlockView world, BlockPos pos,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
+        VoxelShape shape = cir.getReturnValue();
+        if (slabbed$isTopHalfTrapdoor(self) && (shape == null || shape.isEmpty())) {
+            VoxelShape outline = self.getOutlineShape(world, pos, ShapeContext.absent());
+            VoxelShape collision = self.getCollisionShape(world, pos, ShapeContext.absent());
+            if (slabbed$coherentNonEmptyTriadBasis(outline, collision)) {
+                cir.setReturnValue(outline);
+                return;
+            }
+        }
 
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
-            VoxelShape shape = cir.getReturnValue();
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             } else if (slabbed$isLoweredBeta35FloorTopContactObject(self, yOff) && (shape == null || shape.isEmpty())) {
