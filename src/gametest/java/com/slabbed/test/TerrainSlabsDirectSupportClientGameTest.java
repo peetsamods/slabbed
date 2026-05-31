@@ -17,6 +17,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ConnectingBlock;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.ShapeContext;
@@ -28,6 +29,8 @@ import net.minecraft.client.render.model.BlockStateModel;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
@@ -43,6 +46,8 @@ import net.minecraft.world.GameMode;
 import net.minecraft.world.RaycastContext;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Default-off MC 1.21.11 proof for Terrain Slabs direct custom support.
@@ -101,6 +106,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             }
             if (proof) {
                 runDirectSupportProof(ctx, singleplayer);
+                runFenceConnectionProof(singleplayer);
             }
             if (generatedDoubleProof) {
                 runGeneratedDoubleDirectSupportProof(ctx, singleplayer);
@@ -753,6 +759,79 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 failures.append(" | ");
             }
             failures.append(markerPrefix).append(": ").append(error.getMessage());
+        }
+    }
+
+    /**
+     * Proves the fence-down-slabs rule: two horizontally-adjacent fences at a uniform
+     * visual height still connect, but a fence lowered onto a slab next to a fence at
+     * grid height stays a single post (no connection). Deterministic: recomputes the
+     * EAST connection through FenceBlock#getStateForNeighborUpdate (which carries the
+     * Slabbed mixin) and reads the resulting property.
+     */
+    private static void runFenceConnectionProof(TestSingleplayerContext singleplayer) {
+        Block terrainSlabBlock = terrainBlock("grass_slab");
+        BlockState terrainSlab = terrainSlabBlock.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        BlockState finalTerrainSlab = terrainSlab;
+        singleplayer.getServer().runOnServer(server -> {
+            ServerWorld world = server.getOverworld();
+            List<String> failures = new ArrayList<>();
+            // Flat run on custom slabs: both fences lowered to the same height -> connect.
+            checkFencePair(world, failures, "flat_custom_slabs",
+                    new BlockPos(24, 200, -8), finalTerrainSlab,
+                    new BlockPos(25, 200, -8), finalTerrainSlab, true);
+            // Stepped: fence lowered onto a custom slab beside a fence on a full block -> single posts.
+            checkFencePair(world, failures, "step_custom_slab_to_fullblock",
+                    new BlockPos(24, 200, -10), finalTerrainSlab,
+                    new BlockPos(25, 200, -10), Blocks.GRASS_BLOCK.getDefaultState(), false);
+            // Flat run on the ground (vanilla baseline): both at grid height -> connect.
+            checkFencePair(world, failures, "flat_ground",
+                    new BlockPos(24, 200, -12), Blocks.GRASS_BLOCK.getDefaultState(),
+                    new BlockPos(25, 200, -12), Blocks.GRASS_BLOCK.getDefaultState(), true);
+            if (!failures.isEmpty()) {
+                String joined = String.join("; ", failures);
+                System.out.println("TERRAIN_SLABS_FENCE_CONNECTION_RED " + joined);
+                throw new AssertionError("Terrain Slabs fence connection rule failed: " + joined);
+            }
+            System.out.println("TERRAIN_SLABS_FENCE_CONNECTION_GREEN "
+                    + "flat_custom=connect step=single_post flat_ground=connect");
+        });
+    }
+
+    private static void checkFencePair(
+            ServerWorld world, List<String> failures, String label,
+            BlockPos supportA, BlockState supportAState,
+            BlockPos supportB, BlockState supportBState, boolean expectConnected) {
+        world.setBlockState(supportA.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(supportB.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(supportA, supportAState, Block.NOTIFY_ALL);
+        world.setBlockState(supportB, supportBState, Block.NOTIFY_ALL);
+        BlockPos fenceA = supportA.up();
+        BlockPos fenceB = supportB.up();
+        world.setBlockState(fenceA.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(fenceB.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(fenceA, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(fenceB, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_ALL);
+
+        Direction dir = Direction.EAST; // fenceB sits east of fenceA
+        BlockState aState = world.getBlockState(fenceA);
+        BlockState bState = world.getBlockState(fenceB);
+        BlockState recomputed = aState.getStateForNeighborUpdate(
+                world, world, fenceA, dir, fenceB, bState, world.getRandom());
+        BooleanProperty eastProp = ConnectingBlock.FACING_PROPERTIES.get(dir);
+        boolean connected = recomputed.contains(eastProp) && recomputed.get(eastProp);
+
+        double dyA = SlabSupport.getYOffset(world, fenceA, aState);
+        double dyB = SlabSupport.getYOffset(world, fenceB, bState);
+        String fields = " label=" + label
+                + " fenceA=" + fenceA.toShortString() + " fenceB=" + fenceB.toShortString()
+                + " supportA=" + Registries.BLOCK.getId(supportAState.getBlock())
+                + " supportB=" + Registries.BLOCK.getId(supportBState.getBlock())
+                + " dyA=" + dyA + " dyB=" + dyB
+                + " expectedConnected=" + expectConnected + " actualConnected=" + connected;
+        System.out.println("TERRAIN_SLABS_FENCE_CONNECTION_TRACE" + fields);
+        if (connected != expectConnected) {
+            failures.add(label + "(expected=" + expectConnected + " actual=" + connected + ")");
         }
     }
 

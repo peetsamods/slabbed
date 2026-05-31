@@ -66,10 +66,16 @@ fly *under* and *inside* the build to check the worst angles.
   lower side faces and/or the adjacent slab faces (void / see‑through terrain).
 
 ### B. Objects still lower (should sit flush on the slab)
-1. On a `terrainslabs:grass_slab` (bottom), place: **`oak_fence`**, **`torch`**, **`oak_door`**, **`redstone_torch`**.
+1. On a `terrainslabs:grass_slab` (bottom), place a mix of **objects**:
+   **`crafting_table`**, **`furnace`**, **`chest`**, **`oak_fence`**, **`torch`**, **`oak_door`**,
+   **`redstone_torch`**.
 
 - ✅ **PASS:** each sits **visually lowered** so its base rests on the slab's top surface
   (not floating a half‑block above it), no holes, and the selection outline hugs the visible shape.
+  In particular the **crafting table / furnace / chest** lower the same way they do on a vanilla
+  slab — they should NOT stay floating at grid height.
+- ⛔ Natural terrain cubes (dirt/grass/stone) are intentionally the exception — see **A** — they
+  stay at grid height so terrain never tears.
 
 ### C. Terrain‑building scene (the real‑world stress) ⭐ primary check
 1. Build a small terraced patch: mix `terrainslabs:grass_slab` (bottom) with full `grass_block` /
@@ -85,15 +91,31 @@ fly *under* and *inside* the build to check the worst angles.
 - ✅ **PASS:** the stone **still lowers** onto the vanilla slab (Slabbed's normal behaviour).
   This proves the fix is Terrain‑Slabs‑only and didn't touch vanilla slabs.
 
+### E. Fences down slabs stay single posts
+1. Make a short staircase that steps **down** — e.g. a `terrainslabs:grass_slab` next to a full
+   `grass_block`/`dirt` at the same grid height (so one fence will be lowered onto the slab and the
+   neighbour sits at grid height). Place an `oak_fence` on each, side by side.
+2. Also build a **flat** fence run: several `oak_fence` on `terrainslabs:grass_slab` all at the same
+   height in a line.
+
+- ✅ **PASS (stepped):** the two fences at **different heights** do **not** connect — each is a
+  clean **single post**, no stretched/broken connector arm between them.
+- ✅ **PASS (flat):** the fence run at a **uniform height** still **connects** normally into a fence
+  line.
+- ❌ **FAIL:** a connector arm is drawn between two fences at different heights (the old "weird"
+  diagonal/broken join).
+
 ---
 
 ## 4. Checklist
 
 - [ ] Both mods confirmed loaded (Slabbed **and** Terrain Slabs)
 - [ ] **A** — full cubes (dirt/grass/stone) on terrain slabs: grid height, **no see‑through**
-- [ ] **B** — fence / torch / door / redstone torch on terrain slabs: lowered flush, no holes
+- [ ] **B** — objects (crafting table / furnace / chest / fence / torch / door) on terrain slabs:
+      lowered flush, no holes
 - [ ] **C** — mixed terrace: **no see‑through from any angle** (incl. spectator under/inside)
 - [ ] **D** — vanilla `stone_slab` + `stone`: still lowers (unchanged)
+- [ ] **E** — fences stepping down slabs: **single posts** (no connector); flat fence run still connects
 
 ---
 
