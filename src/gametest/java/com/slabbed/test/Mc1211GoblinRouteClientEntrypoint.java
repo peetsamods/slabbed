@@ -73,6 +73,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             "slabbed.mc1211.trapdoorLoweredSeamMp4Red";
     private static final String SBBS_FINAL_SLAB_TARGETING_RED_PROPERTY =
             "slabbed.mc1211.sbbsFinalSlabTargetingRed";
+    private static final String SBBS_LOWER_EDGE_SIDE_SLAB_RED_PROPERTY =
+            "slabbed.mc1211.sbbsLowerEdgeSideSlabRed";
     private static final String TRAPDOOR_SIDE_EXTENSION_RED_PROPERTY =
             "slabbed.mc1211.trapdoorSideExtensionRed";
     private static final String GOBLIN_LOWERED_TRAPDOOR_SEAMS_PROPERTY =
@@ -348,6 +350,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static void onEndTick(MinecraftClient client) {
         if (Boolean.getBoolean(GOBLIN_LOWERED_TRAPDOOR_SEAMS_PROPERTY)) {
             runGoblinLoweredTrapdoorSeamsRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(SBBS_LOWER_EDGE_SIDE_SLAB_RED_PROPERTY)) {
+            runTrapdoorSideExtensionRoute(client);
             return;
         }
         if (Boolean.getBoolean(TRAPDOOR_SIDE_EXTENSION_RED_PROPERTY)) {
@@ -1668,9 +1674,11 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_RED_START]"
                     + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
                     + " route=" + ROUTE
-                    + " property=" + TRAPDOOR_SIDE_EXTENSION_RED_PROPERTY
+                    + " property=" + activeTrapdoorSideExtensionProperty()
                     + " sourceTruth=live-S>B>S-side-extension-under-trapdoor"
-                    + " initialLayer=proof gap"
+                    + " initialLayer=" + (isSbbsLowerEdgeSideSlabRedRoute()
+                    ? "placement-position"
+                    : "proof gap")
                     + " gameplayPatch=false"
                     + " worldReady=" + (client != null && client.world != null)
                     + " playerReady=" + (client != null && client.player != null));
@@ -1834,6 +1842,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                             trapdoorSideExtensionHitVector(desiredTrapdoorSideExtensionSlabType()));
                     return;
                 }
+                if (isSbbsLowerEdgeSideSlabRedRoute()) {
+                    emitSbbsLowerEdgeSideSlabPlacementResult(false);
+                    return;
+                }
                 if (desiredTrapdoorSideExtensionSlabType() == SlabType.BOTTOM) {
                     emitTrapdoorSideExtensionPlacementRed("SIDE_EXTENSION_BOTTOM_SLAB_AUTHORING",
                             "SIDE_EXTENSION_BOTTOM_SLAB_PLACEMENT_REJECTED_OR_WRONG_STATE");
@@ -1841,6 +1853,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 }
                 emitTrapdoorSideExtensionTraceGap("SIDE_EXTENSION_SLAB_AUTHORING",
                         "TRACE_GAP_PLAYER_AUTHORED_SIDE_EXTENSION_TOP_SLAB_NOT_OBSERVED");
+                return;
+            }
+            if (isSbbsLowerEdgeSideSlabRedRoute()) {
+                emitSbbsLowerEdgeSideSlabPlacementResult(true);
                 return;
             }
             trapdoorSeamExtensionTrapdoorPlacementResult = clickTrapdoorUnderSideExtension(client);
@@ -2641,7 +2657,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     }
 
     private static Vec3d trapdoorSideExtensionHitVector(SlabType slabType) {
-        double y = slabType == SlabType.TOP ? 0.75d : 0.25d;
+        double y = isSbbsLowerEdgeSideSlabRedRoute()
+                ? 0.25d
+                : (slabType == SlabType.TOP ? 0.75d : 0.25d);
         return new Vec3d(
                 trapdoorSeamTopSlabPos.getX() + 1.0d,
                 trapdoorSeamTopSlabPos.getY() + y,
@@ -2651,6 +2669,69 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static SlabType desiredTrapdoorSideExtensionSlabType() {
         String raw = System.getProperty(TRAPDOOR_SIDE_EXTENSION_SLAB_TYPE_PROPERTY, "top");
         return "bottom".equalsIgnoreCase(raw) ? SlabType.BOTTOM : SlabType.TOP;
+    }
+
+    private static boolean isSbbsLowerEdgeSideSlabRedRoute() {
+        return Boolean.getBoolean(SBBS_LOWER_EDGE_SIDE_SLAB_RED_PROPERTY);
+    }
+
+    private static String activeTrapdoorSideExtensionProperty() {
+        return isSbbsLowerEdgeSideSlabRedRoute()
+                ? SBBS_LOWER_EDGE_SIDE_SLAB_RED_PROPERTY
+                : TRAPDOOR_SIDE_EXTENSION_RED_PROPERTY;
+    }
+
+    private static void emitSbbsLowerEdgeSideSlabPlacementResult(boolean green) {
+        ServerWorld serverWorld = serverWorldFor(MinecraftClient.getInstance());
+        BlockState topSlabState = serverWorld == null || trapdoorSeamTopSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorSeamTopSlabPos);
+        BlockState extensionState = serverWorld == null || trapdoorSeamExtensionSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorSeamExtensionSlabPos);
+        double topSlabDy = serverWorld == null || trapdoorSeamTopSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorSeamTopSlabPos, topSlabState);
+        double extensionDy = serverWorld == null || trapdoorSeamExtensionSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorSeamExtensionSlabPos, extensionState);
+        String extensionType = extensionState.contains(SlabBlock.TYPE)
+                ? extensionState.get(SlabBlock.TYPE).asString()
+                : "none";
+        String classification = green
+                ? "SBBS_LOWER_EDGE_SIDE_SLAB_PLACEMENT_GREEN_TOP_LANE_PRESERVED"
+                : "SBBS_LOWER_EDGE_SIDE_SLAB_PLACEMENT_RED_LOWER_LANE";
+        String failureLayer = green ? "NONE" : "placement-position";
+        System.out.println("[MC1211_SBBS_LOWER_EDGE_SIDE_SLAB_ROW]"
+                + " rowPhase=AFTER_LOWER_EDGE_SIDE_SLAB_PLACEMENT"
+                + " fixtureOrigin=" + textPos(trapdoorSeamOrigin)
+                + " supportPos=" + textPos(trapdoorSeamSupportPos)
+                + " topSlabPos=" + textPos(trapdoorSeamTopSlabPos)
+                + " topSlabState=" + topSlabState
+                + " topSlabDy=" + formatDouble(topSlabDy)
+                + " extensionSlabPos=" + textPos(trapdoorSeamExtensionSlabPos)
+                + " extensionSlabState=" + extensionState
+                + " extensionSlabType=" + extensionType
+                + " extensionSlabDy=" + formatDouble(extensionDy)
+                + " expectedExtensionSlabType=top"
+                + " lowerEdgeLocalHit=1.000,0.250,0.500"
+                + " placementResultExtensionSlab=" + trapdoorSeamExtensionSlabPlacementResult
+                + " classification=" + classification
+                + " failureLayer=" + failureLayer);
+        System.out.println("[MC1211_SBBS_LOWER_EDGE_SIDE_SLAB_SUMMARY]"
+                + " rows=1"
+                + " finalResult=" + (green ? "GREEN" : "RED")
+                + " classification=" + classification
+                + " failureLayer=" + failureLayer
+                + " patchAllowedNext=" + !green
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+        emitted = true;
+        trapdoorSeamFinalized = true;
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
     }
 
     private static Vec3d trapdoorSideExtensionUndersideHitVector() {
