@@ -22,8 +22,10 @@ import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.block.enums.WallShape;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.model.BlockStateModel;
 import net.minecraft.item.ItemStack;
@@ -31,6 +33,7 @@ import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.BooleanProperty;
+import net.minecraft.state.property.EnumProperty;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
@@ -106,7 +109,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             }
             if (proof) {
                 runDirectSupportProof(ctx, singleplayer);
-                runFenceConnectionProof(singleplayer);
+                runConnectorConnectionProof(singleplayer);
             }
             if (generatedDoubleProof) {
                 runGeneratedDoubleDirectSupportProof(ctx, singleplayer);
@@ -763,76 +766,97 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     }
 
     /**
-     * Proves the fence-down-slabs rule: two horizontally-adjacent fences at a uniform
-     * visual height still connect, but a fence lowered onto a slab next to a fence at
-     * grid height stays a single post (no connection). Deterministic: recomputes the
-     * EAST connection through FenceBlock#getStateForNeighborUpdate (which carries the
-     * Slabbed mixin) and reads the resulting property.
+     * Proves the connector-down-slabs rule for fences, glass panes, and walls: two
+     * horizontally-adjacent connectors of the same family at a uniform visual height
+     * still connect, but one lowered onto a slab next to one at grid height stays a
+     * single post (no connection). Deterministic: recomputes the EAST connection
+     * through {@code getStateForNeighborUpdate} (which carries the Slabbed mixin) and
+     * reads the resulting property.
      */
-    private static void runFenceConnectionProof(TestSingleplayerContext singleplayer) {
+    private static void runConnectorConnectionProof(TestSingleplayerContext singleplayer) {
         Block terrainSlabBlock = terrainBlock("grass_slab");
         BlockState terrainSlab = terrainSlabBlock.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
         BlockState finalTerrainSlab = terrainSlab;
         singleplayer.getServer().runOnServer(server -> {
             ServerWorld world = server.getOverworld();
             List<String> failures = new ArrayList<>();
-            // Flat run on custom slabs: both fences lowered to the same height -> connect.
-            checkFencePair(world, failures, "flat_custom_slabs",
-                    new BlockPos(24, 200, -8), finalTerrainSlab,
-                    new BlockPos(25, 200, -8), finalTerrainSlab, true);
-            // Stepped: fence lowered onto a custom slab beside a fence on a full block -> single posts.
-            checkFencePair(world, failures, "step_custom_slab_to_fullblock",
-                    new BlockPos(24, 200, -10), finalTerrainSlab,
-                    new BlockPos(25, 200, -10), Blocks.GRASS_BLOCK.getDefaultState(), false);
-            // Flat run on the ground (vanilla baseline): both at grid height -> connect.
-            checkFencePair(world, failures, "flat_ground",
-                    new BlockPos(24, 200, -12), Blocks.GRASS_BLOCK.getDefaultState(),
-                    new BlockPos(25, 200, -12), Blocks.GRASS_BLOCK.getDefaultState(), true);
+            checkConnectorScenarios(world, failures, "minecraft:oak_fence", Blocks.OAK_FENCE, finalTerrainSlab, -8);
+            checkConnectorScenarios(world, failures, "minecraft:glass_pane", Blocks.GLASS_PANE, finalTerrainSlab, -16);
+            checkConnectorScenarios(world, failures, "minecraft:cobblestone_wall", Blocks.COBBLESTONE_WALL,
+                    finalTerrainSlab, -24);
             if (!failures.isEmpty()) {
                 String joined = String.join("; ", failures);
-                System.out.println("TERRAIN_SLABS_FENCE_CONNECTION_RED " + joined);
-                throw new AssertionError("Terrain Slabs fence connection rule failed: " + joined);
+                System.out.println("TERRAIN_SLABS_CONNECTOR_CONNECTION_RED " + joined);
+                throw new AssertionError("Terrain Slabs connector connection rule failed: " + joined);
             }
-            System.out.println("TERRAIN_SLABS_FENCE_CONNECTION_GREEN "
-                    + "flat_custom=connect step=single_post flat_ground=connect");
+            System.out.println("TERRAIN_SLABS_CONNECTOR_CONNECTION_GREEN "
+                    + "fence/pane/wall: flat=connect step=single_post ground=connect");
         });
     }
 
-    private static void checkFencePair(
-            ServerWorld world, List<String> failures, String label,
+    private static void checkConnectorScenarios(
+            ServerWorld world, List<String> failures, String id, Block connector,
+            BlockState terrainSlab, int baseZ) {
+        // Flat run on custom slabs: both lowered to the same height -> connect.
+        checkConnectorPair(world, failures, id + "/flat_custom_slabs", connector,
+                new BlockPos(24, 200, baseZ), terrainSlab,
+                new BlockPos(25, 200, baseZ), terrainSlab, true);
+        // Stepped: lowered onto a custom slab beside one on a full block -> single posts.
+        checkConnectorPair(world, failures, id + "/step_custom_slab_to_fullblock", connector,
+                new BlockPos(24, 200, baseZ - 2), terrainSlab,
+                new BlockPos(25, 200, baseZ - 2), Blocks.GRASS_BLOCK.getDefaultState(), false);
+        // Flat run on the ground (vanilla baseline): both at grid height -> connect.
+        checkConnectorPair(world, failures, id + "/flat_ground", connector,
+                new BlockPos(24, 200, baseZ - 4), Blocks.GRASS_BLOCK.getDefaultState(),
+                new BlockPos(25, 200, baseZ - 4), Blocks.GRASS_BLOCK.getDefaultState(), true);
+    }
+
+    private static void checkConnectorPair(
+            ServerWorld world, List<String> failures, String label, Block connector,
             BlockPos supportA, BlockState supportAState,
             BlockPos supportB, BlockState supportBState, boolean expectConnected) {
         world.setBlockState(supportA.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(supportB.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(supportA, supportAState, Block.NOTIFY_ALL);
         world.setBlockState(supportB, supportBState, Block.NOTIFY_ALL);
-        BlockPos fenceA = supportA.up();
-        BlockPos fenceB = supportB.up();
-        world.setBlockState(fenceA.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
-        world.setBlockState(fenceB.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
-        world.setBlockState(fenceA, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_ALL);
-        world.setBlockState(fenceB, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_ALL);
+        BlockPos connA = supportA.up();
+        BlockPos connB = supportB.up();
+        world.setBlockState(connA.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(connB.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(connA, connector.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(connB, connector.getDefaultState(), Block.NOTIFY_ALL);
 
-        Direction dir = Direction.EAST; // fenceB sits east of fenceA
-        BlockState aState = world.getBlockState(fenceA);
-        BlockState bState = world.getBlockState(fenceB);
+        Direction dir = Direction.EAST; // connB sits east of connA
+        BlockState aState = world.getBlockState(connA);
+        BlockState bState = world.getBlockState(connB);
         BlockState recomputed = aState.getStateForNeighborUpdate(
-                world, world, fenceA, dir, fenceB, bState, world.getRandom());
-        BooleanProperty eastProp = ConnectingBlock.FACING_PROPERTIES.get(dir);
-        boolean connected = recomputed.contains(eastProp) && recomputed.get(eastProp);
+                world, world, connA, dir, connB, bState, world.getRandom());
+        boolean connected = connectedEast(recomputed);
 
-        double dyA = SlabSupport.getYOffset(world, fenceA, aState);
-        double dyB = SlabSupport.getYOffset(world, fenceB, bState);
+        double dyA = SlabSupport.getYOffset(world, connA, aState);
+        double dyB = SlabSupport.getYOffset(world, connB, bState);
         String fields = " label=" + label
-                + " fenceA=" + fenceA.toShortString() + " fenceB=" + fenceB.toShortString()
+                + " connA=" + connA.toShortString() + " connB=" + connB.toShortString()
                 + " supportA=" + Registries.BLOCK.getId(supportAState.getBlock())
                 + " supportB=" + Registries.BLOCK.getId(supportBState.getBlock())
                 + " dyA=" + dyA + " dyB=" + dyB
                 + " expectedConnected=" + expectConnected + " actualConnected=" + connected;
-        System.out.println("TERRAIN_SLABS_FENCE_CONNECTION_TRACE" + fields);
+        System.out.println("TERRAIN_SLABS_CONNECTOR_CONNECTION_TRACE" + fields);
         if (connected != expectConnected) {
             failures.add(label + "(expected=" + expectConnected + " actual=" + connected + ")");
         }
+    }
+
+    private static boolean connectedEast(BlockState state) {
+        BooleanProperty boolProp = ConnectingBlock.FACING_PROPERTIES.get(Direction.EAST);
+        if (state.contains(boolProp)) {
+            return state.get(boolProp);
+        }
+        EnumProperty<WallShape> wallProp = WallBlock.WALL_SHAPE_PROPERTIES_BY_DIRECTION.get(Direction.EAST);
+        if (state.contains(wallProp)) {
+            return state.get(wallProp) != WallShape.NONE;
+        }
+        return false;
     }
 
     private static void runLivePlacementSurfaceProof(

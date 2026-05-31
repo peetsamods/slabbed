@@ -199,6 +199,37 @@ public final class SlabSupport {
     }
 
     /**
+     * Visual dy of a connecting block (fence/wall/pane), mirroring
+     * {@code OffsetBlockStateModel}: these are only visually lowered when they sit on a
+     * custom Terrain Slabs direct-support surface, never on a vanilla slab support.
+     */
+    public static double connectingBlockVisualDy(BlockView world, BlockPos pos, BlockState state) {
+        double dy = getYOffset(world, pos, state);
+        if (dy != 0.0 && !isDirectCustomSlabSupportedObject(world, pos, state)) {
+            return 0.0;
+        }
+        return dy;
+    }
+
+    /**
+     * True if {@code neighborState} is a fence/wall/pane sitting at a different visual
+     * height than {@code state} — i.e. one was lowered onto a slab and the other was not.
+     * Such a pair must stay as single posts instead of drawing a connector arm across the
+     * height step. Cross-family joins (fence↔wall, pane↔glass, fence↔solid, …) are left
+     * alone because the neighbour is not a connecting block here.
+     */
+    public static boolean isSteppedConnectingNeighbor(BlockView world, BlockPos pos, BlockState state,
+                                                      BlockPos neighborPos, BlockState neighborState) {
+        Block neighbor = neighborState.getBlock();
+        if (!(neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof PaneBlock)) {
+            return false;
+        }
+        double selfDy = connectingBlockVisualDy(world, pos, state);
+        double neighborDy = connectingBlockVisualDy(world, neighborPos, neighborState);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
+    }
+
+    /**
      * Primary query: should this slab top face count as solid support.
      */
     public static boolean canTreatAsSolidTopFace(WorldView world, BlockPos pos) {
