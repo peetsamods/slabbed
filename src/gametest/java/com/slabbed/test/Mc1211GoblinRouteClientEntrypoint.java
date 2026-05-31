@@ -37,6 +37,7 @@ import net.minecraft.world.level.LevelInfo;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.OffsetBlockStateModel;
+import com.slabbed.client.runtime.LoweredSideSlabRetargeter;
 import com.slabbed.util.SlabSupport;
 
 /**
@@ -64,6 +65,20 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             "slabbed.mc1211.wallFenceProductRedOnly";
     private static final String TRAPDOOR_LOWERED_SEAM_RED_PROPERTY =
             "slabbed.mc1211.trapdoorLoweredSeamRed";
+    private static final String TRAPDOOR_UNDER_BOTTOM_PLACEMENT_RED_PROPERTY =
+            "slabbed.mc1211.trapdoorUnderBottomPlacementRed";
+    private static final String TRAPDOOR_UNDER_LOWERED_BOTTOM_PLACEMENT_RED_PROPERTY =
+            "slabbed.mc1211.trapdoorUnderLoweredBottomPlacementRed";
+    private static final String TRAPDOOR_LOWERED_SEAM_MP4_RED_PROPERTY =
+            "slabbed.mc1211.trapdoorLoweredSeamMp4Red";
+    private static final String SBBS_FINAL_SLAB_TARGETING_RED_PROPERTY =
+            "slabbed.mc1211.sbbsFinalSlabTargetingRed";
+    private static final String TRAPDOOR_SIDE_EXTENSION_RED_PROPERTY =
+            "slabbed.mc1211.trapdoorSideExtensionRed";
+    private static final String GOBLIN_LOWERED_TRAPDOOR_SEAMS_PROPERTY =
+            "slabbed.mc1211.goblinLoweredTrapdoorSeams";
+    private static final String TRAPDOOR_SIDE_EXTENSION_SLAB_TYPE_PROPERTY =
+            "slabbed.mc1211.trapdoorSideExtensionSlabType";
     private static final String OVERLAP_ONLY_PROPERTY = "slabbed.mc1211.overlapMatrixOnly";
     private static final String LEGACY_CLASS =
             "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest";
@@ -194,6 +209,98 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static String trapdoorSeamUpdateClassification = "NOT_MEASURED";
     private static String trapdoorSeamUpdateFailureLayer = "proof gap";
     private static boolean trapdoorSeamUpdateGreen;
+    private static int trapdoorUnderBottomTicks;
+    private static int trapdoorUnderBottomPhase;
+    private static int trapdoorUnderBottomPhaseTick;
+    private static boolean trapdoorUnderBottomCanaryEmitted;
+    private static boolean trapdoorUnderBottomWorldStartRequested;
+    private static boolean trapdoorUnderBottomReadyRowEmitted;
+    private static boolean trapdoorUnderBottomStarted;
+    private static boolean trapdoorUnderBottomFinalized;
+    private static BlockPos trapdoorUnderBottomTargetSlabPos;
+    private static BlockPos trapdoorUnderBottomExpectedTrapdoorPos;
+    private static String trapdoorUnderBottomVanillaTarget = "not_sampled";
+    private static String trapdoorUnderBottomFinalTarget = "not_sampled";
+    private static String trapdoorUnderBottomUsedTarget = "not_sampled";
+    private static String trapdoorUnderBottomPlacementResult = "not_started";
+    private static String trapdoorUnderBottomClassification = "NOT_MEASURED";
+    private static String trapdoorUnderBottomFailureLayer = "proof gap";
+    private static BlockState trapdoorUnderBottomPredictedClientState = Blocks.AIR.getDefaultState();
+    private static String trapdoorUnderBottomSetup = "not_started";
+    private static boolean trapdoorUnderBottomGreen;
+    private static String trapdoorSeamMp4PreUpdateSlabHeldSample = "not_sampled";
+    private static String trapdoorSeamMp4PostUpdateSlabHeldSample = "not_sampled";
+    private static String trapdoorSeamMp4ManualNoCandidatePreSample = "not_sampled";
+    private static String trapdoorSeamMp4ManualNoCandidatePostSample = "not_sampled";
+    private static String trapdoorSeamMp4Classification = "NOT_MEASURED";
+    private static String trapdoorSeamMp4FailureLayer = "proof gap";
+    private static boolean trapdoorSeamMp4LiveElementMatched;
+    private static BlockPos trapdoorSeamMp4SideGroundPos;
+    private static BlockPos trapdoorSeamMp4SideBaseSlabPos;
+    private static BlockPos trapdoorSeamMp4SideSupportPos;
+    private static BlockPos trapdoorSeamMp4SideOwnerSlabPos;
+    private static String trapdoorSeamMp4SideBaseSlabPlacementResult = "not_started";
+    private static String trapdoorSeamMp4SideSupportPlacementResult = "not_started";
+    private static String trapdoorSeamMp4SideOwnerSlabPlacementResult = "not_started";
+    private static int sbbsFinalSlabTicks;
+    private static int sbbsFinalSlabPhase;
+    private static int sbbsFinalSlabPhaseTick;
+    private static boolean sbbsFinalSlabCanaryEmitted;
+    private static boolean sbbsFinalSlabWorldStartRequested;
+    private static boolean sbbsFinalSlabReadyRowEmitted;
+    private static boolean sbbsFinalSlabStarted;
+    private static boolean sbbsFinalSlabFinalized;
+    private static BlockPos sbbsFinalSlabOrigin;
+    private static BlockPos sbbsFinalSlabGroundPos;
+    private static BlockPos sbbsFinalSlabBaseSlabPos;
+    private static BlockPos sbbsFinalSlabSupportPos;
+    private static BlockPos sbbsFinalSlabTopSlabPos;
+    private static BlockPos sbbsLanternSideSlabPos;
+    private static BlockPos sbbsLanternUnderPos;
+    private static BlockPos sbbsChainSideSlabPos;
+    private static BlockPos sbbsChainPos;
+    private static BlockPos sbbsChainLanternPos;
+    private static String sbbsFinalSlabBasePlacementResult = "not_started";
+    private static String sbbsFinalSlabSupportPlacementResult = "not_started";
+    private static String sbbsFinalSlabTopSlabPlacementResult = "not_started";
+    private static String sbbsLanternSideSlabPlacementResult = "not_started";
+    private static String sbbsLanternUnderPlacementResult = "not_started";
+    private static String sbbsChainSideSlabPlacementResult = "not_started";
+    private static String sbbsChainPlacementResult = "not_started";
+    private static String sbbsChainLanternPlacementResult = "not_started";
+    private static String sbbsFinalSlabTargetSample = "not_sampled";
+    private static String sbbsFinalSlabEdgeTargetSample = "not_sampled";
+    private static String sbbsFinalSlabClassification = "NOT_MEASURED";
+    private static String sbbsFinalSlabFailureLayer = "proof gap";
+    private static BlockPos trapdoorSeamTopSlabPos;
+    private static BlockPos trapdoorSeamExtensionSlabPos;
+    private static BlockPos trapdoorSeamExtensionTrapdoorPos;
+    private static BlockPos trapdoorSeamTemporaryCeilingPos;
+    private static String trapdoorSeamTopSlabPlacementResult = "not_started";
+    private static String trapdoorSeamExtensionSlabPlacementResult = "not_started";
+    private static String trapdoorSeamExtensionTrapdoorPlacementResult = "not_started";
+    private static String trapdoorSeamExtensionClassification = "NOT_MEASURED";
+    private static String trapdoorSeamExtensionFailureLayer = "proof gap";
+    private static boolean trapdoorSeamExtensionGreen;
+    private static int goblinLoweredTrapdoorTicks;
+    private static boolean goblinLoweredTrapdoorCanaryEmitted;
+    private static boolean goblinLoweredTrapdoorStarted;
+    private static boolean goblinLoweredTrapdoorFinalized;
+    private static BlockPos goblinLoweredTrapdoorOrigin;
+    private static int goblinLoweredTrapdoorCaseIndex;
+    private static int goblinLoweredTrapdoorCasePhase;
+    private static int goblinLoweredTrapdoorPhaseTick;
+    private static BlockPos goblinLoweredTrapdoorCaseOrigin;
+    private static BlockPos goblinLoweredTrapdoorSupportPos;
+    private static BlockPos goblinLoweredTrapdoorTargetSlabPos;
+    private static BlockPos goblinLoweredTrapdoorExpectedTrapdoorPos;
+    private static BlockPos goblinLoweredTrapdoorActualTrapdoorPos;
+    private static String goblinLoweredTrapdoorPlacementResult = "not_started";
+    private static LoweredTrapdoorGoblinAssessment goblinLoweredTrapdoorBeforeBreak;
+    private static String goblinLoweredTrapdoorTargetSweep = "not_sampled";
+    private static int goblinLoweredTrapdoorGreenRows;
+    private static int goblinLoweredTrapdoorRedRows;
+    private static int goblinLoweredTrapdoorTraceGapRows;
     private static int superflatHarnessTicks;
     private static int superflatHarnessRowIndex;
     private static int superflatHarnessRowPhase;
@@ -221,6 +328,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             new SuperflatHarnessRowSpec("OAK_FENCE", "minecraft:oak_fence", true),
             new SuperflatHarnessRowSpec("STONE_STAIRS", "minecraft:stone_stairs", false)
     };
+    private static final LoweredTrapdoorGoblinCase[] LOWERED_TRAPDOOR_GOBLIN_CASES =
+            new LoweredTrapdoorGoblinCase[] {
+                    new LoweredTrapdoorGoblinCase("SBS_TOP_SIDE_EXTENSION_UNDERSIDE", SlabType.TOP, true, false),
+                    new LoweredTrapdoorGoblinCase("SBS_BOTTOM_SIDE_EXTENSION_UNDERSIDE", SlabType.BOTTOM, true, false),
+                    new LoweredTrapdoorGoblinCase("SBBS_DOUBLE_SIDE_EXTENSION_UNDERSIDE", SlabType.DOUBLE, true, false),
+                    new LoweredTrapdoorGoblinCase("CORNER_TOP_SIDE_EXTENSION_UNDERSIDE", SlabType.TOP, true, true)
+            };
 
     @Override
     public void onInitializeClient() {
@@ -232,6 +346,30 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     }
 
     private static void onEndTick(MinecraftClient client) {
+        if (Boolean.getBoolean(GOBLIN_LOWERED_TRAPDOOR_SEAMS_PROPERTY)) {
+            runGoblinLoweredTrapdoorSeamsRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(TRAPDOOR_SIDE_EXTENSION_RED_PROPERTY)) {
+            runTrapdoorSideExtensionRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(TRAPDOOR_LOWERED_SEAM_MP4_RED_PROPERTY)) {
+            runTrapdoorLoweredSeamMp4Route(client);
+            return;
+        }
+        if (Boolean.getBoolean(SBBS_FINAL_SLAB_TARGETING_RED_PROPERTY)) {
+            runSbbsFinalSlabTargetingRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(TRAPDOOR_UNDER_BOTTOM_PLACEMENT_RED_PROPERTY)) {
+            runTrapdoorUnderBottomPlacementRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(TRAPDOOR_UNDER_LOWERED_BOTTOM_PLACEMENT_RED_PROPERTY)) {
+            runTrapdoorUnderBottomPlacementRoute(client);
+            return;
+        }
         if (Boolean.getBoolean(TRAPDOOR_LOWERED_SEAM_RED_PROPERTY)) {
             runTrapdoorLoweredSeamRoute(client);
             return;
@@ -965,6 +1103,1847 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         emitTrapdoorSeamSummary(client);
     }
 
+    private static void runTrapdoorUnderBottomPlacementRoute(MinecraftClient client) {
+        if (trapdoorUnderBottomFinalized || emitted) {
+            return;
+        }
+        trapdoorUnderBottomTicks++;
+        if (!trapdoorUnderBottomCanaryEmitted) {
+            trapdoorUnderBottomCanaryEmitted = true;
+            System.out.println("[MC1211_TRAPDOOR_UNDER_BOTTOM_PLACEMENT_START]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + activeTrapdoorUnderBottomProperty()
+                    + " target=" + activeTrapdoorUnderBottomTargetName()
+                    + " initialLayer=placement"
+                    + " gameplayPatch=false"
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticTrapdoorUnderBottomWorldIfNeeded(client);
+        String readinessGap = liveTruthReadinessGap(client);
+        if (readinessGap != null) {
+            if (!trapdoorUnderBottomReadyRowEmitted || trapdoorUnderBottomTicks % 1200 == 0) {
+                emitTrapdoorUnderBottomTraceGap("WAITING", readinessGap);
+                trapdoorUnderBottomReadyRowEmitted = true;
+            }
+            if (trapdoorUnderBottomTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitTrapdoorUnderBottomTraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+
+        if (!trapdoorUnderBottomStarted) {
+            trapdoorUnderBottomStarted = true;
+            if (Boolean.getBoolean(TRAPDOOR_UNDER_LOWERED_BOTTOM_PLACEMENT_RED_PROPERTY)) {
+                BlockPos origin = client.player.getBlockPos().add(11, 0, 7).toImmutable();
+                trapdoorUnderBottomTargetSlabPos = origin.up(2).east().toImmutable();
+                trapdoorUnderBottomSetup = "programmatic_lowered_side_extension_bottom_slab";
+            } else {
+                trapdoorUnderBottomTargetSlabPos = client.player.getBlockPos().add(11, 2, 7).toImmutable();
+                trapdoorUnderBottomSetup = "programmatic_plain_bottom_slab";
+            }
+            trapdoorUnderBottomExpectedTrapdoorPos = trapdoorUnderBottomTargetSlabPos.down();
+            if (Boolean.getBoolean(TRAPDOOR_UNDER_LOWERED_BOTTOM_PLACEMENT_RED_PROPERTY)) {
+                prepareTrapdoorUnderLoweredBottomFixture(client);
+            } else {
+                prepareTrapdoorUnderBottomFixture(client);
+            }
+            trapdoorUnderBottomPhase = 1;
+            trapdoorUnderBottomPhaseTick = trapdoorUnderBottomTicks;
+            System.out.println("[MC1211_TRAPDOOR_UNDER_BOTTOM_PLACEMENT_ROW]"
+                    + " rowPhase=START"
+                    + " targetSlabPos=" + textPos(trapdoorUnderBottomTargetSlabPos)
+                    + " expectedTrapdoorPos=" + textPos(trapdoorUnderBottomExpectedTrapdoorPos)
+                    + " setup=" + trapdoorUnderBottomSetup
+                    + " heldItem=minecraft:oak_trapdoor"
+                    + " intendedClickFace=down"
+                    + " manualAnchorInjection=false"
+                    + " gameplayPatch=false");
+            return;
+        }
+
+        if (trapdoorUnderBottomTicks - trapdoorUnderBottomPhaseTick < 20) {
+            return;
+        }
+        if (trapdoorUnderBottomPhase == 1) {
+            emitTrapdoorUnderBottomTimelineRow(client, "PRE_CLICK");
+            trapdoorUnderBottomPlacementResult = clickTrapdoorUnderBottomSlab(client);
+            ClientWorld clientWorld = client == null ? null : client.world;
+            trapdoorUnderBottomPredictedClientState = clientWorld == null
+                    || trapdoorUnderBottomExpectedTrapdoorPos == null
+                    ? Blocks.AIR.getDefaultState()
+                    : clientWorld.getBlockState(trapdoorUnderBottomExpectedTrapdoorPos);
+            emitTrapdoorUnderBottomTimelineRow(client, "IMMEDIATE_AFTER_CLIENT_RETURN");
+            trapdoorUnderBottomPhase = 2;
+            trapdoorUnderBottomPhaseTick = trapdoorUnderBottomTicks;
+            return;
+        }
+        int elapsedTicks = trapdoorUnderBottomTicks - trapdoorUnderBottomPhaseTick;
+        if (elapsedTicks == 1) {
+            emitTrapdoorUnderBottomTimelineRow(client, "AFTER_1_TICK");
+        } else if (elapsedTicks == 5) {
+            emitTrapdoorUnderBottomTimelineRow(client, "AFTER_5_TICKS");
+        }
+        if (elapsedTicks < 30) {
+            return;
+        }
+        emitTrapdoorUnderBottomTimelineRow(client, "AFTER_30_TICKS");
+        emitTrapdoorUnderBottomPlacementRow(client, "AFTER_SERVER_TICK");
+        emitTrapdoorUnderBottomPlacementSummary(client);
+    }
+
+    private static void runTrapdoorLoweredSeamMp4Route(MinecraftClient client) {
+        if (trapdoorSeamFinalized || emitted) {
+            return;
+        }
+        trapdoorSeamTicks++;
+        if (!trapdoorSeamCanaryEmitted) {
+            trapdoorSeamCanaryEmitted = true;
+            System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_RED_START]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + TRAPDOOR_LOWERED_SEAM_MP4_RED_PROPERTY
+                    + " expectedFalseGreenHead=d501477c"
+                    + " sourceTruth=mp4-live-recorder"
+                    + " initialLayer=proof gap"
+                    + " gameplayPatch=false"
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticTrapdoorSeamWorldIfNeeded(client);
+        String readinessGap = liveTruthReadinessGap(client);
+        if (readinessGap != null) {
+            if (!trapdoorSeamReadyRowEmitted || trapdoorSeamTicks % 1200 == 0) {
+                emitTrapdoorSeamMp4TraceGap("WAITING", readinessGap);
+                trapdoorSeamReadyRowEmitted = true;
+            }
+            if (trapdoorSeamTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitTrapdoorSeamMp4TraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+
+        if (!trapdoorSeamStarted) {
+            trapdoorSeamStarted = true;
+            trapdoorSeamOrigin = client.player.getBlockPos().add(11, 0, 7).toImmutable();
+            trapdoorSeamGroundPos = trapdoorSeamOrigin.down();
+            trapdoorSeamSlabPos = trapdoorSeamOrigin;
+            trapdoorSeamSupportPos = trapdoorSeamSlabPos.up();
+            trapdoorSeamExpectedTrapdoorPos = trapdoorSeamSupportPos.up();
+            trapdoorSeamMp4SideBaseSlabPos = trapdoorSeamOrigin.east(2);
+            trapdoorSeamMp4SideGroundPos = trapdoorSeamMp4SideBaseSlabPos.down();
+            trapdoorSeamMp4SideSupportPos = trapdoorSeamMp4SideBaseSlabPos.up();
+            trapdoorSeamMp4SideOwnerSlabPos = trapdoorSeamMp4SideSupportPos.up();
+            prepareTrapdoorSeamFixture(client);
+            trapdoorSeamPhase = 1;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_ROW]"
+                    + " rowPhase=START"
+                    + " fixtureOrigin=" + textPos(trapdoorSeamOrigin)
+                    + " slabPos=" + textPos(trapdoorSeamSlabPos)
+                    + " supportPos=" + textPos(trapdoorSeamSupportPos)
+                    + " expectedTrapdoorPos=" + textPos(trapdoorSeamExpectedTrapdoorPos)
+                    + " sideSupportPos=" + textPos(trapdoorSeamMp4SideSupportPos)
+                    + " sideOwnerSlabPos=" + textPos(trapdoorSeamMp4SideOwnerSlabPos)
+                    + " setup=player-authored"
+                    + " trapdoorItem=minecraft:oak_trapdoor"
+                    + " slabHeldLiveElement=minecraft:stone_slab"
+                    + " manualTrapdoorAnchorInjection=false"
+                    + " gameplayPatch=false");
+            return;
+        }
+
+        if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 8) {
+            return;
+        }
+        if (trapdoorSeamPhase == 1) {
+            trapdoorSeamSlabPlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    trapdoorSeamGroundPos,
+                    Direction.UP,
+                    hitVector(trapdoorSeamGroundPos, Direction.UP));
+            trapdoorSeamPhase = 2;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 2) {
+            if (!trapdoorSeamSlabReady(client)) {
+                if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 160) {
+                    if ((trapdoorSeamTicks - trapdoorSeamPhaseTick) % 20 == 0) {
+                        trapdoorSeamSlabPlacementResult = clickBlock(
+                                client,
+                                Items.STONE_SLAB,
+                                trapdoorSeamGroundPos,
+                                Direction.UP,
+                                hitVector(trapdoorSeamGroundPos, Direction.UP));
+                    }
+                    return;
+                }
+                emitTrapdoorSeamMp4TraceGap("SLAB_AUTHORING", "TRACE_GAP_PLAYER_AUTHORED_BOTTOM_SLAB_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamSupportPlacementResult = clickBlock(
+                    client,
+                    Items.STONE,
+                    trapdoorSeamSlabPos,
+                    Direction.UP,
+                    hitVector(trapdoorSeamSlabPos, Direction.UP));
+            trapdoorSeamPhase = 3;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 3) {
+            if (!trapdoorSeamLoweredSupportReady(client)) {
+                if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 160) {
+                    if ((trapdoorSeamTicks - trapdoorSeamPhaseTick) % 20 == 0) {
+                        trapdoorSeamSupportPlacementResult = clickBlock(
+                                client,
+                                Items.STONE,
+                                trapdoorSeamSlabPos,
+                                Direction.UP,
+                                hitVector(trapdoorSeamSlabPos, Direction.UP));
+                    }
+                    return;
+                }
+                emitTrapdoorSeamMp4TraceGap(
+                        "SUPPORT_AUTHORING",
+                        "TRACE_GAP_PLAYER_AUTHORED_LOWERED_SUPPORT_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamTrapdoorPlacementResult = clickTrapdoorFromCrosshair(client);
+            trapdoorSeamPhase = 4;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 4) {
+            if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 30) {
+                return;
+            }
+            emitTrapdoorSeamPlacementRow(client);
+            trapdoorSeamMp4SideBaseSlabPlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    trapdoorSeamMp4SideGroundPos,
+                    Direction.UP,
+                    hitVector(trapdoorSeamMp4SideGroundPos, Direction.UP));
+            breakTrapdoorSeamSupport(client);
+            trapdoorSeamPhase = 5;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 5) {
+            if (!trapdoorSeamMp4SideBaseSlabReady(client)) {
+                if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 160) {
+                    if ((trapdoorSeamTicks - trapdoorSeamPhaseTick) % 20 == 0) {
+                        trapdoorSeamMp4SideBaseSlabPlacementResult = clickBlock(
+                                client,
+                                Items.STONE_SLAB,
+                                trapdoorSeamMp4SideGroundPos,
+                                Direction.UP,
+                                hitVector(trapdoorSeamMp4SideGroundPos, Direction.UP));
+                    }
+                    return;
+                }
+                emitTrapdoorSeamMp4TraceGap(
+                        "SIDE_BASE_SLAB_AUTHORING",
+                        "TRACE_GAP_MP4_SIDE_BASE_BOTTOM_SLAB_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamMp4SideSupportPlacementResult = clickBlock(
+                    client,
+                    Items.STONE,
+                    trapdoorSeamMp4SideBaseSlabPos,
+                    Direction.UP,
+                    hitVector(trapdoorSeamMp4SideBaseSlabPos, Direction.UP));
+            trapdoorSeamPhase = 6;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 6) {
+            if (!trapdoorSeamMp4SideSupportReady(client)) {
+                if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 160) {
+                    if ((trapdoorSeamTicks - trapdoorSeamPhaseTick) % 20 == 0) {
+                        trapdoorSeamMp4SideSupportPlacementResult = clickBlock(
+                                client,
+                                Items.STONE,
+                                trapdoorSeamMp4SideBaseSlabPos,
+                                Direction.UP,
+                                hitVector(trapdoorSeamMp4SideBaseSlabPos, Direction.UP));
+                    }
+                    return;
+                }
+                emitTrapdoorSeamMp4TraceGap(
+                        "SIDE_SUPPORT_AUTHORING",
+                        "TRACE_GAP_MP4_SIDE_LOWERED_SUPPORT_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamMp4SideOwnerSlabPlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    trapdoorSeamMp4SideSupportPos,
+                    Direction.UP,
+                    trapdoorSeamMp4UpGuardHitVector());
+            trapdoorSeamPhase = 7;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 7) {
+            if (!trapdoorSeamMp4SideOwnerSlabReady(client)) {
+                if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 160) {
+                    if ((trapdoorSeamTicks - trapdoorSeamPhaseTick) % 20 == 0) {
+                        trapdoorSeamMp4SideOwnerSlabPlacementResult = clickBlock(
+                                client,
+                                Items.STONE_SLAB,
+                                trapdoorSeamMp4SideSupportPos,
+                                Direction.UP,
+                                trapdoorSeamMp4UpGuardHitVector());
+                    }
+                    return;
+                }
+                emitTrapdoorSeamMp4TraceGap(
+                        "SIDE_OWNER_SLAB_AUTHORING",
+                        "TRACE_GAP_MP4_SIDE_OWNER_BOTTOM_SLAB_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamMp4PreUpdateSlabHeldSample = sampleTrapdoorSeamMp4SlabHeldTarget(client, "AFTER_SIDE_OWNER_AUTHORED");
+            trapdoorSeamMp4ManualNoCandidatePreSample =
+                    sampleTrapdoorSeamMp4ManualNoCandidateTarget(client, "AFTER_SIDE_OWNER_AUTHORED");
+            emitTrapdoorSeamMp4Row(client, "AFTER_PLAYER_PLACEMENT_AND_SIDE_OWNER_AUTHORED");
+            trapdoorSeamPhase = 8;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 30) {
+            return;
+        }
+        emitTrapdoorSeamUpdateRow(client);
+        trapdoorSeamMp4PostUpdateSlabHeldSample = sampleTrapdoorSeamMp4SlabHeldTarget(client, "POST_SUPPORT_BREAK");
+        trapdoorSeamMp4ManualNoCandidatePostSample =
+                sampleTrapdoorSeamMp4ManualNoCandidateTarget(client, "POST_SUPPORT_BREAK");
+        emitTrapdoorSeamMp4Row(client, "AFTER_SUPPORT_BREAK_AND_SLAB_HELD_TARGET");
+        emitTrapdoorSeamMp4Summary(client);
+    }
+
+    private static void runSbbsFinalSlabTargetingRoute(MinecraftClient client) {
+        if (sbbsFinalSlabFinalized || emitted) {
+            return;
+        }
+        sbbsFinalSlabTicks++;
+        if (!sbbsFinalSlabCanaryEmitted) {
+            sbbsFinalSlabCanaryEmitted = true;
+            System.out.println("[MC1211_SBBS_FINAL_SLAB_TARGET_START]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + SBBS_FINAL_SLAB_TARGETING_RED_PROPERTY
+                    + " sourceTruth=manual-recorder-sbbs-final-slab-hitbox"
+                    + " initialLayer=raycast/rescue"
+                    + " gameplayPatch=false"
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticSbbsFinalSlabWorldIfNeeded(client);
+        String readinessGap = liveTruthReadinessGap(client);
+        if (readinessGap != null) {
+            if (!sbbsFinalSlabReadyRowEmitted || sbbsFinalSlabTicks % 1200 == 0) {
+                emitSbbsFinalSlabTraceGap("WAITING", readinessGap);
+                sbbsFinalSlabReadyRowEmitted = true;
+            }
+            if (sbbsFinalSlabTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitSbbsFinalSlabTraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+
+        if (!sbbsFinalSlabStarted) {
+            sbbsFinalSlabStarted = true;
+            sbbsFinalSlabOrigin = client.player.getBlockPos().add(11, 0, 7).toImmutable();
+            sbbsFinalSlabGroundPos = sbbsFinalSlabOrigin.down();
+            sbbsFinalSlabBaseSlabPos = sbbsFinalSlabOrigin;
+            sbbsFinalSlabSupportPos = sbbsFinalSlabBaseSlabPos.up();
+            sbbsFinalSlabTopSlabPos = sbbsFinalSlabSupportPos.up();
+            sbbsLanternSideSlabPos = sbbsFinalSlabTopSlabPos.east();
+            sbbsLanternUnderPos = sbbsLanternSideSlabPos.down();
+            sbbsChainSideSlabPos = sbbsFinalSlabTopSlabPos.west();
+            sbbsChainPos = sbbsChainSideSlabPos.down();
+            sbbsChainLanternPos = sbbsChainPos.down();
+            prepareSbbsFinalSlabFixture(client);
+            sbbsFinalSlabPhase = 1;
+            sbbsFinalSlabPhaseTick = sbbsFinalSlabTicks;
+            System.out.println("[MC1211_SBBS_FINAL_SLAB_TARGET_ROW]"
+                    + " rowPhase=START"
+                    + " fixtureOrigin=" + textPos(sbbsFinalSlabOrigin)
+                    + " baseSlabPos=" + textPos(sbbsFinalSlabBaseSlabPos)
+                    + " supportPos=" + textPos(sbbsFinalSlabSupportPos)
+                    + " finalSlabPos=" + textPos(sbbsFinalSlabTopSlabPos)
+                    + " lanternSideSlabPos=" + textPos(sbbsLanternSideSlabPos)
+                    + " lanternUnderPos=" + textPos(sbbsLanternUnderPos)
+                    + " chainSideSlabPos=" + textPos(sbbsChainSideSlabPos)
+                    + " chainPos=" + textPos(sbbsChainPos)
+                    + " chainLanternPos=" + textPos(sbbsChainLanternPos)
+                    + " setup=player-authored"
+                    + " heldItemForProbe=minecraft:stone_slab"
+                    + " interiorLocalHit=0.750,0.500,0.487"
+                    + " edgeLocalHit=0.937,0.500,0.487"
+                    + " manualAnchorInjection=false"
+                    + " gameplayPatch=false");
+            return;
+        }
+
+        if (sbbsFinalSlabTicks - sbbsFinalSlabPhaseTick < 8) {
+            return;
+        }
+        if (sbbsFinalSlabPhase == 1) {
+            sbbsFinalSlabBasePlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    sbbsFinalSlabGroundPos,
+                    Direction.UP,
+                    hitVector(sbbsFinalSlabGroundPos, Direction.UP));
+            sbbsFinalSlabPhase = 2;
+            sbbsFinalSlabPhaseTick = sbbsFinalSlabTicks;
+            return;
+        }
+        if (sbbsFinalSlabPhase == 2) {
+            if (!sbbsFinalSlabBaseReady(client)) {
+                if (sbbsFinalSlabTicks - sbbsFinalSlabPhaseTick < 160) {
+                    if ((sbbsFinalSlabTicks - sbbsFinalSlabPhaseTick) % 20 == 0) {
+                        sbbsFinalSlabBasePlacementResult = clickBlock(
+                                client,
+                                Items.STONE_SLAB,
+                                sbbsFinalSlabGroundPos,
+                                Direction.UP,
+                                hitVector(sbbsFinalSlabGroundPos, Direction.UP));
+                    }
+                    return;
+                }
+                emitSbbsFinalSlabTraceGap("BASE_SLAB_AUTHORING", "TRACE_GAP_BOTTOM_SLAB_NOT_OBSERVED");
+                return;
+            }
+            sbbsFinalSlabSupportPlacementResult = clickBlock(
+                    client,
+                    Items.STONE,
+                    sbbsFinalSlabBaseSlabPos,
+                    Direction.UP,
+                    hitVector(sbbsFinalSlabBaseSlabPos, Direction.UP));
+            sbbsFinalSlabPhase = 3;
+            sbbsFinalSlabPhaseTick = sbbsFinalSlabTicks;
+            return;
+        }
+        if (sbbsFinalSlabPhase == 3) {
+            if (!sbbsFinalSlabSupportReady(client)) {
+                if (sbbsFinalSlabTicks - sbbsFinalSlabPhaseTick < 160) {
+                    if ((sbbsFinalSlabTicks - sbbsFinalSlabPhaseTick) % 20 == 0) {
+                        sbbsFinalSlabSupportPlacementResult = clickBlock(
+                                client,
+                                Items.STONE,
+                                sbbsFinalSlabBaseSlabPos,
+                                Direction.UP,
+                                hitVector(sbbsFinalSlabBaseSlabPos, Direction.UP));
+                    }
+                    return;
+                }
+                emitSbbsFinalSlabTraceGap("SUPPORT_AUTHORING", "TRACE_GAP_LOWERED_STONE_SUPPORT_NOT_OBSERVED");
+                return;
+            }
+            sbbsFinalSlabTopSlabPlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    sbbsFinalSlabSupportPos,
+                    Direction.UP,
+                    sbbsFinalSlabInteriorHitVector());
+            sbbsFinalSlabPhase = 4;
+            sbbsFinalSlabPhaseTick = sbbsFinalSlabTicks;
+            return;
+        }
+        if (sbbsFinalSlabPhase == 4) {
+            if (!sbbsFinalSlabTopReady(client)) {
+                if (sbbsFinalSlabTicks - sbbsFinalSlabPhaseTick < 160) {
+                    if ((sbbsFinalSlabTicks - sbbsFinalSlabPhaseTick) % 20 == 0) {
+                        sbbsFinalSlabTopSlabPlacementResult = clickBlock(
+                                client,
+                                Items.STONE_SLAB,
+                                sbbsFinalSlabSupportPos,
+                                Direction.UP,
+                                sbbsFinalSlabInteriorHitVector());
+                    }
+                    return;
+                }
+                emitSbbsFinalSlabTraceGap("FINAL_SLAB_AUTHORING", "TRACE_GAP_LOWERED_FINAL_BOTTOM_SLAB_NOT_OBSERVED");
+                return;
+            }
+            sbbsFinalSlabTargetSample = sampleSbbsFinalSlabTarget(
+                    client,
+                    "AFTER_FINAL_SLAB_AUTHORED_INTERIOR",
+                    sbbsFinalSlabInteriorHitVector());
+            sbbsFinalSlabEdgeTargetSample = sampleSbbsFinalSlabTarget(
+                    client,
+                    "AFTER_FINAL_SLAB_AUTHORED_EDGE",
+                    sbbsFinalSlabEdgeHitVector());
+            if (!authorSbbsUndersideFixtures(client)) {
+                emitSbbsFinalSlabTraceGap("SBBS_UNDERSIDE_AUTHORING", "TRACE_GAP_SBBS_UNDERSIDE_FIXTURE_NOT_OBSERVED");
+                return;
+            }
+            classifySbbsFinalSlabSamples();
+            emitSbbsFinalSlabRow(client, "AFTER_FINAL_SLAB_AUTHORED");
+            emitSbbsFinalSlabSummary(client);
+        }
+    }
+
+    private static boolean authorSbbsUndersideFixtures(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null
+                || sbbsLanternSideSlabPos == null
+                || sbbsLanternUnderPos == null
+                || sbbsChainSideSlabPos == null
+                || sbbsChainPos == null
+                || sbbsChainLanternPos == null) {
+            return false;
+        }
+
+        BlockState loweredBottomSlab = Blocks.STONE_SLAB.getDefaultState()
+                .with(SlabBlock.TYPE, SlabType.BOTTOM)
+                .with(SlabBlock.WATERLOGGED, false);
+        serverWorld.setBlockState(sbbsLanternSideSlabPos, loweredBottomSlab, 3);
+        sbbsLanternSideSlabPlacementResult = "SET";
+        serverWorld.setBlockState(
+                sbbsLanternUnderPos,
+                Blocks.LANTERN.getDefaultState().with(net.minecraft.block.LanternBlock.HANGING, true),
+                3);
+        sbbsLanternUnderPlacementResult = "SET";
+
+        serverWorld.setBlockState(sbbsChainSideSlabPos, loweredBottomSlab, 3);
+        sbbsChainSideSlabPlacementResult = "SET";
+        serverWorld.setBlockState(
+                sbbsChainPos,
+                Blocks.CHAIN.getDefaultState().with(net.minecraft.block.ChainBlock.AXIS, Direction.Axis.Y),
+                3);
+        sbbsChainPlacementResult = "SET";
+        serverWorld.setBlockState(
+                sbbsChainLanternPos,
+                Blocks.LANTERN.getDefaultState().with(net.minecraft.block.LanternBlock.HANGING, true),
+                3);
+        sbbsChainLanternPlacementResult = "SET";
+
+        BlockState lanternSideSlabState = serverWorld.getBlockState(sbbsLanternSideSlabPos);
+        BlockState lanternUnderState = serverWorld.getBlockState(sbbsLanternUnderPos);
+        BlockState chainSideSlabState = serverWorld.getBlockState(sbbsChainSideSlabPos);
+        BlockState chainState = serverWorld.getBlockState(sbbsChainPos);
+        BlockState chainLanternState = serverWorld.getBlockState(sbbsChainLanternPos);
+        return lanternSideSlabState.isOf(Blocks.STONE_SLAB)
+                && lanternSideSlabState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && lanternUnderState.isOf(Blocks.LANTERN)
+                && chainSideSlabState.isOf(Blocks.STONE_SLAB)
+                && chainSideSlabState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && chainState.isOf(Blocks.CHAIN)
+                && chainLanternState.isOf(Blocks.LANTERN);
+    }
+
+    private static String activeTrapdoorUnderBottomProperty() {
+        return Boolean.getBoolean(TRAPDOOR_UNDER_LOWERED_BOTTOM_PLACEMENT_RED_PROPERTY)
+                ? TRAPDOOR_UNDER_LOWERED_BOTTOM_PLACEMENT_RED_PROPERTY
+                : TRAPDOOR_UNDER_BOTTOM_PLACEMENT_RED_PROPERTY;
+    }
+
+    private static String activeTrapdoorUnderBottomTargetName() {
+        return Boolean.getBoolean(TRAPDOOR_UNDER_LOWERED_BOTTOM_PLACEMENT_RED_PROPERTY)
+                ? "lowered-side-extension-bottom-slab-underside"
+                : "true-bottom-slab-underside";
+    }
+
+    private static void runTrapdoorSideExtensionRoute(MinecraftClient client) {
+        if (trapdoorSeamFinalized || emitted) {
+            return;
+        }
+        trapdoorSeamTicks++;
+        if (!trapdoorSeamCanaryEmitted) {
+            trapdoorSeamCanaryEmitted = true;
+            System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_RED_START]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + TRAPDOOR_SIDE_EXTENSION_RED_PROPERTY
+                    + " sourceTruth=live-S>B>S-side-extension-under-trapdoor"
+                    + " initialLayer=proof gap"
+                    + " gameplayPatch=false"
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticTrapdoorSeamWorldIfNeeded(client);
+        String readinessGap = liveTruthReadinessGap(client);
+        if (readinessGap != null) {
+            if (!trapdoorSeamReadyRowEmitted || trapdoorSeamTicks % 1200 == 0) {
+                emitTrapdoorSideExtensionTraceGap("WAITING", readinessGap);
+                trapdoorSeamReadyRowEmitted = true;
+            }
+            if (trapdoorSeamTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitTrapdoorSideExtensionTraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+
+        if (!trapdoorSeamStarted) {
+            trapdoorSeamStarted = true;
+            trapdoorSeamOrigin = client.player.getBlockPos().add(11, 0, 7).toImmutable();
+            trapdoorSeamGroundPos = trapdoorSeamOrigin.down();
+            trapdoorSeamSlabPos = trapdoorSeamOrigin;
+            trapdoorSeamSupportPos = trapdoorSeamSlabPos.up();
+            trapdoorSeamTopSlabPos = trapdoorSeamSupportPos.up();
+            trapdoorSeamTemporaryCeilingPos = trapdoorSeamTopSlabPos.up();
+            trapdoorSeamExtensionSlabPos = trapdoorSeamTopSlabPos.east();
+            trapdoorSeamExtensionTrapdoorPos = trapdoorSeamExtensionSlabPos.down();
+            trapdoorSeamExpectedTrapdoorPos = trapdoorSeamExtensionTrapdoorPos;
+            prepareTrapdoorSideExtensionFixture(client);
+            trapdoorSeamPhase = 1;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_ROW]"
+                    + " rowPhase=START"
+                    + " fixtureOrigin=" + textPos(trapdoorSeamOrigin)
+                    + " baseSlabPos=" + textPos(trapdoorSeamSlabPos)
+                    + " supportPos=" + textPos(trapdoorSeamSupportPos)
+                    + " topSlabPos=" + textPos(trapdoorSeamTopSlabPos)
+                    + " extensionSlabPos=" + textPos(trapdoorSeamExtensionSlabPos)
+                    + " expectedTrapdoorPos=" + textPos(trapdoorSeamExpectedTrapdoorPos)
+                    + " setup=player-authored-S>B>S-side-extension"
+                    + " finalSlabType=TOP"
+                    + " extensionSlabType=" + desiredTrapdoorSideExtensionSlabType().asString()
+                    + " trapdoorItem=minecraft:oak_trapdoor"
+                    + " gameplayPatch=false");
+            return;
+        }
+
+        if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 8) {
+            return;
+        }
+        if (trapdoorSeamPhase == 1) {
+            trapdoorSeamSlabPlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    trapdoorSeamGroundPos,
+                    Direction.UP,
+                    hitVector(trapdoorSeamGroundPos, Direction.UP));
+            trapdoorSeamPhase = 2;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 2) {
+            if (!trapdoorSeamSlabReady(client)) {
+                if (retryTrapdoorSideExtensionClick(client, trapdoorSeamSlabPlacementResult, 160)) {
+                    trapdoorSeamSlabPlacementResult = clickBlock(
+                            client,
+                            Items.STONE_SLAB,
+                            trapdoorSeamGroundPos,
+                            Direction.UP,
+                            hitVector(trapdoorSeamGroundPos, Direction.UP));
+                    return;
+                }
+                emitTrapdoorSideExtensionTraceGap("BASE_SLAB_AUTHORING",
+                        "TRACE_GAP_PLAYER_AUTHORED_BOTTOM_BASE_SLAB_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamSupportPlacementResult = clickBlock(
+                    client,
+                    Items.STONE,
+                    trapdoorSeamSlabPos,
+                    Direction.UP,
+                    hitVector(trapdoorSeamSlabPos, Direction.UP));
+            trapdoorSeamPhase = 3;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 3) {
+            if (!trapdoorSeamLoweredSupportReady(client)) {
+                if (retryTrapdoorSideExtensionClick(client, trapdoorSeamSupportPlacementResult, 160)) {
+                    trapdoorSeamSupportPlacementResult = clickBlock(
+                            client,
+                            Items.STONE,
+                            trapdoorSeamSlabPos,
+                            Direction.UP,
+                            hitVector(trapdoorSeamSlabPos, Direction.UP));
+                    return;
+                }
+                emitTrapdoorSideExtensionTraceGap("SUPPORT_AUTHORING",
+                        "TRACE_GAP_PLAYER_AUTHORED_LOWERED_SUPPORT_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamTopSlabPlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    trapdoorSeamTemporaryCeilingPos,
+                    Direction.DOWN,
+                    hitVector(trapdoorSeamTemporaryCeilingPos, Direction.DOWN));
+            trapdoorSeamPhase = 4;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 4) {
+            if (!trapdoorSeamTopSlabReady(client)) {
+                if (retryTrapdoorSideExtensionClick(client, trapdoorSeamTopSlabPlacementResult, 160)) {
+                    trapdoorSeamTopSlabPlacementResult = clickBlock(
+                            client,
+                            Items.STONE_SLAB,
+                            trapdoorSeamTemporaryCeilingPos,
+                            Direction.DOWN,
+                            hitVector(trapdoorSeamTemporaryCeilingPos, Direction.DOWN));
+                    return;
+                }
+                emitTrapdoorSideExtensionTraceGap("TOP_SLAB_AUTHORING",
+                        "TRACE_GAP_PLAYER_AUTHORED_TOP_SLAB_NOT_OBSERVED");
+                return;
+            }
+            removeTrapdoorSideExtensionTemporaryCeiling(client);
+            trapdoorSeamPhase = 5;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 5) {
+            if (!trapdoorSeamTemporaryCeilingRemoved(client)) {
+                if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 80) {
+                    return;
+                }
+                emitTrapdoorSideExtensionTraceGap("TEMP_CEILING_REMOVAL",
+                        "TRACE_GAP_TOP_SLAB_TEMP_CEILING_REMOVAL_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamExtensionSlabPlacementResult = clickBlock(
+                    client,
+                    Items.STONE_SLAB,
+                    trapdoorSeamTopSlabPos,
+                    Direction.EAST,
+                    trapdoorSideExtensionHitVector(desiredTrapdoorSideExtensionSlabType()));
+            trapdoorSeamPhase = 6;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamPhase == 6) {
+            if (!trapdoorSeamExtensionSlabReady(client)) {
+                if (retryTrapdoorSideExtensionClick(client, trapdoorSeamExtensionSlabPlacementResult, 160)) {
+                    trapdoorSeamExtensionSlabPlacementResult = clickBlock(
+                            client,
+                            Items.STONE_SLAB,
+                            trapdoorSeamTopSlabPos,
+                            Direction.EAST,
+                            trapdoorSideExtensionHitVector(desiredTrapdoorSideExtensionSlabType()));
+                    return;
+                }
+                if (desiredTrapdoorSideExtensionSlabType() == SlabType.BOTTOM) {
+                    emitTrapdoorSideExtensionPlacementRed("SIDE_EXTENSION_BOTTOM_SLAB_AUTHORING",
+                            "SIDE_EXTENSION_BOTTOM_SLAB_PLACEMENT_REJECTED_OR_WRONG_STATE");
+                    return;
+                }
+                emitTrapdoorSideExtensionTraceGap("SIDE_EXTENSION_SLAB_AUTHORING",
+                        "TRACE_GAP_PLAYER_AUTHORED_SIDE_EXTENSION_TOP_SLAB_NOT_OBSERVED");
+                return;
+            }
+            trapdoorSeamExtensionTrapdoorPlacementResult = clickTrapdoorUnderSideExtension(client);
+            trapdoorSeamPhase = 7;
+            trapdoorSeamPhaseTick = trapdoorSeamTicks;
+            return;
+        }
+        if (trapdoorSeamTicks - trapdoorSeamPhaseTick < 30) {
+            return;
+        }
+        emitTrapdoorSideExtensionRow(client);
+        emitTrapdoorSideExtensionSummary(client);
+    }
+
+    private static void runGoblinLoweredTrapdoorSeamsRoute(MinecraftClient client) {
+        if (goblinLoweredTrapdoorFinalized || emitted) {
+            return;
+        }
+        goblinLoweredTrapdoorTicks++;
+        if (!goblinLoweredTrapdoorCanaryEmitted) {
+            goblinLoweredTrapdoorCanaryEmitted = true;
+            System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_START]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + GOBLIN_LOWERED_TRAPDOOR_SEAMS_PROPERTY
+                    + " harnessDriven=true"
+                    + " manualComputerUseEvidence=false"
+                    + " initialLayer=proof gap"
+                    + " gameplayPatch=false"
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticTrapdoorSeamWorldIfNeeded(client);
+        String readinessGap = liveTruthReadinessGap(client);
+        if (readinessGap != null) {
+            if (goblinLoweredTrapdoorTicks % 1200 == 1) {
+                System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_ROW]"
+                        + " rowPhase=WAITING"
+                        + " classification=" + readinessGap
+                        + " failureLayer=proof gap");
+            }
+            if (goblinLoweredTrapdoorTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            goblinLoweredTrapdoorTraceGapRows++;
+            emitGoblinLoweredTrapdoorSummary("TRACE_GAP", readinessGap, "proof gap", client);
+            return;
+        }
+        if (!goblinLoweredTrapdoorStarted) {
+            goblinLoweredTrapdoorStarted = true;
+            goblinLoweredTrapdoorOrigin = client.player.getBlockPos().add(17, 0, 11).toImmutable();
+            System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_CASE]"
+                    + " rowPhase=SUITE_START"
+                    + " fixtureOrigin=" + textPos(goblinLoweredTrapdoorOrigin)
+                    + " cases=" + LOWERED_TRAPDOOR_GOBLIN_CASES.length
+                    + " authoring=scripted_harness"
+                    + " actions=build,place_trapdoor,sweep_targets,break_support,neighbor_update,recheck"
+                    + " cullingCheck=NOT_OBSERVABLE_LOG_ONLY"
+                    + " screenshot=NOT_REQUESTED");
+            ServerWorld serverWorld = serverWorldFor(client);
+            if (serverWorld == null || client.world == null) {
+                goblinLoweredTrapdoorTraceGapRows++;
+                emitGoblinLoweredTrapdoorSummary("TRACE_GAP", "TRACE_GAP_WORLD_NOT_READY", "proof gap", client);
+                return;
+            }
+            goblinLoweredTrapdoorPhaseTick = goblinLoweredTrapdoorTicks;
+            return;
+        }
+        if (goblinLoweredTrapdoorCaseIndex >= LOWERED_TRAPDOOR_GOBLIN_CASES.length) {
+            String finalResult = goblinLoweredTrapdoorRedRows > 0
+                    ? "RED"
+                    : (goblinLoweredTrapdoorTraceGapRows > 0 ? "TRACE_GAP" : "GREEN");
+            String classification = goblinLoweredTrapdoorRedRows > 0
+                    ? "ONE_OR_MORE_GOBLIN_CASES_RED"
+                    : (goblinLoweredTrapdoorTraceGapRows > 0
+                    ? "ONE_OR_MORE_GOBLIN_CASES_TRACE_GAP"
+                    : "ALL_GOBLIN_CASES_GREEN");
+            String failureLayer = goblinLoweredTrapdoorRedRows > 0
+                    ? "see_case_rows"
+                    : (goblinLoweredTrapdoorTraceGapRows > 0 ? "proof gap" : "NONE");
+            emitGoblinLoweredTrapdoorSummary(finalResult, classification, failureLayer, client);
+            return;
+        }
+        runGoblinLoweredTrapdoorCaseStep(client);
+    }
+
+    private static void runGoblinLoweredTrapdoorCaseStep(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || client == null || client.world == null || client.player == null) {
+            goblinLoweredTrapdoorTraceGapRows++;
+            emitGoblinLoweredTrapdoorSummary("TRACE_GAP", "TRACE_GAP_WORLD_OR_PLAYER_NOT_READY", "proof gap", client);
+            return;
+        }
+        LoweredTrapdoorGoblinCase spec = LOWERED_TRAPDOOR_GOBLIN_CASES[goblinLoweredTrapdoorCaseIndex];
+        if (goblinLoweredTrapdoorCasePhase == 0) {
+            goblinLoweredTrapdoorCaseOrigin =
+                    goblinLoweredTrapdoorOrigin.add(goblinLoweredTrapdoorCaseIndex * 6, 0, 0).toImmutable();
+            BlockPos baseSlabPos = goblinLoweredTrapdoorCaseOrigin;
+            goblinLoweredTrapdoorSupportPos = baseSlabPos.up();
+            BlockPos ownerTopSlabPos = goblinLoweredTrapdoorSupportPos.up();
+            goblinLoweredTrapdoorTargetSlabPos = ownerTopSlabPos.east();
+            goblinLoweredTrapdoorExpectedTrapdoorPos = goblinLoweredTrapdoorTargetSlabPos.down();
+            prepareGoblinLoweredTrapdoorCaseWorld(client, serverWorld, goblinLoweredTrapdoorCaseOrigin);
+            BlockState baseSlabState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+            BlockState supportState = Blocks.STONE.getDefaultState();
+            BlockState ownerTopState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP);
+            BlockState targetSlabState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, spec.targetSlabType());
+            serverWorld.setBlockState(baseSlabPos, baseSlabState, 3);
+            serverWorld.setBlockState(goblinLoweredTrapdoorSupportPos, supportState, 3);
+            serverWorld.setBlockState(ownerTopSlabPos, ownerTopState, 3);
+            serverWorld.setBlockState(goblinLoweredTrapdoorTargetSlabPos, targetSlabState, 3);
+            client.world.setBlockState(baseSlabPos, baseSlabState, 3);
+            client.world.setBlockState(goblinLoweredTrapdoorSupportPos, supportState, 3);
+            client.world.setBlockState(ownerTopSlabPos, ownerTopState, 3);
+            client.world.setBlockState(goblinLoweredTrapdoorTargetSlabPos, targetSlabState, 3);
+            SlabAnchorAttachment.addAnchor(serverWorld, goblinLoweredTrapdoorSupportPos, supportState);
+            SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(
+                    serverWorld, ownerTopSlabPos, ownerTopState, goblinLoweredTrapdoorSupportPos, supportState);
+            addGoblinLoweredSlabMarker(
+                    serverWorld, goblinLoweredTrapdoorTargetSlabPos, targetSlabState, ownerTopSlabPos, ownerTopState);
+            if (spec.cornerCase()) {
+                BlockPos cornerSlabPos = ownerTopSlabPos.north();
+                serverWorld.setBlockState(cornerSlabPos, ownerTopState, 3);
+                client.world.setBlockState(cornerSlabPos, ownerTopState, 3);
+                SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(
+                        serverWorld, cornerSlabPos, ownerTopState, ownerTopSlabPos, ownerTopState);
+            }
+            goblinLoweredTrapdoorPlacementResult =
+                    clickGoblinTrapdoorUnderSlab(client, goblinLoweredTrapdoorTargetSlabPos);
+            BlockState authoredTargetState = serverWorld.getBlockState(goblinLoweredTrapdoorTargetSlabPos);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    serverWorld, goblinLoweredTrapdoorTargetSlabPos, authoredTargetState);
+            goblinLoweredTrapdoorCasePhase = 1;
+            goblinLoweredTrapdoorPhaseTick = goblinLoweredTrapdoorTicks;
+            System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_CASE]"
+                    + " rowPhase=CASE_AUTHORED"
+                    + " caseName=" + spec.caseName()
+                    + " fixtureOrigin=" + textPos(goblinLoweredTrapdoorCaseOrigin)
+                    + " targetSlabType=" + spec.targetSlabType().asString()
+                    + " placementResultTrapdoor=" + goblinLoweredTrapdoorPlacementResult);
+            return;
+        }
+        if (goblinLoweredTrapdoorCasePhase == 1) {
+            if (goblinLoweredTrapdoorTicks - goblinLoweredTrapdoorPhaseTick < 30) {
+                return;
+            }
+            BlockState targetBeforeBreak = serverWorld.getBlockState(goblinLoweredTrapdoorTargetSlabPos);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    serverWorld, goblinLoweredTrapdoorTargetSlabPos, targetBeforeBreak);
+            goblinLoweredTrapdoorActualTrapdoorPos =
+                    findNearbyTrapdoor(serverWorld, goblinLoweredTrapdoorExpectedTrapdoorPos);
+            goblinLoweredTrapdoorBeforeBreak = assessGoblinLoweredTrapdoorCase(
+                    client, serverWorld, spec, goblinLoweredTrapdoorCaseOrigin,
+                    goblinLoweredTrapdoorSupportPos, goblinLoweredTrapdoorTargetSlabPos,
+                    goblinLoweredTrapdoorExpectedTrapdoorPos, goblinLoweredTrapdoorActualTrapdoorPos,
+                    goblinLoweredTrapdoorPlacementResult, "BEFORE_BREAK");
+            goblinLoweredTrapdoorTargetSweep = sampleGoblinLoweredTrapdoorTargets(
+                    client, spec, goblinLoweredTrapdoorTargetSlabPos,
+                    goblinLoweredTrapdoorActualTrapdoorPos, "BEFORE_BREAK");
+            serverWorld.breakBlock(goblinLoweredTrapdoorSupportPos, false);
+            serverWorld.updateNeighbors(goblinLoweredTrapdoorSupportPos, Blocks.AIR);
+            serverWorld.updateNeighbors(
+                    goblinLoweredTrapdoorTargetSlabPos,
+                    serverWorld.getBlockState(goblinLoweredTrapdoorTargetSlabPos).getBlock());
+            goblinLoweredTrapdoorCasePhase = 2;
+            goblinLoweredTrapdoorPhaseTick = goblinLoweredTrapdoorTicks;
+            return;
+        }
+        if (goblinLoweredTrapdoorCasePhase == 2) {
+            if (goblinLoweredTrapdoorTicks - goblinLoweredTrapdoorPhaseTick < 30) {
+                return;
+            }
+            BlockState targetAfterBreak = serverWorld.getBlockState(goblinLoweredTrapdoorTargetSlabPos);
+            SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(
+                    serverWorld, goblinLoweredTrapdoorTargetSlabPos, targetAfterBreak);
+            LoweredTrapdoorGoblinAssessment afterBreak = assessGoblinLoweredTrapdoorCase(
+                    client, serverWorld, spec, goblinLoweredTrapdoorCaseOrigin,
+                    goblinLoweredTrapdoorSupportPos, goblinLoweredTrapdoorTargetSlabPos,
+                    goblinLoweredTrapdoorExpectedTrapdoorPos, goblinLoweredTrapdoorActualTrapdoorPos,
+                    goblinLoweredTrapdoorPlacementResult, "AFTER_SUPPORT_BREAK");
+            emitGoblinLoweredTrapdoorCaseResult(client, spec, afterBreak);
+            goblinLoweredTrapdoorCaseIndex++;
+            goblinLoweredTrapdoorCasePhase = 0;
+            goblinLoweredTrapdoorPhaseTick = goblinLoweredTrapdoorTicks;
+        }
+    }
+
+    private static void emitGoblinLoweredTrapdoorCaseResult(
+            MinecraftClient client,
+            LoweredTrapdoorGoblinCase spec,
+            LoweredTrapdoorGoblinAssessment afterBreak
+    ) {
+        String classification;
+        String failureLayer;
+        String result;
+        if (!goblinLoweredTrapdoorBeforeBreak.green()) {
+            classification = goblinLoweredTrapdoorBeforeBreak.classification();
+            failureLayer = goblinLoweredTrapdoorBeforeBreak.failureLayer();
+            result = "RED";
+        } else if (goblinLoweredTrapdoorTargetSweep.contains("wrongOwner=true")) {
+            classification = "TARGET_SWEEP_OWNER_MISMATCH";
+            failureLayer = "raycast";
+            result = "RED";
+        } else if (!afterBreak.green()) {
+            classification = afterBreak.classification();
+            failureLayer = afterBreak.failureLayer();
+            result = "RED";
+        } else {
+            classification = "LOWERED_TRAPDOOR_SEAM_GOBLIN_GREEN";
+            failureLayer = "NONE";
+            result = "GREEN";
+        }
+        if ("GREEN".equals(result)) {
+            goblinLoweredTrapdoorGreenRows++;
+            System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_GREEN]"
+                    + " caseName=" + spec.caseName()
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer);
+        } else {
+            goblinLoweredTrapdoorRedRows++;
+            System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_RED]"
+                    + " caseName=" + spec.caseName()
+                    + " classification=" + classification
+                    + " failureLayer=" + failureLayer);
+        }
+
+        System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_ROW]"
+                + " caseName=" + spec.caseName()
+                + " rowPhase=CASE_RESULT"
+                + " fixtureOrigin=" + textPos(goblinLoweredTrapdoorCaseOrigin)
+                + " supportPos=" + textPos(goblinLoweredTrapdoorSupportPos)
+                + " targetSlabPos=" + textPos(goblinLoweredTrapdoorTargetSlabPos)
+                + " targetSlabType=" + spec.targetSlabType().asString()
+                + " sideExtension=" + spec.sideExtension()
+                + " cornerCase=" + spec.cornerCase()
+                + " expectedTrapdoorPos=" + textPos(goblinLoweredTrapdoorExpectedTrapdoorPos)
+                + " actualTrapdoorPos=" + textPos(goblinLoweredTrapdoorActualTrapdoorPos)
+                + " placementResultTrapdoor=" + goblinLoweredTrapdoorPlacementResult
+                + " beforeBreak=" + goblinLoweredTrapdoorBeforeBreak.summary()
+                + " afterBreak=" + afterBreak.summary()
+                + " targetSweep=" + goblinLoweredTrapdoorTargetSweep
+                + " crosshair=" + describeCrosshair(client)
+                + " cullingVisibleFaceSanity=NOT_OBSERVABLE_LOG_ONLY"
+                + " classification=" + classification
+                + " failureLayer=" + failureLayer
+                + " result=" + result);
+    }
+
+    private static LoweredTrapdoorGoblinRow runGoblinLoweredTrapdoorCase(
+            MinecraftClient client,
+            ServerWorld serverWorld,
+            LoweredTrapdoorGoblinCase spec,
+            BlockPos caseOrigin
+    ) {
+        if (client == null || client.world == null || client.player == null || serverWorld == null) {
+            return new LoweredTrapdoorGoblinRow("TRACE_GAP", "TRACE_GAP_ROUTE_NOT_READY", "proof gap");
+        }
+        BlockPos baseSlabPos = caseOrigin;
+        BlockPos supportPos = baseSlabPos.up();
+        BlockPos ownerTopSlabPos = supportPos.up();
+        BlockPos targetSlabPos = spec.sideExtension() ? ownerTopSlabPos.east() : ownerTopSlabPos;
+        BlockPos trapdoorPos = targetSlabPos.down();
+        BlockPos cornerSlabPos = ownerTopSlabPos.north();
+
+        prepareGoblinLoweredTrapdoorCaseWorld(client, serverWorld, caseOrigin);
+        BlockState baseSlabState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        BlockState supportState = Blocks.STONE.getDefaultState();
+        BlockState ownerTopState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP);
+        BlockState targetSlabState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, spec.targetSlabType());
+        serverWorld.setBlockState(baseSlabPos, baseSlabState, 3);
+        serverWorld.setBlockState(supportPos, supportState, 3);
+        serverWorld.setBlockState(ownerTopSlabPos, ownerTopState, 3);
+        client.world.setBlockState(baseSlabPos, baseSlabState, 3);
+        client.world.setBlockState(supportPos, supportState, 3);
+        client.world.setBlockState(ownerTopSlabPos, ownerTopState, 3);
+        SlabAnchorAttachment.addAnchor(serverWorld, supportPos, supportState);
+        SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(
+                serverWorld, ownerTopSlabPos, ownerTopState, supportPos, supportState);
+        if (spec.sideExtension()) {
+            serverWorld.setBlockState(targetSlabPos, targetSlabState, 3);
+            client.world.setBlockState(targetSlabPos, targetSlabState, 3);
+            addGoblinLoweredSlabMarker(serverWorld, targetSlabPos, targetSlabState, ownerTopSlabPos, ownerTopState);
+        }
+        if (spec.cornerCase()) {
+            serverWorld.setBlockState(cornerSlabPos, ownerTopState, 3);
+            client.world.setBlockState(cornerSlabPos, ownerTopState, 3);
+            SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(
+                    serverWorld, cornerSlabPos, ownerTopState, ownerTopSlabPos, ownerTopState);
+        }
+        String trapdoorPlacementResult = clickGoblinTrapdoorUnderSlab(client, targetSlabPos);
+        BlockState authoredTargetState = serverWorld.getBlockState(targetSlabPos);
+        SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(serverWorld, targetSlabPos, authoredTargetState);
+        BlockPos actualTrapdoorPos = findNearbyTrapdoor(serverWorld, trapdoorPos);
+        LoweredTrapdoorGoblinAssessment beforeBreak = assessGoblinLoweredTrapdoorCase(
+                client, serverWorld, spec, caseOrigin, supportPos, targetSlabPos, trapdoorPos,
+                actualTrapdoorPos, trapdoorPlacementResult, "BEFORE_BREAK");
+        String targetSweep = sampleGoblinLoweredTrapdoorTargets(
+                client, spec, targetSlabPos, actualTrapdoorPos, "BEFORE_BREAK");
+        serverWorld.breakBlock(supportPos, false);
+        serverWorld.updateNeighbors(supportPos, Blocks.AIR);
+        serverWorld.updateNeighbors(targetSlabPos, serverWorld.getBlockState(targetSlabPos).getBlock());
+        LoweredTrapdoorGoblinAssessment afterBreak = assessGoblinLoweredTrapdoorCase(
+                client, serverWorld, spec, caseOrigin, supportPos, targetSlabPos, trapdoorPos,
+                actualTrapdoorPos, trapdoorPlacementResult, "AFTER_SUPPORT_BREAK");
+        String classification = beforeBreak.classification();
+        String failureLayer = beforeBreak.failureLayer();
+        String result = beforeBreak.green() && afterBreak.green() && !targetSweep.contains("wrongOwner=true")
+                ? "GREEN"
+                : "RED";
+        if (!beforeBreak.green()) {
+            classification = beforeBreak.classification();
+            failureLayer = beforeBreak.failureLayer();
+        } else if (targetSweep.contains("wrongOwner=true")) {
+            classification = "TARGET_SWEEP_OWNER_MISMATCH";
+            failureLayer = "raycast";
+        } else if (!afterBreak.green()) {
+            classification = afterBreak.classification();
+            failureLayer = afterBreak.failureLayer();
+        } else {
+            classification = "LOWERED_TRAPDOOR_SEAM_GOBLIN_GREEN";
+            failureLayer = "NONE";
+        }
+
+        System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_ROW]"
+                + " caseName=" + spec.caseName()
+                + " rowPhase=CASE_RESULT"
+                + " fixtureOrigin=" + textPos(caseOrigin)
+                + " baseSlabPos=" + textPos(baseSlabPos)
+                + " supportPos=" + textPos(supportPos)
+                + " ownerTopSlabPos=" + textPos(ownerTopSlabPos)
+                + " targetSlabPos=" + textPos(targetSlabPos)
+                + " targetSlabType=" + spec.targetSlabType().asString()
+                + " sideExtension=" + spec.sideExtension()
+                + " cornerCase=" + spec.cornerCase()
+                + " expectedTrapdoorPos=" + textPos(trapdoorPos)
+                + " actualTrapdoorPos=" + textPos(actualTrapdoorPos)
+                + " placementResultTrapdoor=" + trapdoorPlacementResult
+                + " beforeBreak=" + beforeBreak.summary()
+                + " afterBreak=" + afterBreak.summary()
+                + " targetSweep=" + targetSweep
+                + " cullingVisibleFaceSanity=NOT_OBSERVABLE_LOG_ONLY"
+                + " classification=" + classification
+                + " failureLayer=" + failureLayer
+                + " result=" + result);
+        return new LoweredTrapdoorGoblinRow(result, classification, failureLayer);
+    }
+
+    private static void prepareGoblinLoweredTrapdoorCaseWorld(
+            MinecraftClient client,
+            ServerWorld serverWorld,
+            BlockPos caseOrigin
+    ) {
+        for (int x = caseOrigin.getX() - 2; x <= caseOrigin.getX() + 4; x++) {
+            for (int z = caseOrigin.getZ() - 3; z <= caseOrigin.getZ() + 3; z++) {
+                for (int y = caseOrigin.getY() - 2; y <= caseOrigin.getY() + 5; y++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    serverWorld.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
+                    if (client.world != null) {
+                        client.world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+        }
+        BlockPos groundPos = caseOrigin.down();
+        serverWorld.setBlockState(groundPos, Blocks.STONE.getDefaultState(), 3);
+        if (client.world != null) {
+            client.world.setBlockState(groundPos, Blocks.STONE.getDefaultState(), 3);
+        }
+    }
+
+    private static void addGoblinLoweredSlabMarker(
+            ServerWorld world,
+            BlockPos pos,
+            BlockState state,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        SlabType type = state.get(SlabBlock.TYPE);
+        if (type == SlabType.BOTTOM) {
+            SlabAnchorAttachment.addCompoundVisibleSideLowerSlab(world, pos, state, sourcePos, sourceState);
+        } else if (type == SlabType.TOP) {
+            SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(world, pos, state, sourcePos, sourceState);
+        } else {
+            SlabAnchorAttachment.addCompoundVisibleSideDoubleSlab(world, pos, state, sourcePos, sourceState);
+        }
+    }
+
+    private static String clickGoblinTrapdoorUnderSlab(MinecraftClient client, BlockPos targetSlabPos) {
+        if (client == null || client.player == null || client.world == null || client.interactionManager == null
+                || client.gameRenderer == null || targetSlabPos == null) {
+            return "FAIL_ROUTE_NOT_READY";
+        }
+        BlockPos trapdoorPos = targetSlabPos.down();
+        BlockPos supportPos = trapdoorPos.west();
+        Vec3d hitVector = new Vec3d(
+                supportPos.getX() + 0.98d,
+                supportPos.getY() + 0.90d,
+                supportPos.getZ() + 0.5d);
+        syncGoblinLoweredTrapdoorPlayer(client, hitVector, new Vec3d(1.75d, -0.35d, 0.0d), Items.OAK_TRAPDOOR);
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        // Deterministic authoring: click support east face so placement resolves into trapdoorPos.
+        BlockHitResult fallback = new BlockHitResult(hitVector, Direction.EAST, supportPos, false);
+        ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, fallback);
+
+        ServerWorld serverWorld = serverWorldFor(client);
+        BlockState targetSlabState = serverWorld == null ? Blocks.AIR.getDefaultState() : serverWorld.getBlockState(targetSlabPos);
+        BlockState trapdoorState = serverWorld == null ? Blocks.AIR.getDefaultState() : serverWorld.getBlockState(trapdoorPos);
+        double targetSlabDy = serverWorld == null ? Double.NaN : SlabSupport.getYOffset(serverWorld, targetSlabPos, targetSlabState);
+        double trapdoorDy = (serverWorld == null || !trapdoorState.isOf(Blocks.OAK_TRAPDOOR))
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorPos, trapdoorState);
+        System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_CLICK]"
+                + " phase=IMMEDIATE_POST_CLICK"
+                + " targetSlabPos=" + textPos(targetSlabPos)
+                + " supportPos=" + textPos(supportPos)
+                + " trapdoorPos=" + textPos(trapdoorPos)
+                + " fallbackSide=east"
+                + " interactResult=" + result
+                + " targetSlabState=" + targetSlabState
+                + " targetSlabDy=" + formatDouble(targetSlabDy)
+                + " trapdoorState=" + trapdoorState
+                + " trapdoorDy=" + formatDouble(trapdoorDy));
+
+        return "FALLBACK_" + result;
+    }
+
+    private static void syncGoblinLoweredTrapdoorPlayer(
+            MinecraftClient client,
+            Vec3d hitVector,
+            Vec3d eyeOffset,
+            net.minecraft.item.Item heldItem
+    ) {
+        Vec3d eye = hitVector.add(eyeOffset);
+        Vec3d delta = hitVector.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        client.player.setStackInHand(Hand.MAIN_HAND,
+                heldItem == null ? ItemStack.EMPTY : new ItemStack(heldItem, 8));
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND,
+                    heldItem == null ? ItemStack.EMPTY : new ItemStack(heldItem, 8));
+        }
+    }
+
+    private static LoweredTrapdoorGoblinAssessment assessGoblinLoweredTrapdoorCase(
+            MinecraftClient client,
+            ServerWorld serverWorld,
+            LoweredTrapdoorGoblinCase spec,
+            BlockPos caseOrigin,
+            BlockPos supportPos,
+            BlockPos targetSlabPos,
+            BlockPos expectedTrapdoorPos,
+            BlockPos actualTrapdoorPos,
+            String trapdoorPlacementResult,
+            String phase
+    ) {
+        BlockState supportState = serverWorld.getBlockState(supportPos);
+        BlockState targetSlabState = serverWorld.getBlockState(targetSlabPos);
+        BlockState trapdoorState = serverWorld.getBlockState(actualTrapdoorPos);
+        BlockState clientTrapdoorState = client.world.getBlockState(actualTrapdoorPos);
+        double supportDy = SlabSupport.getYOffset(serverWorld, supportPos, supportState);
+        double targetSlabDy = SlabSupport.getYOffset(serverWorld, targetSlabPos, targetSlabState);
+        boolean targetIsLoweredSlab = targetSlabState.isOf(Blocks.STONE_SLAB) && near(targetSlabDy, -0.5d);
+        boolean targetBottomVariant = targetSlabState.isOf(Blocks.STONE_SLAB)
+                && targetSlabState.contains(SlabBlock.TYPE)
+                && targetSlabState.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+        boolean targetIsValidForCase = targetIsLoweredSlab
+                || (spec.targetSlabType() == SlabType.BOTTOM && targetBottomVariant);
+        boolean trapdoorAppeared = trapdoorState.isOf(Blocks.OAK_TRAPDOOR);
+        double trapdoorDy = trapdoorAppeared
+                ? SlabSupport.getYOffset(serverWorld, actualTrapdoorPos, trapdoorState)
+                : Double.NaN;
+        double clientTrapdoorDy = trapdoorAppeared
+                ? ClientDy.dyFor(client.world, actualTrapdoorPos, clientTrapdoorState)
+                : Double.NaN;
+        double expectedTrapdoorDy = expectedGoblinTrapdoorDy(spec.targetSlabType(), targetSlabDy);
+        boolean expectedPos = actualTrapdoorPos != null && actualTrapdoorPos.equals(expectedTrapdoorPos);
+        boolean survivalGreen = trapdoorAppeared && trapdoorState.canPlaceAt(serverWorld, actualTrapdoorPos);
+        VoxelShape slabOutline = targetSlabState.getOutlineShape(serverWorld, targetSlabPos);
+        VoxelShape trapdoorOutline = trapdoorAppeared
+                ? trapdoorState.getOutlineShape(serverWorld, actualTrapdoorPos,
+                net.minecraft.block.ShapeContext.of(client.player))
+                : null;
+        VoxelShape trapdoorRaycast = trapdoorAppeared
+                ? trapdoorState.getRaycastShape(serverWorld, actualTrapdoorPos)
+                : null;
+        VoxelShape trapdoorCollision = trapdoorAppeared
+                ? trapdoorState.getCollisionShape(serverWorld, actualTrapdoorPos,
+                net.minecraft.block.ShapeContext.of(client.player))
+                : null;
+        net.minecraft.util.math.Box slabBox = worldBox(slabOutline, targetSlabPos);
+        net.minecraft.util.math.Box trapdoorBox = worldBox(trapdoorOutline, actualTrapdoorPos);
+        net.minecraft.util.math.Box trapdoorRaycastBox = worldBox(trapdoorRaycast, actualTrapdoorPos);
+        net.minecraft.util.math.Box trapdoorCollisionBox = worldBox(trapdoorCollision, actualTrapdoorPos);
+        boolean overlapsSlab = boxesIntersect(slabBox, trapdoorBox);
+        boolean trapdoorRaycastShapeEmpty = trapdoorRaycast == null || trapdoorRaycast.isEmpty();
+        boolean trapdoorCollisionShapeEmpty = trapdoorCollision == null || trapdoorCollision.isEmpty();
+        boolean triadCoLocatedOutlineRaycast = sameBox(trapdoorBox, trapdoorRaycastBox);
+        boolean triadCoLocatedOutlineCollision = sameBox(trapdoorBox, trapdoorCollisionBox);
+        boolean triadCoLocatedRaycastCollision = sameBox(trapdoorRaycastBox, trapdoorCollisionBox);
+        boolean triadGreen = trapdoorAppeared && triadCoLocatedOutlineRaycast
+                && triadCoLocatedOutlineCollision
+                && triadCoLocatedRaycastCollision;
+        String classification;
+        String failureLayer;
+        boolean green;
+        if (!targetIsValidForCase) {
+            classification = "TARGET_SLAB_NOT_LOWERED";
+            failureLayer = "state authority";
+            green = false;
+        } else if (!trapdoorAppeared && trapdoorPlacementResult.contains("SUCCESS")) {
+            classification = "SUCCESS_WITH_NO_RETAINED_UNDERSIDE_TRAPDOOR_STATE";
+            failureLayer = "placement";
+            green = false;
+        } else if (!trapdoorAppeared) {
+            classification = "UNDERSIDE_TRAPDOOR_PLACEMENT_REJECTED_OR_MISSED";
+            failureLayer = "placement";
+            green = false;
+        } else if (!expectedPos) {
+            classification = "WRONG_UNDERSIDE_TRAPDOOR_POSITION";
+            failureLayer = "placement";
+            green = false;
+        } else if (!survivalGreen) {
+            classification = "UNDERSIDE_TRAPDOOR_SURVIVAL_RED";
+            failureLayer = "survival";
+            green = false;
+        } else if (overlapsSlab) {
+            classification = "UNDERSIDE_TRAPDOOR_OVERLAPS_LOWERED_SLAB";
+            failureLayer = "state authority";
+            green = false;
+        } else if (!near(trapdoorDy, expectedTrapdoorDy)) {
+            classification = "UNDERSIDE_TRAPDOOR_WRONG_DY";
+            failureLayer = "state authority";
+            green = false;
+        } else if (!near(clientTrapdoorDy, trapdoorDy)) {
+            classification = "CLIENT_SERVER_TRAPDOOR_DY_SPLIT";
+            failureLayer = "model";
+            green = false;
+        } else if (!triadCoLocatedOutlineRaycast) {
+            classification = "TRAPDOOR_OUTLINE_RAYCAST_SPLIT";
+            failureLayer = "raycast";
+            green = false;
+        } else if (!triadCoLocatedOutlineCollision) {
+            classification = "TRAPDOOR_OUTLINE_COLLISION_SPLIT";
+            failureLayer = "collision";
+            green = false;
+        } else if (!triadCoLocatedRaycastCollision) {
+            classification = "TRAPDOOR_RAYCAST_COLLISION_SPLIT";
+            failureLayer = "proof gap";
+            green = false;
+        } else if (!triadGreen) {
+            classification = "TRAPDOOR_TRIAD_COHERENT";
+            failureLayer = "proof gap";
+            green = false;
+        } else {
+            classification = "UNDERSIDE_TRAPDOOR_INHABITS_LOWERED_SPACE";
+            failureLayer = "NONE";
+            green = true;
+        }
+        String summary = "phase=" + phase
+                + "/caseOrigin=" + textPos(caseOrigin)
+                + "/supportState=" + supportState
+                + "/supportDy=" + formatDouble(supportDy)
+                + "/targetSlabState=" + targetSlabState
+                + "/targetSlabDy=" + formatDouble(targetSlabDy)
+                + "/trapdoorState=" + trapdoorState
+                + "/trapdoorHalf=" + (trapdoorAppeared ? trapdoorState.get(net.minecraft.block.TrapdoorBlock.HALF) : "NONE")
+                + "/trapdoorFacing=" + (trapdoorAppeared ? trapdoorState.get(net.minecraft.block.TrapdoorBlock.FACING) : "NONE")
+                + "/trapdoorOpen=" + (trapdoorAppeared ? trapdoorState.get(net.minecraft.block.TrapdoorBlock.OPEN) : false)
+                + "/trapdoorPowered=" + (trapdoorAppeared ? trapdoorState.get(net.minecraft.block.TrapdoorBlock.POWERED) : false)
+                + "/trapdoorWaterlogged=" + (trapdoorAppeared
+                    ? trapdoorState.get(net.minecraft.block.TrapdoorBlock.WATERLOGGED)
+                    : "NONE")
+                + "/trapdoorDy=" + formatDouble(trapdoorDy)
+                + "/clientTrapdoorDy=" + formatDouble(clientTrapdoorDy)
+                + "/expectedTrapdoorDy=" + formatDouble(expectedTrapdoorDy)
+                + "/yOff=" + formatDouble(trapdoorDy)
+                + "/clientDy=" + formatDouble(clientTrapdoorDy)
+                + "/expectedDy=" + formatDouble(expectedTrapdoorDy)
+                + "/trapdoorRaycastShapeEmpty=" + trapdoorRaycastShapeEmpty
+                + "/trapdoorCollisionShapeEmpty=" + trapdoorCollisionShapeEmpty
+                + "/survival=" + survivalGreen
+                + "/slabBounds=" + formatBox(slabBox)
+                + "/trapdoorBounds=" + formatBox(trapdoorBox)
+                + "/trapdoorOutlineBounds=" + formatBox(trapdoorBox)
+                + "/trapdoorRaycastBounds=" + formatBox(trapdoorRaycastBox)
+                + "/trapdoorCollisionBounds=" + formatBox(trapdoorCollisionBox)
+                + "/triadCoLocatedOutlineRaycast=" + triadCoLocatedOutlineRaycast
+                + "/triadCoLocatedOutlineCollision=" + triadCoLocatedOutlineCollision
+                + "/triadCoLocatedRaycastCollision=" + triadCoLocatedRaycastCollision
+                + "/overlapsSlab=" + overlapsSlab
+                + "/triadCoLocated=" + triadGreen
+                + "/classification=" + classification
+                + "/failureLayer=" + failureLayer;
+        return new LoweredTrapdoorGoblinAssessment(green, classification, failureLayer, summary);
+    }
+
+    private static double expectedGoblinTrapdoorDy(SlabType slabType, double slabDy) {
+        if (!Double.isFinite(slabDy)) {
+            return Double.NaN;
+        }
+        return slabType == SlabType.TOP ? slabDy + 0.5d : slabDy;
+    }
+
+    private static String sampleGoblinLoweredTrapdoorTargets(
+            MinecraftClient client,
+            LoweredTrapdoorGoblinCase spec,
+            BlockPos targetSlabPos,
+            BlockPos trapdoorPos,
+            String phase
+    ) {
+        Vec3d center = new Vec3d(targetSlabPos.getX() + 0.5d, targetSlabPos.getY() + 0.01d,
+                targetSlabPos.getZ() + 0.5d);
+        Vec3d edge = new Vec3d(targetSlabPos.getX() + 0.08d, targetSlabPos.getY() + 0.05d,
+                targetSlabPos.getZ() + 0.92d);
+        Vec3d corner = new Vec3d(targetSlabPos.getX() + 0.92d, targetSlabPos.getY() + 0.05d,
+                targetSlabPos.getZ() + 0.08d);
+        StringBuilder samples = new StringBuilder();
+        appendGoblinTargetSample(samples, client, spec, "empty_low_center", phase, targetSlabPos, trapdoorPos,
+                center, new Vec3d(1.75d, -0.35d, 0.0d), null);
+        appendGoblinTargetSample(samples, client, spec, "slab_oblique_edge", phase, targetSlabPos, trapdoorPos,
+                edge, new Vec3d(1.45d, -0.20d, -1.20d), Items.STONE_SLAB);
+        appendGoblinTargetSample(samples, client, spec, "trapdoor_high_corner", phase, targetSlabPos, trapdoorPos,
+                corner, new Vec3d(-1.35d, 0.65d, 1.10d), Items.OAK_TRAPDOOR);
+        return samples.toString();
+    }
+
+    private static void appendGoblinTargetSample(
+            StringBuilder samples,
+            MinecraftClient client,
+            LoweredTrapdoorGoblinCase spec,
+            String sampleName,
+            String phase,
+            BlockPos targetSlabPos,
+            BlockPos trapdoorPos,
+            Vec3d hitVector,
+            Vec3d eyeOffset,
+            net.minecraft.item.Item heldItem
+    ) {
+        if (!samples.isEmpty()) {
+            samples.append("|");
+        }
+        syncGoblinLoweredTrapdoorPlayer(client, hitVector, eyeOffset, heldItem);
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        Vec3d end = eye.add(client.player.getRotationVec(0.0f).multiply(6.0d));
+        HitResult vanillaTarget = client.world.raycast(new RaycastContext(
+                eye,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                client.player));
+        String vanillaOwner = goblinLoweredTrapdoorTargetOwner(client.world, vanillaTarget, targetSlabPos, trapdoorPos);
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalTarget = client.crosshairTarget;
+        String finalOwner = goblinLoweredTrapdoorTargetOwner(client.world, finalTarget, targetSlabPos, trapdoorPos);
+        boolean wrongOwner = finalTarget instanceof BlockHitResult
+                && !("trapdoor".equals(finalOwner) || "targetSlab".equals(finalOwner))
+                && !finalOwner.equals(vanillaOwner);
+        samples.append(sampleName)
+                .append("{phase=").append(phase)
+                .append(",case=").append(spec.caseName())
+                .append(",held=").append(heldItem == null ? "empty" : Registries.ITEM.getId(heldItem))
+                .append(",eye=").append(formatVec(eye))
+                .append(",hit=").append(formatVec(hitVector))
+                .append(",vanilla=").append(formatHit(vanillaTarget))
+                .append(",vanillaOwner=").append(vanillaOwner)
+                .append(",final=").append(formatHit(finalTarget))
+                .append(",owner=").append(finalOwner)
+                .append(",wrongOwner=").append(wrongOwner)
+                .append("}");
+    }
+
+    private static String goblinLoweredTrapdoorTargetOwner(
+            ClientWorld world,
+            HitResult hit,
+            BlockPos targetSlabPos,
+            BlockPos trapdoorPos
+    ) {
+        if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
+            return hit == null ? "null" : hit.getType().toString();
+        }
+        BlockPos hitPos = blockHit.getBlockPos();
+        if (hitPos.equals(trapdoorPos)) {
+            return "trapdoor";
+        }
+        if (hitPos.equals(targetSlabPos)) {
+            return "targetSlab";
+        }
+        BlockState hitState = world == null ? Blocks.AIR.getDefaultState() : world.getBlockState(hitPos);
+        if (hitState.isOf(Blocks.STONE) || hitState.isOf(Blocks.STONE_SLAB)) {
+            return "adjacent_stone_or_slab";
+        }
+        return "other:" + textPos(hitPos);
+    }
+
+    private static void emitGoblinLoweredTrapdoorSummary(
+            String finalResult,
+            String classification,
+            String failureLayer,
+            MinecraftClient client
+    ) {
+        System.out.println("[MC1211_GOBLIN_LOWERED_TRAPDOOR_SUMMARY]"
+                + " cases=" + LOWERED_TRAPDOOR_GOBLIN_CASES.length
+                + " greenRows=" + goblinLoweredTrapdoorGreenRows
+                + " redRows=" + goblinLoweredTrapdoorRedRows
+                + " traceGapRows=" + goblinLoweredTrapdoorTraceGapRows
+                + " finalResult=" + finalResult
+                + " classification=" + classification
+                + " failureLayer=" + failureLayer
+                + " patchAllowedNext=" + ("RED".equals(finalResult) && !"proof gap".equals(failureLayer))
+                + " harnessDriven=true"
+                + " manualComputerUseEvidence=false"
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+        goblinLoweredTrapdoorFinalized = true;
+        emitted = true;
+        if (client != null) {
+            client.scheduleStop();
+        }
+    }
+
+    private static boolean retryTrapdoorSideExtensionClick(MinecraftClient client, String priorResult, int timeoutTicks) {
+        if (trapdoorSeamTicks - trapdoorSeamPhaseTick >= timeoutTicks) {
+            return false;
+        }
+        return client != null && priorResult != null;
+    }
+
+    private static void prepareTrapdoorSideExtensionFixture(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || trapdoorSeamOrigin == null) {
+            return;
+        }
+        serverWorld.getServer().execute(() -> {
+            for (int x = trapdoorSeamOrigin.getX() - 3; x <= trapdoorSeamOrigin.getX() + 4; x++) {
+                for (int z = trapdoorSeamOrigin.getZ() - 3; z <= trapdoorSeamOrigin.getZ() + 3; z++) {
+                    for (int y = trapdoorSeamOrigin.getY() - 2; y <= trapdoorSeamOrigin.getY() + 5; y++) {
+                        serverWorld.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+            serverWorld.setBlockState(trapdoorSeamGroundPos, Blocks.STONE.getDefaultState(), 3);
+            serverWorld.setBlockState(trapdoorSeamTemporaryCeilingPos, Blocks.STONE.getDefaultState(), 3);
+            if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
+                var serverPlayer = serverWorld.getServer().getPlayerManager().getPlayerList().get(0);
+                serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            }
+        });
+        client.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+    }
+
+    private static boolean trapdoorSeamTopSlabReady(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || trapdoorSeamTopSlabPos == null) {
+            return false;
+        }
+        BlockState slabState = serverWorld.getBlockState(trapdoorSeamTopSlabPos);
+        return slabState.isOf(Blocks.STONE_SLAB) && slabState.get(SlabBlock.TYPE) == SlabType.TOP;
+    }
+
+    private static boolean trapdoorSeamExtensionSlabReady(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || trapdoorSeamExtensionSlabPos == null) {
+            return false;
+        }
+        BlockState slabState = serverWorld.getBlockState(trapdoorSeamExtensionSlabPos);
+        return slabState.isOf(Blocks.STONE_SLAB)
+                && slabState.get(SlabBlock.TYPE) == desiredTrapdoorSideExtensionSlabType();
+    }
+
+    private static void removeTrapdoorSideExtensionTemporaryCeiling(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || trapdoorSeamTemporaryCeilingPos == null) {
+            return;
+        }
+        serverWorld.setBlockState(trapdoorSeamTemporaryCeilingPos, Blocks.AIR.getDefaultState(), 3);
+        serverWorld.updateNeighbors(trapdoorSeamTemporaryCeilingPos, Blocks.AIR);
+    }
+
+    private static boolean trapdoorSeamTemporaryCeilingRemoved(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        return serverWorld != null
+                && trapdoorSeamTemporaryCeilingPos != null
+                && serverWorld.getBlockState(trapdoorSeamTemporaryCeilingPos).isAir();
+    }
+
+    private static Vec3d trapdoorSideExtensionHitVector(SlabType slabType) {
+        double y = slabType == SlabType.TOP ? 0.75d : 0.25d;
+        return new Vec3d(
+                trapdoorSeamTopSlabPos.getX() + 1.0d,
+                trapdoorSeamTopSlabPos.getY() + y,
+                trapdoorSeamTopSlabPos.getZ() + 0.5d);
+    }
+
+    private static SlabType desiredTrapdoorSideExtensionSlabType() {
+        String raw = System.getProperty(TRAPDOOR_SIDE_EXTENSION_SLAB_TYPE_PROPERTY, "top");
+        return "bottom".equalsIgnoreCase(raw) ? SlabType.BOTTOM : SlabType.TOP;
+    }
+
+    private static Vec3d trapdoorSideExtensionUndersideHitVector() {
+        return new Vec3d(
+                trapdoorSeamExtensionSlabPos.getX() + 0.5d,
+                trapdoorSeamExtensionSlabPos.getY() + 0.01d,
+                trapdoorSeamExtensionSlabPos.getZ() + 0.5d);
+    }
+
+    private static String clickTrapdoorUnderSideExtension(MinecraftClient client) {
+        if (client == null || client.player == null || client.world == null || client.interactionManager == null
+                || client.gameRenderer == null || trapdoorSeamExtensionSlabPos == null) {
+            return "FAIL_ROUTE_NOT_READY";
+        }
+        Vec3d hitVector = trapdoorSideExtensionUndersideHitVector();
+        syncTrapdoorSideExtensionUnderPlayer(client, hitVector);
+        client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.OAK_TRAPDOOR, 4));
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.OAK_TRAPDOOR, 4));
+        }
+
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        Vec3d end = eye.add(client.player.getRotationVec(0.0f).multiply(6.0d));
+        HitResult vanillaTarget = client.world.raycast(new RaycastContext(
+                eye,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                client.player));
+        trapdoorSeamVanillaTarget = formatHit(vanillaTarget);
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalTarget = client.crosshairTarget;
+        trapdoorSeamFinalTarget = formatHit(finalTarget);
+        trapdoorSeamFinalTargetOwner = trapdoorSeamTargetOwner(client.world, finalTarget);
+        if (finalTarget instanceof BlockHitResult blockHit && finalTarget.getType() == HitResult.Type.BLOCK) {
+            ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, blockHit);
+            return result.toString();
+        }
+        return "NO_BLOCK_TARGET";
+    }
+
+    private static void syncTrapdoorSideExtensionUnderPlayer(MinecraftClient client, Vec3d hitVector) {
+        Vec3d eye = hitVector.add(1.75d, -0.35d, 0.0d);
+        Vec3d delta = hitVector.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+        }
+    }
+
+    private static void emitTrapdoorSideExtensionRow(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        if (serverWorld == null || clientWorld == null || client == null || client.player == null) {
+            emitTrapdoorSideExtensionTraceGap("AFTER_UNDERSIDE_TRAPDOOR_PLACEMENT",
+                    "TRACE_GAP_WORLD_OR_PLAYER_NOT_READY");
+            return;
+        }
+        trapdoorSeamActualTrapdoorPos = findNearbyTrapdoor(serverWorld, trapdoorSeamExpectedTrapdoorPos);
+        BlockState baseSlabState = serverWorld.getBlockState(trapdoorSeamSlabPos);
+        BlockState supportState = serverWorld.getBlockState(trapdoorSeamSupportPos);
+        BlockState topSlabState = serverWorld.getBlockState(trapdoorSeamTopSlabPos);
+        BlockState extensionSlabState = serverWorld.getBlockState(trapdoorSeamExtensionSlabPos);
+        BlockState trapdoorState = serverWorld.getBlockState(trapdoorSeamActualTrapdoorPos);
+        BlockState clientTrapdoorState = clientWorld.getBlockState(trapdoorSeamActualTrapdoorPos);
+        double baseSlabDy = SlabSupport.getYOffset(serverWorld, trapdoorSeamSlabPos, baseSlabState);
+        double supportDy = SlabSupport.getYOffset(serverWorld, trapdoorSeamSupportPos, supportState);
+        double topSlabDy = SlabSupport.getYOffset(serverWorld, trapdoorSeamTopSlabPos, topSlabState);
+        double extensionSlabDy = SlabSupport.getYOffset(
+                serverWorld, trapdoorSeamExtensionSlabPos, extensionSlabState);
+        boolean trapdoorAppeared = trapdoorState.isOf(Blocks.OAK_TRAPDOOR);
+        double trapdoorDy = trapdoorAppeared
+                ? SlabSupport.getYOffset(serverWorld, trapdoorSeamActualTrapdoorPos, trapdoorState)
+                : Double.NaN;
+        double clientTrapdoorDy = trapdoorAppeared
+                ? ClientDy.dyFor(clientWorld, trapdoorSeamActualTrapdoorPos, clientTrapdoorState)
+                : Double.NaN;
+        boolean supportAuthoredLowered = supportState.isOf(Blocks.STONE)
+                && SlabAnchorAttachment.isAnchored(serverWorld, trapdoorSeamSupportPos)
+                && near(supportDy, -0.5d);
+        boolean topSlabAuthored = topSlabState.isOf(Blocks.STONE_SLAB)
+                && topSlabState.get(SlabBlock.TYPE) == SlabType.TOP;
+        boolean extensionTopSlabAuthored = extensionSlabState.isOf(Blocks.STONE_SLAB)
+                && extensionSlabState.get(SlabBlock.TYPE) == desiredTrapdoorSideExtensionSlabType();
+        boolean extensionLowered = extensionTopSlabAuthored && extensionSlabDy < -1.0e-6d;
+        double expectedTrapdoorDy = Double.NaN;
+        if (extensionTopSlabAuthored) {
+            expectedTrapdoorDy = extensionSlabDy
+                    + (extensionSlabState.get(SlabBlock.TYPE) == SlabType.TOP ? 0.5d : 0.0d);
+        }
+        boolean expectedPos = trapdoorSeamActualTrapdoorPos.equals(trapdoorSeamExpectedTrapdoorPos);
+        boolean survivalGreen = trapdoorAppeared && trapdoorState.canPlaceAt(serverWorld, trapdoorSeamActualTrapdoorPos);
+        VoxelShape extensionShape = extensionTopSlabAuthored
+                ? extensionSlabState.getOutlineShape(serverWorld, trapdoorSeamExtensionSlabPos)
+                : null;
+        VoxelShape trapdoorShape = trapdoorAppeared
+                ? trapdoorState.getOutlineShape(serverWorld, trapdoorSeamActualTrapdoorPos,
+                        net.minecraft.block.ShapeContext.of(client.player))
+                : null;
+        net.minecraft.util.math.Box extensionBox = worldBox(extensionShape, trapdoorSeamExtensionSlabPos);
+        net.minecraft.util.math.Box trapdoorBox = worldBox(trapdoorShape, trapdoorSeamActualTrapdoorPos);
+        boolean overlapsExtension = boxesIntersect(extensionBox, trapdoorBox);
+
+        if (!supportAuthoredLowered) {
+            trapdoorSeamExtensionClassification = "TRACE_GAP_S>B>S_LOWERED_SUPPORT_NOT_AUTHORED";
+            trapdoorSeamExtensionFailureLayer = "proof gap";
+            trapdoorSeamExtensionGreen = false;
+        } else if (!topSlabAuthored) {
+            trapdoorSeamExtensionClassification = "TRACE_GAP_S>B>S_TOP_SLAB_NOT_AUTHORED";
+            trapdoorSeamExtensionFailureLayer = "proof gap";
+            trapdoorSeamExtensionGreen = false;
+        } else if (!extensionTopSlabAuthored) {
+            trapdoorSeamExtensionClassification = "TRACE_GAP_SIDE_EXTENSION_TOP_SLAB_NOT_AUTHORED";
+            trapdoorSeamExtensionFailureLayer = "proof gap";
+            trapdoorSeamExtensionGreen = false;
+        } else if (!extensionLowered) {
+            trapdoorSeamExtensionClassification = "SIDE_EXTENSION_TOP_SLAB_NOT_LOWERED";
+            trapdoorSeamExtensionFailureLayer = "state authority";
+            trapdoorSeamExtensionGreen = false;
+        } else if (!trapdoorAppeared && "NO_BLOCK_TARGET".equals(trapdoorSeamExtensionTrapdoorPlacementResult)) {
+            trapdoorSeamExtensionClassification = "TARGET_MISS_UNDER_SIDE_EXTENSION_TOP_SLAB";
+            trapdoorSeamExtensionFailureLayer = "raycast";
+            trapdoorSeamExtensionGreen = false;
+        } else if (!trapdoorAppeared && "SUCCESS".equals(trapdoorSeamExtensionTrapdoorPlacementResult)) {
+            trapdoorSeamExtensionClassification = "SUCCESS_WITH_NO_RETAINED_UNDERSIDE_TRAPDOOR_STATE";
+            trapdoorSeamExtensionFailureLayer = "placement";
+            trapdoorSeamExtensionGreen = false;
+        } else if (!trapdoorAppeared) {
+            trapdoorSeamExtensionClassification = "PLACEMENT_REJECTED_CLEAN";
+            trapdoorSeamExtensionFailureLayer = "NONE";
+            trapdoorSeamExtensionGreen = true;
+        } else if (!expectedPos) {
+            trapdoorSeamExtensionClassification = "WRONG_UNDERSIDE_TRAPDOOR_POSITION";
+            trapdoorSeamExtensionFailureLayer = "placement";
+            trapdoorSeamExtensionGreen = false;
+        } else if (!survivalGreen) {
+            trapdoorSeamExtensionClassification = "UNDERSIDE_TRAPDOOR_SURVIVAL_RED";
+            trapdoorSeamExtensionFailureLayer = "survival";
+            trapdoorSeamExtensionGreen = false;
+        } else if (near(trapdoorDy, 0.5d)) {
+            trapdoorSeamExtensionClassification = "UNDERSIDE_TRAPDOOR_USED_NORMAL_TOP_SLAB_DY_OVER_LOWERED_TOP_SLAB";
+            trapdoorSeamExtensionFailureLayer = "state authority";
+            trapdoorSeamExtensionGreen = false;
+        } else if (overlapsExtension) {
+            trapdoorSeamExtensionClassification = "UNDERSIDE_TRAPDOOR_OVERLAPS_SIDE_EXTENSION_TOP_SLAB";
+            trapdoorSeamExtensionFailureLayer = "state authority";
+            trapdoorSeamExtensionGreen = false;
+        } else if (!near(trapdoorDy, expectedTrapdoorDy)) {
+            trapdoorSeamExtensionClassification = "UNDERSIDE_TRAPDOOR_NOT_ALIGNED_TO_LOWERED_SLAB_UNDERSIDE";
+            trapdoorSeamExtensionFailureLayer = "state authority";
+            trapdoorSeamExtensionGreen = false;
+        } else {
+            trapdoorSeamExtensionClassification = "UNDERSIDE_TRAPDOOR_INHABITS_LOWERED_SPACE";
+            trapdoorSeamExtensionFailureLayer = "NONE";
+            trapdoorSeamExtensionGreen = true;
+        }
+
+        System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_ROW]"
+                + " rowPhase=AFTER_UNDERSIDE_TRAPDOOR_PLACEMENT"
+                + " fixtureOrigin=" + textPos(trapdoorSeamOrigin)
+                + " baseSlabPos=" + textPos(trapdoorSeamSlabPos)
+                + " baseSlabState=" + baseSlabState
+                + " baseSlabDy=" + formatDouble(baseSlabDy)
+                + " supportPos=" + textPos(trapdoorSeamSupportPos)
+                + " supportState=" + supportState
+                + " supportDy=" + formatDouble(supportDy)
+                + " supportAnchored=" + SlabAnchorAttachment.isAnchored(serverWorld, trapdoorSeamSupportPos)
+                + " topSlabPos=" + textPos(trapdoorSeamTopSlabPos)
+                + " topSlabState=" + topSlabState
+                + " topSlabDy=" + formatDouble(topSlabDy)
+                + " extensionSlabPos=" + textPos(trapdoorSeamExtensionSlabPos)
+                + " extensionSlabState=" + extensionSlabState
+                + " extensionSlabDy=" + formatDouble(extensionSlabDy)
+                + " expectedTrapdoorPos=" + textPos(trapdoorSeamExpectedTrapdoorPos)
+                + " actualTrapdoorPos=" + textPos(trapdoorSeamActualTrapdoorPos)
+                + " actualTrapdoorState=" + trapdoorState
+                + " clientTrapdoorState=" + clientTrapdoorState
+                + " trapdoorDy=" + formatDouble(trapdoorDy)
+                + " clientTrapdoorDy=" + formatDouble(clientTrapdoorDy)
+                + " expectedTrapdoorDy=" + formatDouble(expectedTrapdoorDy)
+                + " placementResultBaseSlab=" + trapdoorSeamSlabPlacementResult
+                + " placementResultSupport=" + trapdoorSeamSupportPlacementResult
+                + " placementResultTopSlab=" + trapdoorSeamTopSlabPlacementResult
+                + " placementResultExtensionSlab=" + trapdoorSeamExtensionSlabPlacementResult
+                + " placementResultTrapdoor=" + trapdoorSeamExtensionTrapdoorPlacementResult
+                + " vanillaTarget=" + trapdoorSeamVanillaTarget
+                + " finalTarget=" + trapdoorSeamFinalTarget
+                + " finalTargetOwner=" + trapdoorSeamFinalTargetOwner
+                + " extensionBounds=" + formatBox(extensionBox)
+                + " trapdoorBounds=" + formatBox(trapdoorBox)
+                + " overlapsExtension=" + overlapsExtension
+                + " survivalResult=" + (survivalGreen ? "SURVIVAL_GREEN" : "SURVIVAL_RED")
+                + " classification=" + trapdoorSeamExtensionClassification
+                + " failureLayer=" + trapdoorSeamExtensionFailureLayer);
+        System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_"
+                + (trapdoorSeamExtensionGreen ? "GREEN" : "RED") + "]"
+                + " rowPhase=AFTER_UNDERSIDE_TRAPDOOR_PLACEMENT"
+                + " classification=" + trapdoorSeamExtensionClassification
+                + " failureLayer=" + trapdoorSeamExtensionFailureLayer);
+    }
+
+    private static void emitTrapdoorSideExtensionSummary(MinecraftClient client) {
+        String finalResult = trapdoorSeamExtensionGreen ? "GREEN" : "RED";
+        boolean patchAllowed = !trapdoorSeamExtensionGreen
+                && !"proof gap".equals(trapdoorSeamExtensionFailureLayer);
+        System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_SUMMARY]"
+                + " rows=1"
+                + " finalResult=" + finalResult
+                + " classification=" + trapdoorSeamExtensionClassification
+                + " failureLayer=" + trapdoorSeamExtensionFailureLayer
+                + " patchAllowedNext=" + patchAllowed
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+        trapdoorSeamFinalized = true;
+        emitted = true;
+        if (client != null) {
+            client.scheduleStop();
+        }
+    }
+
+    private static void emitTrapdoorSideExtensionTraceGap(String row, String reason) {
+        trapdoorSeamExtensionClassification = reason;
+        trapdoorSeamExtensionFailureLayer = "proof gap";
+        System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_ROW]"
+                + " rowPhase=" + row
+                + " fixtureOrigin=" + textPos(trapdoorSeamOrigin)
+                + " baseSlabPos=" + textPos(trapdoorSeamSlabPos)
+                + " supportPos=" + textPos(trapdoorSeamSupportPos)
+                + " topSlabPos=" + textPos(trapdoorSeamTopSlabPos)
+                + " extensionSlabPos=" + textPos(trapdoorSeamExtensionSlabPos)
+                + " expectedTrapdoorPos=" + textPos(trapdoorSeamExpectedTrapdoorPos)
+                + " classification=" + reason
+                + " failureLayer=proof gap");
+        if ("WAITING".equals(row)) {
+            return;
+        }
+        System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_SUMMARY]"
+                + " rows=1"
+                + " finalResult=TRACE_GAP"
+                + " classification=" + reason
+                + " failureLayer=proof gap"
+                + " patchAllowedNext=false");
+        trapdoorSeamFinalized = true;
+        emitted = true;
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static void emitTrapdoorSideExtensionPlacementRed(String row, String classification) {
+        trapdoorSeamExtensionClassification = classification;
+        trapdoorSeamExtensionFailureLayer = "placement";
+        System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_ROW]"
+                + " rowPhase=" + row
+                + " fixtureOrigin=" + textPos(trapdoorSeamOrigin)
+                + " baseSlabPos=" + textPos(trapdoorSeamSlabPos)
+                + " supportPos=" + textPos(trapdoorSeamSupportPos)
+                + " topSlabPos=" + textPos(trapdoorSeamTopSlabPos)
+                + " extensionSlabPos=" + textPos(trapdoorSeamExtensionSlabPos)
+                + " desiredExtensionSlabType=" + desiredTrapdoorSideExtensionSlabType().asString()
+                + " placementResultExtensionSlab=" + trapdoorSeamExtensionSlabPlacementResult
+                + " classification=" + classification
+                + " failureLayer=placement");
+        System.out.println("[MC1211_TRAPDOOR_SIDE_EXTENSION_SUMMARY]"
+                + " rows=1"
+                + " finalResult=RED"
+                + " classification=" + classification
+                + " failureLayer=placement"
+                + " patchAllowedNext=true"
+                + " productionBehaviorChanged=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+        trapdoorSeamFinalized = true;
+        emitted = true;
+        if (clientReadyForStop()) {
+            MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
     private static void requestProgrammaticTrapdoorSeamWorldIfNeeded(MinecraftClient client) {
         if (trapdoorSeamWorldStartRequested
                 || client == null
@@ -1021,11 +3000,135 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 }
             }
             serverWorld.setBlockState(trapdoorSeamGroundPos, Blocks.STONE.getDefaultState(), 3);
+            if (trapdoorSeamMp4SideGroundPos != null) {
+                serverWorld.setBlockState(trapdoorSeamMp4SideGroundPos, Blocks.STONE.getDefaultState(), 3);
+            }
+            buildGoblinMergeSpiralFixture(serverWorld, trapdoorSeamOrigin.east(8).south(2));
             if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
                 serverWorld.getServer().getPlayerManager().getPlayerList().get(0)
                         .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
             }
         });
+    }
+
+    private static void buildGoblinMergeSpiralFixture(ServerWorld serverWorld, BlockPos fixtureOrigin) {
+        if (serverWorld == null || fixtureOrigin == null) {
+            return;
+        }
+        BlockPos baseSlabPos = fixtureOrigin;
+        BlockPos baseGroundPos = baseSlabPos.down();
+        int levels = 10;
+        int rows = 0;
+        int trapdoorRows = 0;
+        int hangingRows = 0;
+        int mergeGreenRows = 0;
+        int mergeRedRows = 0;
+
+        // Clear enough room for a tall pillar plus descending side slabs.
+        for (int x = fixtureOrigin.getX() - 4; x <= fixtureOrigin.getX() + 4; x++) {
+            for (int z = fixtureOrigin.getZ() - 4; z <= fixtureOrigin.getZ() + 4; z++) {
+                for (int y = fixtureOrigin.getY() - levels - 3; y <= fixtureOrigin.getY() + levels + 2; y++) {
+                    serverWorld.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 3);
+                }
+            }
+        }
+
+        serverWorld.setBlockState(baseGroundPos, Blocks.STONE.getDefaultState(), 3);
+        serverWorld.setBlockState(baseSlabPos, Blocks.STONE_SLAB.getDefaultState(), 3);
+
+        // Tall pillar rising from slab base.
+        for (int i = 1; i <= levels; i++) {
+            serverWorld.setBlockState(baseSlabPos.up(i), Blocks.STONE.getDefaultState(), 3);
+        }
+
+        Direction[] ring = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+        BlockState[] hangingCycle = {
+                Blocks.LANTERN.getDefaultState().with(net.minecraft.block.LanternBlock.HANGING, true),
+                Blocks.SOUL_LANTERN.getDefaultState().with(net.minecraft.block.LanternBlock.HANGING, true),
+                Blocks.SPORE_BLOSSOM.getDefaultState()
+        };
+
+        // Descending slab spiral around pillar with alternating underside cases.
+        for (int i = 0; i < levels; i++) {
+            Direction side = ring[i % ring.length];
+            BlockPos sideSlabPos = baseSlabPos.up(levels - i).offset(side);
+            BlockPos carrierPos = sideSlabPos.offset(side);
+            BlockPos carrierBaseSlabPos = carrierPos.down();
+            BlockPos undersidePos = sideSlabPos.down();
+            serverWorld.setBlockState(carrierBaseSlabPos, Blocks.STONE_SLAB.getDefaultState(), 3);
+            serverWorld.setBlockState(carrierPos, Blocks.STONE.getDefaultState(), 3);
+            SlabAnchorAttachment.addAnchor(serverWorld, carrierPos, serverWorld.getBlockState(carrierPos));
+            serverWorld.setBlockState(sideSlabPos, Blocks.STONE_SLAB.getDefaultState(), 3);
+            BlockState undersideState;
+            String rowType;
+            if ((i & 1) == 0) {
+                undersideState = Blocks.OAK_TRAPDOOR.getDefaultState()
+                        .with(net.minecraft.block.TrapdoorBlock.HALF, net.minecraft.block.enums.BlockHalf.TOP)
+                        .with(net.minecraft.block.TrapdoorBlock.FACING, side)
+                        .with(net.minecraft.block.TrapdoorBlock.OPEN, false)
+                        .with(net.minecraft.block.TrapdoorBlock.POWERED, false)
+                        .with(net.minecraft.block.TrapdoorBlock.WATERLOGGED, false);
+                rowType = "trapdoor_top_half";
+                serverWorld.setBlockState(undersidePos, undersideState, 3);
+                trapdoorRows++;
+            } else {
+                undersideState = hangingCycle[(i / 2) % hangingCycle.length];
+                rowType = undersideState.isOf(Blocks.SPORE_BLOSSOM)
+                        ? "spore_blossom"
+                        : (undersideState.isOf(Blocks.SOUL_LANTERN) ? "soul_lantern_hanging" : "lantern_hanging");
+                serverWorld.setBlockState(undersidePos, undersideState, 3);
+                hangingRows++;
+            }
+            BlockState supportState = serverWorld.getBlockState(sideSlabPos);
+            BlockState placedState = serverWorld.getBlockState(undersidePos);
+            double supportDy = SlabSupport.getYOffset(serverWorld, sideSlabPos, supportState);
+            double objectDy = SlabSupport.getYOffset(serverWorld, undersidePos, placedState);
+            boolean loweredSupport = supportDy < -1.0e-6d;
+            boolean attachedToLoweredSupport = loweredSupport && near(objectDy, supportDy);
+            if (attachedToLoweredSupport) {
+                mergeGreenRows++;
+            } else {
+                mergeRedRows++;
+            }
+            System.out.println("[MC1211_GOBLIN_MERGE_SPIRAL_ROW]"
+                    + " row=" + (i + 1)
+                    + " rowType=" + rowType
+                    + " carrierBaseSlabPos=" + textPos(carrierBaseSlabPos)
+                    + " carrierPos=" + textPos(carrierPos)
+                    + " supportPos=" + textPos(sideSlabPos)
+                    + " supportState=" + supportState
+                    + " supportDy=" + formatDouble(supportDy)
+                    + " undersidePos=" + textPos(undersidePos)
+                    + " undersideState=" + placedState
+                    + " undersideDy=" + formatDouble(objectDy)
+                    + " classification=" + (attachedToLoweredSupport
+                    ? "LOWERED_UNDERSIDE_ATTACH_GREEN"
+                    : "LOWERED_UNDERSIDE_MERGE_RED")
+                    + " failureLayer=" + (attachedToLoweredSupport ? "NONE" : "model/outline/raycast"));
+            rows++;
+        }
+
+        System.out.println("[MC1211_GOBLIN_MERGE_SPIRAL_FIXTURE]"
+                + " origin=" + textPos(fixtureOrigin)
+                + " baseSlabPos=" + textPos(baseSlabPos)
+                + " pillarLevels=" + levels
+                + " rows=" + rows
+                + " trapdoorRows=" + trapdoorRows
+                + " hangingRows=" + hangingRows
+                + " hangingCases=lantern,soul_lantern,spore_blossom"
+                + " chainTouched=false"
+                + " fenceTouched=false");
+        System.out.println("[MC1211_GOBLIN_MERGE_SPIRAL_SUMMARY]"
+                + " rows=" + rows
+                + " greenRows=" + mergeGreenRows
+                + " redRows=" + mergeRedRows
+                + " finalResult=" + (mergeRedRows == 0 ? "GREEN" : "RED")
+                + " classification=" + (mergeRedRows == 0
+                ? "LOWERED_UNDERSIDE_ATTACH_GREEN"
+                : "LOWERED_UNDERSIDE_MERGE_RED")
+                + " failureLayer=" + (mergeRedRows == 0 ? "NONE" : "model/outline/raycast")
+                + " chainTouched=false"
+                + " fenceTouched=false");
     }
 
     private static boolean trapdoorSeamSlabReady(MinecraftClient client) {
@@ -1047,6 +3150,39 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         return supportState.isOf(Blocks.STONE)
                 && SlabAnchorAttachment.isAnchored(serverWorld, trapdoorSeamSupportPos)
                 && near(supportDy, -0.5d);
+    }
+
+    private static boolean trapdoorSeamMp4SideBaseSlabReady(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || trapdoorSeamMp4SideBaseSlabPos == null) {
+            return false;
+        }
+        BlockState slabState = serverWorld.getBlockState(trapdoorSeamMp4SideBaseSlabPos);
+        return slabState.isOf(Blocks.STONE_SLAB) && slabState.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+    }
+
+    private static boolean trapdoorSeamMp4SideSupportReady(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || trapdoorSeamMp4SideSupportPos == null) {
+            return false;
+        }
+        BlockState supportState = serverWorld.getBlockState(trapdoorSeamMp4SideSupportPos);
+        double supportDy = SlabSupport.getYOffset(serverWorld, trapdoorSeamMp4SideSupportPos, supportState);
+        return supportState.isOf(Blocks.STONE)
+                && SlabAnchorAttachment.isAnchored(serverWorld, trapdoorSeamMp4SideSupportPos)
+                && near(supportDy, -0.5d);
+    }
+
+    private static boolean trapdoorSeamMp4SideOwnerSlabReady(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || trapdoorSeamMp4SideOwnerSlabPos == null) {
+            return false;
+        }
+        BlockState slabState = serverWorld.getBlockState(trapdoorSeamMp4SideOwnerSlabPos);
+        double slabDy = SlabSupport.getYOffset(serverWorld, trapdoorSeamMp4SideOwnerSlabPos, slabState);
+        return slabState.isOf(Blocks.STONE_SLAB)
+                && slabState.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && near(slabDy, -0.5d);
     }
 
     private static String clickTrapdoorFromCrosshair(MinecraftClient client) {
@@ -1339,6 +3475,1028 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         emitted = true;
         if (clientReadyForStop()) {
             MinecraftClient.getInstance().scheduleStop();
+        }
+    }
+
+    private static String sampleTrapdoorSeamMp4SlabHeldTarget(MinecraftClient client, String samplePhase) {
+        if (client == null || client.player == null || client.world == null || client.gameRenderer == null
+                || trapdoorSeamSupportPos == null) {
+            return "samplePhase=" + samplePhase + "/classification=TRACE_GAP_ROUTE_NOT_READY";
+        }
+        Vec3d hitVector = trapdoorSeamMp4EdgeHitVector();
+        syncSlabThenBlockPlayer(client, hitVector);
+        ItemStack stack = new ItemStack(Items.STONE_SLAB, 8);
+        client.player.setStackInHand(Hand.MAIN_HAND, stack);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+        }
+
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        Vec3d end = eye.add(client.player.getRotationVec(0.0f).multiply(6.0d));
+        HitResult vanillaTarget = client.world.raycast(new RaycastContext(
+                eye,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                client.player));
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalTarget = client.crosshairTarget;
+        String finalOwner = trapdoorSeamTargetOwner(client.world, finalTarget);
+        boolean initialMiss = vanillaTarget == null || vanillaTarget.getType() == HitResult.Type.MISS;
+        boolean finalBlock = finalTarget != null && finalTarget.getType() == HitResult.Type.BLOCK;
+        boolean sideOrSupportOwner = "adjacent_stone_or_slab".equals(finalOwner) || "support".equals(finalOwner);
+        boolean upGuardVisibleOwner = vanillaTarget instanceof BlockHitResult vanillaBlock
+                && finalTarget instanceof BlockHitResult finalBlockHit
+                && vanillaBlock.getBlockPos().equals(trapdoorSeamMp4SideSupportPos)
+                && finalBlockHit.getBlockPos().equals(trapdoorSeamMp4SideOwnerSlabPos)
+                && "adjacent_stone_or_slab".equals(finalOwner);
+        boolean upGuardInitialOwnerPreserved = vanillaTarget instanceof BlockHitResult vanillaSupport
+                && finalTarget instanceof BlockHitResult finalSupport
+                && vanillaSupport.getBlockPos().equals(trapdoorSeamMp4SideSupportPos)
+                && finalSupport.getBlockPos().equals(trapdoorSeamMp4SideSupportPos);
+        boolean reproduced = (initialMiss && finalBlock && sideOrSupportOwner) || upGuardVisibleOwner;
+        String classification;
+        if (upGuardVisibleOwner) {
+            classification = "SLAB_HELD_UP_GUARD_VISIBLE_UPPER_SIDE_OWNER_REPRODUCED";
+            trapdoorSeamMp4LiveElementMatched = true;
+        } else if (upGuardInitialOwnerPreserved) {
+            classification = "SLAB_HELD_UP_GUARD_INITIAL_OWNER_PRESERVED";
+        } else if (reproduced) {
+            classification = "SLAB_HELD_MISS_SIDE_RESCUE_REPRODUCED";
+            trapdoorSeamMp4LiveElementMatched = true;
+        } else if (initialMiss) {
+            classification = "SLAB_HELD_TRUE_MISS_NO_RESCUE_CANDIDATE";
+        } else if (finalBlock && sideOrSupportOwner) {
+            classification = "SLAB_HELD_BLOCK_TARGET_NOT_MP4_MISS";
+        } else {
+            classification = "SLAB_HELD_TARGET_PROOF_GAP";
+        }
+        return "samplePhase=" + samplePhase
+                + "/heldItem=minecraft:stone_slab"
+                + "/initialMiss=" + initialMiss
+                + "/vanillaTarget=" + formatHit(vanillaTarget)
+                + "/finalTarget=" + formatHit(finalTarget)
+                + "/finalOwner=" + finalOwner
+                + "/edgeHit=" + formatVec(hitVector)
+                + "/upGuardVisibleOwner=" + upGuardVisibleOwner
+                + "/upGuardInitialOwnerPreserved=" + upGuardInitialOwnerPreserved
+                + "/classification=" + classification
+                + "/reproducedLiveSideRescue=" + reproduced;
+    }
+
+    private static String sampleTrapdoorSeamMp4ManualNoCandidateTarget(MinecraftClient client, String samplePhase) {
+        if (client == null || client.player == null || client.world == null || client.gameRenderer == null
+                || trapdoorSeamMp4SideOwnerSlabPos == null) {
+            return "samplePhase=" + samplePhase + "/classification=TRACE_GAP_ROUTE_NOT_READY";
+        }
+        Vec3d hitVector = trapdoorSeamMp4ManualNoCandidateHitVector();
+        syncTrapdoorSeamManualNoCandidatePlayer(client, hitVector);
+        ItemStack stack = new ItemStack(Items.STONE_SLAB, 8);
+        client.player.setStackInHand(Hand.MAIN_HAND, stack);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+        }
+
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        Vec3d end = eye.add(client.player.getRotationVec(0.0f).multiply(6.0d));
+        HitResult vanillaTarget = client.world.raycast(new RaycastContext(
+                eye,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                client.player));
+        BlockHitResult sideRescueCandidate = LoweredSideSlabRetargeter.findLoweredSideSlabRetarget(
+                client.world,
+                client.player,
+                eye,
+                end,
+                vanillaTarget,
+                true);
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalTarget = client.crosshairTarget;
+        boolean vanillaLoweredSlabFace = vanillaTarget instanceof BlockHitResult vanillaBlock
+                && vanillaBlock.getBlockPos().equals(trapdoorSeamMp4SideOwnerSlabPos)
+                && vanillaBlock.getSide() == Direction.SOUTH;
+        boolean finalPreservedSameFace = finalTarget instanceof BlockHitResult finalBlock
+                && vanillaTarget instanceof BlockHitResult vanillaBlock
+                && finalBlock.getBlockPos().equals(vanillaBlock.getBlockPos())
+                && finalBlock.getSide() == vanillaBlock.getSide();
+        boolean sideRescueAccepted = sideRescueCandidate != null
+                && sideRescueCandidate.getBlockPos().equals(trapdoorSeamMp4SideOwnerSlabPos)
+                && sideRescueCandidate.getSide().getAxis() != Direction.Axis.Y;
+        boolean reproduced = vanillaLoweredSlabFace && finalPreservedSameFace && !sideRescueAccepted;
+        if (reproduced) {
+            trapdoorSeamMp4LiveElementMatched = true;
+        }
+        String classification;
+        if (reproduced) {
+            classification = "SLAB_HELD_BLOCK_LOWERED_FACE_NO_CANDIDATE_REPRODUCED";
+        } else if (vanillaLoweredSlabFace && sideRescueAccepted) {
+            classification = "SLAB_HELD_BLOCK_LOWERED_FACE_SIDE_RESCUE_GREEN";
+        } else if (vanillaLoweredSlabFace) {
+            classification = "SLAB_HELD_BLOCK_LOWERED_FACE_RETARGETED";
+        } else {
+            classification = "SLAB_HELD_BLOCK_LOWERED_FACE_TRACE_GAP";
+        }
+        return "samplePhase=" + samplePhase
+                + "/heldItem=minecraft:stone_slab"
+                + "/sourceTruth=manual-log-203619"
+                + "/vanillaLoweredSlabFace=" + vanillaLoweredSlabFace
+                + "/finalPreservedSameFace=" + finalPreservedSameFace
+                + "/sideRescueAccepted=" + sideRescueAccepted
+                + "/vanillaTarget=" + formatHit(vanillaTarget)
+                + "/finalTarget=" + formatHit(finalTarget)
+                + "/sideRescueCandidate=" + formatHit(sideRescueCandidate)
+                + "/edgeHit=" + formatVec(hitVector)
+                + "/eye=" + formatVec(eye)
+                + "/end=" + formatVec(end)
+                + "/classification=" + classification
+                + "/reproducedLiveNoCandidate=" + reproduced;
+    }
+
+    private static Vec3d trapdoorSeamMp4EdgeHitVector() {
+        if (trapdoorSeamMp4SideSupportPos != null) {
+            return trapdoorSeamMp4UpGuardHitVector();
+        }
+        return new Vec3d(
+                trapdoorSeamSupportPos.getX() + 0.193d,
+                trapdoorSeamSupportPos.getY() + 0.500d,
+                trapdoorSeamSupportPos.getZ() + 0.984d);
+    }
+
+    private static Vec3d trapdoorSeamMp4UpGuardHitVector() {
+        return new Vec3d(
+                trapdoorSeamMp4SideSupportPos.getX() + 0.233d,
+                trapdoorSeamMp4SideSupportPos.getY() + 0.500d,
+                trapdoorSeamMp4SideSupportPos.getZ() + 0.777d);
+    }
+
+    private static Vec3d trapdoorSeamMp4ManualNoCandidateHitVector() {
+        return new Vec3d(
+                trapdoorSeamMp4SideOwnerSlabPos.getX() + 0.801d,
+                trapdoorSeamMp4SideOwnerSlabPos.getY() - 0.021d,
+                trapdoorSeamMp4SideOwnerSlabPos.getZ() + 1.000d);
+    }
+
+    private static void syncTrapdoorSeamManualNoCandidatePlayer(MinecraftClient client, Vec3d hitVector) {
+        Vec3d eye = hitVector.add(-0.613d, -1.401d, 1.990d);
+        Vec3d end = hitVector.add(0.851d, 1.949d, -2.757d);
+        Vec3d delta = end.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+        }
+    }
+
+    private static void emitTrapdoorSeamMp4Row(MinecraftClient client, String rowPhase) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        BlockState supportState = serverWorld == null || trapdoorSeamSupportPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorSeamSupportPos);
+        BlockState trapdoorState = serverWorld == null || trapdoorSeamActualTrapdoorPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorSeamActualTrapdoorPos);
+        BlockState clientTrapdoorState = clientWorld == null || trapdoorSeamActualTrapdoorPos == null
+                ? Blocks.AIR.getDefaultState()
+                : clientWorld.getBlockState(trapdoorSeamActualTrapdoorPos);
+        double supportDy = serverWorld == null || trapdoorSeamSupportPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorSeamSupportPos, supportState);
+        double trapdoorDy = serverWorld == null || trapdoorSeamActualTrapdoorPos == null || !trapdoorState.isOf(Blocks.OAK_TRAPDOOR)
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorSeamActualTrapdoorPos, trapdoorState);
+        BlockState sideSupportState = serverWorld == null || trapdoorSeamMp4SideSupportPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorSeamMp4SideSupportPos);
+        BlockState sideOwnerSlabState = serverWorld == null || trapdoorSeamMp4SideOwnerSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorSeamMp4SideOwnerSlabPos);
+        double sideSupportDy = serverWorld == null || trapdoorSeamMp4SideSupportPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorSeamMp4SideSupportPos, sideSupportState);
+        double sideOwnerSlabDy = serverWorld == null || trapdoorSeamMp4SideOwnerSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorSeamMp4SideOwnerSlabPos, sideOwnerSlabState);
+        String liveMatch = trapdoorSeamMp4LiveElementMatched ? "yes" : "no";
+        System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_ROW]"
+                + " rowPhase=" + rowPhase
+                + " fixtureOrigin=" + textPos(trapdoorSeamOrigin)
+                + " supportPos=" + textPos(trapdoorSeamSupportPos)
+                + " supportState=" + supportState
+                + " supportDy=" + formatDouble(supportDy)
+                + " expectedTrapdoorPos=" + textPos(trapdoorSeamExpectedTrapdoorPos)
+                + " actualTrapdoorPos=" + textPos(trapdoorSeamActualTrapdoorPos)
+                + " actualTrapdoorState=" + trapdoorState
+                + " clientTrapdoorState=" + clientTrapdoorState
+                + " trapdoorDy=" + formatDouble(trapdoorDy)
+                + " sideSupportPos=" + textPos(trapdoorSeamMp4SideSupportPos)
+                + " sideSupportState=" + sideSupportState
+                + " sideSupportDy=" + formatDouble(sideSupportDy)
+                + " sideOwnerSlabPos=" + textPos(trapdoorSeamMp4SideOwnerSlabPos)
+                + " sideOwnerSlabState=" + sideOwnerSlabState
+                + " sideOwnerSlabDy=" + formatDouble(sideOwnerSlabDy)
+                + " sideBaseSlabPlacementResult=" + trapdoorSeamMp4SideBaseSlabPlacementResult
+                + " sideSupportPlacementResult=" + trapdoorSeamMp4SideSupportPlacementResult
+                + " sideOwnerSlabPlacementResult=" + trapdoorSeamMp4SideOwnerSlabPlacementResult
+                + " placementClassification=" + trapdoorSeamPlacementClassification
+                + " updateClassification=" + trapdoorSeamUpdateClassification
+                + " preUpdateSlabHeldSample=" + trapdoorSeamMp4PreUpdateSlabHeldSample
+                + " postUpdateSlabHeldSample=" + trapdoorSeamMp4PostUpdateSlabHeldSample
+                + " preUpdateManualNoCandidateSample=" + trapdoorSeamMp4ManualNoCandidatePreSample
+                + " postUpdateManualNoCandidateSample=" + trapdoorSeamMp4ManualNoCandidatePostSample
+                + " mp4LiveSideRescueMatched=" + liveMatch);
+    }
+
+    private static void emitTrapdoorSeamMp4Summary(MinecraftClient client) {
+        boolean d501Green = trapdoorSeamPlacementGreen && trapdoorSeamUpdateGreen;
+        boolean upGuardPreserved = trapdoorSeamMp4PreUpdateSlabHeldSample.contains(
+                "classification=SLAB_HELD_UP_GUARD_INITIAL_OWNER_PRESERVED")
+                && trapdoorSeamMp4PostUpdateSlabHeldSample.contains(
+                "classification=SLAB_HELD_UP_GUARD_INITIAL_OWNER_PRESERVED");
+        if (trapdoorSeamMp4LiveElementMatched) {
+            trapdoorSeamMp4Classification = "MP4_SLAB_HELD_SIDE_RESCUE_RED";
+            trapdoorSeamMp4FailureLayer = "raycast/rescue";
+        } else if (d501Green && upGuardPreserved) {
+            trapdoorSeamMp4Classification = "MP4_SLAB_HELD_UP_GUARD_PRESERVED";
+            trapdoorSeamMp4FailureLayer = "NONE";
+        } else if (d501Green) {
+            trapdoorSeamMp4Classification = "D501_FALSE_GREEN_MP4_LIVE_ELEMENT_MISSING";
+            trapdoorSeamMp4FailureLayer = "proof gap";
+        } else {
+            trapdoorSeamMp4Classification = "PLAYER_AUTHORED_TRAPDOOR_ROUTE_RED_BEFORE_MP4_SIDE_RESCUE";
+            trapdoorSeamMp4FailureLayer = !"NONE".equals(trapdoorSeamPlacementFailureLayer)
+                    ? trapdoorSeamPlacementFailureLayer
+                    : trapdoorSeamUpdateFailureLayer;
+        }
+        String finalResult = "NONE".equals(trapdoorSeamMp4FailureLayer)
+                ? "GREEN"
+                : (trapdoorSeamMp4LiveElementMatched ? "RED" : "PARTIAL");
+        System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_SUMMARY]"
+                + " rows=3"
+                + " finalResult=" + finalResult
+                + " classification=" + trapdoorSeamMp4Classification
+                + " failureLayer=" + trapdoorSeamMp4FailureLayer
+                + " d501PlacementClassification=" + trapdoorSeamPlacementClassification
+                + " d501UpdateClassification=" + trapdoorSeamUpdateClassification
+                + " d501FalseGreenReason=did_not_require_stone_slab_held_mp4_side_rescue_or_neighbor_trace_markers"
+                + " preUpdateSlabHeldSample=" + trapdoorSeamMp4PreUpdateSlabHeldSample
+                + " postUpdateSlabHeldSample=" + trapdoorSeamMp4PostUpdateSlabHeldSample
+                + " patchAllowedNext=" + trapdoorSeamMp4LiveElementMatched
+                + " gameplayPatch=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+        trapdoorSeamFinalized = true;
+        emitted = true;
+        if (client != null) {
+            client.scheduleStop();
+        }
+    }
+
+    private static void emitTrapdoorSeamMp4TraceGap(String row, String reason) {
+        System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_ROW]"
+                + " rowPhase=" + row
+                + " fixtureOrigin=" + textPos(trapdoorSeamOrigin)
+                + " supportPos=" + textPos(trapdoorSeamSupportPos)
+                + " expectedTrapdoorPos=" + textPos(trapdoorSeamExpectedTrapdoorPos)
+                + " classification=" + reason
+                + " failureLayer=proof gap");
+        if (!"WAITING".equals(row)) {
+            System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_SUMMARY]"
+                    + " rows=1"
+                    + " finalResult=TRACE_GAP"
+                    + " classification=" + reason
+                    + " failureLayer=proof gap"
+                    + " patchAllowedNext=false"
+                    + " gameplayPatch=false");
+            trapdoorSeamFinalized = true;
+            emitted = true;
+            if (clientReadyForStop()) {
+                MinecraftClient.getInstance().scheduleStop();
+            }
+        }
+    }
+
+    private static void requestProgrammaticTrapdoorUnderBottomWorldIfNeeded(MinecraftClient client) {
+        if (trapdoorUnderBottomWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
+        }
+        trapdoorUnderBottomWorldStartRequested = true;
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 Trapdoor Under Bottom Harness",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        client.createIntegratedServerLoader().createAndStart(
+                "slabbed-mc1211-trapdoor-under-bottom-harness",
+                levelInfo,
+                generatorOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
+                null);
+    }
+
+    private static void prepareTrapdoorUnderBottomFixture(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || trapdoorUnderBottomTargetSlabPos == null) {
+            return;
+        }
+        BlockState targetState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        serverWorld.getServer().execute(() -> {
+            for (int x = trapdoorUnderBottomTargetSlabPos.getX() - 2;
+                    x <= trapdoorUnderBottomTargetSlabPos.getX() + 2; x++) {
+                for (int z = trapdoorUnderBottomTargetSlabPos.getZ() - 2;
+                        z <= trapdoorUnderBottomTargetSlabPos.getZ() + 2; z++) {
+                    for (int y = trapdoorUnderBottomTargetSlabPos.getY() - 2;
+                            y <= trapdoorUnderBottomTargetSlabPos.getY() + 2; y++) {
+                        BlockPos pos = new BlockPos(x, y, z);
+                        serverWorld.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
+                        if (client.world != null) {
+                            client.world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
+                        }
+                    }
+                }
+            }
+            serverWorld.setBlockState(trapdoorUnderBottomTargetSlabPos, targetState, 3);
+            if (client.world != null) {
+                client.world.setBlockState(trapdoorUnderBottomTargetSlabPos, targetState, 3);
+            }
+            if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
+                serverWorld.getServer().getPlayerManager().getPlayerList().get(0)
+                        .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            }
+        });
+    }
+
+    private static void prepareTrapdoorUnderLoweredBottomFixture(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || client == null || client.world == null || trapdoorUnderBottomTargetSlabPos == null) {
+            return;
+        }
+        BlockPos ownerTopSlabPos = trapdoorUnderBottomTargetSlabPos.west();
+        BlockPos supportPos = ownerTopSlabPos.down();
+        BlockPos baseSlabPos = supportPos.down();
+        BlockState baseSlabState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        BlockState supportState = Blocks.STONE.getDefaultState();
+        BlockState ownerTopState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP);
+        BlockState targetState = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        serverWorld.getServer().execute(() -> {
+            for (int x = baseSlabPos.getX() - 3; x <= trapdoorUnderBottomTargetSlabPos.getX() + 3; x++) {
+                for (int z = baseSlabPos.getZ() - 3; z <= baseSlabPos.getZ() + 3; z++) {
+                    for (int y = baseSlabPos.getY() - 2; y <= ownerTopSlabPos.getY() + 3; y++) {
+                        BlockPos pos = new BlockPos(x, y, z);
+                        serverWorld.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
+                        client.world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+            serverWorld.setBlockState(baseSlabPos, baseSlabState, 3);
+            serverWorld.setBlockState(supportPos, supportState, 3);
+            serverWorld.setBlockState(ownerTopSlabPos, ownerTopState, 3);
+            serverWorld.setBlockState(trapdoorUnderBottomTargetSlabPos, targetState, 3);
+            client.world.setBlockState(baseSlabPos, baseSlabState, 3);
+            client.world.setBlockState(supportPos, supportState, 3);
+            client.world.setBlockState(ownerTopSlabPos, ownerTopState, 3);
+            client.world.setBlockState(trapdoorUnderBottomTargetSlabPos, targetState, 3);
+            SlabAnchorAttachment.addAnchor(serverWorld, supportPos, supportState);
+            SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(
+                    serverWorld, ownerTopSlabPos, ownerTopState, supportPos, supportState);
+            addGoblinLoweredSlabMarker(
+                    serverWorld, trapdoorUnderBottomTargetSlabPos, targetState, ownerTopSlabPos, ownerTopState);
+            if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
+                serverWorld.getServer().getPlayerManager().getPlayerList().get(0)
+                        .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            }
+            System.out.println("[MC1211_TRAPDOOR_UNDER_BOTTOM_PLACEMENT_ROW]"
+                    + " rowPhase=LOWERED_BOTTOM_FIXTURE_READY"
+                    + " setup=" + trapdoorUnderBottomSetup
+                    + " baseSlabPos=" + textPos(baseSlabPos)
+                    + " supportPos=" + textPos(supportPos)
+                    + " ownerTopSlabPos=" + textPos(ownerTopSlabPos)
+                    + " targetSlabPos=" + textPos(trapdoorUnderBottomTargetSlabPos)
+                    + " expectedTrapdoorPos=" + textPos(trapdoorUnderBottomExpectedTrapdoorPos)
+                    + " manualAnchorInjection=false"
+                    + " gameplayPatch=false");
+        });
+    }
+
+    private static String clickTrapdoorUnderBottomSlab(MinecraftClient client) {
+        if (client == null || client.player == null || client.world == null || client.interactionManager == null
+                || client.gameRenderer == null || trapdoorUnderBottomTargetSlabPos == null) {
+            return "FAIL_ROUTE_NOT_READY";
+        }
+        Vec3d hitVector = trapdoorUnderBottomHitVector();
+        syncTrapdoorUnderBottomPlayer(client, hitVector);
+        client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.OAK_TRAPDOOR, 4));
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.OAK_TRAPDOOR, 4));
+        }
+
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        Vec3d end = eye.add(client.player.getRotationVec(0.0f).multiply(6.0d));
+        HitResult vanillaTarget = client.world.raycast(new RaycastContext(
+                eye,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                client.player));
+        trapdoorUnderBottomVanillaTarget = formatHit(vanillaTarget);
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalTarget = client.crosshairTarget;
+        trapdoorUnderBottomFinalTarget = formatHit(finalTarget);
+        if (finalTarget instanceof BlockHitResult blockHit && finalTarget.getType() == HitResult.Type.BLOCK) {
+            trapdoorUnderBottomUsedTarget = formatHit(finalTarget);
+            ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, blockHit);
+            return String.valueOf(result);
+        }
+        trapdoorUnderBottomUsedTarget = "NO_BLOCK_TARGET";
+        return "NO_BLOCK_TARGET";
+    }
+
+    private static Vec3d trapdoorUnderBottomHitVector() {
+        return new Vec3d(
+                trapdoorUnderBottomTargetSlabPos.getX() + 0.5d,
+                trapdoorUnderBottomTargetSlabPos.getY() + 0.01d,
+                trapdoorUnderBottomTargetSlabPos.getZ() + 0.5d);
+    }
+
+    private static void syncTrapdoorUnderBottomPlayer(MinecraftClient client, Vec3d hitVector) {
+        Vec3d eye = hitVector.add(1.75d, -0.35d, 0.0d);
+        Vec3d delta = hitVector.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+        }
+    }
+
+    private static void emitTrapdoorUnderBottomPlacementRow(MinecraftClient client, String rowPhase) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        BlockState targetState = serverWorld == null || trapdoorUnderBottomTargetSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorUnderBottomTargetSlabPos);
+        BlockState finalState = serverWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorUnderBottomExpectedTrapdoorPos);
+        BlockState clientFinalState = clientWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Blocks.AIR.getDefaultState()
+                : clientWorld.getBlockState(trapdoorUnderBottomExpectedTrapdoorPos);
+        double targetDy = serverWorld == null || trapdoorUnderBottomTargetSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorUnderBottomTargetSlabPos, targetState);
+        double finalDy = serverWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorUnderBottomExpectedTrapdoorPos, finalState);
+        boolean targetIsBottomSlab = targetState.isOf(Blocks.STONE_SLAB)
+                && targetState.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+        boolean usedBottomUnderside = trapdoorUnderBottomUsedTarget.contains(
+                "pos=" + textPos(trapdoorUnderBottomTargetSlabPos))
+                && trapdoorUnderBottomUsedTarget.contains("/side=down");
+        boolean trapdoorPresent = finalState.isOf(Blocks.OAK_TRAPDOOR);
+        boolean accepted = trapdoorUnderBottomPlacementResult.contains("SUCCESS")
+                || trapdoorUnderBottomPlacementResult.contains("CONSUME");
+        if (!targetIsBottomSlab) {
+            trapdoorUnderBottomClassification = "TRACE_GAP_TARGET_NOT_BOTTOM_SLAB";
+            trapdoorUnderBottomFailureLayer = "proof gap";
+            trapdoorUnderBottomGreen = false;
+        } else if (!usedBottomUnderside) {
+            trapdoorUnderBottomClassification = "TARGETING_DID_NOT_HIT_BOTTOM_SLAB_UNDERSIDE";
+            trapdoorUnderBottomFailureLayer = "raycast";
+            trapdoorUnderBottomGreen = false;
+        } else if (trapdoorPresent) {
+            trapdoorUnderBottomClassification = "TRAPDOOR_PRESENT_AFTER_TRUE_BOTTOM_UNDERSIDE_CLICK";
+            trapdoorUnderBottomFailureLayer = "NONE";
+            trapdoorUnderBottomGreen = true;
+        } else if (accepted && finalState.isAir()) {
+            trapdoorUnderBottomClassification = "SUCCESS_WITH_NO_RETAINED_BOTTOM_UNDERSIDE_TRAPDOOR_STATE";
+            trapdoorUnderBottomFailureLayer = "placement";
+            trapdoorUnderBottomGreen = false;
+        } else if (!accepted) {
+            trapdoorUnderBottomClassification = "BOTTOM_UNDERSIDE_TRAPDOOR_PLACEMENT_REJECTED";
+            trapdoorUnderBottomFailureLayer = "placement";
+            trapdoorUnderBottomGreen = false;
+        } else {
+            trapdoorUnderBottomClassification = "BOTTOM_UNDERSIDE_TRAPDOOR_ABSENT_UNCLASSIFIED";
+            trapdoorUnderBottomFailureLayer = "placement";
+            trapdoorUnderBottomGreen = false;
+        }
+        System.out.println("[MC1211_TRAPDOOR_UNDER_BOTTOM_PLACEMENT_ROW]"
+                + " rowPhase=" + rowPhase
+                + " targetSlabPos=" + textPos(trapdoorUnderBottomTargetSlabPos)
+                + " targetSlabState=" + targetState
+                + " targetSlabDy=" + formatDouble(targetDy)
+                + " expectedTrapdoorPos=" + textPos(trapdoorUnderBottomExpectedTrapdoorPos)
+                + " finalTrapdoorState=" + finalState
+                + " clientFinalTrapdoorState=" + clientFinalState
+                + " finalTrapdoorDy=" + formatDouble(finalDy)
+                + " trapdoorPresent=" + trapdoorPresent
+                + " trapdoorResolvedToAir=" + finalState.isAir()
+                + " vanillaTarget=" + trapdoorUnderBottomVanillaTarget
+                + " finalTarget=" + trapdoorUnderBottomFinalTarget
+                + " usedTarget=" + trapdoorUnderBottomUsedTarget
+                + " placementResult=" + trapdoorUnderBottomPlacementResult
+                + " placementAccepted=" + accepted
+                + " bottomSlabUndersideCandidate=" + usedBottomUnderside
+                + " classification=" + trapdoorUnderBottomClassification
+                + " failureLayer=" + trapdoorUnderBottomFailureLayer);
+    }
+
+    private static void emitTrapdoorUnderBottomTimelineRow(MinecraftClient client, String rowPhase) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        BlockState targetState = serverWorld == null || trapdoorUnderBottomTargetSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorUnderBottomTargetSlabPos);
+        BlockState supportAboveState = serverWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorUnderBottomExpectedTrapdoorPos.up());
+        BlockState supportBelowState = serverWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorUnderBottomExpectedTrapdoorPos.down());
+        BlockState serverState = serverWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(trapdoorUnderBottomExpectedTrapdoorPos);
+        BlockState clientState = clientWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Blocks.AIR.getDefaultState()
+                : clientWorld.getBlockState(trapdoorUnderBottomExpectedTrapdoorPos);
+        BlockState predictedState = trapdoorUnderBottomPredictedClientState == null
+                ? Blocks.AIR.getDefaultState()
+                : trapdoorUnderBottomPredictedClientState;
+        boolean predictedTrapdoor = predictedState.isOf(Blocks.OAK_TRAPDOOR);
+        boolean serverTrapdoor = serverState.isOf(Blocks.OAK_TRAPDOOR);
+        boolean predictedCanPlaceAtServer = predictedTrapdoor
+                && serverWorld != null
+                && trapdoorUnderBottomExpectedTrapdoorPos != null
+                && predictedState.canPlaceAt(serverWorld, trapdoorUnderBottomExpectedTrapdoorPos);
+        boolean serverStateCanPlaceAtServer = serverTrapdoor
+                && serverWorld != null
+                && trapdoorUnderBottomExpectedTrapdoorPos != null
+                && serverState.canPlaceAt(serverWorld, trapdoorUnderBottomExpectedTrapdoorPos);
+        double targetDy = serverWorld == null || trapdoorUnderBottomTargetSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorUnderBottomTargetSlabPos, targetState);
+        double supportAboveDy = serverWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorUnderBottomExpectedTrapdoorPos.up(), supportAboveState);
+        double serverDy = serverWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, trapdoorUnderBottomExpectedTrapdoorPos, serverState);
+        double clientDy = clientWorld == null || trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? Double.NaN
+                : ClientDy.dyFor(clientWorld, trapdoorUnderBottomExpectedTrapdoorPos, clientState);
+        System.out.println("[MC1211_TRAPDOOR_UNDER_BOTTOM_TIMELINE]"
+                + " rowPhase=" + rowPhase
+                + " targetSlabPos=" + textPos(trapdoorUnderBottomTargetSlabPos)
+                + " targetSlabState=" + targetState
+                + " targetSlabDy=" + formatDouble(targetDy)
+                + " expectedTrapdoorPos=" + textPos(trapdoorUnderBottomExpectedTrapdoorPos)
+                + " supportAbovePos=" + textPos(trapdoorUnderBottomExpectedTrapdoorPos == null
+                ? null
+                : trapdoorUnderBottomExpectedTrapdoorPos.up())
+                + " supportAboveState=" + supportAboveState
+                + " supportAboveDy=" + formatDouble(supportAboveDy)
+                + " supportBelowState=" + supportBelowState
+                + " serverState=" + serverState
+                + " serverDy=" + formatDouble(serverDy)
+                + " clientState=" + clientState
+                + " clientDy=" + formatDouble(clientDy)
+                + " predictedClientState=" + predictedState
+                + " predictedHalf=" + trapdoorHalf(predictedState)
+                + " predictedFacing=" + trapdoorFacing(predictedState)
+                + " predictedCanPlaceAtServer=" + predictedCanPlaceAtServer
+                + " serverStateCanPlaceAtServer=" + serverStateCanPlaceAtServer
+                + " serverTrapdoorPresent=" + serverTrapdoor
+                + " clientTrapdoorPresent=" + clientState.isOf(Blocks.OAK_TRAPDOOR)
+                + " placementResult=" + trapdoorUnderBottomPlacementResult
+                + " usedTarget=" + trapdoorUnderBottomUsedTarget
+                + " gameplayPatch=false");
+    }
+
+    private static String trapdoorHalf(BlockState state) {
+        return state != null && state.isOf(Blocks.OAK_TRAPDOOR)
+                ? String.valueOf(state.get(net.minecraft.block.TrapdoorBlock.HALF))
+                : "NONE";
+    }
+
+    private static String trapdoorFacing(BlockState state) {
+        return state != null && state.isOf(Blocks.OAK_TRAPDOOR)
+                ? String.valueOf(state.get(net.minecraft.block.TrapdoorBlock.FACING))
+                : "NONE";
+    }
+
+    private static void emitTrapdoorUnderBottomPlacementSummary(MinecraftClient client) {
+        System.out.println("[MC1211_TRAPDOOR_UNDER_BOTTOM_PLACEMENT_SUMMARY]"
+                + " rows=1"
+                + " finalResult=" + (trapdoorUnderBottomGreen ? "GREEN" : "RED")
+                + " classification=" + trapdoorUnderBottomClassification
+                + " failureLayer=" + trapdoorUnderBottomFailureLayer
+                + " placementResult=" + trapdoorUnderBottomPlacementResult
+                + " trapdoorPresentRequired=true"
+                + " patchAllowedNext=" + (!trapdoorUnderBottomGreen
+                && !"proof gap".equals(trapdoorUnderBottomFailureLayer))
+                + " gameplayPatch=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+        trapdoorUnderBottomFinalized = true;
+        emitted = true;
+        if (client != null) {
+            client.scheduleStop();
+        }
+    }
+
+    private static void emitTrapdoorUnderBottomTraceGap(String row, String reason) {
+        System.out.println("[MC1211_TRAPDOOR_UNDER_BOTTOM_PLACEMENT_ROW]"
+                + " rowPhase=" + row
+                + " targetSlabPos=" + textPos(trapdoorUnderBottomTargetSlabPos)
+                + " expectedTrapdoorPos=" + textPos(trapdoorUnderBottomExpectedTrapdoorPos)
+                + " classification=" + reason
+                + " failureLayer=proof gap");
+        if (!"WAITING".equals(row)) {
+            trapdoorUnderBottomClassification = reason;
+            trapdoorUnderBottomFailureLayer = "proof gap";
+            emitTrapdoorUnderBottomPlacementSummary(MinecraftClient.getInstance());
+        }
+    }
+
+    private static void requestProgrammaticSbbsFinalSlabWorldIfNeeded(MinecraftClient client) {
+        if (sbbsFinalSlabWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
+        }
+        sbbsFinalSlabWorldStartRequested = true;
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 SBBS Final Slab Target Harness",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        client.createIntegratedServerLoader().createAndStart(
+                "slabbed-mc1211-sbbs-final-slab-target-harness",
+                levelInfo,
+                generatorOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
+                null);
+    }
+
+    private static void prepareSbbsFinalSlabFixture(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || sbbsFinalSlabOrigin == null) {
+            return;
+        }
+        serverWorld.getServer().execute(() -> {
+            for (int x = sbbsFinalSlabOrigin.getX() - 3; x <= sbbsFinalSlabOrigin.getX() + 3; x++) {
+                for (int z = sbbsFinalSlabOrigin.getZ() - 3; z <= sbbsFinalSlabOrigin.getZ() + 3; z++) {
+                    for (int y = sbbsFinalSlabOrigin.getY() - 2; y <= sbbsFinalSlabOrigin.getY() + 4; y++) {
+                        serverWorld.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+            serverWorld.setBlockState(sbbsFinalSlabGroundPos, Blocks.STONE.getDefaultState(), 3);
+            if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
+                serverWorld.getServer().getPlayerManager().getPlayerList().get(0)
+                        .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            }
+        });
+    }
+
+    private static boolean sbbsFinalSlabBaseReady(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || sbbsFinalSlabBaseSlabPos == null) {
+            return false;
+        }
+        BlockState state = serverWorld.getBlockState(sbbsFinalSlabBaseSlabPos);
+        return state.isOf(Blocks.STONE_SLAB) && state.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+    }
+
+    private static boolean sbbsFinalSlabSupportReady(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || sbbsFinalSlabSupportPos == null) {
+            return false;
+        }
+        BlockState state = serverWorld.getBlockState(sbbsFinalSlabSupportPos);
+        double dy = SlabSupport.getYOffset(serverWorld, sbbsFinalSlabSupportPos, state);
+        return state.isOf(Blocks.STONE)
+                && SlabAnchorAttachment.isAnchored(serverWorld, sbbsFinalSlabSupportPos)
+                && near(dy, -0.5d);
+    }
+
+    private static boolean sbbsFinalSlabTopReady(MinecraftClient client) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || sbbsFinalSlabTopSlabPos == null) {
+            return false;
+        }
+        BlockState state = serverWorld.getBlockState(sbbsFinalSlabTopSlabPos);
+        double dy = SlabSupport.getYOffset(serverWorld, sbbsFinalSlabTopSlabPos, state);
+        return state.isOf(Blocks.STONE_SLAB)
+                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && near(dy, -0.5d);
+    }
+
+    private static String sampleSbbsFinalSlabTarget(MinecraftClient client, String samplePhase, Vec3d hitVector) {
+        if (client == null || client.player == null || client.world == null || client.gameRenderer == null
+                || sbbsFinalSlabSupportPos == null || sbbsFinalSlabTopSlabPos == null) {
+            return "samplePhase=" + samplePhase + "/classification=TRACE_GAP_ROUTE_NOT_READY";
+        }
+        syncSbbsFinalSlabPlayer(client, hitVector);
+        ItemStack stack = new ItemStack(Items.STONE_SLAB, 8);
+        client.player.setStackInHand(Hand.MAIN_HAND, stack);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+        }
+
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        Vec3d end = eye.add(client.player.getRotationVec(0.0f).multiply(6.0d));
+        HitResult vanillaTarget = client.world.raycast(new RaycastContext(
+                eye,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                client.player));
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalTarget = client.crosshairTarget;
+        String vanillaOwner = sbbsFinalSlabTargetOwner(client.world, vanillaTarget);
+        String finalOwner = sbbsFinalSlabTargetOwner(client.world, finalTarget);
+        boolean vanillaSupport = "lowered_support".equals(vanillaOwner);
+        boolean finalSupport = "lowered_support".equals(finalOwner);
+        boolean finalSlabSteals = vanillaSupport && "final_bottom_slab".equals(finalOwner);
+        boolean initialOwnerPreserved = vanillaSupport && finalSupport;
+        String classification;
+        if (finalSlabSteals) {
+            classification = "SBBS_FINAL_SLAB_TARGETING_RED_FINAL_SLAB_STEALS_TARGET";
+        } else if (initialOwnerPreserved) {
+            classification = "SBBS_FINAL_SLAB_TARGETING_GREEN_INITIAL_OWNER_PRESERVED";
+        } else if ("final_bottom_slab".equals(finalOwner)) {
+            classification = "SBBS_FINAL_SLAB_TARGETING_RED_FINAL_SLAB_TARGETED";
+        } else {
+            classification = "SBBS_FINAL_SLAB_TARGETING_TRACE_GAP_UNEXPECTED_OWNER";
+        }
+        return "samplePhase=" + samplePhase
+                + "/heldItem=minecraft:stone_slab"
+                + "/vanillaTarget=" + formatHit(vanillaTarget)
+                + "/vanillaOwner=" + vanillaOwner
+                + "/finalTarget=" + formatHit(finalTarget)
+                + "/finalOwner=" + finalOwner
+                + "/liveHit=" + formatVec(hitVector)
+                + "/initialOwnerPreserved=" + initialOwnerPreserved
+                + "/finalSlabSteals=" + finalSlabSteals
+                + "/classification=" + classification;
+    }
+
+    private static void classifySbbsFinalSlabSamples() {
+        if (sbbsFinalSlabEdgeTargetSample.contains("classification=SBBS_FINAL_SLAB_TARGETING_RED_")) {
+            sbbsFinalSlabClassification = "SBBS_FINAL_SLAB_TARGETING_RED_EDGE_FINAL_SLAB_OWNER";
+            sbbsFinalSlabFailureLayer = "raycast/rescue";
+        } else if (sbbsFinalSlabTargetSample.contains("classification=SBBS_FINAL_SLAB_TARGETING_RED_")) {
+            sbbsFinalSlabClassification = "SBBS_FINAL_SLAB_TARGETING_RED_INTERIOR_FINAL_SLAB_OWNER";
+            sbbsFinalSlabFailureLayer = "raycast/rescue";
+        } else if (sbbsFinalSlabTargetSample.contains("classification=SBBS_FINAL_SLAB_TARGETING_GREEN_")
+                && sbbsFinalSlabEdgeTargetSample.contains("classification=SBBS_FINAL_SLAB_TARGETING_GREEN_")) {
+            sbbsFinalSlabClassification = "SBBS_FINAL_SLAB_TARGETING_GREEN_INTERIOR_AND_EDGE_PRESERVED";
+            sbbsFinalSlabFailureLayer = "NONE";
+        } else {
+            sbbsFinalSlabClassification = "SBBS_FINAL_SLAB_TARGETING_TRACE_GAP_SAMPLE_MISMATCH";
+            sbbsFinalSlabFailureLayer = "proof gap";
+        }
+    }
+
+    private static Vec3d sbbsFinalSlabInteriorHitVector() {
+        return new Vec3d(
+                sbbsFinalSlabSupportPos.getX() + 0.750d,
+                sbbsFinalSlabSupportPos.getY() + 0.500d,
+                sbbsFinalSlabSupportPos.getZ() + 0.487d);
+    }
+
+    private static Vec3d sbbsFinalSlabEdgeHitVector() {
+        return new Vec3d(
+                sbbsFinalSlabSupportPos.getX() + 0.937d,
+                sbbsFinalSlabSupportPos.getY() + 0.500d,
+                sbbsFinalSlabSupportPos.getZ() + 0.487d);
+    }
+
+    private static void syncSbbsFinalSlabPlayer(MinecraftClient client, Vec3d hitVector) {
+        Vec3d eye = hitVector.add(0.0d, 0.35d, -1.75d);
+        Vec3d delta = hitVector.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        slabThenBlockReachDiagnostic = "eye=" + formatVec(eye)
+                + "/hitVec=" + formatVec(hitVector)
+                + "/distance=" + formatDouble(eye.distanceTo(hitVector))
+                + "/yaw=" + formatDouble(yaw)
+                + "/pitch=" + formatDouble(pitch);
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+        }
+    }
+
+    private static String sbbsFinalSlabTargetOwner(ClientWorld world, HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
+            return hit == null ? "null" : hit.getType().toString();
+        }
+        BlockPos hitPos = blockHit.getBlockPos();
+        if (hitPos.equals(sbbsFinalSlabSupportPos)) {
+            return "lowered_support";
+        }
+        if (hitPos.equals(sbbsFinalSlabTopSlabPos)) {
+            return "final_bottom_slab";
+        }
+        if (hitPos.equals(sbbsFinalSlabBaseSlabPos)) {
+            return "base_bottom_slab";
+        }
+        BlockState state = world == null ? Blocks.AIR.getDefaultState() : world.getBlockState(hitPos);
+        if (state.isOf(Blocks.STONE) || state.isOf(Blocks.STONE_SLAB)) {
+            return "other_stone_or_slab:" + textPos(hitPos);
+        }
+        return "other:" + textPos(hitPos);
+    }
+
+    private static void emitSbbsFinalSlabRow(MinecraftClient client, String rowPhase) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        BlockState baseState = serverWorld == null || sbbsFinalSlabBaseSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sbbsFinalSlabBaseSlabPos);
+        BlockState supportState = serverWorld == null || sbbsFinalSlabSupportPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sbbsFinalSlabSupportPos);
+        BlockState finalSlabState = serverWorld == null || sbbsFinalSlabTopSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sbbsFinalSlabTopSlabPos);
+        BlockState clientFinalSlabState = clientWorld == null || sbbsFinalSlabTopSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : clientWorld.getBlockState(sbbsFinalSlabTopSlabPos);
+        BlockState lanternSideSlabState = serverWorld == null || sbbsLanternSideSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sbbsLanternSideSlabPos);
+        BlockState lanternUnderState = serverWorld == null || sbbsLanternUnderPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sbbsLanternUnderPos);
+        BlockState chainSideSlabState = serverWorld == null || sbbsChainSideSlabPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sbbsChainSideSlabPos);
+        BlockState chainState = serverWorld == null || sbbsChainPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sbbsChainPos);
+        BlockState chainLanternState = serverWorld == null || sbbsChainLanternPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(sbbsChainLanternPos);
+        double baseDy = serverWorld == null || sbbsFinalSlabBaseSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, sbbsFinalSlabBaseSlabPos, baseState);
+        double supportDy = serverWorld == null || sbbsFinalSlabSupportPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, sbbsFinalSlabSupportPos, supportState);
+        double finalSlabDy = serverWorld == null || sbbsFinalSlabTopSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, sbbsFinalSlabTopSlabPos, finalSlabState);
+        double lanternSideSlabDy = serverWorld == null || sbbsLanternSideSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, sbbsLanternSideSlabPos, lanternSideSlabState);
+        double lanternUnderDy = serverWorld == null || sbbsLanternUnderPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, sbbsLanternUnderPos, lanternUnderState);
+        double chainSideSlabDy = serverWorld == null || sbbsChainSideSlabPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, sbbsChainSideSlabPos, chainSideSlabState);
+        double chainDy = serverWorld == null || sbbsChainPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, sbbsChainPos, chainState);
+        double chainLanternDy = serverWorld == null || sbbsChainLanternPos == null
+                ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, sbbsChainLanternPos, chainLanternState);
+        boolean supportAnchored = serverWorld != null
+                && sbbsFinalSlabSupportPos != null
+                && SlabAnchorAttachment.isAnchored(serverWorld, sbbsFinalSlabSupportPos);
+        System.out.println("[MC1211_SBBS_FINAL_SLAB_TARGET_ROW]"
+                + " rowPhase=" + rowPhase
+                + " fixtureOrigin=" + textPos(sbbsFinalSlabOrigin)
+                + " baseSlabPos=" + textPos(sbbsFinalSlabBaseSlabPos)
+                + " baseSlabState=" + baseState
+                + " baseSlabDy=" + formatDouble(baseDy)
+                + " supportPos=" + textPos(sbbsFinalSlabSupportPos)
+                + " supportState=" + supportState
+                + " supportDy=" + formatDouble(supportDy)
+                + " supportAnchored=" + supportAnchored
+                + " finalSlabPos=" + textPos(sbbsFinalSlabTopSlabPos)
+                + " finalSlabState=" + finalSlabState
+                + " clientFinalSlabState=" + clientFinalSlabState
+                + " finalSlabDy=" + formatDouble(finalSlabDy)
+                + " lanternSideSlabPos=" + textPos(sbbsLanternSideSlabPos)
+                + " lanternSideSlabState=" + lanternSideSlabState
+                + " lanternSideSlabDy=" + formatDouble(lanternSideSlabDy)
+                + " lanternUnderPos=" + textPos(sbbsLanternUnderPos)
+                + " lanternUnderState=" + lanternUnderState
+                + " lanternUnderDy=" + formatDouble(lanternUnderDy)
+                + " chainSideSlabPos=" + textPos(sbbsChainSideSlabPos)
+                + " chainSideSlabState=" + chainSideSlabState
+                + " chainSideSlabDy=" + formatDouble(chainSideSlabDy)
+                + " chainPos=" + textPos(sbbsChainPos)
+                + " chainState=" + chainState
+                + " chainDy=" + formatDouble(chainDy)
+                + " chainLanternPos=" + textPos(sbbsChainLanternPos)
+                + " chainLanternState=" + chainLanternState
+                + " chainLanternDy=" + formatDouble(chainLanternDy)
+                + " basePlacementResult=" + sbbsFinalSlabBasePlacementResult
+                + " supportPlacementResult=" + sbbsFinalSlabSupportPlacementResult
+                + " finalSlabPlacementResult=" + sbbsFinalSlabTopSlabPlacementResult
+                + " lanternSideSlabPlacementResult=" + sbbsLanternSideSlabPlacementResult
+                + " lanternUnderPlacementResult=" + sbbsLanternUnderPlacementResult
+                + " chainSideSlabPlacementResult=" + sbbsChainSideSlabPlacementResult
+                + " chainPlacementResult=" + sbbsChainPlacementResult
+                + " chainLanternPlacementResult=" + sbbsChainLanternPlacementResult
+                + " interiorTargetSample=" + sbbsFinalSlabTargetSample
+                + " edgeTargetSample=" + sbbsFinalSlabEdgeTargetSample
+                + " classification=" + sbbsFinalSlabClassification
+                + " failureLayer=" + sbbsFinalSlabFailureLayer);
+    }
+
+    private static void emitSbbsFinalSlabSummary(MinecraftClient client) {
+        String finalResult = "NONE".equals(sbbsFinalSlabFailureLayer)
+                ? "GREEN"
+                : ("raycast/rescue".equals(sbbsFinalSlabFailureLayer) ? "RED" : "TRACE_GAP");
+        System.out.println("[MC1211_SBBS_FINAL_SLAB_TARGET_SUMMARY]"
+                + " rows=1"
+                + " finalResult=" + finalResult
+                + " classification=" + sbbsFinalSlabClassification
+                + " failureLayer=" + sbbsFinalSlabFailureLayer
+                + " interiorTargetSample=" + sbbsFinalSlabTargetSample
+                + " edgeTargetSample=" + sbbsFinalSlabEdgeTargetSample
+                + " patchAllowedNext=" + "raycast/rescue".equals(sbbsFinalSlabFailureLayer)
+                + " gameplayPatch=false"
+                + " releaseAudit=NOT_RUN"
+                + " releaseTagMoved=false");
+        sbbsFinalSlabFinalized = true;
+        emitted = true;
+        if (client != null) {
+            client.scheduleStop();
+        }
+    }
+
+    private static void emitSbbsFinalSlabTraceGap(String row, String reason) {
+        System.out.println("[MC1211_SBBS_FINAL_SLAB_TARGET_ROW]"
+                + " rowPhase=" + row
+                + " fixtureOrigin=" + textPos(sbbsFinalSlabOrigin)
+                + " baseSlabPos=" + textPos(sbbsFinalSlabBaseSlabPos)
+                + " supportPos=" + textPos(sbbsFinalSlabSupportPos)
+                + " finalSlabPos=" + textPos(sbbsFinalSlabTopSlabPos)
+                + " classification=" + reason
+                + " failureLayer=proof gap");
+        if (!"WAITING".equals(row)) {
+            sbbsFinalSlabClassification = reason;
+            sbbsFinalSlabFailureLayer = "proof gap";
+            emitSbbsFinalSlabSummary(MinecraftClient.getInstance());
         }
     }
 
@@ -3526,6 +6684,18 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 && near(left.maxZ, right.maxZ);
     }
 
+    private static boolean boxesIntersect(net.minecraft.util.math.Box left, net.minecraft.util.math.Box right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        return left.maxX > right.minX
+                && left.minX < right.maxX
+                && left.maxY > right.minY
+                && left.minY < right.maxY
+                && left.maxZ > right.minZ
+                && left.minZ < right.maxZ;
+    }
+
     private static String formatBox(net.minecraft.util.math.Box box) {
         if (box == null) {
             return "null";
@@ -3597,6 +6767,29 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             String rowName,
             String blockId,
             boolean productBadSuspect
+    ) {
+    }
+
+    private record LoweredTrapdoorGoblinCase(
+            String caseName,
+            SlabType targetSlabType,
+            boolean sideExtension,
+            boolean cornerCase
+    ) {
+    }
+
+    private record LoweredTrapdoorGoblinAssessment(
+            boolean green,
+            String classification,
+            String failureLayer,
+            String summary
+    ) {
+    }
+
+    private record LoweredTrapdoorGoblinRow(
+            String result,
+            String classification,
+            String failureLayer
     ) {
     }
 
