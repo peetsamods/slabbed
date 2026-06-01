@@ -126,6 +126,16 @@ fly *under* and *inside* the build to check the worst angles.
 - ✅ **PASS:** every exposed side face is solid — no black / see-through "culled face" on the
   stepped cubes.
 - ❌ **FAIL:** a side face is missing/see-through where the step exposes it.
+3. Also place a lowered object (crafting table / pumpkin on a slab) **next to a normal grid-height
+   block** (dirt, stone). The **grid block's** face toward the lowered object should be solid too
+   (this is the mirror of the same fix).
+
+### H. Hanging from underneath still works
+1. Place a **top slab** and hang a **lantern** (or chain) under it; do the same over a terrain-slab
+   build.
+
+- ✅ **PASS:** the hanging item floats up to the underside of the slab as before — stacking/culling
+  changes didn't disturb ceiling support.
 
 ---
 
@@ -140,6 +150,8 @@ fly *under* and *inside* the build to check the worst angles.
 - [ ] **E** — fences stepping down slabs: **single posts** (no connector); flat fence run still connects
 - [ ] **F** — stacks (torch on fence, fence on fence) lower together; nothing floats
 - [ ] **G** — terraced crafting tables / pumpkins: exposed step faces solid, no culled faces
+      (incl. a grid block next to a lowered object)
+- [ ] **H** — lantern/chain hangs from underneath a top slab as before
 
 ---
 
