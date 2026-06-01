@@ -137,7 +137,7 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
 
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random,
-                slabbed$cullForLowered(view, pos, state, dy, cullTest));
+                slabbed$cullForLowered(view, pos, state, cullTest));
     }
 
     /**
@@ -161,29 +161,16 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
      * which returns false fast for ordinary terrain, so open terrain stays cheap.
      */
     private static Predicate<Direction> slabbed$cullForLowered(
-            BlockRenderView view, BlockPos pos, BlockState state, float dy, Predicate<Direction> cullTest) {
+            BlockRenderView view, BlockPos pos, BlockState state, Predicate<Direction> cullTest) {
         if (!state.isOpaqueFullCube()) {
             return cullTest;
         }
         return direction -> {
-            if (direction == null || !direction.getAxis().isHorizontal()) {
+            if (direction == null || !cullTest.test(direction)) {
                 return cullTest.test(direction);
             }
-            if (!cullTest.test(direction)) {
-                return false;
-            }
-            BlockPos neighborPos = pos.offset(direction);
-            BlockState neighbor = view.getBlockState(neighborPos);
-            if (dy < 0.0f) {
-                // This cube is lowered: cull only if the occluding neighbour is lowered
-                // by the same amount; a higher / un-lowered neighbour leaves the step open.
-                double neighborDy = SlabSupport.getYOffset(view, neighborPos, neighbor);
-                return Math.abs(neighborDy - dy) < 1.0e-6;
-            }
-            // This cube is at grid height: relax only toward a lowered custom-supported
-            // neighbour (cheap check; ordinary terrain returns false fast) so the
-            // neighbour's drop does not punch a hole in this cube's facing side.
-            return !SlabSupport.isDirectCustomSlabSupportedObject(view, neighborPos, neighbor);
+            // Vanilla culls this face; redraw it if it is a slab height-step face.
+            return !SlabSupport.isSlabHeightStepFace(view, pos, state, direction);
         };
     }
 }

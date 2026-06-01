@@ -247,6 +247,30 @@ public final class SlabSupport {
     }
 
     /**
+     * True if the {@code direction} side face of the opaque cube {@code state} at
+     * {@code pos} should be DRAWN even though vanilla culls it, because exactly one of
+     * this block and its {@code direction} neighbour is a lowered custom-supported object
+     * — i.e. they sit at different visual heights and the slab step exposes part of the
+     * shared face (the "window" on a lowered crafting table / pumpkin in a terrace, or
+     * the mirror hole on a grid block beside it).
+     *
+     * <p>Cheap: uses {@link #isDirectCustomSlabSupportedObject} (fast-false for ordinary
+     * terrain) rather than the deep column walk in {@link #getYOffset}, so it is safe to
+     * call from the per-face chunk culling path.
+     */
+    public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
+        if (world == null || pos == null || direction == null
+                || !direction.getAxis().isHorizontal() || !state.isOpaqueFullCube()) {
+            return false;
+        }
+        BlockPos neighborPos = pos.offset(direction);
+        boolean selfLowered = isDirectCustomSlabSupportedObject(world, pos, state);
+        boolean neighborLowered =
+                isDirectCustomSlabSupportedObject(world, neighborPos, world.getBlockState(neighborPos));
+        return selfLowered != neighborLowered;
+    }
+
+    /**
      * Primary query: should this slab top face count as solid support.
      */
     public static boolean canTreatAsSolidTopFace(WorldView world, BlockPos pos) {
