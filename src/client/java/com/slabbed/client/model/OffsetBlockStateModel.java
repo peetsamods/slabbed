@@ -141,22 +141,28 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
     }
 
     /**
-     * Fixes the "culled face" on a lowered opaque full cube (e.g. a crafting table or
-     * pumpkin lowered onto a slab in a terrace). Vanilla computes face culling at the
-     * un-shifted voxel, so a horizontal side face occluded by a grid-height same-level
-     * neighbour is culled even though the lowering exposes its lower half over the step.
+     * Fixes "culled faces" at a slab height step. Vanilla computes face culling at the
+     * un-shifted voxel, so a shared horizontal face between an opaque cube and an
+     * occluding same-level neighbour is culled even when one of them is lowered onto a
+     * slab and the other is not — the step exposes part of the face, leaving a
+     * see-through hole on either side.
      *
-     * <p>Relax it: a lowered side face is only culled when the same-level neighbour is
-     * lowered by the <em>same</em> amount (so its cube actually covers the lowered face).
-     * A higher / un-lowered neighbour leaves the stepped lower half open, so the face is
-     * drawn. This only ever draws MORE faces (never fewer), so it cannot create new
-     * see-through; opaque neighbours still cull their own faces toward this cube, so the
-     * extra draws sit flush behind solids without z-fighting. Vertical faces and
-     * non-cube / non-lowered blocks are left to vanilla culling.
+     * <p>Rule (symmetric): a horizontal side face of an opaque cube is culled only when
+     * the occluding neighbour is at the SAME visual height; a neighbour lowered by a
+     * different amount leaves part of the face open, so it is drawn. This runs for both
+     * the lowered block (relax toward higher neighbours) and the grid-height block
+     * (relax toward lowered neighbours), and only ever draws MORE faces, so it cannot
+     * create new see-through. The extra faces in the overlap region are sandwiched
+     * between the two solid bodies (back-to-back, mutually occluded), so there is no
+     * z-fighting. Vertical faces and non-cube blocks are left to vanilla culling.
+     *
+     * <p>Perf: a lowered cube (rare) resolves the neighbour's exact dy; a grid-height
+     * cube uses the cheap {@link SlabSupport#isDirectCustomSlabSupportedObject} test,
+     * which returns false fast for ordinary terrain, so open terrain stays cheap.
      */
     private static Predicate<Direction> slabbed$cullForLowered(
             BlockRenderView view, BlockPos pos, BlockState state, float dy, Predicate<Direction> cullTest) {
-        if (dy >= 0.0f || !state.isOpaqueFullCube()) {
+        if (!state.isOpaqueFullCube()) {
             return cullTest;
         }
         return direction -> {
@@ -167,8 +173,17 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
                 return false;
             }
             BlockPos neighborPos = pos.offset(direction);
-            double neighborDy = SlabSupport.getYOffset(view, neighborPos, view.getBlockState(neighborPos));
-            return Math.abs(neighborDy - dy) < 1.0e-6;
+            BlockState neighbor = view.getBlockState(neighborPos);
+            if (dy < 0.0f) {
+                // This cube is lowered: cull only if the occluding neighbour is lowered
+                // by the same amount; a higher / un-lowered neighbour leaves the step open.
+                double neighborDy = SlabSupport.getYOffset(view, neighborPos, neighbor);
+                return Math.abs(neighborDy - dy) < 1.0e-6;
+            }
+            // This cube is at grid height: relax only toward a lowered custom-supported
+            // neighbour (cheap check; ordinary terrain returns false fast) so the
+            // neighbour's drop does not punch a hole in this cube's facing side.
+            return !SlabSupport.isDirectCustomSlabSupportedObject(view, neighborPos, neighbor);
         };
     }
 }

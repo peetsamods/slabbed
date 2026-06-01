@@ -33,6 +33,7 @@ import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.BooleanProperty;
+import net.minecraft.state.property.Properties;
 import net.minecraft.state.property.EnumProperty;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.ActionResult;
@@ -115,6 +116,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 runDirectSupportProof(ctx, singleplayer);
                 runConnectorConnectionProof(singleplayer);
                 runLoweredCubeCullProof(ctx, singleplayer);
+                runCeilingHangRegressionProof(singleplayer);
             }
             if (generatedDoubleProof) {
                 runGeneratedDoubleDirectSupportProof(ctx, singleplayer);
@@ -1840,6 +1842,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         BlockState finalSlab = terrainSlab;
         BlockPos stepSlab = SUPPORT_POS.add(12, 0, 0);
         BlockPos flatSlab = SUPPORT_POS.add(12, 0, 4);
+        BlockPos mirrorSlab = SUPPORT_POS.add(12, 0, 8);
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
             // STEP: crafting table lowered onto a slab; east neighbour at grid height; air below-east.
@@ -1852,6 +1855,11 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             world.setBlockState(flatSlab.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(flatSlab.east(), finalSlab, Block.NOTIFY_LISTENERS);
             world.setBlockState(flatSlab.east().up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            // MIRROR: grid-height stone beside a lowered crafting table; the stone's facing side must draw.
+            world.setBlockState(mirrorSlab, finalSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(mirrorSlab.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(mirrorSlab.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(mirrorSlab.up().east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
         });
         ctx.waitTick();
         ctx.waitTick();
@@ -1868,9 +1876,18 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                     mc.world.getBlockState(flatCube.east()));
             int stepEast = countFacesToward(mc.world, stepCube, stepState, dir -> dir == Direction.EAST, Direction.EAST);
             int flatEast = countFacesToward(mc.world, flatCube, flatState, dir -> dir == Direction.EAST, Direction.EAST);
+            BlockPos mirrorCube = mirrorSlab.up().east();
+            BlockState mirrorState = mc.world.getBlockState(mirrorCube);
+            double mirrorDy = SlabSupport.getYOffset(mc.world, mirrorCube, mirrorState);
+            double mirrorNeighborDy = SlabSupport.getYOffset(mc.world, mirrorCube.west(),
+                    mc.world.getBlockState(mirrorCube.west()));
+            int mirrorWest = countFacesToward(mc.world, mirrorCube, mirrorState,
+                    dir -> dir == Direction.WEST, Direction.WEST);
             String fields = " stepCube=" + stepCube.toShortString() + " stepDy=" + stepDy
                     + " stepNeighborDy=" + stepNeighborDy + " stepEastFaces=" + stepEast
-                    + " flatNeighborDy=" + flatNeighborDy + " flatEastFaces=" + flatEast;
+                    + " flatNeighborDy=" + flatNeighborDy + " flatEastFaces=" + flatEast
+                    + " mirrorCube=" + mirrorCube.toShortString() + " mirrorDy=" + mirrorDy
+                    + " mirrorNeighborDy=" + mirrorNeighborDy + " mirrorWestFaces=" + mirrorWest;
             System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_TRACE" + fields);
 
             String redReason = null;
@@ -1882,12 +1899,54 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 redReason = "stepped_exposed_face_culled";
             } else if (flatEast != 0) {
                 redReason = "flat_flush_face_overdrawn";
+            } else if (!mirrorState.isOf(Blocks.STONE) || Math.abs(mirrorDy) > 1.0e-6d) {
+                redReason = "mirror_grid_cube_mismatch";
+            } else if (Math.abs(mirrorNeighborDy - (-0.5d)) > 1.0e-6d) {
+                redReason = "mirror_neighbor_not_lowered";
+            } else if (mirrorWest <= 0) {
+                redReason = "mirror_grid_face_culled";
             }
             if (redReason != null) {
                 System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_RED reason=" + redReason + fields);
                 throw new AssertionError("Terrain Slabs lowered cube cull proof failed: " + redReason + fields);
             }
             System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_GREEN" + fields);
+        });
+    }
+
+    /**
+     * Regression: hanging things under a (vanilla) top slab still float up +0.5 to the
+     * underside. The Terrain Slabs stacking/cull work must not disturb ceiling support.
+     */
+    private static void runCeilingHangRegressionProof(TestSingleplayerContext singleplayer) {
+        BlockPos topSlabPos = SUPPORT_POS.add(12, 0, 12);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(topSlabPos, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                    Block.NOTIFY_LISTENERS);
+            BlockPos hangPos = topSlabPos.down();
+            world.setBlockState(hangPos, Blocks.LANTERN.getDefaultState().with(Properties.HANGING, true),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(hangPos.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            BlockState hangState = world.getBlockState(hangPos);
+            boolean ceilingAttached = SlabSupport.isCeilingAttached(hangState);
+            double hangDy = SlabSupport.getYOffset(world, hangPos, hangState);
+            String fields = " hangPos=" + hangPos.toShortString()
+                    + " ceilingAttached=" + ceilingAttached + " hangDy=" + hangDy;
+            System.out.println("TERRAIN_SLABS_CEILING_HANG_TRACE" + fields);
+            String redReason = null;
+            if (!hangState.isOf(Blocks.LANTERN)) {
+                redReason = "lantern_state_mismatch";
+            } else if (!ceilingAttached) {
+                redReason = "lantern_not_ceiling_attached";
+            } else if (Math.abs(hangDy - 0.5d) > 1.0e-6d) {
+                redReason = "lantern_not_raised_to_top_slab";
+            }
+            if (redReason != null) {
+                System.out.println("TERRAIN_SLABS_CEILING_HANG_RED reason=" + redReason + fields);
+                throw new AssertionError("Terrain Slabs ceiling hang regression failed: " + redReason + fields);
+            }
+            System.out.println("TERRAIN_SLABS_CEILING_HANG_GREEN" + fields);
         });
     }
 
