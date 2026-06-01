@@ -110,6 +110,23 @@ fly *under* and *inside* the build to check the worst angles.
 - ❌ **FAIL:** a connector arm is drawn between two fences at different heights (the old "weird"
   diagonal/broken join).
 
+### F. Stacking — objects on objects follow the slab
+1. On a `terrainslabs:grass_slab`, build small stacks: a fence with a **torch on top**; a
+   **fence on a fence**; a **block / crafting table on a fence**.
+
+- ✅ **PASS:** the whole stack sits lowered together — the torch rests on the fence top (not
+  floating above it), stacked fences line up — exactly like a column on a vanilla slab.
+- ❌ **FAIL:** the torch / upper object floats a half (or full) block above its support.
+
+### G. Terraced object cubes have no culled faces
+1. Place a descending row of **crafting tables** (or pumpkins) each lowered onto a terrain slab
+   that steps down — the build from your 2nd screenshot.
+2. Orbit and look at the exposed step faces.
+
+- ✅ **PASS:** every exposed side face is solid — no black / see-through "culled face" on the
+  stepped cubes.
+- ❌ **FAIL:** a side face is missing/see-through where the step exposes it.
+
 ---
 
 ## 4. Checklist
@@ -121,6 +138,8 @@ fly *under* and *inside* the build to check the worst angles.
 - [ ] **C** — mixed terrace: **no see‑through from any angle** (incl. spectator under/inside)
 - [ ] **D** — vanilla `stone_slab` + `stone`: still lowers (unchanged)
 - [ ] **E** — fences stepping down slabs: **single posts** (no connector); flat fence run still connects
+- [ ] **F** — stacks (torch on fence, fence on fence) lower together; nothing floats
+- [ ] **G** — terraced crafting tables / pumpkins: exposed step faces solid, no culled faces
 
 ---
 
