@@ -69,13 +69,18 @@ fly *under* and *inside* the build to check the worst angles.
 1. On a `terrainslabs:grass_slab` (bottom), place a mix of **objects**:
    **`crafting_table`**, **`furnace`**, **`chest`**, **`oak_fence`**, **`torch`**, **`oak_door`**,
    **`redstone_torch`**.
+2. Also place the curated **object full-cubes**: **`pumpkin`**, **`carved_pumpkin`**,
+   **`jack_o_lantern`**, **`melon`**, **`bookshelf`**, **`hay_block`**, **`note_block`**,
+   **`smithing_table`** / **`loom`** / **`fletching_table`** / **`cartography_table`**.
 
 - ✅ **PASS:** each sits **visually lowered** so its base rests on the slab's top surface
   (not floating a half‑block above it), no holes, and the selection outline hugs the visible shape.
-  In particular the **crafting table / furnace / chest** lower the same way they do on a vanilla
-  slab — they should NOT stay floating at grid height.
-- ⛔ Natural terrain cubes (dirt/grass/stone) are intentionally the exception — see **A** — they
-  stay at grid height so terrain never tears.
+  Crafting table / furnace / chest **and** the object cubes (pumpkin, bookshelf, …) lower the same
+  way they do on a vanilla slab — they should NOT stay floating at grid height.
+- ⛔ Natural terrain / building cubes (dirt, grass, stone, sand, **wool, concrete, terracotta,
+  planks**) are intentionally the exception — see **A** — they stay at grid height so terrain
+  never tears. (The object-cube list is curated in `SlabSupport.SLAB_SIT_OBJECT_CUBES` and is easy
+  to extend if you want more cubes to count as objects.)
 
 ### C. Terrain‑building scene (the real‑world stress) ⭐ primary check
 1. Build a small terraced patch: mix `terrainslabs:grass_slab` (bottom) with full `grass_block` /

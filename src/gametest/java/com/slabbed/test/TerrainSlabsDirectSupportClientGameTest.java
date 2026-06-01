@@ -68,6 +68,8 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     private static final BlockPos VANILLA_SUPPORT_POS = SUPPORT_POS.add(4, 0, 0);
     private static final BlockPos OBJECT_SUPPORT_POS = SUPPORT_POS.add(8, 0, 0);
     private static final BlockPos CRAFTING_SUPPORT_POS = SUPPORT_POS.add(8, 0, 4);
+    private static final BlockPos PUMPKIN_SUPPORT_POS = SUPPORT_POS.add(8, 0, 8);
+    private static final BlockPos BOOKSHELF_SUPPORT_POS = SUPPORT_POS.add(8, 0, 12);
     private static final BlockPos LIVE_SUPPORT_POS = SUPPORT_POS.add(0, 0, 8);
     private static final double EPSILON = 1.0e-6d;
 
@@ -215,6 +217,14 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             world.setBlockState(CRAFTING_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
             world.setBlockState(CRAFTING_SUPPORT_POS.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(CRAFTING_SUPPORT_POS.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(PUMPKIN_SUPPORT_POS.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(PUMPKIN_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(PUMPKIN_SUPPORT_POS.up(), Blocks.PUMPKIN.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(PUMPKIN_SUPPORT_POS.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(BOOKSHELF_SUPPORT_POS.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(BOOKSHELF_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(BOOKSHELF_SUPPORT_POS.up(), Blocks.BOOKSHELF.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(BOOKSHELF_SUPPORT_POS.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
         });
         ctx.waitTick();
         ctx.waitTick();
@@ -306,6 +316,8 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             assertTerrainSlabsLoweredObjectSupport(mc, OBJECT_SUPPORT_POS, Blocks.TORCH, "minecraft:torch");
             assertTerrainSlabsLoweredObjectSupport(mc, CRAFTING_SUPPORT_POS, Blocks.CRAFTING_TABLE,
                     "minecraft:crafting_table");
+            assertTerrainSlabsLoweredObjectSupport(mc, PUMPKIN_SUPPORT_POS, Blocks.PUMPKIN, "minecraft:pumpkin");
+            assertTerrainSlabsLoweredObjectSupport(mc, BOOKSHELF_SUPPORT_POS, Blocks.BOOKSHELF, "minecraft:bookshelf");
             assertVanillaDirectSupportControl(mc);
         });
     }

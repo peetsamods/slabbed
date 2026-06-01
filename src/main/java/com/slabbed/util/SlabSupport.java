@@ -13,6 +13,7 @@ import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.CaveVinesBodyBlock;
 import net.minecraft.block.CaveVinesHeadBlock;
 import net.minecraft.block.ChainBlock;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.HangingRootsBlock;
@@ -808,9 +809,14 @@ public final class SlabSupport {
      *       ({@code !state.isSolidBlock}).</li>
      * </ul>
      *
-     * <p>Explicitly excludes plain solid world cubes (stone, dirt, planks,
-     * cobblestone, sand, gravel, terracotta, …) so natural terrain does not
-     * visually drop when a slab happens to sit below it.
+     * <p>Plain opaque full cubes are otherwise treated as terrain and excluded
+     * (stone, dirt, planks, cobblestone, sand, gravel, terracotta, wool, …) so
+     * natural terrain / building blocks do not visually drop — and, on Terrain
+     * Slabs, do not tear see-through holes — when a slab happens to sit below.
+     * The curated {@link #SLAB_SIT_OBJECT_CUBES} set carves out specific
+     * full-cube <em>objects</em> (workstations, pumpkins, bookshelves, …) that
+     * players place as decoration and expect to sit on a slab. Extend that set
+     * to opt additional object cubes in.
      */
     private static boolean isSlabSitCandidate(BlockView world, BlockPos pos, BlockState state) {
         Block block = state.getBlock();
@@ -820,8 +826,27 @@ public final class SlabSupport {
         if (block instanceof CraftingTableBlock) {
             return true;
         }
+        if (SLAB_SIT_OBJECT_CUBES.contains(block)) {
+            return true;
+        }
         return !state.isSolidBlock(world, pos);
     }
+
+    /**
+     * Curated full-cube "objects" that should sit on a slab even though they are
+     * opaque full cubes (which are otherwise treated as terrain). Block entities
+     * and the crafting table are already covered by {@link #isSlabSitCandidate};
+     * this set is for the remaining non-BE object cubes. Building/terrain cubes
+     * (wool, concrete, terracotta, planks, …) are intentionally NOT included to
+     * keep them at grid height and avoid see-through terrain.
+     */
+    private static final Set<Block> SLAB_SIT_OBJECT_CUBES = Set.of(
+            // functional full-cube workstations (consistent with the crafting table)
+            Blocks.SMITHING_TABLE, Blocks.FLETCHING_TABLE, Blocks.CARTOGRAPHY_TABLE, Blocks.LOOM,
+            // decorative full cubes commonly placed as objects
+            Blocks.PUMPKIN, Blocks.CARVED_PUMPKIN, Blocks.JACK_O_LANTERN, Blocks.MELON,
+            Blocks.BOOKSHELF, Blocks.HAY_BLOCK, Blocks.NOTE_BLOCK, Blocks.DRIED_KELP_BLOCK,
+            Blocks.SPONGE, Blocks.WET_SPONGE, Blocks.TARGET, Blocks.REDSTONE_LAMP);
 
     private static double directCustomSlabSupportDy(BlockView world, BlockPos pos, BlockState state) {
         if (!isDirectCustomSlabSupportedObject(world, pos, state)) {
