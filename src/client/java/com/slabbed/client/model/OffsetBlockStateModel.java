@@ -136,6 +136,39 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         }
 
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
-        fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
+        fabricWrapped.emitQuads(out, view, pos, state, random,
+                slabbed$cullForLowered(view, pos, state, dy, cullTest));
+    }
+
+    /**
+     * Fixes the "culled face" on a lowered opaque full cube (e.g. a crafting table or
+     * pumpkin lowered onto a slab in a terrace). Vanilla computes face culling at the
+     * un-shifted voxel, so a horizontal side face occluded by a grid-height same-level
+     * neighbour is culled even though the lowering exposes its lower half over the step.
+     *
+     * <p>Relax it: a lowered side face is only culled when the same-level neighbour is
+     * lowered by the <em>same</em> amount (so its cube actually covers the lowered face).
+     * A higher / un-lowered neighbour leaves the stepped lower half open, so the face is
+     * drawn. This only ever draws MORE faces (never fewer), so it cannot create new
+     * see-through; opaque neighbours still cull their own faces toward this cube, so the
+     * extra draws sit flush behind solids without z-fighting. Vertical faces and
+     * non-cube / non-lowered blocks are left to vanilla culling.
+     */
+    private static Predicate<Direction> slabbed$cullForLowered(
+            BlockRenderView view, BlockPos pos, BlockState state, float dy, Predicate<Direction> cullTest) {
+        if (dy >= 0.0f || !state.isOpaqueFullCube()) {
+            return cullTest;
+        }
+        return direction -> {
+            if (direction == null || !direction.getAxis().isHorizontal()) {
+                return cullTest.test(direction);
+            }
+            if (!cullTest.test(direction)) {
+                return false;
+            }
+            BlockPos neighborPos = pos.offset(direction);
+            double neighborDy = SlabSupport.getYOffset(view, neighborPos, view.getBlockState(neighborPos));
+            return Math.abs(neighborDy - dy) < 1.0e-6;
+        };
     }
 }

@@ -114,6 +114,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             if (proof) {
                 runDirectSupportProof(ctx, singleplayer);
                 runConnectorConnectionProof(singleplayer);
+                runLoweredCubeCullProof(ctx, singleplayer);
             }
             if (generatedDoubleProof) {
                 runGeneratedDoubleDirectSupportProof(ctx, singleplayer);
@@ -1824,6 +1825,94 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
 
     private static double modelMinY(net.minecraft.world.BlockRenderView world, BlockPos pos, BlockState state) {
         return modelProbe(world, pos, state, direction -> false).minY();
+    }
+
+    /**
+     * Proves the lowered-opaque-cube culling fix: when a lowered cube's same-level
+     * neighbour sits HIGHER (un-lowered, a terrace step), the stepped side face must be
+     * drawn even though vanilla would cull it; when the neighbour is lowered the SAME
+     * amount (flat), the flush face stays culled (no overdraw). We feed the model a
+     * cullTest that culls EAST (as vanilla would) and count emitted EAST faces.
+     */
+    private static void runLoweredCubeCullProof(ClientGameTestContext ctx, TestSingleplayerContext singleplayer) {
+        Block terrainSlabBlock = terrainBlock("grass_slab");
+        BlockState terrainSlab = terrainSlabBlock.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        BlockState finalSlab = terrainSlab;
+        BlockPos stepSlab = SUPPORT_POS.add(12, 0, 0);
+        BlockPos flatSlab = SUPPORT_POS.add(12, 0, 4);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            // STEP: crafting table lowered onto a slab; east neighbour at grid height; air below-east.
+            world.setBlockState(stepSlab, finalSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(stepSlab.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(stepSlab.east(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(stepSlab.up().east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            // FLAT: crafting table lowered; east neighbour lowered the same amount.
+            world.setBlockState(flatSlab, finalSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(flatSlab.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(flatSlab.east(), finalSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(flatSlab.east().up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            BlockPos stepCube = stepSlab.up();
+            BlockPos flatCube = flatSlab.up();
+            BlockState stepState = mc.world.getBlockState(stepCube);
+            BlockState flatState = mc.world.getBlockState(flatCube);
+            double stepDy = SlabSupport.getYOffset(mc.world, stepCube, stepState);
+            double stepNeighborDy = SlabSupport.getYOffset(mc.world, stepCube.east(),
+                    mc.world.getBlockState(stepCube.east()));
+            double flatNeighborDy = SlabSupport.getYOffset(mc.world, flatCube.east(),
+                    mc.world.getBlockState(flatCube.east()));
+            int stepEast = countFacesToward(mc.world, stepCube, stepState, dir -> dir == Direction.EAST, Direction.EAST);
+            int flatEast = countFacesToward(mc.world, flatCube, flatState, dir -> dir == Direction.EAST, Direction.EAST);
+            String fields = " stepCube=" + stepCube.toShortString() + " stepDy=" + stepDy
+                    + " stepNeighborDy=" + stepNeighborDy + " stepEastFaces=" + stepEast
+                    + " flatNeighborDy=" + flatNeighborDy + " flatEastFaces=" + flatEast;
+            System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_TRACE" + fields);
+
+            String redReason = null;
+            if (!stepState.isOf(Blocks.CRAFTING_TABLE) || !flatState.isOf(Blocks.CRAFTING_TABLE)) {
+                redReason = "crafting_table_state_mismatch";
+            } else if (Math.abs(stepDy - (-0.5d)) > 1.0e-6d) {
+                redReason = "stepped_cube_not_lowered";
+            } else if (stepEast <= 0) {
+                redReason = "stepped_exposed_face_culled";
+            } else if (flatEast != 0) {
+                redReason = "flat_flush_face_overdrawn";
+            }
+            if (redReason != null) {
+                System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_RED reason=" + redReason + fields);
+                throw new AssertionError("Terrain Slabs lowered cube cull proof failed: " + redReason + fields);
+            }
+            System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_GREEN" + fields);
+        });
+    }
+
+    private static int countFacesToward(
+            net.minecraft.world.BlockRenderView world, BlockPos pos, BlockState state,
+            java.util.function.Predicate<Direction> cullTest, Direction face) {
+        BlockStateModel model = net.minecraft.client.MinecraftClient.getInstance()
+                .getBlockRenderManager().getModel(state);
+        if (!(model instanceof FabricBlockStateModel fabricModel)) {
+            throw new AssertionError("expected FabricBlockStateModel for " + state);
+        }
+        Renderer renderer = Renderer.get();
+        if (renderer == null) {
+            throw new AssertionError("Fabric renderer missing for lowered cube cull proof");
+        }
+        MutableMesh mesh = renderer.mutableMesh();
+        fabricModel.emitQuads(mesh.emitter(), world, pos, state, Random.create(0x51abbEDL), cullTest);
+        int[] count = {0};
+        mesh.forEach(quad -> {
+            Direction quadFace = quad.cullFace() != null ? quad.cullFace() : quad.nominalFace();
+            if (quadFace == face) {
+                count[0]++;
+            }
+        });
+        return count[0];
     }
 
     private static ModelProbe modelProbe(
