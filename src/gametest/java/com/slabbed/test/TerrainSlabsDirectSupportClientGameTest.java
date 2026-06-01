@@ -1883,11 +1883,17 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                     mc.world.getBlockState(mirrorCube.west()));
             int mirrorWest = countFacesToward(mc.world, mirrorCube, mirrorState,
                     dir -> dir == Direction.WEST, Direction.WEST);
+            // Direct check of the live vanilla chunk-cull path (BlockModelRenderer.shouldDrawFace).
+            boolean stepDrawVanilla = vanillaShouldDrawFace(mc.world, stepState, Direction.EAST, stepCube);
+            boolean flatDrawVanilla = vanillaShouldDrawFace(mc.world, flatState, Direction.EAST, flatCube);
+            boolean mirrorDrawVanilla = vanillaShouldDrawFace(mc.world, mirrorState, Direction.WEST, mirrorCube);
             String fields = " stepCube=" + stepCube.toShortString() + " stepDy=" + stepDy
                     + " stepNeighborDy=" + stepNeighborDy + " stepEastFaces=" + stepEast
                     + " flatNeighborDy=" + flatNeighborDy + " flatEastFaces=" + flatEast
                     + " mirrorCube=" + mirrorCube.toShortString() + " mirrorDy=" + mirrorDy
-                    + " mirrorNeighborDy=" + mirrorNeighborDy + " mirrorWestFaces=" + mirrorWest;
+                    + " mirrorNeighborDy=" + mirrorNeighborDy + " mirrorWestFaces=" + mirrorWest
+                    + " stepDrawVanilla=" + stepDrawVanilla + " flatDrawVanilla=" + flatDrawVanilla
+                    + " mirrorDrawVanilla=" + mirrorDrawVanilla;
             System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_TRACE" + fields);
 
             String redReason = null;
@@ -1905,6 +1911,12 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 redReason = "mirror_neighbor_not_lowered";
             } else if (mirrorWest <= 0) {
                 redReason = "mirror_grid_face_culled";
+            } else if (!stepDrawVanilla) {
+                redReason = "stepped_face_culled_on_vanilla_path";
+            } else if (flatDrawVanilla) {
+                redReason = "flat_face_drawn_on_vanilla_path";
+            } else if (!mirrorDrawVanilla) {
+                redReason = "mirror_face_culled_on_vanilla_path";
             }
             if (redReason != null) {
                 System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_RED reason=" + redReason + fields);
@@ -1948,6 +1960,20 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             }
             System.out.println("TERRAIN_SLABS_CEILING_HANG_GREEN" + fields);
         });
+    }
+
+    /** Reflectively invokes the vanilla chunk-cull check (private static) on the real render path. */
+    private static boolean vanillaShouldDrawFace(
+            net.minecraft.world.BlockRenderView world, BlockState state, Direction direction, BlockPos pos) {
+        try {
+            Method m = net.minecraft.client.render.block.BlockModelRenderer.class.getDeclaredMethod(
+                    "shouldDrawFace", net.minecraft.world.BlockRenderView.class, BlockState.class,
+                    boolean.class, Direction.class, BlockPos.class);
+            m.setAccessible(true);
+            return (boolean) m.invoke(null, world, state, true, direction, pos);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("could not invoke BlockModelRenderer.shouldDrawFace: " + e);
+        }
     }
 
     private static int countFacesToward(
