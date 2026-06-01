@@ -70,6 +70,8 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     private static final BlockPos CRAFTING_SUPPORT_POS = SUPPORT_POS.add(8, 0, 4);
     private static final BlockPos PUMPKIN_SUPPORT_POS = SUPPORT_POS.add(8, 0, 8);
     private static final BlockPos BOOKSHELF_SUPPORT_POS = SUPPORT_POS.add(8, 0, 12);
+    private static final BlockPos STACK_TORCH_SUPPORT_POS = SUPPORT_POS.add(4, 0, 8);
+    private static final BlockPos STACK_FENCE_SUPPORT_POS = SUPPORT_POS.add(4, 0, 12);
     private static final BlockPos LIVE_SUPPORT_POS = SUPPORT_POS.add(0, 0, 8);
     private static final double EPSILON = 1.0e-6d;
 
@@ -225,6 +227,18 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             world.setBlockState(BOOKSHELF_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
             world.setBlockState(BOOKSHELF_SUPPORT_POS.up(), Blocks.BOOKSHELF.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(BOOKSHELF_SUPPORT_POS.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            // stacking: torch on fence on terrain slab
+            world.setBlockState(STACK_TORCH_SUPPORT_POS.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(STACK_TORCH_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(STACK_TORCH_SUPPORT_POS.up(), Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(STACK_TORCH_SUPPORT_POS.up(2), Blocks.TORCH.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(STACK_TORCH_SUPPORT_POS.up(3), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            // stacking: fence on fence on terrain slab
+            world.setBlockState(STACK_FENCE_SUPPORT_POS.down(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(STACK_FENCE_SUPPORT_POS, finalTerrainSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(STACK_FENCE_SUPPORT_POS.up(), Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(STACK_FENCE_SUPPORT_POS.up(2), Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(STACK_FENCE_SUPPORT_POS.up(3), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
         });
         ctx.waitTick();
         ctx.waitTick();
@@ -318,6 +332,10 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                     "minecraft:crafting_table");
             assertTerrainSlabsLoweredObjectSupport(mc, PUMPKIN_SUPPORT_POS, Blocks.PUMPKIN, "minecraft:pumpkin");
             assertTerrainSlabsLoweredObjectSupport(mc, BOOKSHELF_SUPPORT_POS, Blocks.BOOKSHELF, "minecraft:bookshelf");
+            // stacking: objects on top of lowered objects inherit the slab lowering
+            assertStackedObjectLowered(mc, STACK_TORCH_SUPPORT_POS.up(), Blocks.OAK_FENCE, "minecraft:oak_fence");
+            assertStackedObjectLowered(mc, STACK_TORCH_SUPPORT_POS.up(2), Blocks.TORCH, "minecraft:torch");
+            assertStackedObjectLowered(mc, STACK_FENCE_SUPPORT_POS.up(2), Blocks.OAK_FENCE, "minecraft:oak_fence");
             assertVanillaDirectSupportControl(mc);
         });
     }
@@ -1623,6 +1641,39 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         }
 
         System.out.println(markerPrefix + "_GREEN" + fields);
+    }
+
+    private static void assertStackedObjectLowered(
+            MinecraftClient mc, BlockPos objectPos, Block expectedBlock, String subjectId) {
+        BlockState objectState = mc.world.getBlockState(objectPos);
+        if (!objectState.isOf(expectedBlock)) {
+            throw new AssertionError("expected " + subjectId + " at " + objectPos + ", found " + objectState);
+        }
+        boolean directSubject = SlabSupport.isDirectCustomSlabSupportedObject(mc.world, objectPos, objectState);
+        double objectDy = SlabSupport.getYOffset(mc.world, objectPos, objectState);
+        double modelMinY = modelMinY(mc.world, objectPos, objectState);
+        String fields = " subjectId=" + subjectId
+                + " subjectPos=" + objectPos.toShortString()
+                + " supportBelow=" + Registries.BLOCK.getId(mc.world.getBlockState(objectPos.down()).getBlock())
+                + " directSubject=" + directSubject
+                + " subjectDy=" + objectDy
+                + " modelMinY=" + modelMinY;
+        System.out.println("TERRAIN_SLABS_STACKED_OBJECT_TRACE" + fields);
+
+        String redReason = null;
+        if (!directSubject) {
+            redReason = "stacked_object_not_direct_supported";
+        } else if (Math.abs(objectDy - (-0.5d)) > 1.0e-6d) {
+            redReason = "stacked_object_dy_mismatch";
+        } else if (Math.abs(modelMinY - (-0.5d)) > 1.0e-6d) {
+            redReason = "stacked_object_model_dy_mismatch";
+        }
+
+        if (redReason != null) {
+            System.out.println("TERRAIN_SLABS_STACKED_OBJECT_RED reason=" + redReason + fields);
+            throw new AssertionError("Terrain Slabs stacked object proof failed: " + redReason + fields);
+        }
+        System.out.println("TERRAIN_SLABS_STACKED_OBJECT_GREEN" + fields);
     }
 
     private static void assertTerrainSlabsLoweredObjectSupport(

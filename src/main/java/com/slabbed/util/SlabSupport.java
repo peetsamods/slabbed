@@ -178,8 +178,24 @@ public final class SlabSupport {
             supportPos = pos.down(2);
         }
 
-        BlockState supportState = world.getBlockState(supportPos);
-        return CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE;
+        // Walk down the support column. A custom bottom-like Terrain Slabs surface
+        // lowers the object; a lowered "slab-sit" object below (a fence/torch/crafting
+        // table/... already lowered onto the slab) carries the same -0.5 up the stack,
+        // so stacked objects keep sitting correctly (torch on fence on slab, fence on
+        // fence, …). The walk stops at the first non-object (terrain cube / air), which
+        // therefore keeps anything resting above that at grid height.
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState supportState = world.getBlockState(supportPos);
+            if (CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
+            if (isDirectCustomSlabSupportSubject(world, supportPos, supportState)) {
+                supportPos = supportPos.down();
+                continue;
+            }
+            return false;
+        }
+        return false;
     }
 
     public static double getDirectObjectSupportTopOffset(BlockState state) {
