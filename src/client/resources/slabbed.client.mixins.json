@@ -5,7 +5,7 @@
   "client": [
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
-    "BlockModelRendererCullMixin",
+    "BlockRenderInfoCullMixin",
     "ClientWorldParticleTraceMixin",
     "CarpetDyShapeMixin",
     "GameRendererCrosshairRetargetMixin",

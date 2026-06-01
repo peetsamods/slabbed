@@ -136,41 +136,6 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         }
 
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
-        fabricWrapped.emitQuads(out, view, pos, state, random,
-                slabbed$cullForLowered(view, pos, state, cullTest));
-    }
-
-    /**
-     * Fixes "culled faces" at a slab height step. Vanilla computes face culling at the
-     * un-shifted voxel, so a shared horizontal face between an opaque cube and an
-     * occluding same-level neighbour is culled even when one of them is lowered onto a
-     * slab and the other is not — the step exposes part of the face, leaving a
-     * see-through hole on either side.
-     *
-     * <p>Rule (symmetric): a horizontal side face of an opaque cube is culled only when
-     * the occluding neighbour is at the SAME visual height; a neighbour lowered by a
-     * different amount leaves part of the face open, so it is drawn. This runs for both
-     * the lowered block (relax toward higher neighbours) and the grid-height block
-     * (relax toward lowered neighbours), and only ever draws MORE faces, so it cannot
-     * create new see-through. The extra faces in the overlap region are sandwiched
-     * between the two solid bodies (back-to-back, mutually occluded), so there is no
-     * z-fighting. Vertical faces and non-cube blocks are left to vanilla culling.
-     *
-     * <p>Perf: a lowered cube (rare) resolves the neighbour's exact dy; a grid-height
-     * cube uses the cheap {@link SlabSupport#isDirectCustomSlabSupportedObject} test,
-     * which returns false fast for ordinary terrain, so open terrain stays cheap.
-     */
-    private static Predicate<Direction> slabbed$cullForLowered(
-            BlockRenderView view, BlockPos pos, BlockState state, Predicate<Direction> cullTest) {
-        if (!state.isOpaqueFullCube()) {
-            return cullTest;
-        }
-        return direction -> {
-            if (direction == null || !cullTest.test(direction)) {
-                return cullTest.test(direction);
-            }
-            // Vanilla culls this face; redraw it if it is a slab height-step face.
-            return !SlabSupport.isSlabHeightStepFace(view, pos, state, direction);
-        };
+        fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
     }
 }

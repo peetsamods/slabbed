@@ -84,8 +84,9 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         boolean exactSeedTrace = Boolean.getBoolean(EXACT_SEED_TRACE_PROPERTY);
         boolean livePlacement = Boolean.getBoolean(LIVE_PLACEMENT_PROPERTY);
         boolean particleProof = Boolean.getBoolean(PARTICLE_PROOF_PROPERTY);
+        boolean windowDiag = Boolean.getBoolean("slabbed.terrainSlabsWindowDiag");
         if (!dump && !proof && !generatedDoubleProof
-                && !exactSeedTrace && !livePlacement && !particleProof) {
+                && !exactSeedTrace && !livePlacement && !particleProof && !windowDiag) {
             return;
         }
 
@@ -111,6 +112,9 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             }
             if (dump) {
                 ctx.runOnClient(mc -> dumpTerrainSlabsCompatFacts(mc.world));
+            }
+            if (windowDiag) {
+                runWindowScreenshotDiagnostic(ctx, singleplayer);
             }
             if (proof) {
                 runDirectSupportProof(ctx, singleplayer);
@@ -806,6 +810,64 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
      * through {@code getStateForNeighborUpdate} (which carries the Slabbed mixin) and
      * reads the resulting property.
      */
+    /**
+     * Builds a small terrace (lowered crafting tables beside grid-height crafting tables /
+     * terrain) and screenshots it, so the actual rendered result can be inspected for the
+     * see-through "window" on the live vanilla chunk render path.
+     */
+    private static void runWindowScreenshotDiagnostic(ClientGameTestContext ctx, TestSingleplayerContext singleplayer) {
+        BlockState slab = terrainBlock("grass_slab").getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        BlockState finalSlab = slab;
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (int x = -4; x <= 6; x++) {
+                for (int y = 86; y <= 108; y++) {
+                    for (int z = -4; z <= 6; z++) {
+                        world.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+                    }
+                }
+            }
+            // Solid grass/stone platform.
+            for (int x = -3; x <= 3; x++) {
+                for (int z = -4; z <= 4; z++) {
+                    for (int y = 95; y <= 99; y++) {
+                        world.setBlockState(new BlockPos(x, y, z), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+                    }
+                    world.setBlockState(new BlockPos(x, 100, z), Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+                }
+            }
+            // Lowered crafting table; one block NORTH a grid-height grass cube stands a half-block
+            // taller. The lowering empties the crafting table's upper voxel-half, exposing the
+            // grid cube's south face there -- which vanilla culls -> the see-through "window".
+            world.setBlockState(new BlockPos(0, 100, 0), finalSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(new BlockPos(0, 101, 0), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(new BlockPos(0, 101, -1), Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(new BlockPos(-1, 101, -1), Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(new BlockPos(1, 101, -1), Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+        });
+        for (int i = 0; i < 6; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            mc.player.getAbilities().flying = true;
+            mc.player.setNoGravity(true);
+            mc.player.refreshPositionAndAngles(0.5, 102.0, 3.0, 180.0f, 38.0f);
+            mc.player.setVelocity(0.0, 0.0, 0.0);
+        });
+        for (int i = 0; i < 4; i++) {
+            ctx.waitTick();
+        }
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            mc.player.refreshPositionAndAngles(0.5, 102.0, 3.0, 180.0f, 38.0f);
+            mc.player.setVelocity(0.0, 0.0, 0.0);
+        });
+        ctx.waitTick();
+        ctx.takeScreenshot("terrain_slabs_window_diag");
+        System.out.println("TERRAIN_SLABS_WINDOW_DIAG_SHOT taken");
+    }
+
     private static void runConnectorConnectionProof(TestSingleplayerContext singleplayer) {
         Block terrainSlabBlock = terrainBlock("grass_slab");
         BlockState terrainSlab = terrainSlabBlock.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
@@ -1830,32 +1892,41 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     }
 
     /**
-     * Proves the lowered-opaque-cube culling fix: when a lowered cube's same-level
-     * neighbour sits HIGHER (un-lowered, a terrace step), the stepped side face must be
-     * drawn even though vanilla would cull it; when the neighbour is lowered the SAME
-     * amount (flat), the flush face stays culled (no overdraw). We feed the model a
-     * cullTest that culls EAST (as vanilla would) and count emitted EAST faces.
+     * Proves the lowered-cube cull fix at the predicate that Indigo's {@code BlockRenderInfo}
+     * actually consults ({@link SlabSupport#isSlabHeightStepFace}). In 1.21.11 chunk meshing
+     * the opaque-face cull gate is {@code BlockRenderInfo.shouldDrawSide/shouldCullSide};
+     * neither the FRAPI model cullTest nor {@code BlockModelRenderer.shouldDrawFace} is the
+     * gate for chunks, so the proof exercises the predicate the mixin injects there.
+     * <ul>
+     *   <li>STEP — a lowered opaque cube (pumpkin on a slab) beside a grid-height cube:
+     *       its stepped side face must be redrawn (vanilla would cull it).</li>
+     *   <li>FLAT — two cubes lowered the same amount: the flush face stays culled (no
+     *       overdraw).</li>
+     *   <li>MIRROR — a grid-height opaque cube (stone) beside a lowered object (crafting
+     *       table): the cube's facing side must be redrawn. This is the exact geometry of
+     *       the see-through "window" — the crafting table is not a full cube, so the window
+     *       is always closed on the neighbouring opaque cube.</li>
+     * </ul>
      */
     private static void runLoweredCubeCullProof(ClientGameTestContext ctx, TestSingleplayerContext singleplayer) {
         Block terrainSlabBlock = terrainBlock("grass_slab");
-        BlockState terrainSlab = terrainSlabBlock.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
-        BlockState finalSlab = terrainSlab;
+        BlockState finalSlab = terrainSlabBlock.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
         BlockPos stepSlab = SUPPORT_POS.add(12, 0, 0);
         BlockPos flatSlab = SUPPORT_POS.add(12, 0, 4);
         BlockPos mirrorSlab = SUPPORT_POS.add(12, 0, 8);
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
-            // STEP: crafting table lowered onto a slab; east neighbour at grid height; air below-east.
+            // STEP: pumpkin (opaque cube) lowered onto a slab; east neighbour at grid height; air below-east.
             world.setBlockState(stepSlab, finalSlab, Block.NOTIFY_LISTENERS);
-            world.setBlockState(stepSlab.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(stepSlab.up(), Blocks.PUMPKIN.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(stepSlab.east(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(stepSlab.up().east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
-            // FLAT: crafting table lowered; east neighbour lowered the same amount.
+            // FLAT: pumpkin lowered; east neighbour pumpkin lowered the same amount.
             world.setBlockState(flatSlab, finalSlab, Block.NOTIFY_LISTENERS);
-            world.setBlockState(flatSlab.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(flatSlab.up(), Blocks.PUMPKIN.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(flatSlab.east(), finalSlab, Block.NOTIFY_LISTENERS);
-            world.setBlockState(flatSlab.east().up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
-            // MIRROR: grid-height stone beside a lowered crafting table; the stone's facing side must draw.
+            world.setBlockState(flatSlab.east().up(), Blocks.PUMPKIN.getDefaultState(), Block.NOTIFY_LISTENERS);
+            // MIRROR: grid-height stone beside a lowered crafting table (the window geometry).
             world.setBlockState(mirrorSlab, finalSlab, Block.NOTIFY_LISTENERS);
             world.setBlockState(mirrorSlab.up(), Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(mirrorSlab.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -1867,56 +1938,39 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         ctx.runOnClient(mc -> {
             BlockPos stepCube = stepSlab.up();
             BlockPos flatCube = flatSlab.up();
+            BlockPos mirrorCube = mirrorSlab.up().east();
             BlockState stepState = mc.world.getBlockState(stepCube);
             BlockState flatState = mc.world.getBlockState(flatCube);
-            double stepDy = SlabSupport.getYOffset(mc.world, stepCube, stepState);
-            double stepNeighborDy = SlabSupport.getYOffset(mc.world, stepCube.east(),
-                    mc.world.getBlockState(stepCube.east()));
-            double flatNeighborDy = SlabSupport.getYOffset(mc.world, flatCube.east(),
-                    mc.world.getBlockState(flatCube.east()));
-            int stepEast = countFacesToward(mc.world, stepCube, stepState, dir -> dir == Direction.EAST, Direction.EAST);
-            int flatEast = countFacesToward(mc.world, flatCube, flatState, dir -> dir == Direction.EAST, Direction.EAST);
-            BlockPos mirrorCube = mirrorSlab.up().east();
             BlockState mirrorState = mc.world.getBlockState(mirrorCube);
+            double stepDy = SlabSupport.getYOffset(mc.world, stepCube, stepState);
             double mirrorDy = SlabSupport.getYOffset(mc.world, mirrorCube, mirrorState);
             double mirrorNeighborDy = SlabSupport.getYOffset(mc.world, mirrorCube.west(),
                     mc.world.getBlockState(mirrorCube.west()));
-            int mirrorWest = countFacesToward(mc.world, mirrorCube, mirrorState,
-                    dir -> dir == Direction.WEST, Direction.WEST);
-            // Direct check of the live vanilla chunk-cull path (BlockModelRenderer.shouldDrawFace).
-            boolean stepDrawVanilla = vanillaShouldDrawFace(mc.world, stepState, Direction.EAST, stepCube);
-            boolean flatDrawVanilla = vanillaShouldDrawFace(mc.world, flatState, Direction.EAST, flatCube);
-            boolean mirrorDrawVanilla = vanillaShouldDrawFace(mc.world, mirrorState, Direction.WEST, mirrorCube);
-            String fields = " stepCube=" + stepCube.toShortString() + " stepDy=" + stepDy
-                    + " stepNeighborDy=" + stepNeighborDy + " stepEastFaces=" + stepEast
-                    + " flatNeighborDy=" + flatNeighborDy + " flatEastFaces=" + flatEast
+            // The actual chunk cull gate: Indigo's BlockRenderInfo.shouldDrawSide consults this predicate.
+            boolean stepDraw = SlabSupport.isSlabHeightStepFace(mc.world, stepCube, stepState, Direction.EAST);
+            boolean flatDraw = SlabSupport.isSlabHeightStepFace(mc.world, flatCube, flatState, Direction.EAST);
+            boolean mirrorDraw = SlabSupport.isSlabHeightStepFace(mc.world, mirrorCube, mirrorState, Direction.WEST);
+            String fields = " stepCube=" + stepCube.toShortString() + " stepDy=" + stepDy + " stepDraw=" + stepDraw
+                    + " flatDraw=" + flatDraw
                     + " mirrorCube=" + mirrorCube.toShortString() + " mirrorDy=" + mirrorDy
-                    + " mirrorNeighborDy=" + mirrorNeighborDy + " mirrorWestFaces=" + mirrorWest
-                    + " stepDrawVanilla=" + stepDrawVanilla + " flatDrawVanilla=" + flatDrawVanilla
-                    + " mirrorDrawVanilla=" + mirrorDrawVanilla;
+                    + " mirrorNeighborDy=" + mirrorNeighborDy + " mirrorDraw=" + mirrorDraw;
             System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_TRACE" + fields);
 
             String redReason = null;
-            if (!stepState.isOf(Blocks.CRAFTING_TABLE) || !flatState.isOf(Blocks.CRAFTING_TABLE)) {
-                redReason = "crafting_table_state_mismatch";
+            if (!stepState.isOf(Blocks.PUMPKIN) || !flatState.isOf(Blocks.PUMPKIN)) {
+                redReason = "pumpkin_state_mismatch";
             } else if (Math.abs(stepDy - (-0.5d)) > 1.0e-6d) {
                 redReason = "stepped_cube_not_lowered";
-            } else if (stepEast <= 0) {
+            } else if (!stepDraw) {
                 redReason = "stepped_exposed_face_culled";
-            } else if (flatEast != 0) {
+            } else if (flatDraw) {
                 redReason = "flat_flush_face_overdrawn";
             } else if (!mirrorState.isOf(Blocks.STONE) || Math.abs(mirrorDy) > 1.0e-6d) {
                 redReason = "mirror_grid_cube_mismatch";
             } else if (Math.abs(mirrorNeighborDy - (-0.5d)) > 1.0e-6d) {
                 redReason = "mirror_neighbor_not_lowered";
-            } else if (mirrorWest <= 0) {
+            } else if (!mirrorDraw) {
                 redReason = "mirror_grid_face_culled";
-            } else if (!stepDrawVanilla) {
-                redReason = "stepped_face_culled_on_vanilla_path";
-            } else if (flatDrawVanilla) {
-                redReason = "flat_face_drawn_on_vanilla_path";
-            } else if (!mirrorDrawVanilla) {
-                redReason = "mirror_face_culled_on_vanilla_path";
             }
             if (redReason != null) {
                 System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_RED reason=" + redReason + fields);
@@ -1960,44 +2014,6 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             }
             System.out.println("TERRAIN_SLABS_CEILING_HANG_GREEN" + fields);
         });
-    }
-
-    /** Reflectively invokes the vanilla chunk-cull check (private static) on the real render path. */
-    private static boolean vanillaShouldDrawFace(
-            net.minecraft.world.BlockRenderView world, BlockState state, Direction direction, BlockPos pos) {
-        try {
-            Method m = net.minecraft.client.render.block.BlockModelRenderer.class.getDeclaredMethod(
-                    "shouldDrawFace", net.minecraft.world.BlockRenderView.class, BlockState.class,
-                    boolean.class, Direction.class, BlockPos.class);
-            m.setAccessible(true);
-            return (boolean) m.invoke(null, world, state, true, direction, pos);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError("could not invoke BlockModelRenderer.shouldDrawFace: " + e);
-        }
-    }
-
-    private static int countFacesToward(
-            net.minecraft.world.BlockRenderView world, BlockPos pos, BlockState state,
-            java.util.function.Predicate<Direction> cullTest, Direction face) {
-        BlockStateModel model = net.minecraft.client.MinecraftClient.getInstance()
-                .getBlockRenderManager().getModel(state);
-        if (!(model instanceof FabricBlockStateModel fabricModel)) {
-            throw new AssertionError("expected FabricBlockStateModel for " + state);
-        }
-        Renderer renderer = Renderer.get();
-        if (renderer == null) {
-            throw new AssertionError("Fabric renderer missing for lowered cube cull proof");
-        }
-        MutableMesh mesh = renderer.mutableMesh();
-        fabricModel.emitQuads(mesh.emitter(), world, pos, state, Random.create(0x51abbEDL), cullTest);
-        int[] count = {0};
-        mesh.forEach(quad -> {
-            Direction quadFace = quad.cullFace() != null ? quad.cullFace() : quad.nominalFace();
-            if (quadFace == face) {
-                count[0]++;
-            }
-        });
-        return count[0];
     }
 
     private static ModelProbe modelProbe(

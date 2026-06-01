@@ -258,8 +258,11 @@ public final class SlabSupport {
      * terrain) rather than the deep column walk in {@link #getYOffset}, so it is safe to
      * call from the per-face chunk culling path.
      */
+    /** Debug toggle (-Dslabbed.disableStepCull=true) to disable the step-face cull relaxation. */
+    private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
+
     public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
-        if (world == null || pos == null || direction == null
+        if (STEP_CULL_DISABLED || world == null || pos == null || direction == null
                 || !direction.getAxis().isHorizontal() || !state.isOpaqueFullCube()) {
             return false;
         }
