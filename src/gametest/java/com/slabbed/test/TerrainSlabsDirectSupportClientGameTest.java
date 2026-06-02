@@ -121,6 +121,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 runConnectorConnectionProof(singleplayer);
                 runLoweredCubeCullProof(ctx, singleplayer);
                 runCeilingHangRegressionProof(singleplayer);
+                runHangerFollowLoweredProof(singleplayer);
             }
             if (generatedDoubleProof) {
                 runGeneratedDoubleDirectSupportProof(ctx, singleplayer);
@@ -2013,6 +2014,72 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 throw new AssertionError("Terrain Slabs ceiling hang regression failed: " + redReason + fields);
             }
             System.out.println("TERRAIN_SLABS_CEILING_HANG_GREEN" + fields);
+        });
+    }
+
+    /**
+     * Regression: a decorative hanger (lantern / spore blossom / hanging roots) placed under
+     * a block that Slabbed lowered (anchored onto a slab) must inherit that block's −0.5 so it
+     * hangs cleanly from the lowered underside instead of clipping into it. Chains are excluded
+     * (they keep clipping to connect). Top-slab adherence (+0.5) and plain blocks (0) unchanged.
+     */
+    private static void runHangerFollowLoweredProof(TestSingleplayerContext singleplayer) {
+        BlockState lantern = Blocks.LANTERN.getDefaultState().with(Properties.HANGING, true);
+        BlockState spore = Blocks.SPORE_BLOSSOM.getDefaultState();
+        BlockState roots = Blocks.HANGING_ROOTS.getDefaultState();
+        BlockState chain = Registries.BLOCK.get(Identifier.of("minecraft", "chain")).getDefaultState();
+        BlockState topSlab = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP);
+        BlockState bottomSlab = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        BlockPos base = SUPPORT_POS.add(16, 0, 0);
+        singleplayer.getServer().runOnServer(server -> {
+            ServerWorld world = server.getOverworld();
+            List<String> failures = new ArrayList<>();
+            BlockState[] hangers = {lantern, chain, spore, roots};
+            String[] names = {"lantern", "chain", "spore", "roots"};
+            double[] expected = {-0.5, 0.0, -0.5, -0.5};
+            for (int i = 0; i < hangers.length; i++) {
+                BlockPos sup = base.add(0, 1, i * 3);
+                BlockPos hp = base.add(0, 0, i * 3);
+                // Anchor the support lowered (place on a bottom slab, anchor, remove slab), then hang under it.
+                world.setBlockState(hp, bottomSlab, Block.NOTIFY_LISTENERS);
+                world.setBlockState(sup, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+                com.slabbed.anchor.SlabAnchorAttachment.addAnchor(world, sup, Blocks.STONE.getDefaultState());
+                world.setBlockState(hp, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+                world.setBlockState(hp, hangers[i], Block.NOTIFY_LISTENERS);
+                double supDy = SlabSupport.getYOffset(world, sup, world.getBlockState(sup));
+                double hDy = SlabSupport.getYOffset(world, hp, world.getBlockState(hp));
+                if (Math.abs(supDy - (-0.5d)) > 1.0e-6d) {
+                    failures.add(names[i] + "_support_not_lowered(supDy=" + supDy + ")");
+                }
+                if (Math.abs(hDy - expected[i]) > 1.0e-6d) {
+                    failures.add(names[i] + "_hangerDy=" + hDy + "_expected=" + expected[i]);
+                }
+            }
+            // control: lantern under a plain (non-lowered) full block -> 0
+            BlockPos cSup = base.add(0, 1, 12);
+            BlockPos cHp = base.add(0, 0, 12);
+            world.setBlockState(cSup, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(cHp, lantern, Block.NOTIFY_LISTENERS);
+            double ctrlDy = SlabSupport.getYOffset(world, cHp, world.getBlockState(cHp));
+            if (Math.abs(ctrlDy) > 1.0e-6d) {
+                failures.add("control_lantern_full_block_dy=" + ctrlDy);
+            }
+            // top-slab adherence -> +0.5
+            BlockPos tSup = base.add(0, 1, 15);
+            BlockPos tHp = base.add(0, 0, 15);
+            world.setBlockState(tSup, topSlab, Block.NOTIFY_LISTENERS);
+            world.setBlockState(tHp, lantern, Block.NOTIFY_LISTENERS);
+            double topDy = SlabSupport.getYOffset(world, tHp, world.getBlockState(tHp));
+            if (Math.abs(topDy - 0.5d) > 1.0e-6d) {
+                failures.add("lantern_top_slab_dy=" + topDy);
+            }
+            if (!failures.isEmpty()) {
+                String joined = String.join("; ", failures);
+                System.out.println("TERRAIN_SLABS_HANGER_FOLLOW_RED " + joined);
+                throw new AssertionError("Terrain Slabs hanger follow-lowered proof failed: " + joined);
+            }
+            System.out.println("TERRAIN_SLABS_HANGER_FOLLOW_GREEN lantern/spore/roots follow -0.5, "
+                    + "chain stays 0, control(full)=0, topSlab=+0.5");
         });
     }
 

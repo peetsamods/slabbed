@@ -261,6 +261,9 @@ public final class SlabSupport {
     /** Debug toggle (-Dslabbed.disableStepCull=true) to disable the step-face cull relaxation. */
     private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
 
+    /** Debug toggle (-Dslabbed.disableHangerFollow=true) to disable decorative-hanger follow-down. */
+    private static final boolean HANGER_FOLLOW_DISABLED = Boolean.getBoolean("slabbed.disableHangerFollow");
+
     public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
         if (STEP_CULL_DISABLED || world == null || pos == null || direction == null
                 || !direction.getAxis().isHorizontal() || !state.isOpaqueFullCube()) {
@@ -768,6 +771,22 @@ public final class SlabSupport {
                     continue;
                 }
                 break;
+            }
+        }
+
+        // ── decorative hangers follow a LOWERED support block DOWN ──────
+        // A lantern / spore blossom / hanging roots / … placed under a block that Slabbed
+        // lowered (anchored onto a slab, etc.) must inherit that block's −0.5 so it hangs
+        // from the lowered underside instead of clipping into it. Chains are excluded so
+        // they keep clipping upward to connect. The support's own dy is computed here
+        // recursion-safely: the IN_GET_Y_OFFSET guard is already set, so the support's
+        // isSolidBlock/outline lookups resolve to the raw (un-offset) shape. We skip
+        // ceiling-attached supports so we never walk a stack of hangers.
+        if (!HANGER_FOLLOW_DISABLED && isCeilingAttached(state) && !(blk instanceof ChainBlock)
+                && !above.isAir() && !isCeilingAttached(above)) {
+            double supportDy = getYOffsetInner(world, pos.up(), above);
+            if (supportDy < 0.0) {
+                return supportDy;
             }
         }
 
