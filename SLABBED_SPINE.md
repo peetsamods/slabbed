@@ -27,17 +27,24 @@ port/mc-1.21.1
 Commit:
 
 ```text
-eab0880a
+94a5643e
 ```
 
 Tag:
 
 ```text
-save/mc1211-sbbs-underside-pre-manual-testing
+(untagged — local commit on port/mc-1.21.1)
 ```
 
-Pushed branch: yes
-Pushed tag: yes
+Pushed branch: no (local only — not yet pushed)
+Pushed tag: n/a
+
+Live-confirmed 2026-06-03: decorative-hanger follow-down under lowered FULL blocks
+AND lowered TOP slabs (SlabSupport.java; lantern/soul lantern/spore blossom/
+hanging roots/pale hanging moss, chains excluded). Supersedes prior tagged+pushed
+savepoint `eab0880a` (tag `save/mc1211-sbbs-underside-pre-manual-testing`), which
+remains in history. Note: the working tree still carries the uncommitted
+`LoweredSideSlabRetargeter.java` WIP (deliberately not in 94a5643e).
 
 ## Current objective
 
