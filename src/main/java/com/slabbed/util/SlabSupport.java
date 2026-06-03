@@ -396,6 +396,36 @@ public final class SlabSupport {
         return Double.isFinite(supportDy) && supportDy < -1.0e-6d;
     }
 
+    /**
+     * Full-block analogue of {@link #isBeta35LoweredSlabUndersideVisibleOwnerObject}.
+     * True when a decorative hanger (lantern / soul lantern / spore blossom /
+     * hanging roots / pale hanging moss — NOT chains) hangs directly beneath a
+     * SOLID, NON-SLAB full block that itself renders lowered. Such a hanger must
+     * follow the support down so it stays flush instead of clipping up into the
+     * lowered block. Chains are intentionally excluded so they keep extending to
+     * connect to the support.
+     */
+    private static boolean isBeta35LoweredFullBlockUndersideVisibleOwnerObject(
+            BlockView world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null || state.isAir() || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        Block block = state.getBlock();
+        boolean supportedCeilingObject = state.isOf(Blocks.LANTERN)
+                || state.isOf(Blocks.SOUL_LANTERN)
+                || block instanceof SporeBlossomBlock
+                || block instanceof HangingRootsBlock
+                || isPaleHangingMossBlock(state);
+        if (!supportedCeilingObject) {
+            return false;
+        }
+        BlockPos supportPos = pos.up();
+        BlockState supportState = world.getBlockState(supportPos);
+        double supportDy = loweredFullBlockUndersideSupportDy(world, supportPos, supportState);
+        return Double.isFinite(supportDy) && supportDy < -1.0e-6d;
+    }
+
     public static boolean isBeta35FenceWallVariantContactObject(BlockState state) {
         return state != null
                 && (state.getBlock() instanceof FenceBlock
@@ -442,6 +472,92 @@ public final class SlabSupport {
             return -0.5d;
         }
         return 0.0d;
+    }
+
+    /**
+     * Recursion-safe analogue of {@link #loweredSlabUndersideSupportDy} for a
+     * SOLID, NON-SLAB full-block ceiling support. Returns EXACTLY the dy that
+     * {@link #getYOffsetInner} assigns the full block at {@code pos}, computed
+     * without delegating to {@link #getYOffset} so it is safe to call inside the
+     * {@link #IN_GET_Y_OFFSET} recursion guard. Decorative hangers
+     * (lantern / soul lantern / spore blossom / hanging roots / pale hanging
+     * moss) follow this value down so they hang flush under a lowered support
+     * instead of clipping up into it.
+     *
+     * <p>Every predicate invoked here ({@code isAnchored},
+     * {@code isCompoundFullBlockAnchor}, {@link #isOrdinaryFullBlockWithCompoundDy},
+     * the {@code beta35*ContactDy} family, {@link #shouldOffset},
+     * {@link #slabColumnYOffset}) is already invoked by {@link #getYOffsetInner}
+     * under the same guard, so this mirror adds no new recursion risk and returns
+     * the support's true rendered dy by construction.
+     *
+     * <p>Only ever returns {@code 0.0}, a negative lowered dy ({@code -0.5} /
+     * {@code -1.0}), or {@link Double#NaN} (not a lowered full block — the hanger
+     * keeps its natural dy). Never returns a positive dy: top-slab {@code +0.5}
+     * adherence is a separate downstream branch and full blocks are not top slabs.
+     */
+    private static double loweredFullBlockUndersideSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isSolidBlock(world, pos)) {
+            return Double.NaN;
+        }
+        // ── anchored full block: mirror the getYOffsetInner anchor branch ──────
+        if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            // compound (-1.0): compound anchor OR resting on an adjacent-side-lowered bottom slab
+            if (isOrdinaryFullBlockWithCompoundDy(world, pos, state)) {
+                return -1.0d;
+            }
+            double specialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
+            if (Double.isFinite(specialFullblockContactDy)) {
+                return specialFullblockContactDy;
+            }
+            double oakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);
+            if (Double.isFinite(oakTrapdoorContactDy)) {
+                return oakTrapdoorContactDy;
+            }
+            double regularDoorContactDy = beta35RegularDoorContactDy(world, pos, state);
+            if (Double.isFinite(regularDoorContactDy)) {
+                return regularDoorContactDy;
+            }
+            double standingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
+            if (Double.isFinite(standingOakSignContactDy)) {
+                return standingOakSignContactDy;
+            }
+            double floorButtonContactDy = beta35FloorButtonContactDy(world, pos, state);
+            if (Double.isFinite(floorButtonContactDy)) {
+                return floorButtonContactDy;
+            }
+            return -0.5d;
+        }
+        // ── non-anchored: mirror the standalone contact dys in getYOffsetInner ──
+        // (only special/ordinary full-block contacts can be finite for a solid
+        // full block; the button/fence/gate/trapdoor/door/sign contacts require
+        // non-solid owner types and would be NaN here.)
+        double specialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
+        if (Double.isFinite(specialFullblockContactDy)) {
+            return specialFullblockContactDy;
+        }
+        double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
+        if (Double.isFinite(ordinaryFullBlockContactDy)) {
+            return ordinaryFullBlockContactDy;
+        }
+        // ── non-anchored full block lowered by a slab in its column ─────────────
+        if (shouldOffset(world, pos, state)) {
+            BlockPos belowPos = pos.down();
+            BlockState below = world.getBlockState(belowPos);
+            if (isBottomSlab(below) && isAdjacentSideSlabLowered(world, belowPos, below)) {
+                return -1.0d;
+            }
+            double columnDy = slabColumnYOffset(world, pos);
+            if (columnDy != 0.0d) {
+                return columnDy;
+            }
+            return -0.5d;
+        }
+        return Double.NaN;
     }
 
     private static double beta35FenceWallVariantContactDy(BlockView world, BlockPos pos, BlockState state) {
@@ -1686,11 +1802,33 @@ public final class SlabSupport {
         }
 
         // Ceiling-attached visual owners under lowered slab undersides inherit
-        // the slab lane dy directly to stay attached and avoid merging upward.
+        // the slab lane dy to stay attached. A hanger attaches at its own
+        // block-top (P.y+1); a slab's underside sits at P.y+1 for BOTTOM/DOUBLE
+        // (full-height bottom face) but at P.y+1.5 for a TOP slab (mid-block
+        // underside). So under a lowered TOP slab the hanger's correct dy is the
+        // slab dy PLUS the +0.5 raised-attach baseline; BOTTOM/DOUBLE take the
+        // slab dy directly. Mirrors the top-trapdoor branch above. Without the
+        // +0.5, hangers under a lowered top slab drop 0.5 too far (visible gap).
         if (isBeta35LoweredSlabUndersideVisibleOwnerObject(world, pos, state)) {
             BlockPos supportPos = pos.up();
             BlockState supportState = world.getBlockState(supportPos);
             double supportDy = loweredSlabUndersideSupportDy(world, supportPos, supportState);
+            if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+                return supportState.get(SlabBlock.TYPE) == SlabType.TOP ? supportDy + 0.5d : supportDy;
+            }
+        }
+
+        // Decorative hangers under a lowered FULL-BLOCK support inherit the
+        // support's exact rendered dy (the full-block analogue of the slab
+        // branch above) so they hang flush instead of clipping up into the
+        // lowered block. Runs BEFORE the top-slab +0.5 branch; full blocks are
+        // never top slabs so +0.5 adherence is untouched, and the helper returns
+        // NaN for normal (non-lowered) supports so the already-correct flush case
+        // is preserved. Chains are excluded (not in the decorative owner set).
+        if (isBeta35LoweredFullBlockUndersideVisibleOwnerObject(world, pos, state)) {
+            BlockPos supportPos = pos.up();
+            BlockState supportState = world.getBlockState(supportPos);
+            double supportDy = loweredFullBlockUndersideSupportDy(world, supportPos, supportState);
             if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
                 return supportDy;
             }
