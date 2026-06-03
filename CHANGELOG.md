@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Docs
+- Added external findings log: `tools/terrain-slabs-window-claude-findings-2026-06-01.md` summarizing Claude's latest terrain-slab "window" investigation timeline, claimed commits/proofs, and unresolved live-status endpoint.
+
 ## [0.2.0-beta.2] — Side-Slab Torch Stability
 
 ### Fixed
