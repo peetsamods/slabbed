@@ -119,7 +119,8 @@ public abstract class GameRendererCrosshairRetargetMixin {
         boolean loweredOwner =
                 SlabSupport.isLoweredBlockEntityVisual(world, abovePos, aboveState)
                         || SlabSupport.isLoweredTorchVisual(world, abovePos, aboveState)
-                        || SlabSupport.isLoweredBedVisual(world, abovePos, aboveState);
+                        || SlabSupport.isLoweredBedVisual(world, abovePos, aboveState)
+                        || SlabSupport.isLoweredCustomSupportedObjectVisual(world, abovePos, aboveState);
         if (!loweredOwner) {
             // Ordinary solid full blocks have an unambiguous owner signature:
             // a lowered full-cube outline directly above the slab hit. Keep
