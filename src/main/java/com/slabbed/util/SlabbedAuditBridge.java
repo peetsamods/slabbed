@@ -2,6 +2,9 @@ package com.slabbed.util;
 
 import java.lang.reflect.Method;
 
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+
 /**
  * Reflection bridge to the dev-only audit class
  * {@code com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit}.
@@ -19,15 +22,22 @@ public final class SlabbedAuditBridge {
 
     private static final String AUDIT_CLASS_NAME =
             "com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit";
+    private static final String LIVE_TRACE_CLASS_NAME =
+            "com.slabbed.debug.BsFbLiveTrace";
 
     /** Enable with JVM arg: {@code -Dslabbed.debug.sbsb=true}. */
     private static final boolean ENABLED = Boolean.getBoolean("slabbed.debug.sbsb");
+    private static final boolean LIVE_TRACE_ENABLED = Boolean.getBoolean("slabbed.bsfb.live.trace");
 
     private SlabbedAuditBridge() {
     }
 
     public static boolean isEnabled() {
         return ENABLED;
+    }
+
+    public static boolean isLiveTraceEnabled() {
+        return LIVE_TRACE_ENABLED;
     }
 
     public static void invoke(String methodName, Class<?>[] paramTypes, Object... args) {
@@ -40,6 +50,24 @@ public final class SlabbedAuditBridge {
             method.invoke(null, args);
         } catch (ReflectiveOperationException | LinkageError ignored) {
             // Audit class is dev-only and excluded from the release jar.
+        }
+    }
+
+    public static void captureLiveTrace(World world, BlockPos supportPos, BlockPos fullPos, String label) {
+        if (!LIVE_TRACE_ENABLED) {
+            return;
+        }
+        try {
+            Class<?> traceClass = Class.forName(LIVE_TRACE_CLASS_NAME);
+            Method method = traceClass.getMethod(
+                    "capture",
+                    World.class,
+                    BlockPos.class,
+                    BlockPos.class,
+                    String.class);
+            method.invoke(null, world, supportPos, fullPos, label);
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            // Live trace is dev-only and excluded from the release jar.
         }
     }
 }
