@@ -110,6 +110,29 @@ public abstract class SlabSupportStateMixin {
         return SLABBED$COMFORT_TORCH_SHAPE.offset(0.0, 1.0 + torchDy, 0.0);
     }
 
+    private static VoxelShape slabbed$customLoweredObjectOverlay(
+            BlockView world, BlockPos supportPos, BlockState supportState, ShapeContext ctx
+    ) {
+        if (world == null || supportPos == null || supportState == null) {
+            return null;
+        }
+        if (!SlabSupport.isDirectObjectSupportSurface(world, supportPos, supportState)) {
+            return null;
+        }
+
+        BlockPos abovePos = supportPos.up();
+        BlockState aboveState = world.getBlockState(abovePos);
+        if (!SlabSupport.isLoweredCustomSupportedObjectVisual(world, abovePos, aboveState)) {
+            return null;
+        }
+
+        VoxelShape aboveOutline = aboveState.getOutlineShape(world, abovePos, ctx);
+        if (aboveOutline.isEmpty()) {
+            return null;
+        }
+        return aboveOutline.offset(0.0, 1.0, 0.0);
+    }
+
     // ── placement / survival support ──────────────────────────────────
 
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
@@ -139,7 +162,7 @@ public abstract class SlabSupportStateMixin {
     @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
+        if (direction == Direction.UP && SlabSupport.canTreatAsSolidTopFace(world, pos)) {
             cir.setReturnValue(true);
         }
     }
@@ -195,6 +218,12 @@ public abstract class SlabSupportStateMixin {
                 shape = VoxelShapes.union(shape, overlay);
                 changed = true;
             }
+        }
+
+        VoxelShape customOverlay = slabbed$customLoweredObjectOverlay(world, pos, self, ctx);
+        if (customOverlay != null) {
+            shape = VoxelShapes.union(shape, customOverlay);
+            changed = true;
         }
 
         if (changed) {

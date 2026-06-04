@@ -25,4 +25,25 @@ public final class CompatHooks {
         }
         return false;
     }
+
+    /**
+     * Returns true if compat requires excluding this state from generic slab
+     * support-source semantics.
+     */
+    public static boolean shouldSkipSlabSupport(BlockState state) {
+        if (isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+            return TerrainSlabsCompat.shouldSkipSlabSupport(state);
+        }
+        return false;
+    }
+
+    /**
+     * Named compat-only slab surface role for direct object support decisions.
+     */
+    public static CompatSlabSurfaceKind customSlabSurfaceKind(BlockState state) {
+        if (isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+            return TerrainSlabsCompat.customSlabSurfaceKind(state);
+        }
+        return CompatSlabSurfaceKind.NONE;
+    }
 }

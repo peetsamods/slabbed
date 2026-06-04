@@ -2,11 +2,16 @@ package com.slabbed.util;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.ChiseledBookshelfBlock;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.KelpBlock;
+import net.minecraft.block.KelpPlantBlock;
 import net.minecraft.block.ButtonBlock;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.CaveVinesBodyBlock;
@@ -34,6 +39,8 @@ import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -75,6 +82,9 @@ public final class SlabSupport {
      * Returns true if the state is a slab with a defined type.
      */
     public static boolean isSupportingSlab(BlockState state) {
+        if (CompatHooks.shouldSkipSlabSupport(state)) {
+            return false;
+        }
         return state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE);
     }
 
@@ -93,12 +103,15 @@ public final class SlabSupport {
      * and the queried face is DOWN (i.e. the underside of a top slab).
      */
     public static boolean isTopSlabUndersideSupport(BlockState state, Direction face) {
-        return face == Direction.DOWN && isTopSlab(state);
+        return face == Direction.DOWN && isTopLikeCeilingSurface(state);
     }
 
     /** True if the block at {@code posAbove} is a top or double slab that can provide ceiling support. */
     public static boolean isCeilingSupportBottomSurface(WorldView world, BlockPos posAbove) {
         BlockState stateAbove = world.getBlockState(posAbove);
+        if (isTopLikeCeilingSurface(stateAbove)) {
+            return true;
+        }
         if (!isSupportingSlab(stateAbove)) {
             return false;
         }
@@ -109,6 +122,9 @@ public final class SlabSupport {
     /** Overload for shape/world views. */
     public static boolean isCeilingSupportBottomSurface(BlockView world, BlockPos posAbove) {
         BlockState stateAbove = world.getBlockState(posAbove);
+        if (isTopLikeCeilingSurface(stateAbove)) {
+            return true;
+        }
         if (!isSupportingSlab(stateAbove)) {
             return false;
         }
@@ -121,7 +137,8 @@ public final class SlabSupport {
         if (world == null || pos == null) {
             return false;
         }
-        return isBottomSlab(world.getBlockState(pos.down()));
+        BlockState below = getBlockStateOrNull(world, pos.down());
+        return below != null && isBottomSlab(below);
     }
 
     /**
@@ -139,16 +156,68 @@ public final class SlabSupport {
         };
     }
 
+    public static boolean isDirectObjectSupportSurface(BlockView world, BlockPos pos, BlockState state) {
+        return getDirectObjectSupportTopOffset(state) > 0.0;
+    }
+
+    public static boolean isDirectCustomSlabSupportedObject(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
+            return false;
+        }
+
+        if (state.contains(Properties.BED_PART) && state.contains(Properties.HORIZONTAL_FACING)) {
+            Direction facing = state.get(Properties.HORIZONTAL_FACING);
+            BedPart part = state.get(Properties.BED_PART);
+            BlockPos otherPos = part == BedPart.FOOT
+                    ? pos.offset(facing)
+                    : pos.offset(facing.getOpposite());
+            return hasDirectCustomBottomLikeSupportColumn(world, pos.down())
+                    || hasDirectCustomBottomLikeSupportColumn(world, otherPos.down());
+        }
+
+        BlockPos supportPos = pos.down();
+        if (state.contains(Properties.DOUBLE_BLOCK_HALF)
+                && state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
+            BlockState lowerState = world.getBlockState(pos.down());
+            if (lowerState.getBlock() != state.getBlock()
+                    || !lowerState.contains(Properties.DOUBLE_BLOCK_HALF)
+                    || lowerState.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
+                return false;
+            }
+            supportPos = pos.down(2);
+        }
+
+        return hasDirectCustomBottomLikeSupportColumn(world, supportPos);
+    }
+
+    public static double getDirectObjectSupportTopOffset(BlockState state) {
+        return switch (CompatHooks.customSlabSurfaceKind(state)) {
+            case BOTTOM_LIKE -> 0.5;
+            case TOP_LIKE, DOUBLE_LIKE -> 1.0;
+            case NONE, UNKNOWN -> {
+                if (isBottomSlab(state)) {
+                    yield 0.5;
+                }
+                if (isTopSlab(state) || isSupportingSlab(state) && state.get(SlabBlock.TYPE) == SlabType.DOUBLE) {
+                    yield 1.0;
+                }
+                yield 0.0;
+            }
+        };
+    }
+
     /**
      * Primary query: should this slab top face count as solid support.
      */
     public static boolean canTreatAsSolidTopFace(WorldView world, BlockPos pos) {
-        return isSupportingSlab(world, pos);
+        BlockState state = world.getBlockState(pos);
+        return isSupportingSlab(state) || isDirectObjectSupportSurface(world, pos, state);
     }
 
     /** Overload for shape/world views. */
     public static boolean canTreatAsSolidTopFace(BlockView world, BlockPos pos) {
-        return isSupportingSlab(world, pos);
+        BlockState state = world.getBlockState(pos);
+        return isSupportingSlab(state) || isDirectObjectSupportSurface(world, pos, state);
     }
 
     /**
@@ -242,7 +311,7 @@ public final class SlabSupport {
         // blocks under a top slab that get +0.5 UP via getYOffset should not
         // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
-        if (isCeilingAttached(state) && isTopSlab(world.getBlockState(pos.up()))) {
+        if (isCeilingAttached(state) && isTopLikeCeilingSurface(world.getBlockState(pos.up()))) {
             return false;
         }
 
@@ -252,7 +321,7 @@ public final class SlabSupport {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
-                if (isTopSlab(cur)) {
+                if (isTopLikeCeilingSurface(cur)) {
                     return false;
                 }
                 if (isCeilingAttached(cur)) {
@@ -359,7 +428,8 @@ public final class SlabSupport {
         }
         for (Direction dir : Direction.Type.HORIZONTAL) {
             BlockPos neighborPos = slabPos.offset(dir);
-            BlockState neighbor = world.getBlockState(neighborPos);
+            BlockState neighbor = getBlockStateOrNull(world, neighborPos);
+            if (neighbor == null) continue;
             if (neighbor.getBlock() instanceof SlabBlock) continue;
             if (!neighbor.isSolidBlock(world, neighborPos)) continue;
             if (hasBottomSlabBelow(world, neighborPos)
@@ -407,6 +477,11 @@ public final class SlabSupport {
             return -0.5;
         }
 
+        double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
+        if (!Double.isNaN(directCustomSurfaceDy)) {
+            return directCustomSurfaceDy;
+        }
+
         if (shouldOffset(world, pos, state)) {
             // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
             // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
@@ -440,7 +515,7 @@ public final class SlabSupport {
         BlockState above = world.getBlockState(pos.up());
 
         // direct: ceiling-attached blocks directly under a top slab
-        if (isCeilingAttached(state) && isTopSlab(above)) {
+        if (isCeilingAttached(state) && isTopLikeCeilingSurface(above)) {
             return 0.5;
         }
 
@@ -450,7 +525,7 @@ public final class SlabSupport {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
-                if (isTopSlab(cur)) {
+                if (isTopLikeCeilingSurface(cur)) {
                     return 0.5;
                 }
                 if (isCeilingAttached(cur)) {
@@ -511,6 +586,14 @@ public final class SlabSupport {
                 && getYOffset(world, pos, state) == -0.5;
     }
 
+    public static boolean isLoweredCustomSupportedObjectVisual(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return false;
+        }
+        return isDirectCustomSlabSupportedObject(world, pos, state)
+                && getYOffset(world, pos, state) == -0.5;
+    }
+
     /**
      * Redstone dust support surface — treat slab tops like valid ground for downward stepping.
      */
@@ -537,6 +620,8 @@ public final class SlabSupport {
      *       {@link #isLoweredBlockEntityVisual} contract and ensures
      *       full-cube BE blocks (jukebox, spawner, …) lower alongside
      *       non-full-cube BE blocks (chest, hopper, …).</li>
+     *   <li>Log-family blocks in {@link BlockTags#LOGS} — logs, wood,
+     *       stripped variants, and nether stems, once block tags are bound.</li>
      *   <li>Any block that is not a full solid cube — fences, walls, panes,
      *       torches, buttons, pressure plates, wall signs, etc.
      *       ({@code !state.isSolidBlock}).</li>
@@ -554,7 +639,86 @@ public final class SlabSupport {
         if (block instanceof CraftingTableBlock) {
             return true;
         }
+        if (state.isOf(Blocks.BOOKSHELF)
+                || state.isOf(Blocks.DRIED_KELP_BLOCK)
+                || block instanceof ChiseledBookshelfBlock) {
+            return true;
+        }
+        if (block instanceof KelpBlock || block instanceof KelpPlantBlock) {
+            return true;
+        }
+        if (isLogFamilySlabSitCandidate(state)) {
+            return true;
+        }
         return !state.isSolidBlock(world, pos);
+    }
+
+    private static boolean isLogFamilySlabSitCandidate(BlockState state) {
+        try {
+            return state.isIn(BlockTags.LOGS);
+        } catch (IllegalStateException e) {
+            if ("Tags not bound".equals(e.getMessage())) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    private static boolean isTopLikeCeilingSurface(BlockState state) {
+        CompatSlabSurfaceKind customKind = CompatHooks.customSlabSurfaceKind(state);
+        if (customKind == CompatSlabSurfaceKind.TOP_LIKE || customKind == CompatSlabSurfaceKind.DOUBLE_LIKE) {
+            return true;
+        }
+        return isTopSlab(state)
+                || isSupportingSlab(state) && state.get(SlabBlock.TYPE) == SlabType.DOUBLE;
+    }
+
+    private static double directCustomSlabSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (!isDirectCustomSlabSupportedObject(world, pos, state)) {
+            return Double.NaN;
+        }
+        return -0.5;
+    }
+
+    private static boolean hasDirectCustomBottomLikeSupportColumn(BlockView world, BlockPos supportPos) {
+        BlockPos cursor = supportPos;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState supportState = getBlockStateOrNull(world, cursor);
+            if (supportState == null) {
+                return false;
+            }
+            if (CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
+            if (isDirectCustomSlabSupportSubject(world, cursor, supportState)) {
+                cursor = cursor.down();
+                continue;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    private static boolean isDirectCustomSlabSupportSubject(BlockView world, BlockPos pos, BlockState state) {
+        Block block = state == null ? null : state.getBlock();
+        boolean kelpFamily = block instanceof KelpBlock || block instanceof KelpPlantBlock;
+        if (state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
+                || isThinTopLayer(state)
+                || (!state.getFluidState().isEmpty() && !kelpFamily)
+                || CompatHooks.shouldSkipOffset(state)) {
+            return false;
+        }
+        return isVanillaDirectCustomSlabSubject(state) || isSlabSitCandidate(world, pos, state);
+    }
+
+    private static boolean isVanillaDirectCustomSlabSubject(BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock) || !state.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        var id = Registries.BLOCK.getId(state.getBlock());
+        return id != null && "minecraft".equals(id.getNamespace());
     }
 
     /**
@@ -579,7 +743,10 @@ public final class SlabSupport {
     private static boolean hasSlabInColumn(BlockView world, BlockPos pos) {
         BlockPos cursor = pos.down();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
-            BlockState cur = world.getBlockState(cursor);
+            BlockState cur = getBlockStateOrNull(world, cursor);
+            if (cur == null) {
+                return false;
+            }
             if (isBottomSlab(cur)) {
                 return true;
             }
@@ -601,7 +768,10 @@ public final class SlabSupport {
     private static double slabColumnYOffset(BlockView world, BlockPos pos) {
         BlockPos cursor = pos.down();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
-            BlockState cur = world.getBlockState(cursor);
+            BlockState cur = getBlockStateOrNull(world, cursor);
+            if (cur == null) {
+                return 0.0;
+            }
             if (cur.getBlock() instanceof SlabBlock
                     && isAdjacentSideSlabLowered(world, cursor, cur)) {
                 return isBottomSlab(cur) ? -1.0 : -0.5;
@@ -615,5 +785,21 @@ public final class SlabSupport {
             cursor = cursor.down();
         }
         return 0.0;
+    }
+
+    private static BlockState getBlockStateOrNull(BlockView world, BlockPos pos) {
+        try {
+            return world.getBlockState(pos);
+        } catch (IndexOutOfBoundsException e) {
+            if (isChunkRendererRegion(world)) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    private static boolean isChunkRendererRegion(BlockView world) {
+        return world != null
+                && "net.minecraft.client.render.chunk.ChunkRendererRegion".equals(world.getClass().getName());
     }
 }
