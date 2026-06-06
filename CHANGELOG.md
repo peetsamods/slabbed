@@ -2,6 +2,7 @@
 
 ### Docs
 - Added external findings log: `tools/terrain-slabs-window-claude-findings-2026-06-01.md` summarizing Claude's latest terrain-slab "window" investigation timeline, claimed commits/proofs, and unresolved live-status endpoint.
+- Added recorder infra slice thread record (`019e9531-58e5-7013-a1d1-9dabe9e215d7`): recorder mixins optionalized, contract artifacts hardened (`manifest.json`, `summary.json`, `summary.md`, `session.jsonl`, `actions.tsv`, `mismatches.tsv`), action ledger/backfill stabilized, and non-recorder gameplay logic kept untouched.
 
 ## [0.2.0-beta.2] — Side-Slab Torch Stability
 

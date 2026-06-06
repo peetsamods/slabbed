@@ -3,6 +3,7 @@ package com.slabbed.mixin.client;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.ChainBlock;
@@ -73,6 +74,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
         // initial target sits on a farther/underneath block.
         BlockHitResult anchoredHit = slabbed$retargetAnchoredLoweredFullBlock(tickProgress, ht);
         BlockHitResult loweredSlabHit = slabbed$retargetLoweredSideSlab(tickProgress, ht);
+        if (slabbed$isCrossAxisLoweredSideSlabSteal(ht, loweredSlabHit)) {
+            loweredSlabHit = null;
+        }
         BlockHitResult chosen = slabbed$chooseRescue(tickProgress, anchoredHit, loweredSlabHit, slabHeld);
         BlockHitResult loweredChainHit = slabHeld ? null : slabbed$retargetLoweredChainTopSupport(tickProgress, ht);
         if (loweredChainHit != null && slabbed$isCloserOrTied(tickProgress, loweredChainHit, chosen)) {
@@ -129,7 +133,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             loweredOwner = aboveState.isSolidBlock(world, abovePos)
                     && !(block instanceof net.minecraft.block.BlockEntityProvider)
                     && !(block instanceof net.minecraft.block.CraftingTableBlock)
-                    && SlabSupport.getYOffset(world, abovePos, aboveState) == -0.5;
+                    && SlabSupport.getVisualYOffset(world, abovePos, aboveState) == -0.5;
         }
         if (!loweredOwner) {
             slabbed$traceTargeting(tickProgress, initialTarget,
@@ -240,6 +244,26 @@ public abstract class GameRendererCrosshairRetargetMixin {
         return stack.getItem() instanceof BlockItem bi && bi.getBlock() instanceof SlabBlock;
     }
 
+    private boolean slabbed$isCrossAxisLoweredSideSlabSteal(HitResult currentHit, BlockHitResult sideSlabHit) {
+        if (sideSlabHit == null || currentHit == null || currentHit.getType() != HitResult.Type.BLOCK
+                || !(currentHit instanceof BlockHitResult currentBlockHit)) {
+            return false;
+        }
+
+        Direction.Axis currentAxis = currentBlockHit.getSide().getAxis();
+        Direction.Axis sideSlabAxis = sideSlabHit.getSide().getAxis();
+        if (currentAxis == Direction.Axis.Y || sideSlabAxis == Direction.Axis.Y || currentAxis == sideSlabAxis) {
+            return false;
+        }
+
+        ClientWorld world = client.world;
+        if (world == null) {
+            return false;
+        }
+        BlockPos currentPos = currentBlockHit.getBlockPos();
+        return slabbed$isAnchoredLoweredFullBlock(world, currentPos, world.getBlockState(currentPos));
+    }
+
     private BlockHitResult slabbed$retargetLoweredSideSlab(float tickProgress, HitResult currentHit) {
         ClientWorld world = client.world;
         Entity cam = client.getCameraEntity();
@@ -296,7 +320,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (!(state.getBlock() instanceof SlabBlock)
                 || !state.contains(SlabBlock.TYPE)
                 || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
-                || SlabSupport.getYOffset(world, pos, state) != -0.5) {
+                || SlabSupport.getVisualYOffset(world, pos, state) != -0.5) {
             return null;
         }
         VoxelShape shape = state.getOutlineShape(world, pos, ShapeContext.of(cam));
@@ -363,7 +387,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (!(state.getBlock() instanceof ChainBlock)
                 || !state.contains(ChainBlock.AXIS)
                 || state.get(ChainBlock.AXIS) != Direction.Axis.Y
-                || SlabSupport.getYOffset(world, pos, state) >= 0.0) {
+                || SlabSupport.getVisualYOffset(world, pos, state) >= 0.0) {
             return null;
         }
 
@@ -372,7 +396,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (!(supportState.getBlock() instanceof SlabBlock)
                 || !supportState.contains(SlabBlock.TYPE)
                 || supportState.get(SlabBlock.TYPE) != SlabType.BOTTOM
-                || SlabSupport.getYOffset(world, supportPos, supportState) != -0.5
+                || SlabSupport.getVisualYOffset(world, supportPos, supportState) != -0.5
                 || !slabbed$hasAdjacentAnchoredLoweredFullBlock(world, supportPos)) {
             return null;
         }
@@ -468,16 +492,12 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
 
         return SlabAnchorAttachment.isAnchored(world, pos)
-                && SlabSupport.getYOffset(world, pos, state) == -0.5;
+                && SlabSupport.getVisualYOffset(world, pos, state) == -0.5;
     }
 
     private void slabbed$traceTargeting(
             float tickProgress, HitResult initialTarget, String anchoredDecision, boolean sideSlabRetargetFired
     ) {
-        if (!Boolean.getBoolean("slabbed.target.trace")) {
-            return;
-        }
-
         ClientWorld world = client.world;
         Entity cam = client.getCameraEntity();
         if (world == null || cam == null || client.player == null) {
@@ -488,6 +508,21 @@ public abstract class GameRendererCrosshairRetargetMixin {
         Vec3d dir = cam.getRotationVec(tickProgress);
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
+        SlabbedAuditBridge.invokeRecorder(
+                "recordCrosshairTarget",
+                new Class<?>[]{HitResult.class, HitResult.class, String.class, boolean.class, boolean.class, Vec3d.class, Vec3d.class, ItemStack.class, float.class},
+                initialTarget,
+                client.crosshairTarget,
+                anchoredDecision,
+                sideSlabRetargetFired,
+                slabbed$isSlabPlacementIntent(),
+                eye,
+                dir,
+                client.player.getMainHandStack(),
+                tickProgress);
+        if (!Boolean.getBoolean("slabbed.target.trace")) {
+            return;
+        }
         double vanillaDist2 = Double.POSITIVE_INFINITY;
         if (initialTarget != null && initialTarget.getType() == HitResult.Type.BLOCK) {
             vanillaDist2 = initialTarget.getPos().squaredDistanceTo(eye);
@@ -560,7 +595,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
     ) {
         BlockState state = world.getBlockState(pos);
         boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
-        double dy = SlabSupport.getYOffset(world, pos, state);
+        double dy = SlabSupport.getVisualYOffset(world, pos, state);
         boolean solid = state.isSolidBlock(world, pos);
         if (!solid || !anchored || dy != -0.5) {
             return null;
@@ -604,7 +639,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             return null;
         }
 
-        double dy = SlabSupport.getYOffset(world, pos, state);
+        double dy = SlabSupport.getVisualYOffset(world, pos, state);
         boolean bottom = state.contains(SlabBlock.TYPE) && state.get(SlabBlock.TYPE) == SlabType.BOTTOM;
         if (!bottom || dy != -0.5) {
             return null;

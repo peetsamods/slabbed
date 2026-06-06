@@ -22,11 +22,14 @@ public final class SlabbedAuditBridge {
 
     private static final String AUDIT_CLASS_NAME =
             "com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit";
+    private static final String LIVE_RECORDER_CLASS_NAME =
+            "com.slabbed.dev.audit.LiveCursorIntentRecorder";
     private static final String LIVE_TRACE_CLASS_NAME =
             "com.slabbed.debug.BsFbLiveTrace";
 
     /** Enable with JVM arg: {@code -Dslabbed.debug.sbsb=true}. */
     private static final boolean ENABLED = Boolean.getBoolean("slabbed.debug.sbsb");
+    private static final boolean LIVE_RECORDER_ENABLED = Boolean.getBoolean("slabbed.liveCursorIntentRecorder");
     private static final boolean LIVE_TRACE_ENABLED = Boolean.getBoolean("slabbed.bsfb.live.trace");
 
     private SlabbedAuditBridge() {
@@ -36,8 +39,16 @@ public final class SlabbedAuditBridge {
         return ENABLED;
     }
 
+    public static boolean isRecorderEnabled() {
+        return LIVE_RECORDER_ENABLED;
+    }
+
     public static boolean isLiveTraceEnabled() {
         return LIVE_TRACE_ENABLED;
+    }
+
+    public static void bootstrapLiveRecorder() {
+        invokeRecorder("bootstrap", new Class<?>[]{});
     }
 
     public static void invoke(String methodName, Class<?>[] paramTypes, Object... args) {
@@ -50,6 +61,19 @@ public final class SlabbedAuditBridge {
             method.invoke(null, args);
         } catch (ReflectiveOperationException | LinkageError ignored) {
             // Audit class is dev-only and excluded from the release jar.
+        }
+    }
+
+    public static void invokeRecorder(String methodName, Class<?>[] paramTypes, Object... args) {
+        if (!LIVE_RECORDER_ENABLED) {
+            return;
+        }
+        try {
+            Class<?> recorderClass = Class.forName(LIVE_RECORDER_CLASS_NAME);
+            Method method = recorderClass.getMethod(methodName, paramTypes);
+            method.invoke(null, args);
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            // Recorder class is dev-only and excluded from the release jar.
         }
     }
 

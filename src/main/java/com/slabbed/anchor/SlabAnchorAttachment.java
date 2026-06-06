@@ -19,6 +19,7 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
@@ -34,8 +35,9 @@ import net.minecraft.world.chunk.WorldChunk;
  * <p>Storage: per-{@link WorldChunk} {@link LongOpenHashSet} of packed {@link BlockPos}
  * longs. Persisted via Fabric data attachment, synced to all watching clients.
  *
- * <p>Scope: direct FB-on-BS only. No retroactive anchoring, no chain anchoring,
- * no side-slab persistence, no torch interaction.
+ * <p>Scope: direct FB-on-BS plus ordinary full blocks placed beside an already
+ * anchored lowered full block. No retroactive anchoring, no side-slab persistence,
+ * no torch interaction.
  */
 public final class SlabAnchorAttachment {
     private SlabAnchorAttachment() {
@@ -107,16 +109,20 @@ public final class SlabAnchorAttachment {
 
     /**
      * Records an anchor at {@code pos}. Server-side only; no-op on client world or
-     * if {@code pos} does not qualify under {@link #qualifiesForDirectAnchor}.
+     * if {@code pos} does not qualify under the direct or adjacent lowered-FB anchor
+     * rules.
      */
     public static void addAnchor(World world, BlockPos pos, BlockState state) {
         if (world == null || world.isClient()) {
             return;
         }
-        boolean qualifies = qualifiesForDirectAnchor(world, pos, state);
+        boolean directAnchor = qualifiesForDirectAnchor(world, pos, state);
+        boolean adjacentAnchor = !directAnchor && qualifiesForAdjacentLoweredFullBlockAnchor(world, pos, state);
+        boolean columnAnchor = !directAnchor && !adjacentAnchor && qualifiesForColumnLoweredAnchor(world, pos, state);
+        boolean qualifies = directAnchor || adjacentAnchor || columnAnchor;
         if (TRACE) {
-            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={}",
-                    pos.toShortString(), state, qualifies);
+            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={} direct={} adjacent={} column={}",
+                    pos.toShortString(), state, qualifies, directAnchor, adjacentAnchor, columnAnchor);
         }
         if (!qualifies) {
             return;
@@ -227,6 +233,54 @@ public final class SlabAnchorAttachment {
      * compound bed/double-half cases are intentionally excluded from anchoring v1.
      */
     public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {
+        if (!isOrdinaryAnchorCandidate(world, pos, state)) {
+            return false;
+        }
+        return SlabSupport.hasBottomSlabBelow(world, pos);
+    }
+
+    /**
+     * Anchors an ordinary full block placed in a LOWERED COLUMN — one with a
+     * bottom slab or an existing anchor somewhere in the solid column directly
+     * below it. Without this, such a block is lowered only by a live column walk
+     * ({@code SlabSupport.hasSlabInColumn}); breaking a block lower in the column
+     * opens an air gap that stops the walk, so the block above un-lowers and
+     * visually JUMPS up. Anchoring it at placement makes that lowering persist
+     * (matching the direct-on-slab anchor contract), so editing below it no
+     * longer moves it. Natural terrain never qualifies — a column with no slab or
+     * anchor below returns false.
+     */
+    private static boolean qualifiesForColumnLoweredAnchor(BlockView world, BlockPos pos, BlockState state) {
+        if (!isOrdinaryAnchorCandidate(world, pos, state)) {
+            return false;
+        }
+        return SlabSupport.hasLoweringSourceInColumnBelow(world, pos);
+    }
+
+    private static boolean qualifiesForAdjacentLoweredFullBlockAnchor(BlockView world, BlockPos pos, BlockState state) {
+        if (!isOrdinaryAnchorCandidate(world, pos, state)) {
+            return false;
+        }
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos neighborPos = pos.offset(direction);
+            BlockState neighbor = world.getBlockState(neighborPos);
+            if (neighbor.getBlock() instanceof SlabBlock) {
+                continue;
+            }
+            if (!neighbor.isSolidBlock(world, neighborPos)) {
+                continue;
+            }
+            if (neighbor.getBlock() instanceof BlockEntityProvider) {
+                continue;
+            }
+            if (SlabSupport.getYOffset(world, neighborPos, neighbor) == -0.5d) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isOrdinaryAnchorCandidate(BlockView world, BlockPos pos, BlockState state) {
         if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
             return false;
         }
@@ -252,6 +306,6 @@ public final class SlabAnchorAttachment {
         if (!state.isSolidBlock(world, pos)) {
             return false;
         }
-        return SlabSupport.hasBottomSlabBelow(world, pos);
+        return true;
     }
 }

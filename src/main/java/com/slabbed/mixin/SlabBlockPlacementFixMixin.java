@@ -27,7 +27,7 @@ public abstract class SlabBlockPlacementFixMixin {
         BlockPos belowPos = pos.down();
         BlockState below = ctx.getWorld().getBlockState(belowPos);
 
-        double dyBelow = SlabSupport.getYOffset(ctx.getWorld(), belowPos, below);
+        double dyBelow = SlabSupport.getVisualYOffset(ctx.getWorld(), belowPos, below);
         if (dyBelow == 0.0) return;
 
         cir.setReturnValue(state.with(SlabBlock.TYPE, SlabType.TOP));

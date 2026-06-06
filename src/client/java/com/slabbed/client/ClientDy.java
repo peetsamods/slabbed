@@ -27,7 +27,7 @@ public final class ClientDy {
             return SlabSupport.getDirectObjectSupportTopOffset(support) == 0.5 ? -0.5 : 0.0;
         }
 
-        // For all other blocks, use the full SlabSupport policy including persistent anchors
-        return SlabSupport.getYOffset(world, pos, state);
+        // For all other blocks, use the shared visual dy authority including persistent anchors.
+        return SlabSupport.getVisualYOffset(world, pos, state);
     }
 }

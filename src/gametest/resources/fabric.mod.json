@@ -10,6 +10,7 @@
       "com.slabbed.test.ChainSurvivalReproTest"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.BsFbUpperFacePerpendicularPlacementClientGameTest",
       "com.slabbed.test.TerrainSlabsCustomSurfaceClientGameTest"
     ]
   },

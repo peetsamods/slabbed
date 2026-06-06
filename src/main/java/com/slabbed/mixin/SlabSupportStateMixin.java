@@ -103,7 +103,7 @@ public abstract class SlabSupportStateMixin {
         if (!(aboveBlock instanceof TorchBlock) || aboveBlock instanceof WallTorchBlock) {
             return null;
         }
-        double torchDy = SlabSupport.getYOffset(world, abovePos, above);
+        double torchDy = SlabSupport.getVisualYOffset(world, abovePos, above);
         if (torchDy >= 0.0) {
             return null;
         }
@@ -146,7 +146,9 @@ public abstract class SlabSupportStateMixin {
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$ceilingSupport(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (SlabSupport.isTopSlabUndersideSupport(self, direction)) {
+        if (SlabSupport.isTopSlabUndersideSupport(self, direction)
+                || (shapeType == SideShapeType.CENTER
+                && SlabSupport.isBottomLikeSlabUndersideHookSupport(self, direction))) {
             cir.setReturnValue(true);
         }
     }
@@ -173,7 +175,7 @@ public abstract class SlabSupportStateMixin {
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
 
-        double yOff = SlabSupport.getYOffset(world, pos, self);
+        double yOff = SlabSupport.getVisualYOffset(world, pos, self);
         if (yOff != 0.0) {
             VoxelShape shape = cir.getReturnValue();
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
@@ -200,7 +202,7 @@ public abstract class SlabSupportStateMixin {
         VoxelShape shape = cir.getReturnValue();
         boolean changed = false;
 
-        double yOff = SlabSupport.getYOffset(world, pos, self);
+        double yOff = SlabSupport.getVisualYOffset(world, pos, self);
         if (yOff != 0.0) {
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;

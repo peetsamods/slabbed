@@ -7,7 +7,6 @@ import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.ChainBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
@@ -91,7 +90,7 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof PaleMossCarpetBlock) {
             dy = (float) ClientDy.dyFor(view, pos, state);
         } else {
-            dy = (float) SlabSupport.getYOffset(view, pos, state);
+            dy = (float) SlabSupport.getVisualYOffset(view, pos, state);
             if (dy != 0.0f) {
                 // Preserve the old connection-block exclusion except for the proven
                 // direct custom Terrain Slabs support case.
@@ -105,7 +104,6 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         }
 
         if (Boolean.getBoolean("slabbed.render.offset.trace")
-                && state.getBlock() instanceof ChainBlock
                 && pos.equals(slabbed$tracePos)) {
             boolean excluded = state.getBlock() instanceof FenceBlock
                     || state.getBlock() instanceof WallBlock
@@ -117,7 +115,7 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
                     state.toString(),
                     dy,
                     ClientDy.dyFor(view, pos, state),
-                    SlabSupport.getYOffset(view, pos, state),
+                    SlabSupport.getVisualYOffset(view, pos, state),
                     excluded);
         }
 

@@ -16,15 +16,21 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.block.SideShapeType;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.model.BlockStateModel;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.ItemPlacementContext;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Properties;
 import net.minecraft.state.property.Property;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -43,6 +49,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Default-off red proof for Terrain Slabs custom-surface failures reported in live video.
@@ -63,6 +70,8 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
     private static final BlockPos FENCE_SUPPORT_POS = BASE.add(36, 0, 4);
     private static final BlockPos WALL_SUPPORT_POS = BASE.add(42, 0, 4);
     private static final BlockPos PANE_SUPPORT_POS = BASE.add(48, 0, 4);
+    private static final BlockPos TOP_UNDERSIDE_PLACEMENT_SUPPORT_POS = BASE.add(0, 1, -8);
+    private static final BlockPos BOTTOM_UNDERSIDE_PLACEMENT_SUPPORT_POS = BASE.add(6, 0, -8);
     private static final BlockPos MATRIX_START_POS = BASE.add(0, 0, 12);
     private static final int MATRIX_SUBJECT_SPACING = 3;
     private static final int MATRIX_SUPPORT_SPACING = 3;
@@ -97,6 +106,12 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
             BlockPos fencePos = FENCE_SUPPORT_POS.up();
             BlockPos wallPos = WALL_SUPPORT_POS.up();
             BlockPos panePos = PANE_SUPPORT_POS.up();
+            BlockPos topPlacementLanternPos = TOP_UNDERSIDE_PLACEMENT_SUPPORT_POS.down();
+            BlockPos bottomPlacementLanternPos = BOTTOM_UNDERSIDE_PLACEMENT_SUPPORT_POS.down();
+            AtomicReference<UndersidePlacementProbe> topPlacementProbe =
+                    new AtomicReference<>(UndersidePlacementProbe.notRun());
+            AtomicReference<UndersidePlacementProbe> bottomPlacementProbe =
+                    new AtomicReference<>(UndersidePlacementProbe.notRun());
             List<MatrixSupportCase> matrixSupports = terrainSlabMatrixSupportCases();
             List<MatrixSubjectCase> matrixSubjects = matrixSubjectCases();
 
@@ -115,6 +130,8 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 clearColumn(world, FENCE_SUPPORT_POS);
                 clearColumn(world, WALL_SUPPORT_POS);
                 clearColumn(world, PANE_SUPPORT_POS);
+                clearColumn(world, TOP_UNDERSIDE_PLACEMENT_SUPPORT_POS);
+                clearColumn(world, BOTTOM_UNDERSIDE_PLACEMENT_SUPPORT_POS);
                 clearMatrixArea(world, matrixSubjects);
 
                 world.setBlockState(UNIVERSAL_SUPPORT_POS, bottom, Block.NOTIFY_LISTENERS);
@@ -154,11 +171,23 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 world.setBlockState(PANE_SUPPORT_POS, bottom, Block.NOTIFY_LISTENERS);
                 world.setBlockState(panePos, Blocks.GLASS_PANE.getDefaultState(), Block.NOTIFY_LISTENERS);
 
+                world.setBlockState(TOP_UNDERSIDE_PLACEMENT_SUPPORT_POS, top, Block.NOTIFY_LISTENERS);
+                world.setBlockState(BOTTOM_UNDERSIDE_PLACEMENT_SUPPORT_POS, bottom, Block.NOTIFY_LISTENERS);
+
                 placeObjectCategoryMatrix(world,
                         matrixSupports.subList(0, Math.min(MATRIX_SUPPORT_ROWS_PER_BATCH, matrixSupports.size())),
                         matrixSubjects);
             });
 
+            ctx.waitTick();
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            placeLanternFromUnderside(ctx, singleplayer, TOP_UNDERSIDE_PLACEMENT_SUPPORT_POS, topPlacementProbe);
+            ctx.waitTick();
+            ctx.waitTick();
+            singleplayer.getClientWorld().waitForChunksRender();
+            placeLanternFromUnderside(ctx, singleplayer, BOTTOM_UNDERSIDE_PLACEMENT_SUPPORT_POS, bottomPlacementProbe);
             ctx.waitTick();
             ctx.waitTick();
             singleplayer.getClientWorld().waitForChunksRender();
@@ -190,6 +219,22 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 lanes.add(probeFenceSubjectLane(mc, FENCE_SUPPORT_POS, fencePos));
                 lanes.add(probeWallSubjectLane(mc, WALL_SUPPORT_POS, wallPos));
                 lanes.add(probePaneSubjectLane(mc, PANE_SUPPORT_POS, panePos));
+                lanes.add(probeUndersideItemPlacementLane(
+                        mc,
+                        "TERRAIN_SLABS_TOP_UNDERSIDE_HANGING_LANTERN_ITEM_PLACEMENT",
+                        TOP_UNDERSIDE_PLACEMENT_SUPPORT_POS,
+                        topPlacementLanternPos,
+                        topPlacementProbe.get(),
+                        "TOP_LIKE",
+                        0.5d));
+                lanes.add(probeUndersideItemPlacementLane(
+                        mc,
+                        "TERRAIN_SLABS_BOTTOM_UNDERSIDE_HANGING_LANTERN_ITEM_PLACEMENT",
+                        BOTTOM_UNDERSIDE_PLACEMENT_SUPPORT_POS,
+                        bottomPlacementLanternPos,
+                        bottomPlacementProbe.get(),
+                        "BOTTOM_LIKE",
+                        0.0d));
                 lanes.addAll(matrixLanes);
 
                 List<String> artifactLines = new ArrayList<>();
@@ -435,6 +480,170 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 !undersideFullSquare ? "underside_full_square_false" : null,
                 !ceilingSupport ? "ceiling_support_bottom_surface_false" : null);
         return lane("TERRAIN_SLABS_UNDERSIDE_ANCHOR", reason, fields);
+    }
+
+    private static void placeLanternFromUnderside(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            BlockPos supportPos,
+            AtomicReference<UndersidePlacementProbe> probeRef
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var player = server.getPlayerManager().getPlayerList().get(0);
+                player.refreshPositionAndAngles(
+                        supportPos.getX() + 0.5d,
+                        supportPos.getY() - 1.25d,
+                        supportPos.getZ() + 1.75d,
+                        180.0f,
+                        -35.0f);
+                player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.LANTERN, 4));
+            }
+        });
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                probeRef.set(UndersidePlacementProbe.notReady());
+                return;
+            }
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.LANTERN, 4));
+            mc.player.refreshPositionAndAngles(
+                    supportPos.getX() + 0.5d,
+                    supportPos.getY() - 1.25d,
+                    supportPos.getZ() + 1.75d,
+                    180.0f,
+                    -35.0f);
+            BlockHitResult hit = undersideRaycast(mc, supportPos);
+            String actionResult = "SKIPPED_" + hit.getType();
+            BlockPos placementContextPos = null;
+            boolean placementCanPlace = false;
+            boolean placementCanReplaceExisting = false;
+            boolean candidateLantern = false;
+            boolean candidateHanging = false;
+            boolean candidateCanPlaceAt = false;
+            boolean candidateWorldCanPlace = false;
+            if (hit.getType() == HitResult.Type.BLOCK) {
+                ItemStack stack = new ItemStack(Items.LANTERN, 4);
+                ItemPlacementContext placementContext = new ItemPlacementContext(mc.player, Hand.MAIN_HAND, stack, hit);
+                placementContextPos = placementContext.getBlockPos();
+                placementCanPlace = placementContext.canPlace();
+                placementCanReplaceExisting = placementContext.canReplaceExisting();
+                BlockState candidate = Blocks.LANTERN.getPlacementState(placementContext);
+                candidateLantern = candidate != null && candidate.isOf(Blocks.LANTERN);
+                candidateHanging = candidateLantern
+                        && candidate.contains(Properties.HANGING)
+                        && candidate.get(Properties.HANGING);
+                candidateCanPlaceAt = candidate != null && candidate.canPlaceAt(mc.world, placementContextPos);
+                candidateWorldCanPlace = candidate != null
+                        && mc.world.canPlace(candidate, placementContextPos, ShapeContext.ofPlacement(mc.player));
+                ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+                actionResult = String.valueOf(result);
+            }
+            probeRef.set(UndersidePlacementProbe.from(
+                    hit,
+                    actionResult,
+                    placementContextPos,
+                    placementCanPlace,
+                    placementCanReplaceExisting,
+                    candidateLantern,
+                    candidateHanging,
+                    candidateCanPlaceAt,
+                    candidateWorldCanPlace));
+        });
+    }
+
+    private static BlockHitResult undersideRaycast(MinecraftClient mc, BlockPos supportPos) {
+        Vec3d start = new Vec3d(
+                supportPos.getX() + 0.5d,
+                supportPos.getY() - 1.25d,
+                supportPos.getZ() + 0.5d);
+        Vec3d end = new Vec3d(
+                supportPos.getX() + 0.5d,
+                supportPos.getY() + 1.25d,
+                supportPos.getZ() + 0.5d);
+        return mc.world.raycast(new RaycastContext(
+                start,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                mc.player));
+    }
+
+    private static LaneResult probeUndersideItemPlacementLane(
+            MinecraftClient mc,
+            String laneName,
+            BlockPos supportPos,
+            BlockPos lanternPos,
+            UndersidePlacementProbe placementProbe,
+            String expectedCustomKind,
+            double expectedLanternDy) {
+        BlockState support = mc.world.getBlockState(supportPos);
+        BlockState lantern = mc.world.getBlockState(lanternPos);
+        double lanternDy = SlabSupport.getYOffset(mc.world, lanternPos, lantern);
+        boolean undersideFullSquare = support.isSideSolidFullSquare(mc.world, supportPos, Direction.DOWN);
+        boolean undersideSmallSquare = support.isSideSolid(mc.world, supportPos, Direction.DOWN, SideShapeType.CENTER);
+        boolean ceilingSupport = SlabSupport.isCeilingSupportBottomSurface(mc.world, supportPos);
+        boolean expectedCeilingSupport = "TOP_LIKE".equals(expectedCustomKind)
+                || "DOUBLE_LIKE".equals(expectedCustomKind);
+        boolean canPlaceAt = Blocks.LANTERN.getDefaultState()
+                .with(Properties.HANGING, true)
+                .canPlaceAt(mc.world, lanternPos);
+        boolean placedLantern = lantern.isOf(Blocks.LANTERN);
+        boolean hanging = lantern.contains(Properties.HANGING) && lantern.get(Properties.HANGING);
+        ShapeFacts shape = shapeFacts(mc, lanternPos, lantern, lanternPos.getY() + 0.25d);
+        String fields = commonSupportFields(mc, supportPos, support)
+                + commonSubjectFields(mc, "minecraft:lantern", lanternPos, lantern, lanternDy, shape)
+                + " undersideFullSquare=" + undersideFullSquare
+                + " undersideSmallSquare=" + undersideSmallSquare
+                + " ceilingSupportBottomSurface=" + ceilingSupport
+                + " canPlaceAt=" + canPlaceAt
+                + " placedLantern=" + placedLantern
+                + " hanging=" + hanging
+                + " placementActionResult=" + placementProbe.actionResult()
+                + " placementRayHitType=" + placementProbe.hitType()
+                + " placementRayHitPos=" + describePos(placementProbe.hitBlockPos())
+                + " placementRayHitSide=" + placementProbe.hitSide()
+                + " placementRayHitVec=" + placementProbe.hitVec()
+                + " placementContextPos=" + describePos(placementProbe.placementContextPos())
+                + " placementCanPlace=" + placementProbe.placementCanPlace()
+                + " placementCanReplaceExisting=" + placementProbe.placementCanReplaceExisting()
+                + " candidateLantern=" + placementProbe.candidateLantern()
+                + " candidateHanging=" + placementProbe.candidateHanging()
+                + " candidateCanPlaceAt=" + placementProbe.candidateCanPlaceAt()
+                + " candidateWorldCanPlace=" + placementProbe.candidateWorldCanPlace()
+                + " expectedCustomKind=" + expectedCustomKind
+                + " expectedLanternDy=" + expectedLanternDy
+                + " expectedUndersideFullSquare=true"
+                + " expectedUndersideSmallSquare=true"
+                + " expectedCeilingSupport=" + expectedCeilingSupport
+                + " expectedCanPlaceAt=true expectedPlacedLantern=true expectedHanging=true"
+                + " expectedRayHitPos=" + supportPos.toShortString()
+                + " expectedRayHitSide=DOWN"
+                + " expectedPlacementContextPos=" + lanternPos.toShortString()
+                + " expectedPlacementCanPlace=true expectedPlacementCanReplaceExisting=false"
+                + " expectedCandidateLantern=true expectedCandidateHanging=true"
+                + " expectedCandidateCanPlaceAt=true expectedCandidateWorldCanPlace=true";
+        String reason = firstRedReason(
+                !expectedCustomKind.equals(customSurfaceKind(support)) ? "custom_surface_kind_mismatch" : null,
+                customSkipSupportMissingReason(support),
+                placementProbe.hitType() != HitResult.Type.BLOCK ? "placement_raycast_not_block" : null,
+                !supportPos.equals(placementProbe.hitBlockPos()) ? "placement_raycast_target_mismatch" : null,
+                placementProbe.hitSide() != Direction.DOWN ? "placement_raycast_side_not_down" : null,
+                !lanternPos.equals(placementProbe.placementContextPos()) ? "placement_context_pos_mismatch" : null,
+                !placementProbe.placementCanPlace() ? "placement_context_can_place_false" : null,
+                placementProbe.placementCanReplaceExisting() ? "placement_context_can_replace_existing_true" : null,
+                !placementProbe.candidateLantern() ? "candidate_lantern_state_missing" : null,
+                !placementProbe.candidateHanging() ? "candidate_lantern_not_hanging" : null,
+                !placementProbe.candidateCanPlaceAt() ? "candidate_can_place_at_false" : null,
+                !placementProbe.candidateWorldCanPlace() ? "candidate_world_can_place_false" : null,
+                !placedLantern ? "hanging_lantern_item_not_placed" : null,
+                placedLantern && !hanging ? "lantern_not_hanging" : null,
+                mismatch("lantern_dy_mismatch", lanternDy, expectedLanternDy),
+                !undersideFullSquare ? "underside_full_square_false" : null,
+                !undersideSmallSquare ? "underside_small_square_false" : null,
+                ceilingSupport != expectedCeilingSupport ? "ceiling_support_bottom_surface_mismatch" : null,
+                !canPlaceAt ? "hanging_lantern_can_place_at_false" : null);
+        return lane(laneName, reason, fields);
     }
 
     private static LaneResult probeGhostLane(MinecraftClient mc, BlockPos supportPos, BlockPos ghostPos) {
@@ -806,6 +1015,10 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
         return hit.getType().toString();
     }
 
+    private static String describePos(BlockPos pos) {
+        return pos == null ? "null" : pos.toShortString();
+    }
+
     private static double modelMinY(net.minecraft.world.BlockRenderView world, BlockPos pos, BlockState state) {
         try {
             BlockStateModel model = MinecraftClient.getInstance().getBlockRenderManager().getModel(state);
@@ -1090,6 +1303,60 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
     }
 
     private record RayProbe(HitResult worldHit, HitResult resolvedHit) {
+    }
+
+    private record UndersidePlacementProbe(
+            String actionResult,
+            HitResult.Type hitType,
+            BlockPos hitBlockPos,
+            Direction hitSide,
+            Vec3d hitVec,
+            BlockPos placementContextPos,
+            boolean placementCanPlace,
+            boolean placementCanReplaceExisting,
+            boolean candidateLantern,
+            boolean candidateHanging,
+            boolean candidateCanPlaceAt,
+            boolean candidateWorldCanPlace
+    ) {
+        private static UndersidePlacementProbe notRun() {
+            return new UndersidePlacementProbe(
+                    "NOT_RUN", HitResult.Type.MISS, null, null, null,
+                    null, false, false, false, false, false, false);
+        }
+
+        private static UndersidePlacementProbe notReady() {
+            return new UndersidePlacementProbe(
+                    "CLIENT_NOT_READY", HitResult.Type.MISS, null, null, null,
+                    null, false, false, false, false, false, false);
+        }
+
+        private static UndersidePlacementProbe from(
+                BlockHitResult hit,
+                String actionResult,
+                BlockPos placementContextPos,
+                boolean placementCanPlace,
+                boolean placementCanReplaceExisting,
+                boolean candidateLantern,
+                boolean candidateHanging,
+                boolean candidateCanPlaceAt,
+                boolean candidateWorldCanPlace) {
+            BlockPos blockPos = hit.getType() == HitResult.Type.BLOCK ? hit.getBlockPos() : null;
+            Direction side = hit.getType() == HitResult.Type.BLOCK ? hit.getSide() : null;
+            return new UndersidePlacementProbe(
+                    actionResult,
+                    hit.getType(),
+                    blockPos,
+                    side,
+                    hit.getPos(),
+                    placementContextPos,
+                    placementCanPlace,
+                    placementCanReplaceExisting,
+                    candidateLantern,
+                    candidateHanging,
+                    candidateCanPlaceAt,
+                    candidateWorldCanPlace);
+        }
     }
 
     private record ShapeFacts(

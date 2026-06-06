@@ -2,6 +2,7 @@ package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
@@ -52,6 +53,16 @@ public abstract class BlockItemPlacementIntentMixin {
         return min <= UP_FACE_EDGE_BAND ? nearest : null;
     }
 
+    private static boolean slabbed$isOrdinaryFullBlockPlacementItem(BlockItem item, ItemUsageContext context) {
+        Block block = item.getBlock();
+        if (block instanceof SlabBlock || block instanceof BlockEntityProvider || block instanceof CraftingTableBlock) {
+            return false;
+        }
+        BlockState state = block.getDefaultState();
+        return state.getFluidState().isEmpty()
+                && state.isSolidBlock(context.getWorld(), context.getBlockPos());
+    }
+
     private static final Class<?>[] REMAP_ATTEMPT_PARAM_TYPES = new Class<?>[]{
             ItemUsageContext.class,
             boolean.class,
@@ -98,6 +109,22 @@ public abstract class BlockItemPlacementIntentMixin {
                 remappedHitPos,
                 effectiveSide,
                 hitDescriptor);
+        SlabbedAuditBridge.invokeRecorder(
+                "recordRemapAttempt",
+                REMAP_ATTEMPT_PARAM_TYPES,
+                context,
+                itemIsSlab,
+                faceHorizontal,
+                targetIsSolid,
+                targetHasBlockEntity,
+                targetIsCraftingTable,
+                yOffset,
+                ordinaryLoweredFullBlockGuard,
+                remapped,
+                rejectionReason,
+                remappedHitPos,
+                effectiveSide,
+                hitDescriptor);
     }
 
     @ModifyArg(
@@ -108,8 +135,11 @@ public abstract class BlockItemPlacementIntentMixin {
             )
     )
     private ItemUsageContext slabbed$remapLoweredFullBlockSideHit(ItemUsageContext context) {
-        boolean itemIsSlab = ((BlockItem) (Object) this).getBlock() instanceof SlabBlock;
-        if (!itemIsSlab) {
+        BlockItem self = (BlockItem) (Object) this;
+        boolean itemIsSlab = self.getBlock() instanceof SlabBlock;
+        boolean itemIsOrdinaryFullBlock = slabbed$isOrdinaryFullBlockPlacementItem(self, context);
+        boolean itemEligible = itemIsSlab || itemIsOrdinaryFullBlock;
+        if (!itemEligible) {
             slabbed$recordRemapAttempt(
                     context,
                     false,
@@ -129,13 +159,33 @@ public abstract class BlockItemPlacementIntentMixin {
 
         Direction originalSide = context.getSide();
         Vec3d originalHitPos = context.getHitPos();
+        BlockPos targetPos = context.getBlockPos();
+        BlockState targetState = context.getWorld().getBlockState(targetPos);
+        boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
+        boolean targetIsLoweredSlab = itemIsSlab
+                && targetState.getBlock() instanceof SlabBlock
+                && SlabSupport.getVisualYOffset(context.getWorld(), targetPos, targetState) == -0.5d;
+        boolean targetAcceptsLoweredSidePlacement = targetIsSolid || targetIsLoweredSlab;
+        boolean targetHasBlockEntity = targetState.getBlock() instanceof BlockEntityProvider;
+        boolean targetIsCraftingTable = targetState.getBlock() instanceof CraftingTableBlock;
+        double yOffset = SlabSupport.getVisualYOffset(context.getWorld(), targetPos, targetState);
+        boolean ordinaryLoweredFullBlockGuard = targetIsSolid
+                && !targetHasBlockEntity
+                && !targetIsCraftingTable
+                && yOffset == -0.5d;
         Direction effectiveSide = originalSide;
-        boolean inferredUpFaceLoweredSide = false;
+        String hitDescriptor = originalSide.getAxis().isHorizontal() ? "horizontal_face" : "none";
+        // Only a hit near the EDGE of a lowered block's top face is treated as
+        // perpendicular side-placement intent. A central top-face hit is left as
+        // a genuine place-on-top: it falls through with effectiveSide == UP and
+        // is returned unremapped below. (A prior player-position fallback hijacked
+        // every central top hit toward the side the player faced, which broke
+        // ordinary stacking — see lowered_side_live_hit_remap_runtime_values.json.)
         if (originalSide == Direction.UP) {
-            Direction inferred = slabbed$inferLoweredSideFromUpFaceHit(originalHitPos, context.getBlockPos());
+            Direction inferred = slabbed$inferLoweredSideFromUpFaceHit(originalHitPos, targetPos);
             if (inferred != null) {
                 effectiveSide = inferred;
-                inferredUpFaceLoweredSide = true;
+                hitDescriptor = "up_face_edge";
             }
         }
 
@@ -143,13 +193,13 @@ public abstract class BlockItemPlacementIntentMixin {
         if (!faceHorizontal) {
             slabbed$recordRemapAttempt(
                     context,
-                    true,
+                    itemEligible,
                     false,
-                    false,
-                    false,
-                    false,
-                    0.0d,
-                    false,
+                    targetIsSolid,
+                    targetHasBlockEntity,
+                    targetIsCraftingTable,
+                    yOffset,
+                    ordinaryLoweredFullBlockGuard,
                     false,
                     "face_not_horizontal",
                     null,
@@ -158,21 +208,10 @@ public abstract class BlockItemPlacementIntentMixin {
             return context;
         }
 
-        BlockPos targetPos = context.getBlockPos();
-        BlockState targetState = context.getWorld().getBlockState(targetPos);
-        boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
-        boolean targetHasBlockEntity = targetState.getBlock() instanceof BlockEntityProvider;
-        boolean targetIsCraftingTable = targetState.getBlock() instanceof CraftingTableBlock;
-        double yOffset = SlabSupport.getYOffset(context.getWorld(), targetPos, targetState);
-        boolean ordinaryLoweredFullBlockGuard = targetIsSolid
-                && !targetHasBlockEntity
-                && !targetIsCraftingTable
-                && yOffset == -0.5d;
-
-        if (!targetIsSolid) {
+        if (!targetAcceptsLoweredSidePlacement) {
             slabbed$recordRemapAttempt(
                     context,
-                    true,
+                    itemEligible,
                     true,
                     false,
                     targetHasBlockEntity,
@@ -183,13 +222,13 @@ public abstract class BlockItemPlacementIntentMixin {
                     "target_not_solid",
                     null,
                     effectiveSide,
-                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                    hitDescriptor);
             return context;
         }
         if (targetHasBlockEntity) {
             slabbed$recordRemapAttempt(
                     context,
-                    true,
+                    itemEligible,
                     true,
                     true,
                     true,
@@ -200,13 +239,13 @@ public abstract class BlockItemPlacementIntentMixin {
                     "target_has_block_entity",
                     null,
                     effectiveSide,
-                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                    hitDescriptor);
             return context;
         }
         if (targetIsCraftingTable) {
             slabbed$recordRemapAttempt(
                     context,
-                    true,
+                    itemEligible,
                     true,
                     true,
                     false,
@@ -217,13 +256,13 @@ public abstract class BlockItemPlacementIntentMixin {
                     "target_is_crafting_table",
                     null,
                     effectiveSide,
-                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                    hitDescriptor);
             return context;
         }
         if (yOffset != -0.5d) {
             slabbed$recordRemapAttempt(
                     context,
-                    true,
+                    itemEligible,
                     true,
                     true,
                     false,
@@ -234,7 +273,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     "y_offset_not_-0.5",
                     null,
                     effectiveSide,
-                    inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                    hitDescriptor);
             return context;
         }
 
@@ -243,10 +282,10 @@ public abstract class BlockItemPlacementIntentMixin {
         // [targetPos.y - 0.5, targetPos.y + 0.5], so targetPos.y is the half-line.
         //   originalHitPos.y < targetPos.y  → lower visual half  → BS-FB-0.5S (BOTTOM)
         //   originalHitPos.y > targetPos.y  → upper visual half  → BS-FB-1S  (TOP)
-        // A live ray that lands exactly on the lowered visual upper boundary
-        // (targetPos.y + 0.5) is still the player-facing 0.5S side-placement
-        // intent; keep that boundary in BOTTOM while preserving true upper-half
-        // hits such as targetPos.y + 0.25 as TOP.
+        // Edge-band UP hits that land exactly on the lowered visual upper boundary
+        // (targetPos.y + 0.5) remain player-facing 0.5S side-placement intent;
+        // keep that boundary in BOTTOM while preserving true upper-half hits
+        // such as targetPos.y + 0.25 as TOP.
         // The remapped Y is then clamped just inside the matching half so that
         // vanilla SlabBlock.getPlacementState's `hit.y - placePos.y <= 0.5`
         // discriminator picks the desired SlabType. (placePos.y == targetPos.y
@@ -254,15 +293,14 @@ public abstract class BlockItemPlacementIntentMixin {
         double loweredVisualUpperBoundary = targetPos.getY() + 0.5d;
         boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
                 <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-        boolean upperHalfIntent = originalHitPos.y >= targetPos.getY()
-                && !exactLoweredVisualBoundary;
+        boolean upperHalfIntent = originalHitPos.y >= targetPos.getY() && !exactLoweredVisualBoundary;
         double remappedY = upperHalfIntent
                 ? targetPos.getY() + 0.501d   // > 0.5 → vanilla → TOP
                 : targetPos.getY() + 0.499d;  // ≤ 0.5 → vanilla → BOTTOM
         Vec3d remappedHitPos = new Vec3d(originalHitPos.x, remappedY, originalHitPos.z);
         slabbed$recordRemapAttempt(
                 context,
-                true,
+                itemEligible,
                 true,
                 true,
                 false,
@@ -273,7 +311,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 "none",
                 remappedHitPos,
                 effectiveSide,
-                inferredUpFaceLoweredSide ? "up_face_edge" : "horizontal_face");
+                hitDescriptor);
         BlockHitResult remappedHit = new BlockHitResult(
                 remappedHitPos,
                 effectiveSide,

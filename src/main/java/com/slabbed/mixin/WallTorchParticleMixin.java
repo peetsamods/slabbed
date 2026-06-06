@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Offsets wall torch flame and smoke particles by the same dy used for the model
- * (SlabSupport.getYOffset), so the flame stays flush with the torch head when the
+ * (SlabSupport.getVisualYOffset), so the flame stays flush with the torch head when the
  * wall torch's mounting block is itself lowered (e.g., wall torch on a full block
  * lowered onto a bottom slab support).
  *
@@ -33,7 +33,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *   y = pos.getY() + 0.7 + 0.22;
  *   z = pos.getZ() + 0.5 + 0.27 * facing.getOpposite().getOffsetZ();
  * }</pre>
- * The mod adds {@code dy} (from {@link SlabSupport#getYOffset}) to the Y axis so
+ * The mod adds {@code dy} (from {@link SlabSupport#getVisualYOffset}) to the Y axis so
  * the flame tracks the offset model. X/Z are unchanged.
  */
 @Mixin(WallTorchBlock.class)
@@ -41,7 +41,7 @@ public abstract class WallTorchParticleMixin {
 
     @Inject(method = "randomDisplayTick", at = @At("HEAD"), cancellable = true)
     private void slabbed$offsetParticles(BlockState state, World world, BlockPos pos, Random random, CallbackInfo ci) {
-        double dy = SlabSupport.getYOffset(world, pos, state);
+        double dy = SlabSupport.getVisualYOffset(world, pos, state);
         if (dy == 0.0) {
             return;
         }

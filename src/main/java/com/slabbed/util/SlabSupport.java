@@ -4,6 +4,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.compat.CompatHooks;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
@@ -45,12 +46,20 @@ import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.BlockView;
+import net.minecraft.world.World;
 import net.minecraft.world.WorldView;
+
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Central helper for slab support semantics.
  */
 public final class SlabSupport {
+    private static final Long2DoubleOpenHashMap CLIENT_VISUAL_Y_OFFSETS = new Long2DoubleOpenHashMap();
+    private static final Object CLIENT_VISUAL_Y_OFFSETS_LOCK = new Object();
+
     private SlabSupport() {
     }
 
@@ -104,6 +113,15 @@ public final class SlabSupport {
      */
     public static boolean isTopSlabUndersideSupport(BlockState state, Direction face) {
         return face == Direction.DOWN && isTopLikeCeilingSurface(state);
+    }
+
+    /**
+     * True for bottom-like custom slabs when vanilla asks whether the visible
+     * underside can carry a small hanging attachment such as a lantern.
+     */
+    public static boolean isBottomLikeSlabUndersideHookSupport(BlockState state, Direction face) {
+        return face == Direction.DOWN
+                && CompatHooks.customSlabSurfaceKind(state) == CompatSlabSurfaceKind.BOTTOM_LIKE;
     }
 
     /** True if the block at {@code posAbove} is a top or double slab that can provide ceiling support. */
@@ -394,7 +412,8 @@ public final class SlabSupport {
         if (world == null || pos == null) {
             return 0.0;
         }
-        if (CompatHooks.shouldSkipOffset(state)) {
+        if (CompatHooks.shouldSkipOffset(state)
+                && !isAdjacentCustomSideSlabLowered(world, pos, state)) {
             return 0.0;
         }
 
@@ -408,6 +427,131 @@ public final class SlabSupport {
         } finally {
             IN_GET_Y_OFFSET.set(Boolean.FALSE);
         }
+    }
+
+    /**
+     * Shared client visual-dy authority.
+     *
+     * <p>Main-thread client-world callers compute and publish the dy for {@code pos}.
+     * Render-worker callers such as {@code ChunkRendererRegion} prefer that
+     * published value, so chunk meshes, outline/raycast, and block-entity render use
+     * the same per-position visual decision. A cache miss falls back to the
+     * underlying calculation to preserve first-render behavior; dependent rerender
+     * hooks prewarm the affected region before scheduling rebuilds.
+     */
+    public static double getVisualYOffset(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null) {
+            return 0.0;
+        }
+        if (isClientWorld(world)) {
+            double dy = getYOffset(world, pos, state);
+            putClientVisualYOffset(pos, dy);
+            return dy;
+        }
+        Double cached = cachedClientVisualYOffset(pos);
+        if (cached != null) {
+            return cached;
+        }
+        return getYOffset(world, pos, state);
+    }
+
+    public static void refreshVisualYOffsetRegion(BlockView world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        if (!isClientWorld(world)) {
+            return;
+        }
+        BlockPos.Mutable mutable = new BlockPos.Mutable();
+        for (int y = minY; y <= maxY; y++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                for (int x = minX; x <= maxX; x++) {
+                    mutable.set(x, y, z);
+                    BlockState state = getBlockStateOrNull(world, mutable);
+                    if (state == null) {
+                        removeClientVisualYOffset(mutable);
+                    } else {
+                        putClientVisualYOffset(mutable, getYOffset(world, mutable, state));
+                    }
+                }
+            }
+        }
+    }
+
+    public static void invalidateVisualYOffsetRegion(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        synchronized (CLIENT_VISUAL_Y_OFFSETS_LOCK) {
+            BlockPos.Mutable mutable = new BlockPos.Mutable();
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    for (int x = minX; x <= maxX; x++) {
+                        mutable.set(x, y, z);
+                        CLIENT_VISUAL_Y_OFFSETS.remove(mutable.asLong());
+                    }
+                }
+            }
+        }
+    }
+
+    public static void clearVisualYOffsetCache() {
+        synchronized (CLIENT_VISUAL_Y_OFFSETS_LOCK) {
+            CLIENT_VISUAL_Y_OFFSETS.clear();
+        }
+    }
+
+    private static boolean isClientWorld(BlockView world) {
+        return world instanceof World w && w.isClient();
+    }
+
+    private static void putClientVisualYOffset(BlockPos pos, double dy) {
+        synchronized (CLIENT_VISUAL_Y_OFFSETS_LOCK) {
+            CLIENT_VISUAL_Y_OFFSETS.put(pos.asLong(), dy);
+        }
+    }
+
+    private static void removeClientVisualYOffset(BlockPos pos) {
+        synchronized (CLIENT_VISUAL_Y_OFFSETS_LOCK) {
+            CLIENT_VISUAL_Y_OFFSETS.remove(pos.asLong());
+        }
+    }
+
+    private static Double cachedClientVisualYOffset(BlockPos pos) {
+        synchronized (CLIENT_VISUAL_Y_OFFSETS_LOCK) {
+            long packed = pos.asLong();
+            return CLIENT_VISUAL_Y_OFFSETS.containsKey(packed)
+                    ? CLIENT_VISUAL_Y_OFFSETS.get(packed)
+                    : null;
+        }
+    }
+
+    /** Bounded depth used by the client dependent-rerender pass (Fix 3). */
+    public static int chainRerenderDepth() {
+        return MAX_CHAIN_DEPTH;
+    }
+
+    /**
+     * LEAN gate for the client dependent-rerender mixin: true iff a bottom slab
+     * or a persistent anchor lies in the bounded column directly below {@code pos}
+     * (i.e. {@code pos} sits in a lowered column, so a change at/near it can shift
+     * the rendered dy of stacked dependents above). Deliberately avoids the
+     * adjacency / shape-triggering checks in {@link #hasSlabInColumn} so it is
+     * cheap to call on every client block change.
+     */
+    public static boolean hasLoweringSourceInColumnBelow(BlockView world, BlockPos pos) {
+        if (world == null || pos == null) {
+            return false;
+        }
+        BlockPos cursor = pos.down();
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState cur = getBlockStateOrNull(world, cursor);
+            if (cur == null) {
+                return false;
+            }
+            if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
+                return true;
+            }
+            if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
+                return false;
+            }
+            cursor = cursor.down();
+        }
+        return false;
     }
 
     /**
@@ -426,18 +570,47 @@ public final class SlabSupport {
         if (!slabState.contains(SlabBlock.TYPE)) {
             return false;
         }
-        for (Direction dir : Direction.Type.HORIZONTAL) {
-            BlockPos neighborPos = slabPos.offset(dir);
-            BlockState neighbor = getBlockStateOrNull(world, neighborPos);
-            if (neighbor == null) continue;
-            if (neighbor.getBlock() instanceof SlabBlock) continue;
-            if (!neighbor.isSolidBlock(world, neighborPos)) continue;
-            if (hasBottomSlabBelow(world, neighborPos)
-                    || SlabAnchorAttachment.isAnchored(world, neighborPos)) {
-                return true;
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
+        queue.add(slabPos);
+        visited.add(slabPos.asLong());
+
+        while (!queue.isEmpty() && visited.size() <= MAX_CHAIN_DEPTH) {
+            BlockPos current = queue.removeFirst();
+            for (Direction dir : Direction.Type.HORIZONTAL) {
+                BlockPos neighborPos = current.offset(dir);
+                BlockState neighbor = getBlockStateOrNull(world, neighborPos);
+                if (neighbor == null) {
+                    continue;
+                }
+                if (isLoweredSideSlabSource(world, neighborPos, neighbor)) {
+                    return true;
+                }
+                if (neighbor.getBlock() instanceof SlabBlock
+                        && neighbor.contains(SlabBlock.TYPE)
+                        && visited.add(neighborPos.asLong())) {
+                    queue.addLast(neighborPos);
+                }
             }
         }
         return false;
+    }
+
+    private static boolean isLoweredSideSlabSource(BlockView world, BlockPos pos, BlockState state) {
+        if (state.getBlock() instanceof SlabBlock || !state.isSolidBlock(world, pos)) {
+            return false;
+        }
+        return hasBottomSlabBelow(world, pos)
+                || SlabAnchorAttachment.isAnchored(world, pos)
+                || isDirectCustomSlabSupportedObject(world, pos, state);
+    }
+
+    private static boolean isAdjacentCustomSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
+        if (!(slabState.getBlock() instanceof SlabBlock)
+                || CompatHooks.customSlabSurfaceKind(slabState) == CompatSlabSurfaceKind.NONE) {
+            return false;
+        }
+        return isAdjacentSideSlabLowered(world, slabPos, slabState);
     }
 
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
@@ -496,6 +669,33 @@ public final class SlabSupport {
             }
             return -0.5;
         }
+
+        // ── Decorative hangers under a LOWERED support follow it down ──────────
+        // A lantern / soul lantern / spore blossom / hanging roots / pale hanging
+        // moss hanging beneath a support that itself renders lowered must inherit
+        // the support's negative dy, or the lowered support's underside clips down
+        // into the hanger's top (the lantern-jammed-into-log artifact). Chains are
+        // EXCLUDED so they keep extending to reach the support. Runs BEFORE the
+        // +0.5 ceiling branch; the helpers return 0.0/NaN for a normal
+        // (non-lowered) support so the already-correct flush and +0.5 cases stay
+        // untouched. The helpers are recursion-safe mirrors of the dy logic above
+        // and never call getYOffset (safe inside the IN_GET_Y_OFFSET guard).
+        if (isLoweredUndersideHangerOwner(state)) {
+            BlockPos supportPos = pos.up();
+            BlockState supportState = world.getBlockState(supportPos);
+            double slabSupportDy = loweredSlabUndersideSupportDy(world, supportPos, supportState);
+            if (Double.isFinite(slabSupportDy) && slabSupportDy < -1.0e-6) {
+                // A TOP slab's underside sits half a block higher than a hanger's
+                // natural attach (support.y+1.5 vs hanger.y+1), so the hanger keeps
+                // its +0.5 raised-attach baseline on top of the slab's lowering.
+                return isTopSlab(supportState) ? slabSupportDy + 0.5 : slabSupportDy;
+            }
+            double fullBlockSupportDy = loweredFullBlockUndersideSupportDy(world, supportPos, supportState);
+            if (Double.isFinite(fullBlockSupportDy) && fullBlockSupportDy < -1.0e-6) {
+                return fullBlockSupportDy;
+            }
+        }
+
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
         // Only explicit ceiling-mounted cases may float into the slab space.
         // Note: isSolidBlock is safe here because getYOffset has a recursion guard.
@@ -540,6 +740,102 @@ public final class SlabSupport {
     }
 
     /**
+     * Decorative ceiling hangers that must FOLLOW a lowered support down so they
+     * stay flush instead of clipping up into it: lanterns, soul lanterns, spore
+     * blossoms, hanging roots, and pale hanging moss. Chains are deliberately
+     * EXCLUDED — they extend to reach their support rather than tracking its dy.
+     */
+    private static boolean isLoweredUndersideHangerOwner(BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return state.isOf(Blocks.LANTERN)
+                || state.isOf(Blocks.SOUL_LANTERN)
+                || block instanceof SporeBlossomBlock
+                || block instanceof HangingRootsBlock
+                || isPaleHangingMossBlock(state);
+    }
+
+    private static boolean isPaleHangingMossBlock(BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        var id = Registries.BLOCK.getId(state.getBlock());
+        if (id == null || !"minecraft".equals(id.getNamespace())) {
+            return false;
+        }
+        String path = id.getPath();
+        return "pale_hanging_moss".equals(path) || "pale_hanging_moss_tip".equals(path);
+    }
+
+    /**
+     * Recursion-safe rendered dy of a SLAB support directly above a hanger,
+     * mirroring the slab branch of {@link #getYOffsetInner} without re-entering
+     * {@link #getYOffset}. Returns {@code 0.0} for a non-lowered slab (the caller
+     * gates on {@code < -1e-6}) or {@link Double#NaN} if not a slab.
+     */
+    private static double loweredSlabUndersideSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || !state.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        Double cachedDy = cachedClientVisualYOffset(pos);
+        if (cachedDy != null) {
+            return cachedDy;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        if (!(below.getBlock() instanceof SlabBlock) && !below.isAir()
+                && below.getFluidState().isEmpty()
+                && hasBottomSlabBelow(world, belowPos)) {
+            return -0.5;
+        }
+        if (isAdjacentSideSlabLowered(world, pos, state)) {
+            return -0.5;
+        }
+        return 0.0;
+    }
+
+    /**
+     * Recursion-safe rendered dy of a SOLID NON-SLAB full-block support directly
+     * above a hanger, mirroring the anchor / direct-custom / column branches of
+     * {@link #getYOffsetInner} without re-entering {@link #getYOffset}. Returns a
+     * negative lowered dy ({@code -0.5} / {@code -1.0}), {@code 0.0} (not lowered),
+     * or {@link Double#NaN} (not a qualifying full block).
+     */
+    private static double loweredFullBlockUndersideSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isSolidBlock(world, pos)) {
+            return Double.NaN;
+        }
+        if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            return -0.5;
+        }
+        double directCustomDy = directCustomSlabSupportDy(world, pos, state);
+        if (!Double.isNaN(directCustomDy)) {
+            return directCustomDy;
+        }
+        if (shouldOffset(world, pos, state)) {
+            BlockState belowSlab = world.getBlockState(pos.down());
+            if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
+                return -1.0;
+            }
+            double columnDy = slabColumnYOffset(world, pos);
+            if (columnDy != 0.0) {
+                return columnDy;
+            }
+            return -0.5;
+        }
+        return Double.NaN;
+    }
+
+    /**
      * Shared ownership rule for client raycast/outline retargeting of lowered
      * block-entity-style blocks (e.g. chests) sitting above a bottom slab.
      *
@@ -561,7 +857,7 @@ public final class SlabSupport {
         if (!(state.getBlock() instanceof BlockEntityProvider)) {
             return false;
         }
-        return getYOffset(world, pos, state) == -0.5;
+        return getVisualYOffset(world, pos, state) == -0.5;
     }
 
     public static boolean isLoweredTorchVisual(BlockView world, BlockPos pos, BlockState state) {
@@ -574,7 +870,7 @@ public final class SlabSupport {
             return false;
         }
         // compound dy (-1.0) also qualifies: torch above an adjacent-lowered bottom slab
-        return getYOffset(world, pos, state) < 0.0;
+        return getVisualYOffset(world, pos, state) < 0.0;
     }
 
     public static boolean isLoweredBedVisual(BlockView world, BlockPos pos, BlockState state) {
@@ -583,7 +879,7 @@ public final class SlabSupport {
         }
         return state.getBlock() instanceof net.minecraft.block.BedBlock
                 && state.contains(Properties.BED_PART)
-                && getYOffset(world, pos, state) == -0.5;
+                && getVisualYOffset(world, pos, state) == -0.5;
     }
 
     public static boolean isLoweredCustomSupportedObjectVisual(BlockView world, BlockPos pos, BlockState state) {
@@ -591,7 +887,7 @@ public final class SlabSupport {
             return false;
         }
         return isDirectCustomSlabSupportedObject(world, pos, state)
-                && getYOffset(world, pos, state) == -0.5;
+                && getVisualYOffset(world, pos, state) == -0.5;
     }
 
     /**
