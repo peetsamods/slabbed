@@ -33,11 +33,11 @@ Commit:
 Tag:
 
 ```text
-(untagged — local commit on port/mc-1.21.1)
+save/mc1211-decorative-hanger-followdown-live-confirmed
 ```
 
-Pushed branch: no (local only — not yet pushed)
-Pushed tag: n/a
+Pushed branch: yes
+Pushed tag: yes
 
 Live-confirmed 2026-06-03: decorative-hanger follow-down under lowered FULL blocks
 AND lowered TOP slabs (SlabSupport.java; lantern/soul lantern/spore blossom/
@@ -48,38 +48,46 @@ remains in history. Note: the working tree still carries the uncommitted
 
 ## Current objective
 
-The SBBS underside automation fixtures are saved and pushed. Keep the authority order current, preserve the savepoint, and prepare the next manual live acceptance rerun for the slab-held lowered-side rescue lane.
+Close and verify the hanger follow-down savepoint, reconcile canon, then return
+to the active raycast RED and SBBS manual-live proof gap without absorbing
+unrelated retarget WIP.
 
 ## Current blocker
 
 Visible symptom:
 
 ```text
-Manual slab-held live acceptance has not yet been re-proven after the savepoint.
+lowered bottom side-extension underside trapdoor targeting RED:
+TARGETING_DID_NOT_HIT_BOTTOM_SLAB_UNDERSIDE, targetFace=east
 ```
 
 Failing layer:
 
 ```text
-proof gap
+raycast
 ```
 
 Protected invariant:
 
 ```text
-The new SBBS markers must come from the manual runClient lane and not from gameplay changes.
+Model, outline, raycast, placement, and post-settle behavior must agree on the
+same live-equivalent dy and owner. No render/culling production patch is allowed
+unless a fresh RED names culling and proves the active runtime render path first.
 ```
 
 Latest proof:
 
 ```text
-compileGametest and runClientGameTest passed for the SBBS underside fixture update; commit and annotated tag were created and pushed.
+2026-06-06 closure proof passed from the branch-local Gradle dev client:
+compileJava compileGametestJava plus focused SBBS runClientGameTest with
+goblinOnly/sbbsFinalSlabTargetingRed/disableNetworkSynchronizer. Result GREEN,
+failureLayer=NONE, lanternUnderDy=-0.5, chainLanternDy=0.0.
 ```
 
 Live status:
 
 ```text
-manual rerun pending
+hanger local-live confirmed; active raycast RED and SBBS manual-live proof gap remain open
 ```
 
 ## Next legal slice
@@ -87,13 +95,14 @@ manual rerun pending
 Type:
 
 ```text
-manual-proof
+savepoint-then-raycast-proof
 ```
 
 Allowed files:
 
 ```text
-run/logs/latest.log, build/run/clientGameTest/logs/latest.log
+SLABBED_SPINE.md, docs/codex/06-bug-blaster-case-law.md,
+docs/codex/source-pack/02_SLABBED_ACTIVE_STATUS.md, proof logs under tmp/
 ```
 
 Forbidden files:
@@ -105,13 +114,18 @@ src/**, build.gradle, settings.gradle, gradle.properties, fabric.mod.json, *.mix
 Required proof:
 
 ```text
-Manual `runClient` pass with a slab in hand on the lowered-side rescue setup, followed by log classification from `run/logs/latest.log`.
+Use the branch-local current-HEAD Gradle dev client only. Do not use
+Applications/Minecraft, stale jars, wrong-head jars, or the vanilla launcher.
+After hanger closure, first bug slice is raycast-only proof for
+TARGETING_DID_NOT_HIT_BOTTOM_SLAB_UNDERSIDE.
 ```
 
 Stop condition:
 
 ```text
-Unexpected live lane mismatch, any gameplay edit, or any non-doc file touched.
+Unexpected tracked dirt in the savepoint worktree, stale/wrong-head proof
+source, production render/culling edit without fresh culling RED, or any attempt
+to call the port release-ready before the release gate.
 ```
 
 ## Do not touch boundaries

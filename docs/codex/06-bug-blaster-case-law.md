@@ -65,6 +65,19 @@ Keep custom slab support scoped to normal dry bottom states unless new RED proof
 
 A release jar is not clean merely because debug/proof classes are absent. Production runtime bytecode must also not hard-link excluded classes. Run both jar contents scan and `jdeps` hard-reference scan.
 
+## MC1211 decorative hanger lowered-support follow-down
+
+```text
+❗ BUG BLASTER ❗
+Title: MC1211 decorative hangers clipped or gapped under lowered supports
+Invariant: Decorative hangers must inherit the support block underside that is actually rendered. Full lowered supports and lowered top slabs need distinct recursion-safe dy handling; chains remain excluded.
+Root cause: The 1.21.1 port had two hanger dy gaps. Full-block supports could not safely call through the normal dy path from inside SlabSupport.getYOffset because of the IN_GET_Y_OFFSET recursion guard, so decorative hangers did not follow lowered full-block undersides. Separately, the existing slab-hanger branch returned the slab dy for every slab type; lowered TOP slabs need supportDy + 0.5 because their underside sits half a block higher than bottom/double slab undersides.
+Fix: Commit 94a5643e adds recursion-safe loweredFullBlockUndersideSupportDy and isBeta35LoweredFullBlockUndersideVisibleOwnerObject, wired additively into SlabSupport.java's ceiling section, and corrects the slab-hanger branch to use TYPE == TOP ? supportDy + 0.5 : supportDy. The supported decorative set is lantern, soul lantern, spore blossom, hanging roots, and pale hanging moss; chains are unchanged.
+Proof: Compile passed; focused SBBS goblin route stayed GREEN with lanternUnderDy=-0.5, chainLanternDy=0, and failureLayer=NONE. Julia live-confirmed on 2026-06-03 under Indigo that lanterns and spore blossoms hang flush under warped-slab lowered top ceilings and lowered full-block stone supports. Live/manual proof must come from the branch-local current-HEAD Gradle dev client, never Applications/Minecraft, a stale jar, a wrong-head jar, or the vanilla launcher.
+Savepoint: behavior commit 94a5643e, spine/docs head 20a5ac28, closure tag save/mc1211-decorative-hanger-followdown-live-confirmed. Branch pushed: yes. Tag pushed: yes. Unrelated LoweredSideSlabRetargeter.java and other dirty WIP were deliberately excluded.
+Status: Fixed for the decorative hanger follow-down slice only. Do not promote to release-ready or whole-geometry fixed; the active raycast RED and SBBS manual-live proof gap remain separate.
+```
+
 ## Bug Blaster template
 
 ```text
