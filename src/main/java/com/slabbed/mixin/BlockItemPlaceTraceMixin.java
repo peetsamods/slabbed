@@ -33,7 +33,9 @@ public abstract class BlockItemPlaceTraceMixin {
 
     @Inject(method = "place", at = @At("HEAD"))
     private void slabbed$tracePlaceHead(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
-        if (!SlabbedAuditBridge.isEnabled()) return;
+        boolean sbsbTrace = SlabbedAuditBridge.isEnabled();
+        boolean recorder = SlabbedAuditBridge.isRecorderEnabled();
+        if (!sbsbTrace && !recorder) return;
         BlockItem self = (BlockItem) (Object) this;
         if (!slabbed$isTracedBlock(self.getBlock())) return;
 
@@ -44,29 +46,35 @@ public abstract class BlockItemPlaceTraceMixin {
                 "recordPlacementContext",
                 new Class<?>[]{ItemPlacementContext.class},
                 ctx);
+        SlabbedAuditBridge.invokeRecorder(
+                "recordPlacementContext",
+                new Class<?>[]{ItemPlacementContext.class},
+                ctx);
         BlockPos hitPos = placePos.offset(face.getOpposite());
         BlockState hitState = world.getBlockState(hitPos);
         BlockState placeState = world.getBlockState(placePos);
 
         double dyHit = SlabSupport.getYOffset(world, hitPos, hitState);
         double dyPlace = SlabSupport.getYOffset(world, placePos, placeState);
-        if (dyHit == 0.0 && dyPlace == 0.0) return;
+        if (!recorder && dyHit == 0.0 && dyPlace == 0.0) return;
 
         String side = world.isClient() ? "CLIENT" : "SERVER";
         Identifier itemId = Registries.ITEM.getId(self);
         SLABBED$TRACE.set(new TraceCtx(side, itemId, face, hitPos, placePos));
 
-        Slabbed.LOGGER.info("[SBSB-TRACE][HEAD] side={} item={} face={} hitPos={} hitState={} dyHit={} placePos={} placeState={} dyPlace={} placeAbove={}",
-                side,
-                itemId,
-                face,
-                hitPos,
-                hitState,
-                dyHit,
-                placePos,
-                placeState,
-                dyPlace,
-                world.getBlockState(placePos.up()));
+        if (sbsbTrace && (dyHit != 0.0 || dyPlace != 0.0)) {
+            Slabbed.LOGGER.info("[SBSB-TRACE][HEAD] side={} item={} face={} hitPos={} hitState={} dyHit={} placePos={} placeState={} dyPlace={} placeAbove={}",
+                    side,
+                    itemId,
+                    face,
+                    hitPos,
+                    hitState,
+                    dyHit,
+                    placePos,
+                    placeState,
+                    dyPlace,
+                    world.getBlockState(placePos.up()));
+        }
     }
 
     @Inject(method = "place", at = @At("RETURN"))
@@ -95,6 +103,10 @@ public abstract class BlockItemPlaceTraceMixin {
                     dyPlace,
                     cir.getReturnValue());
             SlabbedAuditBridge.invoke(
+                    "recordPlacementResult",
+                    new Class<?>[]{ItemPlacementContext.class, ActionResult.class},
+                    ctx, cir.getReturnValue());
+            SlabbedAuditBridge.invokeRecorder(
                     "recordPlacementResult",
                     new Class<?>[]{ItemPlacementContext.class, ActionResult.class},
                     ctx, cir.getReturnValue());

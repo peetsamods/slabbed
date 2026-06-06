@@ -2,11 +2,11 @@ package com.slabbed.client;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.util.SlabSupport;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
-import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.WorldChunk;
@@ -76,21 +76,33 @@ public final class SlabAnchorClientSync {
     }
 
     private static void scheduleRerendersForSet(MinecraftClient mc, LongOpenHashSet set) {
-        if (set == null || set.isEmpty()) {
+        if (set == null || set.isEmpty() || mc.worldRenderer == null) {
             return;
         }
         BlockPos.Mutable mutable = new BlockPos.Mutable();
         for (long packed : set) {
             mutable.set(packed);
-            BlockState current = mc.world != null
-                    ? mc.world.getBlockState(mutable)
-                    : null;
-            if (current != null) {
-                if (SlabAnchorAttachment.TRACE) {
-                    Slabbed.LOGGER.info("[ANCHOR] client rerender pos={} reason=attachment_sync_or_chunk_load",
-                            mutable.toShortString());
-                }
-                mc.worldRenderer.scheduleBlockRerenderIfNeeded(mutable, current, current);
+            int x = mutable.getX();
+            int y = mutable.getY();
+            int z = mutable.getZ();
+            // UNCONDITIONAL rebuild of the anchored cell + its bounded dependent
+            // column. The synced anchor changes the rendered dy of this cell (and
+            // of column blocks stacked above it) WITHOUT changing any BlockState,
+            // so scheduleBlockRerenderIfNeeded(pos, same, same) no-ops and the
+            // model stays at the stale (un-lowered) height — the visible gap.
+            // scheduleBlockRenders marks the intersecting sections dirty outright.
+            if (mc.world != null) {
+                SlabSupport.refreshVisualYOffsetRegion(
+                        mc.world,
+                        x - 1, y - 1, z - 1,
+                        x + 1, y + SlabSupport.chainRerenderDepth(), z + 1);
+            }
+            mc.worldRenderer.scheduleBlockRenders(
+                    x - 1, y - 1, z - 1,
+                    x + 1, y + SlabSupport.chainRerenderDepth(), z + 1);
+            if (SlabAnchorAttachment.TRACE) {
+                Slabbed.LOGGER.info("[ANCHOR] client rerender region pos={} reason=attachment_sync_or_chunk_load",
+                        mutable.toShortString());
             }
         }
     }

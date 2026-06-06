@@ -18,9 +18,11 @@ import net.minecraft.util.Hand;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.registry.Registries;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
@@ -803,6 +805,12 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // and places TOP instead of BOTTOM).
         // Side-channel notes only.
         runBsFb05sLivePlacementIntentProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
+
+        // BS-FB upper-face perpendicular placement (RED PROOF — captures Julia's
+        // live path where an upper/top hit on a lowered FB routes placement to
+        // vanilla height instead of the perpendicular lowered side position).
+        // Side-channel notes only.
+        runBsFbUpperFacePerpendicularPlacementProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
         // BS-FB-1S top-half placement law (RED PROOF — capture missing behavior).
         // Side-channel notes only; deliberately does NOT emit manifest/ladder artifacts.
@@ -2052,6 +2060,564 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     + " slabType=" + slabType.get()
                     + " slabDy=" + slabDy.get());
         }
+    }
+
+    /**
+     * BS-FB upper-face perpendicular placement proof.
+     *
+     * <p>Fixture: bottom slab (BS), anchored lowered full block (FB) directly
+     * above it, player standing on the east side. The simulated hit is the
+     * player-facing central {@code UP} hit at the lowered FB's visible upper
+     * boundary ({@code fullPos.y + 0.5}). Product law from Julia's live report:
+     * when that hit is made from the side as a perpendicular placement intent,
+     * placement should resolve to the side position and inherit the lowered
+     * visual height instead of climbing to {@code fullPos.up()}.
+     *
+     * <p>Two subjects are checked:
+     * <ul>
+     *   <li>stone slab item → TOP slab at {@code sidePos}, dy=-0.5.</li>
+     *   <li>stone block item → ordinary full block at {@code sidePos}, dy=-0.5.</li>
+     * </ul>
+     *
+     * <p>Side-channel only: writes
+     * {@code bs_fb_upper_face_perpendicular_placement_notes.json}; does not
+     * register manifest artifacts.
+     */
+    static void runBsFbUpperFacePerpendicularPlacementProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "bs_fb_upper_face_perpendicular_placement";
+        final BlockPos slabSupportPos = FIXTURE_ORIGIN.add(46, 0, 0);
+        final BlockPos slabFullPos = slabSupportPos.up();
+        final BlockPos slabSidePos = slabFullPos.east();
+        final BlockPos blockSupportPos = FIXTURE_ORIGIN.add(50, 0, 0);
+        final BlockPos blockFullPos = blockSupportPos.up();
+        final BlockPos blockSidePos = blockFullPos.east();
+
+        AtomicReference<String> slabActionResult = new AtomicReference<>("not_run");
+        AtomicReference<String> slabSideState = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabSideType = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabSideDy = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabSideVisualY = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabTopState = new AtomicReference<>("not_checked");
+        AtomicReference<String> slabVerdict = new AtomicReference<>("BLOCKED");
+
+        AtomicReference<String> blockActionResult = new AtomicReference<>("not_run");
+        AtomicReference<String> blockSideState = new AtomicReference<>("not_checked");
+        AtomicReference<String> blockSideDy = new AtomicReference<>("not_checked");
+        AtomicReference<String> blockSideVisualY = new AtomicReference<>("not_checked");
+        AtomicReference<String> blockSideAnchored = new AtomicReference<>("not_checked");
+        AtomicReference<String> blockTopState = new AtomicReference<>("not_checked");
+        AtomicReference<String> blockVerdict = new AtomicReference<>("BLOCKED");
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(
+                    slabSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabFullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabSidePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabSidePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(slabFullPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, slabFullPos, world.getBlockState(slabFullPos));
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                        Hand.MAIN_HAND,
+                        new ItemStack(Items.STONE_SLAB, 8));
+            }
+
+            world.setBlockState(
+                    blockSupportPos,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(blockFullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(blockSidePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(blockSidePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(blockFullPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, blockFullPos, world.getBlockState(blockFullPos));
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult slabUpperFaceHit = new BlockHitResult(
+                new Vec3d(
+                        slabFullPos.getX() + 0.5,
+                        slabFullPos.getY() + 0.5,
+                        slabFullPos.getZ() + 0.5),
+                Direction.UP,
+                slabFullPos,
+                false,
+                false);
+
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var player = server.getPlayerManager().getPlayerList().get(0);
+                player.refreshPositionAndAngles(
+                        slabFullPos.getX() + 2.5,
+                        slabFullPos.getY() + 0.5 - 1.62,
+                        slabFullPos.getZ() + 0.5,
+                        90.0f,
+                        0.0f);
+                player.setVelocity(Vec3d.ZERO);
+            }
+        });
+        ctx.waitTick();
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                slabVerdict.set("BLOCKED: client unavailable for slab upper-face placement");
+                return;
+            }
+            mc.player.refreshPositionAndAngles(
+                    slabFullPos.getX() + 2.5,
+                    slabFullPos.getY() + 0.5 - mc.player.getStandingEyeHeight(),
+                    slabFullPos.getZ() + 0.5,
+                    90.0f,
+                    0.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, slabUpperFaceHit);
+            slabActionResult.set(result.toString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                slabVerdict.set("BLOCKED: client world unavailable for slab readback");
+                return;
+            }
+            BlockState side = mc.world.getBlockState(slabSidePos);
+            BlockState top = mc.world.getBlockState(slabFullPos.up());
+            slabSideState.set(side.toString());
+            slabTopState.set(top.toString());
+            String sideType = side.contains(SlabBlock.TYPE) ? side.get(SlabBlock.TYPE).toString() : "none";
+            slabSideType.set(sideType);
+            double dy = SlabSupport.getYOffset(mc.world, slabSidePos, side);
+            slabSideDy.set(Double.toString(dy));
+            VoxelShape outline = side.getOutlineShape(mc.world, slabSidePos, ShapeContext.absent());
+            slabSideVisualY.set(outline.isEmpty()
+                    ? "empty"
+                    : formatYRange(
+                            slabSidePos.getY() + outline.getBoundingBox().minY,
+                            slabSidePos.getY() + outline.getBoundingBox().maxY));
+
+            // Correct intent: a CENTRAL top-face click stacks ON TOP of the lowered
+            // block (and inherits its -0.5 so it sits flush), and must NOT be hijacked
+            // to the side. (Side/perpendicular placement is reached by aiming at the
+            // block's side face or the top-face EDGE band, not its centre.)
+            boolean sideClear = side.isAir();
+            double topDy = SlabSupport.getYOffset(mc.world, slabFullPos.up(), top);
+            boolean topIsLoweredSlab = top.isOf(Blocks.STONE_SLAB)
+                    && top.contains(SlabBlock.TYPE)
+                    && Math.abs(topDy - (-0.5)) < 1.0e-6;
+            if (topIsLoweredSlab && sideClear) {
+                slabVerdict.set("GREEN: central upper-face slab intent stacked a lowered slab ON TOP (no side hijack)");
+            } else {
+                slabVerdict.set("RED: central upper-face slab intent did not stack a lowered slab on top"
+                        + " topState=" + top
+                        + " topDy=" + topDy
+                        + " sideState=" + side);
+            }
+        });
+
+        final BlockHitResult blockUpperFaceHit = new BlockHitResult(
+                new Vec3d(
+                        blockFullPos.getX() + 0.5,
+                        blockFullPos.getY() + 0.5,
+                        blockFullPos.getZ() + 0.5),
+                Direction.UP,
+                blockFullPos,
+                false,
+                false);
+
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var player = server.getPlayerManager().getPlayerList().get(0);
+                player.setStackInHand(
+                        Hand.MAIN_HAND,
+                        new ItemStack(Items.STONE, 8));
+                player.refreshPositionAndAngles(
+                        blockFullPos.getX() + 2.5,
+                        blockFullPos.getY() + 0.5 - 1.62,
+                        blockFullPos.getZ() + 0.5,
+                        90.0f,
+                        0.0f);
+                player.setVelocity(Vec3d.ZERO);
+            }
+        });
+        ctx.waitTick();
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                blockVerdict.set("BLOCKED: client unavailable for block upper-face placement");
+                return;
+            }
+            mc.player.refreshPositionAndAngles(
+                    blockFullPos.getX() + 2.5,
+                    blockFullPos.getY() + 0.5 - mc.player.getStandingEyeHeight(),
+                    blockFullPos.getZ() + 0.5,
+                    90.0f,
+                    0.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, blockUpperFaceHit);
+            blockActionResult.set(result.toString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                blockVerdict.set("BLOCKED: client world unavailable for block readback");
+                return;
+            }
+            BlockState side = mc.world.getBlockState(blockSidePos);
+            BlockState top = mc.world.getBlockState(blockFullPos.up());
+            blockSideState.set(side.toString());
+            blockTopState.set(top.toString());
+            double dy = SlabSupport.getYOffset(mc.world, blockSidePos, side);
+            blockSideDy.set(Double.toString(dy));
+            blockSideAnchored.set(Boolean.toString(SlabAnchorAttachment.isAnchored(mc.world, blockSidePos)));
+            VoxelShape outline = side.getOutlineShape(mc.world, blockSidePos, ShapeContext.absent());
+            blockSideVisualY.set(outline.isEmpty()
+                    ? "empty"
+                    : formatYRange(
+                            blockSidePos.getY() + outline.getBoundingBox().minY,
+                            blockSidePos.getY() + outline.getBoundingBox().maxY));
+
+            // Correct intent: a CENTRAL top-face click stacks the full block ON TOP
+            // (inheriting -0.5 from the lowered column) and must NOT be hijacked to
+            // the side.
+            boolean sideClear = side.isAir();
+            double topDy = SlabSupport.getYOffset(mc.world, blockFullPos.up(), top);
+            boolean topIsLoweredStone = top.isOf(Blocks.STONE)
+                    && Math.abs(topDy - (-0.5)) < 1.0e-6;
+            if (topIsLoweredStone && sideClear) {
+                blockVerdict.set("GREEN: central upper-face block intent stacked a lowered full block ON TOP (no side hijack)");
+            } else {
+                blockVerdict.set("RED: central upper-face block intent did not stack a lowered full block on top"
+                        + " topState=" + top
+                        + " topDy=" + topDy
+                        + " sideState=" + side);
+            }
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "bs-fb upper-face central placement stacks on top",
+                "A CENTRAL UP hit on a lowered FB stacks the slab/block ON TOP, inheriting the lowered -0.5 so it "
+                        + "sits flush, and is NOT hijacked to the side. (Perpendicular side placement is reached via "
+                        + "the side face or the top-face edge band, not the centre.)",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("slabSupportPos", slabSupportPos.toShortString()),
+                        new NoteField("slabFullPos", slabFullPos.toShortString()),
+                        new NoteField("slabSidePos", slabSidePos.toShortString()),
+                        new NoteField("slab_actionResult", slabActionResult.get()),
+                        new NoteField("slab_sideState", slabSideState.get()),
+                        new NoteField("slab_sideType", slabSideType.get()),
+                        new NoteField("slab_sideDy", slabSideDy.get()),
+                        new NoteField("slab_sideVisualY", slabSideVisualY.get()),
+                        new NoteField("slab_topState", slabTopState.get()),
+                        new NoteField("slab_verdict", slabVerdict.get()),
+                        new NoteField("blockSupportPos", blockSupportPos.toShortString()),
+                        new NoteField("blockFullPos", blockFullPos.toShortString()),
+                        new NoteField("blockSidePos", blockSidePos.toShortString()),
+                        new NoteField("block_actionResult", blockActionResult.get()),
+                        new NoteField("block_sideState", blockSideState.get()),
+                        new NoteField("block_sideDy", blockSideDy.get()),
+                        new NoteField("block_sideVisualY", blockSideVisualY.get()),
+                        new NoteField("block_sideAnchored", blockSideAnchored.get()),
+                        new NoteField("block_topState", blockTopState.get()),
+                        new NoteField("block_verdict", blockVerdict.get())
+                ),
+                !slabVerdict.get().startsWith("RED")
+                        && !slabVerdict.get().startsWith("BLOCKED")
+                        && !blockVerdict.get().startsWith("RED")
+                        && !blockVerdict.get().startsWith("BLOCKED"));
+
+        StringBuilder failMsg = new StringBuilder();
+        if (slabVerdict.get().startsWith("RED") || slabVerdict.get().startsWith("BLOCKED")) {
+            failMsg.append("[").append(testId).append("] slab ").append(slabVerdict.get())
+                    .append(" actionResult=").append(slabActionResult.get())
+                    .append(" sideState=").append(slabSideState.get())
+                    .append(" sideType=").append(slabSideType.get())
+                    .append(" sideDy=").append(slabSideDy.get())
+                    .append(" topState=").append(slabTopState.get()).append("\n");
+        }
+        if (blockVerdict.get().startsWith("RED") || blockVerdict.get().startsWith("BLOCKED")) {
+            failMsg.append("[").append(testId).append("] block ").append(blockVerdict.get())
+                    .append(" actionResult=").append(blockActionResult.get())
+                    .append(" sideState=").append(blockSideState.get())
+                    .append(" sideDy=").append(blockSideDy.get())
+                    .append(" sideAnchored=").append(blockSideAnchored.get())
+                    .append(" topState=").append(blockTopState.get()).append("\n");
+        }
+        if (failMsg.length() > 0) {
+            throw new RuntimeException(failMsg.toString().trim());
+        }
+    }
+
+    /**
+     * Terrain Slabs item variant of the lowered side-slab placement law.
+     *
+     * <p>Live authority: Julia reproduced this with {@code terrainslabs:grass_slab}
+     * against a lowered log/full block. The placement resolves to the side cell, but
+     * the Terrain Slabs slab itself keeps dy=0.0, so a lower-half click visually
+     * lands in the target's top half and an upper-half click remains too high.
+     */
+    static void runTerrainSlabsSideSlabPlacementOnLoweredBlockProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Path screenshotDir,
+            Set<String> knownScreenshotFiles,
+            List<ManifestArtifact> artifacts
+    ) {
+        final String testId = "terrain_slabs_side_slab_on_lowered_block";
+        final Block terrainSlabBlock = terrainGrassSlabBlock();
+        final BlockPos lowerSupportPos = FIXTURE_ORIGIN.add(56, 0, 0);
+        final BlockPos lowerFullPos = lowerSupportPos.up();
+        final BlockPos lowerPlacePos = lowerFullPos.south();
+        final BlockPos upperSupportPos = FIXTURE_ORIGIN.add(60, 0, 0);
+        final BlockPos upperFullPos = upperSupportPos.up();
+        final BlockPos upperPlacePos = upperFullPos.south();
+
+        AtomicReference<String> lowerActionResult = new AtomicReference<>("");
+        AtomicReference<String> lowerPlacedState = new AtomicReference<>("");
+        AtomicReference<String> lowerPlacedType = new AtomicReference<>("");
+        AtomicReference<String> lowerDy = new AtomicReference<>("");
+        AtomicReference<String> lowerVisualY = new AtomicReference<>("");
+        AtomicReference<String> lowerVerdict = new AtomicReference<>("audit-only");
+
+        AtomicReference<String> upperActionResult = new AtomicReference<>("");
+        AtomicReference<String> upperPlacedState = new AtomicReference<>("");
+        AtomicReference<String> upperPlacedType = new AtomicReference<>("");
+        AtomicReference<String> upperDy = new AtomicReference<>("");
+        AtomicReference<String> upperVisualY = new AtomicReference<>("");
+        AtomicReference<String> upperVerdict = new AtomicReference<>("audit-only");
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            for (BlockPos supportPos : List.of(lowerSupportPos, upperSupportPos)) {
+                BlockPos fullPos = supportPos.up();
+                BlockPos placePos = fullPos.south();
+                world.setBlockState(
+                        supportPos,
+                        terrainSlabBlock.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                        Block.NOTIFY_LISTENERS);
+                world.setBlockState(fullPos, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+                world.setBlockState(placePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+                world.setBlockState(placePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            }
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var player = server.getPlayerManager().getPlayerList().get(0);
+                player.setStackInHand(Hand.MAIN_HAND, new ItemStack(terrainSlabBlock, 8));
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        final BlockHitResult lowerHalfHit = new BlockHitResult(
+                new Vec3d(lowerFullPos.getX() + 0.5, lowerFullPos.getY() - 0.25, lowerFullPos.getZ() + 1.0),
+                Direction.SOUTH,
+                lowerFullPos,
+                false,
+                false);
+
+        syncServerPlayerForSouthSide(singleplayer, lowerFullPos, terrainSlabBlock);
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                lowerVerdict.set("BLOCKED: client unavailable for terrain lower-half side placement");
+                return;
+            }
+            mc.player.refreshPositionAndAngles(
+                    lowerFullPos.getX() + 0.5,
+                    lowerFullPos.getY() + 0.5 - mc.player.getStandingEyeHeight(),
+                    lowerFullPos.getZ() + 2.5,
+                    180.0f,
+                    0.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(terrainSlabBlock, 8));
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, lowerHalfHit);
+            lowerActionResult.set(result.toString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                lowerVerdict.set("BLOCKED: client world unavailable for terrain lower-half readback");
+                return;
+            }
+            BlockState placed = mc.world.getBlockState(lowerPlacePos);
+            lowerPlacedState.set(placed.toString());
+            String type = placed.contains(SlabBlock.TYPE) ? placed.get(SlabBlock.TYPE).toString() : "none";
+            lowerPlacedType.set(type);
+            double dy = SlabSupport.getYOffset(mc.world, lowerPlacePos, placed);
+            lowerDy.set(Double.toString(dy));
+            lowerVisualY.set(visualYRange(mc.world, lowerPlacePos, placed));
+            boolean isTerrainSlab = placed.isOf(terrainSlabBlock);
+            boolean isBottom = placed.contains(SlabBlock.TYPE) && placed.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+            boolean dyOk = Math.abs(dy - (-0.5d)) < 1.0e-6;
+            if (isTerrainSlab && isBottom && dyOk) {
+                lowerVerdict.set("GREEN: lower-half Terrain Slabs side slab placed BOTTOM with dy=-0.5");
+            } else {
+                lowerVerdict.set("RED: lower-half Terrain Slabs side slab did not lower"
+                        + " state=" + placed + " type=" + type + " dy=" + dy);
+            }
+        });
+
+        final BlockHitResult upperHalfHit = new BlockHitResult(
+                new Vec3d(upperFullPos.getX() + 0.5, upperFullPos.getY() + 0.25, upperFullPos.getZ() + 1.0),
+                Direction.SOUTH,
+                upperFullPos,
+                false,
+                false);
+
+        syncServerPlayerForSouthSide(singleplayer, upperFullPos, terrainSlabBlock);
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                upperVerdict.set("BLOCKED: client unavailable for terrain upper-half side placement");
+                return;
+            }
+            mc.player.refreshPositionAndAngles(
+                    upperFullPos.getX() + 0.5,
+                    upperFullPos.getY() + 0.5 - mc.player.getStandingEyeHeight(),
+                    upperFullPos.getZ() + 2.5,
+                    180.0f,
+                    0.0f);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(terrainSlabBlock, 8));
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHalfHit);
+            upperActionResult.set(result.toString());
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.world == null) {
+                upperVerdict.set("BLOCKED: client world unavailable for terrain upper-half readback");
+                return;
+            }
+            BlockState placed = mc.world.getBlockState(upperPlacePos);
+            upperPlacedState.set(placed.toString());
+            String type = placed.contains(SlabBlock.TYPE) ? placed.get(SlabBlock.TYPE).toString() : "none";
+            upperPlacedType.set(type);
+            double dy = SlabSupport.getYOffset(mc.world, upperPlacePos, placed);
+            upperDy.set(Double.toString(dy));
+            upperVisualY.set(visualYRange(mc.world, upperPlacePos, placed));
+            boolean isTerrainSlab = placed.isOf(terrainSlabBlock);
+            boolean isTop = placed.contains(SlabBlock.TYPE) && placed.get(SlabBlock.TYPE) == SlabType.TOP;
+            boolean dyOk = Math.abs(dy - (-0.5d)) < 1.0e-6;
+            if (isTerrainSlab && isTop && dyOk) {
+                upperVerdict.set("GREEN: upper-half Terrain Slabs side slab placed TOP with dy=-0.5");
+            } else {
+                upperVerdict.set("RED: upper-half Terrain Slabs side slab did not lower"
+                        + " state=" + placed + " type=" + type + " dy=" + dy);
+            }
+        });
+
+        writeInvariantProofNotes(
+                screenshotDir,
+                testId + "_notes.json",
+                testId,
+                "Terrain Slabs slab item lowered-side placement",
+                "Terrain Slabs slab items placed against lower/upper halves of a lowered full block must inherit "
+                        + "the lowered side dy=-0.5, not render at vanilla height.",
+                testId,
+                testId,
+                List.of(
+                        new NoteField("terrainSlabBlock", Registries.BLOCK.getId(terrainSlabBlock).toString()),
+                        new NoteField("lowerSupportPos", lowerSupportPos.toShortString()),
+                        new NoteField("lowerFullPos", lowerFullPos.toShortString()),
+                        new NoteField("lowerPlacePos", lowerPlacePos.toShortString()),
+                        new NoteField("lower_actionResult", lowerActionResult.get()),
+                        new NoteField("lower_placedState", lowerPlacedState.get()),
+                        new NoteField("lower_placedType", lowerPlacedType.get()),
+                        new NoteField("lower_dy", lowerDy.get()),
+                        new NoteField("lower_visualY", lowerVisualY.get()),
+                        new NoteField("lower_verdict", lowerVerdict.get()),
+                        new NoteField("upperSupportPos", upperSupportPos.toShortString()),
+                        new NoteField("upperFullPos", upperFullPos.toShortString()),
+                        new NoteField("upperPlacePos", upperPlacePos.toShortString()),
+                        new NoteField("upper_actionResult", upperActionResult.get()),
+                        new NoteField("upper_placedState", upperPlacedState.get()),
+                        new NoteField("upper_placedType", upperPlacedType.get()),
+                        new NoteField("upper_dy", upperDy.get()),
+                        new NoteField("upper_visualY", upperVisualY.get()),
+                        new NoteField("upper_verdict", upperVerdict.get())
+                ),
+                !lowerVerdict.get().startsWith("RED")
+                        && !lowerVerdict.get().startsWith("BLOCKED")
+                        && !upperVerdict.get().startsWith("RED")
+                        && !upperVerdict.get().startsWith("BLOCKED"));
+
+        StringBuilder failMsg = new StringBuilder();
+        if (lowerVerdict.get().startsWith("RED") || lowerVerdict.get().startsWith("BLOCKED")) {
+            failMsg.append("[").append(testId).append("] lowerHalf ").append(lowerVerdict.get())
+                    .append(" actionResult=").append(lowerActionResult.get())
+                    .append(" state=").append(lowerPlacedState.get())
+                    .append(" type=").append(lowerPlacedType.get())
+                    .append(" dy=").append(lowerDy.get())
+                    .append(" visualY=").append(lowerVisualY.get()).append("\n");
+        }
+        if (upperVerdict.get().startsWith("RED") || upperVerdict.get().startsWith("BLOCKED")) {
+            failMsg.append("[").append(testId).append("] upperHalf ").append(upperVerdict.get())
+                    .append(" actionResult=").append(upperActionResult.get())
+                    .append(" state=").append(upperPlacedState.get())
+                    .append(" type=").append(upperPlacedType.get())
+                    .append(" dy=").append(upperDy.get())
+                    .append(" visualY=").append(upperVisualY.get()).append("\n");
+        }
+        if (failMsg.length() > 0) {
+            throw new RuntimeException(failMsg.toString().trim());
+        }
+    }
+
+    private static void syncServerPlayerForSouthSide(
+            TestSingleplayerContext singleplayer,
+            BlockPos fullPos,
+            Block terrainSlabBlock
+    ) {
+        singleplayer.getServer().runOnServer(server -> {
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var player = server.getPlayerManager().getPlayerList().get(0);
+                player.refreshPositionAndAngles(
+                        fullPos.getX() + 0.5,
+                        fullPos.getY() + 0.5 - 1.62,
+                        fullPos.getZ() + 2.5,
+                        180.0f,
+                        0.0f);
+                player.setVelocity(Vec3d.ZERO);
+                player.setStackInHand(Hand.MAIN_HAND, new ItemStack(terrainSlabBlock, 8));
+            }
+        });
+    }
+
+    private static String visualYRange(net.minecraft.world.BlockView world, BlockPos pos, BlockState state) {
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.absent());
+        if (outline.isEmpty()) {
+            return "empty";
+        }
+        return formatYRange(
+                pos.getY() + outline.getBoundingBox().minY,
+                pos.getY() + outline.getBoundingBox().maxY);
+    }
+
+    private static Block terrainGrassSlabBlock() {
+        Identifier id = Identifier.of("terrainslabs", "grass_slab");
+        Block block = Registries.BLOCK.get(id);
+        if (block == Blocks.AIR || !block.getDefaultState().contains(SlabBlock.TYPE)) {
+            throw new RuntimeException("expected loaded Terrain Slabs grass_slab with SlabBlock.TYPE, got " + block);
+        }
+        return block;
     }
 
     /**

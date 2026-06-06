@@ -46,7 +46,7 @@ public abstract class BlockEntityOffsetMixin {
             return;
         }
 
-        double yOff = SlabSupport.getYOffset(world, pos, blockState);
+        double yOff = SlabSupport.getVisualYOffset(world, pos, blockState);
         if (yOff != 0.0) {
             matrices.translate(0.0, yOff, 0.0);
         }

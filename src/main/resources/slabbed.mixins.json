@@ -14,6 +14,9 @@
     "RedstoneWireBlockMixin",
     "BlockItemPlaceTraceMixin",
     "BlockItemPlacementIntentMixin",
+    "PlayerInteractBlockPacketRecorderMixin",
+    "ServerPlayNetworkHandlerRecorderMixin",
+    "SlabBlockPlacementRecorderMixin",
     "BlockOnPlacedAnchorMixin",
     "BlockOnStateReplacedAnchorMixin"
   ],
