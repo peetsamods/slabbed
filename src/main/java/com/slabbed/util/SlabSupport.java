@@ -817,6 +817,24 @@ public final class SlabSupport {
 
         double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
         if (!Double.isNaN(directCustomSurfaceDy)) {
+            // Mixed-slab compound: when a standing object's immediate support is a vanilla
+            // BOTTOM slab that is itself rendered lowered (a "mixed slab" — a vanilla bottom
+            // slab capping a Terrain Slabs BOTTOM_LIKE surface, so the slab dropped -0.5 to
+            // sit on the half-height terrain), the object must follow BOTH the slab's own
+            // lowering AND its normal -0.5 sit-on-bottom-slab drop, or it floats exactly half
+            // a block above the mixed slab's lowered top (the reported lantern-on-mixed-slab
+            // bug). directCustomSlabSupportDy returns a flat -0.5 that ignores the support
+            // slab's own dy; add it back. Gated to BOTTOM-slab supports — TOP/DOUBLE supports
+            // are full-height at the top, so an object inherits only the slab's dy (-0.5),
+            // handled by the TOP/DOUBLE sit-branch below — and to non-slab objects, so a slab
+            // stacked on a mixed slab is untouched (broad slab-mixing stays out of scope).
+            // loweredBottomSlabSupportDy is recursion-safe (never re-enters getYOffset).
+            if (!(state.getBlock() instanceof SlabBlock)) {
+                double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
+                if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
+                    return directCustomSurfaceDy + supportLoweredDy;
+                }
+            }
             return directCustomSurfaceDy;
         }
 
@@ -1193,6 +1211,37 @@ public final class SlabSupport {
             return Double.NaN;
         }
         return -0.5;
+    }
+
+    /**
+     * Recursion-safe rendered dy of a vanilla BOTTOM-slab support directly beneath a
+     * standing object, used to compound a "mixed slab" lowering so the object follows
+     * its support's own drop in addition to the normal sit-on-bottom-slab -0.5. Mirrors
+     * the lowered cases of the slab branch in {@link #getYOffsetInner} without ever
+     * re-entering {@link #getYOffset}. Returns {@link Double#NaN} when the support is not
+     * a vanilla bottom slab and {@code 0.0} when it is a bottom slab that is not lowered,
+     * so callers (which gate on {@code < -1e-6}) leave the flush case untouched.
+     */
+    private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos) {
+        BlockState s = getBlockStateOrNull(world, supportPos);
+        if (s == null
+                || !(s.getBlock() instanceof SlabBlock)
+                || !s.contains(SlabBlock.TYPE)
+                || !isBottomSlab(s)
+                || !s.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
+            return -0.5;
+        }
+        double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
+        if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
+            return directCustomDy;
+        }
+        if (isAdjacentSideSlabLowered(world, supportPos, s)) {
+            return -0.5;
+        }
+        return 0.0;
     }
 
     private static boolean hasDirectCustomBottomLikeSupportColumn(BlockView world, BlockPos supportPos) {
