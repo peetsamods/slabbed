@@ -861,6 +861,23 @@ public final class SlabSupport {
             return -0.5;
         }
 
+        // A non-solid object (lantern/chain/…) standing on a TOP or DOUBLE slab that is
+        // itself rendered lowered must follow that slab down, or it floats above the slab's
+        // lowered top face (the reported TS+VS floating-lantern bug: a vanilla TOP/DOUBLE slab
+        // sitting on a lowered Terrain-Slabs/full-block column). BOTTOM-slab supports are
+        // already handled by the shouldOffset path above (which yields -0.5 or the compound
+        // -1.0), and the object's own top face sits at the slab's top, so the object inherits
+        // the slab's rendered dy. loweredSlabUndersideSupportDy is recursion-safe (never calls
+        // getYOffset) and returns 0.0 for a non-lowered slab so flush cases stay untouched.
+        if (sitSupport.getBlock() instanceof SlabBlock
+                && sitSupport.contains(SlabBlock.TYPE)
+                && sitSupport.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+            double slabSitDy = loweredSlabUndersideSupportDy(world, sitSupportPos, sitSupport);
+            if (Double.isFinite(slabSitDy) && slabSitDy < -1.0e-6) {
+                return slabSitDy;
+            }
+        }
+
         BlockState above = world.getBlockState(pos.up());
 
         // direct: ceiling-attached blocks directly under a top slab
