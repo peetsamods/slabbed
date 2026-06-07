@@ -175,13 +175,11 @@ public abstract class BlockItemPlacementIntentMixin {
                 && yOffset == -0.5d;
         Direction effectiveSide = originalSide;
         String hitDescriptor = originalSide.getAxis().isHorizontal() ? "horizontal_face" : "none";
-        // Only a hit near the EDGE of a lowered block's top face is treated as
-        // perpendicular side-placement intent. A central top-face hit is left as
-        // a genuine place-on-top: it falls through with effectiveSide == UP and
-        // is returned unremapped below. (A prior player-position fallback hijacked
-        // every central top hit toward the side the player faced, which broke
-        // ordinary stacking — see lowered_side_live_hit_remap_runtime_values.json.)
-        if (originalSide == Direction.UP) {
+        // Only slab items treat a hit near the EDGE of a lowered block's top
+        // face as perpendicular side-placement intent. Ordinary full blocks
+        // keep UP/top placement for edge clicks; actual horizontal-face clicks
+        // still use the side-placement lane below.
+        if (itemIsSlab && originalSide == Direction.UP) {
             Direction inferred = slabbed$inferLoweredSideFromUpFaceHit(originalHitPos, targetPos);
             if (inferred != null) {
                 effectiveSide = inferred;
@@ -271,6 +269,26 @@ public abstract class BlockItemPlacementIntentMixin {
                     ordinaryLoweredFullBlockGuard,
                     false,
                     "y_offset_not_-0.5",
+                    null,
+                    effectiveSide,
+                    hitDescriptor);
+            return context;
+        }
+
+        BlockPos sidePlacePos = targetPos.offset(effectiveSide);
+        BlockState sidePlaceState = context.getWorld().getBlockState(sidePlacePos);
+        if (itemIsOrdinaryFullBlock && !sidePlaceState.isReplaceable()) {
+            slabbed$recordRemapAttempt(
+                    context,
+                    itemEligible,
+                    true,
+                    targetIsSolid,
+                    targetHasBlockEntity,
+                    targetIsCraftingTable,
+                    yOffset,
+                    ordinaryLoweredFullBlockGuard,
+                    false,
+                    "ordinary_full_block_side_not_replaceable",
                     null,
                     effectiveSide,
                     hitDescriptor);

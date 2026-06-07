@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.dev.SlabbedLabFixtures;
 import com.slabbed.dev.SlabbedLabFixtures.LaneStatus;
 import com.slabbed.dev.SlabbedLabFixtures.PlaceResult;
@@ -10,6 +11,9 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.SlabType;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
@@ -220,6 +224,232 @@ public final class SlabbedLabFixtureTest {
                 "stone outline minY should be -0.5, got " + outline.getBoundingBox().minY);
 
         ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabOnAnchoredLoweredSupportInheritsDy(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos baseSlabPos = origin;
+        BlockPos loweredFullPos = baseSlabPos.up();
+        BlockPos loweredSupportPos = loweredFullPos.east();
+        BlockPos placedSlabPos = loweredSupportPos.up();
+
+        world.setBlockState(
+                baseSlabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(loweredFullPos, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(loweredSupportPos, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(world, loweredSupportPos, world.getBlockState(loweredSupportPos));
+
+        BlockState support = world.getBlockState(loweredSupportPos);
+        ctx.assertTrue(
+                SlabAnchorAttachment.isAnchored(world, loweredSupportPos),
+                "fixture invalid: lowered support was not anchored");
+        ctx.assertTrue(
+                SlabSupport.getYOffset(world, loweredSupportPos, support) == -0.5,
+                "fixture invalid: lowered support dy should be -0.5");
+
+        world.setBlockState(
+                placedSlabPos,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+
+        BlockState placed = world.getBlockState(placedSlabPos);
+        double dy = SlabSupport.getYOffset(world, placedSlabPos, placed);
+        ctx.assertTrue(dy == -0.5,
+                "oak slab above anchored lowered support should inherit dy=-0.5, got " + dy);
+
+        VoxelShape outline = placed.getOutlineShape(world, placedSlabPos, ShapeContext.absent());
+        ctx.assertTrue(outline.getBoundingBox().minY == -0.5,
+                "oak slab outline minY should be -0.5, got " + outline.getBoundingBox().minY);
+
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabOnLoweredDoubleSlabSupportInheritsDy(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos baseSlabPos = origin;
+        BlockPos loweredFullPos = baseSlabPos.up();
+        BlockPos loweredDoubleSlabPos = loweredFullPos.east();
+        BlockPos placedSlabPos = loweredDoubleSlabPos.up();
+
+        world.setBlockState(
+                baseSlabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(loweredFullPos, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(
+                loweredDoubleSlabPos,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                Block.NOTIFY_LISTENERS);
+
+        BlockState support = world.getBlockState(loweredDoubleSlabPos);
+        double supportDy = SlabSupport.getYOffset(world, loweredDoubleSlabPos, support);
+        ctx.assertTrue(supportDy == -0.5,
+                "fixture invalid: lowered double slab support dy should be -0.5, got " + supportDy);
+
+        world.setBlockState(
+                placedSlabPos,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+
+        BlockState placed = world.getBlockState(placedSlabPos);
+        double dy = SlabSupport.getYOffset(world, placedSlabPos, placed);
+        ctx.assertTrue(dy == -0.5,
+                "oak slab above lowered double slab should inherit dy=-0.5, got " + dy);
+
+        VoxelShape outline = placed.getOutlineShape(world, placedSlabPos, ShapeContext.absent());
+        ctx.assertTrue(outline.getBoundingBox().minY == -0.5,
+                "oak slab above lowered double slab outline minY should be -0.5, got "
+                        + outline.getBoundingBox().minY);
+
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void perpendicularSideSlabPersistsAfterConnectorBreak(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos baseSlabPos = origin;
+        BlockPos loweredFullPos = baseSlabPos.up();
+        BlockPos connectorSlabPos = loweredFullPos.east();
+        BlockPos perpendicularSlabPos = connectorSlabPos.south();
+
+        world.setBlockState(
+                baseSlabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        placeWithOnPlaced(world, loweredFullPos, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState());
+        placeWithOnPlaced(
+                world,
+                connectorSlabPos,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP));
+        placeWithOnPlaced(
+                world,
+                perpendicularSlabPos,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP));
+
+        BlockState connector = world.getBlockState(connectorSlabPos);
+        BlockState perpendicular = world.getBlockState(perpendicularSlabPos);
+        double connectorDy = SlabSupport.getYOffset(world, connectorSlabPos, connector);
+        double perpendicularDy = SlabSupport.getYOffset(world, perpendicularSlabPos, perpendicular);
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, connectorSlabPos),
+                "fixture invalid: connector side slab should be placement-anchored");
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, perpendicularSlabPos),
+                "fixture invalid: perpendicular side slab should be placement-anchored");
+        ctx.assertTrue(connectorDy == -0.5,
+                "fixture invalid: connector side slab should start lowered, got " + connectorDy);
+        ctx.assertTrue(perpendicularDy == -0.5,
+                "fixture invalid: perpendicular side slab should start lowered, got " + perpendicularDy);
+
+        world.breakBlock(connectorSlabPos, false);
+
+        BlockState after = world.getBlockState(perpendicularSlabPos);
+        double afterDy = SlabSupport.getYOffset(world, perpendicularSlabPos, after);
+        ctx.assertTrue(
+                after.isOf(Blocks.OAK_SLAB)
+                        && after.contains(SlabBlock.TYPE)
+                        && after.get(SlabBlock.TYPE) == SlabType.TOP,
+                "perpendicular slab should remain a TOP oak slab after connector break, got " + after);
+        ctx.assertTrue(afterDy == -0.5,
+                "perpendicular lowered side slab should persist dy=-0.5 after connector break, got " + afterDy);
+
+        VoxelShape outline = after.getOutlineShape(world, perpendicularSlabPos, ShapeContext.absent());
+        ctx.assertTrue(
+                outline.getBoundingBox().minY == 0.0 && outline.getBoundingBox().maxY == 0.5,
+                "perpendicular TOP slab outline should stay lowered at [0.0, 0.5] after connector break, got ["
+                        + outline.getBoundingBox().minY + ", " + outline.getBoundingBox().maxY + "]");
+
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void perpendicularSideSlabFromLoweredSlabEdgeInheritsDyAndPersists(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos baseSlabPos = origin;
+        BlockPos loweredFullPos = baseSlabPos.up();
+        BlockPos loweredTopSlabPos = loweredFullPos.up();
+        BlockPos perpendicularSlabPos = loweredTopSlabPos.south();
+
+        world.setBlockState(
+                baseSlabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        placeWithOnPlaced(world, loweredFullPos, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState());
+        placeWithOnPlaced(
+                world,
+                loweredTopSlabPos,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
+        placeWithOnPlaced(
+                world,
+                perpendicularSlabPos,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
+
+        BlockState loweredTopSlab = world.getBlockState(loweredTopSlabPos);
+        BlockState perpendicular = world.getBlockState(perpendicularSlabPos);
+        double loweredTopDy = SlabSupport.getYOffset(world, loweredTopSlabPos, loweredTopSlab);
+        double perpendicularDy = SlabSupport.getYOffset(world, perpendicularSlabPos, perpendicular);
+        ctx.assertTrue(loweredTopDy == -0.5,
+                "fixture invalid: lowered top slab should start dy=-0.5, got " + loweredTopDy);
+        ctx.assertTrue(perpendicularDy == -0.5,
+                "perpendicular slab from lowered slab edge should start dy=-0.5, got " + perpendicularDy);
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, perpendicularSlabPos),
+                "perpendicular slab from lowered slab edge should be placement-anchored");
+
+        world.breakBlock(loweredTopSlabPos, false);
+
+        BlockState after = world.getBlockState(perpendicularSlabPos);
+        double afterDy = SlabSupport.getYOffset(world, perpendicularSlabPos, after);
+        ctx.assertTrue(after.isOf(Blocks.OAK_SLAB),
+                "perpendicular slab should remain after lowered top slab break, got " + after);
+        ctx.assertTrue(afterDy == -0.5,
+                "perpendicular slab should persist dy=-0.5 after lowered top slab break, got " + afterDy);
+
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void blockOnAnchoredBottomSideSlabKeepsCompoundDy(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos baseSlabPos = origin;
+        BlockPos loweredFullPos = baseSlabPos.up();
+        BlockPos bottomSideSlabPos = loweredFullPos.east();
+        BlockPos topBlockPos = bottomSideSlabPos.up();
+
+        world.setBlockState(
+                baseSlabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        placeWithOnPlaced(world, loweredFullPos, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState());
+        placeWithOnPlaced(
+                world,
+                bottomSideSlabPos,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
+        world.setBlockState(topBlockPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        BlockState sideSlab = world.getBlockState(bottomSideSlabPos);
+        BlockState topBlock = world.getBlockState(topBlockPos);
+        double sideSlabDy = SlabSupport.getYOffset(world, bottomSideSlabPos, sideSlab);
+        double topBlockDy = SlabSupport.getYOffset(world, topBlockPos, topBlock);
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, bottomSideSlabPos),
+                "fixture invalid: bottom side slab should be placement-anchored");
+        ctx.assertTrue(sideSlabDy == -0.5,
+                "bottom side slab should stay lowered by dy=-0.5, got " + sideSlabDy);
+        ctx.assertTrue(topBlockDy == -1.0,
+                "block on lowered bottom side slab should keep compound dy=-1.0, got " + topBlockDy);
+
+        ctx.complete();
+    }
+
+    private static void placeWithOnPlaced(ServerWorld world, BlockPos pos, BlockState state) {
+        world.setBlockState(pos, state, Block.NOTIFY_LISTENERS);
+        state.getBlock().onPlaced(world, pos, state, null, ItemStack.EMPTY);
     }
 
     /**
