@@ -224,6 +224,36 @@ public final class SlabSupport {
         };
     }
 
+    /** Debug toggle (-Dslabbed.disableStepCull=true) to disable the step-face cull relaxation. */
+    private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
+
+    /**
+     * True if the {@code direction} side face of the opaque cube {@code state} at
+     * {@code pos} should be DRAWN even though the chunk mesher culls it, because exactly
+     * one of this block and its {@code direction} neighbour is a lowered custom-supported
+     * object — i.e. they sit at different visual heights and the slab step exposes part of
+     * the shared face (the see-through "window" / "doom-infinity" hole on a lowered cube in
+     * a terrace).
+     *
+     * <p>Cheap: uses {@link #isDirectCustomSlabSupportedObject} (fast-false for ordinary
+     * terrain) rather than the deep column walk in {@link #getYOffset}, so it is safe to
+     * call from the per-face chunk culling path. Only ever ADDS faces.
+     */
+    public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
+        if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
+                || !direction.getAxis().isHorizontal() || !state.isOpaqueFullCube()) {
+            return false;
+        }
+        BlockPos neighborPos = pos.offset(direction);
+        BlockState neighbor = getBlockStateOrNull(world, neighborPos);
+        if (neighbor == null) {
+            return false;
+        }
+        boolean selfLowered = isDirectCustomSlabSupportedObject(world, pos, state);
+        boolean neighborLowered = isDirectCustomSlabSupportedObject(world, neighborPos, neighbor);
+        return selfLowered != neighborLowered;
+    }
+
     /**
      * Primary query: should this slab top face count as solid support.
      */
@@ -847,13 +877,28 @@ public final class SlabSupport {
             return 0.0;
         }
 
-        // A non-solid object (lantern, etc.) sitting on a support that is lowered via the
-        // adjacent/cantilever rule floats, because the support-column walks above cannot
-        // follow that lowering (the air gap under a cantilever stops the walk). Match the
-        // support's lowering so the object sits flush. Reached only by non-solid objects
-        // (solid blocks returned 0.0 just above), so the common render path pays nothing.
+        // A non-solid object (lantern, etc.) standing ON TOP of a full-block support that is
+        // itself rendered lowered must follow that support down, or it floats above the
+        // support's lowered top face (the reported still-floating-lantern bug: a standing
+        // lantern on a lowered grass/dirt/planks block). The object's own shouldOffset column
+        // walk above can MISS this lowering — e.g. when the support is lowered by a persisted
+        // anchor or by adjacency but its own column below is air (a cantilever stops the walk)
+        // or a full-height solid block (no slab in the lantern's column at all). Resolve the
+        // support's actual rendered dy via the recursion-safe loweredFullBlockUndersideSupportDy
+        // (anchor / direct-custom-TS / lowered column / compound -1.0; adjacency-lowered
+        // cantilevers report through their persisted anchor), which never re-enters getYOffset,
+        // and inherit it. Reached only by non-solid objects (solid blocks returned 0.0 just
+        // above), so the common render path pays nothing; returns NaN/0.0 for a non-lowered
+        // support so flush cases stay untouched.
         BlockPos sitSupportPos = pos.down();
         BlockState sitSupport = world.getBlockState(sitSupportPos);
+        double sitSupportDy = loweredFullBlockUndersideSupportDy(world, sitSupportPos, sitSupport);
+        if (Double.isFinite(sitSupportDy) && sitSupportDy < -1.0e-6) {
+            return sitSupportDy;
+        }
+        // Cantilever fallback: a support lowered LIVE purely by adjacency to a lowered full
+        // block (no persisted anchor yet, e.g. the first client frame after a side-placement)
+        // is not yet reported by loweredFullBlockUndersideSupportDy, so detect it directly.
         if (!(sitSupport.getBlock() instanceof SlabBlock)
                 && !(sitSupport.getBlock() instanceof BlockEntityProvider)
                 && sitSupport.isSolidBlock(world, sitSupportPos)

@@ -627,4 +627,79 @@ public final class OffsetRaycastTargetingTest {
                 "lantern on a normal (non-lowered) DOUBLE slab must stay at 0.0, got " + bLantDy);
         ctx.complete();
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Still-floating-lantern regression (from the 2026-06-07 video): a standing
+    // lantern sitting directly ON TOP of a FULL BLOCK (grass/dirt/planks) that is
+    // itself lowered must inherit the support's -0.5 and sit flush — even when the
+    // lantern's own shouldOffset column walk cannot reach the lowering source
+    // (support lowered via a persisted ANCHOR with a full-height solid block below
+    // it, so there is NO slab anywhere in the lantern's column). Before the fix the
+    // lantern stayed at dy=0 and floated above the lowered support.
+    // ──────────────────────────────────────────────────────────────────────────
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lanternOnAnchorLoweredFullBlockSolidBelowLowers(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        // Build the video shape: lowered FB (stone on a bottom slab) with a grass block
+        // beside it sitting on a SOLID full-height plank, anchored on placement via the
+        // adjacent-lowered-FB rule. Then remove the lowered FB + its slab so the grass keeps
+        // only its persisted anchor — exactly the "grass on planks, no slab in column" shape.
+        BlockPos slab = origin.add(3, 2, 3);
+        world.setBlockState(slab, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos loweredFb = slab.up();
+        world.setBlockState(loweredFb, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos planksBelow = loweredFb.south().down();
+        world.setBlockState(planksBelow, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos grass = loweredFb.south();
+        world.setBlockState(grass, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+        com.slabbed.anchor.SlabAnchorAttachment.addAnchor(world, grass, world.getBlockState(grass));
+        world.setBlockState(loweredFb, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(slab, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        ctx.assertTrue(com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, grass),
+                "fixture: grass must stay anchored after the adjacent lowered FB is removed");
+        double supportDy = SlabSupport.getYOffset(world, grass, world.getBlockState(grass));
+        ctx.assertTrue(supportDy == -0.5,
+                "fixture: anchor-lowered grass support must render -0.5, got " + supportDy);
+        ctx.assertTrue(!world.getBlockState(grass.down()).getBlock().equals(Blocks.STONE_SLAB),
+                "fixture: support's column below must be a non-slab solid block (no slab in lantern column)");
+
+        BlockPos lantern = grass.up();
+        world.setBlockState(lantern, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double lanternDy = SlabSupport.getYOffset(world, lantern, world.getBlockState(lantern));
+        ctx.assertTrue(lanternDy == -0.5,
+                "standing lantern on an anchor-lowered full block (solid below) must lower -0.5 "
+                        + "to sit flush, was floating at " + lanternDy);
+        ctx.complete();
+    }
+
+    // A standing lantern on a COMPOUND-lowered full block (dy=-1.0: a full block above a lowered
+    // side slab) must inherit the support's full -1.0, not a flat -0.5. The old sit-branch
+    // returned a fixed -0.5 for any adjacent-lowered support, which left this lantern floating
+    // half a block above the -1.0 support's top face. The fix resolves the support's actual dy.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lanternOnCompoundMinusOneSupportInheritsMinusOne(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos baseSlab = origin.add(3, 2, 3);
+        BlockPos loweredFull = buildLoweredFullBlock(world, baseSlab);
+        BlockPos sideSlab = loweredFull.east();
+        world.setBlockState(sideSlab,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        BlockPos compound = sideSlab.up(); // full block above lowered side slab -> dy -1.0
+        world.setBlockState(compound, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double supportDy = SlabSupport.getYOffset(world, compound, world.getBlockState(compound));
+        ctx.assertTrue(supportDy == -1.0,
+                "fixture: compound support must be dy=-1.0, got " + supportDy);
+
+        BlockPos lantern = compound.up();
+        world.setBlockState(lantern, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double lanternDy = SlabSupport.getYOffset(world, lantern, world.getBlockState(lantern));
+        ctx.assertTrue(lanternDy == -1.0,
+                "standing lantern on a compound -1.0 support must inherit -1.0 (not a flat -0.5), got " + lanternDy);
+        ctx.complete();
+    }
 }
