@@ -559,6 +559,14 @@ public final class SlabSupport {
             if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return true;
             }
+            // A Terrain Slabs custom BOTTOM_LIKE surface lowers everything stacked above
+            // it just like a vanilla bottom slab. Recognise it here so a block placed on
+            // Terrain Slabs terrain qualifies for a column anchor and keeps its lowered dy
+            // when the block below it is broken (otherwise the live column walk hits the
+            // gap, the block un-lowers, and it jumps up into the block above — the z-fight).
+            if (CompatHooks.customSlabSurfaceKind(cur) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return false;
             }
