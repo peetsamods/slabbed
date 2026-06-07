@@ -48,14 +48,21 @@ public abstract class SlabbedDependentRerenderMixin {
         if (!slabbed$affectsLoweredDependents(world, pos, old, updated)) {
             return;
         }
-        // Bounded dependent region: one cell of horizontal margin (adjacent side
-        // slabs / lowered FBs) and the column up to MAX_CHAIN_DEPTH above pos
-        // (stacked/column dependents). One AABB call schedules the intersecting
-        // sections unconditionally, deduped by the renderer.
-        int minX = pos.getX() - 1;
-        int maxX = pos.getX() + 1;
-        int minZ = pos.getZ() - 1;
-        int maxZ = pos.getZ() + 1;
+        // Bounded dependent region: a small horizontal margin and the column up to
+        // MAX_CHAIN_DEPTH above pos (stacked/column dependents). The horizontal margin
+        // is 2 (not 1): adjacent-side-slab lowering propagates HORIZONTALLY through a
+        // chain of slabs, and a TS+VS surface combined against a block+slab leaves a
+        // dependent two cells away (often in a different chunk section) with a stale
+        // baked mesh — the "ghost" full block that only fills in on a later edit. Two
+        // cells covers that immediate propagation while keeping the AABB small (it still
+        // snaps to section granularity, so this only adds sections near a boundary —
+        // exactly the ghost case). Render-only and strictly additive: it only schedules
+        // extra rerenders and refreshes more visual-cache cells; it never removes faces
+        // or changes any dy.
+        int minX = pos.getX() - 2;
+        int maxX = pos.getX() + 2;
+        int minZ = pos.getZ() - 2;
+        int maxZ = pos.getZ() + 2;
         int minY = pos.getY() - 1;
         int maxY = pos.getY() + SlabSupport.chainRerenderDepth();
         SlabSupport.refreshVisualYOffsetRegion(world, minX, minY, minZ, maxX, maxY, maxZ);
@@ -88,6 +95,26 @@ public abstract class SlabbedDependentRerenderMixin {
         }
         // The cell sits in a lowered column (bottom slab / anchor below it), so a
         // change here can disconnect or shift the dy of dependents stacked above.
-        return SlabSupport.hasLoweringSourceInColumnBelow(world, pos);
+        if (SlabSupport.hasLoweringSourceInColumnBelow(world, pos)) {
+            return true;
+        }
+        // A change directly beside a lowering structure (a slab, a Terrain Slabs surface,
+        // or a cell sitting in a lowered column) can shift the rendered dy / cull state of
+        // those adjacent lowered dependents — e.g. a full block placed against a TS+VS
+        // edge whose neighbour slab is lowered. Without this the neighbour keeps a stale
+        // baked mesh and renders as a "ghost" until a later edit. Bounded to the four
+        // horizontal neighbours; all probes are recursion-safe (no getYOffset re-entry
+        // beyond the guarded public call). Render-only.
+        for (net.minecraft.util.math.Direction dir : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
+            BlockPos n = pos.offset(dir);
+            BlockState ns = world.getBlockState(n);
+            if (ns.getBlock() instanceof SlabBlock
+                    || CompatHooks.customSlabSurfaceKind(ns) != CompatSlabSurfaceKind.NONE
+                    || SlabAnchorAttachment.isAnchored(world, n)
+                    || SlabSupport.hasLoweringSourceInColumnBelow(world, n)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

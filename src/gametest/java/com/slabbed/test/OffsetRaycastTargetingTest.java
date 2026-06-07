@@ -511,4 +511,120 @@ public final class OffsetRaycastTargetingTest {
         }
         ctx.complete();
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // REGRESSION (TS+VS float fix): a non-solid object (lantern / chain) standing on
+    // a vanilla TOP or DOUBLE slab that is itself rendered lowered must follow that
+    // slab down to its lowered top face instead of floating a full step above it.
+    // This was the reported "TS + VS + object floats" bug: a vanilla TOP/DOUBLE slab
+    // on a lowered column (Terrain-Slabs surface or full-block-on-bottom-slab) lowers,
+    // but the object on top stayed at dy 0.0 (hasSlabInColumn terminated at the
+    // non-bottom slab without recognising it as a lowered support).
+    // ──────────────────────────────────────────────────────────────────────────
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void objectOnLoweredTopOrDoubleSlabFollows(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        // Helper stacks live in a tight footprint near origin to avoid overlapping
+        // neighbouring test structures in the shared gametest world.
+
+        // 1) Lantern on a vanilla TOP slab that sits on a lowered full block.
+        BlockPos a0 = origin.add(1, 2, 1);
+        world.setBlockState(a0, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos aFb = a0.up();
+        world.setBlockState(aFb, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos aTop = aFb.up();
+        world.setBlockState(aTop, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP), Block.NOTIFY_LISTENERS);
+        BlockPos aLant = aTop.up();
+        world.setBlockState(aLant, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(SlabSupport.getYOffset(world, aTop, world.getBlockState(aTop)) == -0.5,
+                "fixture: TOP slab on a lowered full block must render lowered -0.5");
+        double aLantDy = SlabSupport.getYOffset(world, aLant, world.getBlockState(aLant));
+        ctx.assertTrue(aLantDy == -0.5,
+                "lantern on a lowered TOP slab must follow it down (was floating at 0.0), got " + aLantDy);
+
+        // 2) Chain on the same lowered-TOP-slab arrangement (chains are excluded from the
+        //    overhead hanger-follow path, so this exercises the sit-on-slab path directly).
+        BlockPos b0 = origin.add(3, 2, 1);
+        world.setBlockState(b0, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos bFb = b0.up();
+        world.setBlockState(bFb, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos bTop = bFb.up();
+        world.setBlockState(bTop, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP), Block.NOTIFY_LISTENERS);
+        BlockPos bChain = bTop.up();
+        world.setBlockState(bChain, Blocks.IRON_CHAIN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double bChainDy = SlabSupport.getYOffset(world, bChain, world.getBlockState(bChain));
+        ctx.assertTrue(bChainDy == -0.5,
+                "chain on a lowered TOP slab must follow it down (was floating at 0.0), got " + bChainDy);
+
+        // 3) Lantern on a vanilla DOUBLE slab that sits on a lowered full block.
+        BlockPos c0 = origin.add(5, 2, 1);
+        world.setBlockState(c0, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos cFb = c0.up();
+        world.setBlockState(cFb, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos cDbl = cFb.up();
+        world.setBlockState(cDbl, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE), Block.NOTIFY_LISTENERS);
+        BlockPos cLant = cDbl.up();
+        world.setBlockState(cLant, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(SlabSupport.getYOffset(world, cDbl, world.getBlockState(cDbl)) == -0.5,
+                "fixture: DOUBLE slab on a lowered full block must render lowered -0.5");
+        double cLantDy = SlabSupport.getYOffset(world, cLant, world.getBlockState(cLant));
+        ctx.assertTrue(cLantDy == -0.5,
+                "lantern on a lowered DOUBLE slab must follow it down (was floating at 0.0), got " + cLantDy);
+
+        // 4) Lantern on a vanilla TOP slab placed directly on a Terrain Slabs BOTTOM_LIKE
+        //    surface (the exact TS+VS combo from the report).
+        Block ts = Registries.BLOCK.get(Identifier.of("terrainslabs", "grass_slab"));
+        ctx.assertTrue(ts != Blocks.AIR, "fixture: Terrain Slabs loaded");
+        var tsBottom = ts.getDefaultState();
+        if (tsBottom.contains(SlabBlock.TYPE)) {
+            tsBottom = tsBottom.with(SlabBlock.TYPE, SlabType.BOTTOM);
+        }
+        BlockPos d0 = origin.add(7, 2, 1);
+        world.setBlockState(d0, tsBottom, Block.NOTIFY_LISTENERS);
+        BlockPos dTop = d0.up();
+        world.setBlockState(dTop, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP), Block.NOTIFY_LISTENERS);
+        BlockPos dLant = dTop.up();
+        world.setBlockState(dLant, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double dLantDy = SlabSupport.getYOffset(world, dLant, world.getBlockState(dLant));
+        ctx.assertTrue(dLantDy == -0.5,
+                "lantern on a TOP slab on a Terrain Slabs surface must lower -0.5, got " + dLantDy);
+        ctx.complete();
+    }
+
+    // NO REGRESSION: a non-solid object on a NON-lowered TOP/DOUBLE slab (a normal floor)
+    // must NOT lower — the fix only applies when the slab support is itself rendered lowered.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void objectOnNormalTopOrDoubleSlabDoesNotLower(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        // TOP slab on solid ground (not lowered) -> lantern stays at 0.0.
+        BlockPos a0 = origin.add(2, 2, 2);
+        world.setBlockState(a0, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos aTop = a0.up();
+        world.setBlockState(aTop, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP), Block.NOTIFY_LISTENERS);
+        BlockPos aLant = aTop.up();
+        world.setBlockState(aLant, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(SlabSupport.getYOffset(world, aTop, world.getBlockState(aTop)) == 0.0,
+                "fixture: TOP slab on solid ground must be non-lowered");
+        double aLantDy = SlabSupport.getYOffset(world, aLant, world.getBlockState(aLant));
+        ctx.assertTrue(aLantDy == 0.0,
+                "lantern on a normal (non-lowered) TOP slab must stay at 0.0, got " + aLantDy);
+
+        // DOUBLE slab on solid ground (not lowered) -> lantern stays at 0.0.
+        BlockPos b0 = origin.add(5, 2, 2);
+        world.setBlockState(b0, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos bDbl = b0.up();
+        world.setBlockState(bDbl, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE), Block.NOTIFY_LISTENERS);
+        BlockPos bLant = bDbl.up();
+        world.setBlockState(bLant, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(SlabSupport.getYOffset(world, bDbl, world.getBlockState(bDbl)) == 0.0,
+                "fixture: DOUBLE slab on solid ground must be non-lowered");
+        double bLantDy = SlabSupport.getYOffset(world, bLant, world.getBlockState(bLant));
+        ctx.assertTrue(bLantDy == 0.0,
+                "lantern on a normal (non-lowered) DOUBLE slab must stay at 0.0, got " + bLantDy);
+        ctx.complete();
+    }
 }
