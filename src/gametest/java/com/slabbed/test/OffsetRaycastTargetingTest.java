@@ -485,6 +485,62 @@ public final class OffsetRaycastTargetingTest {
         ctx.complete();
     }
 
+    // A vanilla TOP slab placed on a Terrain Slabs bottom surface must lower the FULL -1.0, not
+    // -0.5: a top slab caps from the UPPER half of its own block, so to sit flush on the
+    // half-height terrain it needs the full block drop. A flat -0.5 leaves a half-block gap
+    // underneath (the combined-slab matrix's one genuine vanilla bug, case 5a).
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void vanillaTopSlabOnTerrainLowersFull(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        Block ts = Registries.BLOCK.get(Identifier.of("terrainslabs", "grass_slab"));
+        ctx.assertTrue(ts != Blocks.AIR, "fixture: Terrain Slabs loaded");
+
+        BlockPos tsPos = origin.add(3, 2, 3);
+        var tss = ts.getDefaultState();
+        if (tss.contains(SlabBlock.TYPE)) {
+            tss = tss.with(SlabBlock.TYPE, SlabType.BOTTOM);
+        }
+        world.setBlockState(tsPos, tss, Block.NOTIFY_LISTENERS);
+        BlockPos topPos = tsPos.up();
+        world.setBlockState(topPos, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP), Block.NOTIFY_LISTENERS);
+
+        double dy = SlabSupport.getYOffset(world, topPos, world.getBlockState(topPos));
+        ctx.assertTrue(dy == -1.0,
+                "vanilla TOP slab on a Terrain Slabs bottom must lower -1.0 to sit flush (was a "
+                        + "half-block gap at -0.5), got " + dy);
+        ctx.complete();
+    }
+
+    // A vanilla BOTTOM slab stacked on a mixed slab (vanilla bottom slab on terrain) must chain:
+    // lower -1.0 to sit flush on the mixed slab's lowered top, not float at -0.5. The compound is
+    // vanilla-only (terrain slabs are skip-offset). Deeper stacks settle at the -1.0 raycast cap.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void vanillaSlabStackedOnMixedSlabChains(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        Block ts = Registries.BLOCK.get(Identifier.of("terrainslabs", "grass_slab"));
+        ctx.assertTrue(ts != Blocks.AIR, "fixture: Terrain Slabs loaded");
+
+        BlockPos tsPos = origin.add(3, 2, 3);
+        var tss = ts.getDefaultState();
+        if (tss.contains(SlabBlock.TYPE)) {
+            tss = tss.with(SlabBlock.TYPE, SlabType.BOTTOM);
+        }
+        world.setBlockState(tsPos, tss, Block.NOTIFY_LISTENERS);
+        BlockPos l1 = tsPos.up(); // vanilla bottom slab capping terrain -> the mixed slab (-0.5)
+        world.setBlockState(l1, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos l2 = l1.up();    // vanilla bottom slab stacked on the mixed slab -> must chain to -1.0
+        world.setBlockState(l2, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+
+        ctx.assertTrue(SlabSupport.getYOffset(world, l1, world.getBlockState(l1)) == -0.5,
+                "fixture: mixed slab (vanilla bottom on terrain) is -0.5");
+        double l2Dy = SlabSupport.getYOffset(world, l2, world.getBlockState(l2));
+        ctx.assertTrue(l2Dy == -1.0,
+                "vanilla slab stacked on a mixed slab must chain to -1.0 (was floating at -0.5), got " + l2Dy);
+        ctx.complete();
+    }
+
     // An object on a CANTILEVERED lowered support (a block beside a lowered block, air below
     // it) must lower to match — otherwise it floats above its lowered support (the reported
     // floating-lantern bug, since the support-column walk stops at the air gap).
