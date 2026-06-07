@@ -782,12 +782,26 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            // Mixed-slab compound (mirrors the directCustom path below): a block anchored
+            // directly on a vanilla BOTTOM slab that is itself lowered must follow the slab's
+            // own drop on top of the anchor's -0.5, or it pops UP half a block the instant its
+            // placement anchor syncs — the live directCustom path gives the correct -1.0 on the
+            // first client frame, then this flat -0.5 anchor pinned it back up (the reported
+            // crafting-table-on-mixed-slab pop). loweredBottomSlabSupportDy is recursion-safe
+            // and returns 0.0/NaN for a non-lowered or non-bottom-slab support, so every other
+            // anchor case (block on a plain slab, persisted anchor after its slab was broken,
+            // column/adjacent/below-anchored) is unchanged at -0.5.
+            double anchorDy = -0.5;
+            double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
+            if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
+                anchorDy += supportLoweredDy;
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
-                Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
-                        side, pos.toShortString(), state);
+                Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy={}",
+                        side, pos.toShortString(), state, anchorDy);
             }
-            return -0.5;
+            return anchorDy;
         }
 
         // Gap-fill (live + recursion-safe): an ordinary solid block sitting directly below
