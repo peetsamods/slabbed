@@ -6,9 +6,10 @@ This lets objects behave naturally on slab tops while preserving correct placeme
 
 ## Features
 - Allows placement of supported objects on slab tops
-- For now, only lanterns successfully place underneath top slab.
+- Lanterns, torches, chains, and other supported objects lower to sit flush on slab tops
 - Objects remain supported after block updates and chunk reloads
 - Correct visual alignment with the slab’s actual top surface
+- Optional compatibility with Countered’s Terrain Slabs (see below)
 - Working on expanding slab compatibility—stairs not currently supported.
 
 ## Slab Semantics
@@ -23,16 +24,15 @@ Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally
 - Minecraft: **1.21.11**
 - Loader: **Fabric**
 - Java: **21**
-- Environment: **Server-side** (works in singleplayer and on servers; clients do not need the mod)
+- Environment: **Client + server** — install on the client for the visual lowering; works in singleplayer and on servers.
 
 ### Limitations
 - Carpet and snow layers cannot coexist with slab placement in the same block space; placing a slab will replace them (vanilla behavior). Slabbed prevents ghosting by excluding thin top-layer blocks from visual offsets.
 - Hanging roots follow vanilla survival rules; no special slab support yet.
 
-### Compatibility / Known incompatibilities
-- **Countered’s Terrain Slabs (`terrainslabs`)**: Slabbed includes a **gated compat veto** that prevents applying **visual Y-offsets** to `terrainslabs:*` blocks to avoid see-through/ghost terrain artifacts.
-  - Scope: offsets only (does not change physics/worldgen).
-  - If artifacts persist, disable Terrain Slabs or accept terrain visuals may be inconsistent.
+### Terrain Slabs compatibility
+- **Countered’s Terrain Slabs (`terrainslabs`)**: blocks, objects (lanterns, torches, chains), and vanilla slabs placed on Terrain Slabs surfaces lower to sit flush, forming continuous combined-slab surfaces. The compatibility is optional and runtime-gated — Slabbed runs unchanged when Terrain Slabs is not installed.
+  - Known limitations: custom (Terrain Slabs) slabs do not yet lower when placed directly onto a vanilla slab, and deep (3+ high) combined-slab towers cap at a one-block visual offset to keep block targeting reliable.
 
 ## Installation
 1. Install Fabric Loader for the target Minecraft version
@@ -40,8 +40,8 @@ Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally
 3. Drop the Slabbed `.jar` into your `mods` folder
 
 ## Status
-Slabbed is currently in **alpha**.  
-Behavior is intentionally limited and may expand incrementally as edge cases are validated.
+Slabbed is currently in **beta**.  
+Behavior expands incrementally as edge cases are validated.
 
 ## License
 This project is licensed under **GPL-3.0-only**.  

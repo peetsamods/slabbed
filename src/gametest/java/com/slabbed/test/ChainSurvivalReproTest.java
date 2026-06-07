@@ -15,8 +15,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
 /**
- * Headless repro coverage for {@code ChainBlockNeighborSurvivalMixin} pop-off
- * behavior.
+ * Headless repro coverage for chain pop-off behavior on slab supports
+ * (documents the intended vanilla survival behavior; Slabbed does not override it).
  *
  * <p>Each test explicitly forces the survival recheck path instead of relying
  * on vague world timing:
@@ -329,8 +329,8 @@ public final class ChainSurvivalReproTest {
     // Per Yarn 1.21.11 mappings (mappings.tiny at class_5172 /
     // net.minecraft.block.ChainBlock), ChainBlock declares only CODEC,
     // WATERLOGGED, and SHAPES_BY_AXIS — no scheduledTick, no neighborUpdate,
-    // no canPlaceAt override. The only survival hook this mod installs is
-    // ChainBlockNeighborSurvivalMixin on getStateForNeighborUpdate.
+    // no canPlaceAt override. Slabbed installs NO chain survival hook, so chains
+    // follow vanilla getStateForNeighborUpdate behavior on slab supports.
     // There is therefore NO separate scheduled-tick path to cover; the six
     // tests below exercise every remaining category that could trigger a
     // chain pop-off via the neighbor-update path.
