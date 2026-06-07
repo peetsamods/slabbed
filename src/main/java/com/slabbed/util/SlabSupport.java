@@ -617,6 +617,36 @@ public final class SlabSupport {
         return false;
     }
 
+    /**
+     * Recursion-safe live check: does {@code pos} have a horizontal neighbour that is a
+     * lowered ordinary full block? Mirrors {@code qualifiesForAdjacentLoweredFullBlockAnchor}
+     * but determines the neighbour's lowering from its sources (anchor / column source
+     * below) instead of {@code getYOffset}, so it is safe to call inside the
+     * {@code IN_GET_Y_OFFSET} guard. Used to lower a cantilevered side-placed block live,
+     * before its own anchor syncs (eliminating the placement snap).
+     */
+    private static boolean isAdjacentToLoweredFullBlock(BlockView world, BlockPos pos) {
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos neighborPos = pos.offset(direction);
+            BlockState neighbor = getBlockStateOrNull(world, neighborPos);
+            if (neighbor == null || neighbor.isAir()) {
+                continue;
+            }
+            Block block = neighbor.getBlock();
+            if (block instanceof SlabBlock || block instanceof BlockEntityProvider) {
+                continue;
+            }
+            if (!neighbor.isSolidBlock(world, neighborPos)) {
+                continue;
+            }
+            if (SlabAnchorAttachment.isAnchored(world, neighborPos)
+                    || hasLoweringSourceInColumnBelow(world, neighborPos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean isLoweredSideSlabSource(BlockView world, BlockPos pos, BlockState state) {
         if (state.getBlock() instanceof SlabBlock) {
             return isVerticallyLoweredSlabSource(world, pos, state);
@@ -744,6 +774,13 @@ public final class SlabSupport {
             BlockState above = world.getBlockState(abovePos);
             if (!(above.getBlock() instanceof SlabBlock)
                     && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, abovePos)) {
+                return -0.5;
+            }
+            // Cantilevered perpendicular side placement: a block placed beside a lowered
+            // full block with air below it lowers only via its (server-side, one-tick-late)
+            // adjacent anchor. Detecting the lowered neighbour live makes the first client
+            // mesh already -0.5, so it never renders at full height first (the snap).
+            if (isAdjacentToLoweredFullBlock(world, pos)) {
                 return -0.5;
             }
         }

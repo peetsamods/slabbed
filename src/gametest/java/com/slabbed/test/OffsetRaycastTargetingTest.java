@@ -412,6 +412,35 @@ public final class OffsetRaycastTargetingTest {
         ctx.complete();
     }
 
+    // ── DIAGNOSTIC: lantern on a vanilla slab on a Terrain Slabs slab (TS>S>lantern) ──
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lanternOnSlabOnTerrainSlabDiag(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        Block ts = Registries.BLOCK.get(Identifier.of("terrainslabs", "grass_slab"));
+        ctx.assertTrue(ts != Blocks.AIR, "fixture: Terrain Slabs loaded");
+
+        BlockPos tsPos = origin.add(3, 2, 3);
+        var tss = ts.getDefaultState();
+        if (tss.contains(SlabBlock.TYPE)) {
+            tss = tss.with(SlabBlock.TYPE, SlabType.BOTTOM);
+        }
+        world.setBlockState(tsPos, tss, Block.NOTIFY_LISTENERS);
+        BlockPos sPos = tsPos.up();
+        world.setBlockState(sPos, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos lPos = sPos.up();
+        world.setBlockState(lPos, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double sDy = SlabSupport.getYOffset(world, sPos, world.getBlockState(sPos));
+        double lDy = SlabSupport.getYOffset(world, lPos, world.getBlockState(lPos));
+        VoxelShape lOutline = world.getBlockState(lPos).getOutlineShape(world, lPos, ShapeContext.absent());
+        System.out.println("[LANTERN-DIAG] tsKind=" + CompatHooks.customSlabSurfaceKind(world.getBlockState(tsPos))
+                + " vanillaSlabDy=" + sDy + " lanternDy=" + lDy
+                + " lanternOutlineMinY=" + (lOutline.isEmpty() ? "empty" : lOutline.getBoundingBox().minY)
+                + " lanternState=" + world.getBlockState(lPos));
+        ctx.complete();
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // 10. PARITY on more non-offset geometry: double slab (full cube) and stairs
     //     (non-empty getRaycastShape) must match vanilla field-by-field.
