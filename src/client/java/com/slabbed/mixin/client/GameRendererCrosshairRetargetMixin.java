@@ -1438,6 +1438,11 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 initialTarget,
                 anchoredDecision,
                 sideSlabRetargetFired);
+        slabbed$traceBeta4SameRaySemanticReplay(
+                tickProgress,
+                initialTarget,
+                anchoredDecision,
+                sideSlabRetargetFired);
 
         if (Boolean.getBoolean("slabbed.beta4LiveRetargetRecorderEveryTick")) {
             double initialDist2 = initialTarget == null || initialTarget.getType() != HitResult.Type.BLOCK
@@ -2162,6 +2167,230 @@ public abstract class GameRendererCrosshairRetargetMixin {
             signature.append('|').append(SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state));
         }
         return signature.toString();
+    }
+
+    private void slabbed$traceBeta4SameRaySemanticReplay(
+            float tickProgress, HitResult initialTarget, String classification, boolean sideSlabRetargetFired
+    ) {
+        if (!Boolean.getBoolean("slabbed.beta4.sameRaySemanticReplay")) {
+            return;
+        }
+
+        ClientWorld world = client.world;
+        Entity cam = client.getCameraEntity();
+        if (world == null || cam == null) {
+            Slabbed.LOGGER.info("[BETA4_SAME_RAY_TRACE_GAP] reason=no-world-or-camera");
+            return;
+        }
+
+        Vec3d eye = cam.getCameraPosVec(tickProgress);
+        Vec3d look = cam.getRotationVec(tickProgress);
+        double reach = 6.0d;
+        Vec3d end = eye.add(look.multiply(reach));
+        ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
+        HitResult finalTarget = client.crosshairTarget;
+        BlockHitResult initialBlock = slabbed$asBlockHit(initialTarget);
+        BlockHitResult finalBlock = slabbed$asBlockHit(finalTarget);
+        BlockHitResult objectOwner = slabbed$retargetLoweredObjectShapeOwner(tickProgress, initialTarget);
+        boolean supportBehindEligible = slabbed$beta4SameRaySupportBehindEligible(world, initialBlock);
+        String supportBehindSkipReason = slabbed$beta4SameRaySupportBehindSkipReason(
+                world,
+                cam,
+                eye,
+                initialBlock);
+        String objectShapeSkipReason = objectOwner == null
+                ? slabbed$beta4SameRayObjectShapeSkipReason(initialTarget, initialBlock)
+                : "accepted";
+        boolean slabHeld = slabbed$isSlabPlacementIntent();
+        BlockHitResult scanCandidate = slabbed$retargetLoweredSideSlab(tickProgress, initialTarget, slabHeld);
+        double currentDistance = initialBlock == null ? Double.NaN : initialBlock.getPos().distanceTo(eye);
+        double capDistance = Double.isNaN(currentDistance) ? reach : currentDistance;
+        BlockPos initialPos = initialBlock == null ? null : initialBlock.getBlockPos();
+
+        StringBuilder line = new StringBuilder(2048);
+        line.append("[BETA4_SAME_RAY_RETARGET]");
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" initialType=").append(initialTarget == null ? "null" : initialTarget.getType());
+        line.append(" initialPos=").append(initialPos == null ? "none" : initialPos.toShortString());
+        line.append(" initialFace=").append(initialBlock == null ? "none" : initialBlock.getSide());
+        line.append(" initialOwner=").append(slabbed$ownerForHit(world, initialBlock));
+        line.append(" rayStart=").append(slabbed$formatVec(eye));
+        line.append(" rayEnd=").append(slabbed$formatVec(end));
+        line.append(" currentDistance=").append(slabbed$formatDouble(currentDistance));
+        line.append(" capDistance=").append(slabbed$formatDouble(capDistance));
+        line.append(" supportBehindPathEligible=").append(supportBehindEligible);
+        line.append(" supportBehindSkipReason=").append(supportBehindSkipReason);
+        line.append(" objectShapeOwnerPreserveEligible=").append(objectOwner != null);
+        line.append(" objectShapeOwnerPreserveSkipReason=").append(objectShapeSkipReason);
+        line.append(" scanSideSlabFired=").append(sideSlabRetargetFired);
+        line.append(" finalOwner=").append(slabbed$ownerForHit(world, finalBlock));
+        line.append(" finalTargetPos=").append(finalBlock == null ? "none" : finalBlock.getBlockPos().toShortString());
+        line.append(" finalTargetFace=").append(finalBlock == null ? "none" : finalBlock.getSide());
+        line.append(" branch=").append(classification);
+        Slabbed.LOGGER.info(line.toString());
+
+        slabbed$logBeta4SameRayCandidate(world, cam, eye, end, held, "self", initialPos, "not-tested",
+                initialPos == null ? "no-initial-block" : null);
+        slabbed$logBeta4SameRayCandidate(world, cam, eye, end, held, "above",
+                initialPos == null ? null : initialPos.up(), "not-tested",
+                initialPos == null ? "no-initial-block" : null);
+        slabbed$logBeta4SameRayCandidate(world, cam, eye, end, held, "supportBehind",
+                initialPos == null ? null : initialPos.up(),
+                supportBehindEligible ? "accepted" : "rejected",
+                supportBehindSkipReason);
+        slabbed$logBeta4SameRayCandidate(world, cam, eye, end, held, "scan",
+                scanCandidate == null ? null : scanCandidate.getBlockPos(), "not-tested",
+                scanCandidate == null ? "no-scan-candidate" : "accepted");
+        slabbed$logBeta4SameRayCandidate(world, cam, eye, end, held, "wall",
+                initialPos == null ? null : initialPos.up(), "not-tested",
+                initialPos == null ? "no-initial-block" : slabbed$beta4SameRayNamedCandidateReason(world, initialPos.up(), "wall"));
+        slabbed$logBeta4SameRayCandidate(world, cam, eye, end, held, "lantern",
+                initialPos == null ? null : initialPos.up(2), "not-tested",
+                initialPos == null ? "no-initial-block" : slabbed$beta4SameRayNamedCandidateReason(world, initialPos.up(2), "lantern"));
+        slabbed$logBeta4SameRayFinal(world, held, initialBlock, finalBlock, classification);
+
+        if (initialBlock == null) {
+            Slabbed.LOGGER.info("[BETA4_SAME_RAY_TRACE_GAP] reason=no-initial-block");
+        }
+    }
+
+    private static BlockHitResult slabbed$asBlockHit(HitResult hit) {
+        return hit instanceof BlockHitResult blockHit && hit.getType() == HitResult.Type.BLOCK
+                ? blockHit
+                : null;
+    }
+
+    private static boolean slabbed$beta4SameRaySupportBehindEligible(ClientWorld world, BlockHitResult initialBlock) {
+        if (world == null || initialBlock == null) {
+            return false;
+        }
+        return slabbed$isBeta35VisibleOwnerSupportSurface(world.getBlockState(initialBlock.getBlockPos()));
+    }
+
+    private static String slabbed$beta4SameRaySupportBehindSkipReason(
+            ClientWorld world,
+            Entity cam,
+            Vec3d eye,
+            BlockHitResult initialBlock
+    ) {
+        if (world == null || cam == null) {
+            return "no-world-or-camera";
+        }
+        if (initialBlock == null) {
+            return "no-initial-block";
+        }
+        BlockPos initialPos = initialBlock.getBlockPos();
+        BlockState initialState = world.getBlockState(initialPos);
+        if (!slabbed$isBeta35VisibleOwnerSupportSurface(initialState)) {
+            return "initial-not-support-surface";
+        }
+        Vec3d supportHit = initialBlock.getPos();
+        Vec3d toSupport = supportHit.subtract(eye);
+        double supportDist = toSupport.length();
+        if (supportDist <= 0.0d) {
+            return "zero-distance";
+        }
+        Vec3d end = eye.add(toSupport.normalize().multiply(supportDist + BETA35_VISIBLE_OWNER_SUPPORT_OVERRUN));
+        BlockHitResult visibleOwner = slabbed$raycastBeta35VisibleOwnerBehindSupport(
+                world,
+                cam,
+                eye,
+                end,
+                initialPos.up(),
+                supportHit);
+        return visibleOwner == null ? "support-behind-owner-miss" : "accepted";
+    }
+
+    private static String slabbed$beta4SameRayObjectShapeSkipReason(
+            HitResult initialTarget,
+            BlockHitResult initialBlock
+    ) {
+        if (initialTarget == null) {
+            return "null-initial-target";
+        }
+        if (initialTarget.getType() == HitResult.Type.ENTITY) {
+            return "entity-target";
+        }
+        if (initialBlock == null) {
+            return "no-initial-block";
+        }
+        return "no-object-shape-owner-hit";
+    }
+
+    private static String slabbed$beta4SameRayNamedCandidateReason(ClientWorld world, BlockPos pos, String expectedName) {
+        BlockState state = world.getBlockState(pos);
+        String key = state.getBlock().getTranslationKey();
+        return key.contains(expectedName) ? "accepted" : "not-" + expectedName;
+    }
+
+    private static void slabbed$logBeta4SameRayCandidate(
+            ClientWorld world,
+            Entity cam,
+            Vec3d eye,
+            Vec3d end,
+            ItemStack held,
+            String label,
+            BlockPos pos,
+            String supportRelation,
+            String skipReason
+    ) {
+        StringBuilder line = new StringBuilder(1536);
+        line.append("[BETA4_SAME_RAY_CANDIDATE]");
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" label=").append(label);
+        line.append(" pos=").append(pos == null ? "none" : pos.toShortString());
+        if (pos == null) {
+            line.append(" state=none dy=NaN bounds=none rayHit=false hitDistance=NaN");
+            line.append(" supportRelation=").append(supportRelation);
+            line.append(" skipReason=").append(skipReason == null ? "no-candidate" : skipReason);
+            Slabbed.LOGGER.info(line.toString());
+            return;
+        }
+
+        BlockState state = world.getBlockState(pos);
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.of(cam));
+        BlockHitResult outlineHit = outline == null || outline.isEmpty() ? null : outline.raycast(eye, end, pos);
+        line.append(" state=").append(state);
+        line.append(" dy=").append(slabbed$formatDouble(dy));
+        line.append(" bounds=").append(slabbed$shapeBounds(world, cam, pos, state, true));
+        line.append(" rayHit=").append(outlineHit != null);
+        line.append(" hitDistance=").append(outlineHit == null
+                ? "NaN"
+                : slabbed$formatDouble(outlineHit.getPos().distanceTo(eye)));
+        line.append(" supportRelation=").append(supportRelation);
+        line.append(" skipReason=").append(skipReason == null
+                ? (outlineHit == null ? "outline-miss" : "accepted")
+                : skipReason);
+        Slabbed.LOGGER.info(line.toString());
+    }
+
+    private static void slabbed$logBeta4SameRayFinal(
+            ClientWorld world,
+            ItemStack held,
+            BlockHitResult initialBlock,
+            BlockHitResult finalBlock,
+            String classification
+    ) {
+        StringBuilder line = new StringBuilder(768);
+        line.append("[BETA4_SAME_RAY_FINAL]");
+        line.append(" heldItem=").append(held.isEmpty() ? "empty" : held.getItem().getTranslationKey());
+        line.append(" initialPos=").append(initialBlock == null ? "none" : initialBlock.getBlockPos().toShortString());
+        line.append(" initialFace=").append(initialBlock == null ? "none" : initialBlock.getSide());
+        line.append(" initialOwner=").append(slabbed$ownerForHit(world, initialBlock));
+        line.append(" finalTargetPos=").append(finalBlock == null ? "none" : finalBlock.getBlockPos().toShortString());
+        line.append(" finalTargetFace=").append(finalBlock == null ? "none" : finalBlock.getSide());
+        line.append(" finalOwner=").append(slabbed$ownerForHit(world, finalBlock));
+        line.append(" branch=").append(classification);
+        Slabbed.LOGGER.info(line.toString());
+    }
+
+    private static String slabbed$ownerForHit(ClientWorld world, BlockHitResult hit) {
+        if (world == null || hit == null) {
+            return "none";
+        }
+        BlockPos pos = hit.getBlockPos();
+        return slabbed$ownerClass(world, pos, world.getBlockState(pos));
     }
 
     private static String slabbed$formatOutlineOwnerShape(ClientWorld world, Entity cam, BlockPos pos, BlockState state) {
