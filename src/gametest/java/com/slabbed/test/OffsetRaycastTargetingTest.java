@@ -1,5 +1,7 @@
 package com.slabbed.test;
 
+import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedOffsetRaycast;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -15,6 +17,8 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
@@ -364,6 +368,47 @@ public final class OffsetRaycastTargetingTest {
         ctx.assertTrue(hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(lantern),
                 "offset-aware raycast should target the +0.5 hanging lantern " + lantern
                         + ", got " + hit.getType() + " " + hit.getBlockPos());
+        ctx.complete();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 11. LOWERING COVERAGE: an ordinary solid full block (grass) must lower onto a
+    //     Terrain Slabs custom BOTTOM_LIKE surface, just like a log does — the player
+    //     reported grass not lowering while stripped logs did. Requires Terrain Slabs
+    //     loaded (it is, via run/mods + modLocalRuntime).
+    // ──────────────────────────────────────────────────────────────────────────
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void grassBlockLowersOnTerrainSlabsSurface(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        Block tsGrassSlab = Registries.BLOCK.get(Identifier.of("terrainslabs", "grass_slab"));
+        ctx.assertTrue(tsGrassSlab != Blocks.AIR,
+                "fixture: terrainslabs:grass_slab must be registered (Terrain Slabs loaded)");
+
+        BlockPos slab = origin.add(3, 2, 3);
+        var slabState = tsGrassSlab.getDefaultState();
+        if (slabState.contains(SlabBlock.TYPE)) {
+            slabState = slabState.with(SlabBlock.TYPE, SlabType.BOTTOM);
+        }
+        world.setBlockState(slab, slabState, Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(
+                CompatHooks.customSlabSurfaceKind(world.getBlockState(slab)) == CompatSlabSurfaceKind.BOTTOM_LIKE,
+                "fixture: TS grass slab should classify BOTTOM_LIKE");
+
+        // A stripped log (already worked) and a grass block (the bug) — both must lower.
+        BlockPos log = slab.up();
+        world.setBlockState(log, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double logDy = SlabSupport.getYOffset(world, log, world.getBlockState(log));
+        ctx.assertTrue(logDy == -0.5, "control: stripped log on TS surface should lower -0.5, got " + logDy);
+
+        BlockPos grassSlab2 = origin.add(5, 2, 3);
+        world.setBlockState(grassSlab2, slabState, Block.NOTIFY_LISTENERS);
+        BlockPos grass = grassSlab2.up();
+        world.setBlockState(grass, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double grassDy = SlabSupport.getYOffset(world, grass, world.getBlockState(grass));
+        ctx.assertTrue(grassDy == -0.5,
+                "grass block on Terrain Slabs surface should lower -0.5 (was the bug), got " + grassDy);
         ctx.complete();
     }
 

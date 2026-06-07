@@ -1,6 +1,8 @@
 package com.slabbed.mixin.client;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.SlabBlock;
@@ -67,6 +69,21 @@ public abstract class SlabbedDependentRerenderMixin {
         }
         // A persistent anchor at this cell backs a lowered full block.
         if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            return true;
+        }
+        // Terrain Slabs custom surfaces drive lowering of blocks on/above them the same
+        // way vanilla slabs do, but they are not SlabBlock instances — so without this a
+        // block placed on Terrain Slabs terrain never force-refreshes the visual cache and
+        // the render worker can bake it un-lowered for a frame (the placement "snap"), and
+        // dependents go stale (the "ghost" that fills in later).
+        if (CompatHooks.customSlabSurfaceKind(old) != CompatSlabSurfaceKind.NONE
+                || CompatHooks.customSlabSurfaceKind(updated) != CompatSlabSurfaceKind.NONE) {
+            return true;
+        }
+        // The newly placed/changed block is itself lowered: refresh the visual cache for
+        // its region on the main thread so the very first baked mesh already uses the
+        // correct dy instead of snapping down a frame later.
+        if (!updated.isAir() && SlabSupport.getYOffset(world, pos, updated) != 0.0) {
             return true;
         }
         // The cell sits in a lowered column (bottom slab / anchor below it), so a
