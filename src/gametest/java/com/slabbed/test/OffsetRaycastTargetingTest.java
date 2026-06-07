@@ -412,7 +412,13 @@ public final class OffsetRaycastTargetingTest {
         ctx.complete();
     }
 
-    // A standing lantern on a vanilla slab on a Terrain Slabs slab must lower to sit flush.
+    // A standing lantern on a vanilla BOTTOM slab on a Terrain Slabs slab (a "mixed slab")
+    // must lower the FULL -1.0 to sit flush: the oak slab itself drops -0.5 to cap the
+    // half-height Terrain Slabs surface, so its visual top sits a half block lower than a
+    // normal bottom slab, and the lantern must follow that -0.5 in ADDITION to its own
+    // -0.5 sit-on-bottom-slab drop. A flat -0.5 (the previous, incorrect expectation —
+    // this test had asserted the bug) leaves the lantern floating half a block above the
+    // mixed slab's lowered top.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void lanternOnTerrainSlabsLowers(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
@@ -432,9 +438,11 @@ public final class OffsetRaycastTargetingTest {
         world.setBlockState(lPos, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
 
         ctx.assertTrue(SlabSupport.getYOffset(world, sPos, world.getBlockState(sPos)) == -0.5,
-                "vanilla slab on Terrain Slabs should lower -0.5");
+                "vanilla bottom slab on Terrain Slabs should lower -0.5");
         double lDy = SlabSupport.getYOffset(world, lPos, world.getBlockState(lPos));
-        ctx.assertTrue(lDy == -0.5, "lantern on slab on Terrain Slabs should lower -0.5, got " + lDy);
+        ctx.assertTrue(lDy == -1.0,
+                "lantern on a vanilla BOTTOM slab on Terrain Slabs (mixed slab) must lower -1.0 to sit "
+                        + "flush (slab's own -0.5 + sit -0.5), was floating at " + lDy);
         ctx.complete();
     }
 
