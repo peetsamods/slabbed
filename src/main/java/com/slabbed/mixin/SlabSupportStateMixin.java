@@ -4,15 +4,17 @@ import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.PaneBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TorchBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -85,54 +87,6 @@ public abstract class SlabSupportStateMixin {
         return block instanceof TorchBlock && !(block instanceof WallTorchBlock);
     }
 
-    /**
-     * Builds the torch comfort overlay in {@code slabPos}'s voxel frame, or returns
-     * {@code null} if the block above {@code slabPos} is not a lowered floor torch.
-     *
-     * <p>Torch comfort shape is voxel-relative Y=0–1 in the torch's frame. Translated
-     * to the slab's frame the comfort shape sits at Y=(1+torchDy) to (2+torchDy),
-     * so we offset {@link #SLABBED$COMFORT_TORCH_SHAPE} by {@code 1.0 + torchDy}.
-     */
-    private static VoxelShape slabbed$slabTorchComfortOverlay(BlockView world, BlockPos slabPos) {
-        if (world == null || slabPos == null) {
-            return null;
-        }
-        BlockPos abovePos = slabPos.up();
-        BlockState above = world.getBlockState(abovePos);
-        Block aboveBlock = above.getBlock();
-        if (!(aboveBlock instanceof TorchBlock) || aboveBlock instanceof WallTorchBlock) {
-            return null;
-        }
-        double torchDy = SlabSupport.getVisualYOffset(world, abovePos, above);
-        if (torchDy >= 0.0) {
-            return null;
-        }
-        return SLABBED$COMFORT_TORCH_SHAPE.offset(0.0, 1.0 + torchDy, 0.0);
-    }
-
-    private static VoxelShape slabbed$customLoweredObjectOverlay(
-            BlockView world, BlockPos supportPos, BlockState supportState, ShapeContext ctx
-    ) {
-        if (world == null || supportPos == null || supportState == null) {
-            return null;
-        }
-        if (!SlabSupport.isDirectObjectSupportSurface(world, supportPos, supportState)) {
-            return null;
-        }
-
-        BlockPos abovePos = supportPos.up();
-        BlockState aboveState = world.getBlockState(abovePos);
-        if (!SlabSupport.isLoweredCustomSupportedObjectVisual(world, abovePos, aboveState)) {
-            return null;
-        }
-
-        VoxelShape aboveOutline = aboveState.getOutlineShape(world, abovePos, ctx);
-        if (aboveOutline.isEmpty()) {
-            return null;
-        }
-        return aboveOutline.offset(0.0, 1.0, 0.0);
-    }
-
     // ── placement / survival support ──────────────────────────────────
 
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
@@ -169,11 +123,30 @@ public abstract class SlabSupportStateMixin {
         }
     }
 
+    /**
+     * Connection blocks (fences, walls, panes) have their render dy forced to 0 by
+     * {@code OffsetBlockStateModel} unless they are a direct Terrain Slabs custom-support
+     * object. The outline/raycast shape must follow the same rule, otherwise the now
+     * authoritative nearest-hit raycast would target a phantom offset outline half a block
+     * below the rendered block.
+     */
+    private static boolean slabbed$isRenderZeroedConnectionBlock(BlockView world, BlockPos pos, BlockState state) {
+        Block block = state.getBlock();
+        boolean connection = block instanceof FenceBlock
+                || block instanceof WallBlock
+                || block instanceof PaneBlock;
+        return connection && !SlabSupport.isDirectCustomSlabSupportedObject(world, pos, state);
+    }
+
     @Inject(method = "getRaycastShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/shape/VoxelShape;",
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetRaycast(BlockView world, BlockPos pos,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
+
+        if (slabbed$isRenderZeroedConnectionBlock(world, pos, self)) {
+            return;
+        }
 
         double yOff = SlabSupport.getVisualYOffset(world, pos, self);
         if (yOff != 0.0) {
@@ -199,37 +172,24 @@ public abstract class SlabSupportStateMixin {
             return;
         }
 
-        VoxelShape shape = cir.getReturnValue();
-        boolean changed = false;
+        // Connection blocks render un-lowered (OffsetBlockStateModel zeroes their dy);
+        // keep the outline aligned so the nearest-hit raycast cannot target a phantom.
+        if (slabbed$isRenderZeroedConnectionBlock(world, pos, self)) {
+            return;
+        }
 
         double yOff = SlabSupport.getVisualYOffset(world, pos, self);
-        if (yOff != 0.0) {
-            if (slabbed$isLoweredFloorTorch(self, yOff)) {
-                shape = SLABBED$COMFORT_TORCH_SHAPE;
-            }
-            shape = shape.offset(0.0, yOff, 0.0);
-            changed = true;
+        if (yOff == 0.0) {
+            return;
         }
 
-        // Slab + lowered floor torch comfort overlay: union the torch comfort column
-        // into the slab's outline so vanilla DDA produces a slab hit; the existing
-        // rescue mixin then retargets that hit to the torch above.
-        if (block instanceof SlabBlock) {
-            VoxelShape overlay = slabbed$slabTorchComfortOverlay(world, pos);
-            if (overlay != null) {
-                shape = VoxelShapes.union(shape, overlay);
-                changed = true;
-            }
+        VoxelShape shape = cir.getReturnValue();
+        // The lowered floor torch keeps a full-height post as its OWN outline so the thin
+        // sprite stays hittable after the dy offset. The offset-aware nearest-hit raycast
+        // tests this shape directly, so no slab-side comfort union is needed.
+        if (slabbed$isLoweredFloorTorch(self, yOff)) {
+            shape = SLABBED$COMFORT_TORCH_SHAPE;
         }
-
-        VoxelShape customOverlay = slabbed$customLoweredObjectOverlay(world, pos, self, ctx);
-        if (customOverlay != null) {
-            shape = VoxelShapes.union(shape, customOverlay);
-            changed = true;
-        }
-
-        if (changed) {
-            cir.setReturnValue(shape);
-        }
+        cir.setReturnValue(shape.offset(0.0, yOff, 0.0));
     }
 }

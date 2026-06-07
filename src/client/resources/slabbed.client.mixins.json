@@ -5,8 +5,8 @@
   "client": [
     "BlockEntityOffsetMixin",
     "CarpetDyShapeMixin",
+    "ClientPickOffsetRaycastMixin",
     "ClientPlayerInteractionRecorderMixin",
-    "GameRendererCrosshairRetargetMixin",
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin",
     "SlabbedDependentRerenderMixin"

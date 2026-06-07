@@ -23,3 +23,6 @@ Thumbs.db
 # Gallery exports
 Gallery/
 src/main/Gallery/
+
+# Claude targeting-overhaul scratch / decompiled refs
+tmp/

@@ -7,9 +7,11 @@
   "entrypoints": {
     "fabric-gametest": [
       "com.slabbed.test.SlabbedLabFixtureTest",
-      "com.slabbed.test.ChainSurvivalReproTest"
+      "com.slabbed.test.ChainSurvivalReproTest",
+      "com.slabbed.test.OffsetRaycastTargetingTest"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.OffsetRaycastClientGameTest",
       "com.slabbed.test.BsFbUpperFacePerpendicularPlacementClientGameTest",
       "com.slabbed.test.TerrainSlabsCustomSurfaceClientGameTest"
     ]
