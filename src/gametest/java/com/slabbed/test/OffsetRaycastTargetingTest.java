@@ -446,6 +446,45 @@ public final class OffsetRaycastTargetingTest {
         ctx.complete();
     }
 
+    // A full BLOCK (e.g. crafting table) placed on a mixed slab must lower -1.0 AND STAY there
+    // — both via the live path (first client frame, no anchor yet) and via its persisted
+    // placement anchor. Before the fix the live path gave the correct -1.0 but the direct
+    // anchor pinned a flat -0.5 the moment it synced, so the block "briefly lowered then popped
+    // up" half a block (the reported crafting-table-on-mixed-slab pop). Both states must match.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnMixedSlabLowersAndStays(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        Block ts = Registries.BLOCK.get(Identifier.of("terrainslabs", "grass_slab"));
+        ctx.assertTrue(ts != Blocks.AIR, "fixture: Terrain Slabs loaded");
+
+        BlockPos tsPos = origin.add(3, 2, 3);
+        var tss = ts.getDefaultState();
+        if (tss.contains(SlabBlock.TYPE)) {
+            tss = tss.with(SlabBlock.TYPE, SlabType.BOTTOM);
+        }
+        world.setBlockState(tsPos, tss, Block.NOTIFY_LISTENERS);
+        BlockPos sPos = tsPos.up();
+        world.setBlockState(sPos, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos fbPos = sPos.up();
+        world.setBlockState(fbPos, Blocks.CRAFTING_TABLE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        ctx.assertTrue(SlabSupport.getYOffset(world, sPos, world.getBlockState(sPos)) == -0.5,
+                "fixture: vanilla bottom slab on Terrain Slabs should lower -0.5");
+        // Live path (no anchor yet — the transient first-frame value).
+        double liveDy = SlabSupport.getYOffset(world, fbPos, world.getBlockState(fbPos));
+        ctx.assertTrue(liveDy == -1.0,
+                "full block on a mixed slab must lower -1.0 on the live path, got " + liveDy);
+        // Persisted anchor (the steady-state value after placement syncs) must MATCH — no pop.
+        com.slabbed.anchor.SlabAnchorAttachment.addAnchor(world, fbPos, world.getBlockState(fbPos));
+        ctx.assertTrue(com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, fbPos),
+                "fixture: full block on a bottom slab must anchor on placement");
+        double anchoredDy = SlabSupport.getYOffset(world, fbPos, world.getBlockState(fbPos));
+        ctx.assertTrue(anchoredDy == -1.0,
+                "anchored full block on a mixed slab must STAY at -1.0 (no pop up to -0.5), got " + anchoredDy);
+        ctx.complete();
+    }
+
     // An object on a CANTILEVERED lowered support (a block beside a lowered block, air below
     // it) must lower to match — otherwise it floats above its lowered support (the reported
     // floating-lantern bug, since the support-column walk stops at the air gap).
