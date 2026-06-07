@@ -159,21 +159,6 @@ public final class SlabSupport {
         return below != null && isBottomSlab(below);
     }
 
-    /**
-     * Effective Y offset of the slab's top face relative to the slab block position.
-     * 0.5 for bottom slabs, 1.0 for top/double.
-     */
-    public static double getSupportYOffset(BlockState state) {
-        if (!isSupportingSlab(state)) {
-            throw new IllegalArgumentException("Not a supporting slab: " + state);
-        }
-        SlabType type = state.get(SlabBlock.TYPE);
-        return switch (type) {
-            case BOTTOM -> 0.5;
-            case TOP, DOUBLE -> 1.0;
-        };
-    }
-
     public static boolean isDirectObjectSupportSurface(BlockView world, BlockPos pos, BlockState state) {
         return getDirectObjectSupportTopOffset(state) > 0.0;
     }
@@ -266,13 +251,6 @@ public final class SlabSupport {
     public static boolean canTreatAsSolidTopFace(BlockView world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);
         return isSupportingSlab(state) || isDirectObjectSupportSurface(world, pos, state);
-    }
-
-    /**
-     * Absolute Y of the slab's top surface.
-     */
-    public static double getEffectiveTopY(BlockState state, BlockPos pos) {
-        return pos.getY() + getSupportYOffset(state);
     }
 
     /** Max blocks to walk down when checking chain offset. */
@@ -499,20 +477,6 @@ public final class SlabSupport {
                         removeClientVisualYOffset(mutable);
                     } else {
                         putClientVisualYOffset(mutable, getYOffset(world, mutable, state));
-                    }
-                }
-            }
-        }
-    }
-
-    public static void invalidateVisualYOffsetRegion(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
-        synchronized (CLIENT_VISUAL_Y_OFFSETS_LOCK) {
-            BlockPos.Mutable mutable = new BlockPos.Mutable();
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    for (int x = minX; x <= maxX; x++) {
-                        mutable.set(x, y, z);
-                        CLIENT_VISUAL_Y_OFFSETS.remove(mutable.asLong());
                     }
                 }
             }
