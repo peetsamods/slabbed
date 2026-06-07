@@ -831,25 +831,35 @@ public final class SlabSupport {
 
         double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
         if (!Double.isNaN(directCustomSurfaceDy)) {
-            // Mixed-slab compound: when a standing object's immediate support is a vanilla
-            // BOTTOM slab that is itself rendered lowered (a "mixed slab" — a vanilla bottom
-            // slab capping a Terrain Slabs BOTTOM_LIKE surface, so the slab dropped -0.5 to
-            // sit on the half-height terrain), the object must follow BOTH the slab's own
-            // lowering AND its normal -0.5 sit-on-bottom-slab drop, or it floats exactly half
-            // a block above the mixed slab's lowered top (the reported lantern-on-mixed-slab
-            // bug). directCustomSlabSupportDy returns a flat -0.5 that ignores the support
-            // slab's own dy; add it back. Gated to BOTTOM-slab supports — TOP/DOUBLE supports
-            // are full-height at the top, so an object inherits only the slab's dy (-0.5),
-            // handled by the TOP/DOUBLE sit-branch below — and to non-slab objects, so a slab
-            // stacked on a mixed slab is untouched (broad slab-mixing stays out of scope).
-            // loweredBottomSlabSupportDy is recursion-safe (never re-enters getYOffset).
-            if (!(state.getBlock() instanceof SlabBlock)) {
-                double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
-                if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
-                    return directCustomSurfaceDy + supportLoweredDy;
-                }
+            // Combined-slab compound. directCustomSlabSupportDy returns a flat -0.5: the drop to
+            // sit on a half-height bottom-type surface (a Terrain Slabs BOTTOM_LIKE slab). Two
+            // corrections keep stacked/combined slabs FLUSH instead of floating half a block:
+            //  (1) If the immediate support is itself a lowered vanilla BOTTOM slab (a "mixed
+            //      slab" — a vanilla bottom slab capping the terrain — or a stack of them),
+            //      follow its drop too. Applies to objects, full blocks, AND vanilla slabs
+            //      stacked on a mixed slab (vanilla-only: terrain slabs are skip-offset and
+            //      never reach here). loweredBottomSlabSupportDy is recursion-safe.
+            //  (2) A vanilla TOP slab caps from the UPPER half of its own block, so it needs an
+            //      extra -0.5 to sit flush on a bottom-type surface (else a half-block gap shows
+            //      underneath — the vanilla-TOP-slab-on-terrain bug). BOTTOM/DOUBLE slabs and
+            //      non-slab objects are unaffected.
+            // The result is clamped to -1.0: that is the deepest offset the offset-aware pick
+            // raycast covers ({C, C.up, C.down}), so deeper niche combos (e.g. a TOP slab on a
+            // mixed slab) settle at -1.0 rather than going untargetable.
+            double dy = directCustomSurfaceDy;
+            double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
+            if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
+                dy += supportLoweredDy;
             }
-            return directCustomSurfaceDy;
+            if (state.getBlock() instanceof SlabBlock
+                    && state.contains(SlabBlock.TYPE)
+                    && state.get(SlabBlock.TYPE) == SlabType.TOP) {
+                dy += -0.5;
+            }
+            if (dy < -1.0) {
+                dy = -1.0;
+            }
+            return dy;
         }
 
         if (shouldOffset(world, pos, state)) {
