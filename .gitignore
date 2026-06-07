@@ -26,3 +26,6 @@ AGENTS.md
 # Gallery exports
 Gallery/
 src/main/Gallery/
+
+# Claude 1.21.1 port scratch / decompiled refs
+tmp/
