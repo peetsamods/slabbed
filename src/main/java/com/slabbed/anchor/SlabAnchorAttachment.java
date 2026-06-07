@@ -35,9 +35,10 @@ import net.minecraft.world.chunk.WorldChunk;
  * <p>Storage: per-{@link WorldChunk} {@link LongOpenHashSet} of packed {@link BlockPos}
  * longs. Persisted via Fabric data attachment, synced to all watching clients.
  *
- * <p>Scope: direct FB-on-BS plus ordinary full blocks placed beside an already
- * anchored lowered full block. No retroactive anchoring, no side-slab persistence,
- * no torch interaction.
+ * <p>Scope: direct FB-on-BS, ordinary full blocks placed beside an already
+ * anchored lowered full block, column-lowered ordinary full blocks, plus
+ * side slabs placed into an already lowered side-slab lane. No retroactive
+ * anchoring and no torch interaction.
  */
 public final class SlabAnchorAttachment {
     private SlabAnchorAttachment() {
@@ -119,10 +120,14 @@ public final class SlabAnchorAttachment {
         boolean directAnchor = qualifiesForDirectAnchor(world, pos, state);
         boolean adjacentAnchor = !directAnchor && qualifiesForAdjacentLoweredFullBlockAnchor(world, pos, state);
         boolean columnAnchor = !directAnchor && !adjacentAnchor && qualifiesForColumnLoweredAnchor(world, pos, state);
-        boolean qualifies = directAnchor || adjacentAnchor || columnAnchor;
+        boolean sideSlabAnchor = !directAnchor
+                && !adjacentAnchor
+                && !columnAnchor
+                && qualifiesForLoweredSideSlabAnchor(world, pos, state);
+        boolean qualifies = directAnchor || adjacentAnchor || columnAnchor || sideSlabAnchor;
         if (TRACE) {
-            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={} direct={} adjacent={} column={}",
-                    pos.toShortString(), state, qualifies, directAnchor, adjacentAnchor, columnAnchor);
+            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={} direct={} adjacent={} column={} sideSlab={}",
+                    pos.toShortString(), state, qualifies, directAnchor, adjacentAnchor, columnAnchor, sideSlabAnchor);
         }
         if (!qualifies) {
             return;
@@ -144,7 +149,7 @@ public final class SlabAnchorAttachment {
                         pos.toShortString(), chunk.getPos(), set.size());
             }
             if (SlabbedAuditBridge.isLiveTraceEnabled()) {
-                BlockPos supportPos = pos.down();
+                BlockPos supportPos = sideSlabAnchor ? pos : pos.down();
                 SlabbedAuditBridge.captureLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
             }
         }
@@ -278,6 +283,17 @@ public final class SlabAnchorAttachment {
             }
         }
         return false;
+    }
+
+    private static boolean qualifiesForLoweredSideSlabAnchor(BlockView world, BlockPos pos, BlockState state) {
+        if (state == null
+                || state.isAir()
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        return SlabSupport.isLoweredSideSlabVisual(world, pos, state);
     }
 
     private static boolean isOrdinaryAnchorCandidate(BlockView world, BlockPos pos, BlockState state) {

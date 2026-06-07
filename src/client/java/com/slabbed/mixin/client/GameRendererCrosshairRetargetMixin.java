@@ -279,15 +279,13 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
             currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
         }
-        int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
+        double scanReach = slabbed$scanReachPastCurrentHit(reach, currentDist2);
+        int steps = Math.max(16, (int) Math.ceil(scanReach / 0.05));
 
         BlockHitResult bestHit = null;
         double bestDist2 = currentDist2;
         for (int i = 1; i <= steps; i++) {
-            double t = reach * i / steps;
-            if (t * t > bestDist2 + 1.0e-6) {
-                break;
-            }
+            double t = scanReach * i / steps;
             Vec3d sample = eye.add(dir.multiply(t));
             BlockPos samplePos = BlockPos.ofFloored(sample);
 
@@ -436,26 +434,26 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (currentHit != null && currentHit.getType() == HitResult.Type.BLOCK) {
             currentDist2 = currentHit.getPos().squaredDistanceTo(eye);
         }
-        int steps = Math.max(16, (int) Math.ceil(reach / 0.05));
+        double scanReach = slabbed$scanReachPastCurrentHit(reach, currentDist2);
+        int steps = Math.max(16, (int) Math.ceil(scanReach / 0.05));
 
         for (int i = 1; i <= steps; i++) {
-            double t = reach * i / steps;
-            if (t * t > currentDist2 + 1.0e-6) {
-                break;
-            }
+            double t = scanReach * i / steps;
             Vec3d sample = eye.add(dir.multiply(t));
             BlockPos samplePos = BlockPos.ofFloored(sample);
 
             BlockPos candidatePos = samplePos;
             BlockState candidateState = world.getBlockState(candidatePos);
-            BlockHitResult hit = slabbed$raycastAnchoredLoweredFullBlock(world, cam, eye, end, candidatePos, candidateState);
+            BlockHitResult hit = slabbed$raycastAnchoredLoweredFullBlock(
+                    world, cam, eye, end, candidatePos, candidateState, currentDist2);
             if (hit != null) {
                 return hit;
             }
 
             candidatePos = samplePos.up();
             candidateState = world.getBlockState(candidatePos);
-            hit = slabbed$raycastAnchoredLoweredFullBlock(world, cam, eye, end, candidatePos, candidateState);
+            hit = slabbed$raycastAnchoredLoweredFullBlock(
+                    world, cam, eye, end, candidatePos, candidateState, currentDist2);
             if (hit != null) {
                 return hit;
             }
@@ -465,7 +463,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
     }
 
     private static BlockHitResult slabbed$raycastAnchoredLoweredFullBlock(
-            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos, BlockState state
+            ClientWorld world, Entity cam, Vec3d eye, Vec3d end, BlockPos pos, BlockState state, double maxHitDist2
     ) {
         if (!slabbed$isAnchoredLoweredFullBlock(world, pos, state)) {
             return null;
@@ -475,7 +473,16 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (hit == null) {
             return null;
         }
-        return hit.getPos().squaredDistanceTo(eye) <= end.squaredDistanceTo(eye) + 1.0e-6 ? hit : null;
+        double hitDist2 = hit.getPos().squaredDistanceTo(eye);
+        return hitDist2 <= end.squaredDistanceTo(eye) + 1.0e-6
+                && hitDist2 <= maxHitDist2 + 1.0e-6 ? hit : null;
+    }
+
+    private static double slabbed$scanReachPastCurrentHit(double reach, double currentDist2) {
+        if (Double.isInfinite(currentDist2)) {
+            return reach;
+        }
+        return Math.min(reach, Math.sqrt(currentDist2) + 0.5);
     }
 
     private static boolean slabbed$isAnchoredLoweredFullBlock(ClientWorld world, BlockPos pos, BlockState state) {
@@ -503,26 +510,16 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (world == null || cam == null || client.player == null) {
             return;
         }
+        boolean recorderEnabled = SlabbedAuditBridge.isRecorderEnabled();
+        boolean traceEnabled = Boolean.getBoolean("slabbed.target.trace");
+        if (!recorderEnabled && !traceEnabled) {
+            return;
+        }
 
         Vec3d eye = cam.getCameraPosVec(tickProgress);
         Vec3d dir = cam.getRotationVec(tickProgress);
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
-        SlabbedAuditBridge.invokeRecorder(
-                "recordCrosshairTarget",
-                new Class<?>[]{HitResult.class, HitResult.class, String.class, boolean.class, boolean.class, Vec3d.class, Vec3d.class, ItemStack.class, float.class},
-                initialTarget,
-                client.crosshairTarget,
-                anchoredDecision,
-                sideSlabRetargetFired,
-                slabbed$isSlabPlacementIntent(),
-                eye,
-                dir,
-                client.player.getMainHandStack(),
-                tickProgress);
-        if (!Boolean.getBoolean("slabbed.target.trace")) {
-            return;
-        }
         double vanillaDist2 = Double.POSITIVE_INFINITY;
         if (initialTarget != null && initialTarget.getType() == HitResult.Type.BLOCK) {
             vanillaDist2 = initialTarget.getPos().squaredDistanceTo(eye);
@@ -530,6 +527,22 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
         String fbCandidate = slabbed$findAnchoredFbCandidate(world, cam, eye, end, vanillaDist2);
         String slabCandidate = slabbed$findLoweredSlabCandidate(world, cam, eye, end, vanillaDist2);
+        String decision = slabbed$decisionWithCandidateReasons(anchoredDecision, fbCandidate, slabCandidate);
+        SlabbedAuditBridge.invokeRecorder(
+                "recordCrosshairTarget",
+                new Class<?>[]{HitResult.class, HitResult.class, String.class, boolean.class, boolean.class, Vec3d.class, Vec3d.class, ItemStack.class, float.class},
+                initialTarget,
+                client.crosshairTarget,
+                decision,
+                sideSlabRetargetFired,
+                slabbed$isSlabPlacementIntent(),
+                eye,
+                dir,
+                client.player.getMainHandStack(),
+                tickProgress);
+        if (!traceEnabled) {
+            return;
+        }
         if (fbCandidate == null && slabCandidate == null) {
             return;
         }
@@ -542,12 +555,36 @@ public abstract class GameRendererCrosshairRetargetMixin {
         line.append(" eye=").append(slabbed$formatVec(eye));
         line.append(" end=").append(slabbed$formatVec(end));
         line.append(" reach=").append(String.format("%.3f", reach));
-        line.append(" anchoredFbDecision=").append(anchoredDecision);
+        line.append(" anchoredFbDecision=").append(decision);
         line.append(" fbCandidate=").append(fbCandidate == null ? "none" : fbCandidate);
         line.append(" sideSlabCandidate=").append(slabCandidate == null ? "none" : slabCandidate);
         line.append(" sideSlabRetargetFired=").append(sideSlabRetargetFired);
         line.append(" final=").append(slabbed$formatHit(client.crosshairTarget));
         Slabbed.LOGGER.info(line.toString());
+    }
+
+    private static String slabbed$decisionWithCandidateReasons(
+            String decision, String fbCandidate, String slabCandidate
+    ) {
+        return decision
+                + ";traceFbReason=" + slabbed$candidateReason(fbCandidate)
+                + ";traceSlabReason=" + slabbed$candidateReason(slabCandidate);
+    }
+
+    private static String slabbed$candidateReason(String candidate) {
+        if (candidate == null) {
+            return "none";
+        }
+        if (candidate.contains("reason=eligible")) {
+            return "eligible";
+        }
+        if (candidate.contains("reason=candidate-farther-than-vanilla-hit")) {
+            return "candidate-farther-than-vanilla-hit";
+        }
+        if (candidate.contains("reason=outline-shape-miss")) {
+            return "outline-shape-miss";
+        }
+        return "unknown";
     }
 
     private static String slabbed$findAnchoredFbCandidate(

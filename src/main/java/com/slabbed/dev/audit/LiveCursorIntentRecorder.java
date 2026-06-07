@@ -5,9 +5,11 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemUsageContext;
@@ -16,9 +18,11 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.World;
 
 import java.io.IOException;
@@ -48,16 +52,26 @@ public final class LiveCursorIntentRecorder {
 
     private static final boolean ENABLED = Boolean.getBoolean("slabbed.liveCursorIntentRecorder");
     private static final String DIR_PROPERTY = "slabbed.liveCursorIntentRecorderDir";
-    private static final String SCHEMA_VERSION = "3";
-    private static final String RECORDER_VERSION = "3-target-semantics";
+    private static final String SCHEMA_VERSION = "5";
+    private static final String RECORDER_VERSION = "5-target-reason-full-block-predicates-slab-top-dy";
     private static final String RUN_ID = UUID.randomUUID().toString();
     private static final String[] RED_COUNTERS = {
             "same_cell_double_combine",
             "placed_above_intended",
+            "placementActionFailed",
+            "acceptedRemapActionFailed",
+            "ordinaryFullBlockUpEdgeRemappedSide",
             "rawFinalTargetVsInteractionHitMismatch",
             "finalTargetPlacementSemanticMismatch",
             "clientServerPlacePosMismatch",
-            "loweredDyLostAfterDoubleTarget"
+            "loweredDyLostAfterDoubleTarget",
+            "slabTopOnLoweredSupportDyLost",
+            "targetScanNoRescueCandidate",
+            "targetEligibleNoRescueCandidate",
+            "targetNoTraceCandidate",
+            "targetLegacyAboveTargetNotLoweredOwner",
+            "targetOutlineShapeMiss",
+            "targetCandidateFartherThanVanillaHit"
     };
     private static final String[] HEALTH_COUNTERS = {
             "sessionRows",
@@ -190,6 +204,7 @@ public final class LiveCursorIntentRecorder {
                     "look", frame.look,
                     "heldItem", frame.heldItem,
                     "tickProgress", formatDouble(frame.tickProgress)));
+            classifyTarget(frame);
         }
     }
 
@@ -398,6 +413,7 @@ public final class LiveCursorIntentRecorder {
             frame.dyHit = safeDy(world, hitPos, hitState);
             frame.dyPlaceBefore = safeDy(world, placePos, placeState);
             frame.canReplaceExisting = ctx.canReplaceExisting();
+            recordFullBlockPlacementPredicates(frame, ctx, world, placePos);
             writeSession("placement_context", frame, frame.side, fields(
                     "item", frame.heldItem,
                     "contextSide", safe(side),
@@ -407,7 +423,45 @@ public final class LiveCursorIntentRecorder {
                     "placeBeforeState", frame.placeBeforeState,
                     "dyHit", formatDouble(frame.dyHit),
                     "dyPlaceBefore", formatDouble(frame.dyPlaceBefore),
-                    "canReplaceExisting", Boolean.toString(frame.canReplaceExisting)));
+                    "canReplaceExisting", Boolean.toString(frame.canReplaceExisting),
+                    "blockPlacementState", frame.blockPlacementState,
+                    "ctxCanPlace", boolOrBlank(frame.blockPlacementContextCanPlace),
+                    "blockStateCanPlaceAt", boolOrBlank(frame.blockPlacementCanPlaceAt),
+                    "blockWorldCanPlace", boolOrBlank(frame.blockPlacementWorldCanPlace),
+                    "playerBox", frame.playerBox,
+                    "collisionShape", frame.placementCollisionShape,
+                    "playerIntersectsCollisionShape", boolOrBlank(frame.playerIntersectsPlacementShape),
+                    "placementPredicateClass", frame.blockPlacementPredicateClass));
+        }
+    }
+
+    private static void recordFullBlockPlacementPredicates(ActionFrame frame, ItemPlacementContext ctx, World world, BlockPos placePos) {
+        if (!(ctx.getStack().getItem() instanceof BlockItem blockItem) || blockItem.getBlock() instanceof SlabBlock) {
+            return;
+        }
+        try {
+            BlockState candidate = blockItem.getBlock().getPlacementState(ctx);
+            ShapeContext shapeContext = ShapeContext.ofPlacement(ctx.getPlayer());
+            boolean ctxCanPlace = ctx.canPlace();
+            boolean stateCanPlaceAt = candidate != null && candidate.canPlaceAt(world, placePos);
+            boolean worldCanPlace = candidate != null && world.canPlace(candidate, placePos, shapeContext);
+            boolean playerIntersects = playerIntersectsPlacementShape(candidate, world, placePos, ctx.getPlayer(), shapeContext);
+
+            frame.blockPlacementState = stateSummary(candidate);
+            frame.blockPlacementContextCanPlace = ctxCanPlace;
+            frame.blockPlacementCanPlaceAt = stateCanPlaceAt;
+            frame.blockPlacementWorldCanPlace = worldCanPlace;
+            frame.playerBox = ctx.getPlayer() == null ? "" : safe(ctx.getPlayer().getBoundingBox());
+            frame.placementCollisionShape = shapeSummary(candidate, world, placePos, shapeContext);
+            frame.playerIntersectsPlacementShape = playerIntersects;
+            frame.blockPlacementPredicateClass = classifyBlockPlacementPredicates(
+                    candidate,
+                    ctxCanPlace,
+                    stateCanPlaceAt,
+                    worldCanPlace,
+                    playerIntersects);
+        } catch (RuntimeException e) {
+            frame.blockPlacementPredicateClass = "predicate_probe_error:" + e.getClass().getSimpleName();
         }
     }
 
@@ -418,13 +472,25 @@ public final class LiveCursorIntentRecorder {
         synchronized (LiveCursorIntentRecorder.class) {
             ensureInitialized();
             ActionFrame frame = requireFrame(ctx.getWorld().isClient() ? "CLIENT" : "SERVER");
+            World world = ctx.getWorld();
             frame.slabPlacementState = stateSummary(state);
             frame.slabPlacementType = slabType(state);
+            frame.placementContextCanPlace = ctx.canPlace();
+            frame.slabPlacementCanPlaceAt = state != null && state.canPlaceAt(world, ctx.getBlockPos());
+            ShapeContext shapeContext = ShapeContext.of(ctx.getPlayer());
+            frame.slabPlacementWorldCanPlace = state != null && world.canPlace(state, ctx.getBlockPos(), shapeContext);
+            frame.playerBox = ctx.getPlayer() == null ? "" : safe(ctx.getPlayer().getBoundingBox());
+            frame.placementCollisionShape = shapeSummary(state, world, ctx.getBlockPos(), shapeContext);
             writeSession("slab_getPlacementState_return", frame, frame.side, fields(
                     "placePos", pos(ctx.getBlockPos()),
                     "contextSide", safe(ctx.getSide()),
                     "state", frame.slabPlacementState,
-                    "slabType", frame.slabPlacementType));
+                    "slabType", frame.slabPlacementType,
+                    "ctxCanPlace", Boolean.toString(frame.placementContextCanPlace),
+                    "stateCanPlaceAt", Boolean.toString(frame.slabPlacementCanPlaceAt),
+                    "worldCanPlace", Boolean.toString(frame.slabPlacementWorldCanPlace),
+                    "playerBox", frame.playerBox,
+                    "collisionShape", frame.placementCollisionShape));
         }
     }
 
@@ -461,6 +527,31 @@ public final class LiveCursorIntentRecorder {
     }
 
     private static void classifyPlacement(ActionFrame frame) {
+        if (isActionFailure(frame.actionResult)) {
+            writeMismatch(frame, "placementActionFailed", "block item placement returned " + safe(frame.actionResult));
+            if (frame.remapAccepted) {
+                writeMismatch(frame, "acceptedRemapActionFailed",
+                        "accepted remap produced " + safe(frame.actionResult)
+                                + " remapMode=" + safe(frame.remapMode)
+                                + " effectiveFace=" + safe(frame.remapEffectiveSide));
+                writeFinalTargetSemanticMismatch(frame,
+                        "accepted remap final target produced failed placement action");
+            }
+        }
+
+        if (isOrdinaryFullBlockPlacementProbe(frame)
+                && frame.remapAccepted
+                && "up_face_edge".equals(frame.remapMode)
+                && frame.remapOriginalSide == Direction.UP
+                && frame.remapEffectiveSide != null
+                && frame.remapEffectiveSide.getAxis().isHorizontal()) {
+            writeMismatch(frame, "ordinaryFullBlockUpEdgeRemappedSide",
+                    "ordinary full-block top-edge click remapped to side placement effectiveFace="
+                            + safe(frame.remapEffectiveSide));
+            writeFinalTargetSemanticMismatch(frame,
+                    "ordinary full-block top-edge final target resolved to side placement");
+        }
+
         if (isSingleSlab(frame.placeBeforeState) && "double".equals(frame.placeAfterSlabType)) {
             writeMismatch(frame, "same_cell_double_combine", "pre-state single slab became double at same placePos");
             writeFinalTargetSemanticMismatch(frame, "final target resolved to same-cell slab combine");
@@ -482,10 +573,76 @@ public final class LiveCursorIntentRecorder {
             writeMismatch(frame, "loweredDyLostAfterDoubleTarget", "lowered double-slab target produced vanilla-dy placed slab");
             writeFinalTargetSemanticMismatch(frame, "lowered double-slab final target produced vanilla-dy placed slab");
         }
+
+        if (!isSlabState(frame.hitState)
+                && frame.contextSide == Direction.UP
+                && frame.contextHitPos != null
+                && frame.placePos != null
+                && frame.placePos.equals(frame.contextHitPos.up())
+                && isSlabState(frame.placeAfterState)
+                && frame.dyHit == -0.5d
+                && frame.dyPlaceAfter == 0.0d) {
+            writeMismatch(frame, "slabTopOnLoweredSupportDyLost",
+                    "slab top-hit on lowered non-slab support produced vanilla-dy placed slab");
+            writeFinalTargetSemanticMismatch(frame,
+                    "slab top-hit on lowered non-slab support lost lowered visual dy");
+        }
+    }
+
+    private static void classifyTarget(TargetFrame frame) {
+        if (frame == null || frame.decision == null || frame.decision.isBlank()) {
+            return;
+        }
+        if (frame.decision.contains("legacy-retarget-fired")) {
+            return;
+        }
+        if (frame.decision.contains("scan-no-rescue-candidate")) {
+            boolean hasEligibleCandidate = frame.decision.contains("traceFbReason=eligible")
+                    || frame.decision.contains("traceSlabReason=eligible");
+            boolean hasDiagnosticCandidate = hasEligibleCandidate
+                    || frame.decision.contains("traceFbReason=candidate-farther-than-vanilla-hit")
+                    || frame.decision.contains("traceSlabReason=candidate-farther-than-vanilla-hit")
+                    || frame.decision.contains("traceFbReason=outline-shape-miss")
+                    || frame.decision.contains("traceSlabReason=outline-shape-miss");
+            boolean hasLegacyReason = frame.decision.contains(";legacy-");
+            if (hasDiagnosticCandidate || hasLegacyReason) {
+                writeTargetMismatch(frame, "targetScanNoRescueCandidate", "target scan found no rescue candidate");
+            }
+            if (hasEligibleCandidate) {
+                writeTargetMismatch(frame, "targetEligibleNoRescueCandidate",
+                        "target scan found no rescue candidate despite eligible diagnostic candidate");
+            }
+            if (hasLegacyReason
+                    && frame.decision.contains("traceFbReason=none")
+                    && frame.decision.contains("traceSlabReason=none")) {
+                writeTargetMismatch(frame, "targetNoTraceCandidate",
+                        "target scan found no rescue candidate and diagnostics found no lowered candidate");
+            }
+        }
+        if (frame.decision.contains("legacy-above-target-not-lowered-owner")) {
+            writeTargetMismatch(frame, "targetLegacyAboveTargetNotLoweredOwner",
+                    "target scan fell through legacy above-target path");
+        }
+        if (frame.decision.contains("legacy-shape-miss") || frame.decision.contains("outline-shape-miss")) {
+            writeTargetMismatch(frame, "targetOutlineShapeMiss", "target candidate shape missed");
+        }
+        if (frame.decision.contains("candidate-farther-than-vanilla-hit")) {
+            writeTargetMismatch(frame, "targetCandidateFartherThanVanillaHit",
+                    "target candidate was farther than vanilla hit");
+        }
     }
 
     private static void writeFinalTargetSemanticMismatch(ActionFrame frame, String detail) {
         writeMismatch(frame, "finalTargetPlacementSemanticMismatch", detail);
+    }
+
+    private static void writeTargetMismatch(TargetFrame frame, String counter, String detail) {
+        String fullDetail = detail
+                + " heldItem=" + safe(frame.heldItem)
+                + " initial=" + safe(frame.initialHit)
+                + " final=" + safe(frame.finalHit)
+                + " decision=" + safe(frame.decision);
+        writeMismatch(null, counter, fullDetail);
     }
 
     private static void compareClientServer(ActionFrame frame) {
@@ -650,7 +807,8 @@ public final class LiveCursorIntentRecorder {
         sb.append("runEnded: ").append(runEnded).append("\n\n");
         sb.append("## Red Counters\n");
         sb.append("note: rawFinalTargetVsInteractionHitMismatch only compares recorded hit identity; ")
-                .append("finalTargetPlacementSemanticMismatch tracks target-consistent placement outcomes that still landed wrong.\n");
+                .append("finalTargetPlacementSemanticMismatch tracks target-consistent placement outcomes that still landed wrong; ")
+                .append("target* counters classify crosshair retarget scan failures even when no placement action fires.\n");
         for (String counter : RED_COUNTERS) {
             sb.append("- ").append(counter).append(": ").append(COUNTERS.getOrDefault(counter, 0)).append('\n');
         }
@@ -942,6 +1100,55 @@ public final class LiveCursorIntentRecorder {
         return state.toString();
     }
 
+    private static String shapeSummary(BlockState state, World world, BlockPos pos, ShapeContext shapeContext) {
+        if (state == null || world == null || pos == null || shapeContext == null) {
+            return "";
+        }
+        VoxelShape shape = state.getCollisionShape(world, pos, shapeContext);
+        if (shape.isEmpty()) {
+            return "empty";
+        }
+        return "box=" + safe(shape.getBoundingBox()) + " boxes=" + shape.getBoundingBoxes().size();
+    }
+
+    private static boolean playerIntersectsPlacementShape(BlockState state, World world, BlockPos pos, PlayerEntity player, ShapeContext shapeContext) {
+        if (state == null || world == null || pos == null || player == null || shapeContext == null) {
+            return false;
+        }
+        VoxelShape shape = state.getCollisionShape(world, pos, shapeContext);
+        Box playerBox = player.getBoundingBox();
+        for (Box localBox : shape.getBoundingBoxes()) {
+            if (localBox.offset(pos).intersects(playerBox)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String classifyBlockPlacementPredicates(
+            BlockState candidate,
+            boolean ctxCanPlace,
+            boolean stateCanPlaceAt,
+            boolean worldCanPlace,
+            boolean playerIntersects) {
+        if (candidate == null) {
+            return "candidate_state_null";
+        }
+        if (!ctxCanPlace) {
+            return "ctx_can_place_false";
+        }
+        if (!stateCanPlaceAt) {
+            return "state_can_place_at_false";
+        }
+        if (!worldCanPlace && playerIntersects) {
+            return "world_can_place_false_player_collision";
+        }
+        if (!worldCanPlace) {
+            return "world_can_place_false";
+        }
+        return "predicates_pass";
+    }
+
     private static boolean isSlabState(String state) {
         return state != null && state.contains("_slab");
     }
@@ -952,6 +1159,18 @@ public final class LiveCursorIntentRecorder {
 
     private static boolean isDoubleSlab(String state) {
         return state != null && state.contains("_slab") && state.contains("type=double");
+    }
+
+    private static boolean isActionFailure(String result) {
+        return result != null && result.contains("Fail[");
+    }
+
+    private static boolean isOrdinaryFullBlockPlacementProbe(ActionFrame frame) {
+        return frame != null
+                && frame.blockPlacementState != null
+                && !frame.blockPlacementState.isBlank()
+                && frame.heldItem != null
+                && !frame.heldItem.contains("_slab");
     }
 
     private static String slabType(BlockState state) {
@@ -983,6 +1202,10 @@ public final class LiveCursorIntentRecorder {
 
     private static String tsv(String value) {
         return safe(value).replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
+    }
+
+    private static String boolOrBlank(Boolean value) {
+        return value == null ? "" : Boolean.toString(value);
     }
 
     private static String json(String value) {
@@ -1018,8 +1241,19 @@ public final class LiveCursorIntentRecorder {
         BlockPos placePos;
         String hitState = "";
         String placeBeforeState = "";
+        String blockPlacementState = "";
         String slabPlacementState = "";
         String slabPlacementType = "";
+        boolean placementContextCanPlace;
+        boolean slabPlacementCanPlaceAt;
+        boolean slabPlacementWorldCanPlace;
+        Boolean blockPlacementContextCanPlace;
+        Boolean blockPlacementCanPlaceAt;
+        Boolean blockPlacementWorldCanPlace;
+        Boolean playerIntersectsPlacementShape;
+        String blockPlacementPredicateClass = "";
+        String playerBox = "";
+        String placementCollisionShape = "";
         String placeAfterState = "";
         String placeAfterSlabType = "";
         double dyHit = Double.NaN;

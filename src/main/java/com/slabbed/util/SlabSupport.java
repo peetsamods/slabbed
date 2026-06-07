@@ -525,6 +525,19 @@ public final class SlabSupport {
         return MAX_CHAIN_DEPTH;
     }
 
+    public static boolean isLoweredSideSlabVisual(BlockView world, BlockPos slabPos, BlockState slabState) {
+        if (world == null
+                || slabPos == null
+                || slabState == null
+                || !(slabState.getBlock() instanceof SlabBlock)
+                || !slabState.contains(SlabBlock.TYPE)
+                || !slabState.getFluidState().isEmpty()) {
+            return false;
+        }
+        return SlabAnchorAttachment.isAnchored(world, slabPos)
+                || isAdjacentSideSlabLowered(world, slabPos, slabState);
+    }
+
     /**
      * LEAN gate for the client dependent-rerender mixin: true iff a bottom slab
      * or a persistent anchor lies in the bounded column directly below {@code pos}
@@ -597,12 +610,70 @@ public final class SlabSupport {
     }
 
     private static boolean isLoweredSideSlabSource(BlockView world, BlockPos pos, BlockState state) {
-        if (state.getBlock() instanceof SlabBlock || !state.isSolidBlock(world, pos)) {
+        if (state.getBlock() instanceof SlabBlock) {
+            return isVerticallyLoweredSlabSource(world, pos, state);
+        }
+        if (!state.isSolidBlock(world, pos)) {
             return false;
         }
         return hasBottomSlabBelow(world, pos)
                 || SlabAnchorAttachment.isAnchored(world, pos)
                 || isDirectCustomSlabSupportedObject(world, pos, state);
+    }
+
+    private static boolean isVerticallyLoweredSlabSource(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null
+                || pos == null
+                || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            return true;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = getBlockStateOrNull(world, belowPos);
+        return below != null
+                && (hasLoweredNonSlabTopSupport(world, belowPos, below)
+                || hasLoweredTopLikeSlabSupport(world, belowPos, below));
+    }
+
+    private static boolean hasLoweredNonSlabTopSupport(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null
+                || pos == null
+                || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        if (hasBottomSlabBelow(world, pos) || SlabAnchorAttachment.isAnchored(world, pos)) {
+            return true;
+        }
+        double directCustomDy = directCustomSlabSupportDy(world, pos, state);
+        if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
+            return true;
+        }
+        return shouldOffset(world, pos, state) && slabColumnYOffset(world, pos) < -1.0e-6;
+    }
+
+    private static boolean hasLoweredTopLikeSlabSupport(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null
+                || pos == null
+                || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || !state.getFluidState().isEmpty()
+                || isBottomSlab(state)) {
+            return false;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        return SlabAnchorAttachment.isAnchored(world, pos)
+                || hasLoweredNonSlabTopSupport(world, belowPos, below)
+                || isAdjacentSideSlabLowered(world, pos, state);
     }
 
     private static boolean isAdjacentCustomSideSlabLowered(BlockView world, BlockPos slabPos, BlockState slabState) {
@@ -617,12 +688,13 @@ public final class SlabSupport {
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
+            if (SlabAnchorAttachment.isAnchored(world, pos)) {
+                return -0.5;
+            }
             BlockPos belowPos = pos.down();
             BlockState below = world.getBlockState(belowPos);
-            Block belowBlock = below.getBlock();
-            if (!(belowBlock instanceof SlabBlock) && !below.isAir()
-                    && below.getFluidState().isEmpty()
-                    && hasBottomSlabBelow(world, belowPos)) {
+            if (hasLoweredNonSlabTopSupport(world, belowPos, below)
+                    || hasLoweredTopLikeSlabSupport(world, belowPos, below)) {
                 return -0.5;
             }
             // Adjacent-side-slab alignment: a bottom or double slab placed at the side of a
@@ -786,11 +858,13 @@ public final class SlabSupport {
         if (cachedDy != null) {
             return cachedDy;
         }
+        if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            return -0.5;
+        }
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
-        if (!(below.getBlock() instanceof SlabBlock) && !below.isAir()
-                && below.getFluidState().isEmpty()
-                && hasBottomSlabBelow(world, belowPos)) {
+        if (hasLoweredNonSlabTopSupport(world, belowPos, below)
+                || hasLoweredTopLikeSlabSupport(world, belowPos, below)) {
             return -0.5;
         }
         if (isAdjacentSideSlabLowered(world, pos, state)) {
@@ -1069,7 +1143,8 @@ public final class SlabSupport {
                 return 0.0;
             }
             if (cur.getBlock() instanceof SlabBlock
-                    && isAdjacentSideSlabLowered(world, cursor, cur)) {
+                    && (SlabAnchorAttachment.isAnchored(world, cursor)
+                    || isAdjacentSideSlabLowered(world, cursor, cur))) {
                 return isBottomSlab(cur) ? -1.0 : -0.5;
             }
             if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
