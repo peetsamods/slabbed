@@ -412,9 +412,9 @@ public final class OffsetRaycastTargetingTest {
         ctx.complete();
     }
 
-    // ── DIAGNOSTIC: lantern on a vanilla slab on a Terrain Slabs slab (TS>S>lantern) ──
+    // A standing lantern on a vanilla slab on a Terrain Slabs slab must lower to sit flush.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void lanternOnSlabOnTerrainSlabDiag(TestContext ctx) {
+    public void lanternOnTerrainSlabsLowers(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
         Block ts = Registries.BLOCK.get(Identifier.of("terrainslabs", "grass_slab"));
@@ -431,13 +431,34 @@ public final class OffsetRaycastTargetingTest {
         BlockPos lPos = sPos.up();
         world.setBlockState(lPos, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
 
-        double sDy = SlabSupport.getYOffset(world, sPos, world.getBlockState(sPos));
+        ctx.assertTrue(SlabSupport.getYOffset(world, sPos, world.getBlockState(sPos)) == -0.5,
+                "vanilla slab on Terrain Slabs should lower -0.5");
         double lDy = SlabSupport.getYOffset(world, lPos, world.getBlockState(lPos));
-        VoxelShape lOutline = world.getBlockState(lPos).getOutlineShape(world, lPos, ShapeContext.absent());
-        System.out.println("[LANTERN-DIAG] tsKind=" + CompatHooks.customSlabSurfaceKind(world.getBlockState(tsPos))
-                + " vanillaSlabDy=" + sDy + " lanternDy=" + lDy
-                + " lanternOutlineMinY=" + (lOutline.isEmpty() ? "empty" : lOutline.getBoundingBox().minY)
-                + " lanternState=" + world.getBlockState(lPos));
+        ctx.assertTrue(lDy == -0.5, "lantern on slab on Terrain Slabs should lower -0.5, got " + lDy);
+        ctx.complete();
+    }
+
+    // An object on a CANTILEVERED lowered support (a block beside a lowered block, air below
+    // it) must lower to match — otherwise it floats above its lowered support (the reported
+    // floating-lantern bug, since the support-column walk stops at the air gap).
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lanternOnCantileveredSupportLowers(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos slab = origin.add(3, 2, 3);
+        world.setBlockState(slab, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos fb = slab.up(); // lowered full block (stone on bottom slab)
+        world.setBlockState(fb, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos cantilever = fb.south(); // beside the lowered FB, air below it
+        world.setBlockState(cantilever, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos lantern = cantilever.up();
+        world.setBlockState(lantern, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        ctx.assertTrue(SlabSupport.getYOffset(world, cantilever, world.getBlockState(cantilever)) == -0.5,
+                "fixture: cantilevered support should be lowered -0.5");
+        double lDy = SlabSupport.getYOffset(world, lantern, world.getBlockState(lantern));
+        ctx.assertTrue(lDy == -0.5,
+                "lantern on a cantilevered lowered support must lower to match (was floating at 0), got " + lDy);
         ctx.complete();
     }
 
