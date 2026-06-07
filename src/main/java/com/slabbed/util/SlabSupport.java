@@ -847,6 +847,20 @@ public final class SlabSupport {
             return 0.0;
         }
 
+        // A non-solid object (lantern, etc.) sitting on a support that is lowered via the
+        // adjacent/cantilever rule floats, because the support-column walks above cannot
+        // follow that lowering (the air gap under a cantilever stops the walk). Match the
+        // support's lowering so the object sits flush. Reached only by non-solid objects
+        // (solid blocks returned 0.0 just above), so the common render path pays nothing.
+        BlockPos sitSupportPos = pos.down();
+        BlockState sitSupport = world.getBlockState(sitSupportPos);
+        if (!(sitSupport.getBlock() instanceof SlabBlock)
+                && !(sitSupport.getBlock() instanceof BlockEntityProvider)
+                && sitSupport.isSolidBlock(world, sitSupportPos)
+                && isAdjacentToLoweredFullBlock(world, sitSupportPos)) {
+            return -0.5;
+        }
+
         BlockState above = world.getBlockState(pos.up());
 
         // direct: ceiling-attached blocks directly under a top slab
