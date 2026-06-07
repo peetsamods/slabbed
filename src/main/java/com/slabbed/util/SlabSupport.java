@@ -1020,7 +1020,13 @@ public final class SlabSupport {
         if (isLogFamilySlabSitCandidate(state)) {
             return true;
         }
-        return !state.isSolidBlock(world, pos);
+        // Ordinary solid full blocks (grass, stone, dirt, …) also sit on and lower onto a
+        // custom Terrain Slabs surface, matching how they already lower onto a vanilla
+        // bottom slab via hasSlabInColumn. Previously only non-solid blocks qualified here,
+        // so a stripped log lowered but a grass block did not — an inconsistency the player
+        // reported. The exclusions in isDirectCustomSlabSupportSubject (air, non-vanilla
+        // slabs, thin layers, fluids, Terrain Slabs' own blocks) already keep this tight.
+        return true;
     }
 
     private static boolean isLogFamilySlabSitCandidate(BlockState state) {
