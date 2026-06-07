@@ -124,10 +124,15 @@ public final class SlabAnchorAttachment {
                 && !adjacentAnchor
                 && !columnAnchor
                 && qualifiesForLoweredSideSlabAnchor(world, pos, state);
-        boolean qualifies = directAnchor || adjacentAnchor || columnAnchor || sideSlabAnchor;
+        boolean belowAnchoredAnchor = !directAnchor
+                && !adjacentAnchor
+                && !columnAnchor
+                && !sideSlabAnchor
+                && qualifiesForBelowAnchoredBlockAnchor(world, pos, state);
+        boolean qualifies = directAnchor || adjacentAnchor || columnAnchor || sideSlabAnchor || belowAnchoredAnchor;
         if (TRACE) {
-            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={} direct={} adjacent={} column={} sideSlab={}",
-                    pos.toShortString(), state, qualifies, directAnchor, adjacentAnchor, columnAnchor, sideSlabAnchor);
+            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={} direct={} adjacent={} column={} sideSlab={} belowAnchored={}",
+                    pos.toShortString(), state, qualifies, directAnchor, adjacentAnchor, columnAnchor, sideSlabAnchor, belowAnchoredAnchor);
         }
         if (!qualifies) {
             return;
@@ -283,6 +288,26 @@ public final class SlabAnchorAttachment {
             }
         }
         return false;
+    }
+
+    /**
+     * Anchors an ordinary full block placed DIRECTLY BELOW an already-anchored lowered
+     * full block. Handles refilling a gap inside a lowered column: e.g. TS &gt; B1 B2 B3 B4,
+     * break B2+B3 (B4 keeps its anchor), then replace B3 — the column source beneath B3 is
+     * now air so the direct/column checks fail, but B3 must still lower to match the
+     * anchored B4 above it or it un-lowers and z-fights B4. The block above being anchored
+     * proves this cell belongs to a lowered column.
+     */
+    private static boolean qualifiesForBelowAnchoredBlockAnchor(BlockView world, BlockPos pos, BlockState state) {
+        if (!isOrdinaryAnchorCandidate(world, pos, state)) {
+            return false;
+        }
+        BlockPos abovePos = pos.up();
+        BlockState above = world.getBlockState(abovePos);
+        if (above.getBlock() instanceof SlabBlock || above.getBlock() instanceof BlockEntityProvider) {
+            return false;
+        }
+        return isAnchored(world, abovePos);
     }
 
     private static boolean qualifiesForLoweredSideSlabAnchor(BlockView world, BlockPos pos, BlockState state) {

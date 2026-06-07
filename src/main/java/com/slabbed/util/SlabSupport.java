@@ -730,6 +730,24 @@ public final class SlabSupport {
             return -0.5;
         }
 
+        // Gap-fill (live + recursion-safe): an ordinary solid block sitting directly below
+        // an anchored lowered block belongs to that lowered column, so it must lower to
+        // match — even when its own support below is air (a broken-out gap that the
+        // column/direct checks can't see). Computing this live (isAnchored never calls
+        // getYOffset) means a refilled block lowers on the very first client frame instead
+        // of un-lowering and z-fighting the anchored block above until its own anchor syncs.
+        if (!(state.getBlock() instanceof SlabBlock)
+                && !(state.getBlock() instanceof BlockEntityProvider)
+                && state.isSolidBlock(world, pos)
+                && world.getBlockState(pos.down()).isAir()) {
+            BlockPos abovePos = pos.up();
+            BlockState above = world.getBlockState(abovePos);
+            if (!(above.getBlock() instanceof SlabBlock)
+                    && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, abovePos)) {
+                return -0.5;
+            }
+        }
+
         double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
         if (!Double.isNaN(directCustomSurfaceDy)) {
             return directCustomSurfaceDy;
