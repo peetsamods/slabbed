@@ -43,7 +43,20 @@ public final class SlabbedShowcaseHarness {
 
     private static final String PROPERTY = "slabbed.mc1211.screenshotShowcase";
 
+    // 10 terrain-slab surface types (one per row) and a cycling set of varied objects.
+    private static final String[] SHOWCASE_SLABS = {
+            "moss_slab", "calcite_slab", "podzol_slab", "sand_slab", "deepslate_slab",
+            "dirt_slab", "gravel_slab", "red_sand_slab", "terrain_stone_slab", "terrain_blackstone_slab"
+    };
+    private static final String[] SHOWCASE_OBJECTS = {
+            "lantern", "torch", "oak_log", "white_carpet", "oak_sapling", "soul_lantern",
+            "dandelion", "red_mushroom", "bookshelf", "pumpkin", "campfire", "hay_block"
+    };
+    private static final int SHOWCASE_ROWS = 10;
+    private static final int SHOWCASE_COLS = 6;
+
     private static boolean worldRequested;
+    private static boolean windowResized;
     private static boolean sceneBuilt;
     private static boolean cameraSet;
     private static boolean captured;
@@ -93,6 +106,16 @@ public final class SlabbedShowcaseHarness {
             return;
         }
 
+        if (!windowResized) {
+            windowResized = true;
+            try {
+                client.getWindow().setWindowedSize(1920, 1080);
+            } catch (Exception ignored) {
+            }
+            System.out.println("[SLABBED_SHOWCASE] window 1920x1080");
+            return;
+        }
+
         if (!sceneBuilt) {
             sceneBuilt = true;
             sceneBuiltTick = ticks;
@@ -110,12 +133,13 @@ public final class SlabbedShowcaseHarness {
         }
 
         BlockPos o = origin;
-        double camX = o.getX() + 1.0;
-        double camEyeY = o.getY() + 3.1;
-        double camZ = o.getZ() - 1.8;
-        double tgtX = o.getX() + 5.2;
-        double tgtY = o.getY() + 0.3;
-        double tgtZ = o.getZ() + 1.0;
+        // Elevated diagonal overview looking across the whole 6x10 grid (tight framing).
+        double camX = o.getX() - 0.5;
+        double camEyeY = o.getY() + 6.2;
+        double camZ = o.getZ() - 1.5;
+        double tgtX = o.getX() + 4.2;
+        double tgtY = o.getY() + 0.5;
+        double tgtZ = o.getZ() + 5.5;
         double dx = tgtX - camX;
         double dy = tgtY - camEyeY;
         double dz = tgtZ - camZ;
@@ -126,13 +150,14 @@ public final class SlabbedShowcaseHarness {
         client.player.refreshPositionAndAngles(camX, camEyeY - 1.62, camZ, yaw, pitch);
         client.player.setVelocity(0.0, 0.0, 0.0);
         client.options.hudHidden = true;
+        client.options.getFov().setValue(55);
         if (!cameraSet) {
             cameraSet = true;
             cameraSetTick = ticks;
             System.out.println("[SLABBED_SHOWCASE] camera yaw=" + yaw + " pitch=" + pitch);
         }
 
-        if (ticks < cameraSetTick + 100) {
+        if (ticks < cameraSetTick + 160) {
             return;
         }
 
@@ -155,32 +180,30 @@ public final class SlabbedShowcaseHarness {
     }
 
     private static void buildScene(ServerWorld w, BlockPos o) {
-        for (int x = -1; x <= 9; x++) {
-            for (int z = -2; z <= 3; z++) {
+        // Grass platform + cleared airspace over the whole grid footprint.
+        for (int x = -2; x <= SHOWCASE_COLS + 2; x++) {
+            for (int z = -2; z <= SHOWCASE_ROWS + 2; z++) {
                 w.setBlockState(o.add(x, -1, z), Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
                 for (int y = 0; y <= 4; y++) {
                     w.setBlockState(o.add(x, y, z), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
                 }
             }
         }
-        String[][] rowSpec = {
-                {"moss_slab", "minecraft", "lantern"},
-                {"calcite_slab", "minecraft", "torch"},
-                {"podzol_slab", "minecraft", "oak_log"},
-                {"sand_slab", "minecraft", "white_carpet"},
-                {"deepslate_slab", "minecraft", "soul_lantern"}
-        };
-        int x = 2;
-        for (String[] spec : rowSpec) {
-            Block slab = Registries.BLOCK.get(Identifier.of("terrain_slabs", spec[0]));
-            Block obj = Registries.BLOCK.get(Identifier.of(spec[1], spec[2]));
+        // One terrain-slab type per row; cycle the varied objects across the columns.
+        for (int r = 0; r < SHOWCASE_ROWS; r++) {
+            Block slab = Registries.BLOCK.get(
+                    Identifier.of("terrain_slabs", SHOWCASE_SLABS[r % SHOWCASE_SLABS.length]));
             BlockState slabState = slab.getDefaultState();
             if (slabState.contains(SlabBlock.TYPE)) {
                 slabState = slabState.with(SlabBlock.TYPE, SlabType.BOTTOM);
             }
-            w.setBlockState(o.add(x, 0, 1), slabState, Block.NOTIFY_LISTENERS);
-            w.setBlockState(o.add(x, 1, 1), obj.getDefaultState(), Block.NOTIFY_LISTENERS);
-            x++;
+            for (int c = 0; c < SHOWCASE_COLS; c++) {
+                String objName = SHOWCASE_OBJECTS[(r * SHOWCASE_COLS + c) % SHOWCASE_OBJECTS.length];
+                Block obj = Registries.BLOCK.get(Identifier.of("minecraft", objName));
+                BlockPos slabPos = o.add(2 + c, 0, 1 + r);
+                w.setBlockState(slabPos, slabState, Block.NOTIFY_LISTENERS);
+                w.setBlockState(slabPos.up(), obj.getDefaultState(), Block.NOTIFY_LISTENERS);
+            }
         }
     }
 
