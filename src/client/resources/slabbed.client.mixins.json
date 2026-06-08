@@ -11,6 +11,7 @@
     "Beta35LiveTorchCaptureMixin",
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
+    "BlockRenderInfoCullMixin",
     "CarpetDyShapeMixin",
     "GameRendererPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",

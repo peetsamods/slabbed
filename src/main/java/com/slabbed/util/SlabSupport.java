@@ -992,6 +992,42 @@ public final class SlabSupport {
         return false;
     }
 
+    /** Kill switch for the slab-height step-face redraw (see {@link #isSlabHeightStepFace}). */
+    private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
+
+    /**
+     * Whether {@code direction}'s horizontal face of the opaque full cube at {@code pos}
+     * is a slab-height "step" face — i.e. this block and its neighbour across that face
+     * are at different vertical render offsets, so part of the face is visually exposed
+     * but the chunk mesher (Indigo) would otherwise cull it (the see-through
+     * "window"/"doom-infinity" hole on a lowered opaque cube at a slab step).
+     *
+     * <p><b>1.21.1 adaptation</b> of the 1.21.11 overhaul helper: here "lowered" is
+     * {@code getYOffset < 0} (1.21.11 used the Terrain-Slabs-specific
+     * {@code isDirectCustomSlabSupportedObject}, which does not exist on 1.21.1). Only
+     * ever used to ADD faces, never remove. Disable with {@code -Dslabbed.disableStepCull=true}.
+     *
+     * <p><b>Threading:</b> called from the Indigo mesher. {@code getYOffset} is already
+     * invoked there by {@code OffsetBlockStateModel.emitBlockQuads} for the current block
+     * (self lookup safe); the NEIGHBOUR {@code getYOffset} is the one unproven risk (a
+     * chunk-border neighbour mid-load could in theory block) — hence the kill switch and
+     * the "needs live confirmation" status.
+     */
+    public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
+        if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
+                || !direction.getAxis().isHorizontal() || !state.isOpaqueFullCube(world, pos)) {
+            return false;
+        }
+        BlockPos neighborPos = pos.offset(direction);
+        BlockState neighbor = world.getBlockState(neighborPos);
+        if (neighbor == null) {
+            return false;
+        }
+        boolean selfLowered = getYOffset(world, pos, state) < 0.0;
+        boolean neighborLowered = getYOffset(world, neighborPos, neighbor) < 0.0;
+        return selfLowered != neighborLowered;
+    }
+
     /**
      * Returns the Y offset for the block at {@code pos}.
      * <ul>
