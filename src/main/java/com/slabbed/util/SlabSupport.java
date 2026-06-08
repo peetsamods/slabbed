@@ -166,15 +166,44 @@ public final class SlabSupport {
     }
 
     /**
-     * Primary query: should this slab top face count as solid support.
+     * Top-surface offset a block presents for DIRECT object support: 0.5 for a bottom-like
+     * surface (vanilla bottom slab OR a Terrain Slabs BOTTOM_LIKE surface), 1.0 for a
+     * top/double-like surface, else 0.0. Opt-in for custom surfaces (NONE without the mod).
+     */
+    public static double getDirectObjectSupportTopOffset(BlockState state) {
+        return switch (CompatHooks.customSlabSurfaceKind(state)) {
+            case BOTTOM_LIKE -> 0.5;
+            case TOP_LIKE, DOUBLE_LIKE -> 1.0;
+            case NONE, UNKNOWN -> {
+                if (isBottomSlab(state)) {
+                    yield 0.5;
+                }
+                if (isTopSlab(state) || isSupportingSlab(state) && state.get(SlabBlock.TYPE) == SlabType.DOUBLE) {
+                    yield 1.0;
+                }
+                yield 0.0;
+            }
+        };
+    }
+
+    /** True if this state presents a top surface that can directly support a lowered object. */
+    public static boolean isDirectObjectSupportSurface(BlockView world, BlockPos pos, BlockState state) {
+        return getDirectObjectSupportTopOffset(state) > 0.0;
+    }
+
+    /**
+     * Primary query: should this slab top face count as solid support. Includes Terrain
+     * Slabs named surfaces (opt-in) so objects can be placed on them.
      */
     public static boolean canTreatAsSolidTopFace(WorldView world, BlockPos pos) {
-        return isSupportingSlab(world, pos);
+        BlockState state = world.getBlockState(pos);
+        return isSupportingSlab(state) || isDirectObjectSupportSurface(world, pos, state);
     }
 
     /** Overload for shape/world views. */
     public static boolean canTreatAsSolidTopFace(BlockView world, BlockPos pos) {
-        return isSupportingSlab(world, pos);
+        BlockState state = world.getBlockState(pos);
+        return isSupportingSlab(state) || isDirectObjectSupportSurface(world, pos, state);
     }
 
     public static boolean isFloorTorch(BlockState state) {
