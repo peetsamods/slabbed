@@ -123,4 +123,50 @@ public final class TerrainSlabsCompatTest {
                 "carpet over a TS bottom slab must see a bottom-slab-equivalent below (ClientDy lowers it -0.5)");
         ctx.complete();
     }
+
+    // ── Combining / mixed-slab compound (terrain + vanilla) ───────────────────────────
+    private static BlockState vanillaSlab(SlabType type) {
+        return Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, type);
+    }
+
+    /** Places layers bottom-up from base; returns getYOffset of the top (sitter) layer. */
+    private static double stackDy(ServerWorld w, BlockPos base, BlockState... layers) {
+        BlockPos p = base;
+        for (BlockState layer : layers) {
+            w.setBlockState(p, layer, Block.NOTIFY_LISTENERS);
+            p = p.up();
+        }
+        BlockPos top = base.up(layers.length - 1);
+        return SlabSupport.getYOffset(w, top, w.getBlockState(top));
+    }
+
+    // Contract #3: a vanilla BOTTOM slab on a Terrain Slabs slab combines flush (-0.5).
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void vanillaBottomSlabCombinesOnTs(TestContext ctx) {
+        double dy = stackDy(ctx.getWorld(), ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3),
+                tsBottomSlab(), vanillaSlab(SlabType.BOTTOM));
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "vanilla bottom slab on a Terrain Slabs slab should combine flush at -0.5, got " + dy);
+        ctx.complete();
+    }
+
+    // Contract #5: a vanilla TOP slab on a Terrain Slabs slab compounds to -1.0.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void vanillaTopSlabCompoundsOnTs(TestContext ctx) {
+        double dy = stackDy(ctx.getWorld(), ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3),
+                tsBottomSlab(), vanillaSlab(SlabType.TOP));
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                "vanilla TOP slab on a Terrain Slabs slab should compound to -1.0, got " + dy);
+        ctx.complete();
+    }
+
+    // Contract #2: an object on a MIXED slab (vanilla bottom slab capping a TS slab) compounds to -1.0.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void objectOnMixedTsSlabCompounds(TestContext ctx) {
+        double dy = stackDy(ctx.getWorld(), ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3),
+                tsBottomSlab(), vanillaSlab(SlabType.BOTTOM), Blocks.LANTERN.getDefaultState());
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                "lantern on a mixed (vanilla-on-terrain) slab should compound to -1.0, got " + dy);
+        ctx.complete();
+    }
 }
