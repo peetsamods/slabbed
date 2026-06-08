@@ -41,13 +41,19 @@ on `customSlabSurfaceKind != NONE` (requires the mod loaded), so without TS the 
 unchanged — the green tests prove no regression to the targeting overhaul, hanger-follow, or
 mixed-slab lowering.
 
-## To live-test (Julia)
-1. Put a **1.21.1-compatible** Terrain Slabs jar (mod id `terrainslabs`) + `midnightlib` into
-   `run/mods/`. ⚠️ `countereds_terrain_slabs-2.2.5.jar` in the sibling roots is the **1.21.11**
-   build — confirm a 1.21.1 build first (it must load on MC 1.21.1).
-2. `JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew runClient`.
-3. Place a full block / object on a `terrainslabs` bottom slab → it should sit flush (−0.5),
+## To live-test (Julia) — environment is now wired
+Already done for you: the MC 1.21.1 jars are in `run/mods/`
+(`terrain_slabs-fabric-3.1.2.jar` + its dep `architectury-13.0.8-fabric.jar`); the project
+loader is bumped to `0.19.2` (TS 3.1.2 requires ≥0.19.2); `MOD_ID` is set to `terrain_slabs`
+(the 1.21.1 mod id/namespace — the 1.21.11 build used `terrainslabs`); and `build.gradle`
+loads these mods via `modLocalRuntime` for `runClient` only (gated out of `runGameTest`,
+whose headless dedicated server aborts on TS's client entrypoints).
+
+1. `JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew runClient`.
+2. Place a full block / object on a `terrain_slabs` bottom slab → it should sit flush (−0.5),
    like on a vanilla bottom slab. Stack another on top → also flush.
+
+NOTE: the dependency is **Architectury**, not midnightlib — that was the 1.21.11 build's dep.
 
 ## First-cut scope / known gaps (iterate live)
 This cut nails the **headline BOTTOM_LIKE direct + column** case. Not yet wired (deliberately,
