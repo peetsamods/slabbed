@@ -17,6 +17,7 @@ public final class SlabbedClient implements ClientModInitializer {
         initGapFillerOverlay();
         initTargetDyOverlay();
         initScreenshotCaptureService();
+        SlabbedShowcaseHarness.init();
     }
 
     private static void initGapFillerOverlay() {
