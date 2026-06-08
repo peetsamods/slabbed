@@ -3,6 +3,7 @@ package com.slabbed.util;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
@@ -142,7 +143,11 @@ public final class SlabSupport {
         if (world == null || pos == null) {
             return false;
         }
-        return isBottomSlab(world.getBlockState(pos.down()));
+        BlockState below = world.getBlockState(pos.down());
+        // Terrain Slabs compat (opt-in; NONE/inert without the mod): a custom BOTTOM_LIKE
+        // surface acts as a bottom slab for direct object support.
+        return isBottomSlab(below)
+                || CompatHooks.customSlabSurfaceKind(below) == CompatSlabSurfaceKind.BOTTOM_LIKE;
     }
 
     /**
@@ -2095,6 +2100,12 @@ public final class SlabSupport {
             if (isBottomSlab(cur)) {
                 return true;
             }
+            // Terrain Slabs compat (opt-in; inert without the mod): a custom BOTTOM_LIKE
+            // surface in the column provides support. Checked before the SlabBlock
+            // early-exit below because TS slabs are SlabBlock instances.
+            if (CompatHooks.customSlabSurfaceKind(cur) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
             if (SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return true;
             }
@@ -2117,6 +2128,12 @@ public final class SlabSupport {
             if (cur.getBlock() instanceof SlabBlock
                     && isAdjacentSideSlabLowered(world, cursor, cur)) {
                 return isBottomSlab(cur) ? -1.0 : -0.5;
+            }
+            // Terrain Slabs compat (opt-in; inert without the mod): a custom BOTTOM_LIKE
+            // surface lowers the column object -0.5, like a vanilla bottom slab. Checked
+            // before the SlabBlock early-exit below (TS slabs are SlabBlock instances).
+            if (CompatHooks.customSlabSurfaceKind(cur) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return -0.5;
             }
             if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return -0.5;
