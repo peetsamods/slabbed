@@ -260,4 +260,71 @@ public final class OffsetRaycastTargetingTest {
         }
         ctx.complete();
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 9. BLOCKER GUARD: a render-zeroed connection block must NOT have its outline
+    //    offset (else the authoritative raycast targets a phantom shape below the
+    //    rendered block). Ported from the 1.21.11 overhaul (commit 39a345e7) and
+    //    adapted to 1.21.1: here a glass PANE is the render-zeroed connection block
+    //    (OffsetBlockStateModel zeroes its dy because it is NOT an
+    //    isBeta35FenceWallVariantContactObject). Fences/walls on 1.21.1 ARE contact
+    //    objects and DO lower flush — that consistent case is covered by the matrix.
+    // ──────────────────────────────────────────────────────────────────────────
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void connectionBlockOutlineNotOffset(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos slab = origin.add(3, 2, 3);
+        world.setBlockState(slab,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        BlockPos pane = slab.up();
+        world.setBlockState(pane, Blocks.GLASS_PANE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        // Fixture: the pane must be an offset-eligible (dy<0) yet render-zeroed
+        // connection block, so the gate's bail is genuinely exercised.
+        double dy = SlabSupport.getYOffset(world, pane, world.getBlockState(pane));
+        ctx.assertTrue(dy < 0.0,
+                "fixture: glass pane on a bottom slab should be offset-eligible (dy<0), got " + dy);
+        ctx.assertFalse(SlabSupport.isBeta35FenceWallVariantContactObject(world.getBlockState(pane)),
+                "fixture: a glass pane must be a render-zeroed (non-contact) connection block");
+
+        VoxelShape outline = world.getBlockState(pane).getOutlineShape(world, pane, ShapeContext.absent());
+        ctx.assertFalse(outline.isEmpty(), "pane outline should be non-empty");
+        double minY = outline.getBoundingBox().minY;
+        ctx.assertTrue(minY >= -1.0e-6,
+                "render-zeroed pane-on-slab outline must NOT be offset below 0 (got minY=" + minY
+                        + "); it renders un-lowered, so the raycast must match");
+        ctx.complete();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 10. TORCH via its OWN offset shape (proves the slab-side comfort union is not
+    //     needed once the nearest-hit raycast is authoritative). Ported from 1.21.11.
+    // ──────────────────────────────────────────────────────────────────────────
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void loweredFloorTorchTargetedViaOwnShape(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos slab = origin.add(3, 2, 3);
+        world.setBlockState(slab,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        BlockPos torch = slab.up();
+        world.setBlockState(torch, Blocks.TORCH.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(world.getBlockState(torch).isOf(Blocks.TORCH), "fixture: torch must survive on slab top");
+
+        double dy = SlabSupport.getYOffset(world, torch, world.getBlockState(torch));
+        ctx.assertTrue(dy == -0.5, "fixture: floor torch on slab should be lowered -0.5, got " + dy);
+
+        // Aim horizontally at the torch column at the lowered comfort-post mid-height.
+        double y = torch.getY() - 0.25;
+        Vec3d eye = v(origin, 3.5, y - origin.getY(), 0.5);
+        Vec3d end = v(origin, 3.5, y - origin.getY(), 7.5);
+        BlockHitResult hit = slabbed(world, eye, end);
+        ctx.assertTrue(hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(torch),
+                "offset-aware raycast should target the lowered floor torch " + torch
+                        + ", got " + hit.getType() + " " + hit.getBlockPos());
+        ctx.complete();
+    }
 }
