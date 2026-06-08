@@ -65,6 +65,17 @@ dependencies {
 
     // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
     // extended to the gametest source set by configureTests { createSourceSet = true })
+
+    // ── Terrain Slabs compat live-testing (optional, auto-detected) ───────────
+    // To live-test the named-surface direct-support compat, drop a 1.21.1-compatible
+    // Terrain Slabs jar (Fabric mod id "terrainslabs") + its midnightlib dependency into
+    // run/mods/, then `./gradlew runClient`. Absent these jars this block is inert and the
+    // build/tests are unaffected (the compat path returns NONE without the mod loaded).
+    // NOTE: countereds_terrain_slabs-2.2.5.jar in the sibling roots is the 1.21.11 build —
+    // confirm a 1.21.1-compatible Terrain Slabs jar before relying on it.
+    fileTree(dir: "${projectDir}/run/mods", include: ["*terrain*slab*.jar", "*midnightlib*.jar"]).each { jar ->
+        modLocalRuntime files(jar)
+    }
 }
 
 processResources {

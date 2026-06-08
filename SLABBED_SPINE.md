@@ -150,3 +150,17 @@ combined-slab chain; (2) window/cull fix (BlockRenderInfoCullMixin, absent on 1.
 tmp/) — deliberately deferred so the live trace tooling stays available for Julia's
 morning confirmation; (4) optional ServerInteractBlockHitToleranceMixin narrowing
 (post-live-confirm only); (5) merge story onto port/mc-1.21.1 (Julia's WIP likely dissolved).
+
+---
+
+## Savepoint 2026-06-08 — Terrain Slabs named-surface direct support (first cut) [headless-green]
+
+Branch `claude/1211-terrain-slabs-named-surface` (off the overhaul branch). Added the
+named-surface direct-support compat: CompatSlabSurfaceKind enum + TerrainSlabsCompat.customSlabSurfaceKind
++ CompatHooks dispatch (from shipped 0.3.0-beta.1, MOD_ID `terrainslabs`), and three gated
+additive extensions in SlabSupport (hasBottomSlabBelow, hasSlabInColumn, slabColumnYOffset)
+so objects/columns on a TS BOTTOM_LIKE surface lower −0.5 via the existing proven path.
+build.gradle auto-detects a TS jar in run/mods. Compiles + All 37 server gametests pass
+(inert without the mod → non-TS path byte-identical → no regression). NOT live-confirmed:
+needs a 1.21.1-compatible Terrain Slabs jar + runClient. First-cut gaps (iterate live):
+TOP_LIKE/DOUBLE_LIKE, vanilla-slab-on-TS, double-block upper. See TERRAIN_SLABS_COMPAT.md.
