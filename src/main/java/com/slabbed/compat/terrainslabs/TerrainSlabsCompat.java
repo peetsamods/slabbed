@@ -18,7 +18,10 @@ public final class TerrainSlabsCompat {
     private TerrainSlabsCompat() {
     }
 
-    public static final String MOD_ID = "terrainslabs";
+    // MC 1.21.1 build of Countered's Terrain Slabs (terrain_slabs-fabric-3.x) uses mod id
+    // + block namespace "terrain_slabs" (underscore). The 1.21.11 build (2.2.5) used
+    // "terrainslabs" — this port targets the 1.21.1 mod id.
+    public static final String MOD_ID = "terrain_slabs";
     private static final boolean LOADED = FabricLoader.getInstance().isModLoaded(MOD_ID);
 
     /** Returns true if slab offsets should be skipped for this state. */
