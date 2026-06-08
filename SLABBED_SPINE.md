@@ -122,3 +122,31 @@ Unexpected live lane mismatch, any gameplay edit, or any non-doc file touched.
 - Do not move release tags unless explicitly running release correction.
 - Do not use dirty/archive roots unless recovery is explicitly requested.
 - Do not edit multiple layers in one slice.
+
+---
+
+## Savepoint 2026-06-07 (overnight, autonomous) — 1.21.1 TARGETING OVERHAUL ACTIVATED
+
+Branch: `claude/1211-targeting-overhaul-activate` (off `43b5eadc` → off committed HEAD
+`20a5ac28`). Commit: `73a0af4b`. NOT pushed, NOT merged, savepoint `94a5643e` untouched.
+
+Activated the offset-aware nearest-hit raycast as the single 1.21.1 targeting authority
+(mirrors proven 1.21.11 overhaul `39a345e7`); deleted the old DDA-rescue lane
+(GameRendererCrosshairRetargetMixin 2786L + LoweredSideSlabRetargeter 249L); stripped the
+slab-torch comfort overlay; added the fence/wall/pane outline gate (mirrors
+OffsetBlockStateModel.emitBlockQuads exactly — on 1.21.1 panes are render-zeroed,
+fences/walls are contact objects that lower flush); ported the 2 omitted server gametests.
+KEPT ServerInteractBlockHitToleranceMixin (load-bearing server placement, NOT a targeting
+tolerance) + BlockItemPlacementIntentMixin. Net −2960 lines.
+
+Proof (headless): `runGameTest` → All 37 required tests pass (35 + 2 ported). `javap` on
+yarn `GameRenderer.findCrosshairTarget` → exactly one `Entity.raycast(DFZ)` so the
+`@Redirect` binds uniquely. NOT live-confirmed (fabric-client-gametest broken on 1.21.1) →
+final client-pick acceptance is Julia's `runClient`. See branch `HANDOFF.md`.
+
+Next legal slices (separate, in order): (1) Julia live `runClient` accept + re-prove the
+combined-slab chain; (2) window/cull fix (BlockRenderInfoCullMixin, absent on 1.21.1);
+(3) cleanup-to-parity (gate-off trace mixins + jar exclude, hot-path println, gitignore
+tmp/) — deliberately deferred so the live trace tooling stays available for Julia's
+morning confirmation; (4) optional ServerInteractBlockHitToleranceMixin narrowing
+(post-live-confirm only); (5) merge story onto port/mc-1.21.1 (Julia's WIP likely dissolved).
