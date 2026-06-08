@@ -73,10 +73,16 @@ dependencies {
     // Terrain Slabs jar (Fabric mod id "terrain_slabs") + its Architectury dependency into
     // run/mods/, then `./gradlew runClient`. Absent these jars this block is inert and the
     // build/tests are unaffected (the compat path returns NONE without the mod loaded).
-    // NOT loaded into runGameTest: Terrain Slabs has client entrypoints that abort a
-    // headless dedicated-server run, so we skip the wiring whenever a gametest task runs.
-    def slabbedRunningGameTest = gradle.startParameter.taskNames.any { it.toLowerCase().contains("gametest") }
-    if (!slabbedRunningGameTest) {
+    // NOT loaded into the headless SERVER gametest (runGameTest): Terrain Slabs has client
+    // entrypoints that abort a dedicated-server run. The CLIENT harness (runClientGameTest)
+    // and runClient DO load it (they're real clients) — needed e.g. by the screenshot
+    // showcase route. So skip the wiring only for a server gametest task ("gametest" without
+    // "client").
+    def slabbedRunningServerGameTest = gradle.startParameter.taskNames.any {
+        def t = it.toLowerCase()
+        t.contains("gametest") && !t.contains("client")
+    }
+    if (!slabbedRunningServerGameTest) {
         fileTree(dir: "${projectDir}/run/mods", include: ["*terrain*slab*.jar", "*architectury*.jar", "*midnightlib*.jar"]).each { jar ->
             modLocalRuntime files(jar)
         }
