@@ -4,7 +4,13 @@
   "version": "1.0.0",
   "name": "Slabbed GameTest",
   "environment": "*",
+  "provides": [
+    "terrain_slabs"
+  ],
   "entrypoints": {
+    "main": [
+      "com.slabbed.test.TerrainSlabsTestShim"
+    ],
     "client": [
       "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint"
     ],
@@ -12,7 +18,8 @@
       "com.slabbed.test.Mc1211GoblinRouteCanaryGameTest",
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest",
-      "com.slabbed.test.OffsetRaycastTargetingTest"
+      "com.slabbed.test.OffsetRaycastTargetingTest",
+      "com.slabbed.test.TerrainSlabsCompatTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",
