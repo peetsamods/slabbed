@@ -1598,6 +1598,116 @@ public final class SlabSupport {
         return hasLoweredSlabLaneSupport(world, slabPos, slabState);
     }
 
+    // ── Terrain Slabs combining / mixed-slab compound (directCustom lane) ─────────────
+    // Ported from the 1.21.11 reference. Lets a vanilla slab (or object) sitting on a
+    // Terrain Slabs surface lower onto it (-0.5, "combine into a flush double"), and an
+    // object on a MIXED stack (vanilla bottom slab that is itself lowered) compound to -1.0.
+    // Vanilla-bottom-slab-only as the compound source — terrain-on-terrain stays deferred.
+    private static BlockState getBlockStateOrNull(BlockView world, BlockPos pos) {
+        return (world == null || pos == null) ? null : world.getBlockState(pos);
+    }
+
+    private static boolean isVanillaDirectCustomSlabSubject(BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock) || !state.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        var id = Registries.BLOCK.getId(state.getBlock());
+        return id != null && "minecraft".equals(id.getNamespace());
+    }
+
+    private static boolean isDirectCustomSlabSupportSubject(BlockView world, BlockPos pos, BlockState state) {
+        if (state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
+                || isThinTopLayer(state)
+                || !state.getFluidState().isEmpty()
+                || CompatHooks.shouldSkipOffset(state)) {
+            return false;
+        }
+        return isVanillaDirectCustomSlabSubject(state) || isSlabSitCandidate(world, pos, state);
+    }
+
+    private static boolean hasDirectCustomBottomLikeSupportColumn(BlockView world, BlockPos supportPos) {
+        BlockPos cursor = supportPos;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState supportState = getBlockStateOrNull(world, cursor);
+            if (supportState == null) {
+                return false;
+            }
+            if (CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
+            if (isDirectCustomSlabSupportSubject(world, cursor, supportState)) {
+                cursor = cursor.down();
+                continue;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    /**
+     * True when {@code state} at {@code pos} ultimately rests on a Terrain Slabs BOTTOM_LIKE
+     * surface (directly or through a column of stacked subjects). Handles beds (two columns)
+     * and double-blocks (upper half checks two down).
+     */
+    public static boolean isDirectCustomSlabSupportedObject(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
+            return false;
+        }
+        if (state.contains(Properties.BED_PART) && state.contains(Properties.HORIZONTAL_FACING)) {
+            Direction facing = state.get(Properties.HORIZONTAL_FACING);
+            BedPart part = state.get(Properties.BED_PART);
+            BlockPos otherPos = part == BedPart.FOOT ? pos.offset(facing) : pos.offset(facing.getOpposite());
+            return hasDirectCustomBottomLikeSupportColumn(world, pos.down())
+                    || hasDirectCustomBottomLikeSupportColumn(world, otherPos.down());
+        }
+        BlockPos supportPos = pos.down();
+        if (state.contains(Properties.DOUBLE_BLOCK_HALF)
+                && state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
+            BlockState lowerState = world.getBlockState(pos.down());
+            if (lowerState.getBlock() != state.getBlock()
+                    || !lowerState.contains(Properties.DOUBLE_BLOCK_HALF)
+                    || lowerState.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
+                return false;
+            }
+            supportPos = pos.down(2);
+        }
+        return hasDirectCustomBottomLikeSupportColumn(world, supportPos);
+    }
+
+    private static double directCustomSlabSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        return isDirectCustomSlabSupportedObject(world, pos, state) ? -0.5 : Double.NaN;
+    }
+
+    /**
+     * Recursion-safe rendered dy of a VANILLA bottom-slab support directly beneath an object,
+     * used to compound a mixed-slab lowering (vanilla-bottom-slab-only by design). -0.5 if that
+     * support is itself lowered (anchored / directCustom-on-TS / adjacent-side-lowered), 0.0 if
+     * flush, NaN if not a vanilla bottom slab. Never re-enters getYOffset.
+     */
+    private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos) {
+        BlockState s = getBlockStateOrNull(world, supportPos);
+        if (s == null
+                || !(s.getBlock() instanceof SlabBlock)
+                || !s.contains(SlabBlock.TYPE)
+                || !isBottomSlab(s)
+                || !s.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
+            return -0.5;
+        }
+        double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
+        if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
+            return directCustomDy;
+        }
+        if (isAdjacentSideSlabLowered(world, supportPos, s)) {
+            return -0.5;
+        }
+        return 0.0;
+    }
+
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
@@ -1800,6 +1910,29 @@ public final class SlabSupport {
         double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
         if (Double.isFinite(ordinaryFullBlockContactDy)) {
             return ordinaryFullBlockContactDy;
+        }
+
+        // Terrain Slabs combining / mixed-slab compound: an object or vanilla slab resting on a
+        // Terrain Slabs surface lowers -0.5 onto it; if the support directly below is itself a
+        // lowered vanilla bottom slab (a MIXED slab) the drop compounds to -1.0; a vanilla TOP
+        // slab adds another -0.5. Gated on directCustomSlabSupportDy != NaN, so any column that
+        // is not Terrain-Slabs-backed takes the identical pre-existing path below.
+        double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
+        if (!Double.isNaN(directCustomSurfaceDy)) {
+            double dy = directCustomSurfaceDy;
+            double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
+            if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
+                dy += supportLoweredDy;
+            }
+            if (state.getBlock() instanceof SlabBlock
+                    && state.contains(SlabBlock.TYPE)
+                    && state.get(SlabBlock.TYPE) == SlabType.TOP) {
+                dy += -0.5;
+            }
+            if (dy < -1.0) {
+                dy = -1.0;
+            }
+            return dy;
         }
 
         if (shouldOffset(world, pos, state)) {
