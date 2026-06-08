@@ -86,27 +86,16 @@ public final class TerrainSlabsCompatTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void torchParity(TestContext ctx) { assertParity(ctx, Blocks.TORCH.getDefaultState(), "floor torch"); }
 
-    // Redstone: KNOWN GAP — lowers -0.5 on a vanilla bottom slab but 0.0 on a TS slab.
-    // Non-failing diagnostic: logs the intermediate predicates so the early getYOffsetInner
-    // branch that swallows it can be identified and fixed. TODO: route redstone through the
-    // TS-aware support path. Does not fail the suite.
+    // Redstone wire lowers -0.5 on a Terrain Slabs slab (parity with 1.21.11, and with a
+    // vanilla bottom slab). Now owned by the directCustom lane (redstone is a non-solid
+    // slab-sit subject). This pins the parity so a future lane change can't silently regress it.
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
-    public void redstoneWireDiag(TestContext ctx) {
+    public void redstoneWireLowersOnTs(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
-        BlockPos tsSlab = origin.add(3, 2, 3);
-        w.setBlockState(tsSlab, tsBottomSlab(), Block.NOTIFY_LISTENERS);
-        BlockPos r = tsSlab.up();
-        w.setBlockState(r, Blocks.REDSTONE_WIRE.getDefaultState(), Block.NOTIFY_LISTENERS);
-        BlockState rs = w.getBlockState(r);
-        boolean shouldOffset = SlabSupport.shouldOffset(w, r, rs);
-        boolean hasBottomBelow = SlabSupport.hasBottomSlabBelow(w, r);
-        boolean directSupport = SlabSupport.isDirectObjectSupportSurface(w, tsSlab, w.getBlockState(tsSlab));
-        double tsDy = SlabSupport.getYOffset(w, r, rs);
-        System.out.println("[TS_REDSTONE_DIAG] shouldOffset=" + shouldOffset
-                + " hasBottomSlabBelow=" + hasBottomBelow
-                + " directSupportSurface=" + directSupport
-                + " tsDy=" + tsDy + " (vanilla bottom slab gives -0.5)");
+        double dy = stackDy(w, ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3),
+                tsBottomSlab(), Blocks.REDSTONE_WIRE.getDefaultState());
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "redstone wire on a Terrain Slabs slab should lower -0.5 (got " + dy + ")");
         ctx.complete();
     }
 
