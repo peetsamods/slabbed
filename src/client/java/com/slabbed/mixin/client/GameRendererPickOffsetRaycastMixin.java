@@ -23,13 +23,14 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * <p>This redirect replaces <em>only</em> that block raycast with the offset-aware
  * nearest-hit raycast, preserving the vanilla block-vs-entity merge and reach clamp.
  *
- * <p><b>NOT REGISTERED in slabbed.client.mixins.json.</b> This is a ready-to-wire
- * candidate. Activating the 1.21.1 overhaul means: register this mixin, remove
- * {@code GameRendererCrosshairRetargetMixin} (+ {@code LoweredSideSlabRetargeter}) and
- * the slab-side comfort overlays from {@code SlabSupportStateMixin}, and add the
- * fence/wall/pane outline gate — mirroring commit 39a345e7 on the 1.21.11 branch.
- * The {@link SlabbedOffsetRaycast} util it depends on is already verified on 1.21.1 by
- * the server gametests in {@code OffsetRaycastTargetingTest}.
+ * <p><b>ACTIVE</b> (registered in slabbed.client.mixins.json). The 1.21.1 overhaul
+ * cutover registered this mixin, removed {@code GameRendererCrosshairRetargetMixin}
+ * (+ {@code LoweredSideSlabRetargeter}) and the slab-side comfort overlay from
+ * {@code SlabSupportStateMixin}, and added the fence/wall/pane outline gate —
+ * mirroring commit 39a345e7 on the 1.21.11 branch. The {@link SlabbedOffsetRaycast}
+ * util it depends on is verified on 1.21.1 by the server gametests in
+ * {@code OffsetRaycastTargetingTest}. Final client-pick acceptance is Julia's live
+ * {@code runClient} (fabric-client-gametest is broken on 1.21.1).
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererPickOffsetRaycastMixin {

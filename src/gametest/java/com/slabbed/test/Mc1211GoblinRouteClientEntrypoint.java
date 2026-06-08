@@ -37,7 +37,6 @@ import net.minecraft.world.level.LevelInfo;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.OffsetBlockStateModel;
-import com.slabbed.client.runtime.LoweredSideSlabRetargeter;
 import com.slabbed.util.SlabSupport;
 
 /**
@@ -3650,13 +3649,11 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
                 client.player));
-        BlockHitResult sideRescueCandidate = LoweredSideSlabRetargeter.findLoweredSideSlabRetarget(
-                client.world,
-                client.player,
-                eye,
-                end,
-                vanillaTarget,
-                true);
+        // (Targeting overhaul) The old lowered-side rescue lane is deleted; the
+        // offset-aware nearest-hit raycast (GameRendererPickOffsetRaycastMixin /
+        // SlabbedOffsetRaycast) now handles this case geometrically. This sampler is
+        // diagnostic-only, so the rescue candidate is always null (NO_CANDIDATE).
+        BlockHitResult sideRescueCandidate = null;
         client.gameRenderer.updateCrosshairTarget(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         boolean vanillaLoweredSlabFace = vanillaTarget instanceof BlockHitResult vanillaBlock
