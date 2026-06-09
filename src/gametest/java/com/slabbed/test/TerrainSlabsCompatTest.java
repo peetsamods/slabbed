@@ -170,6 +170,40 @@ public final class TerrainSlabsCompatTest {
         ctx.complete();
     }
 
+    // Fence "split" fix: a fence lowered onto a Terrain Slab and a ground fence at the same Y
+    // sit at different visual heights, so they must read as a stepped pair (connection broken).
+    // Two ground fences at the same height must NOT (control).
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void fenceConnectionBreaksAcrossTsStep(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos groundBase = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(groundBase, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos groundFence = groundBase.up();
+        w.setBlockState(groundFence, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        // Adjacent column: a TS slab + a fence lowered onto it (same Y as the ground fence).
+        BlockPos tsBase = groundBase.east();
+        w.setBlockState(tsBase, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        BlockPos loweredFence = tsBase.up();
+        w.setBlockState(loweredFence, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        ctx.assertTrue(
+                SlabSupport.isSteppedConnectingNeighbor(w, groundFence, w.getBlockState(groundFence),
+                        loweredFence, w.getBlockState(loweredFence)),
+                "a ground fence and a fence lowered onto a TS slab (same Y) must be a stepped pair");
+
+        // Control: a second ground fence at the same height must NOT be stepped.
+        BlockPos groundBase2 = groundBase.west();
+        w.setBlockState(groundBase2, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos groundFence2 = groundBase2.up();
+        w.setBlockState(groundFence2, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(
+                !SlabSupport.isSteppedConnectingNeighbor(w, groundFence, w.getBlockState(groundFence),
+                        groundFence2, w.getBlockState(groundFence2)),
+                "two ground fences at the same height must NOT be a stepped pair");
+        ctx.complete();
+    }
+
     // Contract #2: an object on a MIXED slab (vanilla bottom slab capping a TS slab) compounds to -1.0.
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void objectOnMixedTsSlabCompounds(TestContext ctx) {

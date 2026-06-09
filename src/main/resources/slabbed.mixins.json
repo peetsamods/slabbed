@@ -16,7 +16,9 @@
     "BlockItemPlacementIntentMixin",
     "ServerInteractBlockHitToleranceMixin",
     "BlockOnPlacedAnchorMixin",
-    "BlockOnStateReplacedAnchorMixin"
+    "BlockOnStateReplacedAnchorMixin",
+    "FencePaneSlabConnectionMixin",
+    "WallSlabConnectionMixin"
   ],
   "client": [],
   "injectors": { "defaultRequire": 1 }
