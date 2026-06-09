@@ -153,6 +153,23 @@ public final class TerrainSlabsCompatTest {
         ctx.complete();
     }
 
+    // DODO fix: a perpendicular slab placed beside the TOP of a 2-block stack on a TS slab must
+    // inherit the lowering (not sit +0.5 high leaving a see-through gap).
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void sideSlabBesideTsStackLowers(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(base.up(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(base.up(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos sidePos = base.up(2).east();
+        w.setBlockState(sidePos, vanillaSlab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        double dy = SlabSupport.getYOffset(w, sidePos, w.getBlockState(sidePos));
+        ctx.assertTrue(dy < -1.0e-6,
+                "side slab beside a 2-block stack on a Terrain Slab must lower (no +0.5 DODO), got dy=" + dy);
+        ctx.complete();
+    }
+
     // Contract #2: an object on a MIXED slab (vanilla bottom slab capping a TS slab) compounds to -1.0.
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void objectOnMixedTsSlabCompounds(TestContext ctx) {
