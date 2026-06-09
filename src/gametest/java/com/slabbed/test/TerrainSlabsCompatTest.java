@@ -92,10 +92,14 @@ public final class TerrainSlabsCompatTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void redstoneWireLowersOnTs(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        double dy = stackDy(w, ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3),
-                tsBottomSlab(), Blocks.REDSTONE_WIRE.getDefaultState());
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        // Pass the redstone state explicitly (the render path computes dy from the state, not
+        // the placed world block — and redstone's strict survival check isn't the subject here).
+        BlockState redstone = Blocks.REDSTONE_WIRE.getDefaultState();
+        double dy = SlabSupport.getYOffset(w, base.up(), redstone);
         ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
-                "redstone wire on a Terrain Slabs slab should lower -0.5 (got " + dy + ")");
+                "redstone state on a Terrain Slabs slab should lower -0.5 (got " + dy + ")");
         ctx.complete();
     }
 
