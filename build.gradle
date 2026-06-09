@@ -118,8 +118,7 @@ def slabbedForwardedRunPropertyArgs = {
                 && (key.startsWith("slabbed.mc1211.")
                 || key == "slabbed.bsfb.live.trace"
                 || key == "slabbed.disableStepCull"
-                || key == "slabbed.targetDyOverlay"
-                || key == "slabbed.tsInheritLowering")
+                || key == "slabbed.targetDyOverlay")
     }.collect { key, value -> "-D${key}=${value}" }
 }
 
