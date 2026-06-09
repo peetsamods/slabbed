@@ -357,10 +357,83 @@ public final class MatrixCoverageTest {
         ctx.complete();
     }
 
+    // Panes are FORCE-ZEROED in OffsetBlockStateModel (they are not a Beta 3.5 fence/wall variant),
+    // so a "lowered onto a TS slab" pane and a ground pane both RENDER at full height — they are NOT
+    // a stepped pair. The step check must mirror that render reality (was a false break / BUG 3).
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
-    public void paneStepsAcrossLoweredNeighbor(TestContext ctx) {
-        ctx.assertTrue(steppedLoweredVsGround(ctx.getWorld(), origin(ctx), Blocks.GLASS_PANE.getDefaultState()),
-                "ground pane vs pane lowered onto a TS slab must be a stepped pair");
+    public void paneNeverStepsAcrossLoweredNeighbor(TestContext ctx) {
+        ctx.assertTrue(!steppedLoweredVsGround(ctx.getWorld(), origin(ctx), Blocks.GLASS_PANE.getDefaultState()),
+                "panes render force-zeroed, so a ground pane and a TS-supported pane render at the same "
+                        + "height and must NOT be a stepped pair");
+        ctx.complete();
+    }
+
+    // ── BUG 2 (fence/wall): a wall lowered onto a VANILLA bottom slab and a wall lowered onto a TS
+    //    slab BOTH render at the SAME visual offset (raw getYOffset; walls are Beta 3.5 variants).
+    //    They must NOT be a stepped pair. The old connectingBlockVisualDy gated on the TS-only
+    //    isDirectCustomSlabSupportedObject, so the vanilla-slab wall reported 0.0 vs the TS wall's
+    //    -0.5 and the connection was falsely broken. (wallOnTsAndWallOnVanillaSameHeightNotStepped_BUG)
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void wallOnTsAndWallOnVanillaSameHeightNotStepped(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = origin(ctx);
+        BlockState wall = Blocks.COBBLESTONE_WALL.getDefaultState();
+
+        // Column A: wall lowered onto a VANILLA bottom slab.
+        w.setBlockState(base, vSlab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos wallOnVanilla = base.up();
+        w.setBlockState(wallOnVanilla, wall, Block.NOTIFY_LISTENERS);
+
+        // Column B (adjacent): wall lowered onto a TS bottom slab — same Y, same rendered offset.
+        BlockPos tsBase = base.east();
+        w.setBlockState(tsBase, tsSlab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos wallOnTs = tsBase.up();
+        w.setBlockState(wallOnTs, wall, Block.NOTIFY_LISTENERS);
+
+        // Sanity: both render at the same visual dy.
+        assertDy(ctx,
+                SlabSupport.connectingBlockVisualDy(w, wallOnVanilla, w.getBlockState(wallOnVanilla)),
+                SlabSupport.connectingBlockVisualDy(w, wallOnTs, w.getBlockState(wallOnTs)),
+                "wall on a vanilla slab and a wall on a TS slab must report the SAME visual dy");
+
+        ctx.assertTrue(
+                !SlabSupport.isSteppedConnectingNeighbor(w, wallOnVanilla, w.getBlockState(wallOnVanilla),
+                        wallOnTs, w.getBlockState(wallOnTs)),
+                "a wall on a vanilla slab and a wall on a TS slab render at the same height and must "
+                        + "NOT be a stepped pair");
+        ctx.complete();
+    }
+
+    // ── BUG 3 (panes): a pane "supported" by a TS slab and a ground pane both render force-zeroed,
+    //    so an aligned pane connection must survive across the TS step. The old code reported the
+    //    TS-supported pane at -0.5 and falsely broke it. (paneConnectionBreaksAcrossTsStep_PROBE)
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void paneConnectionSurvivesAcrossTsStep(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos groundBase = origin(ctx);
+        BlockState pane = Blocks.GLASS_PANE.getDefaultState();
+
+        // Ground pane on stone.
+        w.setBlockState(groundBase, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos groundPane = groundBase.up();
+        w.setBlockState(groundPane, pane, Block.NOTIFY_LISTENERS);
+
+        // Adjacent column: a pane sitting on a TS bottom slab.
+        BlockPos tsBase = groundBase.east();
+        w.setBlockState(tsBase, tsSlab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos tsPane = tsBase.up();
+        w.setBlockState(tsPane, pane, Block.NOTIFY_LISTENERS);
+
+        // Both panes render force-zeroed → same visual dy (0.0).
+        assertDy(ctx, SlabSupport.connectingBlockVisualDy(w, groundPane, w.getBlockState(groundPane)), 0.0,
+                "a ground pane renders force-zeroed (dy 0.0)");
+        assertDy(ctx, SlabSupport.connectingBlockVisualDy(w, tsPane, w.getBlockState(tsPane)), 0.0,
+                "a pane on a TS slab also renders force-zeroed (dy 0.0)");
+
+        ctx.assertTrue(
+                !SlabSupport.isSteppedConnectingNeighbor(w, groundPane, w.getBlockState(groundPane),
+                        tsPane, w.getBlockState(tsPane)),
+                "an aligned pane connection must survive across a TS step (panes never visually step)");
         ctx.complete();
     }
 

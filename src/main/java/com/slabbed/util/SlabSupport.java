@@ -1725,14 +1725,33 @@ public final class SlabSupport {
     }
 
     /**
-     * Visual dy of a connecting block (fence/wall/pane), mirroring the render path: these are
-     * only visually lowered when they sit on a custom Terrain Slabs direct-support surface,
-     * never merely because {@code getYOffset} reports a slab-relative offset. Keeps the
-     * stepped-connection check in lock-step with what is actually drawn.
+     * Visual dy of a connecting block (fence/wall/pane), mirroring EXACTLY what
+     * {@link com.slabbed.client.model.OffsetBlockStateModel#emitBlockQuads} draws so the
+     * stepped-connection check stays in lock-step with the render path:
+     * <ul>
+     *   <li>Fence/wall ({@link #isBeta35FenceWallVariantContactObject}): the RAW
+     *       {@link #getYOffset}. A wall lowered onto a vanilla bottom slab and a wall lowered
+     *       onto a Terrain Slabs surface BOTH render at the same offset, so both report it here.</li>
+     *   <li>Pane ({@link PaneBlock}): FORCED 0.0. The render path force-zeroes panes (they are
+     *       not a Beta 3.5 fence/wall variant), so a pane is never visually stepped against
+     *       another pane regardless of its slab support.</li>
+     *   <li>Anything else: the raw {@link #getYOffset} (unchanged legacy behavior).</li>
+     * </ul>
+     * Previously this gated on {@link #isDirectCustomSlabSupportedObject} (Terrain-Slabs-only),
+     * which desynced from the render path: a fence/wall on a VANILLA slab and a pane on a TS slab
+     * were mis-classified, falsely breaking connections between posts that render at one height.
      */
     public static double connectingBlockVisualDy(BlockView world, BlockPos pos, BlockState state) {
         double dy = getYOffset(world, pos, state);
-        if (dy != 0.0 && !isDirectCustomSlabSupportedObject(world, pos, state)) {
+        if (dy == 0.0) {
+            return 0.0;
+        }
+        Block block = state.getBlock();
+        // OffsetBlockStateModel force-zeroes the render dy for any fence/wall/pane that is NOT a
+        // proven Beta 3.5 fence/wall variant (this excludes ALL panes). Mirror that exactly so the
+        // step check sees the same height the block is actually drawn at.
+        if ((block instanceof FenceBlock || block instanceof WallBlock || block instanceof PaneBlock)
+                && !isBeta35FenceWallVariantContactObject(state)) {
             return 0.0;
         }
         return dy;
