@@ -30,12 +30,18 @@ public final class SlabbedClient implements ClientModInitializer {
     }
 
     private static void initTargetDyOverlay() {
-        if (!SlabbedClientFlags.TARGET_DY_OVERLAY) {
-            return;
-        }
-        invokeStaticInit(
-                "com.slabbed.client.TargetDyOverlay",
-                "target dy overlay");
+        // Always register the overlay + the /slabdy toggle (the overlay self-gates on its
+        // runtime enabled flag, which starts from -Dslabbed.targetDyOverlay).
+        TargetDyOverlay.init();
+        net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback.EVENT.register(
+                (dispatcher, access) -> dispatcher.register(
+                        net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal("slabdy")
+                                .executes(ctx -> {
+                                    boolean on = TargetDyOverlay.toggle();
+                                    ctx.getSource().sendFeedback(net.minecraft.text.Text.literal(
+                                            "[slabbed] target dy overlay " + (on ? "ON" : "OFF")));
+                                    return 1;
+                                })));
     }
 
     private static void initScreenshotCaptureService() {
