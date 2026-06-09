@@ -36,7 +36,9 @@ import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Properties;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.BlockView;
@@ -715,9 +717,28 @@ public final class SlabSupport {
             return -0.5;
         }
 
+        // Terrain Slabs combining / mixed-slab compound: an object (or vanilla slab) resting on a
+        // Terrain Slabs surface lowers -0.5 onto it; if the support directly below is itself a
+        // lowered vanilla bottom slab (a MIXED slab — vanilla bottom slab capping a TS slab) the
+        // drop compounds to -1.0; a vanilla TOP slab adds another -0.5. Gated on
+        // directCustomSlabSupportDy != NaN, so any column that is not Terrain-Slabs-backed takes
+        // the identical pre-existing path below.
         double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
         if (!Double.isNaN(directCustomSurfaceDy)) {
-            return directCustomSurfaceDy;
+            double dy = directCustomSurfaceDy;
+            double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
+            if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
+                dy += supportLoweredDy;
+            }
+            if (state.getBlock() instanceof SlabBlock
+                    && state.contains(SlabBlock.TYPE)
+                    && state.get(SlabBlock.TYPE) == SlabType.TOP) {
+                dy += -0.5;
+            }
+            if (dy < -1.0) {
+                dy = -1.0;
+            }
+            return dy;
         }
 
         if (shouldOffset(world, pos, state)) {
@@ -918,9 +939,54 @@ public final class SlabSupport {
         return -0.5;
     }
 
+    /**
+     * Recursion-safe rendered dy of a VANILLA bottom-slab support directly beneath an object,
+     * used to compound a mixed-slab lowering (a vanilla bottom slab capping a Terrain Slabs
+     * surface). Returns -0.5 if that vanilla support is itself lowered (anchored or
+     * adjacent-side-lowered), 0.0 if it is a flush vanilla bottom slab, and NaN if the support
+     * is not a vanilla bottom slab. Never re-enters {@link #getYOffset} (no recursion risk).
+     */
+    private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos) {
+        BlockState s = getBlockStateOrNull(world, supportPos);
+        if (s == null
+                || !(s.getBlock() instanceof SlabBlock)
+                || !s.contains(SlabBlock.TYPE)
+                || !isBottomSlab(s)
+                || !s.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
+            return -0.5;
+        }
+        // A vanilla bottom slab that itself sits on a Terrain Slabs surface (a MIXED slab) is
+        // lowered -0.5 by the directCustom lane; the object above it must inherit that drop.
+        double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
+        if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
+            return directCustomDy;
+        }
+        if (isAdjacentSideSlabLowered(world, supportPos, s)) {
+            return -0.5;
+        }
+        return 0.0;
+    }
+
+    /**
+     * True for a VANILLA (minecraft-namespace) slab — the only slab kind allowed to be a
+     * directCustom subject. This lets a vanilla slab placed on a Terrain Slabs surface lower
+     * onto it ("combine into a flush double"), while Terrain Slabs' own slabs are excluded so
+     * the existing skip-offset asymmetry is unchanged.
+     */
+    private static boolean isVanillaDirectCustomSlabSubject(BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock) || !state.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        Identifier id = Registries.BLOCK.getId(state.getBlock());
+        return id != null && "minecraft".equals(id.getNamespace());
+    }
+
     private static boolean isDirectCustomSlabSupportSubject(BlockView world, BlockPos pos, BlockState state) {
         if (state.isAir()
-                || state.getBlock() instanceof SlabBlock
+                || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
                 || isThinTopLayer(state)
                 || !state.getFluidState().isEmpty()
                 || CompatHooks.shouldSkipOffset(state)) {
@@ -938,7 +1004,7 @@ public final class SlabSupport {
         // fixes the beta 4.1 culling blocker, while objects still lower exactly as they
         // do on vanilla slabs. Terrain-Slabs-only: vanilla slab behaviour and generic
         // Slabbed support are untouched.
-        return isSlabSitCandidate(world, pos, state);
+        return isVanillaDirectCustomSlabSubject(state) || isSlabSitCandidate(world, pos, state);
     }
 
     /**
@@ -967,6 +1033,12 @@ public final class SlabSupport {
             if (isBottomSlab(cur)) {
                 return true;
             }
+            // Terrain Slabs compat (opt-in; inert without the mod): a custom BOTTOM_LIKE surface
+            // in the column provides support. Checked before the SlabBlock early-exit below
+            // because TS slabs are SlabBlock instances.
+            if (CompatHooks.customSlabSurfaceKind(cur) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
             if (SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return true;
             }
@@ -989,6 +1061,12 @@ public final class SlabSupport {
             if (cur.getBlock() instanceof SlabBlock
                     && isAdjacentSideSlabLowered(world, cursor, cur)) {
                 return isBottomSlab(cur) ? -1.0 : -0.5;
+            }
+            // Terrain Slabs compat (opt-in; inert without the mod): a custom BOTTOM_LIKE surface
+            // lowers the column object -0.5, like a vanilla bottom slab. Checked before the
+            // SlabBlock early-exit below (TS slabs are SlabBlock instances).
+            if (CompatHooks.customSlabSurfaceKind(cur) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return -0.5;
             }
             if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return -0.5;
