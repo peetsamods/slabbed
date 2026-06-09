@@ -301,6 +301,43 @@ public final class TerrainSlabsCompatTest {
         ctx.complete();
     }
 
+    // PROTOTYPE LOGIC (flag-independent): the lowering a skipped TS slab WOULD inherit from a
+    // lowering support column. Validates the fix wired behind -Dslabbed.tsInheritLowering=true,
+    // without needing the flag set. When the flag/asymmetry is adopted, this is the contract.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void tsInheritedLoweringLogic(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        // TS top slab on a vanilla bottom slab (lowering support) → would inherit -0.5.
+        BlockPos a = origin.add(3, 2, 3);
+        w.setBlockState(a, vanillaBottomSlab(), Block.NOTIFY_LISTENERS);
+        BlockPos aTs = a.up();
+        w.setBlockState(aTs, tsTopSlab(), Block.NOTIFY_LISTENERS);
+        double onLowered = SlabSupport.tsInheritedLoweringDy(w, aTs, w.getBlockState(aTs));
+        ctx.assertTrue(Math.abs(onLowered + 0.5) <= EPS,
+                "TS slab on a lowering support would inherit -0.5, got " + onLowered);
+
+        // TS slab on solid ground → no inherited lowering (must not float-fix where there's no step).
+        BlockPos b = origin.add(6, 2, 3);
+        w.setBlockState(b, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos bTs = b.up();
+        w.setBlockState(bTs, tsTopSlab(), Block.NOTIFY_LISTENERS);
+        double onGround = SlabSupport.tsInheritedLoweringDy(w, bTs, w.getBlockState(bTs));
+        ctx.assertTrue(Math.abs(onGround) <= EPS,
+                "TS slab on solid ground inherits nothing, got " + onGround);
+
+        // A vanilla (non-skipped) block returns 0 from this helper (not its domain).
+        BlockPos c = origin.add(9, 3, 3);
+        w.setBlockState(c, vanillaBottomSlab(), Block.NOTIFY_LISTENERS);
+        BlockPos cObj = c.up();
+        w.setBlockState(cObj, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double vanilla = SlabSupport.tsInheritedLoweringDy(w, cObj, w.getBlockState(cObj));
+        ctx.assertTrue(Math.abs(vanilla) <= EPS,
+                "vanilla block is not in tsInheritedLoweringDy's domain, got " + vanilla);
+        ctx.complete();
+    }
+
     // Contract #2: an object on a MIXED slab (vanilla bottom slab capping a TS slab) compounds to -1.0.
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void objectOnMixedTsSlabCompounds(TestContext ctx) {
