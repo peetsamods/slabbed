@@ -429,7 +429,41 @@ public final class SlabSupport {
     public static boolean isBeta35FenceWallVariantContactObject(BlockState state) {
         return state != null
                 && (state.getBlock() instanceof FenceBlock
-                        || state.getBlock() instanceof WallBlock);
+                        || state.getBlock() instanceof WallBlock
+                        || state.getBlock() instanceof PaneBlock);
+    }
+
+    /**
+     * Visual dy of a connecting block (fence/wall/pane), as used by the stepped-connection
+     * check. Connecting blocks are only ever treated as visually lowered on a custom Terrain
+     * Slabs direct-support surface — which this branch does not have yet — so any slab-relative
+     * offset collapses to 0 here. (When TS compat lands on canonical, gate the collapse on the
+     * TS direct-support predicate so the check activates, exactly as on the TS branch.)
+     */
+    public static double connectingBlockVisualDy(BlockView world, BlockPos pos, BlockState state) {
+        double dy = getYOffset(world, pos, state);
+        if (dy != 0.0) {
+            return 0.0;
+        }
+        return dy;
+    }
+
+    /**
+     * True if {@code neighborState} is a fence/wall/pane sitting at a different visual height
+     * than {@code state} — i.e. one was lowered onto a slab and the other was not. Such a pair
+     * must stay as single posts instead of drawing a connector arm across the height step
+     * (the "split" / illegal fence connection). Cross-family joins are left alone because the
+     * neighbour is not a connecting block here.
+     */
+    public static boolean isSteppedConnectingNeighbor(BlockView world, BlockPos pos, BlockState state,
+                                                      BlockPos neighborPos, BlockState neighborState) {
+        Block neighbor = neighborState.getBlock();
+        if (!(neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof PaneBlock)) {
+            return false;
+        }
+        double selfDy = connectingBlockVisualDy(world, pos, state);
+        double neighborDy = connectingBlockVisualDy(world, neighborPos, neighborState);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
     }
 
     public static boolean isBeta35FenceGateContactObject(BlockState state) {
@@ -1049,14 +1083,22 @@ public final class SlabSupport {
             return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
                     CompoundSlabRemapDecision.rejected(sourcePos, null, null, "missing_context"));
         }
-        if (sourceState.getBlock() instanceof SlabBlock
-                || !SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                || !SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos)
-                || Math.abs(getYOffset(world, sourcePos, sourceState) + 1.0d) > 1.0e-6d) {
+        boolean compoundFullBlockSource = !(sourceState.getBlock() instanceof SlabBlock)
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos)
+                && Math.abs(getYOffset(world, sourcePos, sourceState) + 1.0d) <= 1.0e-6d;
+        boolean compoundVisibleSlabLaneSource = sourceState.getBlock() instanceof SlabBlock
+                && isCompoundVisibleSlabLaneOwner(world, sourcePos, sourceState)
+                && Math.abs(getYOffset(world, sourcePos, sourceState) + 1.0d) <= 1.0e-6d;
+        if (!compoundFullBlockSource && !compoundVisibleSlabLaneSource) {
             return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
                     CompoundSlabRemapDecision.rejected(sourcePos, null, null, "source_not_compound_full_block_dy_-1"));
         }
         if (intendedDirection == Direction.UP) {
+            if (!compoundFullBlockSource) {
+                return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
+                        CompoundSlabRemapDecision.rejected(sourcePos, null, null, "source_not_compound_full_block_dy_-1"));
+            }
             BlockPos candidatePlacementPos = sourcePos.up();
             BlockState candidateState = world.getBlockState(candidatePlacementPos);
             if (!candidateState.isAir()) {
