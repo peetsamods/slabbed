@@ -19,7 +19,8 @@
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest",
       "com.slabbed.test.OffsetRaycastTargetingTest",
-      "com.slabbed.test.TerrainSlabsCompatTest"
+      "com.slabbed.test.TerrainSlabsCompatTest",
+      "com.slabbed.test.MatrixCoverageTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",
