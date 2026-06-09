@@ -68,12 +68,16 @@ public final class SlabbedShowcaseHarness {
     private SlabbedShowcaseHarness() {
     }
 
+    private static final String CULL_PROPERTY = "slabbed.mc1211.cullShowcase";
+    private static boolean cullMode;
+
     public static void init() {
-        if (!Boolean.getBoolean(PROPERTY)) {
+        if (!Boolean.getBoolean(PROPERTY) && !Boolean.getBoolean(CULL_PROPERTY)) {
             return;
         }
+        cullMode = Boolean.getBoolean(CULL_PROPERTY);
         ClientTickEvents.END_CLIENT_TICK.register(SlabbedShowcaseHarness::onTick);
-        System.out.println("[SLABBED_SHOWCASE] armed");
+        System.out.println("[SLABBED_SHOWCASE] armed cullMode=" + cullMode);
     }
 
     private static void onTick(MinecraftClient client) {
@@ -134,12 +138,29 @@ public final class SlabbedShowcaseHarness {
 
         BlockPos o = origin;
         // Elevated diagonal overview looking across the whole 6x10 grid (tight framing).
-        double camX = o.getX() - 0.5;
-        double camEyeY = o.getY() + 6.2;
-        double camZ = o.getZ() - 1.5;
-        double tgtX = o.getX() + 4.2;
-        double tgtY = o.getY() + 0.5;
-        double tgtZ = o.getZ() + 5.5;
+        double camX;
+        double camEyeY;
+        double camZ;
+        double tgtX;
+        double tgtY;
+        double tgtZ;
+        if (cullMode) {
+            // Near-horizontal look WEST, eye level inside the exposed lower-half strip,
+            // so the see-through "window" on the lowered cubes' east faces is dead ahead.
+            camX = o.getX() + 3.5;
+            camEyeY = o.getY() + 0.78;
+            camZ = o.getZ() + 2.0;
+            tgtX = o.getX() - 1.0;
+            tgtY = o.getY() + 0.78;
+            tgtZ = o.getZ() + 2.0;
+        } else {
+            camX = o.getX() - 0.5;
+            camEyeY = o.getY() + 6.2;
+            camZ = o.getZ() - 1.5;
+            tgtX = o.getX() + 4.2;
+            tgtY = o.getY() + 0.5;
+            tgtZ = o.getZ() + 5.5;
+        }
         double dx = tgtX - camX;
         double dy = tgtY - camEyeY;
         double dz = tgtZ - camZ;
@@ -179,7 +200,34 @@ public final class SlabbedShowcaseHarness {
         return server.getWorld(client.world.getRegistryKey());
     }
 
+    // Reproduces the see-through "doom window": a lowered opaque cube whose exposed
+    // lower-half east face is wrongly culled by the chunk mesher. A solid cell-east
+    // neighbour triggers vanilla culling; air directly east exposes the strip.
+    private static void buildCullScene(ServerWorld w, BlockPos o) {
+        int rows = 3;
+        for (int x = -2; x <= 4; x++) {
+            for (int z = -2; z <= rows + 2; z++) {
+                w.setBlockState(o.add(x, -1, z), Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+                for (int y = 0; y <= 4; y++) {
+                    w.setBlockState(o.add(x, y, z), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+                }
+            }
+        }
+        BlockState bottomSlab = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        for (int r = 0; r < rows; r++) {
+            BlockPos p = o.add(0, 0, 1 + r);
+            w.setBlockState(p, bottomSlab, Block.NOTIFY_LISTENERS);                               // bottom slab
+            w.setBlockState(p.up(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);       // lowered opaque cube (-0.5)
+            w.setBlockState(p.east().up(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS); // cell-east solid -> vanilla culls
+            // p.east() stays AIR -> exposes the cube's lower-half east face (the "window")
+        }
+    }
+
     private static void buildScene(ServerWorld w, BlockPos o) {
+        if (cullMode) {
+            buildCullScene(w, o);
+            return;
+        }
         // Grass platform + cleared airspace over the whole grid footprint.
         for (int x = -2; x <= SHOWCASE_COLS + 2; x++) {
             for (int z = -2; z <= SHOWCASE_ROWS + 2; z++) {

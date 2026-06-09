@@ -116,7 +116,8 @@ def slabbedForwardedRunPropertyArgs = {
         key instanceof String
                 && value != null
                 && (key.startsWith("slabbed.mc1211.")
-                || key == "slabbed.bsfb.live.trace")
+                || key == "slabbed.bsfb.live.trace"
+                || key == "slabbed.disableStepCull")
     }.collect { key, value -> "-D${key}=${value}" }
 }
 
