@@ -996,15 +996,6 @@ public final class SlabSupport {
     private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
 
     /**
-     * Opt-in (default OFF) prototype: let a Terrain Slabs slab — which is normally never offset
-     * ({@code shouldSkipOffset}) — INHERIT the lowering of a lowering support column, so it stays
-     * flush instead of floating (the TOP_LIKE "DODO"). Default-off means zero behavior change;
-     * launch with {@code -Dslabbed.tsInheritLowering=true} to live-test (watch for double-offset,
-     * the one risk that can't be checked headlessly). See SLABBED_YSYSTEM_DESIGN.md §3.
-     */
-    private static final boolean TS_INHERIT_LOWERING = Boolean.getBoolean("slabbed.tsInheritLowering");
-
-    /**
      * Whether {@code direction}'s horizontal face of the opaque full cube at {@code pos}
      * is a slab-height "step" face — i.e. this block and its neighbour across that face
      * are at different vertical render offsets, so part of the face is visually exposed
@@ -1053,12 +1044,6 @@ public final class SlabSupport {
             return 0.0;
         }
         if (CompatHooks.shouldSkipOffset(state)) {
-            if (TS_INHERIT_LOWERING) {
-                double inherited = tsInheritedLoweringDy(world, pos, state);
-                if (inherited != 0.0) {
-                    return inherited;
-                }
-            }
             return 0.0;
         }
 
@@ -2346,23 +2331,6 @@ public final class SlabSupport {
      * walk false via the slab terminator below. Walk remains bounded by
      * {@link #MAX_CHAIN_DEPTH}.
      */
-    /**
-     * The lowering a normally-skipped Terrain Slabs SLAB would inherit from a lowering support
-     * column beneath it (or 0 if none / not applicable). Recursion-safe — hasSlabInColumn and
-     * slabColumnYOffset never re-enter getYOffset. Wired into getYOffset only when
-     * {@link #TS_INHERIT_LOWERING} is enabled; exposed for direct harness testing of the logic
-     * independent of the flag. See SLABBED_YSYSTEM_DESIGN.md §3 (the skip-offset asymmetry).
-     */
-    public static double tsInheritedLoweringDy(BlockView world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || state == null
-                || !(state.getBlock() instanceof SlabBlock)
-                || !CompatHooks.shouldSkipOffset(state)
-                || !hasSlabInColumn(world, pos)) {
-            return 0.0;
-        }
-        return slabColumnYOffset(world, pos);
-    }
-
     private static boolean hasSlabInColumn(BlockView world, BlockPos pos) {
         BlockPos cursor = pos.down();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {

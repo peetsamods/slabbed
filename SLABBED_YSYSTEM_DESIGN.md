@@ -85,21 +85,28 @@ Confirmed by harness (`tsTopSlabOnLoweredSupportStaysFlush_KNOWN_GAP` + control)
 - A vanilla block on the *same* lowered support lowers `-0.5`. So the gap is **specifically the
   TS skip-offset exclusion**, not the support failing.
 
-This is the **skip-offset asymmetry** already flagged "DEFERRED for beta 5" in memory. It is a
-genuine **design decision**, not a code bug:
+**RESOLUTION (2026-06-09, live-confirmed):** this float was a **placement-position** bug, not a
+rendering/lowering one. Julia confirmed she does *not* want a TS slab to "snap"/inherit lowering
+from a side neighbour (below the floating slab was air, not a support). The slab was simply
+*placed half a block too high*: aiming at the upper half of the lowered log's side produced a slab
+at `[Y+0.5, Y+1]` instead of flush at `[Y, Y+0.5]`. Root cause = a top/bottom inversion in
+`BlockItemPlacementIntentMixin` (the upper *visual* half of a −0.5 block is the *bottom* half of
+its grid cell). Fixed in `92601c80`: upper visual half → BOTTOM slab in cell Y, lower visual half
+→ TOP slab in cell Y−1. A render-side "inherit lowering" prototype (`-Dslabbed.tsInheritLowering`)
+was **explored, rejected, and reverted** once this was understood.
+
+The **skip-offset asymmetry is still a genuine, open design decision** (independent of the float
+above), kept here for the future:
 
 > Should a Terrain Slabs block, when it sits on a lowering support, inherit the lowering like a
-> vanilla block does — or does Terrain Slabs own its block's vertical placement and Slabbed must
-> keep its hands off (to avoid double-offset / fighting TS's own rendering)?
+> vanilla block does — or does Terrain Slabs own its block's vertical placement and Slabbed keep
+> its hands off?
 
-I did **not** change `shouldSkipOffset` overnight, because:
-1. it's a deliberate exclusion with broad blast radius (it also governs how TS slabs combine as
-   supports), and
-2. the "correct" answer is a product decision about who owns TS block geometry — yours, not mine,
-   and it needs a live look (does removing the skip double-offset TS slabs in the common case?).
-
-It is now **pinned by a green tripwire test** so that whenever we flip it, the change is explicit
-and any regression is visible.
+Source check (TS `3.1.2`): TS only offsets `Blocks.SNOW` + `VegetationBlock` on *bottom* slabs
+(via `MixinBlockStateBase`, guarded against double-apply), never its own slab blocks — so Slabbed
+lowering a TS slab would *not* fight TS. But the current call is to leave TS slabs un-lowered and
+rely on correct placement instead. The `tsTopSlabOnLoweredSupportStaysFlush_KNOWN_GAP`
+characterization test pins that un-lowered behavior as the intended contract.
 
 ---
 
@@ -174,11 +181,13 @@ declarative system* instead of whack-a-mole.
   (`shimTopAndDoubleClassify`, `fullBlockOnTsTopLike/DoubleLikeNotLowered`,
   `tsTopSlabOnLoweredSupportStaysFlush_KNOWN_GAP`, `vanillaBlockOnSameLoweredSupportDoesLower`).
   **55/55 harness tests pass.** Commit `9ed019dc`.
-- Root-caused the screenshot DODO to the **skip-offset asymmetry** (`shouldSkipOffset` excludes
-  all `terrain_slabs` blocks from lowering), not a missing arithmetic case.
+- Initially mis-attributed the screenshot DODO to the skip-offset asymmetry and prototyped a
+  render-side fix; **that was wrong** — see §3. The real cause was a placement-position inversion,
+  fixed in `92601c80` (live-confirmed). The prototype was reverted.
 - Wrote this note.
 
-**Open for your morning call:** (a) flip the skip-offset asymmetry for TS blocks (fix the
-TOP_LIKE float) — needs a live double-offset check; (b) start the resolver-first consolidation;
-(c) keep shipping edge-case fixes and defer the refactor. My vote: (a) as a scoped fix once you
-confirm it doesn't double-offset live, then (c) to a shippable cut, then (b).
+**Resolved:** the TOP_LIKE float was a placement bug (`92601c80`), not the asymmetry. **Still
+open** (your call, no urgency): (a) the resolver-first consolidation (§4a) — biggest lever, and
+the placement fix is a perfect first candidate to migrate onto it; (b) the declarative surface
+contract (§4b); (c) the skip-offset asymmetry as a deliberate future decision (§3), currently
+pinned un-lowered by the KNOWN_GAP tripwire.
