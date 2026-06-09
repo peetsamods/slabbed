@@ -798,6 +798,7 @@ public abstract class BlockItemPlacementIntentMixin {
         // - full block target: keep legacy geometric intent for 0.5S vs 1S law.
         SlabType expectedType;
         double remappedY;
+        BlockPos fullBlockSideCell = targetPos;
         if (targetState.getBlock() instanceof SlabBlock) {
             if (originalSide == Direction.UP
                     && targetState.get(SlabBlock.TYPE) == SlabType.TOP) {
@@ -814,18 +815,28 @@ public abstract class BlockItemPlacementIntentMixin {
             }
             remappedY = slabbed$placementYForType(targetPos, expectedType);
         } else {
+            // Ordinary lowered full block: it occupies world-y [Y+yOffset, Y+yOffset+1]
+            // visually (a -0.5 block at cell Y shows in [Y-0.5, Y+0.5]). Place the slab flush
+            // with the clicked VISUAL half — mapped to grid space:
+            //   upper visual half [Y, Y+0.5]   → BOTTOM slab in cell Y   (occupies [Y, Y+0.5])
+            //   lower visual half [Y-0.5, Y)    → TOP slab in cell Y-1    (occupies [Y-0.5, Y])
+            // The previous mapping sent the upper visual half to a TOP slab in cell Y, landing
+            // it at [Y+0.5, Y+1] — half a block too high, leaving the see-through "DODO" gap.
             double loweredVisualMidline = targetPos.getY() + yOffset + 0.5d;
-            double loweredVisualUpperBoundary = targetPos.getY() + yOffset + 1.0d;
-            boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
-                    <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-            boolean upperHalfIntent = originalHitPos.y >= loweredVisualMidline && !exactLoweredVisualBoundary;
-            expectedType = upperHalfIntent ? SlabType.TOP : SlabType.BOTTOM;
-            remappedY = slabbed$placementYForType(targetPos, expectedType);
+            boolean upperHalfIntent = originalHitPos.y >= loweredVisualMidline;
+            if (upperHalfIntent) {
+                expectedType = SlabType.BOTTOM;
+                remappedY = slabbed$placementYForType(targetPos, SlabType.BOTTOM);
+            } else {
+                expectedType = SlabType.TOP;
+                fullBlockSideCell = targetPos.down();
+                remappedY = slabbed$placementYForType(fullBlockSideCell, SlabType.TOP);
+            }
         }
         if (originalSide == Direction.UP && expectedType == SlabType.BOTTOM) {
             remappedY = targetPos.getY() + 0.501d;
         }
-        BlockPos remappedBlockPos = targetPos;
+        BlockPos remappedBlockPos = fullBlockSideCell;
         if (targetState.getBlock() instanceof SlabBlock
                 && targetState.contains(SlabBlock.TYPE)
                 && targetState.get(SlabBlock.TYPE) == SlabType.TOP
