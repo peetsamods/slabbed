@@ -35,6 +35,14 @@ public final class TerrainSlabsCompatTest {
         return Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
     }
 
+    private static BlockState tsTopSlab() {
+        return TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP);
+    }
+
+    private static BlockState tsDoubleSlab() {
+        return TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE);
+    }
+
     private static double dyOnSupport(ServerWorld w, BlockPos supportPos, BlockState support, BlockState object) {
         w.setBlockState(supportPos, support, Block.NOTIFY_LISTENERS);
         BlockPos objPos = supportPos.up();
@@ -201,6 +209,95 @@ public final class TerrainSlabsCompatTest {
                 !SlabSupport.isSteppedConnectingNeighbor(w, groundFence, w.getBlockState(groundFence),
                         groundFence2, w.getBlockState(groundFence2)),
                 "two ground fences at the same height must NOT be a stepped pair");
+        ctx.complete();
+    }
+
+    // PROBE: a bottom slab sitting on TOP of a 2-block stack on a TS slab — does it render lowered
+    // (flush) or at full height (the +0.5 DODO over the placement)? Logs the actual dy.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void slabOnTopOfTsStackDyProbe(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(base.up(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(base.up(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos topSlabPos = base.up(3);
+        w.setBlockState(topSlabPos, vanillaSlab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        double topStoneDy = SlabSupport.getYOffset(w, base.up(2), w.getBlockState(base.up(2)));
+        double slabDy = SlabSupport.getYOffset(w, topSlabPos, w.getBlockState(topSlabPos));
+        // Explicit values (NOT just equality — equal-at-zero would pass vacuously).
+        ctx.assertTrue(Math.abs(topStoneDy + 0.5) <= EPS,
+                "top stone of a 2-stack on a TS slab must be -0.5, got " + topStoneDy);
+        ctx.assertTrue(Math.abs(slabDy + 0.5) <= EPS,
+                "bottom slab on top of a TS-lowered stack must be -0.5 (flush), got " + slabDy
+                        + " (topStoneDy=" + topStoneDy + ")");
+        ctx.complete();
+    }
+
+    // ── CHARACTERIZATION: TOP_LIKE / DOUBLE_LIKE surfaces + the skip-offset asymmetry ──────
+    // These pin CURRENT behavior (green tripwires). Several encode the KNOWN GAP that a
+    // Terrain Slabs block is a support surface but is itself never lowered (shouldSkipOffset).
+    // When the asymmetry is resolved (see SLABBED_YSYSTEM_DESIGN.md), flip the asserts.
+
+    // Sanity: shim TOP/DOUBLE classify as TOP_LIKE / DOUBLE_LIKE.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void shimTopAndDoubleClassify(TestContext ctx) {
+        ctx.assertTrue(CompatHooks.customSlabSurfaceKind(tsTopSlab()) == CompatSlabSurfaceKind.TOP_LIKE,
+                "TS top slab must classify TOP_LIKE");
+        ctx.assertTrue(CompatHooks.customSlabSurfaceKind(tsDoubleSlab()) == CompatSlabSurfaceKind.DOUBLE_LIKE,
+                "TS double slab must classify DOUBLE_LIKE");
+        ctx.complete();
+    }
+
+    // A full block sitting ON a TS TOP_LIKE surface is NOT lowered (top surface is full height).
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnTsTopLikeNotLowered(TestContext ctx) {
+        double dy = dyOnSupport(ctx.getWorld(), ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3),
+                tsTopSlab(), Blocks.STONE.getDefaultState());
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "stone on a TS TOP_LIKE slab should sit at full height (dy 0), got " + dy);
+        ctx.complete();
+    }
+
+    // A full block sitting ON a TS DOUBLE_LIKE surface is NOT lowered (full cube support).
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnTsDoubleLikeNotLowered(TestContext ctx) {
+        double dy = dyOnSupport(ctx.getWorld(), ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3),
+                tsDoubleSlab(), Blocks.STONE.getDefaultState());
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "stone on a TS DOUBLE_LIKE slab should sit at full height (dy 0), got " + dy);
+        ctx.complete();
+    }
+
+    // KNOWN GAP (skip-offset asymmetry): a TS slab placed ON a lowered support (vanilla bottom
+    // slab) does NOT inherit the lowering — it stays at dy 0 and floats (this is the "DODO"
+    // Julia saw with a Packed Mud TOP_LIKE slab). Pinned so a fix is a deliberate, visible flip.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void tsTopSlabOnLoweredSupportStaysFlush_KNOWN_GAP(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base, vanillaBottomSlab(), Block.NOTIFY_LISTENERS);   // lowering support
+        BlockPos tsPos = base.up();
+        w.setBlockState(tsPos, tsTopSlab(), Block.NOTIFY_LISTENERS);
+        double dy = SlabSupport.getYOffset(w, tsPos, w.getBlockState(tsPos));
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "KNOWN GAP: TS slab is skipOffset, so on a lowered support it stays dy 0 (got " + dy
+                        + "). Flip when the asymmetry is resolved.");
+        ctx.complete();
+    }
+
+    // Companion: a VANILLA full block on the same lowered support DOES lower — proving the gap is
+    // specifically the TS skip-offset exclusion, not the support failing to lower.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void vanillaBlockOnSameLoweredSupportDoesLower(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base, vanillaBottomSlab(), Block.NOTIFY_LISTENERS);
+        BlockPos objPos = base.up();
+        w.setBlockState(objPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double dy = SlabSupport.getYOffset(w, objPos, w.getBlockState(objPos));
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "control: vanilla stone on a bottom slab lowers -0.5 (got " + dy + ")");
         ctx.complete();
     }
 
