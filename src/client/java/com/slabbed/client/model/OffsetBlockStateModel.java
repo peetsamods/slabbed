@@ -81,7 +81,7 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
     }
 
     /**
-     * Fabric renderer entry point used by Indigo/Sodium+Indium.
+     * Fabric renderer entry point used by Indigo and Sodium's FRAPI-compatible renderer.
      */
     @Override
     public void emitQuads(QuadEmitter emitter, BlockRenderView view, BlockPos pos, BlockState state, Random random,
