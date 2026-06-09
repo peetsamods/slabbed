@@ -1725,6 +1725,38 @@ public final class SlabSupport {
     }
 
     /**
+     * Visual dy of a connecting block (fence/wall/pane), mirroring the render path: these are
+     * only visually lowered when they sit on a custom Terrain Slabs direct-support surface,
+     * never merely because {@code getYOffset} reports a slab-relative offset. Keeps the
+     * stepped-connection check in lock-step with what is actually drawn.
+     */
+    public static double connectingBlockVisualDy(BlockView world, BlockPos pos, BlockState state) {
+        double dy = getYOffset(world, pos, state);
+        if (dy != 0.0 && !isDirectCustomSlabSupportedObject(world, pos, state)) {
+            return 0.0;
+        }
+        return dy;
+    }
+
+    /**
+     * True if {@code neighborState} is a fence/wall/pane sitting at a different visual height
+     * than {@code state} — i.e. one was lowered onto a slab and the other was not. Such a pair
+     * must stay as single posts instead of drawing a connector arm across the height step
+     * (the "split" / illegal fence connection). Cross-family joins (fence↔wall, pane↔glass,
+     * fence↔solid, …) are left alone because the neighbour is not a connecting block here.
+     */
+    public static boolean isSteppedConnectingNeighbor(BlockView world, BlockPos pos, BlockState state,
+                                                      BlockPos neighborPos, BlockState neighborState) {
+        Block neighbor = neighborState.getBlock();
+        if (!(neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof PaneBlock)) {
+            return false;
+        }
+        double selfDy = connectingBlockVisualDy(world, pos, state);
+        double neighborDy = connectingBlockVisualDy(world, neighborPos, neighborState);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
+    }
+
+    /**
      * Recursion-safe rendered dy of a VANILLA bottom-slab support directly beneath an object,
      * used to compound a mixed-slab lowering (vanilla-bottom-slab-only by design). -0.5 if that
      * support is itself lowered (anchored / directCustom-on-TS / adjacent-side-lowered), 0.0 if
