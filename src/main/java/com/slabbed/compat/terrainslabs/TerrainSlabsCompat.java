@@ -17,8 +17,21 @@ public final class TerrainSlabsCompat {
     private TerrainSlabsCompat() {
     }
 
-    public static final String MOD_ID = "terrainslabs";
-    private static final boolean LOADED = FabricLoader.getInstance().isModLoaded(MOD_ID);
+    /** Modern Terrain Slabs (3.x, multiloader). */
+    public static final String MOD_ID = "terrain_slabs";
+    /** Legacy Fabric-only Terrain Slabs (≤2.x). */
+    public static final String LEGACY_MOD_ID = "terrainslabs";
+    private static final boolean LOADED = FabricLoader.getInstance().isModLoaded(MOD_ID)
+            || FabricLoader.getInstance().isModLoaded(LEGACY_MOD_ID);
+
+    /** True if {@code id}'s namespace is either the modern or legacy Terrain Slabs mod id. */
+    private static boolean isTerrainSlabsNamespace(Identifier id) {
+        if (id == null) {
+            return false;
+        }
+        String ns = id.getNamespace();
+        return MOD_ID.equals(ns) || LEGACY_MOD_ID.equals(ns);
+    }
 
     /** Returns true if slab offsets should be skipped for this state. */
     public static boolean shouldSkipOffset(BlockState state) {
@@ -28,7 +41,7 @@ public final class TerrainSlabsCompat {
 
         Block block = state.getBlock();
         Identifier id = Registries.BLOCK.getId(block);
-        return id != null && MOD_ID.equals(id.getNamespace());
+        return isTerrainSlabsNamespace(id);
     }
 
     /** Returns true if generic Slabbed slab-support semantics should skip this state. */
@@ -58,7 +71,7 @@ public final class TerrainSlabsCompat {
     }
 
     private static boolean isNamedCustomSlabSurface(Identifier id) {
-        if (id == null || !MOD_ID.equals(id.getNamespace())) {
+        if (!isTerrainSlabsNamespace(id)) {
             return false;
         }
         String path = id.getPath();
