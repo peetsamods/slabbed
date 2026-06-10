@@ -1776,31 +1776,43 @@ public final class SlabSupport {
     }
 
     /**
-     * Recursion-safe rendered dy of a VANILLA bottom-slab support directly beneath an object,
-     * used to compound a mixed-slab lowering (vanilla-bottom-slab-only by design). -0.5 if that
-     * support is itself lowered (anchored / directCustom-on-TS / adjacent-side-lowered), 0.0 if
-     * flush, NaN if not a vanilla bottom slab. Never re-enters getYOffset.
+     * Recursion-safe rendered dy of a VANILLA bottom-or-top-slab support directly beneath an
+     * object, used to compound a mixed-slab lowering. For a lowered BOTTOM slab: -0.5 (anchored /
+     * directCustom-on-TS / adjacent-side-lowered), 0.0 if flush. For a lowered TOP slab: an extra
+     * -0.5 is added on top of that base, because the top slab presents its top surface a full cell
+     * above its lowered base, so an object resting on it follows the top slab down (BUG 1 fix).
+     * DOUBLE slabs and non-slabs return NaN. Never re-enters getYOffset.
      */
     private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos) {
         BlockState s = getBlockStateOrNull(world, supportPos);
         if (s == null
                 || !(s.getBlock() instanceof SlabBlock)
                 || !s.contains(SlabBlock.TYPE)
-                || !isBottomSlab(s)
+                || s.get(SlabBlock.TYPE) == SlabType.DOUBLE
                 || !s.getFluidState().isEmpty()) {
             return Double.NaN;
         }
+        double base;
         if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
-            return -0.5;
+            base = -0.5;
+        } else {
+            double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
+            if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
+                base = directCustomDy;
+            } else if (isAdjacentSideSlabLowered(world, supportPos, s)) {
+                base = -0.5;
+            } else {
+                base = 0.0;
+            }
         }
-        double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
-        if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
-            return directCustomDy;
+        // BUG 1 fix: a lowered TOP slab support presents its top surface a full cell above its
+        // lowered base, so an object resting on it drops an extra -0.5 (mirrors the
+        // object-on-TOP-slab term in the compound path). Bottom slabs are unaffected; the -1.0
+        // clamp in the caller keeps the total bounded.
+        if (base < -1.0e-6 && s.get(SlabBlock.TYPE) == SlabType.TOP) {
+            base += -0.5;
         }
-        if (isAdjacentSideSlabLowered(world, supportPos, s)) {
-            return -0.5;
-        }
-        return 0.0;
+        return base;
     }
 
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
