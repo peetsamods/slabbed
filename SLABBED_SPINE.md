@@ -10,6 +10,16 @@
 
 ---
 
+## 2026-06-09 — `0.3.0-beta.2` released: Terrain Slabs mod-id hotfix
+
+- **Branch:** `hotfix/0.3.0-beta.2-terrain-slabs-modid` · **HEAD:** `00b6a7c4` · **MC:** 1.21.11
+- Restored the optional Terrain Slabs compatibility layer for current installs by detecting the modern `terrain_slabs` mod id as well as legacy `terrainslabs`; before this hotfix the base slab behavior worked, but the TS compat path stayed inert against 3.x.
+- Added `TerrainSlabsHotfixTest` + `TerrainSlabsTestShim` to prove modern-id classification/lowering and keep the legacy-id fixtures alive.
+- **Proof:** 54/54 headless tests green at tag `slabbed-0.3.0-beta.2`; modern `terrain_slabs:test_slab` classifies `BOTTOM_LIKE` and lowers supported blocks by `-0.5` again.
+- **Scope note:** this fixed compat detection only; the deferred terrain-render / deep-chaining limits from `0.3.0-beta.1` remain unchanged.
+
+---
+
 ## 2026-06-07 — `0.3.0-beta.1` released: Terrain Slabs compatibility
 
 - **Branch:** `claude/terrain-targeting-overhaul-20260606` · **HEAD:** `9f85d8b6` · **MC:** 1.21.11
