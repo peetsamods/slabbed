@@ -11,6 +11,7 @@ import net.minecraft.util.math.BlockPos;
 
 public final class TargetDyOverlay {
     private static boolean initialized;
+    private static boolean enabled = SlabbedClientFlags.TARGET_DY_OVERLAY;
 
     private TargetDyOverlay() {
     }
@@ -23,23 +24,37 @@ public final class TargetDyOverlay {
         HudRenderCallback.EVENT.register(TargetDyOverlay::render);
     }
 
+    public static boolean toggle() {
+        enabled = !enabled;
+        return enabled;
+    }
+
+    public static boolean isEnabled() {
+        return enabled;
+    }
+
     private static void render(DrawContext context, RenderTickCounter tickCounter) {
+        if (!enabled) {
+            return;
+        }
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.world == null || client.textRenderer == null) {
             return;
         }
         HitResult target = client.crosshairTarget;
         if (!(target instanceof BlockHitResult blockHit) || target.getType() != HitResult.Type.BLOCK) {
-            drawLine(context, client, "target: none dy=NaN", 8, 8, 0xffd7d7d7);
+            drawLine(context, client, "[slabdy] target: none", 8, 8, 0xffd7d7d7);
             return;
         }
         BlockPos pos = blockHit.getBlockPos();
         BlockState state = client.world.getBlockState(pos);
         double dy = ClientDy.dyFor(client.world, pos, state);
-        String line = "target "
+        String line = "[slabdy] "
                 + pos.toShortString()
-                + " "
+                + "  "
                 + state.getBlock().getName().getString()
+                + " side="
+                + blockHit.getSide().asString()
                 + " dy="
                 + format(dy);
         drawLine(context, client, line, 8, 8, dy == 0.0d ? 0xffd7d7d7 : 0xffffd166);
