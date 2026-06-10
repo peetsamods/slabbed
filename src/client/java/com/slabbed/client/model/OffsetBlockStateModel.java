@@ -108,6 +108,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             String state,
             double dy,
             String modelClass,
+            String viewClass,
+            String renderOutlineBounds,
             String tickOrFrame,
             int passSequence,
             int totalQuadsSeen,
@@ -132,6 +134,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     "none",
                     Double.NaN,
                     "none",
+                    "none",
+                    "empty",
                     "unknown",
                     0,
                     0,
@@ -466,13 +470,21 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         String matrixKey = blockId + "@" + pos.toShortString();
         String matrixRow = slabbed$mc1211FamilyMatrixRow(blockId);
         String modelClass = model == null ? "null" : model.getClass().getName();
+        String viewClass = view == null ? "null" : view.getClass().getName();
         String tickOrFrame = slabbed$mc1211ClientTickOrUnknown();
         int passSequence = slabbed$mc1211FullMeshBoundsPassSequence.incrementAndGet();
         String meshTraceKey = matrixKey + "|pass=" + passSequence;
         BlockPos observedPos = slabbed$fullMeshBoundsTracePos;
         boolean observedProofRow = observedPos != null && observedPos.equals(pos);
+        boolean fullMeshBoundsTraceEnabled = Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace");
+        boolean aggregateTraceCandidate = fullMeshBoundsTraceEnabled
+                && slabbed$shouldLogMc1211FullMeshBoundsTrace(pos, blockId, dy);
+        String renderOutlineBounds = observedProofRow || aggregateTraceCandidate
+                ? slabbed$outlineBounds(view, pos, state)
+                : "not_sampled";
         String aggregateDedupKey = (observedProofRow ? meshTraceKey : matrixKey)
                 + "|" + slabbed$formatTraceDouble(dy)
+                + "|" + renderOutlineBounds
                 + "|" + reason;
         boolean finiteBounds = Double.isFinite(minBeforeY)
                 && Double.isFinite(maxBeforeY)
@@ -490,6 +502,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     state.toString(),
                     dy,
                     modelClass,
+                    viewClass,
+                    renderOutlineBounds,
                     tickOrFrame,
                     passSequence,
                     totalQuadsSeen,
@@ -508,10 +522,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     finiteBounds);
         }
 
-        if (!Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace")) {
-            return;
-        }
-        if (!slabbed$shouldLogMc1211FullMeshBoundsTrace(pos, blockId, dy)) {
+        if (!aggregateTraceCandidate) {
             return;
         }
         if (!slabbed$mc1211FullMeshBoundsTraceRows.add(aggregateDedupKey)) {
@@ -520,7 +531,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         double expectedMinAfterY = finiteBounds ? minBeforeY + dy : Double.NaN;
         double expectedMaxAfterY = finiteBounds ? maxBeforeY + dy : Double.NaN;
         Slabbed.LOGGER.info(
-                "[MC1211_FULL_MESH_BOUNDS_TRACE] meshTraceKey={} matrixKey={} matrixRow={} blockId={} pos={} state={} dy={} modelClass={} tickOrFrame={} passSequence={} rowSource={} quadsVisited={} verticesVisited={} minBeforeY={} maxBeforeY={} minAfterY={} maxAfterY={} expectedMinAfterY={} expectedMaxAfterY={} viewClass={} reason={} snapshotSource={} aggregateDedupKey={}",
+                "[MC1211_FULL_MESH_BOUNDS_TRACE] meshTraceKey={} matrixKey={} matrixRow={} blockId={} pos={} state={} dy={} modelClass={} tickOrFrame={} passSequence={} rowSource={} quadsVisited={} verticesVisited={} minBeforeY={} maxBeforeY={} minAfterY={} maxAfterY={} expectedMinAfterY={} expectedMaxAfterY={} viewClass={} renderOutlineBounds={} reason={} snapshotSource={} aggregateDedupKey={}",
                 meshTraceKey,
                 matrixKey,
                 matrixRow,
@@ -540,7 +551,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 finiteBounds ? slabbed$formatTraceDouble(maxAfterY) : "NaN",
                 slabbed$formatTraceDouble(expectedMinAfterY),
                 slabbed$formatTraceDouble(expectedMaxAfterY),
-                view.getClass().getName(),
+                viewClass,
+                renderOutlineBounds,
                 reason,
                 "aggregate_emit",
                 aggregateDedupKey);
@@ -555,7 +567,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             return;
         }
         Slabbed.LOGGER.info(
-                "[MC1211_FULL_MESH_BOUNDS_TRACE] meshTraceKey={} matrixKey={} matrixRow={} blockId={} pos={} state={} dy={} modelClass={} tickOrFrame={} passSequence={} rowSource={} quadsVisited={} verticesVisited={} minBeforeY={} maxBeforeY={} minAfterY={} maxAfterY={} expectedMinAfterY={} expectedMaxAfterY={} viewClass={} reason={} snapshotSource={} aggregateDedupKey={}",
+                "[MC1211_FULL_MESH_BOUNDS_TRACE] meshTraceKey={} matrixKey={} matrixRow={} blockId={} pos={} state={} dy={} modelClass={} tickOrFrame={} passSequence={} rowSource={} quadsVisited={} verticesVisited={} minBeforeY={} maxBeforeY={} minAfterY={} maxAfterY={} expectedMinAfterY={} expectedMaxAfterY={} viewClass={} renderOutlineBounds={} reason={} snapshotSource={} aggregateDedupKey={}",
                 trace.meshTraceKey(),
                 trace.matrixKey(),
                 trace.matrixRow(),
@@ -575,7 +587,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 finiteBounds ? slabbed$formatTraceDouble(trace.maxAfterY()) : "NaN",
                 finiteBounds ? slabbed$formatTraceDouble(trace.minBeforeY() + trace.dy()) : "NaN",
                 finiteBounds ? slabbed$formatTraceDouble(trace.maxBeforeY() + trace.dy()) : "NaN",
-                "snapshot",
+                trace.viewClass(),
+                trace.renderOutlineBounds(),
                 trace.reason(),
                 trace.snapshotSource(),
                 trace.aggregateDedupKey());

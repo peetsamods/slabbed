@@ -1538,6 +1538,9 @@ public final class SlabSupport {
         if (!(slabState.getBlock() instanceof SlabBlock) || !slabState.contains(SlabBlock.TYPE)) {
             return false;
         }
+        if (hasVanillaFullBlockSupportBelow(world, slabPos)) {
+            return false;
+        }
         Set<BlockPos> visited = new HashSet<>();
         ArrayDeque<BlockPos> queue = new ArrayDeque<>();
         visited.add(slabPos);
@@ -1553,6 +1556,9 @@ public final class SlabSupport {
 
             BlockState cursorState = world.getBlockState(cursor);
             if (!(cursorState.getBlock() instanceof SlabBlock) || !cursorState.contains(SlabBlock.TYPE)) {
+                continue;
+            }
+            if (hasVanillaFullBlockSupportBelow(world, cursor)) {
                 continue;
             }
             if (!cursor.equals(slabPos)
@@ -1577,6 +1583,20 @@ public final class SlabSupport {
             }
         }
         return false;
+    }
+
+    private static boolean hasVanillaFullBlockSupportBelow(BlockView world, BlockPos slabPos) {
+        if (world == null || slabPos == null) {
+            return false;
+        }
+        BlockPos belowPos = slabPos.down();
+        BlockState below = world.getBlockState(belowPos);
+        return below != null
+                && !below.isAir()
+                && !(below.getBlock() instanceof SlabBlock)
+                && below.getFluidState().isEmpty()
+                && below.isSolidBlock(world, belowPos)
+                && !isFullHeightLoweredCarrierForSideSupport(world, belowPos, below);
     }
 
     private static boolean isLoweredSlabLaneOwnerForSideInheritance(

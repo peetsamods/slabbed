@@ -122,13 +122,15 @@ public final class SlabbedLabFixtureTest {
         boolean sameSpotAfterSlabBreakOnly = Boolean.getBoolean("slabbed.mc1211.sameSpotAfterSlabBreakOnly");
         boolean slabThenBlockBaselineOnly = Boolean.getBoolean("slabbed.mc1211.slabThenBlockBaselineOnly");
         boolean wallFenceProductRedOnly = Boolean.getBoolean("slabbed.mc1211.wallFenceProductRedOnly");
+        boolean sbsTopSlabCombinationRed = Boolean.getBoolean("slabbed.mc1211.sbsTopSlabCombinationRed");
         boolean overlapOnly = Boolean.getBoolean("slabbed.mc1211.overlapMatrixOnly");
         if ((goblinOnly
                 || sidePlaceStoneLoweringOnly
                 || sidePlaceStoneLiveTruthOnly
                 || sameSpotAfterSlabBreakOnly
                 || slabThenBlockBaselineOnly
-                || wallFenceProductRedOnly)
+                || wallFenceProductRedOnly
+                || sbsTopSlabCombinationRed)
                 && !overlapOnly) {
             System.out.println("[MC1211_SERVER_STATE_OVERLAP_MATRIX_SKIPPED]"
                     + " route=runClientGameTest"
@@ -137,6 +139,8 @@ public final class SlabbedLabFixtureTest {
                     ? "slabbed.mc1211.slabThenBlockBaselineOnly"
                     : wallFenceProductRedOnly
                     ? "slabbed.mc1211.wallFenceProductRedOnly"
+                    : sbsTopSlabCombinationRed
+                    ? "slabbed.mc1211.sbsTopSlabCombinationRed"
                     : sameSpotAfterSlabBreakOnly
                     ? "slabbed.mc1211.sameSpotAfterSlabBreakOnly"
                     : sidePlaceStoneLiveTruthOnly
@@ -291,6 +295,29 @@ public final class SlabbedLabFixtureTest {
                 false,
                 false,
                 "decorative_state_only_no_model_outline_raycast_targeting_claim"));
+
+        BlockPos mergeSourceSlab = origin.add(0, 0, 7);
+        BlockPos mergeSourceFull = mergeSourceSlab.up();
+        world.setBlockState(mergeSourceSlab, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        authorBlock(world, mergeSourceFull, Blocks.STONE.getDefaultState());
+        BlockPos vanillaSupport = mergeSourceSlab.east();
+        BlockPos vanillaSupportedSlab = vanillaSupport.up();
+        world.setBlockState(vanillaSupport, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(vanillaSupportedSlab, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        rows.add(measureServerStateRow(
+                world,
+                "H_vb_vs_supported_slab_isolated_from_adjacent_vs_vb",
+                vanillaSupportedSlab,
+                vanillaSupportedSlab,
+                "VANILLA_SUPPORTED_SLAB_NOT_SIDE_LANE_CARRIER",
+                0.0d,
+                false,
+                true,
+                false,
+                true,
+                false,
+                false,
+                "vb_vs_vertical_support_wins_over_adjacent_lowered_lane"));
 
         int green = 0;
         int red = 0;

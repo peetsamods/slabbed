@@ -29,6 +29,18 @@ public final class LoweredSideSlabRetargeter {
         if (world == null || cam == null || eye == null || end == null) {
             return null;
         }
+        // Underside-aim intent guard: when the player deliberately aims at the DOWN
+        // face (bottom edge) of a block, they intend to place BELOW it, not to extend
+        // the lowered side-slab lane. Without this, a bottom-edge aim on a lowered slab
+        // is stolen into the lowered lane (sideOwnerWouldWin), so the placed slab lands
+        // 0.5 lower than intended. Mirrors the Direction.DOWN guard in
+        // GameRendererCrosshairRetargetMixin#isInitialHitOnLoweredFullBlockPlacementIntent.
+        if (currentHit != null
+                && currentHit.getType() == HitResult.Type.BLOCK
+                && currentHit instanceof BlockHitResult currentDownHit
+                && currentDownHit.getSide() == Direction.DOWN) {
+            return null;
+        }
         Vec3d dir = end.subtract(eye);
         double reach = dir.length();
         if (reach <= 0.0d) {
