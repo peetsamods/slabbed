@@ -360,4 +360,31 @@ public final class TerrainSlabsCompatTest {
         ctx.complete();
     }
 
+    // Powder-snow DODO fix: powder snow is a FULL CUBE, so it matched the full-block-on-slab
+    // lowering branch and Slabbed dropped it -0.5 while neighbouring powder snow stayed flush —
+    // a half-block step across snowy terrain. Powder snow (PowderSnowBlock, NOT a SnowBlock) is
+    // natural terrain fill and must NEVER be offset: dy stays 0. Control: a stone block on the
+    // same slab IS lowered, proving the support is active (so the powder-snow pass isn't vacuous).
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void powderSnowOnSlabIsNeverLowered(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base, vanillaSlab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        // control: an ordinary full block on the same bottom slab IS lowered -0.5
+        BlockPos stonePos = base.up();
+        w.setBlockState(stonePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double stoneDy = SlabSupport.getYOffset(w, stonePos, w.getBlockState(stonePos));
+        ctx.assertTrue(stoneDy < -1.0e-6,
+                "fixture: a full block on a bottom slab should be lowered, got " + stoneDy);
+        // powder snow on the same kind of slab must NOT be lowered
+        BlockPos snowBase = base.east(2);
+        w.setBlockState(snowBase, vanillaSlab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockPos powderPos = snowBase.up();
+        w.setBlockState(powderPos, Blocks.POWDER_SNOW.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double powderDy = SlabSupport.getYOffset(w, powderPos, w.getBlockState(powderPos));
+        ctx.assertTrue(Math.abs(powderDy) <= EPS,
+                "powder snow on a slab must NOT be lowered (it is terrain fill), got " + powderDy);
+        ctx.complete();
+    }
+
 }
