@@ -616,8 +616,11 @@ public final class SlabSupport {
             return false;
         }
         boolean hasBottomBelow = hasBottomSlabBelow(world, pos);
+        BlockState below = getBlockStateOrNull(world, pos.down());
+        boolean hasBottomLikeCustomBelow = below != null
+                && CompatHooks.customSlabSurfaceKind(below) == CompatSlabSurfaceKind.BOTTOM_LIKE;
         boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
-        return hasBottomBelow || anchored;
+        return hasBottomBelow || hasBottomLikeCustomBelow || anchored;
     }
 
     private static boolean hasLoweredCarrierBelow(BlockView world, BlockPos pos) {
@@ -675,7 +678,21 @@ public final class SlabSupport {
         if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, slabPos, slabState)) {
             return true;
         }
+        if (hasNonLoweredFullBlockSupportBelow(world, slabPos)) {
+            return false;
+        }
         return hasLoweredSlabLaneSupport(world, slabPos, slabState);
+    }
+
+    private static boolean hasNonLoweredFullBlockSupportBelow(BlockView world, BlockPos slabPos) {
+        BlockPos belowPos = slabPos.down();
+        BlockState below = getBlockStateOrNull(world, belowPos);
+        return below != null
+                && !below.isAir()
+                && !(below.getBlock() instanceof SlabBlock)
+                && below.getFluidState().isEmpty()
+                && below.isSolidBlock(world, belowPos)
+                && !isLoweredFullBlockCarrier(world, belowPos, below);
     }
 
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {

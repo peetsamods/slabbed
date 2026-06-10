@@ -18,6 +18,20 @@ fabricApi {
     }
 }
 
+// Forward selected -Dslabbed.* properties from the gradle invocation to the game JVM so e.g.
+// `runClient -Dslabbed.targetDyOverlay=true` actually reaches the client.
+def slabbedForwardedRunPropertyArgs = {
+    System.properties.findAll { key, value ->
+        key instanceof String && value != null
+                && (key == "slabbed.targetDyOverlay" || key == "slabbed.gapfill")
+    }.collect { key, value -> "-D${key}=${value}" }
+}
+tasks.withType(JavaExec).configureEach {
+    doFirst {
+        jvmArgs slabbedForwardedRunPropertyArgs()
+    }
+}
+
 version = project.mod_version
 group = project.maven_group
 

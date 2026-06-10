@@ -102,6 +102,57 @@ public final class TerrainSlabsCompoundDyTest {
         ctx.complete();
     }
 
+    // A vanilla slab placed beside a full block lowered by a Terrain Slabs surface inherits
+    // that side-lane lowering; otherwise TS+block+VS leaves the vanilla slab floating at grid height.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void vanillaSideSlabBesideTsLoweredFullBlockLowers(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        BlockPos full = base.up();
+        BlockPos sideSlab = full.east();
+        w.setBlockState(base, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(full, Blocks.OAK_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(sideSlab, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+
+        double fullDy = SlabSupport.getYOffset(w, full, w.getBlockState(full));
+        double sideSlabDy = SlabSupport.getYOffset(w, sideSlab, w.getBlockState(sideSlab));
+        ctx.assertTrue(Math.abs(fullDy + 0.5) <= EPS,
+                "oak log on a Terrain Slabs slab should lower to -0.5, got " + fullDy);
+        ctx.assertTrue(Math.abs(sideSlabDy + 0.5) <= EPS,
+                "vanilla side slab beside a TS-lowered full block should inherit -0.5, got " + sideSlabDy);
+        ctx.assertTrue(SlabSupport.isLoweredSideLaneSlabCarrier(w, sideSlab, w.getBlockState(sideSlab)),
+                "vanilla side slab beside a TS-lowered full block should be a lowered side-lane carrier");
+        ctx.complete();
+    }
+
+    // A slab on its own full-block support is a vertical stack, not a side lane. An adjacent
+    // lowered vanilla slab+block lane must not pull it down into the lower block.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void vanillaSlabOnFullBlockBesideLoweredVanillaLaneStaysFlush(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        BlockPos flushFull = base;
+        BlockPos flushSlab = flushFull.up();
+        BlockPos loweredSlab = base.east();
+        BlockPos loweredFull = loweredSlab.up();
+
+        w.setBlockState(flushFull, Blocks.ORANGE_WOOL.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(flushSlab, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        w.setBlockState(loweredSlab, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        w.setBlockState(loweredFull, Blocks.ORANGE_WOOL.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double loweredFullDy = SlabSupport.getYOffset(w, loweredFull, w.getBlockState(loweredFull));
+        double flushSlabDy = SlabSupport.getYOffset(w, flushSlab, w.getBlockState(flushSlab));
+        ctx.assertTrue(Math.abs(loweredFullDy + 0.5) <= EPS,
+                "adjacent VS+VB lane should lower the vanilla full block to -0.5, got " + loweredFullDy);
+        ctx.assertTrue(Math.abs(flushSlabDy) <= EPS,
+                "VB+VS lane should stay flush and not merge downward beside VS+VB, got " + flushSlabDy);
+        ctx.complete();
+    }
+
     // BUG 1 fix: an object on a vanilla TOP slab capping a Terrain Slab compounds to -1.0 (was -0.5,
     // floating, because loweredBottomSlabSupportDy ignored TOP-slab supports). Mirrors the 1.21.1 fix.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
