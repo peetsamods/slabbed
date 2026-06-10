@@ -8,9 +8,12 @@ import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.PaneBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TrapdoorBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
@@ -706,12 +709,21 @@ public abstract class BlockItemPlacementIntentMixin {
         boolean targetHasBlockEntity = targetState.getBlock() instanceof BlockEntityProvider;
         boolean targetIsCraftingTable = targetState.getBlock() instanceof CraftingTableBlock;
         double yOffset = SlabSupport.getYOffset(context.getWorld(), targetPos, targetState);
+        // A lowered connecting block (fence/wall/pane standing on a lowered carrier) is NOT a solid
+        // block, so the solid-only guard below used to bail here and let vanilla place the slab at
+        // grid height — leaving it floating beside the visually-lowered fence. It IS a legitimate
+        // lowered side-support carrier (the slab placed beside it inherits the -0.5 via getYOffset),
+        // so engage the same lowered-carrier remap path the ordinary lowered full block uses.
+        boolean targetIsLoweredConnectingCarrier = yOffset < 0.0d
+                && (targetState.getBlock() instanceof FenceBlock
+                        || targetState.getBlock() instanceof WallBlock
+                        || targetState.getBlock() instanceof PaneBlock);
         boolean ordinaryLoweredFullBlockGuard = targetIsSolid
                 && !targetHasBlockEntity
                 && !targetIsCraftingTable
                 && yOffset < 0.0d;
 
-        if (!targetIsSolid && !targetIsLoweredSlab) {
+        if (!targetIsSolid && !targetIsLoweredSlab && !targetIsLoweredConnectingCarrier) {
             slabbed$recordRemapAttempt(
                     context,
                     true,

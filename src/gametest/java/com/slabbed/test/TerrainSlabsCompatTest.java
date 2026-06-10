@@ -338,4 +338,26 @@ public final class TerrainSlabsCompatTest {
         ctx.complete();
     }
 
+    // Fence-side fix (Julia's exact geometry): a fence post on a TS slab is lowered; a slab placed
+    // beside the UPPER fence in the stack must inherit -0.5 (flush), not float.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void slabBesideStackedFenceOnTsInheritsLowering(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base, tsBottomSlab(), Block.NOTIFY_LISTENERS);          // Packed-Mud-like TS slab
+        BlockPos fenceLow = base.up();
+        BlockPos fenceHigh = base.up(2);
+        w.setBlockState(fenceLow, Blocks.SPRUCE_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(fenceHigh, Blocks.SPRUCE_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double upperFenceDy = SlabSupport.getYOffset(w, fenceHigh, w.getBlockState(fenceHigh));
+        ctx.assertTrue(upperFenceDy < -1.0e-6,
+                "fixture: upper fence on a TS-slab column should be lowered, got " + upperFenceDy);
+        BlockPos slabPos = fenceHigh.east();
+        w.setBlockState(slabPos, vanillaSlab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        double slabDy = SlabSupport.getYOffset(w, slabPos, w.getBlockState(slabPos));
+        ctx.assertTrue(Math.abs(slabDy + 0.5) <= EPS,
+                "slab beside the upper fence (on a TS-slab column) should inherit -0.5, got " + slabDy);
+        ctx.complete();
+    }
+
 }
