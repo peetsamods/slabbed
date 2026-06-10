@@ -22,10 +22,12 @@ import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.util.shape.VoxelShape;
 
 /**
  * Persistent slab-anchor registry.
@@ -748,7 +750,8 @@ public final class SlabAnchorAttachment {
      * <ul>
      *   <li>not air, not fluid</li>
      *   <li>not a slab, carpet, thin top layer, block-entity, bed, or double-block</li>
-     *   <li>solid full block</li>
+     *   <li>solid full block, or a non-solid block with full-height carrier bounds
+     *       in a named Slabbed anchor lane</li>
      *   <li>has a bottom slab directly below, or sits directly on an ordinary full
      *       block already lowered by exactly {@code -0.5}</li>
      * </ul>
@@ -792,10 +795,7 @@ public final class SlabAnchorAttachment {
         if (state.contains(Properties.DOUBLE_BLOCK_HALF)) {
             return false;
         }
-        if (!state.isSolidBlock(world, pos)) {
-            return false;
-        }
-        return true;
+        return isOrdinaryFullBlockAnchorCarrierBounds(world, pos, state);
     }
 
     private static boolean isPaleMossCarpet(Block block) {
@@ -873,12 +873,7 @@ public final class SlabAnchorAttachment {
                 || sourceState == null) {
             return false;
         }
-        if (!isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                || !isCompoundFullBlockAnchor(world, sourcePos)) {
-            return false;
-        }
-        double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
-        if (Math.abs(sourceDy + 1.0d) > 1.0e-6d) {
+        if (!isCompoundVisibleSideSource(world, sourcePos, sourceState)) {
             return false;
         }
         int dx = Math.abs(pos.getX() - sourcePos.getX());
@@ -901,12 +896,7 @@ public final class SlabAnchorAttachment {
                 || sourceState == null) {
             return false;
         }
-        if (!isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                || !isCompoundFullBlockAnchor(world, sourcePos)) {
-            return false;
-        }
-        double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
-        if (Math.abs(sourceDy + 1.0d) > 1.0e-6d) {
+        if (!isCompoundVisibleSideSource(world, sourcePos, sourceState)) {
             return false;
         }
         int dx = Math.abs(pos.getX() - sourcePos.getX());
@@ -929,12 +919,7 @@ public final class SlabAnchorAttachment {
                 || sourceState == null) {
             return false;
         }
-        if (!isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                || !isCompoundFullBlockAnchor(world, sourcePos)) {
-            return false;
-        }
-        double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
-        if (Math.abs(sourceDy + 1.0d) > 1.0e-6d) {
+        if (!isCompoundVisibleSideSource(world, sourcePos, sourceState)) {
             return false;
         }
         int dx = Math.abs(pos.getX() - sourcePos.getX());
@@ -943,12 +928,42 @@ public final class SlabAnchorAttachment {
         return dy == 0 && dx + dz == 1;
     }
 
+    private static boolean isCompoundVisibleSideSource(
+            BlockView world,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (world == null || sourcePos == null || sourceState == null) {
+            return false;
+        }
+        double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
+        if (Math.abs(sourceDy + 1.0d) > 1.0e-6d) {
+            return false;
+        }
+        if (sourceState.getBlock() instanceof SlabBlock) {
+            return SlabSupport.isCompoundVisibleSlabLaneOwner(world, sourcePos, sourceState);
+        }
+        return isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
+                && isCompoundFullBlockAnchor(world, sourcePos);
+    }
+
     public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockView world, BlockPos pos, BlockState state) {
         return isPersistentLoweredSlabCarrierState(state)
                 && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && (SlabSupport.isLoweredSideLaneSlabCarrier(world, pos, state)
                 || qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(world, pos, state)
                 || qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(world, pos, state));
+    }
+
+    public static boolean isLoweredFullBlockSlabCarrierSupport(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isNonSlabNonFluidCarrierSupportState(state)) {
+            return false;
+        }
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (!near(dy, -0.5d)) {
+            return false;
+        }
+        return isFullHeightNonSlabCarrierSupport(world, pos, state, dy);
     }
 
     private static boolean qualifiesForCompoundVisibleOwnerTopSlab(
@@ -969,11 +984,14 @@ public final class SlabAnchorAttachment {
             return false;
         }
         if (!isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                || !isCompoundFullBlockAnchor(world, sourcePos)) {
+                || !(isCompoundFullBlockAnchor(world, sourcePos) || isAnchored(world, sourcePos))) {
             return false;
         }
         double sourceDy = SlabSupport.getYOffset(world, sourcePos, sourceState);
-        return Math.abs(sourceDy + 1.0d) <= 1.0e-6d;
+        if (isCompoundFullBlockAnchor(world, sourcePos)) {
+            return Math.abs(sourceDy + 1.0d) <= 1.0e-6d;
+        }
+        return Math.abs(sourceDy + 0.5d) <= 1.0e-6d;
     }
 
     private static boolean isPersistentLoweredSlabCarrierState(BlockState state) {
@@ -1009,7 +1027,7 @@ public final class SlabAnchorAttachment {
 
     private static boolean isCompoundVisibleOwnerTopSlabState(BlockState state) {
         return state != null
-                && state.isOf(Blocks.STONE_SLAB)
+                && state.getBlock() instanceof SlabBlock
                 && state.contains(SlabBlock.TYPE)
                 && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
                 && state.getFluidState().isEmpty();
@@ -1034,10 +1052,7 @@ public final class SlabAnchorAttachment {
         }
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
-        if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
-            return false;
-        }
-        return isAnchored(world, belowPos) || SlabSupport.getYOffset(world, belowPos, below) == -0.5;
+        return isLoweredFullBlockSlabCarrierSupport(world, belowPos, below);
     }
 
     private static boolean qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlockNonRecursive(
@@ -1050,10 +1065,77 @@ public final class SlabAnchorAttachment {
         }
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
-        if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
+        if (!isNonSlabNonFluidCarrierSupportState(below)
+                || !isFullHeightNonSlabCarrierSupport(world, belowPos, below, -0.5d)) {
             return false;
         }
         return isAnchored(world, belowPos) || SlabSupport.hasBottomSlabBelow(world, belowPos);
+    }
+
+    private static boolean isNonSlabNonFluidCarrierSupportState(BlockState state) {
+        return state != null
+                && !state.isAir()
+                && !(state.getBlock() instanceof SlabBlock)
+                && state.getFluidState().isEmpty();
+    }
+
+    private static boolean isFullHeightNonSlabCarrierSupport(
+            BlockView world,
+            BlockPos pos,
+            BlockState state,
+            double expectedDy
+    ) {
+        if (world == null || pos == null || !isNonSlabNonFluidCarrierSupportState(state)) {
+            return false;
+        }
+        if (state.isSolidBlock(world, pos)) {
+            return true;
+        }
+        return hasFullHeightCarrierBounds(world, pos, state, expectedDy);
+    }
+
+    private static boolean isOrdinaryFullBlockAnchorCarrierBounds(
+            BlockView world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (world == null || pos == null || !isNonSlabNonFluidCarrierSupportState(state)) {
+            return false;
+        }
+        if (state.isSolidBlock(world, pos)) {
+            return true;
+        }
+        // Candidate checks can run after Slabbed has shifted non-solid full-height
+        // carriers into their visible lane; accept only the named legal anchor lanes.
+        return hasFullHeightCarrierBounds(world, pos, state, 0.0d)
+                || hasFullHeightCarrierBounds(world, pos, state, -0.5d)
+                || hasFullHeightCarrierBounds(world, pos, state, -1.0d);
+    }
+
+    private static boolean hasFullHeightCarrierBounds(
+            BlockView world,
+            BlockPos pos,
+            BlockState state,
+            double expectedDy
+    ) {
+        VoxelShape outline = state.getOutlineShape(world, pos);
+        if (outline == null || outline.isEmpty()) {
+            return false;
+        }
+        Box bounds = outline.getBoundingBox();
+        return near(bounds.minX, 0.0d)
+                && near(bounds.maxX, 1.0d)
+                && near(bounds.minZ, 0.0d)
+                && near(bounds.maxZ, 1.0d)
+                && (unitYAt(bounds, 0.0d) || unitYAt(bounds, expectedDy));
+    }
+
+    private static boolean unitYAt(Box bounds, double minY) {
+        return near(bounds.minY, minY) && near(bounds.maxY, minY + 1.0d);
+    }
+
+    private static boolean near(double actual, double expected) {
+        return Math.abs(actual - expected) <= 1.0e-6d;
     }
 
     private static boolean qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(
