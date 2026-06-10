@@ -26,6 +26,7 @@ import net.minecraft.block.LeverBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PointedDripstoneBlock;
+import net.minecraft.block.PowderSnowBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.SnowBlock;
 import net.minecraft.block.SporeBlossomBlock;
@@ -365,8 +366,10 @@ public final class SlabSupport {
             return false;
         }
 
-        // never offset thin top-layer blocks (snow layers, carpet)
-        if (isThinTopLayer(state)) {
+        // never offset thin top-layer blocks (snow layers, carpet) or powder snow — they are
+        // natural surface/terrain fill, not structural objects. Powder snow is a full cube so it
+        // is NOT an isThinTopLayer (which keys on SnowBlock), hence the explicit guard.
+        if (isThinTopLayer(state) || state.getBlock() instanceof PowderSnowBlock) {
             return false;
         }
 
@@ -462,6 +465,16 @@ public final class SlabSupport {
         }
         if (CompatHooks.shouldSkipOffset(state)
                 && !isLoweredCustomSlabSurface(world, pos, state)) {
+            return 0.0;
+        }
+
+        // Powder snow is a FULL CUBE, so unlike snow layers it matches the "full block on a slab"
+        // lowering branch and Slabbed was dropping it -0.5 onto a slab while neighbouring powder
+        // snow on full ground stayed flush — leaving a half-block step / DODO across snowy terrain.
+        // PowderSnowBlock is NOT a SnowBlock, so isThinTopLayer never excluded it. It is natural
+        // terrain fill (Terrain Slabs likewise does not lower it), so never offset it: keep all
+        // powder snow flush and consistent.
+        if (state.getBlock() instanceof PowderSnowBlock) {
             return 0.0;
         }
 
