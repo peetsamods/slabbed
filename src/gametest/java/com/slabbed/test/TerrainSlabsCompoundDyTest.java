@@ -102,6 +102,17 @@ public final class TerrainSlabsCompoundDyTest {
         ctx.complete();
     }
 
+    // BUG 1 fix: an object on a vanilla TOP slab capping a Terrain Slab compounds to -1.0 (was -0.5,
+    // floating, because loweredBottomSlabSupportDy ignored TOP-slab supports). Mirrors the 1.21.1 fix.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lanternOnVanillaTopSlabOnTsCompounds(TestContext ctx) {
+        double dy = stackDy(ctx.getWorld(), ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3),
+                tsBottomSlab(), vanillaSlab(SlabType.TOP), Blocks.LANTERN.getDefaultState());
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                "lantern on a vanilla TOP slab capping a Terrain Slab should compound to -1.0 (BUG 1), got " + dy);
+        ctx.complete();
+    }
+
     // Control: a single vanilla bottom slab (no TS below) does NOT compound — only -0.5.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void objectOnPlainVanillaSlabDoesNotCompound(TestContext ctx) {

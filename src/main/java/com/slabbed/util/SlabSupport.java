@@ -951,23 +951,33 @@ public final class SlabSupport {
         if (s == null
                 || !(s.getBlock() instanceof SlabBlock)
                 || !s.contains(SlabBlock.TYPE)
-                || !isBottomSlab(s)
+                || s.get(SlabBlock.TYPE) == SlabType.DOUBLE
                 || !s.getFluidState().isEmpty()) {
             return Double.NaN;
         }
+        double base;
         if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
-            return -0.5;
+            base = -0.5;
+        } else {
+            // A vanilla slab that itself sits on a Terrain Slabs surface (a MIXED slab) is
+            // lowered -0.5 by the directCustom lane; the object above it must inherit that drop.
+            double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
+            if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
+                base = directCustomDy;
+            } else if (isAdjacentSideSlabLowered(world, supportPos, s)) {
+                base = -0.5;
+            } else {
+                base = 0.0;
+            }
         }
-        // A vanilla bottom slab that itself sits on a Terrain Slabs surface (a MIXED slab) is
-        // lowered -0.5 by the directCustom lane; the object above it must inherit that drop.
-        double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
-        if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
-            return directCustomDy;
+        // BUG 1 fix: a lowered TOP slab support presents its top surface a full cell above its
+        // lowered base, so an object resting on it drops an extra -0.5 (mirrors the
+        // object-on-TOP-slab term in the compound path). Bottom slabs unaffected; DOUBLE excluded
+        // above; the caller's -1.0 clamp keeps the total bounded.
+        if (base < -1.0e-6 && s.get(SlabBlock.TYPE) == SlabType.TOP) {
+            base += -0.5;
         }
-        if (isAdjacentSideSlabLowered(world, supportPos, s)) {
-            return -0.5;
-        }
-        return 0.0;
+        return base;
     }
 
     /**
