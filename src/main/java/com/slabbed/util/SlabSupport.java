@@ -1516,7 +1516,25 @@ public final class SlabSupport {
 
     private static boolean isFullHeightLoweredCarrierForSideSupport(BlockView world, BlockPos pos, BlockState state) {
         return isLoweredFullBlockCarrier(world, pos, state)
-                || isLoweredDoubleSlabCarrierForSideSupport(world, pos, state);
+                || isLoweredDoubleSlabCarrierForSideSupport(world, pos, state)
+                || isLoweredConnectingBlockCarrier(world, pos, state);
+    }
+
+    /**
+     * A lowered fence/wall/pane is also a side-support carrier: a slab placed beside it should
+     * inherit the -0.5 (sit flush) instead of floating. Recursion-safe (no getYOffset re-entry).
+     */
+    private static boolean isLoweredConnectingBlockCarrier(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || !(state.getBlock() instanceof FenceBlock
+                        || state.getBlock() instanceof WallBlock
+                        || state.getBlock() instanceof PaneBlock)) {
+            return false;
+        }
+        return hasBottomSlabBelow(world, pos)
+                || SlabAnchorAttachment.isAnchored(world, pos)
+                || slabColumnYOffset(world, pos) < -1.0e-6
+                || isDirectCustomSlabSupportedObject(world, pos, state);
     }
 
     private static boolean isLoweredFullBlockCarrier(BlockView world, BlockPos pos, BlockState state) {
