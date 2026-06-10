@@ -43,14 +43,16 @@ Live-confirmed 2026-06-03: decorative-hanger follow-down under lowered FULL bloc
 AND lowered TOP slabs (SlabSupport.java; lantern/soul lantern/spore blossom/
 hanging roots/pale hanging moss, chains excluded). Supersedes prior tagged+pushed
 savepoint `eab0880a` (tag `save/mc1211-sbbs-underside-pre-manual-testing`), which
-remains in history. Note: the working tree still carries the uncommitted
-`LoweredSideSlabRetargeter.java` WIP (deliberately not in 94a5643e).
+remains in history. Historical note: 94a5643e deliberately excluded the
+then-uncommitted `LoweredSideSlabRetargeter.java` WIP; that later work is
+tracked in commit `817f1cc0` and is not part of the hanger savepoint tag.
 
 ## Current objective
 
-Close and verify the hanger follow-down savepoint, reconcile canon, then return
-to the active raycast RED and SBBS manual-live proof gap without absorbing
-unrelated retarget WIP.
+Keep the MC 1.21.1 port on the pushed hanger closure plus tracked side-carrier
+commits, with the VS/lowered-full-block visual merge/culling RED deferred.
+Next implementation work remains the named raycast-only proof slice or the
+release gate Julia explicitly requests.
 
 ## Current blocker
 
@@ -88,6 +90,43 @@ Live status:
 
 ```text
 hanger local-live confirmed; active raycast RED and SBBS manual-live proof gap remain open
+```
+
+## Deferred visual/culling REDs
+
+### MC 1.21.1 VS/lowered full-block adjacency
+
+Visible symptom:
+
+```text
+Branch-local manual screenshots on 2026-06-10 show VS/lowered-full-block
+checkerboards and full-block-adjacent setups visually merging, including a
+culled/missing face at the lowered full block / vanilla slab boundary.
+```
+
+Failing layer:
+
+```text
+render/culling surface, not placement/rescue/survival
+```
+
+Status:
+
+```text
+Deferred for MC 1.21.1. The shadow/inappropriate-shadow lane is stopped. The
+render-worker outline-shape experiment in SlabSupportStateMixin.java was
+reversed and must not be restored unless a fresh culling-specific RED proves
+the active runtime render path and names the exact hook.
+```
+
+Artifacts:
+
+```text
+tmp/mc1211-vbvs-shadow-checkerboard/
+tmp/mc1211-vbvs-shadow-audit-20260610/
+tmp/mc1211-vbvs-vsvb-merge-red-20260610/
+tmp/mc1211-vbvs-vsvb-merge-red-20260610-rerun/
+tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 ```
 
 ## Next legal slice
@@ -130,7 +169,7 @@ to call the port release-ready before the release gate.
 
 ## Do not touch boundaries
 
-- Do not touch culling unless fresh RED says culling.
+- Do not touch culling or shadow/render-worker shape unless fresh RED says culling.
 - Do not promote Terrain Slabs into generic Slabbed support.
 - Do not broaden rescue without RED proof.
 - Do not move release tags unless explicitly running release correction.
