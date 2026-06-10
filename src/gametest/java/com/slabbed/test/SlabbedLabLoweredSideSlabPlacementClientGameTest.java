@@ -1,6 +1,5 @@
 package com.slabbed.test;
 
-import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 
@@ -10,12 +9,18 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Focused client GameTest for the BS > FB > lower-half side slab placement repro.
+ * Legacy helper for the BS > FB > lower-half side slab placement repro.
+ *
+ * <p>This class is intentionally not a {@code FabricClientGameTest}; it is not
+ * registered in {@code fabric.mod.json} and must not be treated as an active
+ * proof gate without a fresh registration/proof-authority slice.
  */
-public final class SlabbedLabLoweredSideSlabPlacementClientGameTest implements FabricClientGameTest {
+public final class SlabbedLabLoweredSideSlabPlacementClientGameTest {
 
-    @Override
-    public void runTest(ClientGameTestContext ctx) {
+    private SlabbedLabLoweredSideSlabPlacementClientGameTest() {
+    }
+
+    static void runLegacyLoweredSideSlabPlacementProof(ClientGameTestContext ctx) {
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
