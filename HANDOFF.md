@@ -64,9 +64,11 @@ other natural full-cube terrain fill (mud, sculk, moss block…) for the same sl
   0 — a stale contract to flip/delete so it stops misleading (tracked as a background task).
 - **BUG4** — compound stack under-lowers (−0.5 not −1.0) when the top block is placed via the GENERIC anchor
   path (piston/dispenser/`/setblock`), not the player top-face mixin. DEFERRED (rarer; delicate anchor law).
-- **Release gate** = a systematic LIVE matrix pass (the 38 matrix tests + adversarial recipes make it fast).
-  This is the LAST thing between the branch and a shippable beta — all major placement/render bugs are fixed
-  and live-confirmed (slab-on-lowered, vegetation, fence-side, BUG A).
+- **Release gate — PASSED (live, 2026-06-10).** Julia walked the full live matrix (A single-lowering,
+  B vegetation, C fence-side, D side-placement, E compound/stacking, F render sweep) — **all green.**
+  The branch is **SHIPPABLE.** Remaining = cut the beta (version bump + build + tag; Codex uploads to
+  Modrinth/CurseForge). Two parked KNOWN-MINOR (not blockers, agreed): B5 saplings won't place on a TS slab
+  (placement-support check), and "SBSBS" slab-beside-slab chain. Mention in release notes as known minor.
 
 ## Build / run
 - Headless tests: `JAVA_HOME=<temurin-21> ./gradlew --no-daemon --console=plain runGameTest` (TS shim

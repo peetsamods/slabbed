@@ -234,3 +234,14 @@ shouldOffset short-circuit), matching what TS itself does. Harness 99/99 (added
 [[slabbed-exclusion-by-behavior-not-classname]] — exclude by role not one class; trust the overlay
 source tag; agent fan-outs can be wrong in unison under a shared wrong framing. Follow-up: audit
 other full-cube terrain fill (mud/sculk/moss). Release gate unchanged: live matrix pass.
+
+---
+
+## Savepoint 2026-06-10 (night) — LIVE MATRIX PASSED, branch SHIPPABLE
+
+Julia walked the full live matrix (A single-lowering, B vegetation, C fence-side, D side-placement,
+E compound/stacking, F render sweep) — **ALL GREEN.** The 1.21.1 candidate
+`claude/1211-terrain-slabs-named-surface` has cleared every blocker and is SHIPPABLE. Remaining work is
+purely release mechanics: version bump + build jar + tag + Codex upload to Modrinth/CurseForge. Two parked
+KNOWN-MINOR (agreed non-blockers): B5 saplings won't place on a TS slab; SBSBS slab-beside-slab chain.
+Post-ship: the RESOLVER, then 1.21.11 reconciliation + 1.20.1/26.1.2 ports.
