@@ -1,6 +1,5 @@
 package com.slabbed.client.model;
-import com.slabbed.Slabbed;
-import com.slabbed.anchor.SlabAnchorAttachment;
+
 import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
@@ -8,26 +7,14 @@ import net.fabricmc.fabric.api.renderer.v1.model.ForwardingBakedModel;
 import net.fabricmc.fabric.api.renderer.v1.render.RenderContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.ChainBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.WallBlock;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.model.BakedModel;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.registry.Registries;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.random.Random;
-import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockRenderView;
-import net.minecraft.world.World;
-import net.minecraft.block.ShapeContext;
 
-import java.util.Locale;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -36,28 +23,6 @@ import java.util.function.Supplier;
  */
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
 public final class OffsetBlockStateModel extends ForwardingBakedModel {
-    private static volatile BlockPos slabbed$tracePos = null;
-    private static volatile RenderOffsetTrace slabbed$lastTrace = RenderOffsetTrace.missing();
-    private static volatile BlockPos slabbed$modelDyOwnerTracePos = null;
-    private static volatile ModelDyOwnerTrace slabbed$modelDyOwnerLastTrace = ModelDyOwnerTrace.missing();
-    private static volatile BlockPos slabbed$fullMeshBoundsTracePos = null;
-    private static volatile FullMeshBoundsTrace slabbed$fullMeshBoundsLastTrace = FullMeshBoundsTrace.missing();
-    private static final Set<String> slabbed$mc1211FullMeshBoundsTraceRows = ConcurrentHashMap.newKeySet();
-    private static final AtomicInteger slabbed$mc1211FullMeshBoundsPassSequence = new AtomicInteger();
-    private static final Set<String> slabbed$mc1211LiveModelTraceRows = ConcurrentHashMap.newKeySet();
-    private static volatile boolean slabbed$mc1211LiveModelTraceCanaryLogged = false;
-    private static volatile boolean slabbed$mc1211LiveModelTraceParseFailureLogged = false;
-    private static volatile boolean slabbed$mc1211LiveModelTraceLimitLogged = false;
-    private static volatile int slabbed$mc1211LiveModelTraceRowCount = 0;
-    private static volatile int slabbed$mc1211LiveModelTraceSkippedCount = 0;
-    private static volatile int slabbed$mc1211LiveModelTraceSkippedByBlockFilterCount = 0;
-    private static volatile int slabbed$mc1211LiveModelTraceSkippedByRadiusCount = 0;
-    private static volatile int slabbed$mc1211LiveModelTraceMatchesOutlineCount = 0;
-    private static volatile int slabbed$mc1211LiveModelTraceLowerThanOutlineCount = 0;
-    private static volatile int slabbed$mc1211LiveModelTraceHigherThanOutlineCount = 0;
-    private static volatile int slabbed$mc1211LiveModelTraceOutlineUnavailableCount = 0;
-    private static volatile int slabbed$mc1211LiveModelTraceNotVideoEquivalentCount = 0;
-
     public OffsetBlockStateModel(BakedModel wrapped) {
         this.wrapped = wrapped;
     }
@@ -67,230 +32,42 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         return false;
     }
 
-    public record RenderOffsetTrace(
-            boolean seen,
-            String viewClass,
-            String pos,
-            String state,
-            double modelDy,
-            double clientDy,
-            double slabSupportDy,
-            boolean excludedByWrapper
-    ) {
-        static RenderOffsetTrace missing() {
-            return new RenderOffsetTrace(false, "none", "none", "none", 0.0, 0.0, 0.0, false);
-        }
-    }
-
-    public record ModelDyOwnerTrace(
-            boolean seen,
-            String viewClass,
-            String pos,
-            String state,
-            int emitCalls,
-            int appliedCalls,
-            double totalAppliedDy,
-            double lastDy
-    ) {
-        static ModelDyOwnerTrace missing() {
-            return new ModelDyOwnerTrace(false, "none", "none", "none", 0, 0, 0.0, 0.0);
-        }
-    }
-
-    public record FullMeshBoundsTrace(
-            boolean seen,
-            String meshTraceKey,
-            String matrixKey,
-            String matrixRow,
-            String blockId,
-            String pos,
-            String state,
-            double dy,
-            String modelClass,
-            String tickOrFrame,
-            int passSequence,
-            int totalQuadsSeen,
-            int verticesVisited,
-            double minBeforeY,
-            double maxBeforeY,
-            double minAfterY,
-            double maxAfterY,
-            String reason,
-            String rowSource,
-            String snapshotSource,
-            String aggregateDedupKey
-    ) {
-        static FullMeshBoundsTrace missing() {
-            return new FullMeshBoundsTrace(
-                    false,
-                    "none",
-                    "none",
-                    "UNKNOWN",
-                    "none",
-                    "none",
-                    "none",
-                    Double.NaN,
-                    "none",
-                    "unknown",
-                    0,
-                    0,
-                    0,
-                    Double.NaN,
-                    Double.NaN,
-                    Double.NaN,
-                    Double.NaN,
-                    "missing",
-                    "FULL_MESH_SNAPSHOT",
-                    "missing",
-                    "none");
-        }
-    }
-
-    public static void resetRenderOffsetTrace(BlockPos pos) {
-        slabbed$tracePos = pos;
-        slabbed$lastTrace = RenderOffsetTrace.missing();
-    }
-
-    public static RenderOffsetTrace snapshotRenderOffsetTrace() {
-        return slabbed$lastTrace;
-    }
-
-    public static void resetModelDyOwnerTrace(BlockPos pos) {
-        slabbed$modelDyOwnerTracePos = pos == null ? null : pos.toImmutable();
-        slabbed$modelDyOwnerLastTrace = ModelDyOwnerTrace.missing();
-    }
-
-    public static ModelDyOwnerTrace snapshotModelDyOwnerTrace() {
-        return slabbed$modelDyOwnerLastTrace;
-    }
-
-    public static void resetFullMeshBoundsTrace(BlockPos pos) {
-        slabbed$fullMeshBoundsTracePos = pos == null ? null : pos.toImmutable();
-        slabbed$fullMeshBoundsLastTrace = FullMeshBoundsTrace.missing();
-    }
-
-    public static FullMeshBoundsTrace snapshotFullMeshBoundsTrace() {
-        return slabbed$fullMeshBoundsLastTrace;
-    }
-
     /**
      * Fabric renderer entry point used by Indigo/Sodium+Indium.
      */
     @Override
     public void emitBlockQuads(BlockRenderView view, BlockState state, BlockPos pos, Supplier<Random> randomSupplier,
                                RenderContext context) {
-        float sourceDy;
-        String dySourcePath;
         float dy;
         if (state.getBlock() instanceof CarpetBlock) {
-            sourceDy = (float) ClientDy.dyFor(view, pos, state);
-            dySourcePath = "fabricEmitBlockQuads:ClientDy:carpet";
-            dy = sourceDy;
+            dy = (float) ClientDy.dyFor(view, pos, state);
         } else {
-            sourceDy = (float) SlabSupport.getYOffset(view, pos, state);
-            dySourcePath = "fabricEmitBlockQuads:SlabSupport";
-            dy = sourceDy;
+            dy = (float) SlabSupport.getYOffset(view, pos, state);
             if (dy != 0.0f) {
                 // Prevent visual connection offsets for fences/walls/panes,
                 // except for the explicitly proven Beta 3.5 fence/wall variants.
                 if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof PaneBlock) {
                     if (!SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
                         dy = 0.0f;
-                        dySourcePath = dySourcePath + ":visualConnectionExcluded";
                     }
                 }
             }
         }
-        slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
-        slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, sourceDy, dy);
-
-        BlockPos modelDyTracePos = slabbed$modelDyOwnerTracePos;
-        if (modelDyTracePos != null && modelDyTracePos.equals(pos)) {
-            ModelDyOwnerTrace prev = slabbed$modelDyOwnerLastTrace;
-            boolean applied = dy != 0.0f;
-            slabbed$modelDyOwnerLastTrace = new ModelDyOwnerTrace(
-                    true,
-                    view.getClass().getName(),
-                    pos.toShortString(),
-                    state.toString(),
-                    prev.emitCalls() + 1,
-                    prev.appliedCalls() + (applied ? 1 : 0),
-                    prev.totalAppliedDy() + (applied ? dy : 0.0),
-                    dy);
-        }
-
-        if (Boolean.getBoolean("slabbed.render.offset.trace")
-                && state.getBlock() instanceof ChainBlock
-                && pos.equals(slabbed$tracePos)) {
-            boolean excluded = state.getBlock() instanceof FenceBlock
-                    || state.getBlock() instanceof WallBlock
-                    || state.getBlock() instanceof PaneBlock;
-            slabbed$lastTrace = new RenderOffsetTrace(
-                    true,
-                    view.getClass().getName(),
-                    pos.toShortString(),
-                    state.toString(),
-                    dy,
-                    ClientDy.dyFor(view, pos, state),
-                    SlabSupport.getYOffset(view, pos, state),
-                    excluded);
-        }
-
-        // Prove that the render-path BlockView is not a World, causing isAnchored to return false.
-        // Fires only when -Dslabbed.anchor.trace=true AND view is NOT a World instance.
-        if (SlabAnchorAttachment.TRACE && !(view instanceof World)) {
-            boolean anchoredViaFallback = false;
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc != null && mc.world != null) {
-                anchoredViaFallback = SlabAnchorAttachment.isAnchored(mc.world, pos);
-            }
-            if (anchoredViaFallback || dy != 0.0f) {
-                Slabbed.LOGGER.info("[ANCHOR] model dy view={} pos={} dy={} anchoredViaWorldFallback={}",
-                        view.getClass().getSimpleName(), pos.toShortString(), dy, anchoredViaFallback);
-            }
-        }
 
         if (dy == 0.0f) {
-            slabbed$recordMc1211FullMeshBoundsTrace(view, pos, state, wrapped, dy,
-                    0, 0, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
-                    "dy_zero_no_transform");
             emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
             return;
         }
 
         final float yOffset = dy;
-        final BakedModel traceModel = wrapped;
-        final int[] totalQuadsSeen = {0};
-        final int[] verticesVisited = {0};
-        final double[] meshBounds = {
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY,
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY};
         context.pushTransform(quad -> {
-            totalQuadsSeen[0]++;
             for (int i = 0; i < 4; i++) {
-                verticesVisited[0]++;
-                float beforeY = quad.y(i);
-                float afterY = beforeY + yOffset;
-                meshBounds[0] = Math.min(meshBounds[0], beforeY);
-                meshBounds[1] = Math.max(meshBounds[1], beforeY);
-                meshBounds[2] = Math.min(meshBounds[2], afterY);
-                meshBounds[3] = Math.max(meshBounds[3], afterY);
-                quad.pos(i, quad.x(i), afterY, quad.z(i));
+                quad.pos(i, quad.x(i), quad.y(i) + yOffset, quad.z(i));
             }
             return true;
         });
         try {
             emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
-            slabbed$recordMc1211FullMeshBoundsTrace(view, pos, state, traceModel, dy,
-                    totalQuadsSeen[0],
-                    verticesVisited[0],
-                    meshBounds[0],
-                    meshBounds[1],
-                    meshBounds[2],
-                    meshBounds[3],
-                    "quad_transform_aggregate");
         } finally {
             context.popTransform();
         }
@@ -304,468 +81,5 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
 
         context.bakedModelConsumer().accept(wrapped, state);
-    }
-
-    private static void slabbed$logCompoundVisibleRenderTraceModelDy(
-            BlockRenderView view,
-            BlockPos pos,
-            BlockState state,
-            float modelDy
-    ) {
-        if (!SlabAnchorAttachment.beta4CompoundVisibleRenderTraceEnabled()) {
-            return;
-        }
-        String marker = slabbed$compoundVisibleMarker(view, pos, state);
-        if ("none".equals(marker)) {
-            return;
-        }
-        double clientDy = ClientDy.dyFor(view, pos, state);
-        double slabSupportDy = SlabSupport.getYOffset(view, pos, state);
-        Slabbed.LOGGER.info(
-                "[MAINTAINER_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_MODEL_DY] pos={} marker={} serverMarker=n/a clientMarker=true modelViewType={} modelDy={} slabSupportDy={} clientDy={} candidateRerenderScheduled=n/a neighborRerenderScheduled=n/a",
-                pos.toShortString(),
-                marker,
-                view.getClass().getSimpleName(),
-                modelDy,
-                slabSupportDy,
-                clientDy);
-    }
-
-    private static String slabbed$compoundVisibleMarker(BlockRenderView view, BlockPos pos, BlockState state) {
-        if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(view, pos, state)) {
-            return "lower";
-        }
-        if (SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(view, pos, state)) {
-            return "upper";
-        }
-        if (SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(view, pos, state)) {
-            return "double";
-        }
-        if (SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(view, pos, state)) {
-            return "top";
-        }
-        return "none";
-    }
-
-    private static void slabbed$logMc1211LiveModelTrace(
-            BlockRenderView view,
-            BlockPos pos,
-            BlockState state,
-            String dySourcePath,
-            float modelDyBeforeWrapper,
-            float modelDyAfterWrapper
-    ) {
-        if (!Boolean.getBoolean("slabbed.mc1211.liveModelTrace")) {
-            return;
-        }
-
-        String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
-        String blockFilter = System.getProperty("slabbed.mc1211.liveModelTraceBlock", "minecraft:stone").trim();
-        if (blockFilter.isEmpty()) {
-            blockFilter = "minecraft:stone";
-        }
-        BlockPos near = slabbed$mc1211LiveModelTraceNearPos();
-        int radius = slabbed$mc1211LiveModelTraceRadius();
-        boolean parseFailed = near == null && !System.getProperty("slabbed.mc1211.liveModelTraceNear", "").isBlank();
-        slabbed$logMc1211LiveModelTraceCanary(blockFilter, near, radius, parseFailed);
-        if (parseFailed) {
-            return;
-        }
-        if (!blockId.equals(blockFilter)) {
-            slabbed$mc1211LiveModelTraceSkippedCount++;
-            slabbed$mc1211LiveModelTraceSkippedByBlockFilterCount++;
-            return;
-        }
-        int distanceFromNear = near == null ? -1 : slabbed$mc1211ManhattanDistance(pos, near);
-        if (near != null && distanceFromNear > radius) {
-            slabbed$mc1211LiveModelTraceSkippedCount++;
-            slabbed$mc1211LiveModelTraceSkippedByRadiusCount++;
-            return;
-        }
-
-        String rowKey = blockId + "@" + pos.toShortString();
-        if (slabbed$mc1211LiveModelTraceRows.size() >= 128) {
-            slabbed$mc1211LiveModelTraceSkippedCount++;
-            if (!slabbed$mc1211LiveModelTraceLimitLogged) {
-                slabbed$mc1211LiveModelTraceLimitLogged = true;
-                slabbed$logMc1211LiveModelTraceSummary("row_limit_reached");
-            }
-            return;
-        }
-        if (!slabbed$mc1211LiveModelTraceRows.add(rowKey)) {
-            return;
-        }
-
-        double outlineDy = ClientDy.dyFor(view, pos, state);
-        MinecraftClient mc = MinecraftClient.getInstance();
-        ClientWorld clientWorld = mc == null ? null : mc.world;
-        BlockState clientState = clientWorld == null ? state : clientWorld.getBlockState(pos);
-        double clientWorldDy = clientWorld == null ? Double.NaN : ClientDy.dyFor(clientWorld, pos, clientState);
-        boolean renderViewCarrierMismatch = clientWorld != null
-                && Math.abs(outlineDy - clientWorldDy) > 1.0e-6;
-        boolean translationApplied = modelDyAfterWrapper != 0.0f;
-        String reason = slabbed$mc1211LiveModelTraceReason(
-                modelDyBeforeWrapper,
-                modelDyAfterWrapper,
-                outlineDy,
-                renderViewCarrierMismatch);
-        slabbed$mc1211RecordReason(reason);
-        boolean modelLowerThanOutline = "MODEL_TRACE_LOWER_THAN_OUTLINE".equals(reason);
-        double deltaModelMinusOutline = modelDyAfterWrapper - outlineDy;
-        String bounds = slabbed$outlineBounds(view, pos, state);
-        String nearFilter = near == null ? "none" : near.toShortString();
-        String relativePos = near == null ? "n/a" : slabbed$relativePos(pos, near);
-        String renderSection = slabbed$renderSection(pos);
-        int rowCount = ++slabbed$mc1211LiveModelTraceRowCount;
-
-        Slabbed.LOGGER.info(
-                "[MC1211_LIVE_MODEL_TRACE_ROW] pos={} blockState={} blockId={} renderViewClass={} viewIsWorld={} clientWorldPresent={} nearFilter={} relativeToNear={} distanceFromNear={} renderSection={} modelDySourcePath={} modelDyBeforeWrapper={} modelDyAfterWrapper={} outlineDy={} clientWorldDy={} deltaModelMinusOutline={} modelLowerThanOutline={} modelTranslationApplied={} targetDy=omitted currentBounds={} inferredModelYTranslation={} reason={}",
-                pos.toShortString(),
-                state,
-                blockId,
-                view.getClass().getName(),
-                view instanceof World,
-                clientWorld != null,
-                nearFilter,
-                relativePos,
-                distanceFromNear < 0 ? "n/a" : Integer.toString(distanceFromNear),
-                renderSection,
-                dySourcePath,
-                slabbed$formatTraceDouble(modelDyBeforeWrapper),
-                slabbed$formatTraceDouble(modelDyAfterWrapper),
-                slabbed$formatTraceDouble(outlineDy),
-                slabbed$formatTraceDouble(clientWorldDy),
-                slabbed$formatTraceDouble(deltaModelMinusOutline),
-                modelLowerThanOutline,
-                translationApplied,
-                bounds,
-                slabbed$formatTraceDouble(modelDyAfterWrapper),
-                reason);
-        if (rowCount == 1 || rowCount % 25 == 0) {
-            slabbed$logMc1211LiveModelTraceSummary("rows_observed");
-        }
-    }
-
-    private static void slabbed$recordMc1211FullMeshBoundsTrace(
-            BlockRenderView view,
-            BlockPos pos,
-            BlockState state,
-            BakedModel model,
-            float dy,
-            int totalQuadsSeen,
-            int verticesVisited,
-            double minBeforeY,
-            double maxBeforeY,
-            double minAfterY,
-            double maxAfterY,
-            String reason
-    ) {
-        String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
-        String matrixKey = blockId + "@" + pos.toShortString();
-        String matrixRow = slabbed$mc1211FamilyMatrixRow(blockId);
-        String modelClass = model == null ? "null" : model.getClass().getName();
-        String tickOrFrame = slabbed$mc1211ClientTickOrUnknown();
-        int passSequence = slabbed$mc1211FullMeshBoundsPassSequence.incrementAndGet();
-        String meshTraceKey = matrixKey + "|pass=" + passSequence;
-        BlockPos observedPos = slabbed$fullMeshBoundsTracePos;
-        boolean observedProofRow = observedPos != null && observedPos.equals(pos);
-        String aggregateDedupKey = (observedProofRow ? meshTraceKey : matrixKey)
-                + "|" + slabbed$formatTraceDouble(dy)
-                + "|" + reason;
-        boolean finiteBounds = Double.isFinite(minBeforeY)
-                && Double.isFinite(maxBeforeY)
-                && Double.isFinite(minAfterY)
-                && Double.isFinite(maxAfterY);
-
-        if (observedProofRow) {
-            slabbed$fullMeshBoundsLastTrace = new FullMeshBoundsTrace(
-                    true,
-                    meshTraceKey,
-                    matrixKey,
-                    matrixRow,
-                    blockId,
-                    pos.toShortString(),
-                    state.toString(),
-                    dy,
-                    modelClass,
-                    tickOrFrame,
-                    passSequence,
-                    totalQuadsSeen,
-                    verticesVisited,
-                    finiteBounds ? minBeforeY : Double.NaN,
-                    finiteBounds ? maxBeforeY : Double.NaN,
-                    finiteBounds ? minAfterY : Double.NaN,
-                    finiteBounds ? maxAfterY : Double.NaN,
-                    reason,
-                    "FULL_MESH_SNAPSHOT",
-                    "observed_pos",
-                    aggregateDedupKey);
-            slabbed$logMc1211FullMeshBoundsSnapshotTrace(
-                    slabbed$fullMeshBoundsLastTrace,
-                    state,
-                    finiteBounds);
-        }
-
-        if (!Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace")) {
-            return;
-        }
-        if (!slabbed$shouldLogMc1211FullMeshBoundsTrace(pos, blockId, dy)) {
-            return;
-        }
-        if (!slabbed$mc1211FullMeshBoundsTraceRows.add(aggregateDedupKey)) {
-            return;
-        }
-        double expectedMinAfterY = finiteBounds ? minBeforeY + dy : Double.NaN;
-        double expectedMaxAfterY = finiteBounds ? maxBeforeY + dy : Double.NaN;
-        Slabbed.LOGGER.info(
-                "[MC1211_FULL_MESH_BOUNDS_TRACE] meshTraceKey={} matrixKey={} matrixRow={} blockId={} pos={} state={} dy={} modelClass={} tickOrFrame={} passSequence={} rowSource={} quadsVisited={} verticesVisited={} minBeforeY={} maxBeforeY={} minAfterY={} maxAfterY={} expectedMinAfterY={} expectedMaxAfterY={} viewClass={} reason={} snapshotSource={} aggregateDedupKey={}",
-                meshTraceKey,
-                matrixKey,
-                matrixRow,
-                blockId,
-                pos.toShortString(),
-                state,
-                slabbed$formatTraceDouble(dy),
-                modelClass,
-                tickOrFrame,
-                passSequence,
-                "FULL_MESH_AGGREGATE",
-                totalQuadsSeen,
-                verticesVisited,
-                finiteBounds ? slabbed$formatTraceDouble(minBeforeY) : "NaN",
-                finiteBounds ? slabbed$formatTraceDouble(maxBeforeY) : "NaN",
-                finiteBounds ? slabbed$formatTraceDouble(minAfterY) : "NaN",
-                finiteBounds ? slabbed$formatTraceDouble(maxAfterY) : "NaN",
-                slabbed$formatTraceDouble(expectedMinAfterY),
-                slabbed$formatTraceDouble(expectedMaxAfterY),
-                view.getClass().getName(),
-                reason,
-                "aggregate_emit",
-                aggregateDedupKey);
-    }
-
-    private static void slabbed$logMc1211FullMeshBoundsSnapshotTrace(
-            FullMeshBoundsTrace trace,
-            BlockState state,
-            boolean finiteBounds
-    ) {
-        if (!Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace")) {
-            return;
-        }
-        Slabbed.LOGGER.info(
-                "[MC1211_FULL_MESH_BOUNDS_TRACE] meshTraceKey={} matrixKey={} matrixRow={} blockId={} pos={} state={} dy={} modelClass={} tickOrFrame={} passSequence={} rowSource={} quadsVisited={} verticesVisited={} minBeforeY={} maxBeforeY={} minAfterY={} maxAfterY={} expectedMinAfterY={} expectedMaxAfterY={} viewClass={} reason={} snapshotSource={} aggregateDedupKey={}",
-                trace.meshTraceKey(),
-                trace.matrixKey(),
-                trace.matrixRow(),
-                trace.blockId(),
-                trace.pos(),
-                state,
-                slabbed$formatTraceDouble(trace.dy()),
-                trace.modelClass(),
-                trace.tickOrFrame(),
-                trace.passSequence(),
-                trace.rowSource(),
-                trace.totalQuadsSeen(),
-                trace.verticesVisited(),
-                finiteBounds ? slabbed$formatTraceDouble(trace.minBeforeY()) : "NaN",
-                finiteBounds ? slabbed$formatTraceDouble(trace.maxBeforeY()) : "NaN",
-                finiteBounds ? slabbed$formatTraceDouble(trace.minAfterY()) : "NaN",
-                finiteBounds ? slabbed$formatTraceDouble(trace.maxAfterY()) : "NaN",
-                finiteBounds ? slabbed$formatTraceDouble(trace.minBeforeY() + trace.dy()) : "NaN",
-                finiteBounds ? slabbed$formatTraceDouble(trace.maxBeforeY() + trace.dy()) : "NaN",
-                "snapshot",
-                trace.reason(),
-                trace.snapshotSource(),
-                trace.aggregateDedupKey());
-    }
-
-    private static boolean slabbed$shouldLogMc1211FullMeshBoundsTrace(BlockPos pos, String blockId, float dy) {
-        BlockPos observedPos = slabbed$fullMeshBoundsTracePos;
-        if (observedPos != null && observedPos.equals(pos)) {
-            return true;
-        }
-        return slabbed$isMc1211FamilyMatrixTraceCandidateBlockId(blockId)
-                && Math.abs(dy) > 1.0e-6f;
-    }
-
-    private static boolean slabbed$isMc1211FamilyMatrixTraceCandidateBlockId(String blockId) {
-        return "minecraft:stone".equals(blockId)
-                || "minecraft:oak_log".equals(blockId)
-                || "minecraft:oak_planks".equals(blockId)
-                || "minecraft:crafting_table".equals(blockId)
-                || "minecraft:stone_wall".equals(blockId)
-                || "minecraft:cobblestone_wall".equals(blockId)
-                || "minecraft:stone_stairs".equals(blockId)
-                || "minecraft:oak_fence".equals(blockId)
-                || "minecraft:stone_slab".equals(blockId);
-    }
-
-    private static String slabbed$mc1211FamilyMatrixRow(String blockId) {
-        return switch (blockId) {
-            case "minecraft:stone" -> "STONE";
-            case "minecraft:oak_log", "minecraft:oak_planks" -> "KNOWN_GOOD_1";
-            case "minecraft:crafting_table" -> "KNOWN_GOOD_2";
-            case "minecraft:stone_wall" -> "STONE_WALL";
-            case "minecraft:cobblestone_wall" -> "COBBLESTONE_WALL";
-            case "minecraft:oak_fence" -> "OAK_FENCE";
-            case "minecraft:stone_stairs" -> "STONE_STAIRS";
-            default -> "UNKNOWN";
-        };
-    }
-
-    private static String slabbed$mc1211ClientTickOrUnknown() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null || mc.world == null) {
-            return "unknown";
-        }
-        return Long.toString(mc.world.getTime());
-    }
-
-    private static void slabbed$logMc1211LiveModelTraceCanary(String blockFilter, BlockPos near, int radius, boolean parseFailed) {
-        if (slabbed$mc1211LiveModelTraceCanaryLogged) {
-            return;
-        }
-        slabbed$mc1211LiveModelTraceCanaryLogged = true;
-        Slabbed.LOGGER.info(
-                "[MC1211_LIVE_MODEL_TRACE_CANARY] enabled=true traceRunsByDefault=false blockFilter={} nearFilter={} radius={} parseFailed={} path=OffsetBlockStateModel.emitBlockQuads behaviorChanged=false",
-                blockFilter,
-                near == null ? "none" : near.toShortString(),
-                radius,
-                parseFailed);
-        if (parseFailed && !slabbed$mc1211LiveModelTraceParseFailureLogged) {
-            slabbed$mc1211LiveModelTraceParseFailureLogged = true;
-            Slabbed.LOGGER.info(
-                    "[MC1211_LIVE_MODEL_TRACE_SUMMARY] reason=parse_failure rows=0 uniquePositions=0 skipped={} skippedByBlockFilter={} skippedByRadius={} parseFailed=true rawNearFilter={}",
-                    slabbed$mc1211LiveModelTraceSkippedCount,
-                    slabbed$mc1211LiveModelTraceSkippedByBlockFilterCount,
-                    slabbed$mc1211LiveModelTraceSkippedByRadiusCount,
-                    System.getProperty("slabbed.mc1211.liveModelTraceNear", ""));
-        }
-    }
-
-    private static void slabbed$logMc1211LiveModelTraceSummary(String reason) {
-        Slabbed.LOGGER.info(
-                "[MC1211_LIVE_MODEL_TRACE_SUMMARY] reason={} rows={} uniquePositions={} skipped={} skippedByBlockFilter={} skippedByRadius={} reasonMatchesOutline={} reasonLowerThanOutline={} reasonHigherThanOutline={} reasonOutlineUnavailable={} reasonNotVideoEquivalent={}",
-                reason,
-                slabbed$mc1211LiveModelTraceRowCount,
-                slabbed$mc1211LiveModelTraceRows.size(),
-                slabbed$mc1211LiveModelTraceSkippedCount,
-                slabbed$mc1211LiveModelTraceSkippedByBlockFilterCount,
-                slabbed$mc1211LiveModelTraceSkippedByRadiusCount,
-                slabbed$mc1211LiveModelTraceMatchesOutlineCount,
-                slabbed$mc1211LiveModelTraceLowerThanOutlineCount,
-                slabbed$mc1211LiveModelTraceHigherThanOutlineCount,
-                slabbed$mc1211LiveModelTraceOutlineUnavailableCount,
-                slabbed$mc1211LiveModelTraceNotVideoEquivalentCount);
-    }
-
-    private static BlockPos slabbed$mc1211LiveModelTraceNearPos() {
-        String raw = System.getProperty("slabbed.mc1211.liveModelTraceNear", "");
-        if (raw.isBlank()) {
-            return null;
-        }
-        String[] parts = raw.trim().split(",");
-        if (parts.length != 3) {
-            return null;
-        }
-        try {
-            return new BlockPos(
-                    Integer.parseInt(parts[0].trim()),
-                    Integer.parseInt(parts[1].trim()),
-                    Integer.parseInt(parts[2].trim()));
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    private static int slabbed$mc1211ManhattanDistance(BlockPos pos, BlockPos near) {
-        return Math.abs(pos.getX() - near.getX())
-                + Math.abs(pos.getY() - near.getY())
-                + Math.abs(pos.getZ() - near.getZ());
-    }
-
-    private static int slabbed$mc1211LiveModelTraceRadius() {
-        String raw = System.getProperty("slabbed.mc1211.liveModelTraceRadius", "3").trim();
-        if (raw.isEmpty()) {
-            return 3;
-        }
-        try {
-            int parsed = Integer.parseInt(raw);
-            return Math.max(0, Math.min(parsed, 32));
-        } catch (NumberFormatException ignored) {
-            return 3;
-        }
-    }
-
-    private static String slabbed$mc1211LiveModelTraceReason(
-            double modelDyBeforeWrapper,
-            double modelDyAfterWrapper,
-            double outlineDy,
-            boolean renderViewCarrierMismatch
-    ) {
-        if (renderViewCarrierMismatch) {
-            return "MODEL_TRACE_NOT_VIDEO_EQUIVALENT";
-        }
-        if (Double.isNaN(outlineDy)) {
-            return "MODEL_TRACE_OUTLINE_UNAVAILABLE";
-        }
-        if (Math.abs(modelDyAfterWrapper - outlineDy) <= 1.0e-6) {
-            return "MODEL_TRACE_MATCHES_OUTLINE";
-        }
-        if (modelDyAfterWrapper < outlineDy - 1.0e-6) {
-            return "MODEL_TRACE_LOWER_THAN_OUTLINE";
-        }
-        if (modelDyAfterWrapper > outlineDy + 1.0e-6) {
-            return "MODEL_TRACE_HIGHER_THAN_OUTLINE";
-        }
-        return "MODEL_TRACE_NOT_VIDEO_EQUIVALENT";
-    }
-
-    private static void slabbed$mc1211RecordReason(String reason) {
-        switch (reason) {
-            case "MODEL_TRACE_MATCHES_OUTLINE" -> slabbed$mc1211LiveModelTraceMatchesOutlineCount++;
-            case "MODEL_TRACE_LOWER_THAN_OUTLINE" -> slabbed$mc1211LiveModelTraceLowerThanOutlineCount++;
-            case "MODEL_TRACE_HIGHER_THAN_OUTLINE" -> slabbed$mc1211LiveModelTraceHigherThanOutlineCount++;
-            case "MODEL_TRACE_OUTLINE_UNAVAILABLE" -> slabbed$mc1211LiveModelTraceOutlineUnavailableCount++;
-            default -> slabbed$mc1211LiveModelTraceNotVideoEquivalentCount++;
-        }
-    }
-
-    private static String slabbed$relativePos(BlockPos pos, BlockPos near) {
-        int dx = pos.getX() - near.getX();
-        int dy = pos.getY() - near.getY();
-        int dz = pos.getZ() - near.getZ();
-        return dx + "," + dy + "," + dz;
-    }
-
-    private static String slabbed$renderSection(BlockPos pos) {
-        int chunkX = pos.getX() >> 4;
-        int chunkZ = pos.getZ() >> 4;
-        int sectionY = pos.getY() >> 4;
-        return "chunk(" + chunkX + "," + chunkZ + ")/sectionY(" + sectionY + ")";
-    }
-
-    private static String slabbed$outlineBounds(BlockRenderView view, BlockPos pos, BlockState state) {
-        try {
-            VoxelShape outline = state.getOutlineShape(view, pos, ShapeContext.absent());
-            if (outline == null || outline.isEmpty()) {
-                return "empty";
-            }
-            Box box = outline.getBoundingBox();
-            return String.format(
-                    Locale.ROOT,
-                    "[%.6f,%.6f]",
-                    box.minY,
-                    box.maxY);
-        } catch (RuntimeException e) {
-            return "error:" + e.getClass().getSimpleName();
-        }
-    }
-
-    private static String slabbed$formatTraceDouble(double value) {
-        if (Double.isNaN(value)) {
-            return "NaN";
-        }
-        return String.format(Locale.ROOT, "%.6f", value);
     }
 }

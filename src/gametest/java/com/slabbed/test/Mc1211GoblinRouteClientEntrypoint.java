@@ -36,7 +36,6 @@ import net.minecraft.world.gen.WorldPresets;
 import net.minecraft.world.level.LevelInfo;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.SlabSupport;
 
 /**
@@ -5029,16 +5028,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
         if (sameSpotPhase == 3) {
             syncSameSpotAim(client);
-            System.setProperty("slabbed.render.offset.trace", "true");
-            OffsetBlockStateModel.resetRenderOffsetTrace(sameSpotFullPos);
+            sameSpotPreModelTrace = "retired_release_hygiene";
             sameSpotPhase = 4;
             sameSpotPhaseTick = sameSpotTicks;
             return;
         }
         if (sameSpotPhase == 4) {
             sameSpotPreTarget = describeCrosshair(client);
-            sameSpotPreModelTrace = describeModelTrace(OffsetBlockStateModel.snapshotRenderOffsetTrace());
-            OffsetBlockStateModel.resetRenderOffsetTrace(sameSpotFullPos);
             requestSameSpotBreak(client);
             sameSpotPhase = 5;
             sameSpotPhaseTick = sameSpotTicks;
@@ -5049,8 +5045,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
         if (sameSpotPhase == 5) {
             sameSpotPostTarget = describeCrosshair(client);
-            sameSpotPostModelTrace = describeModelTrace(OffsetBlockStateModel.snapshotRenderOffsetTrace());
-            System.clearProperty("slabbed.render.offset.trace");
+            sameSpotPostModelTrace = "retired_release_hygiene";
             emitSameSpotRow(client);
             sameSpotFinalized = true;
             emitted = true;
@@ -5261,7 +5256,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " reason=" + reason);
         sameSpotFinalized = true;
         emitted = true;
-        System.clearProperty("slabbed.render.offset.trace");
         if (clientReadyForStop()) {
             MinecraftClient.getInstance().scheduleStop();
         }
@@ -5284,15 +5278,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + "/state=" + state
                 + "/dy=" + formatDouble(SlabSupport.getYOffset(client.world, pos, state))
                 + "/anchor=" + SlabAnchorAttachment.isAnchored(client.world, pos);
-    }
-
-    private static String describeModelTrace(OffsetBlockStateModel.RenderOffsetTrace trace) {
-        if (trace == null || !trace.seen()) {
-            return "missing";
-        }
-        return "modelDy=" + formatDouble(trace.modelDy())
-                + "/pos=" + trace.pos()
-                + "/state=" + trace.state();
     }
 
     private static void runSuperflatModelHitboxHarnessRoute(MinecraftClient client) {
@@ -5387,7 +5372,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                             .setStackInHand(Hand.MAIN_HAND, stack.copy());
                 }
             }
-            OffsetBlockStateModel.resetFullMeshBoundsTrace(superflatHarnessPlacePos);
             superflatHarnessRowPhase = 1;
             superflatHarnessPhaseTick = superflatHarnessTicks;
             return;
@@ -5540,38 +5524,31 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         VoxelShape effectiveRaycast = rawRaycastShapeEmpty ? outline : raycast;
         String outlineBounds = shapeBounds(outline);
         String raycastBounds = shapeBounds(effectiveRaycast);
-        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
-        String modelMeshMinY = meshTrace.seen() ? formatDouble(meshTrace.minAfterY()) : "NaN";
-        String modelMeshMaxY = meshTrace.seen() ? formatDouble(meshTrace.maxAfterY()) : "NaN";
-        String meshTraceKey = meshTrace.seen() ? meshTrace.meshTraceKey() : "none";
-        String meshMatrixKey = meshTrace.seen() ? meshTrace.matrixKey() : "none";
-        String meshMatrixRow = meshTrace.seen() ? meshTrace.matrixRow() : "UNKNOWN";
-        String meshBlockId = meshTrace.seen() ? meshTrace.blockId() : "none";
-        String meshPos = meshTrace.seen() ? meshTrace.pos() : "none";
-        String meshState = meshTrace.seen() ? meshTrace.state() : "none";
-        String meshDy = meshTrace.seen() ? formatDouble(meshTrace.dy()) : "NaN";
-        String meshModelClass = meshTrace.seen() ? meshTrace.modelClass() : "unknown";
-        String meshTickOrFrame = meshTrace.seen() ? meshTrace.tickOrFrame() : "unknown";
-        String meshPassSequence = meshTrace.seen() ? Integer.toString(meshTrace.passSequence()) : "0";
-        String meshQuadsVisited = meshTrace.seen() ? Integer.toString(meshTrace.totalQuadsSeen()) : "0";
-        String meshVerticesVisited = meshTrace.seen() ? Integer.toString(meshTrace.verticesVisited()) : "0";
-        String meshMinBeforeY = meshTrace.seen() ? formatDouble(meshTrace.minBeforeY()) : "NaN";
-        String meshMaxBeforeY = meshTrace.seen() ? formatDouble(meshTrace.maxBeforeY()) : "NaN";
-        String meshSnapshotSource = meshTrace.seen() ? meshTrace.snapshotSource() : "none";
-        String meshAggregateDedupKey = meshTrace.seen() ? meshTrace.aggregateDedupKey() : "none";
+        String modelMeshMinY = "NaN";
+        String modelMeshMaxY = "NaN";
+        String meshTraceKey = "retired_release_hygiene";
+        String meshMatrixKey = "none";
+        String meshMatrixRow = "RETIRED";
+        String meshBlockId = "none";
+        String meshPos = "none";
+        String meshState = "none";
+        String meshDy = "NaN";
+        String meshModelClass = "none";
+        String meshTickOrFrame = "unknown";
+        String meshPassSequence = "0";
+        String meshQuadsVisited = "0";
+        String meshVerticesVisited = "0";
+        String meshMinBeforeY = "NaN";
+        String meshMaxBeforeY = "NaN";
+        String meshSnapshotSource = "retired_release_hygiene";
+        String meshAggregateDedupKey = "none";
         String outlineMinY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().minY);
         String outlineMaxY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().maxY);
         String raycastMinY = effectiveRaycast.isEmpty() ? "NaN" : formatDouble(effectiveRaycast.getBoundingBox().minY);
         String raycastMaxY = effectiveRaycast.isEmpty() ? "NaN" : formatDouble(effectiveRaycast.getBoundingBox().maxY);
-        double delta = (meshTrace.seen() && !outline.isEmpty())
-                ? Math.abs(meshTrace.minAfterY() - outline.getBoundingBox().minY)
-                : Double.NaN;
-        boolean triadBoundsPresent = meshTrace.seen() && !outline.isEmpty() && !effectiveRaycast.isEmpty();
-        boolean triadAligned = triadBoundsPresent
-                && delta <= 1.0e-6
-                && Math.abs(meshTrace.minAfterY() - effectiveRaycast.getBoundingBox().minY) <= 1.0e-6
-                && Math.abs(meshTrace.maxAfterY() - outline.getBoundingBox().maxY) <= 1.0e-6
-                && Math.abs(meshTrace.maxAfterY() - effectiveRaycast.getBoundingBox().maxY) <= 1.0e-6;
+        double delta = Double.NaN;
+        boolean triadBoundsPresent = false;
+        boolean triadAligned = false;
         boolean placedDyExpected = Math.abs(placedDy - (-0.5d)) <= 1.0e-6;
         boolean technicalTriadAligned = triadAligned && placedDyExpected && substrateProven;
         boolean productVisualLawPass = !row.productBadSuspect();
@@ -5589,9 +5566,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 verdict = "TRACE_GAP_NOT_REAL_PLACEMENT";
                 reason = "interact_block_not_success";
                 superflatHarnessTraceGapRows++;
-            } else if (!meshTrace.seen()) {
+            } else if (!triadBoundsPresent) {
                 verdict = "TRACE_GAP_MODEL_BOUNDS";
-                reason = "full_mesh_trace_missing_for_row";
+                reason = "production_model_trace_retired_for_release_hygiene";
                 superflatHarnessTraceGapRows++;
             } else if (outline.isEmpty() || effectiveRaycast.isEmpty()) {
                 verdict = "TRACE_GAP_OUTLINE_RAYCAST_BOUNDS";
@@ -5702,8 +5679,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " raycastMaxY=" + raycastMaxY
                 + " targetPos=" + targetPos
                 + " targetFace=" + targetFace
-                + " expectedModelMinY=" + (meshTrace.seen() ? formatDouble(meshTrace.minBeforeY() + meshTrace.dy()) : "NaN")
-                + " expectedModelMaxY=" + (meshTrace.seen() ? formatDouble(meshTrace.maxBeforeY() + meshTrace.dy()) : "NaN")
+                + " expectedModelMinY=NaN"
+                + " expectedModelMaxY=NaN"
                 + " modelVsOutlineDelta=" + formatDouble(delta)
                 + " modelClass=" + meshModelClass
                 + " outlineBounds=" + outlineBounds
@@ -6566,7 +6543,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 ? "NaN..NaN"
                 : formatDouble(outlineShape.getBoundingBox().minY) + ".."
                 + formatDouble(outlineShape.getBoundingBox().maxY);
-        OffsetBlockStateModel.RenderOffsetTrace trace = sampleModelTrace(fullPos);
         String reason;
         boolean modelEqualsOutline;
         boolean modelLowerThanOutline;
@@ -6577,42 +6553,15 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         String modelDyProxy;
         String modelVisualEquivalence;
         String targetDyText = formatDouble(targetDy);
-        if (!trace.seen()) {
-            reason = "TRACE_GAP_RENDER_MODEL_PATH_NOT_OBSERVABLE_FROM_GAMETEST";
-            modelEqualsOutline = false;
-            modelLowerThanOutline = false;
-            traceGap = true;
-            modelDy = "NaN";
-            modelBounds = "NaN..NaN";
-            modelObserverKind = "not_observable";
-            modelDyProxy = "NaN";
-            modelVisualEquivalence = "no";
-        } else {
-            double tracedModelDy = trace.modelDy();
-            double modelDyDelta = tracedModelDy - outlineDy;
-            String inferredModelBounds = inferShiftedBounds(outlineShape, modelDyDelta);
-            double modelMin = shiftedMinY(outlineShape, modelDyDelta);
-            double outlineMin = outlineShape.isEmpty() ? Double.NaN : outlineShape.getBoundingBox().minY;
-            modelLowerThanOutline = Double.isFinite(modelMin)
-                    && Double.isFinite(outlineMin)
-                    && modelMin < outlineMin - 1.0e-6;
-            modelEqualsOutline = Math.abs(modelDyDelta) <= 1.0e-6;
-            modelDy = formatDouble(tracedModelDy);
-            modelBounds = inferredModelBounds;
-            modelObserverKind = "gametest_hook";
-            modelDyProxy = modelDy;
-            modelVisualEquivalence = "proxy_only";
-            if (modelLowerThanOutline) {
-                reason = "MODEL_LOWER_THAN_OUTLINE";
-                traceGap = false;
-            } else if (!modelEqualsOutline) {
-                reason = "MODEL_DY_MISMATCH";
-                traceGap = true;
-            } else {
-                reason = "TRACE_GAP_MODEL_PROXY_ONLY_NOT_VISUAL_MESH";
-                traceGap = true;
-            }
-        }
+        reason = "TRACE_GAP_PRODUCTION_MODEL_TRACE_RETIRED_FOR_RELEASE_HYGIENE";
+        modelEqualsOutline = false;
+        modelLowerThanOutline = false;
+        traceGap = true;
+        modelDy = "NaN";
+        modelBounds = "NaN..NaN";
+        modelObserverKind = "retired_release_hygiene";
+        modelDyProxy = "NaN";
+        modelVisualEquivalence = "no";
 
         System.out.println("[MC1211_MODEL_VS_OUTLINE_ROW]"
                 + " row=" + rowName
@@ -6823,30 +6772,6 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                     .append(serverWorld == null ? "UNAVAILABLE" : serverWorld.getBlockState(pos).getBlock());
         }
         return line.toString();
-    }
-
-    private static OffsetBlockStateModel.RenderOffsetTrace sampleModelTrace(BlockPos observedPos) {
-        System.setProperty("slabbed.render.offset.trace", "true");
-        OffsetBlockStateModel.resetRenderOffsetTrace(observedPos);
-        OffsetBlockStateModel.RenderOffsetTrace trace = OffsetBlockStateModel.snapshotRenderOffsetTrace();
-        System.clearProperty("slabbed.render.offset.trace");
-        return trace;
-    }
-
-    private static String inferShiftedBounds(VoxelShape outlineShape, double modelDyDelta) {
-        if (outlineShape.isEmpty()) {
-            return "NaN..NaN";
-        }
-        return formatDouble(outlineShape.getBoundingBox().minY + modelDyDelta)
-                + ".."
-                + formatDouble(outlineShape.getBoundingBox().maxY + modelDyDelta);
-    }
-
-    private static double shiftedMinY(VoxelShape outlineShape, double modelDyDelta) {
-        if (outlineShape.isEmpty()) {
-            return Double.NaN;
-        }
-        return outlineShape.getBoundingBox().minY + modelDyDelta;
     }
 
     private record SuperflatHarnessRowSpec(
