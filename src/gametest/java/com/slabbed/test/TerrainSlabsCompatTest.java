@@ -322,4 +322,20 @@ public final class TerrainSlabsCompatTest {
                 "lantern on a vanilla TOP slab capping a Terrain Slab should compound to -1.0 (BUG 1), got " + dy);
         ctx.complete();
     }
+
+    // Vegetation double-offset fix: Terrain Slabs already lowers its own vegetation on slabs, so
+    // Slabbed must NOT also lower it (otherwise generated grass clips into the slab). dy stays 0.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void vegetationNotLoweredWhenTerrainSlabsHandlesIt(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        BlockPos grassPos = base.up();
+        w.setBlockState(grassPos, Blocks.SHORT_GRASS.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double dy = SlabSupport.getYOffset(w, grassPos, w.getBlockState(grassPos));
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "short grass on a TS slab must NOT be lowered by Slabbed (TS handles it), got " + dy);
+        ctx.complete();
+    }
+
 }

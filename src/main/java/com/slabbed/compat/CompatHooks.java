@@ -49,4 +49,15 @@ public final class CompatHooks {
         }
         return CompatSlabSurfaceKind.NONE;
     }
+
+    /**
+     * True if Terrain Slabs already lowers this block on a slab itself (vegetation), so Slabbed
+     * must leave it alone — otherwise it double-lowers and clips. Inert without Terrain Slabs.
+     */
+    public static boolean isNativelyOffsetOnTop(BlockState state) {
+        if (isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+            return TerrainSlabsCompat.isNativelyOffsetOnTop(state);
+        }
+        return false;
+    }
 }

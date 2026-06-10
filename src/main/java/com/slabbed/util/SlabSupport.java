@@ -1047,6 +1047,12 @@ public final class SlabSupport {
             return 0.0;
         }
 
+        // Terrain Slabs already lowers its own vegetation/snow on slabs; Slabbed must not also
+        // offset those or they double-lower and clip into the slab (generated grass on a TS slab).
+        if (CompatHooks.isNativelyOffsetOnTop(state)) {
+            return 0.0;
+        }
+
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
         if (IN_GET_Y_OFFSET.get()) {
             if (state.getBlock() instanceof SlabBlock

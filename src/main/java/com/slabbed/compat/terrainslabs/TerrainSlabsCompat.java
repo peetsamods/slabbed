@@ -4,6 +4,7 @@ import com.slabbed.compat.CompatSlabSurfaceKind;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.PlantBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Property;
@@ -41,6 +42,15 @@ public final class TerrainSlabsCompat {
      */
     public static boolean shouldSkipSlabSupport(BlockState state) {
         return shouldSkipOffset(state);
+    }
+
+    /**
+     * Blocks that Terrain Slabs already offsets itself when they sit on a slab — vegetation
+     * (grass, ferns, flowers, …). Slabbed must NOT also offset these, or they double-lower and
+     * clip into the slab. (Snow is already excluded by Slabbed's isThinTopLayer.)
+     */
+    public static boolean isNativelyOffsetOnTop(BlockState state) {
+        return state != null && state.getBlock() instanceof PlantBlock;
     }
 
     /**
