@@ -7,7 +7,7 @@
 - **Branch:** `claude/1211-terrain-slabs-named-surface`
 - **Worktree:** `/Users/joolmac/CascadeProjects/Slabbed-claude-1211port-candidate-20260606`
 - **Remote:** `peetsamods/slabbed` — **PUSHED** (`git push -u origin` done; tracks `origin/claude/1211-terrain-slabs-named-surface`).
-- **HEAD:** `d4dae6c5` (pushed). **Uncommitted:** the in-flight fence-side carrier fix (see below).
+- **HEAD:** `3739f76b` (pushed). Tree clean.
 - **Minecraft:** 1.21.1 · **Loader:** Fabric 0.19.2 · **Yarn:** 1.21.1+build.3 · **Java:** 21
 - **Author convention:** `Julia Schohl <joolmac@users.noreply.github.com>` + `Co-Authored-By: Claude Opus 4.8`.
 - This is the **most feature-complete** Slabbed line (SlabSupport ~2400 lines). Canonical `port/mc-1.21.1`
@@ -37,17 +37,17 @@ this block," replacing the scattered consumers (`getYOffset` vs `loweredBottomSl
   Slabs, which lowers veg/snow itself (`CompatHooks.isNativelyOffsetOnTop`). Stops generated grass clipping
   into TS slabs. LIVE-CONFIRMED.
 
-## IN FLIGHT — fence-side float (uncommitted; do NOT commit until live-confirmed)
-A slab placed beside a **lowered fence** floats instead of sitting flush. The fence is lowered because it
-stands on a TS BOTTOM_LIKE slab (e.g. Packed Mud Slab) — confirmed via `/slabdy`.
-- **Re-applied:** `isLoweredConnectingBlockCarrier` in `SlabSupport` (a lowered fence/wall/pane is a
-  side-support carrier) + `slabBesideStackedFenceOnTsInheritsLowering` test. **Harness PROVES** the slab
-  inherits −0.5 (98/98, incl. Julia's exact 2-fence-on-TS-slab geometry).
-- **But live still floated** → root is the **PLACEMENT**, not the lowering: `BlockItemPlacementIntentMixin`'s
-  remapper only engages for SOLID targets, so a fence target (non-solid) bails → the slab lands a cell off.
-- **Next:** Julia to `/slabdy` the PLACED slab (cell + dy) → confirms the off-cell → extend the placement
-  remapper to handle non-solid (fence/wall/pane) lowered targets. Files dirty: `SlabSupport.java`,
-  `TerrainSlabsCompatTest.java`.
+## DONE — fence-side float (`3739f76b`, LIVE-CONFIRMED + pushed)
+A slab placed beside a **lowered fence/wall/pane** (lowered because it stands on a TS BOTTOM_LIKE slab, e.g.
+Packed Mud Slab) used to float at grid height instead of sitting flush. Two coupled causes, both fixed:
+- **LOWERING** (`SlabSupport`): `isLoweredConnectingBlockCarrier` makes a lowered fence/wall/pane a
+  side-support carrier (wired into `isFullHeightLoweredCarrierForSideSupport`), so a slab placed beside it
+  inherits −0.5 via `getYOffset`. Harness-proven (`slabBesideStackedFenceOnTsInheritsLowering`).
+- **PLACEMENT** (`BlockItemPlacementIntentMixin`): the side-hit remapper used to bail on any non-solid target
+  (`target_not_solid`) → vanilla planted the slab at grid height. It now engages for a lowered connecting
+  block (`targetIsLoweredConnectingCarrier`) and routes through the ordinary-lowered-full-block path:
+  lower-half→BOTTOM, upper-half→TOP, placed in the neighbor cell where it inherits −0.5 and sits flush.
+- Confirmed live (slab flush against lowered Spruce Fence, both halves track). Harness 98/98.
 
 ## Open (need Julia / deferred)
 - **BUG A** — opaque full cube lowers −0.5 on a TS slab (parity with vanilla slabs by design). The

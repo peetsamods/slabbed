@@ -194,3 +194,17 @@ IN FLIGHT (uncommitted): fence-side float — slab beside a lowered fence floats
 PLACEMENT remapper bailing on non-solid (fence) targets. Awaiting Julia's /slabdy on the placed slab.
 Open: BUG A (likely stale TerrainSlabsDirectSupportClientGameTest contract; needs live cull check),
 BUG4 (compound via generic anchor path) deferred. Release gate = live matrix pass.
+
+---
+
+## Savepoint 2026-06-10 (afternoon) — fence-side float RESOLVED
+
+`3739f76b` (pushed). The fence-side float is fixed end-to-end and LIVE-CONFIRMED (slab flush against a
+lowered Spruce Fence, both halves track). Root was two coupled gaps: (1) lowering — a lowered fence/wall/
+pane is now a side-support carrier (`isLoweredConnectingBlockCarrier`), so a slab beside it inherits −0.5;
+(2) placement — the side-hit remapper bailed on non-solid targets (`target_not_solid`) and let vanilla
+plant the slab at grid height; it now engages for a lowered connecting block (`targetIsLoweredConnecting-
+Carrier`) and routes through the ordinary-lowered-full-block path (lower→BOTTOM, upper→TOP, neighbor cell
+inherits −0.5). Julia's two /slabdy readings (fence at 24,119,8 + 24,120,8 both dy=−0.500 LOWERED) proved
+the lowering was already correct and isolated the bug to placement. Harness 98/98. Tree clean at HEAD.
+Open unchanged: BUG A (likely-stale cull contract, live check), BUG4 (deferred). Next: RESOLVER + live matrix.
