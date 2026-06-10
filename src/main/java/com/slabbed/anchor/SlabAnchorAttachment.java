@@ -383,7 +383,7 @@ public final class SlabAnchorAttachment {
         }
         LongOpenHashSet existing = chunk.getAttached(type);
         LongOpenHashSet set = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
-        BlockState stateBefore = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.isEnabled()
+        BlockState stateBefore = RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()
                 ? world.getBlockState(pos) : null;
         if (set.add(pos.asLong())) {
             // setAttached triggers persistence + auto-sync for synced attachments.
@@ -393,9 +393,9 @@ public final class SlabAnchorAttachment {
                         label, pos.toShortString(), chunk.getPos(), set.size());
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "add", true);
-            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.recordAnchorEvent(
+            RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
                     world,
-                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.ADD,
+                    "ADD",
                     type, pos, stateBefore, stateBefore);
             return true;
         }
@@ -460,9 +460,9 @@ public final class SlabAnchorAttachment {
                 chunk.setAttached(type, set);
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "remove", false);
-            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.recordAnchorEvent(
+            RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
                     world,
-                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.REMOVE,
+                    "REMOVE",
                     type, pos, world.getBlockState(pos), world.getBlockState(pos));
         }
         return removed;

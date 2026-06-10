@@ -4,8 +4,6 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.runtime.LoweredSideSlabRetargeter;
-import com.slabbed.util.Beta35FenceWallLiveInspectRecorder;
-import com.slabbed.util.Beta35SlabHeightHitAcceptanceRecorder;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockState;
@@ -1349,7 +1347,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
         if (!slabbed$mc1211TrapdoorSeamMp4ManualStartLogged) {
             slabbed$mc1211TrapdoorSeamMp4ManualStartLogged = true;
-            System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_RED_START]"
+            Slabbed.LOGGER.info("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_RED_START]"
                     + " route=runClient"
                     + " property=" + MC1211_TRAPDOOR_SEAM_MP4_RED_PROPERTY
                     + " sourceTruth=manual-live-recorder"
@@ -1363,7 +1361,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             return;
         }
         slabbed$mc1211TrapdoorSeamMp4ManualRedRows++;
-        System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_RED]"
+        Slabbed.LOGGER.info("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_RED]"
                 + " row=" + slabbed$mc1211TrapdoorSeamMp4ManualRedRows
                 + " finalResult=RED"
                 + " classification=MP4_MANUAL_LIVE_TARGETING_RED"
@@ -1380,7 +1378,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 + " eye=" + slabbed$formatVec(eye)
                 + " end=" + slabbed$formatVec(end)
                 + " gameplayPatch=false");
-        System.out.println("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_SUMMARY]"
+        Slabbed.LOGGER.info("[MC1211_TRAPDOOR_SEAM_MP4_MANUAL_SUMMARY]"
                 + " rows=" + slabbed$mc1211TrapdoorSeamMp4ManualRedRows
                 + " finalResult=RED"
                 + " classification=MP4_MANUAL_LIVE_TARGETING_RED"
@@ -1889,7 +1887,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 client.crosshairTarget,
                 anchoredDecision,
                 sideSlabRetargetFired);
-        Beta35FenceWallLiveInspectRecorder.recordClientTarget(
+        RuntimeDiagnostics.recordFenceWallClientTarget(
                 world,
                 cam,
                 client.player,
@@ -1899,7 +1897,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 initialTarget,
                 client.crosshairTarget,
                 anchoredDecision);
-        Beta35SlabHeightHitAcceptanceRecorder.recordClientTarget(
+        RuntimeDiagnostics.recordSlabHeightClientTarget(
                 world,
                 cam,
                 client.player,

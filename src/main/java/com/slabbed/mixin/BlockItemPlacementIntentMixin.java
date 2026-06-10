@@ -1,7 +1,7 @@
 package com.slabbed.mixin;
 
+import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.util.Beta4ManualLiveTrace;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockEntityProvider;
@@ -407,7 +407,7 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos outgoingPos = outgoing == null ? incomingPos : outgoing.getBlockPos();
         World outgoingWorld = outgoing == null ? world : outgoing.getWorld();
         BlockState outgoingState = outgoingWorld.getBlockState(outgoingPos);
-        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
                 + " phase=" + phase
                 + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
                 + " incomingPos=" + incomingPos.toShortString()
@@ -423,7 +423,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 + " heldItem=" + Registries.ITEM.getId(incoming.getStack().getItem())
                 + " decision=" + decision);
         if (phase.contains("exit")) {
-            System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
+            Slabbed.LOGGER.info("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
                     + " phase=" + phase
                     + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
                     + " incomingPos=" + incomingPos.toShortString()
@@ -447,7 +447,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 && placedState.get(SlabBlock.TYPE) == SlabType.DOUBLE
                 && Math.abs(SlabSupport.getYOffset(world, placePos, placedState) + 0.5d)
                 <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
                 + " phase=finalization-return"
                 + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
                 + " result=" + result
@@ -464,7 +464,7 @@ public abstract class BlockItemPlacementIntentMixin {
     private static ItemUsageContext slabbed$inspectReturn(
             ItemUsageContext incoming, ItemUsageContext outgoing, String reason
     ) {
-        Beta4ManualLiveTrace.logPlacementIntent(incoming, outgoing, reason);
+        RuntimeDiagnostics.logManualPlacementIntent(incoming, outgoing, reason);
         RuntimeDiagnostics.logInspectIntent(incoming, outgoing, reason);
         return outgoing;
     }
