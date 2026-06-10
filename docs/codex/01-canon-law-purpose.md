@@ -603,4 +603,4 @@ This essay answers the “why.” The source pack answers the “what is binding
 
 - Notion: `SLABBED Constitution`, `SLABBED Bug Blasters`, `Slabbed Running Log`, `Slabbed Commit Index`, `Slabbed Release Index`, `SLABBED Hub`.
 - Source pack: `00_SLABBED_SOURCE_INDEX.md`, `01_SLABBED_CANONICAL_DOCTRINE.md`, `02_SLABBED_ACTIVE_STATUS.md`, `03_SLABBED_BUG_BLASTERS.md`, `04_SLABBED_WORKFLOWS.md`, `05_SLABBED_SKILLS_AND_COMMANDS.md`, `06_SLABBED_RESEARCH.md`, `07_SLABBED_ARCHIVE_AND_PRUNE_MAP.md`.
-- GitHub: `joolbits/slabbed`; `SUMMARY.md`; `RULES.md`; `src/main/java/com/slabbed/util/SlabSupport.java`; `src/main/java/com/slabbed/mixin/SlabSupportStateMixin.java`; public repo metadata showing `main` as default branch.
+- GitHub: `peetsamods/slabbed`; `SUMMARY.md`; `RULES.md`; `src/main/java/com/slabbed/util/SlabSupport.java`; `src/main/java/com/slabbed/mixin/SlabSupportStateMixin.java`; public repo metadata showing `main` as default branch.

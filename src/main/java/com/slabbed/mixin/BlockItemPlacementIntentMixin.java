@@ -115,12 +115,17 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private static boolean slabbed$isCompoundSideHit(ItemUsageContext context, BlockPos pos, BlockState state) {
-        if (context.getSide().getAxis().isVertical()
-                || state.getBlock() instanceof SlabBlock
-                || !SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), pos)) {
+        if (context.getSide().getAxis().isVertical()) {
             return false;
         }
         double yOffset = SlabSupport.getYOffset(context.getWorld(), pos, state);
+        if (state.getBlock() instanceof SlabBlock) {
+            return SlabSupport.isCompoundVisibleSlabLaneOwner(context.getWorld(), pos, state)
+                    && Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+        }
+        if (!SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), pos)) {
+            return false;
+        }
         return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
@@ -143,9 +148,7 @@ public abstract class BlockItemPlacementIntentMixin {
         }
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
-        return SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)
-                && (SlabAnchorAttachment.isAnchored(world, belowPos)
-                || SlabSupport.getYOffset(world, belowPos, below) < 0.0d);
+        return SlabAnchorAttachment.isLoweredFullBlockSlabCarrierSupport(world, belowPos, below);
     }
 
     private static boolean slabbed$isCompoundVisibleOwnerTopSlabResult(
@@ -156,7 +159,8 @@ public abstract class BlockItemPlacementIntentMixin {
         if (context.getSide() != Direction.UP
                 || !(placedState.getBlock() instanceof SlabBlock)
                 || !placedState.contains(SlabBlock.TYPE)
-                || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !placedState.getFluidState().isEmpty()) {
             return false;
         }
         CompoundVisibleOwnerTopIntent intent = COMPOUND_VISIBLE_OWNER_TOP_INTENT.get();

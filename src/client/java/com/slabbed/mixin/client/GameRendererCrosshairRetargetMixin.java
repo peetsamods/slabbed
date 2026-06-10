@@ -883,7 +883,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             Vec3d supportHit
     ) {
         BlockState state = world.getBlockState(pos);
-        if (!SlabSupport.isBeta35SlabHeightVisibleOwnerObject(world, pos, state)) {
+        if (!slabbed$isVisibleOwnerBeforeSupportObject(world, pos, state)) {
             return null;
         }
 
@@ -936,7 +936,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         }
         ClientWorld world = client.world;
         return world != null
-                && SlabSupport.isBeta35SlabHeightVisibleOwnerObject(
+                && slabbed$isVisibleOwnerBeforeSupportObject(
                         world,
                         chosen.getBlockPos(),
                         world.getBlockState(chosen.getBlockPos()));
@@ -962,6 +962,9 @@ public abstract class GameRendererCrosshairRetargetMixin {
         if (SlabSupport.isBeta35RegularDoorVisibleOwnerObject(world, chosen.getBlockPos(), state)) {
             return "visible-door-owner-preserve";
         }
+        if (SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, chosen.getBlockPos(), state)) {
+            return "visible-owner-top-slab-preserve";
+        }
         return "visible-object-owner-preserve";
     }
 
@@ -973,7 +976,17 @@ public abstract class GameRendererCrosshairRetargetMixin {
         return SlabSupport.isLoweredTorchVisual(world, pos, state)
                 || SlabSupport.isLoweredBlockEntityVisual(world, pos, state)
                 || SlabSupport.isLoweredBedVisual(world, pos, state)
+                || slabbed$isCompoundFullBlockShapeOwner(world, pos, state)
                 || slabbed$isBeta35HitboxOwnerObject(world, pos, state);
+    }
+
+    private static boolean slabbed$isCompoundFullBlockShapeOwner(ClientWorld world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && state != null
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state)
+                && Math.abs(SlabSupport.getYOffset(world, pos, state) + 1.0d) <= 1.0e-6d;
     }
 
     private static boolean slabbed$isBeta35HitboxOwnerObject(ClientWorld world, BlockPos pos, BlockState state) {
@@ -983,8 +996,15 @@ public abstract class GameRendererCrosshairRetargetMixin {
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d
                 && (SlabSupport.isBeta35FenceWallVariantContactObject(state)
                         || state.isOf(Blocks.ANVIL)
-                        || SlabSupport.isBeta35SlabHeightVisibleOwnerObject(world, pos, state)
+                        || slabbed$isVisibleOwnerBeforeSupportObject(world, pos, state)
                         || slabbed$isBeta35SlabHeightApertureOwnerObject(world, pos, state));
+    }
+
+    private static boolean slabbed$isVisibleOwnerBeforeSupportObject(
+            ClientWorld world, BlockPos pos, BlockState state
+    ) {
+        return SlabSupport.isBeta35SlabHeightVisibleOwnerObject(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state);
     }
 
     private static boolean slabbed$isBeta35SlabHeightApertureOwnerObject(
