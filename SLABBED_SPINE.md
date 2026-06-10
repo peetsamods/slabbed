@@ -218,3 +218,19 @@ lowering is correct by-design. **BUG A is not a bug** — only cleanup left is f
 `TerrainSlabsDirectSupportClientGameTest` assertion (tracked as a background task). With fence-side,
 slab-on-lowered, vegetation, and BUG A all resolved + live-confirmed, the ONLY remaining gate to a
 shippable 1.21.1 beta is a systematic LIVE matrix pass. BUG4 still deferred. Next big rock = the RESOLVER.
+
+---
+
+## Savepoint 2026-06-10 (evening) — powder-snow DODO fixed (release blocker)
+
+`95c0ab12` (pushed, LIVE-CONFIRMED). Julia hit a half-block step ("DODO") in snowy grove terrain.
+First mis-diagnosed (by me + a 3-agent fan-out) as vanilla powder-snow pits / a Terrain Slabs
+render-offset quirk — WRONG. Her /slabdy read `Powder Snow · VANILLA · dy=-0.500 LOWERED`: the
+VANILLA tag = Slabbed's own getYOffset lowering it. Root cause: `isThinTopLayer` excluded only
+`SnowBlock`; powder snow is `PowderSnowBlock` (a FULL CUBE), so it matched the full-block-on-slab
+−0.5 branch and stepped vs flush neighbours. Fix: never offset PowderSnowBlock (getYOffset +
+shouldOffset short-circuit), matching what TS itself does. Harness 99/99 (added
+`powderSnowOnSlabIsNeverLowered` with a stone-on-slab control). Lesson recorded:
+[[slabbed-exclusion-by-behavior-not-classname]] — exclude by role not one class; trust the overlay
+source tag; agent fan-outs can be wrong in unison under a shared wrong framing. Follow-up: audit
+other full-cube terrain fill (mud/sculk/moss). Release gate unchanged: live matrix pass.

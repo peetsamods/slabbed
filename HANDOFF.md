@@ -7,7 +7,7 @@
 - **Branch:** `claude/1211-terrain-slabs-named-surface`
 - **Worktree:** `/Users/joolmac/CascadeProjects/Slabbed-claude-1211port-candidate-20260606`
 - **Remote:** `peetsamods/slabbed` — **PUSHED** (`git push -u origin` done; tracks `origin/claude/1211-terrain-slabs-named-surface`).
-- **HEAD:** `3739f76b` (pushed). Tree clean.
+- **HEAD:** `95c0ab12` (pushed). Tree clean.
 - **Minecraft:** 1.21.1 · **Loader:** Fabric 0.19.2 · **Yarn:** 1.21.1+build.3 · **Java:** 21
 - **Author convention:** `Julia Schohl <joolmac@users.noreply.github.com>` + `Co-Authored-By: Claude Opus 4.8`.
 - This is the **most feature-complete** Slabbed line (SlabSupport ~2400 lines). Canonical `port/mc-1.21.1`
