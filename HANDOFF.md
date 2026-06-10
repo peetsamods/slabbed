@@ -49,6 +49,14 @@ Packed Mud Slab) used to float at grid height instead of sitting flush. Two coup
   lower-half→BOTTOM, upper-half→TOP, placed in the neighbor cell where it inherits −0.5 and sits flush.
 - Confirmed live (slab flush against lowered Spruce Fence, both halves track). Harness 98/98.
 
+## DONE — powder-snow DODO (`95c0ab12`, LIVE-CONFIRMED + pushed)
+Powder snow on a slab was lowered −0.5 while neighbouring powder snow on full ground stayed flush → a
+half-block step in snowy terrain. Root cause: `isThinTopLayer` excluded only `SnowBlock`; powder snow is
+`PowderSnowBlock` (a FULL CUBE) → matched the full-block-on-slab −0.5 branch. Fix: never offset
+`PowderSnowBlock` (`getYOffset` + `shouldOffset` short-circuit), matching TS's own behaviour. Harness 99/99
+(`powderSnowOnSlabIsNeverLowered`). Lesson: [`memory`] exclude by ROLE, not one class name. FOLLOW-UP: audit
+other natural full-cube terrain fill (mud, sculk, moss block…) for the same slip (background task).
+
 ## Open (need Julia / deferred)
 - **BUG A — RESOLVED (live, 2026-06-10).** Opaque full cube on a TS slab shows NO cull hole live (cull fix
   `BlockRenderInfoCullMixin` present); the −0.5 lowering is correct/by-design parity with vanilla slabs.
