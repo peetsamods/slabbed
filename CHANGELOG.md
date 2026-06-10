@@ -1,4 +1,33 @@
 ## [Unreleased]
+- Terrain Slabs named-surface compatibility (objects lowering onto Terrain Slabs surfaces, compound −1.0) is planned for a follow-up; this build keeps the existing gated compat (Terrain Slabs blocks are excluded from Slabbed's visual offsets).
+
+## [0.4.0-beta.3] - Slabbed 0.4.0 Beta 3 / Minecraft 1.21.1
+
+The Minecraft 1.21.1 port, with a rebuilt targeting path. Consolidates the
+slab-lowering, placement, and visual-contact work since 0.2.0-beta.4.
+
+> Version note: this port moves from `0.2.0-beta.4` directly to `0.4.0-beta.3`;
+> the intervening `0.3.x` and `0.4.0-beta.1`–`beta.2` tags belong to separate
+> Slabbed branches and are not part of this 1.21.1 line.
+
+### Targeting
+- Replaced the old DDA "rescue" retargeter with an offset-aware nearest-hit raycast, so the crosshair selects and breaks exactly the block you are pointing at on lowered/offset shapes — no more sideways mistargeting. Fence/wall/pane and lowered-block outlines are kept consistent with their rendered shape so the raycast can't target a phantom.
+
+### Fixed
+- Adjacent side slabs beside a lowered full block stay visually lowered and merge flush (no seam/float across the height step).
+- Decorative hangers — lanterns, soul lanterns, spore blossoms, hanging roots, pale hanging moss — follow a lowered support block down instead of clipping into it. Chains excluded; top-slab `+0.5` adherence preserved.
+- Powder snow is never lowered onto slabs (it is a full terrain cube, not a thin top layer), fixing the snowy-terrain see-through step.
+- Lowered top-slab lower-edge side placement lands flush in the aimed visual half; a slab placed onto a compound/lowered stack targets the visible owner's top.
+- Fence, wall, and pane connections no longer draw across a Slabbed height step.
+- Lowered trapdoor seam resolves from the correct block-state authority.
+
+### Developer
+- `/slabdy` overlay: a toggleable HUD readout of the targeted block's source and visual offset (off by default).
+
+### Known limitations
+- A face-culling / shadow artifact beside a lowered full-block ↔ vanilla-slab boundary is deferred to a later render/culling slice.
+- Full Terrain Slabs named-surface support (lowering objects onto Terrain Slabs surfaces) is not in this build; Terrain Slabs blocks are kept un-offset (no ghost terrain) and otherwise behave as vanilla support.
+- No all-item or all-partial-block support claim is made for this beta.
 
 ## [0.2.0-beta.4] — Slabbed 0.2.0 Beta 4 / Beta 4
 
