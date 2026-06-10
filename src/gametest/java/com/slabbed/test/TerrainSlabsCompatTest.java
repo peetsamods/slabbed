@@ -387,4 +387,42 @@ public final class TerrainSlabsCompatTest {
         ctx.complete();
     }
 
+    // Hanger-inherits-from-below fix (Bug 1): hanging roots hang from the block ABOVE. They lack
+    // the HANGING property (lanterns have it), so they used to fall through to hasSlabInColumn,
+    // which walks DOWN — and a lantern placed beneath them bridges that walk to a slab further
+    // down, wrongly lowering the roots -0.5. With a FLUSH support above, the roots must stay flush
+    // regardless of what is below.
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void hangingRootsNotLoweredByBridgedSlabBelow(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base.up(2), tsBottomSlab(), Block.NOTIFY_LISTENERS);   // flush support ABOVE
+        BlockPos rootsPos = base.up();
+        w.setBlockState(rootsPos, Blocks.HANGING_ROOTS.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(base, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);  // bridges the down-walk
+        w.setBlockState(base.down(), tsBottomSlab(), Block.NOTIFY_LISTENERS);  // slab the walk would otherwise find
+        double dy = SlabSupport.getYOffset(w, rootsPos, w.getBlockState(rootsPos));
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "hanging roots hang from the flush slab ABOVE; a lantern-bridged slab BELOW must NOT lower them, got " + dy);
+        ctx.complete();
+    }
+
+    // Sign-smoosh fix (Bug 2) regression guard: a hanging sign under a NORMAL (non-lowered) top
+    // slab still gets the +0.5 raised-attach baseline. Adding HangingSignBlock to the lowered-
+    // support follow set must not disturb this common case. (The lowered-top-slab case — where the
+    // sign should combine supportDy + 0.5 to sit flush instead of +0.5 smooshing up — needs side/
+    // anchor lowering that setBlockState can't build, and is verified live.)
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void hangingSignUnderNormalTopSlabKeepsRaisedBaseline(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        w.setBlockState(base.up(), vanillaSlab(SlabType.TOP), Block.NOTIFY_LISTENERS);
+        BlockPos signPos = base;
+        w.setBlockState(signPos, Blocks.WARPED_HANGING_SIGN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double dy = SlabSupport.getYOffset(w, signPos, w.getBlockState(signPos));
+        ctx.assertTrue(Math.abs(dy - 0.5) <= EPS,
+                "hanging sign under a normal top slab keeps the +0.5 raised-attach baseline, got " + dy);
+        ctx.complete();
+    }
+
 }
