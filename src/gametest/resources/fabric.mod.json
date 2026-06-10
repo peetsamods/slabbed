@@ -9,7 +9,8 @@
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest",
       "com.slabbed.test.TerrainSlabsCompoundDyTest",
-      "com.slabbed.test.TerrainSlabsSteppedConnectionTest"
+      "com.slabbed.test.TerrainSlabsSteppedConnectionTest",
+      "com.slabbed.test.ParityColumnLoweredCarrierSideSlabTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest",

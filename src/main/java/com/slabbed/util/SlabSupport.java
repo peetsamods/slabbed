@@ -617,7 +617,17 @@ public final class SlabSupport {
         }
         boolean hasBottomBelow = hasBottomSlabBelow(world, pos);
         boolean anchored = SlabAnchorAttachment.isAnchored(world, pos);
-        return hasBottomBelow || anchored;
+        // Parity port (1.21.1 reference): a full block lowered via its COLUMN (the top of a
+        // stack standing on a bottom slab or a Terrain Slabs surface, with no chunk anchor) is
+        // also a lowered carrier, so an adjacent side slab inherits the lowering. Fixes the +0.5
+        // "DODO" gap when placing a perpendicular slab beside such a stack. slabColumnYOffset
+        // walks down through solid blocks to the slab (covers solid full cubes that are not
+        // directCustom subjects); isDirectCustomSlabSupportedObject covers non-solid sit objects.
+        // Both are recursion-safe (never re-enter getYOffset) and already invoked elsewhere in
+        // getYOffsetInner under the same guard, so this adds no new recursion risk.
+        boolean columnLowered = slabColumnYOffset(world, pos) < -1.0e-6
+                || isDirectCustomSlabSupportedObject(world, pos, state);
+        return hasBottomBelow || anchored || columnLowered;
     }
 
     private static boolean hasLoweredCarrierBelow(BlockView world, BlockPos pos) {
