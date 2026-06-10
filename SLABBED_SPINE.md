@@ -245,3 +245,20 @@ E compound/stacking, F render sweep) — **ALL GREEN.** The 1.21.1 candidate
 purely release mechanics: version bump + build jar + tag + Codex upload to Modrinth/CurseForge. Two parked
 KNOWN-MINOR (agreed non-blockers): B5 saplings won't place on a TS slab; SBSBS slab-beside-slab chain.
 Post-ship: the RESOLVER, then 1.21.11 reconciliation + 1.20.1/26.1.2 ports.
+
+---
+
+## Savepoint 2026-06-10 (late night) — ceiling-hanger droop + sign-smoosh fixed (release re-blockers)
+
+`434e7c41` (pushed, LIVE-CONFIRMED "Yay, it works!"). After the live matrix passed and 0.4.0-beta.1 was
+tagged/staged, Julia found two hanger blockers in a built structure: (1) hanging roots drooped −0.5 when a
+lantern was placed beneath them; (2) a hanging sign smooshed +0.5 up into a lowered slab. ONE root: ceiling-
+hung blocks were run through "resting on a support BELOW" branches whose downward walks step through any
+non-air block, so a placed lantern bridged the walk to a slab 2 cells down (roots), and HangingSign was
+missing from the follow-a-lowered-support set (sign). Fix = structural early-dispatch: always-ceiling-hung
+decorations (roots/spore/sign/pale moss, no floor variant) routed at the top of getYOffsetInner to
+ceilingHungDecorationDy() which derives dy SOLELY from the support above, bypassing all below-branches;
++HangingSign in the follow-sets; loweredSlabUndersideSupportDy→NaN for TS slabs (flush ≠ lowered support).
+Harness 101/101. Lesson: [[slabbed-ceiling-hangers-attach-from-above]] — attachment DIRECTION is first-class;
+downward walks bridge through placed blocks; fix the dispatch, not each branch. VERSION: 0.4.0-beta.1 tag
+stands (had the bugs); publishable jar = 0.4.0-beta.2 (re-cut pending). Release gate otherwise still green.
