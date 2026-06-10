@@ -1,18 +1,19 @@
 # Lowered Side Slab Live Manual Checklist
 
 This checklist verifies live player feel for lowered-side-slab targeting behavior.
-It complements, but does not replace, the automated proof bundle.
+It is a historical checklist for the lowered-side-slab proof-bundle lane.
 
-Passing the automated proof bundle is a prerequisite before running this checklist.
-If automated proof fails, stop — do not attempt live verification.
+The old automated proof bundle is not a current prerequisite for live
+verification or release. If an automated proof result and live play disagree,
+trust live play and stop.
 
 ---
 
 ## Starting point
 
 - Run from a clean trusted savepoint.
-- Prefer the latest proof bundle tag/savepoint.
-- Run the automated proof bundle first:
+- If intentionally revisiting the legacy proof-bundle lane, prefer its
+  historical tag/savepoint and optionally run the bundle:
 
   **Mac**
   ```bash
@@ -24,7 +25,8 @@ If automated proof fails, stop — do not attempt live verification.
   .\tools\Run-LoweredSideSlabProofBundle.ps1
   ```
 
-- Confirm the verifier reports PASS before proceeding to live checks.
+- Treat a verifier PASS as bundle-local evidence only; it does not override
+  manual live findings.
 
 ---
 
@@ -118,7 +120,7 @@ Place a crafting table on a bottom slab.
 
 ## Stop conditions
 
-- If live play contradicts the automated proof result, **trust live play and stop.**
+- If live play contradicts an automated proof result, **trust live play and stop.**
 - If the same symptom survives two separate attempts, stop implementation and run a static audit (confirm the fix is present, validate mixins.json, check fabric.mod.json registration).
 - **Do not broaden rescue as a shortcut.**
 - **Do not touch torch or bed rescue** without a concrete, reproducible regression in hand.

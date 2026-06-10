@@ -1,11 +1,13 @@
 # Lowered Side Slab Proof Bundle
 
-Documentation-only checkpoint for the cross-platform proof bundle runners.
+Historical documentation-only checkpoint for the cross-platform proof bundle runners.
 Passing this bundle does not authorise unrelated gameplay changes.
+This bundle is not a current release gate or live-verification prerequisite.
+Use the runners only when intentionally revisiting this legacy proof lane.
 
 ---
 
-## Latest trusted savepoint
+## Historical trusted savepoint
 
 | Field  | Value                                  |
 |--------|----------------------------------------|
@@ -17,7 +19,11 @@ Both Mac and Windows runners passed at this savepoint.
 
 ---
 
-## Runners
+## Historical runners
+
+These commands are optional legacy proof-bundle tools. They do not replace
+current release hygiene, registered test verification, or manual live checks
+when live player feel is the actual acceptance target.
 
 **Mac**
 ```bash
@@ -42,7 +48,7 @@ py -3 tools/verify_lowered_side_slab_proof_bundle.py
 
 ---
 
-## Canonical artifact directory
+## Historical artifact directory
 
 ```
 build/run/clientGameTest/screenshots
@@ -50,7 +56,7 @@ build/run/clientGameTest/screenshots
 
 > **Note:** the path is `screenshots`, not `proof-bundle`.
 
-### Required artifact files
+### Required artifact files for this legacy bundle
 
 | File | Description |
 |------|-------------|
@@ -80,7 +86,7 @@ build/run/clientGameTest/screenshots
 
 ## Live verification
 
-For live player-feel verification after the automated bundle passes, use:
+For the historical live player-feel checklist associated with this bundle, use:
 `tools/lowered-side-slab-live-checklist.md`
 
 ---

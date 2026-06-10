@@ -1,5 +1,8 @@
 # Slabbed 1.21.11 — Targeting Overhaul Handoff
 
+Archived branch handoff. This records the evaluation path for the targeting
+overhaul branch only; it is not the current release checklist.
+
 Written 2026-06-06 (overnight, autonomous, no live testing). Branch
 `claude/terrain-targeting-overhaul-20260606`, based off the codex line
 `c459fb01` + the dirty WIP (baseline commit `5567bcf7`). The overhaul itself is
