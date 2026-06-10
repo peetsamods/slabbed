@@ -20,10 +20,10 @@ Slabbed treats the **top face** of the following as valid ground:
 Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally **not** affected.
 
 ## Compatibility
-- Minecraft: **1.21.11**
+- Minecraft: **1.21.1**
 - Loader: **Fabric**
 - Java: **21**
-- Environment: **Server-side** (works in singleplayer and on servers; clients do not need the mod)
+- Environment: **Client and server** for multiplayer; singleplayer works through the local integrated server.
 
 ### Limitations
 - Carpet and snow layers cannot coexist with slab placement in the same block space; placing a slab will replace them (vanilla behavior). Slabbed prevents ghosting by excluding thin top-layer blocks from visual offsets.
@@ -40,8 +40,8 @@ Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally
 3. Drop the Slabbed `.jar` into your `mods` folder
 
 ## Status
-Slabbed is currently in **alpha**.  
-Behavior is intentionally limited and may expand incrementally as edge cases are validated.
+Slabbed is currently in **beta**.
+Behavior is intentionally limited and expands only after edge cases are validated.
 
 ## License
 This project is licensed under **GPL-3.0-only**.  
