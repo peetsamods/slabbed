@@ -1,15 +1,23 @@
 package com.slabbed.util;
 
 import java.lang.reflect.Method;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.minecraft.block.BlockState;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.BlockRenderView;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 
 public final class RuntimeDiagnostics {
@@ -21,6 +29,18 @@ public final class RuntimeDiagnostics {
     private static final String INSPECT_CLASS_NAME = DEBUG_PACKAGE_NAME + "SlabbedInspect";
     private static final String BS_FB_TRACE_CLASS_NAME = DEBUG_PACKAGE_NAME + "BsFbLiveTrace";
     private static final String BS_FB_TRACE_CLIENT_CLASS_NAME = "com.slabbed.client.debug.BsFbLiveTraceClient";
+    private static final String BETA4_MANUAL_LIVE_TRACE_CLASS_NAME =
+            "com.slabbed.util." + "Beta4ManualLiveTrace";
+    private static final String BETA35_FENCE_WALL_INSPECT_RECORDER_CLASS_NAME =
+            "com.slabbed.util." + "Beta35FenceWallLiveInspectRecorder";
+    private static final String BETA35_SLAB_HEIGHT_RECORDER_CLASS_NAME =
+            "com.slabbed.util." + "Beta35SlabHeightHitAcceptanceRecorder";
+    private static final String BETA35_LIVE_TORCH_RECORDER_CLASS_NAME =
+            "com.slabbed.util." + "Beta35LiveTorchCaptureRecorder";
+    private static final String BETA35_SLAB_JUMP_RECORDER_CLASS_NAME =
+            "com.slabbed.util." + "Beta35SlabJumpSourceTruthRecorder";
+    private static final String MODEL_DY_TRACE_BRIDGE_CLASS_NAME =
+            "com.slabbed.client.runtime.ModelDyTranslateTraceBridge";
     private static final boolean ENABLED = Boolean.getBoolean("slabbed.debug.sbsb");
 
     private RuntimeDiagnostics() {
@@ -309,6 +329,229 @@ public final class RuntimeDiagnostics {
                 persistentAnchorBefore,
                 persistentAnchorAfter,
                 reason);
+    }
+
+    public static void logManualPlacementIntent(ItemUsageContext incoming, ItemUsageContext outgoing, String reason) {
+        invoke(
+                BETA4_MANUAL_LIVE_TRACE_CLASS_NAME,
+                "logPlacementIntent",
+                new Class<?>[]{ItemUsageContext.class, ItemUsageContext.class, String.class},
+                incoming,
+                outgoing,
+                reason);
+    }
+
+    public static void logManualServerTolerance(
+            World world,
+            BlockHitResult hit,
+            ItemStack heldStack,
+            Vec3d centerBefore,
+            Vec3d centerAfter,
+            String reason
+    ) {
+        invoke(
+                BETA4_MANUAL_LIVE_TRACE_CLASS_NAME,
+                "logServerTolerance",
+                new Class<?>[]{World.class, BlockHitResult.class, ItemStack.class, Vec3d.class, Vec3d.class, String.class},
+                world,
+                hit,
+                heldStack,
+                centerBefore,
+                centerAfter,
+                reason);
+    }
+
+    public static void logSlabSupportDecision(
+            BlockView world,
+            BlockPos sourcePos,
+            BlockState sourceState,
+            Direction intendedDirection,
+            Vec3d hitPos,
+            Object decision
+    ) {
+        if (decision == null) {
+            return;
+        }
+        invoke(
+                BETA4_MANUAL_LIVE_TRACE_CLASS_NAME,
+                "logSlabSupportDecision",
+                new Class<?>[]{BlockView.class, BlockPos.class, BlockState.class, Direction.class, Vec3d.class, decision.getClass()},
+                world,
+                sourcePos,
+                sourceState,
+                intendedDirection,
+                hitPos,
+                decision);
+    }
+
+    public static void recordFenceWallClientTarget(
+            World world,
+            Entity camera,
+            PlayerEntity player,
+            Vec3d eye,
+            Vec3d rayEnd,
+            ItemStack held,
+            HitResult initialTarget,
+            HitResult finalTarget,
+            String finalDecision
+    ) {
+        invoke(
+                BETA35_FENCE_WALL_INSPECT_RECORDER_CLASS_NAME,
+                "recordClientTarget",
+                new Class<?>[]{World.class, Entity.class, PlayerEntity.class, Vec3d.class, Vec3d.class, ItemStack.class, HitResult.class, HitResult.class, String.class},
+                world,
+                camera,
+                player,
+                eye,
+                rayEnd,
+                held,
+                initialTarget,
+                finalTarget,
+                finalDecision);
+    }
+
+    public static void logFenceWallServerTolerance(
+            World world,
+            PlayerEntity player,
+            BlockHitResult hit,
+            ItemStack held,
+            Vec3d validationCenter,
+            Vec3d shiftedValidationCenter
+    ) {
+        invoke(
+                BETA35_FENCE_WALL_INSPECT_RECORDER_CLASS_NAME,
+                "logServerTolerance",
+                new Class<?>[]{World.class, PlayerEntity.class, BlockHitResult.class, ItemStack.class, Vec3d.class, Vec3d.class},
+                world,
+                player,
+                hit,
+                held,
+                validationCenter,
+                shiftedValidationCenter);
+    }
+
+    public static void recordSlabHeightClientTarget(
+            World world,
+            Entity camera,
+            PlayerEntity player,
+            Vec3d eye,
+            Vec3d rayEnd,
+            ItemStack held,
+            HitResult initialTarget,
+            HitResult finalTarget,
+            String finalDecision
+    ) {
+        invoke(
+                BETA35_SLAB_HEIGHT_RECORDER_CLASS_NAME,
+                "recordClientTarget",
+                new Class<?>[]{World.class, Entity.class, PlayerEntity.class, Vec3d.class, Vec3d.class, ItemStack.class, HitResult.class, HitResult.class, String.class},
+                world,
+                camera,
+                player,
+                eye,
+                rayEnd,
+                held,
+                initialTarget,
+                finalTarget,
+                finalDecision);
+    }
+
+    public static void logSlabHeightServerTolerance(
+            World world,
+            PlayerEntity player,
+            BlockHitResult hit,
+            ItemStack held,
+            Vec3d validationCenter,
+            Vec3d shiftedValidationCenter
+    ) {
+        invoke(
+                BETA35_SLAB_HEIGHT_RECORDER_CLASS_NAME,
+                "logServerTolerance",
+                new Class<?>[]{World.class, PlayerEntity.class, BlockHitResult.class, ItemStack.class, Vec3d.class, Vec3d.class},
+                world,
+                player,
+                hit,
+                held,
+                validationCenter,
+                shiftedValidationCenter);
+    }
+
+    public static void recordLiveTorchComfortTrace(World world, String reason, BlockPos pos, BlockPos supportPos) {
+        invoke(
+                BETA35_LIVE_TORCH_RECORDER_CLASS_NAME,
+                "recordComfortTrace",
+                new Class<?>[]{World.class, String.class, BlockPos.class, BlockPos.class},
+                world,
+                reason,
+                pos,
+                supportPos);
+    }
+
+    public static boolean beta35SlabJumpSourceTruthEnabled() {
+        return Boolean.TRUE.equals(invoke(BETA35_SLAB_JUMP_RECORDER_CLASS_NAME, "isEnabled", new Class<?>[]{}));
+    }
+
+    public static void recordBeta35SlabJumpAnchorEvent(
+            World world,
+            String action,
+            AttachmentType<LongOpenHashSet> type,
+            BlockPos pos,
+            BlockState oldState,
+            BlockState newState
+    ) {
+        try {
+            Class<?> targetClass = Class.forName(BETA35_SLAB_JUMP_RECORDER_CLASS_NAME);
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Object eventAction = Enum.valueOf((Class<Enum>) Class.forName(
+                    BETA35_SLAB_JUMP_RECORDER_CLASS_NAME + "$EventAction"), action);
+            Method method = targetClass.getMethod(
+                    "recordAnchorEvent",
+                    World.class,
+                    eventAction.getClass(),
+                    AttachmentType.class,
+                    BlockPos.class,
+                    BlockState.class,
+                    BlockState.class);
+            method.invoke(null, world, eventAction, type, pos, oldState, newState);
+        } catch (ReflectiveOperationException | IllegalArgumentException | LinkageError ignored) {
+            // Recorder class is excluded from the release jar.
+        }
+    }
+
+    public static void recordModelDyTrace(
+            String method,
+            BlockRenderView world,
+            BlockPos pos,
+            BlockState state,
+            double dy
+    ) {
+        invoke(
+                MODEL_DY_TRACE_BRIDGE_CLASS_NAME,
+                "record",
+                new Class<?>[]{String.class, BlockRenderView.class, BlockPos.class, BlockState.class, double.class},
+                method,
+                world,
+                pos,
+                state,
+                dy);
+    }
+
+    public static void recordBeta4ModelDyTrace(
+            String method,
+            BlockRenderView world,
+            BlockPos pos,
+            BlockState state,
+            double dy
+    ) {
+        invoke(
+                MODEL_DY_TRACE_BRIDGE_CLASS_NAME,
+                "recordBeta4ModelDy",
+                new Class<?>[]{String.class, BlockRenderView.class, BlockPos.class, BlockState.class, double.class},
+                method,
+                world,
+                pos,
+                state,
+                dy);
     }
 
     private static Object invoke(String className, String methodName, Class<?>[] paramTypes, Object... args) {

@@ -3962,7 +3962,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
         ctx.runOnClient(mc -> {
             System.setProperty("slabbed.render.offset.trace", "true");
-            com.slabbed.client.model.OffsetBlockStateModel.resetRenderOffsetTrace(chainPos);
+            com.slabbed.client.model.OffsetBlockStateModel.resetRenderOffsetSample(chainPos);
         });
         singleplayer.getServer().runOnServer(server -> server.getOverworld().setBlockState(
                 chainPos,
@@ -4028,8 +4028,8 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             topRayText.set(slabbed$describeHorizontalOutlineRay(
                     mc, chainPos, topY, "top"));
 
-            com.slabbed.client.model.OffsetBlockStateModel.RenderOffsetTrace modelTrace =
-                    com.slabbed.client.model.OffsetBlockStateModel.snapshotRenderOffsetTrace();
+            com.slabbed.client.model.OffsetBlockStateModel.RenderOffsetSample modelTrace =
+                    com.slabbed.client.model.OffsetBlockStateModel.snapshotRenderOffsetSample();
             modelSeenText.set(Boolean.toString(modelTrace.seen()));
             modelViewClassText.set(modelTrace.viewClass());
             modelStateText.set(modelTrace.state());

@@ -143,7 +143,7 @@ public final class SlabbedLabModelDySingleOwnerAuditClientGameTest implements Fa
                 eyeTextBox[0] = fmtVec(eye);
                 positionPlayer(mc, eye, target);
 
-                OffsetBlockStateModel.resetModelDyOwnerTrace(pos);
+                OffsetBlockStateModel.resetModelDyOwnerSample(pos);
                 ModelDyTranslateTraceBridge.reset(pos);
 
                 mc.worldRenderer.scheduleBlockRenders(
@@ -178,10 +178,10 @@ public final class SlabbedLabModelDySingleOwnerAuditClientGameTest implements Fa
             }
 
             singleplayer.getClientWorld().waitForChunksRender();
-            final OffsetBlockStateModel.ModelDyOwnerTrace[] attemptOffsetTrace = new OffsetBlockStateModel.ModelDyOwnerTrace[1];
+            final OffsetBlockStateModel.ModelDyOwnerSample[] attemptOffsetTrace = new OffsetBlockStateModel.ModelDyOwnerSample[1];
             final ModelDyTranslateTraceBridge.Trace[] attemptMixinTrace = new ModelDyTranslateTraceBridge.Trace[1];
             ctx.runOnClient(mc -> {
-                attemptOffsetTrace[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace();
+                attemptOffsetTrace[0] = OffsetBlockStateModel.snapshotModelDyOwnerSample();
                 attemptMixinTrace[0] = ModelDyTranslateTraceBridge.snapshot();
             });
 
@@ -193,14 +193,14 @@ public final class SlabbedLabModelDySingleOwnerAuditClientGameTest implements Fa
             }
         }
 
-        final OffsetBlockStateModel.ModelDyOwnerTrace[] offsetTraceBox = new OffsetBlockStateModel.ModelDyOwnerTrace[1];
+        final OffsetBlockStateModel.ModelDyOwnerSample[] offsetTraceBox = new OffsetBlockStateModel.ModelDyOwnerSample[1];
         final ModelDyTranslateTraceBridge.Trace[] mixinTraceBox = new ModelDyTranslateTraceBridge.Trace[1];
         ctx.runOnClient(mc -> {
-            offsetTraceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace();
+            offsetTraceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerSample();
             mixinTraceBox[0] = ModelDyTranslateTraceBridge.snapshot();
         });
 
-        OffsetBlockStateModel.ModelDyOwnerTrace offsetTrace = offsetTraceBox[0];
+        OffsetBlockStateModel.ModelDyOwnerSample offsetTrace = offsetTraceBox[0];
         ModelDyTranslateTraceBridge.Trace mixinTrace = mixinTraceBox[0];
         BlockState state = stateBox[0];
         double expectedDy = expectedDyBox[0];
@@ -265,7 +265,7 @@ public final class SlabbedLabModelDySingleOwnerAuditClientGameTest implements Fa
     private static CaseClassification classifyCase(
             double expectedDy,
             boolean renderSubmitted,
-            OffsetBlockStateModel.ModelDyOwnerTrace offsetTrace,
+            OffsetBlockStateModel.ModelDyOwnerSample offsetTrace,
             ModelDyTranslateTraceBridge.Trace mixinTrace,
             boolean offsetApplied,
             boolean mixinApplied
