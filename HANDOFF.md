@@ -1,88 +1,65 @@
 # Slabbed — Branch Handoff
 
 > **Current state of THIS branch — overwrite freely.** Append-only *history* lives in
-> [`SLABBED_SPINE.md`](SLABBED_SPINE.md). One `HANDOFF.md` per branch.
-> Companion doc: [`TARGETING_OVERHAUL_1211_PORT.md`](TARGETING_OVERHAUL_1211_PORT.md) (the activation playbook this branch executed).
+> [`SLABBED_SPINE.md`](SLABBED_SPINE.md). Design rationale: [`SLABBED_YSYSTEM_DESIGN.md`](SLABBED_YSYSTEM_DESIGN.md).
 
 ## Branch
-
-- **Branch:** `claude/1211-targeting-overhaul-activate`
+- **Branch:** `claude/1211-terrain-slabs-named-surface`
 - **Worktree:** `/Users/joolmac/CascadeProjects/Slabbed-claude-1211port-candidate-20260606`
-- **Based on:** `43b5eadc` (foundation) → off committed HEAD `20a5ac28` of `port/mc-1.21.1`
-- **Minecraft:** 1.21.1 · **Loader:** Fabric 0.17.3 · **Yarn:** 1.21.1+build.3 · **Java:** 21
-- **NOT pushed. NOT merged. Savepoint `94a5643e` untouched. Julia's uncommitted WIP in `Slabbed-phase19-integrate` untouched.**
+- **Remote:** `peetsamods/slabbed` — **PUSHED** (`git push -u origin` done; tracks `origin/claude/1211-terrain-slabs-named-surface`).
+- **HEAD:** `d4dae6c5` (pushed). **Uncommitted:** the in-flight fence-side carrier fix (see below).
+- **Minecraft:** 1.21.1 · **Loader:** Fabric 0.19.2 · **Yarn:** 1.21.1+build.3 · **Java:** 21
+- **Author convention:** `Julia Schohl <joolmac@users.noreply.github.com>` + `Co-Authored-By: Claude Opus 4.8`.
+- This is the **most feature-complete** Slabbed line (SlabSupport ~2400 lines). Canonical `port/mc-1.21.1`
+  (in `Slabbed-phase19-integrate`) is behind + carries Julia's owner-top WIP; consolidation recommendation =
+  **adopt this candidate as the release base** and forward-port canonical's few uniques.
 
-## Status: TARGETING OVERHAUL ACTIVATED — headless-green, awaiting live `runClient`
+## Strategy (agreed with Julia)
+Patch 1.21.1 to a shippable beta → then build the **RESOLVER**: one authority that answers "how lowered is
+this block," replacing the scattered consumers (`getYOffset` vs `loweredBottomSlabSupportDy` vs
+`connectingBlockVisualDy` vs anchor-authoring) whose disagreements are the root of this whole bug class
+(adversarial pass confirmed). 1.21.11 reconciliation + 1.20.1/26.1.2 after.
 
-The MC 1.21.1 port now uses the offset-aware nearest-hit raycast as the single targeting
-authority, mirroring the proven 1.21.11 overhaul (commit `39a345e7`). The old DDA-rescue
-lane is deleted. **Net −2,960 lines** (−3,035 rescue lane, +75 geometry gate + tests).
+## Done this session (all committed + pushed, harness 97-98/98 green at each step)
+- `d2aa911e` **/slabdy** dev overlay (block source + dy + LOWERED/RAISED/flush; later +`[UPPER/lower half]`).
+  Toggle in-game `/slabdy`; default-on with `-Dslabbed.targetDyOverlay=true`.
+- `f6ef7f99` fence/wall/pane connection break across a height step. `9ed019dc` TOP_LIKE/DOUBLE_LIKE +
+  skip-offset-asymmetry characterization tripwires. `cdd27b01` Y-system design note.
+- `92601c80` first placement-DODO fix → superseded by `b6352bf2`. `c8437388` reverted the
+  `tsInheritLowering` prototype (`d17eacf1`) — wrong approach; the float was placement, not rendering.
+- `0ea587a5` +38 combined-slab dy MATRIX tests. `bb436990` `connectingBlockVisualDy` now mirrors the
+  render path (kills false fence/wall/pane step-breaks). `82917f08` **BUG1**: object on a vanilla TOP slab
+  capping a TS slab compounds to −1.0 (was floating at −0.5).
+- **`b6352bf2`** ★ slab **side-placement** on a lowered block lands flush: the placement remapper now
+  PREDICTS the slab's own dy via `getYOffset` (safe — not inside getYOffsetInner) and picks cell+type to
+  match. The recurring "too low/too high." LIVE-CONFIRMED. Also added the `/slabdy` half readout.
+- **`d4dae6c5`** ★ vegetation no longer double-lowered: Slabbed defers `PlantBlock` (vegetation) to Terrain
+  Slabs, which lowers veg/snow itself (`CompatHooks.isNativelyOffsetOnTop`). Stops generated grass clipping
+  into TS slabs. LIVE-CONFIRMED.
 
-### Done (this branch)
+## IN FLIGHT — fence-side float (uncommitted; do NOT commit until live-confirmed)
+A slab placed beside a **lowered fence** floats instead of sitting flush. The fence is lowered because it
+stands on a TS BOTTOM_LIKE slab (e.g. Packed Mud Slab) — confirmed via `/slabdy`.
+- **Re-applied:** `isLoweredConnectingBlockCarrier` in `SlabSupport` (a lowered fence/wall/pane is a
+  side-support carrier) + `slabBesideStackedFenceOnTsInheritsLowering` test. **Harness PROVES** the slab
+  inherits −0.5 (98/98, incl. Julia's exact 2-fence-on-TS-slab geometry).
+- **But live still floated** → root is the **PLACEMENT**, not the lowering: `BlockItemPlacementIntentMixin`'s
+  remapper only engages for SOLID targets, so a fence target (non-solid) bails → the slab lands a cell off.
+- **Next:** Julia to `/slabdy` the PLACED slab (cell + dy) → confirms the off-cell → extend the placement
+  remapper to handle non-solid (fence/wall/pane) lowered targets. Files dirty: `SlabSupport.java`,
+  `TerrainSlabsCompatTest.java`.
 
-- **Activated** `GameRendererPickOffsetRaycastMixin` — `@Redirect` of the single
-  `Entity.raycast(DFZ)` call inside `GameRenderer.findCrosshairTarget`, backed by the
-  already-proven `SlabbedOffsetRaycast`. Registered in `slabbed.client.mixins.json`.
-- **Deleted** `GameRendererCrosshairRetargetMixin` (2,786 lines) + `LoweredSideSlabRetargeter`
-  (249 lines) — the old per-block-type rescue lane.
-- **Stripped** the slab-side torch comfort-overlay union (+ its helper) from
-  `SlabSupportStateMixin` — it would feed the now-authoritative raycast a phantom slab hit.
-- **Added** the fence/wall/pane outline gate in `SlabSupportStateMixin` (`getRaycastShape`
-  + `getOutlineShape`): bail (don't offset) when the block is a render-zeroed connection
-  block. The gate reuses the *exact* render predicate
-  (`(FenceBlock||WallBlock||PaneBlock) && !isBeta35FenceWallVariantContactObject`), so
-  outline and model can never disagree. On 1.21.1, fences/walls ARE contact objects (they
-  lower flush); **panes** are the render-zeroed case the gate protects.
-- **Ported** the 2 omitted 1.21.11 server gametests: `connectionBlockOutlineNotOffset`
-  (adapted to a glass PANE — the 1.21.1 render-zeroed block — with self-validating
-  fixture asserts) and `loweredFloorTorchTargetedViaOwnShape`.
-- **Stubbed** `SlabbedRetargetTestHooks.findLoweredSideSlabRetarget` → `null` so the legacy
-  (non-running) client gametests still compile.
+## Open (need Julia / deferred)
+- **BUG A** — opaque full cube lowers −0.5 on a TS slab (parity with vanilla slabs by design). The
+  client-gametest `TerrainSlabsDirectSupportClientGameTest` asserts 0 — likely a STALE contract. Needs a
+  live cull-hole check (cull fix `BlockRenderInfoCullMixin` present on this branch); if clean, delete/flip
+  the stale contract.
+- **BUG4** — compound stack under-lowers (−0.5 not −1.0) when the top block is placed via the GENERIC anchor
+  path (piston/dispenser/`/setblock`), not the player top-face mixin. DEFERRED (rarer; delicate anchor law).
+- **Release gate** = a systematic LIVE matrix pass (the 38 matrix tests + adversarial recipes make it fast).
 
-### Verification (headless, all green)
-
-- `JAVA_HOME=<temurin-21> ./gradlew compileJava compileClientJava compileGametestJava runGameTest`
-  → **All 37 required tests passed** (35 prior + the 2 ported). `OffsetRaycastTargetingTest`
-  now 10 methods; the pane gate + torch-own-shape both green.
-- **`@Redirect` binding proven by bytecode:** `javap` on yarn `GameRenderer.findCrosshairTarget`
-  shows EXACTLY ONE `Entity.raycast:(DFZ)` invoke (the other raycast is `ProjectileUtil.raycast`,
-  a different descriptor) → the redirect binds uniquely and applies cleanly. This is the
-  client-side proof `runGameTest` cannot give (client-only mixin).
-
-### NOT done — needs Julia (live / deferred)
-
-1. **Live `runClient` acceptance (REQUIRED gate).** fabric-client-gametest is broken on
-   1.21.1, so the end-to-end client-pick proof is not automatable. Aim along a lowered
-   terrain wall / at lowered blocks' visual surfaces; confirm the crosshair follows the
-   visual surface with no jumpiness or side-hijack, and place/break works. Then re-prove
-   the committed lowering/hanger cases (combined-slab chain) per "always check the chain".
-2. **`ServerInteractBlockHitToleranceMixin` — KEPT as-is, deliberately.** Recon proved it is
-   load-bearing SERVER placement logic (same-cell slab-merge finalize + `ofCenter`
-   validation-center shift), NOT a 1.21.11-style targeting tolerance. It was NOT deleted.
-   A possible later *narrowing* (drop the same-cell-merge `@Inject` that was the server
-   companion of the deleted client rescue) is behavioral + headlessly-unprovable → do it as
-   a SEPARATE commit only after the client cutover is live-confirmed.
-3. **Cleanup-to-parity (separate slice, behaviorally inert).** 1.21.1 still ships 6
-   Beta3.5/Beta4 trace mixins `required:true` + a hot-path `System.out.println`
-   (`SlabSupport` BOTTOM_PERSISTENT) + `tmp/` not gitignored — 1.21.11 gates these off and
-   excludes from the jar. Bring to parity before any beta tag.
-4. **Merge story.** This branch diverged from `port/mc-1.21.1`. Julia's uncommitted WIP in
-   `Slabbed-phase19-integrate` (the slab-held compound-visible-owner-top-slab feature) lives
-   only in that root and is **likely dissolved by this overhaul** — re-evaluate its target
-   case live before salvaging any of it. Decide: fast-forward `port/mc-1.21.1` onto this
-   branch after live-confirm, or cherry-pick.
-5. **Window/cull fix** (`BlockRenderInfoCullMixin`) is still absent on 1.21.1 — separate slice.
-
-### Build / test
-
-- Gametests: `JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew --no-daemon runGameTest`
-  → expect `All 37 required tests passed`.
-- Dev client (live): `./gradlew runClient` (Indigo; the bug reproduces under Indigo too).
-- Do NOT add `OffsetRaycastClientGameTest` (the 1.21.11 e2e client test) — fabric-client-gametest is broken on 1.21.1.
-
-### Gotchas
-
-- The gate predicate MUST stay identical to `OffsetBlockStateModel.emitBlockQuads:197-202`.
-  If that render exclusion changes, change the gate in lockstep or outline/model desync.
-- `SlabbedRetargetTestHooks` returning null is intentional (the lane is gone); the legacy
-  client gametests that call it do not run on 1.21.1.
+## Build / run
+- Headless tests: `JAVA_HOME=<temurin-21> ./gradlew --no-daemon --console=plain runGameTest` (TS shim
+  `terrain_slabs:test_slab`; gametest mod `provides` terrain_slabs).
+- Live: `./gradlew --no-daemon runClient -Dslabbed.targetDyOverlay=true` (run/mods has terrain_slabs 3.1.2
+  + architectury + midnightlib).

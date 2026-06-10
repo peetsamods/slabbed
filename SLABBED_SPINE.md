@@ -164,3 +164,33 @@ build.gradle auto-detects a TS jar in run/mods. Compiles + All 37 server gametes
 (inert without the mod → non-TS path byte-identical → no regression). NOT live-confirmed:
 needs a 1.21.1-compatible Terrain Slabs jar + runClient. First-cut gaps (iterate live):
 TOP_LIKE/DOUBLE_LIKE, vanilla-slab-on-TS, double-block upper. See TERRAIN_SLABS_COMPAT.md.
+
+## Savepoint 2026-06-10 — 1.21.1 patches toward shippable, PUSHED to peetsamods/slabbed
+
+Branch `claude/1211-terrain-slabs-named-surface` is now PUSHED (first push; HEAD `d4dae6c5`).
+Strategy locked with Julia: patch 1.21.1 to shippable, THEN build the RESOLVER (one authority
+for "how lowered is this block") — the adversarial pass proved that multiple functions
+disagreeing about lowering is the root of the whole bug class. Sequence committed + pushed:
+
+- /slabdy overlay (`d2aa911e`, + `[UPPER/lower half]` readout in `b6352bf2`); fence/wall/pane
+  step-break (`f6ef7f99`); TOP_LIKE characterization (`9ed019dc`); Y-system design note
+  (`cdd27b01`); +38 matrix tests (`0ea587a5`); connectingBlockVisualDy↔render sync (`bb436990`).
+- BUG1 — object on a vanilla TOP slab capping a TS slab → −1.0 (`82917f08`, was floating −0.5).
+- ★ Slab side-placement on a lowered block lands flush (`b6352bf2`): placement remapper now
+  PREDICTS the slab's own dy via getYOffset and picks cell+type to match (mini-resolver). The
+  recurring "too low/too high." LIVE-CONFIRMED.
+- ★ Vegetation no longer double-lowered (`d4dae6c5`): Slabbed defers PlantBlock to Terrain Slabs
+  (which lowers veg/snow itself). Stops generated grass clipping into TS slabs. LIVE-CONFIRMED.
+- Reverted the tsInheritLowering prototype (`d17eacf1` → `c8437388`) — float was placement, not render.
+
+Separately: 0.3.0-beta.2 HOTFIX shipped on the core repo (`Slabbed`, branch
+`hotfix/0.3.0-beta.2-terrain-slabs-modid` @ `00b6a7c4`, tag `slabbed-0.3.0-beta.2`): detect both
+`terrain_slabs` + legacy `terrainslabs` mod ids (shipped beta.1 was inert against modern TS). Jar
+in ModrinthApp profile + staged for Codex upload. 1.21.11 compat branch: BUG1 ported (`908a3ea3`);
+worktree branches `parity-1211-wt` (safe column-lowered-carrier lane) + `adv-1211-compat-wt` (BUG A repro).
+
+IN FLIGHT (uncommitted): fence-side float — slab beside a lowered fence floats. Carrier fix
+(`isLoweredConnectingBlockCarrier`) is harness-proven (98/98) but live still floats → root is the
+PLACEMENT remapper bailing on non-solid (fence) targets. Awaiting Julia's /slabdy on the placed slab.
+Open: BUG A (likely stale TerrainSlabsDirectSupportClientGameTest contract; needs live cull check),
+BUG4 (compound via generic anchor path) deferred. Release gate = live matrix pass.
