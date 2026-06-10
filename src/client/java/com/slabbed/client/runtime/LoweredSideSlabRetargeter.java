@@ -1,6 +1,7 @@
 package com.slabbed.client.runtime;
 
-import com.slabbed.util.Beta35LiveTorchCaptureRecorder;
+import com.slabbed.Slabbed;
+import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -19,6 +20,7 @@ import net.minecraft.util.shape.VoxelShapes;
 
 public final class LoweredSideSlabRetargeter {
     private static final double COMFORT_MISS_THRESHOLD = 0.05d;
+    private static final String COMFORT_TRACE_OPT_IN = "slabbed.loweredSideSlabComfortTrace";
 
     private LoweredSideSlabRetargeter() {
     }
@@ -122,21 +124,21 @@ public final class LoweredSideSlabRetargeter {
                 && SlabSupport.getYOffset(world, supportPos, supportState) < 0.0
                 && !supportState.isOf(Blocks.AIR);
         if (canComfortScan) {
-            System.out.println("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_scan_attempt "
+            slabbed$traceComfort("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_scan_attempt "
                     + "pos=" + pos.toShortString()
                     + " support=" + supportPos.toShortString()
                     + " currentDist2=" + (currentHit == null ? "INF" : currentHit.getPos().squaredDistanceTo(eye))
                     + " endDist2=" + end.squaredDistanceTo(eye));
-            Beta35LiveTorchCaptureRecorder.recordComfortTrace(
+            RuntimeDiagnostics.recordLiveTorchComfortTrace(
                     world, "comfort_scan_attempt", pos, supportPos);
         }
         BlockHitResult hit = shape.raycast(eye, end, pos);
         if (hit == null && canComfortScan) {
             hit = comfortRaycastLoweredSideSlab(world, cam, eye, end, pos, state, shape);
             if (hit != null) {
-                System.out.println("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_miss_angle_owner_gap "
+                slabbed$traceComfort("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_miss_angle_owner_gap "
                         + "pos=" + pos.toShortString() + " hit=" + hit.getPos());
-                Beta35LiveTorchCaptureRecorder.recordComfortTrace(
+                RuntimeDiagnostics.recordLiveTorchComfortTrace(
                         world, "comfort_miss_angle_owner_gap", pos, supportPos);
             }
         }
@@ -214,10 +216,10 @@ public final class LoweredSideSlabRetargeter {
         );
         BlockHitResult comfortHit = comfort.raycast(eye, end, pos);
         if (comfortHit == null) {
-            System.out.println("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_miss_angle_owner_gap"
+            slabbed$traceComfort("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_miss_angle_owner_gap"
                     + " no-box-intersection pos=" + pos.toShortString()
                     + " box=" + box);
-            Beta35LiveTorchCaptureRecorder.recordComfortTrace(
+            RuntimeDiagnostics.recordLiveTorchComfortTrace(
                     world, "comfort_miss_angle_owner_gap no-box-intersection", pos, pos.down());
             return null;
         }
@@ -247,15 +249,21 @@ public final class LoweredSideSlabRetargeter {
             maxAxisDelta = Math.max(maxAxisDelta, Math.abs(d));
         }
         if (maxAxisDelta > COMFORT_MISS_THRESHOLD + 1.0e-9) {
-            System.out.println("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_miss_angle_owner_gap"
+            slabbed$traceComfort("[SBSB-TRACE][LOWERED_SIDE_SLAB_COMFORT] reason=comfort_miss_angle_owner_gap"
                     + " distance-reject pos=" + pos.toShortString()
                     + " hit=" + comfortHit.getPos()
                     + " axisDelta=" + maxAxisDelta);
-            Beta35LiveTorchCaptureRecorder.recordComfortTrace(
+            RuntimeDiagnostics.recordLiveTorchComfortTrace(
                     world, "comfort_miss_angle_owner_gap distance-reject", pos, pos.down());
             return null;
         }
 
         return comfortHit;
+    }
+
+    private static void slabbed$traceComfort(String message) {
+        if (Boolean.getBoolean(COMFORT_TRACE_OPT_IN)) {
+            Slabbed.LOGGER.info(message);
+        }
     }
 }

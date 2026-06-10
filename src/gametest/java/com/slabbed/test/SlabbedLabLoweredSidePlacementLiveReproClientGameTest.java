@@ -13012,7 +13012,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     /**
      * Render-quad dy RED proof for the Beta 3.5 fence/wall variant false-green.
      *
-     * Reads {@link OffsetBlockStateModel#snapshotModelDyOwnerTrace()} after a forced
+     * Reads {@link OffsetBlockStateModel#snapshotModelDyOwnerSample()} after a forced
      * re-render so the proof captures whether the Fabric emitQuads path actually applied
      * dy for fence/wall variants. The previous shape-triad proof was passing because
      * collision/outline/raycast shapes are offset by {@code SlabSupportStateMixin}, while
@@ -13054,7 +13054,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " glass_pane=NOT_COVERED"
                 + " priorVariantCoverageClaim=GREEN_RESCINDED_FOR_RELEASE"
                 + " previousFailureLayer=OBJECT_MODEL_BOTTOM_PROXY_GAP"
-                + " probe=OffsetBlockStateModel.snapshotModelDyOwnerTrace"
+                + " probe=OffsetBlockStateModel.snapshotModelDyOwnerSample"
                 + " productionRenderFixImplemented=false"
                 + " releaseAudit=NOT_RUN");
 
@@ -13224,7 +13224,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 modelBoundsBox[0] = beta35FormatBox(modelProxyBox);
             }
             if (mc.worldRenderer != null) {
-                OffsetBlockStateModel.resetModelDyOwnerTrace(objectPos);
+                OffsetBlockStateModel.resetModelDyOwnerSample(objectPos);
                 mc.worldRenderer.scheduleBlockRenders(
                         objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
                         objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
@@ -13244,10 +13244,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
         singleplayer.getClientWorld().waitForChunksRender();
 
-        final OffsetBlockStateModel.ModelDyOwnerTrace[] traceBox = {null};
-        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace());
+        final OffsetBlockStateModel.ModelDyOwnerSample[] traceBox = {null};
+        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerSample());
 
-        OffsetBlockStateModel.ModelDyOwnerTrace trace = traceBox[0];
+        OffsetBlockStateModel.ModelDyOwnerSample trace = traceBox[0];
         boolean traceSeen = trace != null && trace.seen();
         int emitCalls = trace == null ? 0 : trace.emitCalls();
         int appliedCalls = trace == null ? 0 : trace.appliedCalls();
@@ -13484,7 +13484,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 modelBoundsBox[0] = beta35FormatBox(modelProxyBox);
             }
             if (mc.worldRenderer != null) {
-                OffsetBlockStateModel.resetModelDyOwnerTrace(objectPos);
+                OffsetBlockStateModel.resetModelDyOwnerSample(objectPos);
                 mc.worldRenderer.scheduleBlockRenders(
                         objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
                         objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
@@ -13504,8 +13504,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
         singleplayer.getClientWorld().waitForChunksRender();
 
-        final OffsetBlockStateModel.ModelDyOwnerTrace[] traceBox = {null};
-        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace());
+        final OffsetBlockStateModel.ModelDyOwnerSample[] traceBox = {null};
+        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerSample());
 
         final boolean[] survivedBox = {false};
         ctx.runOnClient(mc -> {
@@ -13515,7 +13515,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             }
         });
 
-        OffsetBlockStateModel.ModelDyOwnerTrace trace = traceBox[0];
+        OffsetBlockStateModel.ModelDyOwnerSample trace = traceBox[0];
         boolean traceSeen = trace != null && trace.seen();
         int emitCalls = trace == null ? 0 : trace.emitCalls();
         int appliedCalls = trace == null ? 0 : trace.appliedCalls();
@@ -13777,7 +13777,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 modelBoundsBox[0] = beta35FormatBox(modelProxyBox);
             }
             if (mc.worldRenderer != null) {
-                OffsetBlockStateModel.resetModelDyOwnerTrace(objectPos);
+                OffsetBlockStateModel.resetModelDyOwnerSample(objectPos);
                 mc.worldRenderer.scheduleBlockRenders(
                         objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
                         objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
@@ -13797,8 +13797,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
         singleplayer.getClientWorld().waitForChunksRender();
 
-        final OffsetBlockStateModel.ModelDyOwnerTrace[] traceBox = {null};
-        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace());
+        final OffsetBlockStateModel.ModelDyOwnerSample[] traceBox = {null};
+        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerSample());
 
         final boolean[] survivedBox = {false};
         ctx.runOnClient(mc -> {
@@ -13808,7 +13808,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             }
         });
 
-        OffsetBlockStateModel.ModelDyOwnerTrace trace = traceBox[0];
+        OffsetBlockStateModel.ModelDyOwnerSample trace = traceBox[0];
         boolean traceSeen = trace != null && trace.seen();
         int emitCalls = trace == null ? 0 : trace.emitCalls();
         int appliedCalls = trace == null ? 0 : trace.appliedCalls();
@@ -14012,7 +14012,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         ctx.waitTick();
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
-        OffsetBlockStateModel.ModelDyOwnerTrace trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
+        OffsetBlockStateModel.ModelDyOwnerSample trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
 
         final String[] failureLayerBox = {"UNKNOWN"};
         ctx.runOnClient(mc -> {
@@ -19852,7 +19852,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             world.updateNeighbors(objectPos.west(), world.getBlockState(objectPos.west()).getBlock());
         });
         ctx.waitTick();
-        OffsetBlockStateModel.ModelDyOwnerTrace trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
+        OffsetBlockStateModel.ModelDyOwnerSample trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
         boolean traceSeen = trace != null && trace.seen();
         int appliedCalls = trace == null ? 0 : trace.appliedCalls();
         double lastDy = trace == null ? 0.0d : trace.lastDy();
@@ -20012,7 +20012,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             world.updateNeighbors(supportCandidatePos, supportState.getBlock());
         });
         ctx.waitTick();
-        OffsetBlockStateModel.ModelDyOwnerTrace trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
+        OffsetBlockStateModel.ModelDyOwnerSample trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
         boolean traceSeen = trace != null && trace.seen();
         int appliedCalls = trace == null ? 0 : trace.appliedCalls();
         double lastDy = trace == null ? 0.0d : trace.lastDy();
@@ -20229,7 +20229,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             ctx.waitTick();
         }
 
-        OffsetBlockStateModel.ModelDyOwnerTrace trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
+        OffsetBlockStateModel.ModelDyOwnerSample trace = beta35CaptureModelDyTrace(ctx, singleplayer, objectPos);
         boolean traceSeen = trace != null && trace.seen();
         int appliedCalls = trace == null ? 0 : trace.appliedCalls();
         double lastDy = trace == null ? 0.0d : trace.lastDy();
@@ -20392,7 +20392,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         ctx.waitTick();
     }
 
-    private static OffsetBlockStateModel.ModelDyOwnerTrace beta35CaptureModelDyTrace(
+    private static OffsetBlockStateModel.ModelDyOwnerSample beta35CaptureModelDyTrace(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
             BlockPos objectPos
@@ -20401,7 +20401,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.worldRenderer == null) {
                 return;
             }
-            OffsetBlockStateModel.resetModelDyOwnerTrace(objectPos);
+            OffsetBlockStateModel.resetModelDyOwnerSample(objectPos);
             mc.worldRenderer.scheduleBlockRenders(
                     objectPos.getX() - 1, objectPos.getY() - 1, objectPos.getZ() - 1,
                     objectPos.getX() + 1, objectPos.getY() + 1, objectPos.getZ() + 1);
@@ -20419,10 +20419,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
         singleplayer.getClientWorld().waitForChunksRender();
 
-        final OffsetBlockStateModel.ModelDyOwnerTrace[] traceBox = {
-                new OffsetBlockStateModel.ModelDyOwnerTrace(false, "none", "none", "none", 0, 0, 0.0d, 0.0d)
+        final OffsetBlockStateModel.ModelDyOwnerSample[] traceBox = {
+                new OffsetBlockStateModel.ModelDyOwnerSample(false, "none", "none", "none", 0, 0, 0.0d, 0.0d)
         };
-        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerTrace());
+        ctx.runOnClient(mc -> traceBox[0] = OffsetBlockStateModel.snapshotModelDyOwnerSample());
         return traceBox[0];
     }
 

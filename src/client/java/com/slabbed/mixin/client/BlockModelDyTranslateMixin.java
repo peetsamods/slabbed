@@ -1,7 +1,7 @@
 package com.slabbed.mixin.client;
 
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.runtime.ModelDyTranslateTraceBridge;
+import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.BlockModelRenderer;
@@ -27,7 +27,7 @@ public class BlockModelDyTranslateMixin {
             BlockState state,
             double dy
     ) {
-        ModelDyTranslateTraceBridge.record(method, world, pos, state, dy);
+        RuntimeDiagnostics.recordModelDyTrace(method, world, pos, state, dy);
     }
 
     @Inject(method = "render(Lnet/minecraft/world/BlockRenderView;Lnet/minecraft/client/render/model/BakedModel;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZLnet/minecraft/util/math/random/Random;JI)V",
