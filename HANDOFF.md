@@ -57,6 +57,17 @@ half-block step in snowy terrain. Root cause: `isThinTopLayer` excluded only `Sn
 (`powderSnowOnSlabIsNeverLowered`). Lesson: [`memory`] exclude by ROLE, not one class name. FOLLOW-UP: audit
 other natural full-cube terrain fill (mud, sculk, moss block…) for the same slip (background task).
 
+## DONE — ceiling-hanger droop + sign smoosh (`434e7c41`, LIVE-CONFIRMED + pushed)
+Two release-blockers, one root: ceiling-hung blocks (hanging roots / spore / hanging sign / pale moss) were
+run through "resting on a support BELOW" branches whose downward walks step through any non-air block — a
+placed lantern bridged the walk to a slab 2 cells down → roots drooped −0.5; and `HangingSign` was missing
+from the follow-a-lowered-support set → it smooshed +0.5 up into a lowered slab. Fix: early-dispatch always-
+ceiling-hung decorations (no floor variant) at the top of `getYOffsetInner` to `ceilingHungDecorationDy()` =
+dy from the support ABOVE only, bypassing all below-branches; +`HangingSign` in the follow-sets;
+`loweredSlabUndersideSupportDy`→NaN for TS slabs (flush ≠ lowered support). Harness 101/101
+(`hangingRootsNotLoweredByBridgedSlabBelow`, `hangingSignUnderNormalTopSlabKeepsRaisedBaseline`). Lesson:
+[`memory`] ceiling hangers attach from ABOVE; downward walks bridge through placed blocks.
+
 ## Open (need Julia / deferred)
 - **BUG A — RESOLVED (live, 2026-06-10).** Opaque full cube on a TS slab shows NO cull hole live (cull fix
   `BlockRenderInfoCullMixin` present); the −0.5 lowering is correct/by-design parity with vanilla slabs.
@@ -64,11 +75,12 @@ other natural full-cube terrain fill (mud, sculk, moss block…) for the same sl
   0 — a stale contract to flip/delete so it stops misleading (tracked as a background task).
 - **BUG4** — compound stack under-lowers (−0.5 not −1.0) when the top block is placed via the GENERIC anchor
   path (piston/dispenser/`/setblock`), not the player top-face mixin. DEFERRED (rarer; delicate anchor law).
-- **Release gate — PASSED (live, 2026-06-10).** Julia walked the full live matrix (A single-lowering,
-  B vegetation, C fence-side, D side-placement, E compound/stacking, F render sweep) — **all green.**
-  The branch is **SHIPPABLE.** Remaining = cut the beta (version bump + build + tag; Codex uploads to
-  Modrinth/CurseForge). Two parked KNOWN-MINOR (not blockers, agreed): B5 saplings won't place on a TS slab
-  (placement-support check), and "SBSBS" slab-beside-slab chain. Mention in release notes as known minor.
+- **Release gate — live matrix PASSED (2026-06-10), then 2 hanger blockers found+fixed (`434e7c41`).**
+  Branch is **SHIPPABLE.** `0.4.0-beta.1` was tagged/staged then re-blocked by the hangers; publishable jar =
+  **`0.4.0-beta.2`** — RE-CUT PENDING: bump `mod_version` 0.4.0-beta.1→0.4.0-beta.2, `./gradlew build`, tag
+  `slabbed-0.4.0-beta.2`, restage jar to `~/Library/Application Support/ModrinthApp/profiles/Slabbed 1.21.1/mods/`
+  (NOT `Slabbed_` = the 1.21.11 profile), then Codex upload to Modrinth/CurseForge. Two parked KNOWN-MINOR
+  (not blockers): B5 saplings won't place on a TS slab; "SBSBS" slab-beside-slab chain. Note in release notes.
 
 ## Build / run
 - Headless tests: `JAVA_HOME=<temurin-21> ./gradlew --no-daemon --console=plain runGameTest` (TS shim
