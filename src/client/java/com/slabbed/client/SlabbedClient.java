@@ -3,7 +3,10 @@ package com.slabbed.client;
 import com.slabbed.Slabbed;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.text.Text;
 
 import java.lang.reflect.InvocationTargetException;
 
@@ -29,12 +32,15 @@ public final class SlabbedClient implements ClientModInitializer {
     }
 
     private static void initTargetDyOverlay() {
-        if (!SlabbedClientFlags.TARGET_DY_OVERLAY) {
-            return;
-        }
-        invokeStaticInit(
-                "com.slabbed.client.TargetDyOverlay",
-                "target dy overlay");
+        TargetDyOverlay.init();
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+                dispatcher.register(ClientCommandManager.literal("slabdy")
+                        .executes(context -> {
+                            boolean enabled = TargetDyOverlay.toggle();
+                            context.getSource().sendFeedback(Text.literal(
+                                    "[slabbed] target dy overlay " + (enabled ? "ON" : "OFF")));
+                            return 1;
+                        })));
     }
 
     private static void initScreenshotCaptureService() {

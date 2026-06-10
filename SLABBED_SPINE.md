@@ -50,46 +50,49 @@ tracked in commit `817f1cc0` and is not part of the hanger savepoint tag.
 ## Current objective
 
 Keep the MC 1.21.1 port on the pushed hanger closure plus tracked side-carrier
-commits, with the VS/lowered-full-block visual merge/culling RED deferred.
-Next implementation work remains the named raycast-only proof slice or the
-release gate Julia explicitly requests.
+commits, with the VS/lowered-full-block merge issue accepted as resolved by
+Julia's 2026-06-10 manual branch-local check. The remaining pictured face
+culling/shadow artifact is deferred for post-beta follow-up. Current work is
+the beta.3 release/manual-Modrinth-test gate Julia explicitly requested.
 
 ## Current blocker
 
 Visible symptom:
 
 ```text
-lowered bottom side-extension underside trapdoor targeting RED:
-TARGETING_DID_NOT_HIT_BOTTOM_SLAB_UNDERSIDE, targetFace=east
+deferred pictured face culling/shadow artifact beside VS/lowered full-block
+checkerboard setup
 ```
 
 Failing layer:
 
 ```text
-raycast
+render/culling surface; not placement/rescue/survival
 ```
 
 Protected invariant:
 
 ```text
 Model, outline, raycast, placement, and post-settle behavior must agree on the
-same live-equivalent dy and owner. No render/culling production patch is allowed
-unless a fresh RED names culling and proves the active runtime render path first.
+same live-equivalent dy and owner. Julia accepted the former merge issue as
+resolved; the pictured face culling/shadow artifact is explicitly deferred.
+No render/culling production patch is allowed unless a fresh RED names culling
+and proves the active runtime render path first.
 ```
 
 Latest proof:
 
 ```text
-2026-06-06 closure proof passed from the branch-local Gradle dev client:
-compileJava compileGametestJava plus focused SBBS runClientGameTest with
-goblinOnly/sbbsFinalSlabTargetingRed/disableNetworkSynchronizer. Result GREEN,
-failureLayer=NONE, lanternUnderDy=-0.5, chainLanternDy=0.0.
+2026-06-10 release hygiene and beta.2 version proof passed on port/mc-1.21.1.
+Julia later reported the merge issue resolved and requested beta.3 parity with
+the MC 1.21.11 port, with the pictured culling/shadow issue deferred.
 ```
 
 Live status:
 
 ```text
-hanger local-live confirmed; active raycast RED and SBBS manual-live proof gap remain open
+hanger local-live confirmed; merge issue resolved by Julia; pictured
+render/culling artifact deferred
 ```
 
 ## Deferred visual/culling REDs
@@ -99,9 +102,11 @@ hanger local-live confirmed; active raycast RED and SBBS manual-live proof gap r
 Visible symptom:
 
 ```text
-Branch-local manual screenshots on 2026-06-10 show VS/lowered-full-block
-checkerboards and full-block-adjacent setups visually merging, including a
-culled/missing face at the lowered full block / vanilla slab boundary.
+Branch-local manual screenshots on 2026-06-10 originally showed
+VS/lowered-full-block checkerboards and full-block-adjacent setups visually
+merging. Julia later accepted the merge issue as resolved. The remaining
+pictured issue is the culled/missing face / shadow artifact at the lowered
+full-block / vanilla slab boundary.
 ```
 
 Failing layer:
@@ -113,10 +118,11 @@ render/culling surface, not placement/rescue/survival
 Status:
 
 ```text
-Deferred for MC 1.21.1. The shadow/inappropriate-shadow lane is stopped. The
-render-worker outline-shape experiment in SlabSupportStateMixin.java was
-reversed and must not be restored unless a fresh culling-specific RED proves
-the active runtime render path and names the exact hook.
+Merge issue resolved by Julia for MC 1.21.1. The remaining pictured
+culling/shadow artifact is deferred. The render-worker outline-shape experiment
+in SlabSupportStateMixin.java was reversed and must not be restored unless a
+fresh culling-specific RED proves the active runtime render path and names the
+exact hook.
 ```
 
 Artifacts:
