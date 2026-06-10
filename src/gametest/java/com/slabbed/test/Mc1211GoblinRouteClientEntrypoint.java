@@ -2,12 +2,17 @@ package com.slabbed.test;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.texture.NativeImage;
+import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -34,6 +39,10 @@ import net.minecraft.world.dimension.DimensionOptionsRegistryHolder;
 import net.minecraft.world.gen.GeneratorOptions;
 import net.minecraft.world.gen.WorldPresets;
 import net.minecraft.world.level.LevelInfo;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Locale;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.OffsetBlockStateModel;
@@ -63,6 +72,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             "slabbed.mc1211.superflatModelHitboxHarnessOnly";
     private static final String WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY =
             "slabbed.mc1211.wallFenceProductRedOnly";
+    private static final String RELEASE_VISUAL_CATEGORY_MATRIX_PROPERTY =
+            "slabbed.mc1211.releaseVisualCategoryMatrix";
     private static final String TRAPDOOR_LOWERED_SEAM_RED_PROPERTY =
             "slabbed.mc1211.trapdoorLoweredSeamRed";
     private static final String TRAPDOOR_UNDER_BOTTOM_PLACEMENT_RED_PROPERTY =
@@ -73,6 +84,12 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             "slabbed.mc1211.trapdoorLoweredSeamMp4Red";
     private static final String SBBS_FINAL_SLAB_TARGETING_RED_PROPERTY =
             "slabbed.mc1211.sbbsFinalSlabTargetingRed";
+    private static final String SBS_TOP_SLAB_COMBINATION_RED_PROPERTY =
+            "slabbed.mc1211.sbsTopSlabCombinationRed";
+    private static final String SBS_TOP_SLAB_VISUAL_HOLD_PROPERTY =
+            "slabbed.mc1211.sbsTopSlabVisualHold";
+    private static final String VBVS_SHADOW_CHECKERBOARD_RED_PROPERTY =
+            "slabbed.mc1211.vbvsShadowCheckerboardRed";
     private static final String SBBS_LOWER_EDGE_SIDE_SLAB_RED_PROPERTY =
             "slabbed.mc1211.sbbsLowerEdgeSideSlabRed";
     private static final String TRAPDOOR_SIDE_EXTENSION_RED_PROPERTY =
@@ -274,6 +291,48 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static String sbbsFinalSlabEdgeTargetSample = "not_sampled";
     private static String sbbsFinalSlabClassification = "NOT_MEASURED";
     private static String sbbsFinalSlabFailureLayer = "proof gap";
+    private static int sbsTopSlabTicks;
+    private static int sbsTopSlabRowIndex;
+    private static int sbsTopSlabStepIndex;
+    private static int sbsTopSlabStepAttemptTick;
+    private static int sbsTopSlabLastRetryTick;
+    private static boolean sbsTopSlabStepAttempted;
+    private static boolean sbsTopSlabCanaryEmitted;
+    private static boolean sbsTopSlabWorldStartRequested;
+    private static boolean sbsTopSlabReadyRowEmitted;
+    private static boolean sbsTopSlabStarted;
+    private static boolean sbsTopSlabFinalized;
+    private static int sbsTopSlabRedRows;
+    private static int sbsTopSlabGreenRows;
+    private static int sbsTopSlabTraceGapRows;
+    private static int sbsTopSlabCullingProofRows;
+    private static BlockPos sbsTopSlabOrigin;
+    private static BlockPos sbsTopSlabCaseOrigin;
+    private static boolean sbsTopSlabRepeatFinalClickAttempted;
+    private static boolean sbsTopSlabSideProbeAttempted;
+    private static int sbsTopSlabSideProbeAttemptTick;
+    private static SbsTopSlabSideTargetProbe sbsTopSlabSideTargetProbe =
+            SbsTopSlabSideTargetProbe.notRun("not_started");
+    private static String sbsTopSlabPlacementResults = "";
+    private static String sbsTopSlabReachDiagnostic = "not_sampled";
+    private static String sbsTopSlabRows = "";
+    private static String sbsTopSlabFirstFailingBoundary = "NONE";
+    private static int vbvsShadowTicks;
+    private static int vbvsShadowPhase;
+    private static int vbvsShadowPhaseTick;
+    private static int vbvsShadowTileIndex;
+    private static boolean vbvsShadowCanaryEmitted;
+    private static boolean vbvsShadowWorldStartRequested;
+    private static boolean vbvsShadowReadyRowEmitted;
+    private static boolean vbvsShadowStarted;
+    private static boolean vbvsShadowFinalized;
+    private static BlockPos vbvsShadowOrigin;
+    private static String vbvsShadowRows = "";
+    private static int vbvsShadowRedRows;
+    private static int vbvsShadowGreenRows;
+    private static int vbvsShadowTraceGapRows;
+    private static final int VBVS_SHADOW_MESH_TRACE_MIN_WAIT_TICKS = 20;
+    private static final int VBVS_SHADOW_MESH_TRACE_TIMEOUT_TICKS = 160;
     private static BlockPos trapdoorSeamTopSlabPos;
     private static BlockPos trapdoorSeamExtensionSlabPos;
     private static BlockPos trapdoorSeamExtensionTrapdoorPos;
@@ -318,17 +377,50 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private static String superflatHarnessPlacementMethod = "not_started";
     private static String superflatHarnessPlacementReturn = "not_started";
     private static int superflatHarnessInteractAttempts;
+    private static boolean superflatHarnessScreenClosedForRow;
     private static int superflatHarnessGreenRows;
     private static int superflatHarnessRedRows;
     private static int superflatHarnessTraceGapRows;
     private static int superflatHarnessProductBadRows;
+    private static final int SUPERFLAT_HARNESS_MODEL_SETTLE_TIMEOUT_TICKS = 80;
     private static final SuperflatHarnessRowSpec[] SUPERFLAT_HARNESS_ROWS = new SuperflatHarnessRowSpec[] {
             new SuperflatHarnessRowSpec("STONE_FULL_BLOCK", "minecraft:stone", false),
             new SuperflatHarnessRowSpec("KNOWN_GOOD_FULL_BLOCK", "minecraft:oak_log", false),
             new SuperflatHarnessRowSpec("COBBLESTONE_WALL", "minecraft:cobblestone_wall", true),
-            new SuperflatHarnessRowSpec("STONE_WALL", "minecraft:stone_wall", true),
+            new SuperflatHarnessRowSpec("STONE_BRICK_WALL", "minecraft:stone_brick_wall", true),
             new SuperflatHarnessRowSpec("OAK_FENCE", "minecraft:oak_fence", true),
             new SuperflatHarnessRowSpec("STONE_STAIRS", "minecraft:stone_stairs", false)
+    };
+    private static final SuperflatHarnessRowSpec[] RELEASE_VISUAL_CATEGORY_ROWS = new SuperflatHarnessRowSpec[] {
+            new SuperflatHarnessRowSpec("FULL_BLOCK_STONE", "minecraft:stone", false),
+            new SuperflatHarnessRowSpec("LOG_OAK", "minecraft:oak_log", false),
+            new SuperflatHarnessRowSpec("TABLE_CRAFTING", "minecraft:crafting_table", false),
+            new SuperflatHarnessRowSpec("SLAB_OAK", "minecraft:oak_slab", false),
+            new SuperflatHarnessRowSpec("STAIRS_STONE", "minecraft:stone_stairs", false),
+            new SuperflatHarnessRowSpec("WALL_COBBLESTONE", "minecraft:cobblestone_wall", true),
+            new SuperflatHarnessRowSpec("WALL_STONE_BRICK", "minecraft:stone_brick_wall", true),
+            new SuperflatHarnessRowSpec("FENCE_OAK", "minecraft:oak_fence", true),
+            new SuperflatHarnessRowSpec("FENCE_GATE_OAK", "minecraft:oak_fence_gate", true),
+            new SuperflatHarnessRowSpec("PANE_GLASS", "minecraft:glass_pane", false),
+            new SuperflatHarnessRowSpec("TRAPDOOR_OAK", "minecraft:oak_trapdoor", false),
+            new SuperflatHarnessRowSpec("DOOR_SPRUCE", "minecraft:spruce_door", false),
+            new SuperflatHarnessRowSpec("SIGN_OAK", "minecraft:oak_sign", false),
+            new SuperflatHarnessRowSpec("BUTTON_ACACIA", "minecraft:acacia_button", false),
+            new SuperflatHarnessRowSpec("LANTERN", "minecraft:lantern", false),
+            new SuperflatHarnessRowSpec("CHAIN", "minecraft:chain", false),
+            new SuperflatHarnessRowSpec("CANDLE", "minecraft:candle", false),
+            new SuperflatHarnessRowSpec("FLOWER_POT", "minecraft:flower_pot", false),
+            new SuperflatHarnessRowSpec("CARPET_WHITE", "minecraft:white_carpet", false),
+            new SuperflatHarnessRowSpec("RAIL", "minecraft:rail", false),
+            new SuperflatHarnessRowSpec("REDSTONE_WIRE", "minecraft:redstone_wire", false),
+            new SuperflatHarnessRowSpec("HOPPER", "minecraft:hopper", false),
+            new SuperflatHarnessRowSpec("FULL_BLOCK_STONE_ON_OAK_SLAB", "minecraft:stone", false, Blocks.OAK_SLAB),
+            new SuperflatHarnessRowSpec("SLAB_STONE_ON_OAK_SLAB", "minecraft:stone_slab", false, Blocks.OAK_SLAB),
+            new SuperflatHarnessRowSpec("WALL_COBBLESTONE_ON_OAK_SLAB", "minecraft:cobblestone_wall", true, Blocks.OAK_SLAB),
+            new SuperflatHarnessRowSpec("FENCE_OAK_ON_OAK_SLAB", "minecraft:oak_fence", true, Blocks.OAK_SLAB),
+            new SuperflatHarnessRowSpec("FENCE_GATE_OAK_ON_OAK_SLAB", "minecraft:oak_fence_gate", true, Blocks.OAK_SLAB),
+            new SuperflatHarnessRowSpec("PANE_GLASS_ON_OAK_SLAB", "minecraft:glass_pane", false, Blocks.OAK_SLAB),
+            new SuperflatHarnessRowSpec("HOPPER_ON_OAK_SLAB", "minecraft:hopper", false, Blocks.OAK_SLAB)
     };
     private static final LoweredTrapdoorGoblinCase[] LOWERED_TRAPDOOR_GOBLIN_CASES =
             new LoweredTrapdoorGoblinCase[] {
@@ -336,6 +428,36 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                     new LoweredTrapdoorGoblinCase("SBS_BOTTOM_SIDE_EXTENSION_UNDERSIDE", SlabType.BOTTOM, true, false),
                     new LoweredTrapdoorGoblinCase("SBBS_DOUBLE_SIDE_EXTENSION_UNDERSIDE", SlabType.DOUBLE, true, false),
                     new LoweredTrapdoorGoblinCase("CORNER_TOP_SIDE_EXTENSION_UNDERSIDE", SlabType.TOP, true, true)
+            };
+    private static final SbsTopSlabCombinationCase[] SBS_TOP_SLAB_COMBINATION_CASES =
+            new SbsTopSlabCombinationCase[] {
+                    new SbsTopSlabCombinationCase("SBB_CONTROL", "SBB", false, Blocks.STONE, Items.STONE),
+                    new SbsTopSlabCombinationCase("SBS_STONE_SLAB_REPEAT_COMBINE", "SBS", true,
+                            Blocks.STONE_SLAB, Items.STONE_SLAB, true),
+                    new SbsTopSlabCombinationCase("SBS_OAK_SLAB_CONTROL", "SBS", true,
+                            Blocks.OAK_SLAB, Items.OAK_SLAB),
+                    new SbsTopSlabCombinationCase("SBS_OAK_SLAB_ON_COPPER_BULB_RED", "SBS", true,
+                            Blocks.OAK_SLAB, Items.OAK_SLAB,
+                            Blocks.WAXED_EXPOSED_COPPER_BULB, Items.WAXED_EXPOSED_COPPER_BULB),
+                    new SbsTopSlabCombinationCase("SBSB_COPPER_BULB_ON_OAK_SLAB_RED", "SBSB", false,
+                            Blocks.WAXED_EXPOSED_COPPER_BULB, Items.WAXED_EXPOSED_COPPER_BULB,
+                            Blocks.WAXED_EXPOSED_COPPER_BULB, Items.WAXED_EXPOSED_COPPER_BULB,
+                            Blocks.OAK_SLAB, Items.OAK_SLAB),
+                    new SbsTopSlabCombinationCase("SBSB_LIVE_CROSSHAIR_COPPER_BULB_ON_OAK_SLAB_RED", "SBSB", false,
+                            Blocks.WAXED_EXPOSED_COPPER_BULB, Items.WAXED_EXPOSED_COPPER_BULB,
+                            Blocks.WAXED_EXPOSED_COPPER_BULB, Items.WAXED_EXPOSED_COPPER_BULB,
+                            Blocks.OAK_SLAB, Items.OAK_SLAB, false, true),
+                    new SbsTopSlabCombinationCase("SBSBS_OAK_SLAB_ON_SECOND_BLOCK_RED", "SBSBS", true,
+                            Blocks.OAK_SLAB, Items.OAK_SLAB,
+                            Blocks.WAXED_EXPOSED_COPPER_BULB, Items.WAXED_EXPOSED_COPPER_BULB,
+                            Blocks.OAK_SLAB, Items.OAK_SLAB),
+                    new SbsTopSlabCombinationCase("SBSBS_PERP_SIDE_TARGET_FROM_OWNER_TOP_RED", "SBSBS", true,
+                            Blocks.OAK_SLAB, Items.OAK_SLAB,
+                            Blocks.WAXED_EXPOSED_COPPER_BULB, Items.WAXED_EXPOSED_COPPER_BULB,
+                            Blocks.OAK_SLAB, Items.OAK_SLAB, false, false, true),
+                    new SbsTopSlabCombinationCase("SBBBBBS_STONE_SLAB_REPEAT_COMBINE", "SBBBBBS", true,
+                            Blocks.STONE_SLAB, Items.STONE_SLAB, true),
+                    new SbsTopSlabCombinationCase("SBBBBBB_CONTROL", "SBBBBBB", false, Blocks.STONE, Items.STONE)
             };
 
     @Override
@@ -368,6 +490,14 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             runSbbsFinalSlabTargetingRoute(client);
             return;
         }
+        if (Boolean.getBoolean(SBS_TOP_SLAB_COMBINATION_RED_PROPERTY)) {
+            runSbsTopSlabCombinationRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(VBVS_SHADOW_CHECKERBOARD_RED_PROPERTY)) {
+            runVbvsShadowCheckerboardRoute(client);
+            return;
+        }
         if (Boolean.getBoolean(TRAPDOOR_UNDER_BOTTOM_PLACEMENT_RED_PROPERTY)) {
             runTrapdoorUnderBottomPlacementRoute(client);
             return;
@@ -381,6 +511,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             return;
         }
         if (Boolean.getBoolean(WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY)) {
+            runSuperflatModelHitboxHarnessRoute(client);
+            return;
+        }
+        if (Boolean.getBoolean(RELEASE_VISUAL_CATEGORY_MATRIX_PROPERTY)) {
             runSuperflatModelHitboxHarnessRoute(client);
             return;
         }
@@ -4581,6 +4715,2115 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
     }
 
+    private static void runSbsTopSlabCombinationRoute(MinecraftClient client) {
+        if (sbsTopSlabFinalized || emitted) {
+            return;
+        }
+        sbsTopSlabTicks++;
+        if (!sbsTopSlabCanaryEmitted) {
+            sbsTopSlabCanaryEmitted = true;
+            System.out.println("[MC1211_SBS_TOP_SLAB_COMBINATION_START]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + SBS_TOP_SLAB_COMBINATION_RED_PROPERTY
+                    + " rowCount=" + SBS_TOP_SLAB_COMBINATION_CASES.length
+                    + " rows=SBB_CONTROL,SBS_STONE_SLAB_REPEAT_COMBINE,SBS_OAK_SLAB_CONTROL,"
+                    + "SBS_OAK_SLAB_ON_COPPER_BULB_RED,SBSB_COPPER_BULB_ON_OAK_SLAB_RED,"
+                    + "SBSB_LIVE_CROSSHAIR_COPPER_BULB_ON_OAK_SLAB_RED,"
+                    + "SBSBS_OAK_SLAB_ON_SECOND_BLOCK_RED,SBSBS_PERP_SIDE_TARGET_FROM_OWNER_TOP_RED,"
+                    + "SBBBBBS_STONE_SLAB_REPEAT_COMBINE,"
+                    + "SBBBBBB_CONTROL"
+                    + " initialLayer=placement/state_authority"
+                    + " playerLikeBuild=true"
+                    + " manualMarkerInjection=false"
+                    + " gameplayPatch=false"
+                    + " cleanup=false"
+                    + " savepoint=false"
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticSbsTopSlabWorldIfNeeded(client);
+        String readinessGap = sbsTopSlabReadinessGap(client);
+        if (readinessGap != null) {
+            if (!sbsTopSlabReadyRowEmitted || sbsTopSlabTicks % 1200 == 0) {
+                emitSbsTopSlabReadyRow("WAITING", readinessGap);
+                sbsTopSlabReadyRowEmitted = true;
+            }
+            if (sbsTopSlabTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitSbsTopSlabTraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+
+        if (!sbsTopSlabStarted) {
+            sbsTopSlabStarted = true;
+            sbsTopSlabOrigin = client.player.getBlockPos().add(15, 0, 11).toImmutable();
+            sbsTopSlabRowIndex = 0;
+            sbsTopSlabStepIndex = -1;
+            sbsTopSlabStepAttempted = false;
+            sbsTopSlabRepeatFinalClickAttempted = false;
+            sbsTopSlabSideProbeAttempted = false;
+            sbsTopSlabSideProbeAttemptTick = sbsTopSlabTicks;
+            sbsTopSlabSideTargetProbe = SbsTopSlabSideTargetProbe.notRun("not_started");
+            sbsTopSlabStepAttemptTick = sbsTopSlabTicks;
+            sbsTopSlabLastRetryTick = sbsTopSlabTicks;
+            System.out.println("[MC1211_SBS_TOP_SLAB_COMBINATION_ROW]"
+                    + " rowPhase=START"
+                    + " fixtureOrigin=" + textPos(sbsTopSlabOrigin)
+                    + " authoredCases=SBB_CONTROL/SBS_STONE_SLAB_REPEAT_COMBINE/SBS_OAK_SLAB_CONTROL/"
+                    + "SBS_OAK_SLAB_ON_COPPER_BULB_RED/SBSB_COPPER_BULB_ON_OAK_SLAB_RED/"
+                    + "SBSB_LIVE_CROSSHAIR_COPPER_BULB_ON_OAK_SLAB_RED/"
+                    + "SBSBS_OAK_SLAB_ON_SECOND_BLOCK_RED/SBSBS_PERP_SIDE_TARGET_FROM_OWNER_TOP_RED/"
+                    + "SBBBBBS_STONE_SLAB_REPEAT_COMBINE/"
+                    + "SBBBBBB_CONTROL"
+                    + " playerLikeBuild=true"
+                    + " manualMarkerInjection=false"
+                    + " screenshotPath=not_supported_mc1211_client_tick_route"
+                    + " gameplayPatch=false");
+            return;
+        }
+
+        if (sbsTopSlabRowIndex >= SBS_TOP_SLAB_COMBINATION_CASES.length) {
+            emitSbsTopSlabSummary(client);
+            return;
+        }
+
+        runSbsTopSlabCombinationCase(client, SBS_TOP_SLAB_COMBINATION_CASES[sbsTopSlabRowIndex]);
+    }
+
+    private static void requestProgrammaticSbsTopSlabWorldIfNeeded(MinecraftClient client) {
+        if (sbsTopSlabWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
+        }
+        sbsTopSlabWorldStartRequested = true;
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 SBS Top Slab Combination Red",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        client.createIntegratedServerLoader().createAndStart(
+                "slabbed-mc1211-sbs-top-slab-combination-red",
+                levelInfo,
+                generatorOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
+                null);
+    }
+
+    private static String sbsTopSlabReadinessGap(MinecraftClient client) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(client);
+        if (!readiness.clientBootstrapReady) {
+            return "TRACE_GAP_CLIENT_BOOTSTRAP_NOT_FINISHED";
+        }
+        if (!readiness.clientWorldReady) {
+            return sbsTopSlabWorldStartRequested
+                    ? "TRACE_GAP_PROGRAMMATIC_CLIENT_WORLD_PENDING"
+                    : "TRACE_GAP_PROGRAMMATIC_WORLD_START_PENDING";
+        }
+        if (!readiness.clientPlayerReady) {
+            return "TRACE_GAP_CLIENT_PLAYER_NOT_READY";
+        }
+        if (!readiness.integratedServerReady) {
+            return "TRACE_GAP_INTEGRATED_SERVER_NOT_READY";
+        }
+        if (!readiness.serverWorldReady) {
+            return "TRACE_GAP_SERVER_WORLD_NOT_READY";
+        }
+        if (!readiness.serverPlayerReady) {
+            return "TRACE_GAP_SERVER_PLAYER_NOT_READY";
+        }
+        if (!readiness.interactionManagerReady) {
+            return "TRACE_GAP_INTERACTION_MANAGER_NOT_READY";
+        }
+        return null;
+    }
+
+    private static void emitSbsTopSlabReadyRow(String phase, String reason) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(MinecraftClient.getInstance());
+        System.out.println("[MC1211_SBS_TOP_SLAB_COMBINATION_READY_ROW]"
+                + " phase=" + phase
+                + " tick=" + sbsTopSlabTicks
+                + " clientBootstrapReady=" + readiness.clientBootstrapReady
+                + " clientWorldReady=" + readiness.clientWorldReady
+                + " clientPlayerReady=" + readiness.clientPlayerReady
+                + " integratedServerReady=" + readiness.integratedServerReady
+                + " serverWorldReady=" + readiness.serverWorldReady
+                + " serverPlayerReady=" + readiness.serverPlayerReady
+                + " interactionManagerReady=" + readiness.interactionManagerReady
+                + " programmaticWorldStartRequested=" + sbsTopSlabWorldStartRequested
+                + " reason=" + reason);
+    }
+
+    private static void runSbsTopSlabCombinationCase(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec
+    ) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || client.world == null || client.player == null) {
+            emitSbsTopSlabTraceGap(spec.rowName(), "TRACE_GAP_WORLD_OR_PLAYER_NOT_READY");
+            return;
+        }
+        if (sbsTopSlabStepIndex < 0) {
+            sbsTopSlabCaseOrigin = sbsTopSlabOrigin.add(sbsTopSlabRowIndex * 5, 0, 0);
+            prepareSbsTopSlabCase(serverWorld, spec);
+            sbsTopSlabPlacementResults = "";
+            sbsTopSlabReachDiagnostic = "not_sampled";
+            sbsTopSlabStepIndex = 0;
+            sbsTopSlabStepAttempted = false;
+            sbsTopSlabRepeatFinalClickAttempted = false;
+            sbsTopSlabStepAttemptTick = sbsTopSlabTicks;
+            sbsTopSlabLastRetryTick = sbsTopSlabTicks;
+            System.out.println("[MC1211_SBS_TOP_SLAB_COMBINATION_ROW]"
+                    + " rowPhase=CASE_START"
+                    + " rowName=" + spec.rowName()
+                    + " structure=" + spec.structure()
+                    + " caseOrigin=" + textPos(sbsTopSlabCaseOrigin)
+                    + " groundPos=" + textPos(sbsTopSlabCaseOrigin.down())
+                    + " expectedFinalPos=" + textPos(sbsTopSlabFinalPos(spec))
+                    + " expectedFinalKind=" + blockId(spec.finalBlock())
+                    + " playerLikeBuild=true"
+                    + " manualMarkerInjection=false");
+            return;
+        }
+        if (sbsTopSlabTicks - sbsTopSlabStepAttemptTick < 8 && !sbsTopSlabStepAttempted) {
+            return;
+        }
+        if (sbsTopSlabStepIndex < spec.structure().length()) {
+            if (!sbsTopSlabStepAttempted) {
+                clickSbsTopSlabStep(client, spec, sbsTopSlabStepIndex, false);
+                return;
+            }
+            if (sbsTopSlabStepReady(serverWorld, spec, sbsTopSlabStepIndex)) {
+                if (sbsTopSlabStepIndex == spec.structure().length() - 1) {
+                    if (spec.repeatFinalClick()) {
+                        if (!sbsTopSlabRepeatFinalClickAttempted) {
+                            clickSbsTopSlabRepeatFinalClick(client, spec, false);
+                            return;
+                        }
+                        if (!sbsTopSlabRepeatFinalClickReady(serverWorld, spec)) {
+                            if (sbsTopSlabTicks - sbsTopSlabStepAttemptTick >= 160) {
+                                emitSbsTopSlabCombinationRow(client, spec, "REPEAT_FINAL_TIMEOUT");
+                                advanceSbsTopSlabCase();
+                                return;
+                            }
+                            if (sbsTopSlabTicks - sbsTopSlabLastRetryTick >= 20) {
+                                clickSbsTopSlabRepeatFinalClick(client, spec, true);
+                            }
+                            return;
+                        }
+                    }
+                    emitSbsTopSlabPersistenceTrace(client, spec, "FINAL_STEP_READY", 0);
+                }
+                sbsTopSlabStepIndex++;
+                sbsTopSlabStepAttempted = false;
+                sbsTopSlabStepAttemptTick = sbsTopSlabTicks;
+                sbsTopSlabLastRetryTick = sbsTopSlabTicks;
+                return;
+            }
+            if (sbsTopSlabTicks - sbsTopSlabStepAttemptTick < 160) {
+                if (sbsTopSlabTicks - sbsTopSlabLastRetryTick >= 20) {
+                    clickSbsTopSlabStep(client, spec, sbsTopSlabStepIndex, true);
+                }
+                return;
+            }
+            emitSbsTopSlabCombinationRow(client, spec, "STEP_TIMEOUT_" + sbsTopSlabStepIndex);
+            advanceSbsTopSlabCase();
+            return;
+        }
+        int finalHoldTicks = sbsTopSlabTicks - sbsTopSlabStepAttemptTick;
+        if (finalHoldTicks < 60) {
+            if (sbsTopSlabShouldEmitPersistenceTrace(finalHoldTicks)) {
+                emitSbsTopSlabPersistenceTrace(client, spec, "FINAL_HOLD", finalHoldTicks);
+            }
+            return;
+        }
+        if (finalHoldTicks < 100 && sbsTopSlabShouldWaitForMeshTrace(client, spec)) {
+            return;
+        }
+        if (spec.sideSlabFromFinalOwnerTop()) {
+            if (!sbsTopSlabSideProbeAttempted) {
+                sbsTopSlabSideTargetProbe = startSbsTopSlabPerpendicularSideTargetProbe(client, spec);
+                sbsTopSlabSideProbeAttempted = true;
+                sbsTopSlabSideProbeAttemptTick = sbsTopSlabTicks;
+                return;
+            }
+            if (sbsTopSlabTicks - sbsTopSlabSideProbeAttemptTick < 20) {
+                return;
+            }
+            sbsTopSlabSideTargetProbe = completeSbsTopSlabPerpendicularSideTargetProbe(
+                    client,
+                    spec,
+                    sbsTopSlabSideTargetProbe,
+                    sbsTopSlabTicks - sbsTopSlabSideProbeAttemptTick);
+        }
+        emitSbsTopSlabCombinationRow(
+                client,
+                spec,
+                spec.sideSlabFromFinalOwnerTop() ? "AFTER_PERP_SIDE_SETTLE" : "AFTER_AUTHORED_STEPS");
+        advanceSbsTopSlabCase();
+    }
+
+    private static boolean sbsTopSlabShouldWaitForMeshTrace(MinecraftClient client, SbsTopSlabCombinationCase spec) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        if (serverWorld == null || spec == null || spec.finalSlab()) {
+            return false;
+        }
+        BlockState finalState = serverWorld.getBlockState(sbsTopSlabFinalPos(spec));
+        BlockState supportState = serverWorld.getBlockState(sbsTopSlabSupportPos(spec));
+        if (finalState.isAir()
+                || finalState.getBlock() instanceof SlabBlock
+                || !(supportState.getBlock() instanceof SlabBlock)) {
+            return false;
+        }
+        return !OffsetBlockStateModel.snapshotFullMeshBoundsTrace().seen();
+    }
+
+    private static void prepareSbsTopSlabCase(ServerWorld serverWorld, SbsTopSlabCombinationCase spec) {
+        BlockPos origin = sbsTopSlabCaseOrigin;
+        serverWorld.getServer().execute(() -> {
+            for (int x = origin.getX() - 1; x <= origin.getX() + 1; x++) {
+                for (int z = origin.getZ() - 1; z <= origin.getZ() + 1; z++) {
+                    for (int y = origin.getY() - 2; y <= origin.getY() + spec.structure().length() + 2; y++) {
+                        serverWorld.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 3);
+                    }
+                }
+            }
+            serverWorld.setBlockState(origin.down(), Blocks.STONE.getDefaultState(), 3);
+            if (!serverWorld.getServer().getPlayerManager().getPlayerList().isEmpty()) {
+                serverWorld.getServer().getPlayerManager().getPlayerList().get(0)
+                        .changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            }
+        });
+    }
+
+    private static void clickSbsTopSlabStep(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            int stepIndex,
+            boolean retry
+    ) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        BlockPos hitPos = stepIndex == 0 ? sbsTopSlabCaseOrigin.down() : sbsTopSlabStepPos(spec, stepIndex - 1);
+        Vec3d hitVector = sbsTopSlabVisibleTopHitVector(serverWorld, hitPos);
+        char step = spec.structure().charAt(stepIndex);
+        net.minecraft.item.Item held = sbsTopSlabStepItem(spec, stepIndex);
+        if (stepIndex == spec.structure().length() - 1) {
+            BlockPos finalPos = sbsTopSlabFinalPos(spec);
+            OffsetBlockStateModel.resetModelDyOwnerTrace(finalPos);
+            OffsetBlockStateModel.resetFullMeshBoundsTrace(finalPos);
+        }
+        String heldItem = itemId(held);
+        String result = spec.liveCrosshairFinalStep() && stepIndex == spec.structure().length() - 1
+                ? clickBlockViaLiveCrosshair(client, spec, held, hitVector, "FINAL_STEP")
+                : clickBlock(
+                        client,
+                        held,
+                        hitPos,
+                        Direction.UP,
+                        hitVector);
+        sbsTopSlabReachDiagnostic = slabThenBlockReachDiagnostic;
+        String stepResult = "step=" + stepIndex
+                + "/symbol=" + step
+                + "/heldItem=" + heldItem
+                + "/hitPos=" + textPos(hitPos)
+                + "/face=up"
+                + "/mode=" + (spec.liveCrosshairFinalStep() && stepIndex == spec.structure().length() - 1
+                        ? "live_crosshair_final_step" : "fabricated_up_hit")
+                + "/hitVector=" + formatVec(hitVector)
+                + "/retry=" + retry
+                + "/result=" + result;
+        sbsTopSlabPlacementResults = sbsTopSlabPlacementResults.isEmpty()
+                ? stepResult
+                : sbsTopSlabPlacementResults + ";" + stepResult;
+        sbsTopSlabStepAttempted = true;
+        if (!retry) {
+            sbsTopSlabStepAttemptTick = sbsTopSlabTicks;
+        }
+        sbsTopSlabLastRetryTick = sbsTopSlabTicks;
+    }
+
+    private static void clickSbsTopSlabRepeatFinalClick(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            boolean retry
+    ) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        BlockPos finalPos = sbsTopSlabFinalPos(spec);
+        Vec3d hitVector = sbsTopSlabVisibleTopHitVector(serverWorld, finalPos);
+        net.minecraft.item.Item held = spec.finalItem();
+        String result = clickBlock(
+                client,
+                held,
+                finalPos,
+                Direction.UP,
+                hitVector);
+        sbsTopSlabReachDiagnostic = slabThenBlockReachDiagnostic;
+        String stepResult = "step=repeat_final"
+                + "/symbol=R"
+                + "/heldItem=" + itemId(held)
+                + "/hitPos=" + textPos(finalPos)
+                + "/face=up"
+                + "/hitVector=" + formatVec(hitVector)
+                + "/retry=" + retry
+                + "/result=" + result;
+        sbsTopSlabPlacementResults = sbsTopSlabPlacementResults.isEmpty()
+                ? stepResult
+                : sbsTopSlabPlacementResults + ";" + stepResult;
+        sbsTopSlabRepeatFinalClickAttempted = true;
+        if (!retry) {
+            sbsTopSlabStepAttemptTick = sbsTopSlabTicks;
+        }
+        sbsTopSlabLastRetryTick = sbsTopSlabTicks;
+    }
+
+    private static String clickBlockViaLiveCrosshair(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            net.minecraft.item.Item item,
+            Vec3d intendedHitVector,
+            String samplePhase
+    ) {
+        if (client == null || client.player == null || client.interactionManager == null
+                || client.world == null || client.gameRenderer == null) {
+            return "FAIL_ROUTE_NOT_READY";
+        }
+        syncSlabThenBlockPlayer(client, intendedHitVector);
+        ItemStack stack = new ItemStack(item, 8);
+        client.player.setStackInHand(Hand.MAIN_HAND, stack);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(item, 8));
+        }
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        Vec3d end = eye.add(client.player.getRotationVec(0.0f).multiply(6.0d));
+        HitResult vanillaTarget = client.world.raycast(new RaycastContext(
+                eye,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                client.player));
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalTarget = client.crosshairTarget;
+        if (!(finalTarget instanceof BlockHitResult blockHit) || finalTarget.getType() != HitResult.Type.BLOCK) {
+            return "FAIL_LIVE_CROSSHAIR_NOT_BLOCK"
+                    + "/samplePhase=" + samplePhase
+                    + "/vanillaTarget=" + formatHit(vanillaTarget)
+                    + "/finalTarget=" + formatHit(finalTarget);
+        }
+        ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, blockHit);
+        return "LIVE_CROSSHAIR_" + result
+                + "/samplePhase=" + samplePhase
+                + "/vanillaTarget=" + formatHit(vanillaTarget)
+                + "/vanillaOwner=" + sbsTopSlabTargetOwner(spec, vanillaTarget)
+                + "/finalTarget=" + formatHit(finalTarget)
+                + "/finalOwner=" + sbsTopSlabTargetOwner(spec, finalTarget);
+    }
+
+    private static boolean sbsTopSlabStepReady(
+            ServerWorld serverWorld,
+            SbsTopSlabCombinationCase spec,
+            int stepIndex
+    ) {
+        if (serverWorld == null || sbsTopSlabCaseOrigin == null) {
+            return false;
+        }
+        BlockPos stepPos = sbsTopSlabStepPos(spec, stepIndex);
+        BlockState state = serverWorld.getBlockState(stepPos);
+        return state.isOf(sbsTopSlabStepBlock(spec, stepIndex));
+    }
+
+    private static boolean sbsTopSlabRepeatFinalClickReady(
+            ServerWorld serverWorld,
+            SbsTopSlabCombinationCase spec
+    ) {
+        if (serverWorld == null || sbsTopSlabCaseOrigin == null) {
+            return false;
+        }
+        BlockState state = serverWorld.getBlockState(sbsTopSlabFinalPos(spec));
+        return state.isOf(spec.finalBlock())
+                && state.contains(SlabBlock.TYPE)
+                && state.get(SlabBlock.TYPE) == SlabType.DOUBLE;
+    }
+
+    private static net.minecraft.item.Item sbsTopSlabStepItem(SbsTopSlabCombinationCase spec, int stepIndex) {
+        char step = spec.structure().charAt(stepIndex);
+        if (step == 'S' && spec.finalSlab() && stepIndex == spec.structure().length() - 1) {
+            return spec.finalItem();
+        }
+        if (step == 'S') {
+            return spec.slabItem();
+        }
+        if (!spec.finalSlab() && stepIndex == spec.structure().length() - 1) {
+            return spec.finalItem();
+        }
+        return spec.supportItem();
+    }
+
+    private static Block sbsTopSlabStepBlock(SbsTopSlabCombinationCase spec, int stepIndex) {
+        char step = spec.structure().charAt(stepIndex);
+        if (step == 'S' && spec.finalSlab() && stepIndex == spec.structure().length() - 1) {
+            return spec.finalBlock();
+        }
+        if (step == 'S') {
+            return spec.slabBlock();
+        }
+        if (!spec.finalSlab() && stepIndex == spec.structure().length() - 1) {
+            return spec.finalBlock();
+        }
+        return spec.supportBlock();
+    }
+
+    private static BlockPos sbsTopSlabStepPos(SbsTopSlabCombinationCase spec, int stepIndex) {
+        return sbsTopSlabCaseOrigin.up(stepIndex);
+    }
+
+    private static BlockPos sbsTopSlabFinalPos(SbsTopSlabCombinationCase spec) {
+        return sbsTopSlabStepPos(spec, spec.structure().length() - 1);
+    }
+
+    private static BlockPos sbsTopSlabSupportPos(SbsTopSlabCombinationCase spec) {
+        return sbsTopSlabStepPos(spec, Math.max(0, spec.structure().length() - 2));
+    }
+
+    private static Vec3d sbsTopSlabVisibleTopHitVector(ServerWorld serverWorld, BlockPos pos) {
+        double y = pos == null ? 0.0d : pos.getY() + 1.0d;
+        if (serverWorld != null && pos != null) {
+            BlockState state = serverWorld.getBlockState(pos);
+            VoxelShape shape = state.getOutlineShape(serverWorld, pos);
+            if (!state.isAir() && !shape.isEmpty()) {
+                y = pos.getY() + shape.getBoundingBox().maxY;
+            }
+        }
+        return new Vec3d(pos.getX() + 0.5d, y, pos.getZ() + 0.5d);
+    }
+
+    private static Vec3d sbsTopSlabVisibleCenterHitVector(ServerWorld serverWorld, BlockPos pos) {
+        double y = pos == null ? 0.0d : pos.getY() + 0.5d;
+        if (serverWorld != null && pos != null) {
+            BlockState state = serverWorld.getBlockState(pos);
+            VoxelShape shape = state.getOutlineShape(serverWorld, pos);
+            if (!state.isAir() && !shape.isEmpty()) {
+                var bounds = shape.getBoundingBox();
+                y = pos.getY() + ((bounds.minY + bounds.maxY) * 0.5d);
+            }
+        }
+        return new Vec3d(pos.getX() + 0.5d, y, pos.getZ() + 0.5d);
+    }
+
+    private static void emitSbsTopSlabCombinationRow(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            String rowPhase
+    ) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        BlockPos finalPos = sbsTopSlabFinalPos(spec);
+        BlockPos supportPos = sbsTopSlabSupportPos(spec);
+        BlockState finalState = serverWorld == null ? Blocks.AIR.getDefaultState() : serverWorld.getBlockState(finalPos);
+        BlockState clientFinalState = clientWorld == null ? Blocks.AIR.getDefaultState() : clientWorld.getBlockState(finalPos);
+        BlockState finalAboveState = serverWorld == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(finalPos.up());
+        BlockState supportState = serverWorld == null ? Blocks.AIR.getDefaultState() : serverWorld.getBlockState(supportPos);
+        BlockState clientSupportState = clientWorld == null ? Blocks.AIR.getDefaultState() : clientWorld.getBlockState(supportPos);
+        double finalDy = serverWorld == null ? Double.NaN : SlabSupport.getYOffset(serverWorld, finalPos, finalState);
+        double finalClientDy = clientWorld == null ? Double.NaN : ClientDy.dyFor(clientWorld, finalPos, clientFinalState);
+        double supportDy = serverWorld == null ? Double.NaN : SlabSupport.getYOffset(serverWorld, supportPos, supportState);
+        double supportClientDy = clientWorld == null ? Double.NaN : ClientDy.dyFor(clientWorld, supportPos, clientSupportState);
+        boolean finalOwnerTop = serverWorld != null
+                && SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(serverWorld, finalPos, finalState);
+        boolean finalClientOwnerTop = clientWorld != null
+                && SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(clientWorld, finalPos, clientFinalState);
+        boolean finalLoweredCarrier = serverWorld != null
+                && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(serverWorld, finalPos, finalState);
+        boolean finalClientLoweredCarrier = clientWorld != null
+                && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(clientWorld, finalPos, clientFinalState);
+        boolean finalAnchored = serverWorld != null && SlabAnchorAttachment.isAnchored(serverWorld, finalPos);
+        boolean finalCompoundAnchor = serverWorld != null
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(serverWorld, finalPos);
+        boolean finalClientCompoundAnchor = clientWorld != null
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(clientWorld, finalPos);
+        boolean supportAnchored = serverWorld != null && SlabAnchorAttachment.isAnchored(serverWorld, supportPos);
+        boolean supportClientAnchored = clientWorld != null && SlabAnchorAttachment.isAnchored(clientWorld, supportPos);
+        boolean supportCompoundAnchor = serverWorld != null
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(serverWorld, supportPos);
+        boolean supportLowered = !(supportState.getBlock() instanceof SlabBlock)
+                && !supportState.isAir()
+                && supportDy < -1.0e-6d;
+        boolean supportIsSlab = supportState.getBlock() instanceof SlabBlock;
+        String supportCarrierFacts = sbsTopSlabSupportCarrierFacts(serverWorld, supportPos, supportState, supportDy);
+        double supportTopY = sbsTopSlabVisibleTopY(serverWorld, supportPos, supportState, supportDy);
+        double finalBottomY = sbsTopSlabVisibleBottomY(serverWorld, finalPos, finalState, finalDy);
+        double contactGap = Double.isFinite(finalBottomY) && Double.isFinite(supportTopY)
+                ? finalBottomY - supportTopY
+                : Double.NaN;
+        Vec3d finalHitVector = sbsTopSlabVisibleTopHitVector(serverWorld, supportPos);
+        String targetSample = sampleSbsTopSlabTarget(client, spec, finalHitVector, "FINAL_TARGET");
+        double targetDy = sbsTopSlabTargetDy(clientWorld, client == null ? null : client.crosshairTarget);
+        Direction targetSide = sbsTopSlabTargetSide(client == null ? null : client.crosshairTarget);
+        Vec3d finalBlockHitVector = sbsTopSlabVisibleCenterHitVector(serverWorld, finalPos);
+        String finalBlockTargetSample = sampleSbsTopSlabTarget(
+                client,
+                spec,
+                finalBlockHitVector,
+                "FINAL_BLOCK_TARGET");
+        String finalBlockTargetOwner = sbsTopSlabTargetOwner(spec, client == null ? null : client.crosshairTarget);
+        double finalBlockTargetDy = sbsTopSlabTargetDy(clientWorld, client == null ? null : client.crosshairTarget);
+        OffsetBlockStateModel.ModelDyOwnerTrace modelTrace = OffsetBlockStateModel.snapshotModelDyOwnerTrace();
+        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        SbsTopSlabCullingProof cullingProof = captureSbsTopSlabCullingProof(
+                clientWorld,
+                finalPos,
+                clientFinalState,
+                supportPos,
+                clientSupportState,
+                targetSide);
+        SbsTopSlabSupportRemovalProbe supportRemovalProbe = probeSbsTopSlabAfterSupportRemoval(
+                client,
+                spec,
+                supportIsSlab);
+        SbsTopSlabSideTargetProbe sideTargetProbe = spec.sideSlabFromFinalOwnerTop()
+                ? sbsTopSlabSideTargetProbe
+                : SbsTopSlabSideTargetProbe.notRun("not_requested");
+        SbsTopSlabClassification classification = classifySbsTopSlabRow(
+                spec,
+                finalState,
+                finalAboveState,
+                finalDy,
+                finalOwnerTop,
+                finalLoweredCarrier,
+                finalAnchored,
+                finalCompoundAnchor,
+                supportLowered,
+                supportIsSlab,
+                supportDy,
+                supportCompoundAnchor,
+                contactGap,
+                modelTrace,
+                finalClientDy,
+                targetDy,
+                meshTrace,
+                cullingProof,
+                finalBlockTargetOwner,
+                finalBlockTargetDy,
+                supportRemovalProbe,
+                sideTargetProbe);
+        recordSbsTopSlabRowSummary(spec, classification);
+        SlabType slabType = finalState.getBlock() instanceof SlabBlock && finalState.contains(SlabBlock.TYPE)
+                ? finalState.get(SlabBlock.TYPE)
+                : null;
+        System.out.println("[MC1211_SBS_TOP_SLAB_COMBINATION_ROW]"
+                + " rowPhase=" + rowPhase
+                + " rowName=" + spec.rowName()
+                + " structure=" + spec.structure()
+                + " authoredSteps=" + sbsTopSlabPlacementResults
+                + " heldItem=" + itemId(spec.finalItem())
+                + " finalBlockId=" + blockId(spec.finalBlock())
+                + " clickedFace=up"
+                + " hitVector=" + formatVec(finalHitVector)
+                + " finalTarget=" + targetSample
+                + " finalBlockHitVector=" + formatVec(finalBlockHitVector)
+                + " finalBlockTarget=" + finalBlockTargetSample
+                + " finalBlockTargetOwner=" + finalBlockTargetOwner
+                + " finalBlockTargetDy=" + formatDouble(finalBlockTargetDy)
+                + " postSupportRemoval=" + sbsTopSlabSupportRemovalProbeText(supportRemovalProbe)
+                + " perpSideTarget=" + sbsTopSlabSideTargetProbeText(sideTargetProbe)
+                + " caseOrigin=" + textPos(sbsTopSlabCaseOrigin)
+                + " supportPos=" + textPos(supportPos)
+                + " supportState=" + supportState
+                + " supportClientState=" + clientSupportState
+                + " supportDy=" + formatDouble(supportDy)
+                + " supportClientDy=" + formatDouble(supportClientDy)
+                + " supportAnchored=" + supportAnchored
+                + " supportClientAnchored=" + supportClientAnchored
+                + " supportCompoundFullBlockAnchorMarker=" + supportCompoundAnchor
+                + " supportLowered=" + supportLowered
+                + " supportCarrierFacts=" + supportCarrierFacts
+                + " supportTopY=" + formatDouble(supportTopY)
+                + " finalPos=" + textPos(finalPos)
+                + " finalState=" + finalState
+                + " finalClientState=" + clientFinalState
+                + " finalAboveState=" + finalAboveState
+                + " slabType=" + (slabType == null ? "none" : slabType.asString())
+                + " slabSupportDy=" + formatDouble(finalDy)
+                + " clientDy=" + formatDouble(finalClientDy)
+                + " ownerTopMarker=" + finalOwnerTop
+                + " clientOwnerTopMarker=" + finalClientOwnerTop
+                + " loweredCarrierMarker=" + finalLoweredCarrier
+                + " clientLoweredCarrierMarker=" + finalClientLoweredCarrier
+                + " anchoredMarker=" + finalAnchored
+                + " compoundFullBlockAnchorMarker=" + finalCompoundAnchor
+                + " clientCompoundFullBlockAnchorMarker=" + finalClientCompoundAnchor
+                + " placedSlabVisualBottomY=" + formatDouble(finalBottomY)
+                + " contactGap=" + formatDouble(contactGap)
+                + " modelDy=" + (modelTrace.seen() ? formatDouble(modelTrace.lastDy()) : "not_observed")
+                + " modelTrace=" + sbsTopSlabModelTraceText(modelTrace)
+                + " outlineDy=" + formatDouble(finalClientDy)
+                + " targetDy=" + formatDouble(targetDy)
+                + " meshTrace=" + sbsTopSlabMeshTraceText(meshTrace)
+                + " cullingProof=" + sbsTopSlabCullingProofText(cullingProof)
+                + " screenshotPath=not_supported_mc1211_client_tick_route"
+                + " reachDiagnostic=" + sbsTopSlabReachDiagnostic
+                + " classification=" + classification.classification()
+                + " failureLayer=" + classification.failureLayer()
+                + " finalResult=" + classification.finalResult()
+                + " gameplayPatch=false"
+                + " cleanup=false"
+                + " savepoint=false");
+    }
+
+    private static boolean sbsTopSlabShouldEmitPersistenceTrace(int finalHoldTicks) {
+        return finalHoldTicks == 1
+                || finalHoldTicks == 2
+                || finalHoldTicks == 5
+                || finalHoldTicks == 10
+                || finalHoldTicks == 20
+                || finalHoldTicks == 40
+                || finalHoldTicks == 59;
+    }
+
+    private static void emitSbsTopSlabPersistenceTrace(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            String tracePhase,
+            int finalHoldTicks
+    ) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        BlockPos finalPos = sbsTopSlabFinalPos(spec);
+        BlockPos supportPos = sbsTopSlabSupportPos(spec);
+        BlockState finalState = serverWorld == null ? Blocks.AIR.getDefaultState() : serverWorld.getBlockState(finalPos);
+        BlockState clientFinalState = clientWorld == null ? Blocks.AIR.getDefaultState() : clientWorld.getBlockState(finalPos);
+        BlockState supportState = serverWorld == null ? Blocks.AIR.getDefaultState() : serverWorld.getBlockState(supportPos);
+        double finalDy = serverWorld == null ? Double.NaN : SlabSupport.getYOffset(serverWorld, finalPos, finalState);
+        double supportDy = serverWorld == null ? Double.NaN : SlabSupport.getYOffset(serverWorld, supportPos, supportState);
+        boolean finalCarrier = serverWorld != null
+                && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(serverWorld, finalPos, finalState);
+        boolean clientFinalCarrier = clientWorld != null
+                && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(clientWorld, finalPos, clientFinalState);
+        boolean qualifiesCarrier = serverWorld != null
+                && SlabAnchorAttachment.qualifiesForPersistentLoweredSlabCarrier(serverWorld, finalPos, finalState);
+        boolean bottomCarrierNonRecursive = serverWorld != null
+                && SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(
+                serverWorld,
+                finalPos,
+                finalState);
+        boolean supportAnchored = serverWorld != null && SlabAnchorAttachment.isAnchored(serverWorld, supportPos);
+        boolean finalCanPlaceAt = serverWorld != null && !finalState.isAir() && finalState.canPlaceAt(serverWorld, finalPos);
+        String supportCarrierFacts = sbsTopSlabSupportCarrierFacts(serverWorld, supportPos, supportState, supportDy);
+        System.out.println("[MC1211_SBS_TOP_SLAB_PERSISTENCE_TRACE]"
+                + " tracePhase=" + tracePhase
+                + " rowName=" + spec.rowName()
+                + " holdTicks=" + finalHoldTicks
+                + " finalPos=" + textPos(finalPos)
+                + " finalState=" + finalState
+                + " finalClientState=" + clientFinalState
+                + " finalDy=" + formatDouble(finalDy)
+                + " finalCarrier=" + finalCarrier
+                + " clientFinalCarrier=" + clientFinalCarrier
+                + " qualifiesCarrier=" + qualifiesCarrier
+                + " bottomCarrierNonRecursive=" + bottomCarrierNonRecursive
+                + " finalCanPlaceAt=" + finalCanPlaceAt
+                + " supportPos=" + textPos(supportPos)
+                + " supportState=" + supportState
+                + " supportDy=" + formatDouble(supportDy)
+                + " supportAnchored=" + supportAnchored
+                + " supportCarrierFacts=" + supportCarrierFacts
+                + " placementRoute=ClientPlayerInteractionManager.interactBlock"
+                + " gameplayPatch=false"
+                + " cleanup=false"
+                + " savepoint=false");
+    }
+
+    private static String sbsTopSlabSupportCarrierFacts(
+            ServerWorld serverWorld,
+            BlockPos supportPos,
+            BlockState supportState,
+            double supportDy
+    ) {
+        if (serverWorld == null || supportPos == null || supportState == null) {
+            return "candidate=false/reason=world_or_support_missing";
+        }
+        boolean candidate = SlabAnchorAttachment.isLoweredFullBlockSlabCarrierSupport(
+                serverWorld,
+                supportPos,
+                supportState);
+        boolean ordinary = SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(
+                serverWorld,
+                supportPos,
+                supportState);
+        boolean solid = supportState.isSolidBlock(serverWorld, supportPos);
+        boolean blockEntity = supportState.getBlock() instanceof BlockEntityProvider;
+        boolean craftingTable = supportState.getBlock() instanceof CraftingTableBlock;
+        boolean slab = supportState.getBlock() instanceof SlabBlock;
+        VoxelShape outline = supportState.getOutlineShape(serverWorld, supportPos);
+        return "candidate=" + candidate
+                + "/ordinary=" + ordinary
+                + "/solid=" + solid
+                + "/blockEntity=" + blockEntity
+                + "/craftingTable=" + craftingTable
+                + "/slab=" + slab
+                + "/air=" + supportState.isAir()
+                + "/fluidEmpty=" + supportState.getFluidState().isEmpty()
+                + "/loweredExact=" + near(supportDy, -0.5d)
+                + "/outline=" + sbsTopSlabShapeBoundsText(outline, supportDy);
+    }
+
+    private static String sbsTopSlabShapeBoundsText(VoxelShape shape, double dy) {
+        if (shape == null) {
+            return "null";
+        }
+        if (shape.isEmpty()) {
+            return "empty";
+        }
+        var bounds = shape.getBoundingBox();
+        return "minY=" + formatDouble(bounds.minY)
+                + ",maxY=" + formatDouble(bounds.maxY)
+                + ",dyAdjustedMinY=" + formatDouble(bounds.minY - dy)
+                + ",dyAdjustedMaxY=" + formatDouble(bounds.maxY - dy);
+    }
+
+    private static String sampleSbsTopSlabTarget(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            Vec3d hitVector
+    ) {
+        return sampleSbsTopSlabTarget(client, spec, hitVector, "FINAL_TARGET");
+    }
+
+    private static String sampleSbsTopSlabTarget(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            Vec3d hitVector,
+            String samplePhase
+    ) {
+        if (client == null || client.player == null || client.world == null || client.gameRenderer == null) {
+            return "samplePhase=" + samplePhase + "/classification=TRACE_GAP_ROUTE_NOT_READY";
+        }
+        syncSlabThenBlockPlayer(client, hitVector);
+        client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(spec.finalItem(), 8));
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(spec.finalItem(), 8));
+        }
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        Vec3d end = eye.add(client.player.getRotationVec(0.0f).multiply(6.0d));
+        HitResult vanillaTarget = client.world.raycast(new RaycastContext(
+                eye,
+                end,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                client.player));
+        client.gameRenderer.updateCrosshairTarget(0.0f);
+        HitResult finalTarget = client.crosshairTarget;
+        return "samplePhase=" + samplePhase
+                + "/vanillaTarget=" + formatHit(vanillaTarget)
+                + "/vanillaOwner=" + sbsTopSlabTargetOwner(spec, vanillaTarget)
+                + "/finalTarget=" + formatHit(finalTarget)
+                + "/finalOwner=" + sbsTopSlabTargetOwner(spec, finalTarget)
+                + "/liveHit=" + formatVec(hitVector);
+    }
+
+    private static String sbsTopSlabTargetOwner(SbsTopSlabCombinationCase spec, HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
+            return hit == null ? "null" : hit.getType().toString();
+        }
+        BlockPos hitPos = blockHit.getBlockPos();
+        if (hitPos.equals(sbsTopSlabFinalPos(spec))) {
+            return spec.finalSlab() ? "final_top_slab" : "final_control_block";
+        }
+        if (hitPos.equals(sbsTopSlabSupportPos(spec))) {
+            return "support_owner";
+        }
+        if (hitPos.equals(sbsTopSlabCaseOrigin.down())) {
+            return "foundation";
+        }
+        return "other:" + textPos(hitPos);
+    }
+
+    private static double sbsTopSlabTargetDy(ClientWorld world, HitResult hit) {
+        if (world == null || !(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
+            return Double.NaN;
+        }
+        BlockPos pos = blockHit.getBlockPos();
+        return ClientDy.dyFor(world, pos, world.getBlockState(pos));
+    }
+
+    private static Direction sbsTopSlabTargetSide(HitResult hit) {
+        if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
+            return null;
+        }
+        return blockHit.getSide();
+    }
+
+    private static SbsTopSlabSupportRemovalProbe probeSbsTopSlabAfterSupportRemoval(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            boolean supportIsSlab
+    ) {
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        if (serverWorld == null || spec == null || !supportIsSlab) {
+            return SbsTopSlabSupportRemovalProbe.notRun("not_sbsb_lowered_slab_support");
+        }
+        BlockPos finalPos = sbsTopSlabFinalPos(spec);
+        BlockPos supportPos = sbsTopSlabSupportPos(spec);
+        BlockState supportStateBefore = serverWorld.getBlockState(supportPos);
+        if (!(supportStateBefore.getBlock() instanceof SlabBlock)) {
+            return SbsTopSlabSupportRemovalProbe.notRun("support_not_slab");
+        }
+        boolean removed = serverWorld.breakBlock(supportPos, false);
+        BlockState finalStateAfter = serverWorld.getBlockState(finalPos);
+        BlockState supportStateAfter = serverWorld.getBlockState(supportPos);
+        BlockState clientFinalStateAfter = clientWorld == null
+                ? Blocks.AIR.getDefaultState()
+                : clientWorld.getBlockState(finalPos);
+        double finalDyAfter = SlabSupport.getYOffset(serverWorld, finalPos, finalStateAfter);
+        double clientDyAfter = clientWorld == null
+                ? Double.NaN
+                : ClientDy.dyFor(clientWorld, finalPos, clientFinalStateAfter);
+        boolean anchoredAfter = SlabAnchorAttachment.isAnchored(serverWorld, finalPos);
+        boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(serverWorld, finalPos);
+        boolean canPlaceAtAfter = !finalStateAfter.isAir() && finalStateAfter.canPlaceAt(serverWorld, finalPos);
+        Vec3d hitVectorAfter = sbsTopSlabVisibleCenterHitVector(serverWorld, finalPos);
+        String targetSampleAfter = sampleSbsTopSlabTarget(
+                client,
+                spec,
+                hitVectorAfter,
+                "POST_SUPPORT_REMOVAL_FINAL_BLOCK_TARGET");
+        String targetOwnerAfter = sbsTopSlabTargetOwner(spec, client == null ? null : client.crosshairTarget);
+        double targetDyAfter = sbsTopSlabTargetDy(clientWorld, client == null ? null : client.crosshairTarget);
+        return new SbsTopSlabSupportRemovalProbe(
+                true,
+                removed,
+                supportStateBefore.toString(),
+                supportStateAfter.toString(),
+                finalStateAfter.toString(),
+                clientFinalStateAfter.toString(),
+                finalDyAfter,
+                clientDyAfter,
+                anchoredAfter,
+                compoundAfter,
+                canPlaceAtAfter,
+                targetSampleAfter,
+                targetOwnerAfter,
+                targetDyAfter,
+                hitVectorAfter,
+                "NONE");
+    }
+
+    private static SbsTopSlabSideTargetProbe startSbsTopSlabPerpendicularSideTargetProbe(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec
+    ) {
+        if (client == null || spec == null || !spec.sideSlabFromFinalOwnerTop()) {
+            return SbsTopSlabSideTargetProbe.notRun("not_requested");
+        }
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client.world;
+        if (serverWorld == null || clientWorld == null) {
+            return SbsTopSlabSideTargetProbe.notRun("world_not_ready");
+        }
+        BlockPos finalPos = sbsTopSlabFinalPos(spec);
+        Vec3d hitVector = sbsTopSlabVisibleSideHitVector(serverWorld, finalPos, Direction.EAST);
+        syncSlabThenBlockPlayer(client, hitVector);
+        client.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(spec.slabItem(), 8));
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            server.getPlayerManager().getPlayerList().get(0).setStackInHand(
+                    Hand.MAIN_HAND,
+                    new ItemStack(spec.slabItem(), 8));
+        }
+        String sample = sampleSbsTopSlabTarget(client, spec, hitVector, "PERP_SIDE_TARGET");
+        HitResult hit = client.crosshairTarget;
+        String targetOwner = sbsTopSlabTargetOwner(spec, hit);
+        double targetDy = sbsTopSlabTargetDy(clientWorld, hit);
+        Direction targetSide = sbsTopSlabTargetSide(hit);
+        Vec3d eye = client.player.getCameraPosVec(0.0f);
+        BlockPos playerPos = client.player.getBlockPos();
+        BlockPos sidePos = finalPos.offset(Direction.EAST);
+        BlockState sideStateBefore = serverWorld.getBlockState(sidePos);
+        BlockState sideClientStateBefore = clientWorld.getBlockState(sidePos);
+        String interactResult = "not_run";
+        if (hit instanceof BlockHitResult blockHit && hit.getType() == HitResult.Type.BLOCK
+                && client.interactionManager != null && client.player != null) {
+            ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, blockHit);
+            interactResult = result.toString();
+        }
+        BlockState sideStateImmediate = serverWorld.getBlockState(sidePos);
+        BlockState sideClientStateImmediate = clientWorld.getBlockState(sidePos);
+        return new SbsTopSlabSideTargetProbe(
+                true,
+                false,
+                hitVector,
+                itemId(spec.slabItem()),
+                "perpendicular_side_slab_from_settled_owner_top",
+                textPos(playerPos),
+                formatVec(eye),
+                sample,
+                targetOwner,
+                targetDy,
+                targetSide,
+                interactResult,
+                0,
+                sidePos,
+                sideStateBefore.toString(),
+                sideClientStateBefore.toString(),
+                sideStateImmediate.toString(),
+                sideClientStateImmediate.toString(),
+                sideStateImmediate.toString(),
+                sideClientStateImmediate.toString(),
+                SlabSupport.getYOffset(serverWorld, sidePos, sideStateImmediate),
+                ClientDy.dyFor(clientWorld, sidePos, sideClientStateImmediate),
+                SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(serverWorld, sidePos, sideStateImmediate),
+                SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(serverWorld, sidePos, sideStateImmediate),
+                SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(serverWorld, sidePos, sideStateImmediate),
+                "NONE");
+    }
+
+    private static SbsTopSlabSideTargetProbe completeSbsTopSlabPerpendicularSideTargetProbe(
+            MinecraftClient client,
+            SbsTopSlabCombinationCase spec,
+            SbsTopSlabSideTargetProbe started,
+            int waitTicks
+    ) {
+        if (started == null || !started.ran()) {
+            return SbsTopSlabSideTargetProbe.notRun(started == null ? "not_started" : started.reason());
+        }
+        ServerWorld serverWorld = serverWorldFor(client);
+        ClientWorld clientWorld = client == null ? null : client.world;
+        if (serverWorld == null || clientWorld == null || started.sidePos() == null) {
+            return started.withCompletion(
+                    false,
+                    waitTicks,
+                    started.sideStateImmediate(),
+                    started.sideClientStateImmediate(),
+                    started.sideDyAfter(),
+                    started.sideClientDyAfter(),
+                    started.sideLowerMarker(),
+                    started.sideUpperMarker(),
+                    started.sideDoubleMarker(),
+                    "completion_world_not_ready");
+        }
+        BlockState sideStateAfter = serverWorld.getBlockState(started.sidePos());
+        BlockState sideClientStateAfter = clientWorld.getBlockState(started.sidePos());
+        return started.withCompletion(
+                true,
+                waitTicks,
+                sideStateAfter.toString(),
+                sideClientStateAfter.toString(),
+                SlabSupport.getYOffset(serverWorld, started.sidePos(), sideStateAfter),
+                ClientDy.dyFor(clientWorld, started.sidePos(), sideClientStateAfter),
+                SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(serverWorld, started.sidePos(), sideStateAfter),
+                SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(serverWorld, started.sidePos(), sideStateAfter),
+                SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(serverWorld, started.sidePos(), sideStateAfter),
+                "NONE");
+    }
+
+    private static Vec3d sbsTopSlabVisibleSideHitVector(
+            ServerWorld serverWorld,
+            BlockPos pos,
+            Direction side
+    ) {
+        double y = pos == null ? 0.0d : pos.getY() + 0.5d;
+        if (serverWorld != null && pos != null) {
+            BlockState state = serverWorld.getBlockState(pos);
+            VoxelShape shape = state.getOutlineShape(serverWorld, pos);
+            if (!state.isAir() && !shape.isEmpty()) {
+                var bounds = shape.getBoundingBox();
+                y = pos.getY() + ((bounds.minY + bounds.maxY) * 0.5d);
+            }
+        }
+        double x = pos.getX() + 0.5d;
+        double z = pos.getZ() + 0.5d;
+        if (side == Direction.EAST) {
+            x = pos.getX() + 1.0d;
+        } else if (side == Direction.WEST) {
+            x = pos.getX();
+        } else if (side == Direction.SOUTH) {
+            z = pos.getZ() + 1.0d;
+        } else if (side == Direction.NORTH) {
+            z = pos.getZ();
+        }
+        return new Vec3d(x, y, z);
+    }
+
+    private static String sbsTopSlabSupportRemovalProbeText(SbsTopSlabSupportRemovalProbe probe) {
+        return "ran=" + probe.ran()
+                + "/removed=" + probe.removed()
+                + "/reason=" + probe.reason()
+                + "/supportBefore=" + probe.supportStateBefore()
+                + "/supportAfter=" + probe.supportStateAfter()
+                + "/finalAfter=" + probe.finalStateAfter()
+                + "/clientFinalAfter=" + probe.clientFinalStateAfter()
+                + "/finalDyAfter=" + formatDouble(probe.finalDyAfter())
+                + "/clientDyAfter=" + formatDouble(probe.clientDyAfter())
+                + "/anchoredAfter=" + probe.anchoredAfter()
+                + "/compoundAfter=" + probe.compoundAfter()
+                + "/canPlaceAtAfter=" + probe.canPlaceAtAfter()
+                + "/targetAfter=" + probe.targetSampleAfter()
+                + "/targetOwnerAfter=" + probe.targetOwnerAfter()
+                + "/targetDyAfter=" + formatDouble(probe.targetDyAfter())
+                + "/hitVectorAfter=" + formatVec(probe.hitVectorAfter());
+    }
+
+    private static String sbsTopSlabSideTargetProbeText(SbsTopSlabSideTargetProbe probe) {
+        return "ran=" + probe.ran()
+                + "/reason=" + probe.reason()
+                + "/hitVector=" + formatVec(probe.hitVector())
+                + "/heldItem=" + probe.heldItem()
+                + "/intendedAction=" + probe.intendedAction()
+                + "/playerBlockPos=" + probe.playerBlockPos()
+                + "/playerEye=" + probe.playerEye()
+                + "/target=" + probe.targetSample()
+                + "/targetOwner=" + probe.targetOwner()
+                + "/targetDy=" + formatDouble(probe.targetDy())
+                + "/targetSide=" + (probe.targetSide() == null ? "none" : probe.targetSide().asString())
+                + "/interactResult=" + probe.interactResult()
+                + "/completed=" + probe.completed()
+                + "/waitTicks=" + probe.waitTicks()
+                + "/sidePos=" + textPos(probe.sidePos())
+                + "/sideStateBefore=" + probe.sideStateBefore()
+                + "/sideClientStateBefore=" + probe.sideClientStateBefore()
+                + "/sideStateImmediate=" + probe.sideStateImmediate()
+                + "/sideClientStateImmediate=" + probe.sideClientStateImmediate()
+                + "/sideStateAfter=" + probe.sideStateAfter()
+                + "/sideClientStateAfter=" + probe.sideClientStateAfter()
+                + "/sideDyAfter=" + formatDouble(probe.sideDyAfter())
+                + "/sideClientDyAfter=" + formatDouble(probe.sideClientDyAfter())
+                + "/sideLowerMarker=" + probe.sideLowerMarker()
+                + "/sideUpperMarker=" + probe.sideUpperMarker()
+                + "/sideDoubleMarker=" + probe.sideDoubleMarker();
+    }
+
+    private static SbsTopSlabCullingProof captureSbsTopSlabCullingProof(
+            ClientWorld world,
+            BlockPos finalPos,
+            BlockState finalState,
+            BlockPos supportPos,
+            BlockState supportState,
+            Direction targetSide
+    ) {
+        if (world == null || finalPos == null || finalState == null || finalState.isAir()) {
+            return SbsTopSlabCullingProof.missing("ROUTE_OR_FINAL_STATE_NOT_READY");
+        }
+        Direction measuredTargetSide = targetSide == null ? Direction.UP : targetSide;
+        boolean targetFaceDraws = sbsTopSlabShouldDrawSide(world, finalPos, finalState, measuredTargetSide);
+        boolean upFaceDraws = sbsTopSlabShouldDrawSide(world, finalPos, finalState, Direction.UP);
+        boolean downFaceDraws = sbsTopSlabShouldDrawSide(world, finalPos, finalState, Direction.DOWN);
+        boolean northFaceDraws = sbsTopSlabShouldDrawSide(world, finalPos, finalState, Direction.NORTH);
+        boolean southFaceDraws = sbsTopSlabShouldDrawSide(world, finalPos, finalState, Direction.SOUTH);
+        boolean westFaceDraws = sbsTopSlabShouldDrawSide(world, finalPos, finalState, Direction.WEST);
+        boolean eastFaceDraws = sbsTopSlabShouldDrawSide(world, finalPos, finalState, Direction.EAST);
+        boolean supportUpFaceDraws = supportPos != null
+                && supportState != null
+                && !supportState.isAir()
+                && sbsTopSlabShouldDrawSide(world, supportPos, supportState, Direction.UP);
+        boolean targetCullingFaceEmpty = sbsTopSlabCullingFaceEmpty(world, finalPos, finalState, measuredTargetSide);
+        boolean upCullingFaceEmpty = sbsTopSlabCullingFaceEmpty(world, finalPos, finalState, Direction.UP);
+        boolean downCullingFaceEmpty = sbsTopSlabCullingFaceEmpty(world, finalPos, finalState, Direction.DOWN);
+        boolean supportUpCullingFaceEmpty = supportPos == null
+                || supportState == null
+                || supportState.isAir()
+                || sbsTopSlabCullingFaceEmpty(world, supportPos, supportState, Direction.UP);
+        boolean horizontalFaceDraws = northFaceDraws || southFaceDraws || westFaceDraws || eastFaceDraws;
+        boolean expectedVisibleFaceDraws = targetFaceDraws || upFaceDraws || horizontalFaceDraws;
+        return new SbsTopSlabCullingProof(
+                true,
+                measuredTargetSide,
+                targetFaceDraws,
+                upFaceDraws,
+                downFaceDraws,
+                northFaceDraws,
+                southFaceDraws,
+                westFaceDraws,
+                eastFaceDraws,
+                supportUpFaceDraws,
+                targetCullingFaceEmpty,
+                upCullingFaceEmpty,
+                downCullingFaceEmpty,
+                supportUpCullingFaceEmpty,
+                expectedVisibleFaceDraws,
+                expectedVisibleFaceDraws ? "NONE" : "ALL_EXPECTED_FACES_CULLED");
+    }
+
+    private static boolean sbsTopSlabShouldDrawSide(
+            ClientWorld world,
+            BlockPos pos,
+            BlockState state,
+            Direction direction
+    ) {
+        return Block.shouldDrawSide(state, world, pos, direction, pos.offset(direction));
+    }
+
+    private static boolean sbsTopSlabCullingFaceEmpty(
+            ClientWorld world,
+            BlockPos pos,
+            BlockState state,
+            Direction direction
+    ) {
+        return state.getCullingFace(world, pos, direction).isEmpty();
+    }
+
+    private static double sbsTopSlabVisibleTopY(
+            ServerWorld serverWorld,
+            BlockPos pos,
+            BlockState state,
+            double dy
+    ) {
+        if (serverWorld == null || pos == null || state == null || state.isAir() || !Double.isFinite(dy)) {
+            return Double.NaN;
+        }
+        VoxelShape shape = state.getOutlineShape(serverWorld, pos);
+        if (shape.isEmpty()) {
+            return Double.NaN;
+        }
+        return pos.getY() + shape.getBoundingBox().maxY;
+    }
+
+    private static double sbsTopSlabVisibleBottomY(
+            ServerWorld serverWorld,
+            BlockPos pos,
+            BlockState state,
+            double dy
+    ) {
+        if (serverWorld == null || pos == null || state == null || state.isAir() || !Double.isFinite(dy)) {
+            return Double.NaN;
+        }
+        VoxelShape shape = state.getOutlineShape(serverWorld, pos);
+        if (shape.isEmpty()) {
+            return Double.NaN;
+        }
+        return pos.getY() + shape.getBoundingBox().minY;
+    }
+
+    private static SbsTopSlabClassification classifySbsTopSlabRow(
+            SbsTopSlabCombinationCase spec,
+            BlockState finalState,
+            BlockState finalAboveState,
+            double finalDy,
+            boolean finalOwnerTop,
+            boolean finalLoweredCarrier,
+            boolean finalAnchored,
+            boolean finalCompoundAnchor,
+            boolean supportLowered,
+            boolean supportIsSlab,
+            double supportDy,
+            boolean supportCompoundAnchor,
+            double contactGap,
+            OffsetBlockStateModel.ModelDyOwnerTrace modelTrace,
+            double outlineDy,
+            double targetDy,
+            OffsetBlockStateModel.FullMeshBoundsTrace meshTrace,
+            SbsTopSlabCullingProof cullingProof,
+            String finalBlockTargetOwner,
+            double finalBlockTargetDy,
+            SbsTopSlabSupportRemovalProbe supportRemovalProbe,
+            SbsTopSlabSideTargetProbe sideTargetProbe
+    ) {
+        if (spec.finalSlab()) {
+            String prefix = spec.rowName();
+            if (!supportLowered) {
+                return new SbsTopSlabClassification(
+                        "LOWERED_CARRIER_MISSING",
+                        "placement/state authority",
+                        "RED");
+            }
+            if (!finalState.isOf(spec.finalBlock())) {
+                return new SbsTopSlabClassification(
+                        prefix + "_FINAL_SLAB_NOT_PLACED",
+                        "placement/state authority",
+                        "RED");
+            }
+            if (spec.repeatFinalClick()) {
+                if (!finalAboveState.isAir()) {
+                    return new SbsTopSlabClassification(
+                            prefix + "_REPEAT_CLICK_UPWARD_STACKED",
+                            "placement/state authority",
+                            "RED");
+                }
+                if (!finalState.contains(SlabBlock.TYPE) || finalState.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
+                    return new SbsTopSlabClassification(
+                            prefix + "_REPEAT_CLICK_DID_NOT_COMBINE_TO_DOUBLE",
+                            "placement/state authority",
+                            "RED");
+                }
+                if (!near(finalDy, -0.5d) || finalOwnerTop || finalAnchored) {
+                    return new SbsTopSlabClassification(
+                            prefix + "_COMBINED_DOUBLE_NOT_LOWERED",
+                            "state authority",
+                            "RED");
+                }
+                return new SbsTopSlabClassification(
+                        prefix + "_SAME_POSITION_DOUBLE_GREEN",
+                        "NONE",
+                        "GREEN");
+            }
+            if (!supportIsSlab && supportCompoundAnchor && near(supportDy, -1.0d)) {
+                if (!finalOwnerTop) {
+                    return new SbsTopSlabClassification(
+                            prefix + "_OWNER_TOP_MARKER_MISSING_ON_COMPOUND_FULL_BLOCK",
+                            "state authority",
+                            "RED");
+                }
+                if (!near(finalDy, -1.0d)) {
+                    return new SbsTopSlabClassification(
+                            prefix + "_OWNER_TOP_SLAB_NOT_IN_COMPOUND_DY_MINUS_ONE_LANE",
+                            "state authority",
+                            "RED");
+                }
+                if (!near(outlineDy, finalDy)) {
+                    return new SbsTopSlabClassification(
+                            prefix + "_OWNER_TOP_OUTLINE_DY_MISMATCH",
+                            "outline",
+                            "RED");
+                }
+                if (modelTrace.seen() && !near(modelTrace.lastDy(), finalDy)) {
+                    return new SbsTopSlabClassification(
+                            prefix + "_OWNER_TOP_MODEL_DY_MISMATCH",
+                            "model",
+                            "RED");
+                }
+                if (meshTrace.seen() && !near(meshTrace.dy(), finalDy)) {
+                    return new SbsTopSlabClassification(
+                            prefix + "_OWNER_TOP_MESH_DY_MISMATCH",
+                            "model",
+                            "RED");
+                }
+                if (spec.sideSlabFromFinalOwnerTop()) {
+                    if (!sideTargetProbe.ran()) {
+                        return new SbsTopSlabClassification(
+                                prefix + "_PERP_SIDE_TARGET_PROBE_NOT_RUN",
+                                "proof gap",
+                                "TRACE_GAP");
+                    }
+                    if (!"final_top_slab".equals(sideTargetProbe.targetOwner())) {
+                        return new SbsTopSlabClassification(
+                                prefix + "_PERP_SIDE_TARGET_OWNER_MISMATCH",
+                                "raycast",
+                                "RED");
+                    }
+                    if (sideTargetProbe.targetSide() == null
+                            || sideTargetProbe.targetSide().getAxis() != Direction.Axis.X) {
+                        return new SbsTopSlabClassification(
+                                prefix + "_PERP_SIDE_TARGET_FACE_MISMATCH",
+                                "raycast",
+                                "RED");
+                    }
+                    if (!near(sideTargetProbe.targetDy(), -1.0d)) {
+                        return new SbsTopSlabClassification(
+                                prefix + "_PERP_SIDE_TARGET_DY_MISMATCH",
+                                "raycast",
+                                "RED");
+                    }
+                    if (!sideTargetProbe.completed()) {
+                        return new SbsTopSlabClassification(
+                                prefix + "_PERP_SIDE_SETTLED_SAMPLE_NOT_COMPLETED",
+                                "proof gap",
+                                "TRACE_GAP");
+                    }
+                    if (!sideTargetProbe.sideStateAfter().contains(blockId(spec.slabBlock()))) {
+                        return new SbsTopSlabClassification(
+                                prefix + "_PERP_SIDE_SLAB_NOT_PLACED",
+                                "placement",
+                                "RED");
+                    }
+                    if (!near(sideTargetProbe.sideDyAfter(), -1.0d)) {
+                        return new SbsTopSlabClassification(
+                                prefix + "_PERP_SIDE_SLAB_DY_MISMATCH",
+                                "state authority",
+                                "RED");
+                    }
+                    if (!sideTargetProbe.sideLowerMarker()
+                            && !sideTargetProbe.sideUpperMarker()
+                            && !sideTargetProbe.sideDoubleMarker()) {
+                        return new SbsTopSlabClassification(
+                                prefix + "_PERP_SIDE_SLAB_MARKER_MISSING",
+                                "state authority",
+                                "RED");
+                    }
+                }
+                return new SbsTopSlabClassification(
+                        prefix + "_OWNER_TOP_SLAB_ON_COMPOUND_FULL_BLOCK_GREEN",
+                        "NONE",
+                        "GREEN");
+            }
+            if (finalState.isOf(Blocks.STONE_SLAB) && finalOwnerTop && near(finalDy, -1.0d)) {
+                return new SbsTopSlabClassification(
+                        "STONE_SLAB_OWNER_TOP_MATERIAL_MERGE_RED",
+                        "placement/state authority",
+                        "RED");
+            }
+            if (!near(finalDy, -0.5d) || !finalLoweredCarrier || finalOwnerTop || finalAnchored) {
+                return new SbsTopSlabClassification(
+                        prefix + "_FINAL_SLAB_NOT_SEPARATE_LOWERED_CARRIER",
+                        "placement/state authority",
+                        "RED");
+            }
+            return new SbsTopSlabClassification(
+                    prefix + "_SEPARATE_LOWERED_CARRIER_GREEN",
+                    "NONE",
+                    "GREEN");
+        }
+        if (!finalState.isOf(spec.finalBlock())) {
+            return new SbsTopSlabClassification(
+                    spec.rowName() + "_CONTROL_BLOCK_NOT_PLACED",
+                    "placement/state authority",
+                    "RED");
+        }
+        if (supportIsSlab) {
+            if (!near(contactGap, 0.0d)) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_FINAL_BLOCK_FLOATING_OVER_LOWERED_SLAB",
+                        "placement/state authority",
+                        "RED");
+            }
+            if (!near(finalDy, -1.0d)) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_FINAL_BLOCK_NOT_IN_LOWERED_SLAB_TOP_LANE",
+                        "state authority",
+                        "RED");
+            }
+            if (!finalAnchored || !finalCompoundAnchor) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_FINAL_BLOCK_MISSING_PERSISTENT_COMPOUND_ANCHOR",
+                        "state authority",
+                        "RED");
+            }
+            if (!"final_control_block".equals(finalBlockTargetOwner)) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_FINAL_BLOCK_TARGET_OWNER_MISMATCH",
+                        "raycast",
+                        "RED");
+            }
+            if (!near(finalBlockTargetDy, finalDy)) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_FINAL_BLOCK_TARGET_DY_MISMATCH",
+                        "raycast",
+                        "RED");
+            }
+            if (!near(outlineDy, finalDy)) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_OUTLINE_DY_MISMATCH",
+                        "outline",
+                        "RED");
+            }
+            if (modelTrace.seen() && !near(modelTrace.lastDy(), finalDy)) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_MODEL_DY_MISMATCH",
+                        "model",
+                        "RED");
+            }
+            if (meshTrace.seen() && !near(meshTrace.dy(), finalDy)) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_MESH_DY_MISMATCH",
+                        "model",
+                        "RED");
+            }
+            if (!modelTrace.seen() && !meshTrace.seen()) {
+                return new SbsTopSlabClassification(
+                        spec.rowName() + "_MODEL_MESH_PROOF_GAP",
+                        "proof gap",
+                        "TRACE_GAP");
+            }
+            if (supportRemovalProbe.ran()) {
+                if (!supportRemovalProbe.removed()) {
+                    return new SbsTopSlabClassification(
+                            spec.rowName() + "_SUPPORT_REMOVAL_DID_NOT_BREAK_SUPPORT",
+                            "proof gap",
+                            "TRACE_GAP");
+                }
+                if (!supportRemovalProbe.finalStateAfter().contains(blockId(spec.finalBlock()))) {
+                    return new SbsTopSlabClassification(
+                            spec.rowName() + "_FINAL_BLOCK_MISSING_AFTER_SUPPORT_REMOVAL",
+                            "survival",
+                            "RED");
+                }
+                if (!supportRemovalProbe.anchoredAfter() || !supportRemovalProbe.compoundAfter()) {
+                    return new SbsTopSlabClassification(
+                            spec.rowName() + "_ANCHOR_LOST_AFTER_SUPPORT_REMOVAL",
+                            "state authority",
+                            "RED");
+                }
+                if (!near(supportRemovalProbe.finalDyAfter(), -1.0d)) {
+                    return new SbsTopSlabClassification(
+                            spec.rowName() + "_FINAL_BLOCK_POPPED_UP_AFTER_SUPPORT_REMOVAL",
+                            "survival",
+                            "RED");
+                }
+                if (!"final_control_block".equals(supportRemovalProbe.targetOwnerAfter())) {
+                    return new SbsTopSlabClassification(
+                            spec.rowName() + "_TARGET_OWNER_MISMATCH_AFTER_SUPPORT_REMOVAL",
+                            "raycast",
+                            "RED");
+                }
+                if (!near(supportRemovalProbe.targetDyAfter(), supportRemovalProbe.finalDyAfter())) {
+                    return new SbsTopSlabClassification(
+                            spec.rowName() + "_TARGET_DY_MISMATCH_AFTER_SUPPORT_REMOVAL",
+                            "raycast",
+                            "RED");
+                }
+            }
+            return new SbsTopSlabClassification(
+                    spec.rowName() + "_FULL_BLOCK_ON_LOWERED_SLAB_GREEN",
+                    "NONE",
+                    "GREEN");
+        }
+        if (!near(finalDy, -0.5d) || !finalAnchored) {
+            return new SbsTopSlabClassification(
+                    spec.rowName() + "_CONTROL_BLOCK_NOT_LOWERED",
+                    "placement/state authority",
+                    "RED");
+        }
+        return new SbsTopSlabClassification(
+                spec.rowName() + "_GREEN",
+                "NONE",
+                "GREEN");
+    }
+
+    private static void recordSbsTopSlabRowSummary(
+            SbsTopSlabCombinationCase spec,
+            SbsTopSlabClassification classification
+    ) {
+        switch (classification.finalResult()) {
+            case "RED" -> sbsTopSlabRedRows++;
+            case "GREEN" -> sbsTopSlabGreenRows++;
+            default -> sbsTopSlabTraceGapRows++;
+        }
+        if ("CULLING_PROOF_REQUIRED".equals(classification.classification())) {
+            sbsTopSlabCullingProofRows++;
+        }
+        if (!"GREEN".equals(classification.finalResult()) && "NONE".equals(sbsTopSlabFirstFailingBoundary)) {
+            sbsTopSlabFirstFailingBoundary = classification.failureLayer();
+        }
+        String summary = spec.rowName()
+                + "=" + classification.finalResult()
+                + "/" + classification.classification()
+                + "/failureLayer=" + classification.failureLayer();
+        sbsTopSlabRows = sbsTopSlabRows.isEmpty() ? summary : sbsTopSlabRows + "," + summary;
+    }
+
+    private static String sbsTopSlabModelTraceText(OffsetBlockStateModel.ModelDyOwnerTrace trace) {
+        return "seen=" + trace.seen()
+                + "/viewClass=" + trace.viewClass()
+                + "/pos=" + trace.pos()
+                + "/state=" + trace.state()
+                + "/emitCalls=" + trace.emitCalls()
+                + "/appliedCalls=" + trace.appliedCalls()
+                + "/lastDy=" + formatDouble(trace.lastDy());
+    }
+
+    private static String sbsTopSlabMeshTraceText(OffsetBlockStateModel.FullMeshBoundsTrace trace) {
+        return "seen=" + trace.seen()
+                + "/blockId=" + trace.blockId()
+                + "/pos=" + trace.pos()
+                + "/dy=" + formatDouble(trace.dy())
+                + "/minAfterY=" + formatDouble(trace.minAfterY())
+                + "/maxAfterY=" + formatDouble(trace.maxAfterY())
+                + "/reason=" + trace.reason();
+    }
+
+    private static String sbsTopSlabCullingProofText(SbsTopSlabCullingProof proof) {
+        return "seen=" + proof.seen()
+                + "/targetSide=" + (proof.targetSide() == null ? "none" : proof.targetSide().asString())
+                + "/targetFaceDraws=" + proof.targetFaceDraws()
+                + "/upFaceDraws=" + proof.upFaceDraws()
+                + "/downFaceDraws=" + proof.downFaceDraws()
+                + "/northFaceDraws=" + proof.northFaceDraws()
+                + "/southFaceDraws=" + proof.southFaceDraws()
+                + "/westFaceDraws=" + proof.westFaceDraws()
+                + "/eastFaceDraws=" + proof.eastFaceDraws()
+                + "/supportUpFaceDraws=" + proof.supportUpFaceDraws()
+                + "/targetCullingFaceEmpty=" + proof.targetCullingFaceEmpty()
+                + "/upCullingFaceEmpty=" + proof.upCullingFaceEmpty()
+                + "/downCullingFaceEmpty=" + proof.downCullingFaceEmpty()
+                + "/supportUpCullingFaceEmpty=" + proof.supportUpCullingFaceEmpty()
+                + "/expectedVisibleFaceDraws=" + proof.expectedVisibleFaceDraws()
+                + "/classification=" + proof.classification();
+    }
+
+    private static String itemId(net.minecraft.item.Item item) {
+        return String.valueOf(Registries.ITEM.getId(item));
+    }
+
+    private static String blockId(Block block) {
+        return String.valueOf(Registries.BLOCK.getId(block));
+    }
+
+    private static void advanceSbsTopSlabCase() {
+        sbsTopSlabRowIndex++;
+        sbsTopSlabStepIndex = -1;
+        sbsTopSlabStepAttempted = false;
+        sbsTopSlabRepeatFinalClickAttempted = false;
+        sbsTopSlabStepAttemptTick = sbsTopSlabTicks;
+        sbsTopSlabLastRetryTick = sbsTopSlabTicks;
+    }
+
+    private static void emitSbsTopSlabTraceGap(String row, String reason) {
+        sbsTopSlabTraceGapRows++;
+        if ("NONE".equals(sbsTopSlabFirstFailingBoundary)) {
+            sbsTopSlabFirstFailingBoundary = "proof gap";
+        }
+        String summary = row + "=TRACE_GAP/" + reason + "/failureLayer=proof gap";
+        sbsTopSlabRows = sbsTopSlabRows.isEmpty() ? summary : sbsTopSlabRows + "," + summary;
+        System.out.println("[MC1211_SBS_TOP_SLAB_COMBINATION_ROW]"
+                + " rowPhase=" + row
+                + " fixtureOrigin=" + textPos(sbsTopSlabOrigin)
+                + " caseOrigin=" + textPos(sbsTopSlabCaseOrigin)
+                + " classification=" + reason
+                + " failureLayer=proof gap"
+                + " finalResult=TRACE_GAP"
+                + " gameplayPatch=false");
+        emitSbsTopSlabSummary(MinecraftClient.getInstance());
+    }
+
+    private static void emitSbsTopSlabSummary(MinecraftClient client) {
+        if (sbsTopSlabFinalized) {
+            return;
+        }
+        String finalResult = sbsTopSlabRedRows > 0
+                ? "RED"
+                : (sbsTopSlabTraceGapRows > 0 ? "TRACE_GAP" : "GREEN");
+        String firstFailingBoundary = "NONE".equals(sbsTopSlabFirstFailingBoundary)
+                ? "NONE"
+                : sbsTopSlabFirstFailingBoundary;
+        System.out.println("[MC1211_SBS_TOP_SLAB_COMBINATION_SUMMARY]"
+                + " rows=" + SBS_TOP_SLAB_COMBINATION_CASES.length
+                + " redRows=" + sbsTopSlabRedRows
+                + " greenRows=" + sbsTopSlabGreenRows
+                + " traceGapRows=" + sbsTopSlabTraceGapRows
+                + " cullingProofRows=" + sbsTopSlabCullingProofRows
+                + " finalResult=" + finalResult
+                + " firstFailingBoundary=" + firstFailingBoundary
+                + " rowSummary=" + sbsTopSlabRows
+                + " playerLikeBuild=true"
+                + " manualMarkerInjection=false"
+                + " gameplayPatch=false"
+                + " cleanup=false"
+                + " savepoint=false"
+                + " releaseAudit=NOT_RUN"
+                + " visualHold=" + Boolean.getBoolean(SBS_TOP_SLAB_VISUAL_HOLD_PROPERTY)
+                + " releaseTagMoved=false");
+        System.out.println("[MC1211_SBS_TOP_SLAB_COMBINATION_" + finalResult + "]"
+                + " rows=" + SBS_TOP_SLAB_COMBINATION_CASES.length
+                + " firstFailingBoundary=" + firstFailingBoundary
+                + " rowSummary=" + sbsTopSlabRows);
+        sbsTopSlabFinalized = true;
+        emitted = true;
+        if (client != null && !Boolean.getBoolean(SBS_TOP_SLAB_VISUAL_HOLD_PROPERTY)) {
+            client.scheduleStop();
+        }
+    }
+
+    private static void runVbvsShadowCheckerboardRoute(MinecraftClient client) {
+        if (vbvsShadowFinalized || emitted) {
+            return;
+        }
+        vbvsShadowTicks++;
+        if (!vbvsShadowCanaryEmitted) {
+            vbvsShadowCanaryEmitted = true;
+            System.out.println("[MC1211_VBVS_SHADOW_CHECKERBOARD_START]"
+                    + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
+                    + " route=" + ROUTE
+                    + " property=" + VBVS_SHADOW_CHECKERBOARD_RED_PROPERTY
+                    + " rows=9"
+                    + " fixture=checkerboard_full_block_on_bottom_slab_vs_bottom_slab_on_full_block"
+                    + " gameplayPatch=false"
+                    + " cleanup=false"
+                    + " savepoint=false"
+                    + " worldReady=" + (client != null && client.world != null)
+                    + " playerReady=" + (client != null && client.player != null));
+        }
+
+        requestProgrammaticVbvsShadowWorldIfNeeded(client);
+        String readinessGap = vbvsShadowReadinessGap(client);
+        if (readinessGap != null) {
+            if (!vbvsShadowReadyRowEmitted || vbvsShadowTicks % 1200 == 0) {
+                emitVbvsShadowReadyRow("WAITING", readinessGap);
+                vbvsShadowReadyRowEmitted = true;
+            }
+            if (vbvsShadowTicks < SIDE_PLACE_READINESS_TIMEOUT_TICKS) {
+                return;
+            }
+            emitVbvsShadowTraceGap("ROUTE_READINESS", readinessGap);
+            return;
+        }
+        if (client.currentScreen != null) {
+            client.setScreen(null);
+        }
+
+        if (!vbvsShadowStarted) {
+            vbvsShadowStarted = true;
+            vbvsShadowOrigin = client.player.getBlockPos().add(8, 0, 8).toImmutable();
+            authorVbvsShadowCheckerboard(client, serverWorldFor(client), vbvsShadowOrigin);
+            syncVbvsShadowCamera(client, vbvsShadowOrigin);
+            vbvsShadowPhase = 0;
+            vbvsShadowTileIndex = 0;
+            vbvsShadowPhaseTick = vbvsShadowTicks;
+            System.out.println("[MC1211_VBVS_SHADOW_CHECKERBOARD_ROW]"
+                    + " rowPhase=FIXTURE_AUTHORED"
+                    + " fixtureOrigin=" + textPos(vbvsShadowOrigin)
+                    + " layout=F,S,F/S,F,S/F,S,F"
+                    + " fullTile=orange_concrete_on_oak_bottom_slab_anchor"
+                    + " slabTile=oak_bottom_slab_on_orange_concrete_vanilla_support"
+                    + " manualMarkerInjection=false"
+                    + " gameplayPatch=false");
+            return;
+        }
+
+        if (vbvsShadowPhase == 0) {
+            if (vbvsShadowTicks - vbvsShadowPhaseTick < 40) {
+                return;
+            }
+            vbvsShadowPhase = 1;
+            vbvsShadowPhaseTick = vbvsShadowTicks;
+            OffsetBlockStateModel.resetFullMeshBoundsTrace(vbvsShadowTilePos(vbvsShadowTileIndex));
+            return;
+        }
+
+        if (vbvsShadowPhase == 1) {
+            int elapsed = vbvsShadowTicks - vbvsShadowPhaseTick;
+            if (elapsed < VBVS_SHADOW_MESH_TRACE_MIN_WAIT_TICKS) {
+                return;
+            }
+            if (!vbvsShadowMeshTraceReadyForTile(vbvsShadowTileIndex)) {
+                scheduleVbvsShadowTileRerender(client, vbvsShadowTilePos(vbvsShadowTileIndex));
+                if (elapsed < VBVS_SHADOW_MESH_TRACE_TIMEOUT_TICKS) {
+                    return;
+                }
+            }
+            emitVbvsShadowTileRow(client, serverWorldFor(client), vbvsShadowTileIndex);
+            vbvsShadowTileIndex++;
+            if (vbvsShadowTileIndex >= 9) {
+                vbvsShadowPhase = 2;
+                vbvsShadowPhaseTick = vbvsShadowTicks;
+                return;
+            }
+            OffsetBlockStateModel.resetFullMeshBoundsTrace(vbvsShadowTilePos(vbvsShadowTileIndex));
+            vbvsShadowPhaseTick = vbvsShadowTicks;
+            return;
+        }
+
+        if (vbvsShadowPhase == 2) {
+            if (vbvsShadowTicks - vbvsShadowPhaseTick < 10) {
+                return;
+            }
+            emitVbvsShadowSummary(client);
+        }
+    }
+
+    private static boolean vbvsShadowMeshTraceReadyForTile(int tileIndex) {
+        BlockPos pos = vbvsShadowTilePos(tileIndex);
+        OffsetBlockStateModel.FullMeshBoundsTrace trace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        return pos != null
+                && trace != null
+                && trace.seen()
+                && textPos(pos).equals(trace.pos().replace(" ", ""));
+    }
+
+    private static void scheduleVbvsShadowTileRerender(MinecraftClient client, BlockPos pos) {
+        if (client == null || client.world == null || client.worldRenderer == null || pos == null) {
+            return;
+        }
+        client.worldRenderer.scheduleBlockRenders(
+                pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
+                pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1);
+    }
+
+    private static void requestProgrammaticVbvsShadowWorldIfNeeded(MinecraftClient client) {
+        if (vbvsShadowWorldStartRequested
+                || client == null
+                || !client.isFinishedLoading()
+                || client.world != null
+                || client.player != null) {
+            return;
+        }
+        vbvsShadowWorldStartRequested = true;
+        LevelInfo levelInfo = new LevelInfo(
+                "Slabbed MC1211 VBVS Shadow Checkerboard Red",
+                GameMode.CREATIVE,
+                false,
+                Difficulty.PEACEFUL,
+                true,
+                new GameRules(),
+                DataConfiguration.SAFE_MODE);
+        GeneratorOptions generatorOptions = new GeneratorOptions(0L, false, false);
+        client.createIntegratedServerLoader().createAndStart(
+                "slabbed-mc1211-vbvs-shadow-checkerboard-red",
+                levelInfo,
+                generatorOptions,
+                Mc1211GoblinRouteClientEntrypoint::createSuperflatDimensionOptions,
+                null);
+    }
+
+    private static String vbvsShadowReadinessGap(MinecraftClient client) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(client);
+        if (!readiness.clientBootstrapReady) {
+            return "TRACE_GAP_CLIENT_BOOTSTRAP_NOT_FINISHED";
+        }
+        if (!readiness.clientWorldReady) {
+            return vbvsShadowWorldStartRequested
+                    ? "TRACE_GAP_PROGRAMMATIC_CLIENT_WORLD_PENDING"
+                    : "TRACE_GAP_PROGRAMMATIC_WORLD_START_PENDING";
+        }
+        if (!readiness.clientPlayerReady) {
+            return "TRACE_GAP_CLIENT_PLAYER_NOT_READY";
+        }
+        if (!readiness.integratedServerReady) {
+            return "TRACE_GAP_INTEGRATED_SERVER_NOT_READY";
+        }
+        if (!readiness.serverWorldReady) {
+            return "TRACE_GAP_SERVER_WORLD_NOT_READY";
+        }
+        if (!readiness.serverPlayerReady) {
+            return "TRACE_GAP_SERVER_PLAYER_NOT_READY";
+        }
+        if (!readiness.interactionManagerReady) {
+            return "TRACE_GAP_INTERACTION_MANAGER_NOT_READY";
+        }
+        return null;
+    }
+
+    private static void emitVbvsShadowReadyRow(String phase, String reason) {
+        SidePlaceReadiness readiness = SidePlaceReadiness.capture(MinecraftClient.getInstance());
+        System.out.println("[MC1211_VBVS_SHADOW_CHECKERBOARD_READY_ROW]"
+                + " phase=" + phase
+                + " tick=" + vbvsShadowTicks
+                + " clientBootstrapReady=" + readiness.clientBootstrapReady
+                + " clientWorldReady=" + readiness.clientWorldReady
+                + " clientPlayerReady=" + readiness.clientPlayerReady
+                + " integratedServerReady=" + readiness.integratedServerReady
+                + " serverWorldReady=" + readiness.serverWorldReady
+                + " serverPlayerReady=" + readiness.serverPlayerReady
+                + " interactionManagerReady=" + readiness.interactionManagerReady
+                + " programmaticWorldStartRequested=" + vbvsShadowWorldStartRequested
+                + " reason=" + reason);
+    }
+
+    private static void authorVbvsShadowCheckerboard(
+            MinecraftClient client,
+            ServerWorld serverWorld,
+            BlockPos origin
+    ) {
+        if (client == null || client.world == null || serverWorld == null || origin == null) {
+            return;
+        }
+        for (int x = -2; x <= 4; x++) {
+            for (int z = -2; z <= 4; z++) {
+                for (int y = -2; y <= 2; y++) {
+                    BlockPos clearPos = origin.add(x, y, z);
+                    serverWorld.setBlockState(clearPos, Blocks.AIR.getDefaultState(), 3);
+                    client.world.setBlockState(clearPos, Blocks.AIR.getDefaultState(), 3);
+                }
+            }
+        }
+        BlockState bottomOakSlab = Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        BlockState orange = Blocks.ORANGE_CONCRETE.getDefaultState();
+        for (int index = 0; index < 9; index++) {
+            BlockPos pos = vbvsShadowTilePos(index);
+            boolean fullTile = vbvsShadowFullTile(index);
+            BlockPos supportPos = pos.down();
+            if (fullTile) {
+                serverWorld.setBlockState(supportPos, bottomOakSlab, 3);
+                serverWorld.setBlockState(pos, orange, 3);
+                client.world.setBlockState(supportPos, bottomOakSlab, 3);
+                client.world.setBlockState(pos, orange, 3);
+                SlabAnchorAttachment.addAnchor(serverWorld, pos, orange);
+            } else {
+                serverWorld.setBlockState(supportPos, orange, 3);
+                serverWorld.setBlockState(pos, bottomOakSlab, 3);
+                client.world.setBlockState(supportPos, orange, 3);
+                client.world.setBlockState(pos, bottomOakSlab, 3);
+                SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(serverWorld, pos, bottomOakSlab);
+            }
+        }
+        serverWorld.getChunkManager().markForUpdate(origin);
+    }
+
+    private static void syncVbvsShadowCamera(MinecraftClient client, BlockPos origin) {
+        if (client == null || client.player == null || origin == null) {
+            return;
+        }
+        Vec3d center = new Vec3d(origin.getX() + 1.5d, origin.getY() + 0.35d, origin.getZ() + 1.5d);
+        Vec3d eye = center.add(0.0d, 5.0d, 4.0d);
+        Vec3d delta = center.subtract(eye);
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
+        double feetY = eye.y - 1.62d;
+        client.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+        client.player.setVelocity(Vec3d.ZERO);
+        client.player.setSneaking(false);
+        client.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+        MinecraftServer server = client.getServer();
+        if (server != null && !server.getPlayerManager().getPlayerList().isEmpty()) {
+            var serverPlayer = server.getPlayerManager().getPlayerList().get(0);
+            serverPlayer.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
+            serverPlayer.setVelocity(Vec3d.ZERO);
+            serverPlayer.setSneaking(false);
+            serverPlayer.changeGameMode(GameMode.CREATIVE);
+            serverPlayer.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+        }
+    }
+
+    private static void emitVbvsShadowTileRow(
+            MinecraftClient client,
+            ServerWorld serverWorld,
+            int tileIndex
+    ) {
+        ClientWorld clientWorld = client == null ? null : client.world;
+        BlockPos pos = vbvsShadowTilePos(tileIndex);
+        BlockPos supportPos = pos == null ? null : pos.down();
+        BlockState serverState = serverWorld == null || pos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(pos);
+        BlockState clientState = clientWorld == null || pos == null
+                ? Blocks.AIR.getDefaultState()
+                : clientWorld.getBlockState(pos);
+        BlockState supportState = serverWorld == null || supportPos == null
+                ? Blocks.AIR.getDefaultState()
+                : serverWorld.getBlockState(supportPos);
+        BlockState clientSupportState = clientWorld == null || supportPos == null
+                ? Blocks.AIR.getDefaultState()
+                : clientWorld.getBlockState(supportPos);
+        double serverDy = serverWorld == null || pos == null ? Double.NaN : SlabSupport.getYOffset(serverWorld, pos, serverState);
+        double clientDy = clientWorld == null || pos == null ? Double.NaN : ClientDy.dyFor(clientWorld, pos, clientState);
+        double supportDy = serverWorld == null || supportPos == null ? Double.NaN
+                : SlabSupport.getYOffset(serverWorld, supportPos, supportState);
+        boolean anchored = serverWorld != null && pos != null && SlabAnchorAttachment.isAnchored(serverWorld, pos);
+        boolean clientAnchored = clientWorld != null && pos != null && SlabAnchorAttachment.isAnchored(clientWorld, pos);
+        boolean loweredCarrier = serverWorld != null
+                && pos != null
+                && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(serverWorld, pos, serverState);
+        boolean clientLoweredCarrier = clientWorld != null
+                && pos != null
+                && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(clientWorld, pos, clientState);
+        boolean fullTile = vbvsShadowFullTile(tileIndex);
+        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        String cullingFacts = vbvsShadowCullingFacts(clientWorld, pos, clientState);
+        String verdict;
+        String reason;
+        if (serverWorld == null || clientWorld == null || pos == null) {
+            verdict = "TRACE_GAP_WORLD_OR_POS_MISSING";
+            reason = "world_or_pos_missing";
+            vbvsShadowTraceGapRows++;
+        } else if (fullTile && (!serverState.isOf(Blocks.ORANGE_CONCRETE) || !anchored || !near(serverDy, -0.5d))) {
+            verdict = "RED_FULL_TILE_AUTHORITY";
+            reason = "full_tile_not_anchored_lowered";
+            vbvsShadowRedRows++;
+        } else if (!fullTile
+                && (!serverState.isOf(Blocks.OAK_SLAB)
+                || !serverState.contains(SlabBlock.TYPE)
+                || serverState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !near(serverDy, 0.0d))) {
+            verdict = "RED_SLAB_TILE_AUTHORITY";
+            reason = "vanilla_slab_tile_not_isolated_from_lowered_lane";
+            vbvsShadowRedRows++;
+        } else if (meshTrace == null || !meshTrace.seen() || !textPos(pos).equals(meshTrace.pos().replace(" ", ""))) {
+            verdict = "TRACE_GAP_MESH_SNAPSHOT";
+            reason = "mesh_snapshot_missing_for_tile";
+            vbvsShadowTraceGapRows++;
+        } else {
+            boolean loweredFullMesh = fullTile
+                    && near(meshTrace.dy(), -0.5d)
+                    && near(meshTrace.minBeforeY(), 0.0d)
+                    && near(meshTrace.maxBeforeY(), 1.0d)
+                    && near(meshTrace.minAfterY(), -0.5d)
+                    && near(meshTrace.maxAfterY(), 0.5d);
+            boolean loweredFullRenderOutlineNative = loweredFullMesh
+                    && vbvsShadowRenderOutlineBounds(meshTrace, 0.0d, 1.0d);
+            boolean loweredFullRenderOutlineAligned = loweredFullMesh
+                    && vbvsShadowRenderOutlineBounds(meshTrace, -0.5d, 0.5d);
+            if (loweredFullRenderOutlineNative) {
+                verdict = "RED_RENDER_WORKER_OUTLINE_NATIVE_WITH_LOWERED_MESH";
+                reason = "render_worker_shape_stayed_native_while_mesh_lowered";
+                vbvsShadowRedRows++;
+            } else {
+                boolean slabTileControl = !fullTile
+                        && near(meshTrace.dy(), 0.0d)
+                        && vbvsShadowRenderOutlineBounds(meshTrace, 0.0d, 0.5d);
+                boolean greenRow = loweredFullRenderOutlineAligned || slabTileControl;
+                verdict = greenRow ? "GREEN_RENDER_OUTLINE_ALIGNED_WITH_MESH" : "TRACE_GAP_RENDER_OUTLINE_UNCLASSIFIED";
+                reason = greenRow
+                        ? "tile_state_mesh_and_render_worker_shape_aligned"
+                        : "mesh_snapshot_seen_but_render_outline_bounds_unclassified";
+                if (greenRow) {
+                    vbvsShadowGreenRows++;
+                } else {
+                    vbvsShadowTraceGapRows++;
+                }
+            }
+        }
+        String rowSummary = "tile" + tileIndex + "=" + verdict + "/" + reason;
+        vbvsShadowRows = vbvsShadowRows.isEmpty() ? rowSummary : vbvsShadowRows + "," + rowSummary;
+        System.out.println("[MC1211_VBVS_SHADOW_CHECKERBOARD_ROW]"
+                + " rowPhase=TILE_SAMPLE"
+                + " tileIndex=" + tileIndex
+                + " tileKind=" + (fullTile ? "FULL_ON_BOTTOM_SLAB" : "SLAB_ON_FULL_BLOCK")
+                + " pos=" + textPos(pos)
+                + " supportPos=" + textPos(supportPos)
+                + " serverState=" + serverState
+                + " clientState=" + clientState
+                + " supportState=" + supportState
+                + " clientSupportState=" + clientSupportState
+                + " serverDy=" + formatDouble(serverDy)
+                + " clientDy=" + formatDouble(clientDy)
+                + " supportDy=" + formatDouble(supportDy)
+                + " anchored=" + anchored
+                + " clientAnchored=" + clientAnchored
+                + " loweredCarrier=" + loweredCarrier
+                + " clientLoweredCarrier=" + clientLoweredCarrier
+                + " outlineBounds=" + (serverWorld == null ? "NaN..NaN" : shapeBounds(serverState.getOutlineShape(serverWorld, pos)))
+                + " clientOutlineBounds=" + (clientWorld == null ? "NaN..NaN" : shapeBounds(clientState.getOutlineShape(clientWorld, pos)))
+                + " meshTrace=" + vbvsShadowMeshTraceText(meshTrace)
+                + " cullingFacts=" + cullingFacts
+                + " verdict=" + verdict
+                + " reason=" + reason
+                + " gameplayPatch=false");
+    }
+
+    private static void emitVbvsShadowSummary(MinecraftClient client) {
+        if (vbvsShadowFinalized) {
+            return;
+        }
+        String screenshotPath = captureVbvsShadowScreenshot(client, "checkerboard-final");
+        String finalResult = vbvsShadowRedRows > 0
+                ? "RED"
+                : (vbvsShadowTraceGapRows > 0 ? "TRACE_GAP" : "GREEN");
+        System.out.println("[MC1211_VBVS_SHADOW_CHECKERBOARD_SUMMARY]"
+                + " rows=9"
+                + " redRows=" + vbvsShadowRedRows
+                + " greenRows=" + vbvsShadowGreenRows
+                + " traceGapRows=" + vbvsShadowTraceGapRows
+                + " finalResult=" + finalResult
+                + " rowSummary=" + vbvsShadowRows
+                + " screenshotPath=" + screenshotPath
+                + " gameplayPatch=false"
+                + " cleanup=false"
+                + " savepoint=false");
+        System.out.println("[MC1211_VBVS_SHADOW_CHECKERBOARD_" + finalResult + "]"
+                + " rows=9"
+                + " screenshotPath=" + screenshotPath
+                + " rowSummary=" + vbvsShadowRows);
+        vbvsShadowFinalized = true;
+        emitted = true;
+        if (client != null) {
+            client.scheduleStop();
+        }
+    }
+
+    private static void emitVbvsShadowTraceGap(String row, String reason) {
+        vbvsShadowTraceGapRows++;
+        String summary = row + "=TRACE_GAP/" + reason;
+        vbvsShadowRows = vbvsShadowRows.isEmpty() ? summary : vbvsShadowRows + "," + summary;
+        System.out.println("[MC1211_VBVS_SHADOW_CHECKERBOARD_ROW]"
+                + " rowPhase=" + row
+                + " fixtureOrigin=" + textPos(vbvsShadowOrigin)
+                + " verdict=TRACE_GAP"
+                + " reason=" + reason
+                + " gameplayPatch=false");
+        emitVbvsShadowSummary(MinecraftClient.getInstance());
+    }
+
+    private static boolean vbvsShadowFullTile(int tileIndex) {
+        int x = tileIndex % 3;
+        int z = tileIndex / 3;
+        return ((x + z) & 1) == 0;
+    }
+
+    private static BlockPos vbvsShadowTilePos(int tileIndex) {
+        if (vbvsShadowOrigin == null) {
+            return null;
+        }
+        return vbvsShadowOrigin.add(tileIndex % 3, 0, tileIndex / 3);
+    }
+
+    private static String vbvsShadowMeshTraceText(OffsetBlockStateModel.FullMeshBoundsTrace trace) {
+        if (trace == null || !trace.seen()) {
+            return "seen=false";
+        }
+        return "seen=true"
+                + "/blockId=" + trace.blockId()
+                + "/pos=" + trace.pos()
+                + "/state=" + trace.state()
+                + "/dy=" + formatDouble(trace.dy())
+                + "/minBeforeY=" + formatDouble(trace.minBeforeY())
+                + "/maxBeforeY=" + formatDouble(trace.maxBeforeY())
+                + "/minAfterY=" + formatDouble(trace.minAfterY())
+                + "/maxAfterY=" + formatDouble(trace.maxAfterY())
+                + "/renderOutlineBounds=" + trace.renderOutlineBounds()
+                + "/reason=" + trace.reason()
+                + "/viewClass=" + trace.viewClass()
+                + "/snapshotSource=" + trace.snapshotSource();
+    }
+
+    private static boolean vbvsShadowRenderOutlineBounds(
+            OffsetBlockStateModel.FullMeshBoundsTrace trace,
+            double minY,
+            double maxY
+    ) {
+        if (trace == null || !trace.seen()) {
+            return false;
+        }
+        return ("[" + formatDouble(minY) + "," + formatDouble(maxY) + "]").equals(trace.renderOutlineBounds());
+    }
+
+    private static String vbvsShadowCullingFacts(ClientWorld world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null || state.isAir()) {
+            return "missing";
+        }
+        StringBuilder facts = new StringBuilder();
+        for (Direction direction : Direction.values()) {
+            if (!facts.isEmpty()) {
+                facts.append("|");
+            }
+            facts.append(direction.asString())
+                    .append(":draw=")
+                    .append(Block.shouldDrawSide(state, world, pos, direction, pos.offset(direction)))
+                    .append("/empty=")
+                    .append(state.getCullingFace(world, pos, direction).isEmpty());
+        }
+        return facts.toString();
+    }
+
+    private static String captureVbvsShadowScreenshot(MinecraftClient client, String label) {
+        if (client == null) {
+            return "TRACE_GAP_SCREENSHOT_CLIENT_NOT_READY";
+        }
+        Framebuffer framebuffer = client.getFramebuffer();
+        if (framebuffer == null) {
+            return "TRACE_GAP_SCREENSHOT_FRAMEBUFFER_NOT_READY";
+        }
+        if (client.currentScreen != null) {
+            client.setScreen(null);
+        }
+        String safeLabel = label.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]+", "_");
+        Path dir = Path.of("tmp", "mc1211-vbvs-shadow-checkerboard").toAbsolutePath();
+        Path path = dir.resolve(String.format(Locale.ROOT, "%04d-%s.png", vbvsShadowTicks, safeLabel));
+        try {
+            Files.createDirectories(dir);
+            try (NativeImage image = ScreenshotRecorder.takeScreenshot(framebuffer)) {
+                image.writeTo(path);
+            }
+            return path.toString();
+        } catch (IOException | RuntimeException e) {
+            return "TRACE_GAP_SCREENSHOT_WRITE_FAILED:" + e.getClass().getSimpleName();
+        }
+    }
+
     private static ServerWorld serverWorldFor(MinecraftClient client) {
         MinecraftServer server = client == null ? null : client.getServer();
         if (server == null || client.world == null) {
@@ -5300,21 +7543,24 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
 
     private static void runSuperflatModelHitboxHarnessRoute(MinecraftClient client) {
         boolean wallFenceProductRedMode = Boolean.getBoolean(WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY);
+        boolean releaseVisualCategoryMode = Boolean.getBoolean(RELEASE_VISUAL_CATEGORY_MATRIX_PROPERTY);
+        SuperflatHarnessRowSpec[] rows = activeSuperflatHarnessRows();
         if (emitted || superflatHarnessFinalized) {
             return;
         }
         superflatHarnessTicks++;
         if (!superflatHarnessCanaryEmitted) {
             superflatHarnessCanaryEmitted = true;
-            System.out.println("[" + (wallFenceProductRedMode
-                    ? "MC1211_WALL_FENCE_PRODUCT_RED_ROUTE_CANARY"
-                    : "MC1211_SUPERFLAT_MODEL_HITBOX_ROUTE_CANARY") + "]"
+            System.out.println("[" + superflatHarnessMarker(
+                    wallFenceProductRedMode,
+                    releaseVisualCategoryMode,
+                    "ROUTE_CANARY") + "]"
                     + " class=" + Mc1211GoblinRouteClientEntrypoint.class.getSimpleName()
                     + " route=" + ROUTE
-                    + " property=" + (wallFenceProductRedMode
-                    ? WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY
-                    : SUPERFLAT_MODEL_HITBOX_HARNESS_ONLY_PROPERTY)
+                    + " property=" + superflatHarnessPropertyName(wallFenceProductRedMode, releaseVisualCategoryMode)
+                    + " rows=" + rows.length
                     + " worldType=superflat"
+                    + " screenshotDir=" + releaseVisualScreenshotDir().toAbsolutePath()
                     + " behaviorChanged=false");
         }
         requestProgrammaticSuperflatHarnessWorldIfNeeded(client);
@@ -5337,29 +7583,35 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         if (!superflatHarnessStarted) {
             superflatHarnessStarted = true;
             superflatHarnessOrigin = client.player.getBlockPos().add(8, 0, 8).toImmutable();
-            System.out.println("[" + (wallFenceProductRedMode
-                    ? "MC1211_WALL_FENCE_PRODUCT_RED_START"
-                    : "MC1211_SUPERFLAT_MODEL_HITBOX_START") + "]"
-                    + " rows=" + SUPERFLAT_HARNESS_ROWS.length
+            System.out.println("[" + superflatHarnessMarker(
+                    wallFenceProductRedMode,
+                    releaseVisualCategoryMode,
+                    "START") + "]"
+                    + " rows=" + rows.length
                     + " fixtureOrigin=" + textPos(superflatHarnessOrigin)
-                    + " supportBlockId=minecraft:stone_slab");
+                    + " placementSurface=mixed_bottom_slabs"
+                    + " supportMix=superflat_ground_plus_bottom_slabs"
+                    + " screenshots=" + releaseVisualCategoryMode
+                    + " supportBlockIds=minecraft:stone_slab,minecraft:oak_slab");
         }
-        if (superflatHarnessRowIndex >= SUPERFLAT_HARNESS_ROWS.length) {
-            emitSuperflatHarnessSummary(wallFenceProductRedMode);
+        if (superflatHarnessRowIndex >= rows.length) {
+            emitSuperflatHarnessSummary(wallFenceProductRedMode, releaseVisualCategoryMode);
             return;
         }
         runSuperflatHarnessRow(
                 client,
-                SUPERFLAT_HARNESS_ROWS[superflatHarnessRowIndex],
+                rows[superflatHarnessRowIndex],
                 superflatHarnessRowIndex,
-                wallFenceProductRedMode);
+                wallFenceProductRedMode,
+                releaseVisualCategoryMode);
     }
 
     private static void runSuperflatHarnessRow(
             MinecraftClient client,
             SuperflatHarnessRowSpec row,
             int rowIndex,
-            boolean wallFenceProductRedMode
+            boolean wallFenceProductRedMode,
+            boolean releaseVisualCategoryMode
     ) {
         if (client == null || client.world == null || client.player == null) {
             return;
@@ -5379,7 +7631,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             superflatHarnessPlacementMethod = "MIXED";
             superflatHarnessPlacementReturn = "not_started";
             superflatHarnessInteractAttempts = 0;
-            authorSuperflatHarnessFixture(server, serverWorld, superflatHarnessSlabPos, superflatHarnessPlacePos);
+            superflatHarnessScreenClosedForRow = false;
+            authorSuperflatHarnessFixture(
+                    server,
+                    serverWorld,
+                    superflatHarnessSlabPos,
+                    superflatHarnessPlacePos,
+                    row.supportBlock());
             syncHarnessPlayerForTopPlace(client, superflatHarnessSlabPos);
             ItemStack stack = harnessStackForBlock(row.blockId());
             if (stack != null) {
@@ -5429,6 +7687,12 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         if (superflatHarnessTicks - superflatHarnessPhaseTick < 20) {
             return;
         }
+        if (releaseVisualCategoryMode && client.currentScreen != null && !superflatHarnessScreenClosedForRow) {
+            client.setScreen(null);
+            superflatHarnessScreenClosedForRow = true;
+            superflatHarnessPhaseTick = superflatHarnessTicks;
+            return;
+        }
         Block expectedBlock = harnessStateForBlock(row.blockId()).getBlock();
         BlockState latestServerState = serverWorld.getBlockState(superflatHarnessPlacePos);
         if (!"DIRECT_WORLD_TRACE_ONLY".equals(superflatHarnessPlacementMethod)
@@ -5447,10 +7711,50 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             superflatHarnessPhaseTick = superflatHarnessTicks;
             return;
         }
-        emitSuperflatHarnessRow(client, serverWorld, row, wallFenceProductRedMode);
+        if (releaseVisualCategoryMode
+                && superflatHarnessShouldAwaitLoweredModelTrace(serverWorld, row, expectedBlock, latestServerState)) {
+            return;
+        }
+        emitSuperflatHarnessRow(client, serverWorld, row, wallFenceProductRedMode, releaseVisualCategoryMode);
         superflatHarnessRowIndex++;
         superflatHarnessRowPhase = 0;
         superflatHarnessPhaseTick = superflatHarnessTicks;
+    }
+
+    private static boolean superflatHarnessShouldAwaitLoweredModelTrace(
+            ServerWorld serverWorld,
+            SuperflatHarnessRowSpec row,
+            Block expectedBlock,
+            BlockState latestServerState
+    ) {
+        if ("DIRECT_WORLD_TRACE_ONLY".equals(superflatHarnessPlacementMethod)
+                || !superflatHarnessPlacementReturn.contains("SUCCESS")
+                || latestServerState.getBlock() != expectedBlock
+                || "minecraft:oak_sign".equals(row.blockId())) {
+            return false;
+        }
+        double placedDy = SlabSupport.getYOffset(serverWorld, superflatHarnessPlacePos, latestServerState);
+        if (Math.abs(placedDy - (-0.5d)) > 1.0e-6d) {
+            return false;
+        }
+        if (superflatHarnessTicks - superflatHarnessPhaseTick >= SUPERFLAT_HARNESS_MODEL_SETTLE_TIMEOUT_TICKS) {
+            return false;
+        }
+        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        return !superflatHarnessLoweredModelTraceReady(meshTrace, placedDy);
+    }
+
+    private static boolean superflatHarnessLoweredModelTraceReady(
+            OffsetBlockStateModel.FullMeshBoundsTrace meshTrace,
+            double expectedDy
+    ) {
+        return meshTrace != null
+                && meshTrace.seen()
+                && Math.abs(meshTrace.dy() - expectedDy) <= 1.0e-6d
+                && Double.isFinite(meshTrace.minBeforeY())
+                && Double.isFinite(meshTrace.maxBeforeY())
+                && Double.isFinite(meshTrace.minAfterY())
+                && Double.isFinite(meshTrace.maxAfterY());
     }
 
     private static void requestProgrammaticSuperflatHarnessWorldIfNeeded(MinecraftClient client) {
@@ -5483,7 +7787,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             MinecraftServer server,
             ServerWorld serverWorld,
             BlockPos slabPos,
-            BlockPos placePos
+            BlockPos placePos,
+            Block supportBlock
     ) {
         server.execute(() -> {
             for (int x = slabPos.getX() - 1; x <= slabPos.getX() + 1; x++) {
@@ -5493,9 +7798,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                     }
                 }
             }
+            BlockState supportBlockState = supportBlock.getDefaultState();
+            if (supportBlockState.contains(SlabBlock.TYPE)) {
+                supportBlockState = supportBlockState.with(SlabBlock.TYPE, SlabType.BOTTOM);
+            }
             serverWorld.setBlockState(
                     slabPos,
-                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    supportBlockState,
                     3);
             serverWorld.setBlockState(placePos, Blocks.AIR.getDefaultState(), 3);
         });
@@ -5518,7 +7827,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             MinecraftClient client,
             ServerWorld serverWorld,
             SuperflatHarnessRowSpec row,
-            boolean wallFenceProductRedMode
+            boolean wallFenceProductRedMode,
+            boolean releaseVisualCategoryMode
     ) {
         ClientWorld clientWorld = client.world;
         BlockState finalClientState = clientWorld.getBlockState(superflatHarnessPlacePos);
@@ -5527,9 +7837,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         double placedDy = SlabSupport.getYOffset(serverWorld, superflatHarnessPlacePos, finalServerState);
         BlockState supportState = serverWorld.getBlockState(superflatHarnessSlabPos);
         double sourceDy = SlabSupport.getYOffset(serverWorld, superflatHarnessSlabPos, supportState);
-        boolean substrateProven = supportState.isOf(Blocks.STONE_SLAB)
+        boolean substrateProven = supportState.isOf(row.supportBlock())
                 && supportState.contains(SlabBlock.TYPE)
                 && supportState.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+        String supportBlockId = Registries.BLOCK.getId(row.supportBlock()).toString();
         boolean anchored = SlabAnchorAttachment.isAnchored(serverWorld, superflatHarnessPlacePos);
         boolean loweredCarrier = SlabSupport.isFullHeightLoweredCarrier(serverWorld, superflatHarnessPlacePos, finalServerState);
         VoxelShape outline = finalServerState.getOutlineShape(serverWorld, superflatHarnessPlacePos);
@@ -5566,6 +7877,30 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         String outlineMaxY = outline.isEmpty() ? "NaN" : formatDouble(outline.getBoundingBox().maxY);
         String raycastMinY = effectiveRaycast.isEmpty() ? "NaN" : formatDouble(effectiveRaycast.getBoundingBox().minY);
         String raycastMaxY = effectiveRaycast.isEmpty() ? "NaN" : formatDouble(effectiveRaycast.getBoundingBox().maxY);
+        boolean finiteModelBounds = meshTrace.seen()
+                && Double.isFinite(meshTrace.minBeforeY())
+                && Double.isFinite(meshTrace.maxBeforeY())
+                && Double.isFinite(meshTrace.minAfterY())
+                && Double.isFinite(meshTrace.maxAfterY());
+        double modelMinTranslation = finiteModelBounds
+                ? meshTrace.minAfterY() - meshTrace.minBeforeY()
+                : Double.NaN;
+        double modelMaxTranslation = finiteModelBounds
+                ? meshTrace.maxAfterY() - meshTrace.maxBeforeY()
+                : Double.NaN;
+        boolean modelTranslationAligned = finiteModelBounds
+                && Math.abs(modelMinTranslation - meshTrace.dy()) <= 1.0e-6
+                && Math.abs(modelMaxTranslation - meshTrace.dy()) <= 1.0e-6;
+        boolean modelBottomBelowOutline = finiteModelBounds
+                && !outline.isEmpty()
+                && meshTrace.minAfterY() < outline.getBoundingBox().minY - 1.0e-6;
+        boolean releaseScreenshotOnlyRenderer = releaseVisualCategoryMode
+                && "minecraft:oak_sign".equals(row.blockId())
+                && finalServerState.getBlock() == expectedBlock;
+        boolean releaseDyZeroNativeRow = releaseVisualCategoryMode
+                && finalServerState.getBlock() == expectedBlock
+                && ("minecraft:oak_slab".equals(row.blockId())
+                        || "minecraft:stone_slab".equals(row.blockId()));
         double delta = (meshTrace.seen() && !outline.isEmpty())
                 ? Math.abs(meshTrace.minAfterY() - outline.getBoundingBox().minY)
                 : Double.NaN;
@@ -5576,6 +7911,9 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 && Math.abs(meshTrace.maxAfterY() - outline.getBoundingBox().maxY) <= 1.0e-6
                 && Math.abs(meshTrace.maxAfterY() - effectiveRaycast.getBoundingBox().maxY) <= 1.0e-6;
         boolean placedDyExpected = Math.abs(placedDy - (-0.5d)) <= 1.0e-6;
+        boolean loweredPlacementWithZeroModelDy = placedDyExpected
+                && meshTrace.seen()
+                && Math.abs(meshTrace.dy()) <= 1.0e-6;
         boolean technicalTriadAligned = triadAligned && placedDyExpected && substrateProven;
         boolean productVisualLawPass = !row.productBadSuspect();
         String visualAcceptance = row.productBadSuspect()
@@ -5583,7 +7921,59 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 : "ORDINARY_CONTROL";
         String verdict;
         String reason;
-        if (!wallFenceProductRedMode) {
+        if (releaseVisualCategoryMode) {
+            productVisualLawPass = true;
+            visualAcceptance = "SCREENSHOT_AND_TRACE_CAPTURED";
+            if ("DIRECT_WORLD_TRACE_ONLY".equals(superflatHarnessPlacementMethod)) {
+                verdict = "TRACE_GAP_NOT_REAL_PLACEMENT";
+                reason = "direct_world_place_trace_only";
+                superflatHarnessTraceGapRows++;
+            } else if (!superflatHarnessPlacementReturn.contains("SUCCESS")) {
+                verdict = "TRACE_GAP_NOT_REAL_PLACEMENT";
+                reason = "interact_block_not_success";
+                superflatHarnessTraceGapRows++;
+            } else if (finalServerState.getBlock() != expectedBlock) {
+                verdict = "TRACE_GAP_EXPECTED_BLOCK_MISSING";
+                reason = "interact_success_but_expected_block_missing";
+                superflatHarnessTraceGapRows++;
+            } else if (!meshTrace.seen()) {
+                if (releaseScreenshotOnlyRenderer) {
+                    verdict = "GREEN_SCREENSHOT_ONLY_RENDERER";
+                    reason = "block_entity_renderer_not_baked_block_model";
+                    superflatHarnessGreenRows++;
+                } else {
+                    verdict = "TRACE_GAP_MODEL_BOUNDS";
+                    reason = "full_mesh_trace_missing_for_row";
+                    superflatHarnessTraceGapRows++;
+                }
+            } else if (!finiteModelBounds) {
+                if (releaseDyZeroNativeRow) {
+                    verdict = "GREEN_NATIVE_DY_ZERO_ACCEPTABLE";
+                    reason = "native_slab_row_has_no_lowered_visual_transform";
+                    superflatHarnessGreenRows++;
+                } else if (loweredPlacementWithZeroModelDy) {
+                    verdict = "RED_MODEL_TRANSLATION_NOT_APPLIED";
+                    reason = "lowered_state_outline_raycast_present_but_model_dy_zero";
+                    superflatHarnessRedRows++;
+                } else {
+                    verdict = "TRACE_GAP_MODEL_BOUNDS";
+                    reason = "full_mesh_trace_has_no_finite_bounds";
+                    superflatHarnessTraceGapRows++;
+                }
+            } else if (!modelTranslationAligned) {
+                verdict = "RED_MODEL_TRANSLATION_INCOHERENT";
+                reason = "model_after_bounds_do_not_equal_before_bounds_plus_dy";
+                superflatHarnessRedRows++;
+            } else if (modelBottomBelowOutline) {
+                verdict = "RED_MODEL_BELOW_OUTLINE";
+                reason = "model_bottom_lower_than_selection_bottom";
+                superflatHarnessRedRows++;
+            } else {
+                verdict = "GREEN_MODEL_TRANSLATION_COHERENT";
+                reason = "model_translated_by_dy_native_bounds_may_be_inside_outline";
+                superflatHarnessGreenRows++;
+            }
+        } else if (!wallFenceProductRedMode) {
             if ("DIRECT_WORLD_TRACE_ONLY".equals(superflatHarnessPlacementMethod)) {
                 verdict = "TRACE_GAP_NOT_REAL_PLACEMENT";
                 reason = "direct_world_place_trace_only";
@@ -5617,11 +8007,11 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             }
         } else if (!substrateProven) {
             verdict = "TRACE_GAP_SUBSTRATE_MISSING";
-            reason = "support_not_bottom_stone_slab";
+            reason = "support_not_expected_bottom_slab";
             superflatHarnessTraceGapRows++;
         } else if ("DIRECT_WORLD_TRACE_ONLY".equals(superflatHarnessPlacementMethod)) {
-            verdict = "minecraft:stone_wall".equals(row.blockId())
-                    ? "TRACE_GAP_STONE_WALL_DIRECT_WORLD_ONLY"
+            verdict = "minecraft:stone_brick_wall".equals(row.blockId())
+                    ? "TRACE_GAP_STONE_BRICK_WALL_DIRECT_WORLD_ONLY"
                     : "TRACE_GAP_BOUNDS_OR_TRIAD_MISSING";
             reason = "direct_world_place_trace_only";
             superflatHarnessTraceGapRows++;
@@ -5658,16 +8048,17 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             superflatHarnessGreenRows++;
         }
         String outputRowName = wallFenceProductRedMode ? redMatrixRowName(row) : row.rowName();
-        String rowMarker = wallFenceProductRedMode
-                ? "MC1211_WALL_FENCE_PRODUCT_RED_ROW"
-                : "MC1211_SUPERFLAT_MODEL_HITBOX_ROW";
+        String rowMarker = superflatHarnessMarker(wallFenceProductRedMode, releaseVisualCategoryMode, "ROW");
         BlockHitResult blockHit = client.crosshairTarget instanceof BlockHitResult b ? b : null;
         String targetPos = blockHit == null ? "none" : textPos(blockHit.getBlockPos());
         String targetFace = blockHit == null ? "none" : blockHit.getSide().asString();
+        String screenshotPath = releaseVisualCategoryMode
+                ? captureReleaseVisualScreenshot(client, outputRowName)
+                : "not_requested";
         System.out.println("[" + rowMarker + "]"
                 + " rowName=" + outputRowName
                 + " blockId=" + row.blockId()
-                + " supportBlockId=minecraft:stone_slab"
+                + " supportBlockId=" + supportBlockId
                 + " slabPos=" + textPos(superflatHarnessSlabPos)
                 + " placedBlockPos=" + textPos(superflatHarnessPlacePos)
                 + " placementMethod=" + superflatHarnessPlacementMethod
@@ -5713,8 +8104,13 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + " raycastBounds=" + raycastBounds
                 + " rawRaycastShapeEmpty=" + rawRaycastShapeEmpty
                 + " technicalTriadAligned=" + technicalTriadAligned
+                + " finiteModelBounds=" + finiteModelBounds
+                + " modelTranslationAligned=" + modelTranslationAligned
+                + " modelBottomBelowOutline=" + modelBottomBelowOutline
+                + " releaseUnsupportedCategory=false"
                 + " productVisualLawPass=" + productVisualLawPass
                 + " visualAcceptance=" + visualAcceptance
+                + " screenshotPath=" + screenshotPath
                 + " clientState=" + finalClientState
                 + " verdict=" + verdict
                 + " reason=" + reason);
@@ -5724,7 +8120,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         return switch (row.blockId()) {
             case "minecraft:cobblestone_wall" -> "COBBLESTONE_WALL_ON_BOTTOM_SLAB_VISUAL_CONTACT_GREEN";
             case "minecraft:oak_fence" -> "OAK_FENCE_ON_BOTTOM_SLAB_VISUAL_CONTACT_GREEN";
-            case "minecraft:stone_wall" -> "STONE_WALL_ON_BOTTOM_SLAB_TRACE_GAP_OR_RED";
+            case "minecraft:stone_brick_wall" -> "STONE_BRICK_WALL_ON_BOTTOM_SLAB_TRACE_GAP_OR_RED";
             case "minecraft:stone" -> "FULL_BLOCK_CONTROL_STONE_GREEN";
             case "minecraft:oak_log" -> "FULL_BLOCK_CONTROL_OAK_LOG_GREEN";
             case "minecraft:stone_stairs" -> "STONE_STAIRS_CONTROL_GREEN";
@@ -5732,9 +8128,19 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         };
     }
 
-    private static void emitSuperflatHarnessSummary(boolean wallFenceProductRedMode) {
+    private static void emitSuperflatHarnessSummary(boolean wallFenceProductRedMode, boolean releaseVisualCategoryMode) {
         String classification;
-        if (!wallFenceProductRedMode) {
+        if (releaseVisualCategoryMode) {
+            if (superflatHarnessRedRows > 0) {
+                classification = "RELEASE_VISUAL_MATRIX_RED";
+            } else if (superflatHarnessTraceGapRows > 0) {
+                classification = "RELEASE_VISUAL_MATRIX_TRACE_GAP";
+            } else if (superflatHarnessProductBadRows > 0) {
+                classification = "RELEASE_VISUAL_MATRIX_GREEN_WITH_NOT_COVERED_CATEGORIES";
+            } else {
+                classification = "RELEASE_VISUAL_MATRIX_GREEN";
+            }
+        } else if (!wallFenceProductRedMode) {
             if (superflatHarnessRedRows > 0) {
                 classification = "RED_MODEL_HITBOX_MISMATCH_CONFIRMED";
             } else if (superflatHarnessTraceGapRows > 0) {
@@ -5755,14 +8161,19 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 classification = "RED_MATRIX_INCOMPLETE";
             }
         }
-        System.out.println("[" + (wallFenceProductRedMode
-                ? "MC1211_WALL_FENCE_PRODUCT_RED_SUMMARY"
-                : "MC1211_SUPERFLAT_MODEL_HITBOX_SUMMARY") + "]"
-                + " rows=" + SUPERFLAT_HARNESS_ROWS.length
+        System.out.println("[" + superflatHarnessMarker(
+                wallFenceProductRedMode,
+                releaseVisualCategoryMode,
+                "SUMMARY") + "]"
+                + " rows=" + activeSuperflatHarnessRows().length
                 + " greenRows=" + superflatHarnessGreenRows
                 + " redRows=" + superflatHarnessRedRows
                 + " traceGapRows=" + superflatHarnessTraceGapRows
                 + " productBadRows=" + superflatHarnessProductBadRows
+                + " notCoveredRows=" + (releaseVisualCategoryMode ? superflatHarnessProductBadRows : 0)
+                + " screenshotDir=" + (releaseVisualCategoryMode
+                ? releaseVisualScreenshotDir().toAbsolutePath()
+                : "not_requested")
                 + " classification=" + classification);
         emitted = true;
         superflatHarnessFinalized = true;
@@ -5771,24 +8182,90 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
     }
 
+    private static SuperflatHarnessRowSpec[] activeSuperflatHarnessRows() {
+        return Boolean.getBoolean(RELEASE_VISUAL_CATEGORY_MATRIX_PROPERTY)
+                ? RELEASE_VISUAL_CATEGORY_ROWS
+                : SUPERFLAT_HARNESS_ROWS;
+    }
+
+    private static String superflatHarnessMarker(
+            boolean wallFenceProductRedMode,
+            boolean releaseVisualCategoryMode,
+            String suffix
+    ) {
+        if (releaseVisualCategoryMode) {
+            return "MC1211_RELEASE_VISUAL_CATEGORY_MATRIX_" + suffix;
+        }
+        return (wallFenceProductRedMode
+                ? "MC1211_WALL_FENCE_PRODUCT_RED_"
+                : "MC1211_SUPERFLAT_MODEL_HITBOX_") + suffix;
+    }
+
+    private static String superflatHarnessPropertyName(
+            boolean wallFenceProductRedMode,
+            boolean releaseVisualCategoryMode
+    ) {
+        if (releaseVisualCategoryMode) {
+            return RELEASE_VISUAL_CATEGORY_MATRIX_PROPERTY;
+        }
+        return wallFenceProductRedMode
+                ? WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY
+                : SUPERFLAT_MODEL_HITBOX_HARNESS_ONLY_PROPERTY;
+    }
+
+    private static Path releaseVisualScreenshotDir() {
+        return Path.of("tmp", "mc1211-release-visual-category-matrix");
+    }
+
+    private static String captureReleaseVisualScreenshot(MinecraftClient client, String label) {
+        if (client == null) {
+            return "TRACE_GAP_SCREENSHOT_CLIENT_NOT_READY";
+        }
+        Framebuffer framebuffer = client.getFramebuffer();
+        if (framebuffer == null) {
+            return "TRACE_GAP_SCREENSHOT_FRAMEBUFFER_NOT_READY";
+        }
+        String safeLabel = label.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]+", "_");
+        Path dir = releaseVisualScreenshotDir().toAbsolutePath();
+        Path path = dir.resolve(String.format(
+                Locale.ROOT,
+                "%04d-%02d-%s.png",
+                superflatHarnessTicks,
+                superflatHarnessRowIndex,
+                safeLabel));
+        try {
+            Files.createDirectories(dir);
+            try (NativeImage image = ScreenshotRecorder.takeScreenshot(framebuffer)) {
+                image.writeTo(path);
+            }
+            return path.toString();
+        } catch (IOException | RuntimeException e) {
+            return "TRACE_GAP_SCREENSHOT_WRITE_FAILED:" + e.getClass().getSimpleName();
+        }
+    }
+
     private static void emitSuperflatHarnessTraceGap(String row, String reason) {
         boolean wallFenceProductRedMode = Boolean.getBoolean(WALL_FENCE_PRODUCT_RED_ONLY_PROPERTY);
-        System.out.println("[" + (wallFenceProductRedMode
-                ? "MC1211_WALL_FENCE_PRODUCT_RED_START"
-                : "MC1211_SUPERFLAT_MODEL_HITBOX_START") + "]"
-                + " rows=" + SUPERFLAT_HARNESS_ROWS.length);
-        System.out.println("[" + (wallFenceProductRedMode
-                ? "MC1211_WALL_FENCE_PRODUCT_RED_ROW"
-                : "MC1211_SUPERFLAT_MODEL_HITBOX_ROW") + "]"
+        boolean releaseVisualCategoryMode = Boolean.getBoolean(RELEASE_VISUAL_CATEGORY_MATRIX_PROPERTY);
+        System.out.println("[" + superflatHarnessMarker(
+                wallFenceProductRedMode,
+                releaseVisualCategoryMode,
+                "START") + "]"
+                + " rows=" + activeSuperflatHarnessRows().length);
+        System.out.println("[" + superflatHarnessMarker(
+                wallFenceProductRedMode,
+                releaseVisualCategoryMode,
+                "ROW") + "]"
                 + " rowName=" + row
                 + " blockId=none"
                 + " placementMethod=DIRECT_WORLD_TRACE_ONLY"
                 + " placementReturn=FAIL_ROUTE_NOT_READY"
                 + " verdict=TRACE_GAP_WORLD_NOT_READY"
                 + " reason=" + reason);
-        System.out.println("[" + (wallFenceProductRedMode
-                ? "MC1211_WALL_FENCE_PRODUCT_RED_SUMMARY"
-                : "MC1211_SUPERFLAT_MODEL_HITBOX_SUMMARY") + "]"
+        System.out.println("[" + superflatHarnessMarker(
+                wallFenceProductRedMode,
+                releaseVisualCategoryMode,
+                "SUMMARY") + "]"
                 + " rows=0"
                 + " classification=TRACE_GAP_WORLD_NOT_READY"
                 + " reason=" + reason);
@@ -5811,9 +8288,27 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             case "minecraft:stone" -> new ItemStack(Items.STONE, 8);
             case "minecraft:oak_log" -> new ItemStack(Items.OAK_LOG, 8);
             case "minecraft:oak_planks" -> new ItemStack(Items.OAK_PLANKS, 8);
+            case "minecraft:crafting_table" -> new ItemStack(Items.CRAFTING_TABLE, 8);
+            case "minecraft:stone_slab" -> new ItemStack(Items.STONE_SLAB, 8);
+            case "minecraft:oak_slab" -> new ItemStack(Items.OAK_SLAB, 8);
             case "minecraft:cobblestone_wall" -> new ItemStack(Items.COBBLESTONE_WALL, 8);
+            case "minecraft:stone_brick_wall" -> new ItemStack(Items.STONE_BRICK_WALL, 8);
             case "minecraft:oak_fence" -> new ItemStack(Items.OAK_FENCE, 8);
+            case "minecraft:oak_fence_gate" -> new ItemStack(Items.OAK_FENCE_GATE, 8);
+            case "minecraft:glass_pane" -> new ItemStack(Items.GLASS_PANE, 8);
             case "minecraft:stone_stairs" -> new ItemStack(Items.STONE_STAIRS, 8);
+            case "minecraft:oak_trapdoor" -> new ItemStack(Items.OAK_TRAPDOOR, 8);
+            case "minecraft:spruce_door" -> new ItemStack(Items.SPRUCE_DOOR, 8);
+            case "minecraft:oak_sign" -> new ItemStack(Items.OAK_SIGN, 8);
+            case "minecraft:acacia_button" -> new ItemStack(Items.ACACIA_BUTTON, 8);
+            case "minecraft:lantern" -> new ItemStack(Items.LANTERN, 8);
+            case "minecraft:chain" -> new ItemStack(Items.CHAIN, 8);
+            case "minecraft:candle" -> new ItemStack(Items.CANDLE, 8);
+            case "minecraft:flower_pot" -> new ItemStack(Items.FLOWER_POT, 8);
+            case "minecraft:white_carpet" -> new ItemStack(Items.WHITE_CARPET, 8);
+            case "minecraft:rail" -> new ItemStack(Items.RAIL, 8);
+            case "minecraft:redstone_wire" -> new ItemStack(Items.REDSTONE, 8);
+            case "minecraft:hopper" -> new ItemStack(Items.HOPPER, 8);
             default -> {
                 var item = Registries.ITEM.get(Identifier.of(blockId));
                 yield item == null || item == Items.AIR ? null : new ItemStack(item, 8);
@@ -6855,8 +9350,12 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     private record SuperflatHarnessRowSpec(
             String rowName,
             String blockId,
-            boolean productBadSuspect
+            boolean productBadSuspect,
+            Block supportBlock
     ) {
+        private SuperflatHarnessRowSpec(String rowName, String blockId, boolean productBadSuspect) {
+            this(rowName, blockId, productBadSuspect, Blocks.STONE_SLAB);
+        }
     }
 
     private record LoweredTrapdoorGoblinCase(
@@ -6865,6 +9364,276 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             boolean sideExtension,
             boolean cornerCase
     ) {
+    }
+
+    private record SbsTopSlabCombinationCase(
+            String rowName,
+            String structure,
+            boolean finalSlab,
+            Block finalBlock,
+            net.minecraft.item.Item finalItem,
+            Block supportBlock,
+            net.minecraft.item.Item supportItem,
+            Block slabBlock,
+            net.minecraft.item.Item slabItem,
+            boolean repeatFinalClick,
+            boolean liveCrosshairFinalStep,
+            boolean sideSlabFromFinalOwnerTop
+    ) {
+        private SbsTopSlabCombinationCase(
+                String rowName,
+                String structure,
+                boolean finalSlab,
+                Block finalBlock,
+                net.minecraft.item.Item finalItem
+        ) {
+            this(rowName, structure, finalSlab, finalBlock, finalItem,
+                    Blocks.STONE, Items.STONE, Blocks.STONE_SLAB, Items.STONE_SLAB, false, false, false);
+        }
+
+        private SbsTopSlabCombinationCase(
+                String rowName,
+                String structure,
+                boolean finalSlab,
+                Block finalBlock,
+                net.minecraft.item.Item finalItem,
+                boolean repeatFinalClick
+        ) {
+            this(rowName, structure, finalSlab, finalBlock, finalItem,
+                    Blocks.STONE, Items.STONE, Blocks.STONE_SLAB, Items.STONE_SLAB, repeatFinalClick, false, false);
+        }
+
+        private SbsTopSlabCombinationCase(
+                String rowName,
+                String structure,
+                boolean finalSlab,
+                Block finalBlock,
+                net.minecraft.item.Item finalItem,
+                Block supportBlock,
+                net.minecraft.item.Item supportItem
+        ) {
+            this(rowName, structure, finalSlab, finalBlock, finalItem,
+                    supportBlock, supportItem, Blocks.STONE_SLAB, Items.STONE_SLAB, false, false, false);
+        }
+
+        private SbsTopSlabCombinationCase(
+                String rowName,
+                String structure,
+                boolean finalSlab,
+                Block finalBlock,
+                net.minecraft.item.Item finalItem,
+                Block supportBlock,
+                net.minecraft.item.Item supportItem,
+                Block slabBlock,
+                net.minecraft.item.Item slabItem
+        ) {
+            this(rowName, structure, finalSlab, finalBlock, finalItem,
+                    supportBlock, supportItem, slabBlock, slabItem, false, false, false);
+        }
+
+        private SbsTopSlabCombinationCase(
+                String rowName,
+                String structure,
+                boolean finalSlab,
+                Block finalBlock,
+                net.minecraft.item.Item finalItem,
+                Block supportBlock,
+                net.minecraft.item.Item supportItem,
+                Block slabBlock,
+                net.minecraft.item.Item slabItem,
+                boolean repeatFinalClick,
+                boolean liveCrosshairFinalStep
+        ) {
+            this(rowName, structure, finalSlab, finalBlock, finalItem,
+                    supportBlock, supportItem, slabBlock, slabItem,
+                    repeatFinalClick, liveCrosshairFinalStep, false);
+        }
+
+    }
+
+    private record SbsTopSlabSideTargetProbe(
+            boolean ran,
+            boolean completed,
+            Vec3d hitVector,
+            String heldItem,
+            String intendedAction,
+            String playerBlockPos,
+            String playerEye,
+            String targetSample,
+            String targetOwner,
+            double targetDy,
+            Direction targetSide,
+            String interactResult,
+            int waitTicks,
+            BlockPos sidePos,
+            String sideStateBefore,
+            String sideClientStateBefore,
+            String sideStateImmediate,
+            String sideClientStateImmediate,
+            String sideStateAfter,
+            String sideClientStateAfter,
+            double sideDyAfter,
+            double sideClientDyAfter,
+            boolean sideLowerMarker,
+            boolean sideUpperMarker,
+            boolean sideDoubleMarker,
+            String reason
+    ) {
+        SbsTopSlabSideTargetProbe withCompletion(
+                boolean completed,
+                int waitTicks,
+                String sideStateAfter,
+                String sideClientStateAfter,
+                double sideDyAfter,
+                double sideClientDyAfter,
+                boolean sideLowerMarker,
+                boolean sideUpperMarker,
+                boolean sideDoubleMarker,
+                String reason
+        ) {
+            return new SbsTopSlabSideTargetProbe(
+                    ran,
+                    completed,
+                    hitVector,
+                    heldItem,
+                    intendedAction,
+                    playerBlockPos,
+                    playerEye,
+                    targetSample,
+                    targetOwner,
+                    targetDy,
+                    targetSide,
+                    interactResult,
+                    waitTicks,
+                    sidePos,
+                    sideStateBefore,
+                    sideClientStateBefore,
+                    sideStateImmediate,
+                    sideClientStateImmediate,
+                    sideStateAfter,
+                    sideClientStateAfter,
+                    sideDyAfter,
+                    sideClientDyAfter,
+                    sideLowerMarker,
+                    sideUpperMarker,
+                    sideDoubleMarker,
+                    reason);
+        }
+
+        static SbsTopSlabSideTargetProbe notRun(String reason) {
+            return new SbsTopSlabSideTargetProbe(
+                    false,
+                    false,
+                    new Vec3d(Double.NaN, Double.NaN, Double.NaN),
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    Double.NaN,
+                    null,
+                    "not_run",
+                    0,
+                    null,
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    Double.NaN,
+                    Double.NaN,
+                    false,
+                    false,
+                    false,
+                    reason);
+        }
+    }
+
+    private record SbsTopSlabClassification(
+            String classification,
+            String failureLayer,
+            String finalResult
+    ) {
+    }
+
+    private record SbsTopSlabCullingProof(
+            boolean seen,
+            Direction targetSide,
+            boolean targetFaceDraws,
+            boolean upFaceDraws,
+            boolean downFaceDraws,
+            boolean northFaceDraws,
+            boolean southFaceDraws,
+            boolean westFaceDraws,
+            boolean eastFaceDraws,
+            boolean supportUpFaceDraws,
+            boolean targetCullingFaceEmpty,
+            boolean upCullingFaceEmpty,
+            boolean downCullingFaceEmpty,
+            boolean supportUpCullingFaceEmpty,
+            boolean expectedVisibleFaceDraws,
+            String classification
+    ) {
+        static SbsTopSlabCullingProof missing(String classification) {
+            return new SbsTopSlabCullingProof(
+                    false,
+                    null,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                    true,
+                    true,
+                    true,
+                    false,
+                    classification);
+        }
+    }
+
+    private record SbsTopSlabSupportRemovalProbe(
+            boolean ran,
+            boolean removed,
+            String supportStateBefore,
+            String supportStateAfter,
+            String finalStateAfter,
+            String clientFinalStateAfter,
+            double finalDyAfter,
+            double clientDyAfter,
+            boolean anchoredAfter,
+            boolean compoundAfter,
+            boolean canPlaceAtAfter,
+            String targetSampleAfter,
+            String targetOwnerAfter,
+            double targetDyAfter,
+            Vec3d hitVectorAfter,
+            String reason
+    ) {
+        static SbsTopSlabSupportRemovalProbe notRun(String reason) {
+            return new SbsTopSlabSupportRemovalProbe(
+                    false,
+                    false,
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    "not_run",
+                    Double.NaN,
+                    Double.NaN,
+                    false,
+                    false,
+                    false,
+                    "not_run",
+                    "not_run",
+                    Double.NaN,
+                    new Vec3d(Double.NaN, Double.NaN, Double.NaN),
+                    reason);
+        }
     }
 
     private record LoweredTrapdoorGoblinAssessment(

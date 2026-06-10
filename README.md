@@ -45,7 +45,7 @@ Behavior is intentionally limited and may expand incrementally as edge cases are
 
 ## License
 This project is licensed under **GPL-3.0-only**.  
-Source code is available at: https://github.com/joolbits/slabbed
+Source code is available at: https://github.com/peetsamods/slabbed
 
 ## Lowered Side Slab Proof Bundle
 
@@ -57,4 +57,4 @@ Canonical proof artifacts are written under:
 
 ## Issues / Feedback
 Bug reports and suggestions can be filed on GitHub:  
-https://github.com/joolbits/slabbed/issues
+https://github.com/peetsamods/slabbed/issues
