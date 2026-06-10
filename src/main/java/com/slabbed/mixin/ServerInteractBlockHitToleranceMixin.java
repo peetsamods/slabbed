@@ -1,11 +1,6 @@
 package com.slabbed.mixin;
 
-import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.util.Beta4ManualLiveTrace;
-import com.slabbed.util.Beta35FenceWallLiveInspectRecorder;
-import com.slabbed.util.Beta35SlabHeightHitAcceptanceRecorder;
-import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -35,7 +30,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ServerInteractBlockHitToleranceMixin {
     private static final double COMPOUND_DY = -1.0d;
     private static final double EPSILON = 1.0e-6d;
-    private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
 
     @Shadow @Final public ServerPlayerEntity player;
 
@@ -65,27 +59,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         World world = player.getEntityWorld();
         BlockState state = world.getBlockState(pos);
         BlockState mergedState = state.with(SlabBlock.TYPE, SlabType.DOUBLE);
-        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
-                + " phase=server-direct-finalization"
-                + " side=SERVER"
-                + " incomingPos=" + pos.toShortString()
-                + " incomingFace=" + hit.getSide().asString()
-                + " incomingHit=" + hit.getPos()
-                + " incomingState=" + state
-                + " incomingDy=" + SlabSupport.getYOffset(world, pos, state)
-                + " heldItem=" + Registries.ITEM.getId(player.getStackInHand(packet.getHand()).getItem())
-                + " decision=LOWERED_SAME_CELL_SLAB_MERGE");
-        double beforeDy = SlabSupport.getYOffset(world, pos, state);
         boolean changed = world.setBlockState(pos, mergedState, Block.NOTIFY_ALL);
-        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
-                + " phase=server-direct-finalization"
-                + " side=SERVER"
-                + " target=" + pos.toShortString()
-                + " beforeState=" + state
-                + " beforeDy=" + beforeDy
-                + " afterState=" + world.getBlockState(pos)
-                + " afterDy=" + SlabSupport.getYOffset(world, pos, world.getBlockState(pos))
-                + " setBlockStateDurable=" + (changed ? "YES" : "NO"));
         if (!changed) {
             return;
         }
@@ -108,30 +82,8 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (blockPos instanceof BlockPos pos && player != null && packet != null) {
             loweredSameCellSlabMergeCenter = slabbed$loweredSameCellSlabMergeValidationCenter(pos, packet);
             beta35ShiftedCenter = slabbed$beta35ShiftedValidationCenter(pos, packet, center);
-            Beta35FenceWallLiveInspectRecorder.logServerTolerance(
-                    player.getEntityWorld(),
-                    player,
-                    packet.getBlockHitResult(),
-                    player.getStackInHand(packet.getHand()),
-                    center,
-                    beta35ShiftedCenter);
-            Beta35SlabHeightHitAcceptanceRecorder.logServerTolerance(
-                    player.getEntityWorld(),
-                    player,
-                    packet.getBlockHitResult(),
-                    player.getStackInHand(packet.getHand()),
-                    center,
-                    beta35ShiftedCenter);
-            slabbed$logRepeatMergeTolerance(pos, packet, center, loweredSameCellSlabMergeCenter);
         }
         if (loweredSameCellSlabMergeCenter != null) {
-            Beta4ManualLiveTrace.logServerTolerance(
-                    player.getEntityWorld(),
-                    packet.getBlockHitResult(),
-                    player.getStackInHand(packet.getHand()),
-                    center,
-                    loweredSameCellSlabMergeCenter,
-                    "LOWERED_SAME_CELL_SLAB_MERGE");
             return loweredSameCellSlabMergeCenter;
         }
         if (beta35ShiftedCenter != null) {
@@ -141,24 +93,8 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                 || player == null
                 || packet == null
                 || !slabbed$isLegalCompoundFullBlockVisualHit(pos, packet)) {
-            if (blockPos instanceof BlockPos rawPos && player != null && packet != null) {
-                Beta4ManualLiveTrace.logServerTolerance(
-                        player.getEntityWorld(),
-                        packet.getBlockHitResult(),
-                        player.getStackInHand(packet.getHand()),
-                        center,
-                        center,
-                        "leave_packet_unchanged");
-            }
             return center;
         }
-        Beta4ManualLiveTrace.logServerTolerance(
-                player.getEntityWorld(),
-                packet.getBlockHitResult(),
-                player.getStackInHand(packet.getHand()),
-                center,
-                center.add(0.0d, COMPOUND_DY, 0.0d),
-                "compound_full_block_visual_hit");
         return center.add(0.0d, COMPOUND_DY, 0.0d);
     }
 
@@ -217,35 +153,6 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         return Math.abs(delta.x) < tolerance
                 && Math.abs(delta.y) < tolerance
                 && Math.abs(delta.z) < tolerance;
-    }
-
-    private void slabbed$logRepeatMergeTolerance(
-            BlockPos pos,
-            PlayerInteractBlockC2SPacket packet,
-            Vec3d center,
-            Vec3d loweredSameCellSlabMergeCenter
-    ) {
-        if (!Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN)) {
-            return;
-        }
-        World world = player.getEntityWorld();
-        BlockHitResult hit = packet.getBlockHitResult();
-        BlockState state = world == null ? null : world.getBlockState(pos);
-        ItemStack heldStack = player.getStackInHand(packet.getHand());
-        boolean legalLoweredSameCellMerge = loweredSameCellSlabMergeCenter != null;
-        Slabbed.LOGGER.info(
-                "[JULIA_BETA4_REPEAT_SEAM_SERVER_TOLERANCE] packetBlockPos={} state={} dy={} face={} hitVec={} heldItem={} legalLoweredSameCellMerge={} action={} centerBefore={} centerAfter={} reason={}",
-                pos.toShortString(),
-                state,
-                state == null ? "null" : SlabSupport.getYOffset(world, pos, state),
-                hit == null ? "null" : hit.getSide(),
-                hit == null ? "null" : hit.getPos(),
-                heldStack == null ? "null" : Registries.ITEM.getId(heldStack.getItem()),
-                legalLoweredSameCellMerge,
-                legalLoweredSameCellMerge ? "rewrite_to_lowered_same_cell_slab_merge_hit" : "leave_packet_unchanged",
-                center,
-                legalLoweredSameCellMerge ? loweredSameCellSlabMergeCenter : center,
-                legalLoweredSameCellMerge ? "LOWERED_SAME_CELL_SLAB_MERGE" : "not_lowered_same_cell_merge");
     }
 
     private Vec3d slabbed$loweredSameCellSlabMergeValidationCenter(
@@ -370,33 +277,6 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             boolean bridgeAccepted,
             String rejectionReason
     ) {
-        if (!RuntimeDiagnostics.compoundLivePathEnabled()) {
-            return;
-        }
-        BlockState state = world == null || pos == null ? null : world.getBlockState(pos);
-        boolean heldIsSlab = heldStack != null
-                && heldStack.getItem() instanceof BlockItem blockItem
-                && blockItem.getBlock() instanceof SlabBlock;
-        boolean ordinaryFullBlockHeld = world != null
-                && pos != null
-                && heldStack != null
-                && slabbed$isHeldOrdinaryFullBlock(world, pos, heldStack);
-        Slabbed.LOGGER.info(
-                "[BETA4_COMPOUND_HIT_VALIDITY_BRIDGE] heldItem={} heldIsSlab={} blockPos={} packetBlockPos={} state={} dy={} compoundFullBlockAnchor={} face={} hitVec={} hitInsideVisualBounds={} ordinaryFullBlockTarget={} ordinaryFullBlockHeld={} bridgeAccepted={} rejectionReason={}",
-                heldStack == null ? "null" : Registries.ITEM.getId(heldStack.getItem()),
-                heldIsSlab,
-                pos == null ? "null" : pos.toShortString(),
-                hit == null ? "null" : hit.getBlockPos().toShortString(),
-                state,
-                state == null ? "null" : SlabSupport.getYOffset(world, pos, state),
-                compoundFullBlockAnchor,
-                hit == null ? "null" : hit.getSide(),
-                hit == null ? "null" : hit.getPos(),
-                hitInsideVisualBounds,
-                ordinaryFullBlockTarget,
-                ordinaryFullBlockHeld,
-                bridgeAccepted,
-                bridgeAccepted ? "none" : rejectionReason);
     }
 
     private static boolean slabbed$isHeldOrdinaryFullBlock(World world, BlockPos pos, ItemStack stack) {

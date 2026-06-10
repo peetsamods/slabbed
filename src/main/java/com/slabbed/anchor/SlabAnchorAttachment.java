@@ -4,7 +4,6 @@ import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.RuntimeDiagnostics;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
@@ -233,10 +232,6 @@ public final class SlabAnchorAttachment {
 
     private static void addAnchorUnchecked(World world, BlockPos pos) {
         boolean added = addToAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (added && RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
-            BlockPos supportPos = pos.down();
-            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
-        }
         // Beta4 sidecar: if the position currently satisfies the compound full-block
         // condition (anchored ordinary full block above a lowered bottom slab carrier),
         // also record the authored dy=-1.0 lane so it survives source slab removal.
@@ -381,8 +376,6 @@ public final class SlabAnchorAttachment {
         }
         LongOpenHashSet existing = chunk.getAttached(type);
         LongOpenHashSet set = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
-        BlockState stateBefore = com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.isEnabled()
-                ? world.getBlockState(pos) : null;
         if (set.add(pos.asLong())) {
             // setAttached triggers persistence + auto-sync for synced attachments.
             chunk.setAttached(type, set);
@@ -391,10 +384,6 @@ public final class SlabAnchorAttachment {
                         label, pos.toShortString(), chunk.getPos(), set.size());
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "add", true);
-            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.recordAnchorEvent(
-                    world,
-                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.ADD,
-                    type, pos, stateBefore, stateBefore);
             return true;
         }
         return false;
@@ -405,10 +394,6 @@ public final class SlabAnchorAttachment {
      */
     public static void removeAnchor(World world, BlockPos pos) {
         boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (removed && RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
-            BlockPos supportPos = pos.down();
-            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_REMOVED");
-        }
         // Beta4 sidecar travels with the ordinary anchor: when the compound block
         // itself is broken/replaced, clear the authored compound truth too.
         removeFromAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
@@ -458,10 +443,6 @@ public final class SlabAnchorAttachment {
                 chunk.setAttached(type, set);
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "remove", false);
-            com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.recordAnchorEvent(
-                    world,
-                    com.slabbed.util.Beta35SlabJumpSourceTruthRecorder.EventAction.REMOVE,
-                    type, pos, world.getBlockState(pos), world.getBlockState(pos));
         }
         return removed;
     }

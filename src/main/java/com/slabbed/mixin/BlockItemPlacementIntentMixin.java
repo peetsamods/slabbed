@@ -1,9 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.util.Beta4ManualLiveTrace;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.BlockState;
@@ -19,7 +17,6 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemUsageContext;
-import net.minecraft.registry.Registries;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.function.BooleanBiFunction;
 import net.minecraft.util.hit.BlockHitResult;
@@ -39,7 +36,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BlockItemPlacementIntentMixin {
 
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
-    private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
     private static final ThreadLocal<CompoundVisibleSideLowerIntent> COMPOUND_VISIBLE_SIDE_LOWER_INTENT =
             new ThreadLocal<>();
     private static final ThreadLocal<CompoundVisibleSideUpperIntent> COMPOUND_VISIBLE_SIDE_UPPER_INTENT =
@@ -339,22 +335,6 @@ public abstract class BlockItemPlacementIntentMixin {
         }
     }
 
-    private static final Class<?>[] REMAP_ATTEMPT_PARAM_TYPES = new Class<?>[]{
-            ItemUsageContext.class,
-            boolean.class,
-            boolean.class,
-            boolean.class,
-            boolean.class,
-            boolean.class,
-            double.class,
-            boolean.class,
-            boolean.class,
-            String.class,
-            Vec3d.class,
-            Direction.class,
-            String.class
-    };
-
     private static void slabbed$recordRemapAttempt(
             ItemUsageContext context,
             boolean itemIsSlab,
@@ -369,26 +349,6 @@ public abstract class BlockItemPlacementIntentMixin {
             Vec3d remappedHitPos,
             Direction effectiveSide,
             String hitDescriptor) {
-        RuntimeDiagnostics.invoke(
-                "recordRemapAttempt",
-                REMAP_ATTEMPT_PARAM_TYPES,
-                context,
-                itemIsSlab,
-                faceHorizontal,
-                targetIsSolid,
-                targetHasBlockEntity,
-                targetIsCraftingTable,
-                yOffset,
-                ordinaryLoweredFullBlockGuard,
-                remapped,
-                rejectionReason,
-                remappedHitPos,
-                effectiveSide,
-                hitDescriptor);
-    }
-
-    private static boolean slabbed$repeatSeamTraceEnabled() {
-        return Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN);
     }
 
     private static void slabbed$traceRepeatPlacementContext(
@@ -397,74 +357,18 @@ public abstract class BlockItemPlacementIntentMixin {
             ItemUsageContext outgoing,
             String decision
     ) {
-        if (!slabbed$repeatSeamTraceEnabled() || incoming == null || incoming.getWorld() == null) {
-            return;
-        }
-        World world = incoming.getWorld();
-        BlockPos incomingPos = incoming.getBlockPos();
-        BlockState incomingState = world.getBlockState(incomingPos);
-        BlockPos outgoingPos = outgoing == null ? incomingPos : outgoing.getBlockPos();
-        World outgoingWorld = outgoing == null ? world : outgoing.getWorld();
-        BlockState outgoingState = outgoingWorld.getBlockState(outgoingPos);
-        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
-                + " phase=" + phase
-                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
-                + " incomingPos=" + incomingPos.toShortString()
-                + " incomingFace=" + incoming.getSide()
-                + " incomingHit=" + incoming.getHitPos()
-                + " incomingState=" + incomingState
-                + " incomingDy=" + SlabSupport.getYOffset(world, incomingPos, incomingState)
-                + " outgoingPos=" + outgoingPos.toShortString()
-                + " outgoingFace=" + (outgoing == null ? "null" : outgoing.getSide())
-                + " outgoingHit=" + (outgoing == null ? "null" : outgoing.getHitPos())
-                + " outgoingState=" + outgoingState
-                + " outgoingDy=" + SlabSupport.getYOffset(outgoingWorld, outgoingPos, outgoingState)
-                + " heldItem=" + Registries.ITEM.getId(incoming.getStack().getItem())
-                + " decision=" + decision);
-        if (phase.contains("exit")) {
-            System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
-                    + " phase=" + phase
-                    + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
-                    + " incomingPos=" + incomingPos.toShortString()
-                    + " outgoingPos=" + outgoingPos.toShortString()
-                    + " decision=" + decision);
-        }
     }
 
     private static void slabbed$traceRepeatFinalization(
             ItemPlacementContext context,
-            ActionResult result,
+            net.minecraft.util.ActionResult result,
             BlockState placedState
     ) {
-        if (!slabbed$repeatSeamTraceEnabled() || context == null || context.getWorld() == null) {
-            return;
-        }
-        World world = context.getWorld();
-        BlockPos placePos = context.getBlockPos();
-        boolean durableDouble = placedState.getBlock() instanceof SlabBlock
-                && placedState.contains(SlabBlock.TYPE)
-                && placedState.get(SlabBlock.TYPE) == SlabType.DOUBLE
-                && Math.abs(SlabSupport.getYOffset(world, placePos, placedState) + 0.5d)
-                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
-                + " phase=finalization-return"
-                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
-                + " result=" + result
-                + " accepted=" + (result != null && result.isAccepted())
-                + " placePos=" + placePos.toShortString()
-                + " face=" + context.getSide()
-                + " hit=" + context.getHitPos()
-                + " placedState=" + placedState
-                + " placedDy=" + SlabSupport.getYOffset(world, placePos, placedState)
-                + " durableDouble=" + durableDouble
-                + " setBlockStateDurable=" + (durableDouble ? "YES" : "NO_OR_NOT_DOUBLE"));
     }
 
     private static ItemUsageContext slabbed$inspectReturn(
             ItemUsageContext incoming, ItemUsageContext outgoing, String reason
     ) {
-        Beta4ManualLiveTrace.logPlacementIntent(incoming, outgoing, reason);
-        RuntimeDiagnostics.logInspectIntent(incoming, outgoing, reason);
         return outgoing;
     }
 
@@ -902,26 +806,6 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockItem self = (BlockItem) (Object) this;
         boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
         if (!cir.getReturnValue().isAccepted()) {
-            RuntimeDiagnostics.recordPlace(
-                    "finalization-return",
-                    Registries.ITEM.getId(self),
-                    heldIsSlab,
-                    context,
-                    cir.getReturnValue(),
-                    "anchorFinalization=skipped_result_not_accepted");
-            RuntimeDiagnostics.recordCompoundFinalization(
-                    "finalization-return",
-                    Registries.ITEM.getId(self),
-                    heldIsSlab,
-                    context,
-                    cir.getReturnValue(),
-                    "skipped_result_not_accepted",
-                    context.getBlockPos().offset(context.getSide().getOpposite()),
-                    false,
-                    false,
-                    false,
-                    false,
-                    "placement_result_not_accepted");
             return;
         }
 
@@ -933,183 +817,25 @@ public abstract class BlockItemPlacementIntentMixin {
             if (slabbed$isCompoundVisibleSideLowerSlabResult(context, placePos, placedState)) {
                 BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
                 BlockState sourceState = world.getBlockState(sourcePos);
-                boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, placePos,
-                        placedState);
                 SlabAnchorAttachment.addCompoundVisibleSideLowerSlab(world, placePos, placedState, sourcePos,
                         sourceState);
-                boolean markerAfter = SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, placePos,
-                        placedState);
-                RuntimeDiagnostics.recordPlace(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "anchorFinalization=ran_compound_visible_side_lower_slab markerBefore="
-                                + markerBefore
-                                + " markerAfter=" + markerAfter
-                                + " sourcePos=" + sourcePos.toShortString()
-                                + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
-                RuntimeDiagnostics.recordCompoundFinalization(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "ran_compound_visible_side_lower_slab",
-                        sourcePos,
-                        markerBefore,
-                        markerAfter,
-                        false,
-                        false,
-                        "COMPOUND_VISIBLE_SIDE_LOWER_SLAB");
             } else if (slabbed$isCompoundVisibleSideUpperSlabResult(context, placePos, placedState)) {
                 BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
                 BlockState sourceState = world.getBlockState(sourcePos);
-                boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, placePos,
-                        placedState);
                 SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(world, placePos, placedState, sourcePos,
                         sourceState);
-                boolean markerAfter = SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, placePos,
-                        placedState);
-                RuntimeDiagnostics.recordPlace(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "anchorFinalization=ran_compound_visible_side_upper_slab markerBefore="
-                                + markerBefore
-                                + " markerAfter=" + markerAfter
-                                + " sourcePos=" + sourcePos.toShortString()
-                                + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
-                RuntimeDiagnostics.recordCompoundFinalization(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "ran_compound_visible_side_upper_slab",
-                        sourcePos,
-                        markerBefore,
-                        markerAfter,
-                        false,
-                        false,
-                        "COMPOUND_VISIBLE_SIDE_UPPER_SLAB");
             } else if (slabbed$isCompoundVisibleSideDoubleSlabResult(context, placePos, placedState)) {
                 BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
                 BlockState sourceState = world.getBlockState(sourcePos);
-                boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, placePos,
-                        placedState);
                 SlabAnchorAttachment.addCompoundVisibleSideDoubleSlab(world, placePos, placedState, sourcePos,
                         sourceState);
-                boolean markerAfter = SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, placePos,
-                        placedState);
-                RuntimeDiagnostics.recordPlace(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "anchorFinalization=ran_compound_visible_side_double_slab markerBefore="
-                                + markerBefore
-                                + " markerAfter=" + markerAfter
-                                + " sourcePos=" + sourcePos.toShortString()
-                                + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
-                RuntimeDiagnostics.recordCompoundFinalization(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "ran_compound_visible_side_double_slab",
-                        sourcePos,
-                        markerBefore,
-                        markerAfter,
-                        false,
-                        false,
-                        "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB");
             } else if (slabbed$isCompoundVisibleOwnerTopSlabResult(context, placePos, placedState)) {
                 BlockPos sourcePos = placePos.down();
                 BlockState sourceState = world.getBlockState(sourcePos);
-                boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, placePos,
-                        placedState);
                 SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(world, placePos, placedState, sourcePos,
                         sourceState);
-                boolean markerAfter = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, placePos,
-                        placedState);
-                RuntimeDiagnostics.recordPlace(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "anchorFinalization=ran_compound_visible_owner_top_slab markerBefore="
-                                + markerBefore
-                                + " markerAfter=" + markerAfter
-                                + " sourcePos=" + sourcePos.toShortString()
-                                + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
-                RuntimeDiagnostics.recordCompoundFinalization(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "ran_compound_visible_owner_top_slab",
-                        sourcePos,
-                        markerBefore,
-                        markerAfter,
-                        false,
-                        false,
-                        "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
             } else if (slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
-                boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
-                boolean persistentBefore = SlabAnchorAttachment.isAnchored(world, placePos);
                 SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, placePos, placedState);
-                boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
-                boolean persistentAfter = SlabAnchorAttachment.isAnchored(world, placePos);
-                RuntimeDiagnostics.recordPlace(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "anchorFinalization=ran_update_persistent_lowered_slab_carrier carrierAfter="
-                                + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, placedState));
-                RuntimeDiagnostics.recordCompoundFinalization(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "ran_update_persistent_lowered_slab_carrier",
-                        placePos.down(),
-                        compoundBefore,
-                        compoundAfter,
-                        persistentBefore,
-                        persistentAfter,
-                        "held_slab_persistent_bottom_carrier_candidate");
-            } else {
-                RuntimeDiagnostics.recordPlace(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "anchorFinalization=skipped_slab_not_persistent_carrier_candidate");
-                RuntimeDiagnostics.recordCompoundFinalization(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        true,
-                        context,
-                        cir.getReturnValue(),
-                        "rejected_compound_slab_side",
-                        placePos.offset(context.getSide().getOpposite()),
-                        SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
-                        SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
-                        SlabAnchorAttachment.isAnchored(world, placePos),
-                        SlabAnchorAttachment.isAnchored(world, placePos),
-                        "held_slab_not_persistent_bottom_carrier_candidate");
             }
             COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
             COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
@@ -1121,119 +847,23 @@ public abstract class BlockItemPlacementIntentMixin {
         if (context.getSide() == Direction.UP) {
             BlockPos sourcePos = placePos.down();
             BlockState sourceState = world.getBlockState(sourcePos);
-            boolean anchorBefore = SlabAnchorAttachment.isAnchored(world, placePos);
-            boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
             SlabAnchorAttachment.addTopOfCompoundFullAnchor(world, placePos, placedState, sourcePos, sourceState);
-            boolean anchorAfter = SlabAnchorAttachment.isAnchored(world, placePos);
             boolean compoundAnchorAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
             if (compoundAnchorAfter) {
-                RuntimeDiagnostics.recordPlace(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        false,
-                        context,
-                        cir.getReturnValue(),
-                        "anchorFinalization=ran_top_of_compound_full_anchor anchorBefore="
-                                + anchorBefore
-                                + " anchorAfter=" + anchorAfter
-                                + " compoundAnchorAfter=" + compoundAnchorAfter
-                                + " sourcePos=" + sourcePos.toShortString()
-                                + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
-                RuntimeDiagnostics.recordCompoundFinalization(
-                        "finalization-return",
-                        Registries.ITEM.getId(self),
-                        false,
-                        context,
-                        cir.getReturnValue(),
-                        "ran_top_of_compound_full_anchor",
-                        sourcePos,
-                        compoundBefore,
-                        compoundAnchorAfter,
-                        anchorBefore,
-                        anchorAfter,
-                        "top_of_compound_full_anchor_attempt");
                 return;
             }
         }
 
         if (context.getSide().getAxis().isVertical()) {
-            RuntimeDiagnostics.recordPlace(
-                    "finalization-return",
-                    Registries.ITEM.getId(self),
-                    false,
-                    context,
-                    cir.getReturnValue(),
-                    "anchorFinalization=skipped_vertical_face");
-            RuntimeDiagnostics.recordCompoundFinalization(
-                    "finalization-return",
-                    Registries.ITEM.getId(self),
-                    false,
-                    context,
-                    cir.getReturnValue(),
-                    "skipped_vertical_face",
-                    placePos.down(),
-                    SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
-                    SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
-                    SlabAnchorAttachment.isAnchored(world, placePos),
-                    SlabAnchorAttachment.isAnchored(world, placePos),
-                    "vertical_face_not_side_finalization");
             return;
         }
 
         if (!SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, placePos, placedState)) {
-            RuntimeDiagnostics.recordPlace(
-                    "finalization-return",
-                    Registries.ITEM.getId(self),
-                    false,
-                    context,
-                    cir.getReturnValue(),
-                    "anchorFinalization=skipped_not_ordinary_full_block_anchor_candidate");
-            RuntimeDiagnostics.recordCompoundFinalization(
-                    "finalization-return",
-                    Registries.ITEM.getId(self),
-                    false,
-                    context,
-                    cir.getReturnValue(),
-                    "skipped_not_ordinary_full_block_anchor_candidate",
-                    placePos.offset(context.getSide().getOpposite()),
-                    SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
-                    SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
-                    SlabAnchorAttachment.isAnchored(world, placePos),
-                    SlabAnchorAttachment.isAnchored(world, placePos),
-                    "placed_state_not_ordinary_full_block_anchor_candidate");
             return;
         }
 
         BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
         BlockState sourceState = world.getBlockState(sourcePos);
-        boolean anchorBefore = SlabAnchorAttachment.isAnchored(world, placePos);
-        boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
         SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(world, placePos, placedState, sourcePos, sourceState);
-        boolean anchorAfter = SlabAnchorAttachment.isAnchored(world, placePos);
-        boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
-        RuntimeDiagnostics.recordPlace(
-                "finalization-return",
-                Registries.ITEM.getId(self),
-                false,
-                context,
-                cir.getReturnValue(),
-                "anchorFinalization=ran_side_adjacent_lowered_full_anchor anchorBefore="
-                        + anchorBefore
-                        + " anchorAfter=" + anchorAfter
-                        + " sourcePos=" + sourcePos.toShortString()
-                        + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
-        RuntimeDiagnostics.recordCompoundFinalization(
-                "finalization-return",
-                Registries.ITEM.getId(self),
-                false,
-                context,
-                cir.getReturnValue(),
-                compoundAfter ? "ran_side_adjacent_compound_full_anchor" : "ran_side_adjacent_lowered_full_anchor",
-                sourcePos,
-                compoundBefore,
-                compoundAfter,
-                anchorBefore,
-                anchorAfter,
-                "side_adjacent_lowered_full_anchor_attempt");
     }
 }

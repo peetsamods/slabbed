@@ -2,7 +2,6 @@ package com.slabbed.client.model;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.runtime.ModelDyTranslateTraceBridge;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.fabricmc.fabric.api.renderer.v1.model.ForwardingBakedModel;
@@ -202,7 +201,6 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 }
             }
         }
-        ModelDyTranslateTraceBridge.recordBeta4ModelDy("fabricEmitQuads", view, pos, state, dy);
         slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
         slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, sourceDy, dy);
 

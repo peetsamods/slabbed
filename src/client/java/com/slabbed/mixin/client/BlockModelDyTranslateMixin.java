@@ -1,7 +1,6 @@
 package com.slabbed.mixin.client;
 
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.runtime.ModelDyTranslateTraceBridge;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.BlockModelRenderer;
@@ -20,16 +19,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(BlockModelRenderer.class)
 public class BlockModelDyTranslateMixin {
-    private static void slabbed$recordTrace(
-            String method,
-            BlockRenderView world,
-            BlockPos pos,
-            BlockState state,
-            double dy
-    ) {
-        ModelDyTranslateTraceBridge.record(method, world, pos, state, dy);
-    }
-
     @Inject(method = "render(Lnet/minecraft/world/BlockRenderView;Lnet/minecraft/client/render/model/BakedModel;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZLnet/minecraft/util/math/random/Random;JI)V",
             at = @At("HEAD"))
     private void slabbed$pushDy(BlockRenderView world,
@@ -44,7 +33,6 @@ public class BlockModelDyTranslateMixin {
                                 int overlay,
                                 CallbackInfo ci) {
         double dy = ClientDy.dyFor(world, pos, state);
-        slabbed$recordTrace("render", world, pos, state, dy);
         if (dy == 0.0) {
             return;
         }
@@ -86,7 +74,6 @@ public class BlockModelDyTranslateMixin {
                                       int overlay,
                                       CallbackInfo ci) {
         double dy = ClientDy.dyFor(world, pos, state);
-        slabbed$recordTrace("renderSmooth", world, pos, state, dy);
         if (dy == 0.0) {
             return;
         }
@@ -128,7 +115,6 @@ public class BlockModelDyTranslateMixin {
                                     int overlay,
                                     CallbackInfo ci) {
         double dy = ClientDy.dyFor(world, pos, state);
-        slabbed$recordTrace("renderFlat", world, pos, state, dy);
         if (dy == 0.0) {
             return;
         }

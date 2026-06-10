@@ -1395,7 +1395,6 @@ public final class SlabSupport {
             Vec3d hitPos,
             CompoundSlabRemapDecision decision
     ) {
-        Beta4ManualLiveTrace.logSlabSupportDecision(world, sourcePos, sourceState, intendedDirection, hitPos, decision);
         return decision;
     }
 
