@@ -80,9 +80,18 @@ public final class TargetDyOverlay {
             source = "MOD:" + namespace;
         }
 
+        // Which half of the targeted block's VISUAL height the crosshair is on — the key signal
+        // for slab side-placement (upper-half vs lower-half intent). Computed against the lowered
+        // visual extent (cell bottom = pos.getY() + dy), only meaningful for side (horizontal) faces.
+        String halfNote = "";
+        if (blockHit.getSide().getAxis().isHorizontal()) {
+            double hitFrac = blockHit.getPos().y - (pos.getY() + dy);
+            halfNote = hitFrac >= 0.5d ? "  [UPPER half]" : "  [lower half]";
+        }
+
         String line1 = "[slabdy] " + pos.toShortString() + "  " + state.getBlock().getName().getString();
         String line2 = "  " + source + " · dy=" + format(dy) + " " + status
-                + " · side=" + blockHit.getSide().asString();
+                + " · side=" + blockHit.getSide().asString() + halfNote;
         int color = dy == 0.0d ? 0xffd7d7d7 : (dy < 0.0d ? 0xffffd166 : 0xffff8866);
         drawLine(context, client, line1, 8, 8, color);
         drawLine(context, client, line2, 8, 20, color);

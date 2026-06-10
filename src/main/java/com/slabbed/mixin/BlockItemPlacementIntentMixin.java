@@ -815,16 +815,25 @@ public abstract class BlockItemPlacementIntentMixin {
             }
             remappedY = slabbed$placementYForType(targetPos, expectedType);
         } else {
-            // Ordinary lowered full block: it occupies world-y [Y+yOffset, Y+yOffset+1]
-            // visually (a -0.5 block at cell Y shows in [Y-0.5, Y+0.5]). Place the slab flush
-            // with the clicked VISUAL half — mapped to grid space:
-            //   upper visual half [Y, Y+0.5]   → BOTTOM slab in cell Y   (occupies [Y, Y+0.5])
-            //   lower visual half [Y-0.5, Y)    → TOP slab in cell Y-1    (occupies [Y-0.5, Y])
-            // The previous mapping sent the upper visual half to a TOP slab in cell Y, landing
-            // it at [Y+0.5, Y+1] — half a block too high, leaving the see-through "DODO" gap.
+            // Ordinary lowered full block at cell Y (rendered dy = yOffset; visual occupies
+            // world-y [Y+yOffset, Y+yOffset+1]). The player aimed at one visual HALF; place the
+            // slab so its RENDERED result fills exactly that half. The catch that bit us twice:
+            // the slab's OWN dy matters. A vanilla slab placed beside a lowered block itself drops
+            // to yOffset (it inherits the lowering); a Terrain Slabs slab stays at grid height.
+            // So ask getYOffset — the render source of truth (safe to call here; we are NOT inside
+            // getYOffsetInner) — what the slab will render at, then pick cell+type so the two agree:
+            //   slab inherits (dy<0)   : upper→TOP cell Y, lower→BOTTOM cell Y (it drops into the half)
+            //   slab grid-height (dy 0): upper→BOTTOM cell Y, lower→TOP cell Y-1 (fills the half as-is)
             double loweredVisualMidline = targetPos.getY() + yOffset + 0.5d;
             boolean upperHalfIntent = originalHitPos.y >= loweredVisualMidline;
-            if (upperHalfIntent) {
+            BlockPos sideNeighbor = targetPos.offset(effectiveSide);
+            double predictedSlabDy = SlabSupport.getYOffset(
+                    context.getWorld(), sideNeighbor, self.getBlock().getDefaultState());
+            boolean slabInheritsLowering = predictedSlabDy < -1.0e-6;
+            if (slabInheritsLowering) {
+                expectedType = upperHalfIntent ? SlabType.TOP : SlabType.BOTTOM;
+                remappedY = slabbed$placementYForType(targetPos, expectedType);
+            } else if (upperHalfIntent) {
                 expectedType = SlabType.BOTTOM;
                 remappedY = slabbed$placementYForType(targetPos, SlabType.BOTTOM);
             } else {
