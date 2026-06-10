@@ -3,7 +3,6 @@ package com.slabbed.test;
 import com.slabbed.dev.SlabbedLabFixtures;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.loader.api.FabricLoader;
@@ -43,7 +42,10 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Client GameTest: deterministic proofs for the Slabbed Lab 3-lane fixture.
+ * Legacy helper bucket for Slabbed Lab client proof routines.
+ *
+ * <p>This class is not registered as a {@code fabric-client-gametest} entrypoint.
+ * Keep runnable client GameTests in {@code src/gametest/resources/fabric.mod.json}.
  *
  * <p>What this test proves:
  * <ol>
@@ -84,7 +86,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * (processed during client game ticks, not during {@code waitForChunksRender}), then
  * {@code waitForChunksRender} settles chunk rebuilds before assertions or screenshots.
  */
-public final class SlabbedLabClientGameTest implements FabricClientGameTest {
+public final class SlabbedLabClientGameTest {
+
+    private SlabbedLabClientGameTest() {
+    }
 
     /**
      * Fixed high-altitude fixture origin — guaranteed all-air in any world type
@@ -130,8 +135,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
     private static final float  MODEL_CAM_YAW   = 180.0f;
     private static final float  MODEL_CAM_PITCH = 20.0f;
 
-    @Override
-    public void runTest(ClientGameTestContext ctx) {
+    static void runLegacySlabbedLabHarness(ClientGameTestContext ctx) {
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
