@@ -50,13 +50,15 @@ Packed Mud Slab) used to float at grid height instead of sitting flush. Two coup
 - Confirmed live (slab flush against lowered Spruce Fence, both halves track). Harness 98/98.
 
 ## Open (need Julia / deferred)
-- **BUG A** — opaque full cube lowers −0.5 on a TS slab (parity with vanilla slabs by design). The
-  client-gametest `TerrainSlabsDirectSupportClientGameTest` asserts 0 — likely a STALE contract. Needs a
-  live cull-hole check (cull fix `BlockRenderInfoCullMixin` present on this branch); if clean, delete/flip
-  the stale contract.
+- **BUG A — RESOLVED (live, 2026-06-10).** Opaque full cube on a TS slab shows NO cull hole live (cull fix
+  `BlockRenderInfoCullMixin` present); the −0.5 lowering is correct/by-design parity with vanilla slabs.
+  Confirmed not a bug. CLEANUP: the client-gametest `TerrainSlabsDirectSupportClientGameTest` still asserts
+  0 — a stale contract to flip/delete so it stops misleading (tracked as a background task).
 - **BUG4** — compound stack under-lowers (−0.5 not −1.0) when the top block is placed via the GENERIC anchor
   path (piston/dispenser/`/setblock`), not the player top-face mixin. DEFERRED (rarer; delicate anchor law).
 - **Release gate** = a systematic LIVE matrix pass (the 38 matrix tests + adversarial recipes make it fast).
+  This is the LAST thing between the branch and a shippable beta — all major placement/render bugs are fixed
+  and live-confirmed (slab-on-lowered, vegetation, fence-side, BUG A).
 
 ## Build / run
 - Headless tests: `JAVA_HOME=<temurin-21> ./gradlew --no-daemon --console=plain runGameTest` (TS shim

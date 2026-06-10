@@ -208,3 +208,13 @@ Carrier`) and routes through the ordinary-lowered-full-block path (lower→BOTTO
 inherits −0.5). Julia's two /slabdy readings (fence at 24,119,8 + 24,120,8 both dy=−0.500 LOWERED) proved
 the lowering was already correct and isolated the bug to placement. Harness 98/98. Tree clean at HEAD.
 Open unchanged: BUG A (likely-stale cull contract, live check), BUG4 (deferred). Next: RESOLVER + live matrix.
+
+---
+
+## Savepoint 2026-06-10 (late afternoon) — BUG A dismissed; release gate = live matrix
+
+Julia live-checked BUG A: opaque full cube on a TS slab shows NO cull hole (cull fix present); the −0.5
+lowering is correct by-design. **BUG A is not a bug** — only cleanup left is flipping the stale
+`TerrainSlabsDirectSupportClientGameTest` assertion (tracked as a background task). With fence-side,
+slab-on-lowered, vegetation, and BUG A all resolved + live-confirmed, the ONLY remaining gate to a
+shippable 1.21.1 beta is a systematic LIVE matrix pass. BUG4 still deferred. Next big rock = the RESOLVER.
