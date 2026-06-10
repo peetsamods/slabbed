@@ -4984,7 +4984,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 || !(supportState.getBlock() instanceof SlabBlock)) {
             return false;
         }
-        return !OffsetBlockStateModel.snapshotFullMeshBoundsTrace().seen();
+        return !OffsetBlockStateModel.snapshotFullMeshBoundsSample().seen();
     }
 
     private static void prepareSbsTopSlabCase(ServerWorld serverWorld, SbsTopSlabCombinationCase spec) {
@@ -5018,8 +5018,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         net.minecraft.item.Item held = sbsTopSlabStepItem(spec, stepIndex);
         if (stepIndex == spec.structure().length() - 1) {
             BlockPos finalPos = sbsTopSlabFinalPos(spec);
-            OffsetBlockStateModel.resetModelDyOwnerTrace(finalPos);
-            OffsetBlockStateModel.resetFullMeshBoundsTrace(finalPos);
+            OffsetBlockStateModel.resetModelDyOwnerSample(finalPos);
+            OffsetBlockStateModel.resetFullMeshBoundsSample(finalPos);
         }
         String heldItem = itemId(held);
         String result = spec.liveCrosshairFinalStep() && stepIndex == spec.structure().length() - 1
@@ -5279,8 +5279,8 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 "FINAL_BLOCK_TARGET");
         String finalBlockTargetOwner = sbsTopSlabTargetOwner(spec, client == null ? null : client.crosshairTarget);
         double finalBlockTargetDy = sbsTopSlabTargetDy(clientWorld, client == null ? null : client.crosshairTarget);
-        OffsetBlockStateModel.ModelDyOwnerTrace modelTrace = OffsetBlockStateModel.snapshotModelDyOwnerTrace();
-        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        OffsetBlockStateModel.ModelDyOwnerSample modelTrace = OffsetBlockStateModel.snapshotModelDyOwnerSample();
+        OffsetBlockStateModel.FullMeshBoundsSample meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsSample();
         SbsTopSlabCullingProof cullingProof = captureSbsTopSlabCullingProof(
                 clientWorld,
                 finalPos,
@@ -5924,10 +5924,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             double supportDy,
             boolean supportCompoundAnchor,
             double contactGap,
-            OffsetBlockStateModel.ModelDyOwnerTrace modelTrace,
+            OffsetBlockStateModel.ModelDyOwnerSample modelTrace,
             double outlineDy,
             double targetDy,
-            OffsetBlockStateModel.FullMeshBoundsTrace meshTrace,
+            OffsetBlockStateModel.FullMeshBoundsSample meshTrace,
             SbsTopSlabCullingProof cullingProof,
             String finalBlockTargetOwner,
             double finalBlockTargetDy,
@@ -6216,7 +6216,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         sbsTopSlabRows = sbsTopSlabRows.isEmpty() ? summary : sbsTopSlabRows + "," + summary;
     }
 
-    private static String sbsTopSlabModelTraceText(OffsetBlockStateModel.ModelDyOwnerTrace trace) {
+    private static String sbsTopSlabModelTraceText(OffsetBlockStateModel.ModelDyOwnerSample trace) {
         return "seen=" + trace.seen()
                 + "/viewClass=" + trace.viewClass()
                 + "/pos=" + trace.pos()
@@ -6226,7 +6226,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + "/lastDy=" + formatDouble(trace.lastDy());
     }
 
-    private static String sbsTopSlabMeshTraceText(OffsetBlockStateModel.FullMeshBoundsTrace trace) {
+    private static String sbsTopSlabMeshTraceText(OffsetBlockStateModel.FullMeshBoundsSample trace) {
         return "seen=" + trace.seen()
                 + "/blockId=" + trace.blockId()
                 + "/pos=" + trace.pos()
@@ -6390,7 +6390,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             }
             vbvsShadowPhase = 1;
             vbvsShadowPhaseTick = vbvsShadowTicks;
-            OffsetBlockStateModel.resetFullMeshBoundsTrace(vbvsShadowTilePos(vbvsShadowTileIndex));
+            OffsetBlockStateModel.resetFullMeshBoundsSample(vbvsShadowTilePos(vbvsShadowTileIndex));
             return;
         }
 
@@ -6412,7 +6412,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 vbvsShadowPhaseTick = vbvsShadowTicks;
                 return;
             }
-            OffsetBlockStateModel.resetFullMeshBoundsTrace(vbvsShadowTilePos(vbvsShadowTileIndex));
+            OffsetBlockStateModel.resetFullMeshBoundsSample(vbvsShadowTilePos(vbvsShadowTileIndex));
             vbvsShadowPhaseTick = vbvsShadowTicks;
             return;
         }
@@ -6427,7 +6427,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
 
     private static boolean vbvsShadowMeshTraceReadyForTile(int tileIndex) {
         BlockPos pos = vbvsShadowTilePos(tileIndex);
-        OffsetBlockStateModel.FullMeshBoundsTrace trace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        OffsetBlockStateModel.FullMeshBoundsSample trace = OffsetBlockStateModel.snapshotFullMeshBoundsSample();
         return pos != null
                 && trace != null
                 && trace.seen()
@@ -6612,7 +6612,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 && pos != null
                 && SlabAnchorAttachment.isPersistentLoweredSlabCarrier(clientWorld, pos, clientState);
         boolean fullTile = vbvsShadowFullTile(tileIndex);
-        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        OffsetBlockStateModel.FullMeshBoundsSample meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsSample();
         String cullingFacts = vbvsShadowCullingFacts(clientWorld, pos, clientState);
         String verdict;
         String reason;
@@ -6751,7 +6751,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         return vbvsShadowOrigin.add(tileIndex % 3, 0, tileIndex / 3);
     }
 
-    private static String vbvsShadowMeshTraceText(OffsetBlockStateModel.FullMeshBoundsTrace trace) {
+    private static String vbvsShadowMeshTraceText(OffsetBlockStateModel.FullMeshBoundsSample trace) {
         if (trace == null || !trace.seen()) {
             return "seen=false";
         }
@@ -6771,7 +6771,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
     }
 
     private static boolean vbvsShadowRenderOutlineBounds(
-            OffsetBlockStateModel.FullMeshBoundsTrace trace,
+            OffsetBlockStateModel.FullMeshBoundsSample trace,
             double minY,
             double maxY
     ) {
@@ -7276,15 +7276,15 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         if (sameSpotPhase == 3) {
             syncSameSpotAim(client);
             System.setProperty("slabbed.render.offset.trace", "true");
-            OffsetBlockStateModel.resetRenderOffsetTrace(sameSpotFullPos);
+            OffsetBlockStateModel.resetRenderOffsetSample(sameSpotFullPos);
             sameSpotPhase = 4;
             sameSpotPhaseTick = sameSpotTicks;
             return;
         }
         if (sameSpotPhase == 4) {
             sameSpotPreTarget = describeCrosshair(client);
-            sameSpotPreModelTrace = describeModelTrace(OffsetBlockStateModel.snapshotRenderOffsetTrace());
-            OffsetBlockStateModel.resetRenderOffsetTrace(sameSpotFullPos);
+            sameSpotPreModelTrace = describeModelTrace(OffsetBlockStateModel.snapshotRenderOffsetSample());
+            OffsetBlockStateModel.resetRenderOffsetSample(sameSpotFullPos);
             requestSameSpotBreak(client);
             sameSpotPhase = 5;
             sameSpotPhaseTick = sameSpotTicks;
@@ -7295,7 +7295,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         }
         if (sameSpotPhase == 5) {
             sameSpotPostTarget = describeCrosshair(client);
-            sameSpotPostModelTrace = describeModelTrace(OffsetBlockStateModel.snapshotRenderOffsetTrace());
+            sameSpotPostModelTrace = describeModelTrace(OffsetBlockStateModel.snapshotRenderOffsetSample());
             System.clearProperty("slabbed.render.offset.trace");
             emitSameSpotRow(client);
             sameSpotFinalized = true;
@@ -7532,7 +7532,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 + "/anchor=" + SlabAnchorAttachment.isAnchored(client.world, pos);
     }
 
-    private static String describeModelTrace(OffsetBlockStateModel.RenderOffsetTrace trace) {
+    private static String describeModelTrace(OffsetBlockStateModel.RenderOffsetSample trace) {
         if (trace == null || !trace.seen()) {
             return "missing";
         }
@@ -7648,7 +7648,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                             .setStackInHand(Hand.MAIN_HAND, stack.copy());
                 }
             }
-            OffsetBlockStateModel.resetFullMeshBoundsTrace(superflatHarnessPlacePos);
+            OffsetBlockStateModel.resetFullMeshBoundsSample(superflatHarnessPlacePos);
             superflatHarnessRowPhase = 1;
             superflatHarnessPhaseTick = superflatHarnessTicks;
             return;
@@ -7740,12 +7740,12 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         if (superflatHarnessTicks - superflatHarnessPhaseTick >= SUPERFLAT_HARNESS_MODEL_SETTLE_TIMEOUT_TICKS) {
             return false;
         }
-        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        OffsetBlockStateModel.FullMeshBoundsSample meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsSample();
         return !superflatHarnessLoweredModelTraceReady(meshTrace, placedDy);
     }
 
     private static boolean superflatHarnessLoweredModelTraceReady(
-            OffsetBlockStateModel.FullMeshBoundsTrace meshTrace,
+            OffsetBlockStateModel.FullMeshBoundsSample meshTrace,
             double expectedDy
     ) {
         return meshTrace != null
@@ -7854,7 +7854,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         VoxelShape effectiveRaycast = rawRaycastShapeEmpty ? outline : raycast;
         String outlineBounds = shapeBounds(outline);
         String raycastBounds = shapeBounds(effectiveRaycast);
-        OffsetBlockStateModel.FullMeshBoundsTrace meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsTrace();
+        OffsetBlockStateModel.FullMeshBoundsSample meshTrace = OffsetBlockStateModel.snapshotFullMeshBoundsSample();
         String modelMeshMinY = meshTrace.seen() ? formatDouble(meshTrace.minAfterY()) : "NaN";
         String modelMeshMaxY = meshTrace.seen() ? formatDouble(meshTrace.maxAfterY()) : "NaN";
         String meshTraceKey = meshTrace.seen() ? meshTrace.meshTraceKey() : "none";
@@ -9064,7 +9064,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 ? "NaN..NaN"
                 : formatDouble(outlineShape.getBoundingBox().minY) + ".."
                 + formatDouble(outlineShape.getBoundingBox().maxY);
-        OffsetBlockStateModel.RenderOffsetTrace trace = sampleModelTrace(fullPos);
+        OffsetBlockStateModel.RenderOffsetSample trace = sampleModelTrace(fullPos);
         String reason;
         boolean modelEqualsOutline;
         boolean modelLowerThanOutline;
@@ -9323,10 +9323,10 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         return line.toString();
     }
 
-    private static OffsetBlockStateModel.RenderOffsetTrace sampleModelTrace(BlockPos observedPos) {
+    private static OffsetBlockStateModel.RenderOffsetSample sampleModelTrace(BlockPos observedPos) {
         System.setProperty("slabbed.render.offset.trace", "true");
-        OffsetBlockStateModel.resetRenderOffsetTrace(observedPos);
-        OffsetBlockStateModel.RenderOffsetTrace trace = OffsetBlockStateModel.snapshotRenderOffsetTrace();
+        OffsetBlockStateModel.resetRenderOffsetSample(observedPos);
+        OffsetBlockStateModel.RenderOffsetSample trace = OffsetBlockStateModel.snapshotRenderOffsetSample();
         System.clearProperty("slabbed.render.offset.trace");
         return trace;
     }

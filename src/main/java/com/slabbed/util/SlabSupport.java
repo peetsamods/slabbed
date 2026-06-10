@@ -58,6 +58,8 @@ import java.util.Set;
  * Central helper for slab support semantics.
  */
 public final class SlabSupport {
+    private static final String BOTTOM_PERSISTENT_TRACE_OPT_IN = "slabbed.bottomPersistentTrace";
+
     private SlabSupport() {
     }
 
@@ -1017,7 +1019,7 @@ public final class SlabSupport {
                     && state.contains(SlabBlock.TYPE)
                     && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && isBottomPersistentTracePos(pos)) {
-                System.out.println("[BOTTOM_PERSISTENT] getYOffset early_guard_return pos=" + pos.toShortString()
+                Slabbed.LOGGER.info("[BOTTOM_PERSISTENT] getYOffset early_guard_return pos=" + pos.toShortString()
                         + " state=" + state
                         + " slabType=" + state.get(SlabBlock.TYPE)
                         + " fluidEmpty=" + state.getFluidState().isEmpty()
@@ -1275,7 +1277,7 @@ public final class SlabSupport {
             Vec3d hitPos,
             CompoundSlabRemapDecision decision
     ) {
-        Beta4ManualLiveTrace.logSlabSupportDecision(world, sourcePos, sourceState, intendedDirection, hitPos, decision);
+        RuntimeDiagnostics.logSlabSupportDecision(world, sourcePos, sourceState, intendedDirection, hitPos, decision);
         return decision;
     }
 
@@ -1649,7 +1651,7 @@ public final class SlabSupport {
                 boolean nonRecursiveBottomCarrier =
                         SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
                 boolean branchReached = state.getFluidState().isEmpty() && nonRecursiveBottomCarrier;
-                System.out.println("[BOTTOM_PERSISTENT] getYOffsetInner pos=" + pos.toShortString()
+                Slabbed.LOGGER.info("[BOTTOM_PERSISTENT] getYOffsetInner pos=" + pos.toShortString()
                         + " state=" + state
                         + " slabType=" + state.get(SlabBlock.TYPE)
                         + " fluidEmpty=" + state.getFluidState().isEmpty()
@@ -1664,7 +1666,7 @@ public final class SlabSupport {
                     && state.getFluidState().isEmpty()
                     && SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
                 if (isBottomPersistentTracePos(pos)) {
-                    System.out.println("[BOTTOM_PERSISTENT] branch=return_-0.5 pos=" + pos.toShortString());
+                    Slabbed.LOGGER.info("[BOTTOM_PERSISTENT] branch=return_-0.5 pos=" + pos.toShortString());
                 }
                 return -0.5;
             }
@@ -1968,7 +1970,8 @@ public final class SlabSupport {
     }
 
     private static boolean isBottomPersistentTracePos(BlockPos pos) {
-        return pos != null && pos.getX() == 0 && pos.getY() == 202 && pos.getZ() == 0;
+        return Boolean.getBoolean(BOTTOM_PERSISTENT_TRACE_OPT_IN)
+                && pos != null && pos.getX() == 0 && pos.getY() == 202 && pos.getZ() == 0;
     }
 
     /**

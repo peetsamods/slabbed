@@ -2,7 +2,7 @@ package com.slabbed.client.model;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.runtime.ModelDyTranslateTraceBridge;
+import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.fabricmc.fabric.api.renderer.v1.model.ForwardingBakedModel;
@@ -38,12 +38,12 @@ import java.util.function.Supplier;
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
 public final class OffsetBlockStateModel extends ForwardingBakedModel {
     private static volatile BlockPos slabbed$tracePos = null;
-    private static volatile RenderOffsetTrace slabbed$lastTrace = RenderOffsetTrace.missing();
+    private static volatile RenderOffsetSample slabbed$lastTrace = RenderOffsetSample.missing();
     private static volatile BlockPos slabbed$modelDyOwnerTracePos = null;
-    private static volatile ModelDyOwnerTrace slabbed$modelDyOwnerLastTrace = ModelDyOwnerTrace.missing();
+    private static volatile ModelDyOwnerSample slabbed$modelDyOwnerLastTrace = ModelDyOwnerSample.missing();
     private static volatile BlockPos slabbed$fullMeshBoundsTracePos = null;
-    private static volatile FullMeshBoundsTrace slabbed$fullMeshBoundsLastTrace = FullMeshBoundsTrace.missing();
-    private static final Set<String> slabbed$mc1211FullMeshBoundsTraceRows = ConcurrentHashMap.newKeySet();
+    private static volatile FullMeshBoundsSample slabbed$fullMeshBoundsLastTrace = FullMeshBoundsSample.missing();
+    private static final Set<String> slabbed$mc1211FullMeshBoundsSampleRows = ConcurrentHashMap.newKeySet();
     private static final AtomicInteger slabbed$mc1211FullMeshBoundsPassSequence = new AtomicInteger();
     private static final Set<String> slabbed$mc1211LiveModelTraceRows = ConcurrentHashMap.newKeySet();
     private static volatile boolean slabbed$mc1211LiveModelTraceCanaryLogged = false;
@@ -68,7 +68,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         return false;
     }
 
-    public record RenderOffsetTrace(
+    public record RenderOffsetSample(
             boolean seen,
             String viewClass,
             String pos,
@@ -78,12 +78,12 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             double slabSupportDy,
             boolean excludedByWrapper
     ) {
-        static RenderOffsetTrace missing() {
-            return new RenderOffsetTrace(false, "none", "none", "none", 0.0, 0.0, 0.0, false);
+        static RenderOffsetSample missing() {
+            return new RenderOffsetSample(false, "none", "none", "none", 0.0, 0.0, 0.0, false);
         }
     }
 
-    public record ModelDyOwnerTrace(
+    public record ModelDyOwnerSample(
             boolean seen,
             String viewClass,
             String pos,
@@ -93,12 +93,12 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             double totalAppliedDy,
             double lastDy
     ) {
-        static ModelDyOwnerTrace missing() {
-            return new ModelDyOwnerTrace(false, "none", "none", "none", 0, 0, 0.0, 0.0);
+        static ModelDyOwnerSample missing() {
+            return new ModelDyOwnerSample(false, "none", "none", "none", 0, 0, 0.0, 0.0);
         }
     }
 
-    public record FullMeshBoundsTrace(
+    public record FullMeshBoundsSample(
             boolean seen,
             String meshTraceKey,
             String matrixKey,
@@ -123,8 +123,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             String snapshotSource,
             String aggregateDedupKey
     ) {
-        static FullMeshBoundsTrace missing() {
-            return new FullMeshBoundsTrace(
+        static FullMeshBoundsSample missing() {
+            return new FullMeshBoundsSample(
                     false,
                     "none",
                     "none",
@@ -151,30 +151,30 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
     }
 
-    public static void resetRenderOffsetTrace(BlockPos pos) {
+    public static void resetRenderOffsetSample(BlockPos pos) {
         slabbed$tracePos = pos;
-        slabbed$lastTrace = RenderOffsetTrace.missing();
+        slabbed$lastTrace = RenderOffsetSample.missing();
     }
 
-    public static RenderOffsetTrace snapshotRenderOffsetTrace() {
+    public static RenderOffsetSample snapshotRenderOffsetSample() {
         return slabbed$lastTrace;
     }
 
-    public static void resetModelDyOwnerTrace(BlockPos pos) {
+    public static void resetModelDyOwnerSample(BlockPos pos) {
         slabbed$modelDyOwnerTracePos = pos == null ? null : pos.toImmutable();
-        slabbed$modelDyOwnerLastTrace = ModelDyOwnerTrace.missing();
+        slabbed$modelDyOwnerLastTrace = ModelDyOwnerSample.missing();
     }
 
-    public static ModelDyOwnerTrace snapshotModelDyOwnerTrace() {
+    public static ModelDyOwnerSample snapshotModelDyOwnerSample() {
         return slabbed$modelDyOwnerLastTrace;
     }
 
-    public static void resetFullMeshBoundsTrace(BlockPos pos) {
+    public static void resetFullMeshBoundsSample(BlockPos pos) {
         slabbed$fullMeshBoundsTracePos = pos == null ? null : pos.toImmutable();
-        slabbed$fullMeshBoundsLastTrace = FullMeshBoundsTrace.missing();
+        slabbed$fullMeshBoundsLastTrace = FullMeshBoundsSample.missing();
     }
 
-    public static FullMeshBoundsTrace snapshotFullMeshBoundsTrace() {
+    public static FullMeshBoundsSample snapshotFullMeshBoundsSample() {
         return slabbed$fullMeshBoundsLastTrace;
     }
 
@@ -206,15 +206,15 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 }
             }
         }
-        ModelDyTranslateTraceBridge.recordBeta4ModelDy("fabricEmitQuads", view, pos, state, dy);
+        RuntimeDiagnostics.recordBeta4ModelDyTrace("fabricEmitQuads", view, pos, state, dy);
         slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
         slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, sourceDy, dy);
 
         BlockPos modelDyTracePos = slabbed$modelDyOwnerTracePos;
         if (modelDyTracePos != null && modelDyTracePos.equals(pos)) {
-            ModelDyOwnerTrace prev = slabbed$modelDyOwnerLastTrace;
+            ModelDyOwnerSample prev = slabbed$modelDyOwnerLastTrace;
             boolean applied = dy != 0.0f;
-            slabbed$modelDyOwnerLastTrace = new ModelDyOwnerTrace(
+            slabbed$modelDyOwnerLastTrace = new ModelDyOwnerSample(
                     true,
                     view.getClass().getName(),
                     pos.toShortString(),
@@ -231,7 +231,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             boolean excluded = state.getBlock() instanceof FenceBlock
                     || state.getBlock() instanceof WallBlock
                     || state.getBlock() instanceof PaneBlock;
-            slabbed$lastTrace = new RenderOffsetTrace(
+            slabbed$lastTrace = new RenderOffsetSample(
                     true,
                     view.getClass().getName(),
                     pos.toShortString(),
@@ -257,7 +257,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
 
         if (dy == 0.0f) {
-            slabbed$recordMc1211FullMeshBoundsTrace(view, pos, state, wrapped, dy,
+            slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, wrapped, dy,
                     0, 0, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
                     "dy_zero_no_transform");
             emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
@@ -289,7 +289,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         });
         try {
             emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
-            slabbed$recordMc1211FullMeshBoundsTrace(view, pos, state, traceModel, dy,
+            slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, traceModel, dy,
                     totalQuadsSeen[0],
                     verticesVisited[0],
                     meshBounds[0],
@@ -452,7 +452,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
     }
 
-    private static void slabbed$recordMc1211FullMeshBoundsTrace(
+    private static void slabbed$recordMc1211FullMeshBoundsSample(
             BlockRenderView view,
             BlockPos pos,
             BlockState state,
@@ -478,7 +478,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         boolean observedProofRow = observedPos != null && observedPos.equals(pos);
         boolean fullMeshBoundsTraceEnabled = Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace");
         boolean aggregateTraceCandidate = fullMeshBoundsTraceEnabled
-                && slabbed$shouldLogMc1211FullMeshBoundsTrace(pos, blockId, dy);
+                && slabbed$shouldLogMc1211FullMeshBoundsSample(pos, blockId, dy);
         String renderOutlineBounds = observedProofRow || aggregateTraceCandidate
                 ? slabbed$outlineBounds(view, pos, state)
                 : "not_sampled";
@@ -492,7 +492,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 && Double.isFinite(maxAfterY);
 
         if (observedProofRow) {
-            slabbed$fullMeshBoundsLastTrace = new FullMeshBoundsTrace(
+            slabbed$fullMeshBoundsLastTrace = new FullMeshBoundsSample(
                     true,
                     meshTraceKey,
                     matrixKey,
@@ -525,7 +525,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         if (!aggregateTraceCandidate) {
             return;
         }
-        if (!slabbed$mc1211FullMeshBoundsTraceRows.add(aggregateDedupKey)) {
+        if (!slabbed$mc1211FullMeshBoundsSampleRows.add(aggregateDedupKey)) {
             return;
         }
         double expectedMinAfterY = finiteBounds ? minBeforeY + dy : Double.NaN;
@@ -559,7 +559,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     }
 
     private static void slabbed$logMc1211FullMeshBoundsSnapshotTrace(
-            FullMeshBoundsTrace trace,
+            FullMeshBoundsSample trace,
             BlockState state,
             boolean finiteBounds
     ) {
@@ -594,7 +594,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 trace.aggregateDedupKey());
     }
 
-    private static boolean slabbed$shouldLogMc1211FullMeshBoundsTrace(BlockPos pos, String blockId, float dy) {
+    private static boolean slabbed$shouldLogMc1211FullMeshBoundsSample(BlockPos pos, String blockId, float dy) {
         BlockPos observedPos = slabbed$fullMeshBoundsTracePos;
         if (observedPos != null && observedPos.equals(pos)) {
             return true;
