@@ -8,6 +8,7 @@ final class TerrainSlabsProofFocus {
             "slabbed.terrainSlabsExactSeedTrace",
             "slabbed.terrainSlabsLivePlacementProof",
             "slabbed.terrainSlabsParticleProof",
+            "slabbed.terrainSlabsLoweredCubeCullProof",
             "slabbed.terrainSlabsWindowDiag",
     };
 

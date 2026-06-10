@@ -1,9 +1,11 @@
 package com.slabbed.client.model;
 
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
+import net.minecraft.util.math.Direction;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.function.Predicate;
 
 /**
  * Dynamic proxy that shifts vertex Y in pos(...) and delegates all other methods.
@@ -14,16 +16,32 @@ public final class YOffsetEmitter {
     }
 
     public static QuadEmitter wrap(QuadEmitter delegate, float dy) {
+        return wrap(delegate, dy, direction -> false);
+    }
+
+    public static QuadEmitter wrap(QuadEmitter delegate, float dy, Predicate<Direction> clearCullFace) {
         return (QuadEmitter) Proxy.newProxyInstance(
                 QuadEmitter.class.getClassLoader(),
                 new Class<?>[]{QuadEmitter.class},
-                (proxy, method, args) -> invoke(delegate, proxy, method, args, dy)
+                (proxy, method, args) -> invoke(delegate, proxy, method, args, dy, clearCullFace)
         );
     }
 
-    private static Object invoke(QuadEmitter delegate, Object proxy, Method method, Object[] args, float dy) throws Throwable {
+    private static Object invoke(
+            QuadEmitter delegate,
+            Object proxy,
+            Method method,
+            Object[] args,
+            float dy,
+            Predicate<Direction> clearCullFace
+    ) throws Throwable {
         // Intercept emit() to translate vertices right before emission (covers models that don't call pos())
         if ("emit".equals(method.getName()) && (args == null || args.length == 0)) {
+            Direction cullFace = delegate.cullFace();
+            if (cullFace != null && clearCullFace.test(cullFace)) {
+                delegate.cullFace(null);
+                delegate.nominalFace(cullFace);
+            }
             for (int i = 0; i < 4; i++) {
                 float x = delegate.x(i);
                 float y = delegate.y(i);

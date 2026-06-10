@@ -135,7 +135,35 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
             }
         }
 
-        QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy) : emitter;
-        fabricWrapped.emitQuads(out, view, pos, state, random, cullTest);
+        boolean clearStepCullFaces = slabbed$hasLoweredStepFace(view, pos, state);
+        Predicate<Direction> clearCullFace =
+                direction -> SlabSupport.isSlabHeightStepFace(view, pos, state, direction);
+        QuadEmitter out = (dy != 0.0f || clearStepCullFaces)
+                ? YOffsetEmitter.wrap(emitter, dy, clearCullFace)
+                : emitter;
+        fabricWrapped.emitQuads(out, view, pos, state, random,
+                slabbed$cullForLoweredStepFace(view, pos, state, cullTest));
+    }
+
+    private static boolean slabbed$hasLoweredStepFace(BlockRenderView view, BlockPos pos, BlockState state) {
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            if (SlabSupport.isSlabHeightStepFace(view, pos, state, direction)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Predicate<Direction> slabbed$cullForLoweredStepFace(
+            BlockRenderView view, BlockPos pos, BlockState state, Predicate<Direction> cullTest) {
+        if (!state.isOpaqueFullCube()) {
+            return cullTest;
+        }
+        return direction -> {
+            if (direction == null || !cullTest.test(direction)) {
+                return cullTest.test(direction);
+            }
+            return !SlabSupport.isSlabHeightStepFace(view, pos, state, direction);
+        };
     }
 }

@@ -64,6 +64,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     private static final String EXACT_SEED_TRACE_PROPERTY = "slabbed.terrainSlabsExactSeedTrace";
     private static final String LIVE_PLACEMENT_PROPERTY = "slabbed.terrainSlabsLivePlacementProof";
     private static final String PARTICLE_PROOF_PROPERTY = "slabbed.terrainSlabsParticleProof";
+    private static final String LOWERED_CUBE_CULL_PROPERTY = "slabbed.terrainSlabsLoweredCubeCullProof";
     private static final String EXACT_SEED = "681745208735773989";
     private static final BlockPos SUPPORT_POS = new BlockPos(24, 200, 0);
     private static final BlockPos VANILLA_SUPPORT_POS = SUPPORT_POS.add(4, 0, 0);
@@ -84,13 +85,14 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
         boolean exactSeedTrace = Boolean.getBoolean(EXACT_SEED_TRACE_PROPERTY);
         boolean livePlacement = Boolean.getBoolean(LIVE_PLACEMENT_PROPERTY);
         boolean particleProof = Boolean.getBoolean(PARTICLE_PROOF_PROPERTY);
+        boolean loweredCubeCullProof = Boolean.getBoolean(LOWERED_CUBE_CULL_PROPERTY);
         boolean windowDiag = Boolean.getBoolean("slabbed.terrainSlabsWindowDiag");
         if (!dump && !proof && !generatedDoubleProof
-                && !exactSeedTrace && !livePlacement && !particleProof && !windowDiag) {
+                && !exactSeedTrace && !livePlacement && !particleProof && !loweredCubeCullProof && !windowDiag) {
             return;
         }
 
-        if (!FabricLoader.getInstance().isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+        if (!TerrainSlabsCompat.isLoaded()) {
             System.out.println("TERRAIN_SLABS_COMPAT_DUMP_BEGIN terrainslabs_not_loaded");
             System.out.println("TERRAIN_SLABS_COMPAT_DUMP_END total=0");
             if (proof || generatedDoubleProof) {
@@ -122,6 +124,9 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 runLoweredCubeCullProof(ctx, singleplayer);
                 runCeilingHangRegressionProof(singleplayer);
                 runHangerFollowLoweredProof(singleplayer);
+            }
+            if (loweredCubeCullProof) {
+                runLoweredCubeCullProof(ctx, singleplayer);
             }
             if (generatedDoubleProof) {
                 runGeneratedDoubleDirectSupportProof(ctx, singleplayer);
@@ -156,7 +161,8 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     }
 
     private static void dumpTerrainSlabsCompatFacts(net.minecraft.world.BlockView world) {
-        var mod = FabricLoader.getInstance().getModContainer(TerrainSlabsCompat.MOD_ID);
+        String terrainNamespace = loadedTerrainSlabsNamespace();
+        var mod = FabricLoader.getInstance().getModContainer(terrainNamespace);
         if (mod.isPresent()) {
             var meta = mod.get().getMetadata();
             System.out.println("TERRAIN_SLABS_COMPAT_DUMP_BEGIN"
@@ -166,14 +172,14 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                     + " worldReady=" + (world != null));
         } else {
             System.out.println("TERRAIN_SLABS_COMPAT_DUMP_BEGIN"
-                    + " modId=" + TerrainSlabsCompat.MOD_ID
+                    + " modId=" + terrainNamespace
                     + " version=<unknown> name=<unknown>"
                     + " worldReady=" + (world != null));
         }
 
         int total = 0;
         for (Identifier id : Registries.BLOCK.getIds()) {
-            if (!TerrainSlabsCompat.MOD_ID.equals(id.getNamespace())) {
+            if (!terrainNamespace.equals(id.getNamespace())) {
                 continue;
             }
             Block block = Registries.BLOCK.get(id);
@@ -197,6 +203,17 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             }
         }
         System.out.println("TERRAIN_SLABS_COMPAT_DUMP_END total=" + total);
+    }
+
+    private static String loadedTerrainSlabsNamespace() {
+        FabricLoader loader = FabricLoader.getInstance();
+        if (loader.isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+            return TerrainSlabsCompat.MOD_ID;
+        }
+        if (loader.isModLoaded(TerrainSlabsCompat.LEGACY_MOD_ID)) {
+            return TerrainSlabsCompat.LEGACY_MOD_ID;
+        }
+        return TerrainSlabsCompat.MOD_ID;
     }
 
     private static void runDirectSupportProof(ClientGameTestContext ctx, TestSingleplayerContext singleplayer) {
@@ -1907,6 +1924,9 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
      *       table): the cube's facing side must be redrawn. This is the exact geometry of
      *       the see-through "window" — the crafting table is not a full cube, so the window
      *       is always closed on the neighbouring opaque cube.</li>
+     *   <li>MODEL_PATH — Sodium/FRAPI-style model culling must follow the same
+     *       STEP/FLAT/MIRROR rule; the Indigo {@code BlockRenderInfo} hook is not used
+     *       by every renderer in the live Modrinth profile.</li>
      * </ul>
      */
     private static void runLoweredCubeCullProof(ClientGameTestContext ctx, TestSingleplayerContext singleplayer) {
@@ -1951,10 +1971,25 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             boolean stepDraw = SlabSupport.isSlabHeightStepFace(mc.world, stepCube, stepState, Direction.EAST);
             boolean flatDraw = SlabSupport.isSlabHeightStepFace(mc.world, flatCube, flatState, Direction.EAST);
             boolean mirrorDraw = SlabSupport.isSlabHeightStepFace(mc.world, mirrorCube, mirrorState, Direction.WEST);
+            FaceProbe stepEastFaces = probeFacesToward(
+                    mc.world, stepCube, stepState, dir -> dir == Direction.EAST, Direction.EAST);
+            FaceProbe flatEastFaces = probeFacesToward(
+                    mc.world, flatCube, flatState, dir -> dir == Direction.EAST, Direction.EAST);
+            FaceProbe mirrorWestFaces = probeFacesToward(
+                    mc.world, mirrorCube, mirrorState, dir -> dir == Direction.WEST, Direction.WEST);
             String fields = " stepCube=" + stepCube.toShortString() + " stepDy=" + stepDy + " stepDraw=" + stepDraw
-                    + " flatDraw=" + flatDraw
+                    + " stepEastFaces=" + stepEastFaces.targetFaces()
+                    + " stepEastCulledFaces=" + stepEastFaces.culledFaces()
+                    + " stepEastUnculledFaces=" + stepEastFaces.unculledFaces()
+                    + " stepEastNominalFaces=" + stepEastFaces.nominalFaces()
+                    + " flatDraw=" + flatDraw + " flatEastFaces=" + flatEastFaces.targetFaces()
+                    + " flatEastCulledFaces=" + flatEastFaces.culledFaces()
                     + " mirrorCube=" + mirrorCube.toShortString() + " mirrorDy=" + mirrorDy
-                    + " mirrorNeighborDy=" + mirrorNeighborDy + " mirrorDraw=" + mirrorDraw;
+                    + " mirrorNeighborDy=" + mirrorNeighborDy + " mirrorDraw=" + mirrorDraw
+                    + " mirrorWestFaces=" + mirrorWestFaces.targetFaces()
+                    + " mirrorWestCulledFaces=" + mirrorWestFaces.culledFaces()
+                    + " mirrorWestUnculledFaces=" + mirrorWestFaces.unculledFaces()
+                    + " mirrorWestNominalFaces=" + mirrorWestFaces.nominalFaces();
             System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_TRACE" + fields);
 
             String redReason = null;
@@ -1972,6 +2007,20 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
                 redReason = "mirror_neighbor_not_lowered";
             } else if (!mirrorDraw) {
                 redReason = "mirror_grid_face_culled";
+            } else if (stepEastFaces.targetFaces() <= 0) {
+                redReason = "stepped_model_face_culled";
+            } else if (flatEastFaces.targetFaces() != 0) {
+                redReason = "flat_model_face_overdrawn";
+            } else if (mirrorWestFaces.targetFaces() <= 0) {
+                redReason = "mirror_model_face_culled";
+            } else if (stepEastFaces.culledFaces() > 0) {
+                redReason = "stepped_model_face_kept_cullface";
+            } else if (stepEastFaces.nominalFaces() != stepEastFaces.targetFaces()) {
+                redReason = "stepped_model_face_nominal_not_preserved";
+            } else if (mirrorWestFaces.culledFaces() > 0) {
+                redReason = "mirror_model_face_kept_cullface";
+            } else if (mirrorWestFaces.nominalFaces() != mirrorWestFaces.targetFaces()) {
+                redReason = "mirror_model_face_nominal_not_preserved";
             }
             if (redReason != null) {
                 System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_RED reason=" + redReason + fields);
@@ -1979,6 +2028,53 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
             }
             System.out.println("TERRAIN_SLABS_LOWERED_CUBE_CULL_GREEN" + fields);
         });
+    }
+
+    private record FaceProbe(
+            int targetFaces,
+            int culledFaces,
+            int unculledFaces,
+            int nominalFaces) {
+    }
+
+    private static FaceProbe probeFacesToward(
+            net.minecraft.world.BlockRenderView world, BlockPos pos, BlockState state,
+            java.util.function.Predicate<Direction> cullTest, Direction face) {
+        BlockStateModel model = MinecraftClient.getInstance().getBlockRenderManager().getModel(state);
+        if (!(model instanceof FabricBlockStateModel fabricModel)) {
+            throw new AssertionError("expected FabricBlockStateModel for " + state);
+        }
+        Renderer renderer = Renderer.get();
+        if (renderer == null) {
+            throw new AssertionError("Fabric renderer missing for lowered cube cull proof");
+        }
+        MutableMesh mesh = renderer.mutableMesh();
+        fabricModel.emitQuads(mesh.emitter(), world, pos, state, Random.create(0x51abbEDL), cullTest);
+        int[] targetFaces = {0};
+        int[] culledFaces = {0};
+        int[] unculledFaces = {0};
+        int[] nominalFaces = {0};
+        mesh.forEach(quad -> {
+            Direction cullFace = quad.cullFace();
+            Direction nominalFace = quad.nominalFace();
+            Direction quadFace = cullFace != null ? cullFace : nominalFace;
+            if (quadFace == face) {
+                targetFaces[0]++;
+                if (cullFace == face) {
+                    culledFaces[0]++;
+                } else {
+                    unculledFaces[0]++;
+                }
+                if (nominalFace == face) {
+                    nominalFaces[0]++;
+                }
+            }
+        });
+        return new FaceProbe(
+                targetFaces[0],
+                culledFaces[0],
+                unculledFaces[0],
+                nominalFaces[0]);
     }
 
     /**
@@ -2110,7 +2206,7 @@ public final class TerrainSlabsDirectSupportClientGameTest implements FabricClie
     }
 
     private static Block terrainBlock(String path) {
-        Identifier id = Identifier.of(TerrainSlabsCompat.MOD_ID, path);
+        Identifier id = Identifier.of(loadedTerrainSlabsNamespace(), path);
         for (Identifier candidate : Registries.BLOCK.getIds()) {
             if (candidate.equals(id)) {
                 return Registries.BLOCK.get(id);

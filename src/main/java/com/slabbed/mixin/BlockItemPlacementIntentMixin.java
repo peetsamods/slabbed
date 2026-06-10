@@ -4,6 +4,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
 import com.slabbed.util.SlabbedDebugBridge;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
@@ -217,7 +218,8 @@ public abstract class BlockItemPlacementIntentMixin {
             )
     )
     private ItemUsageContext slabbed$remapLoweredFullBlockSideHit(ItemUsageContext context) {
-        boolean itemIsSlab = ((BlockItem) (Object) this).getBlock() instanceof SlabBlock;
+        Block block = ((BlockItem) (Object) this).getBlock();
+        boolean itemIsSlab = block instanceof SlabBlock;
         if (!itemIsSlab) {
             slabbed$recordRemapAttempt(
                     context,
@@ -371,6 +373,7 @@ public abstract class BlockItemPlacementIntentMixin {
         // - full block target: keep legacy geometric intent for 0.5S vs 1S law.
         SlabType expectedType;
         double remappedY;
+        BlockPos fullBlockSideCell = targetPos;
         if (targetState.getBlock() instanceof SlabBlock) {
             if (originalSide == Direction.UP
                     && targetState.get(SlabBlock.TYPE) == SlabType.TOP) {
@@ -387,8 +390,31 @@ public abstract class BlockItemPlacementIntentMixin {
             boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
                     <= LOWERED_VISUAL_BOUNDARY_EPSILON;
             boolean upperHalfIntent = originalHitPos.y >= targetPos.getY() && !exactLoweredVisualBoundary;
-            expectedType = upperHalfIntent ? SlabType.TOP : SlabType.BOTTOM;
-            remappedY = slabbed$placementYForType(targetPos, expectedType);
+            if (inferredUpFaceLoweredSide) {
+                // Up-face-edge inferred side keeps its existing "cap on top" semantics (paired with
+                // the originalSide==UP remap below). Unchanged.
+                expectedType = upperHalfIntent ? SlabType.TOP : SlabType.BOTTOM;
+                remappedY = slabbed$placementYForType(targetPos, expectedType);
+            } else {
+                // True horizontal side on a -0.5 lowered full block: ask the render authority whether
+                // the placed slab will itself inherit lowering, then pick the cell/type that fills the
+                // clicked visual half after that dy is applied.
+                BlockPos sideNeighbor = targetPos.offset(effectiveSide);
+                double predictedSlabDy = SlabSupport.getYOffset(
+                        context.getWorld(), sideNeighbor, block.getDefaultState());
+                boolean slabInheritsLowering = predictedSlabDy < -1.0e-6;
+                if (slabInheritsLowering) {
+                    expectedType = upperHalfIntent ? SlabType.TOP : SlabType.BOTTOM;
+                    remappedY = slabbed$placementYForType(targetPos, expectedType);
+                } else if (upperHalfIntent) {
+                    expectedType = SlabType.BOTTOM;
+                    remappedY = slabbed$placementYForType(targetPos, SlabType.BOTTOM);
+                } else {
+                    expectedType = SlabType.TOP;
+                    fullBlockSideCell = targetPos.down();
+                    remappedY = slabbed$placementYForType(fullBlockSideCell, SlabType.TOP);
+                }
+            }
         }
         if (originalSide == Direction.UP && expectedType == SlabType.BOTTOM) {
             remappedY = targetPos.getY() + 0.501d;
@@ -411,7 +437,7 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockHitResult remappedHit = new BlockHitResult(
                 remappedHitPos,
                 effectiveSide,
-                targetPos,
+                fullBlockSideCell,
                 context.hitsInsideBlock(),
                 false
         );
