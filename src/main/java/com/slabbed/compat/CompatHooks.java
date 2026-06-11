@@ -20,7 +20,7 @@ public final class CompatHooks {
      * Returns true if compat requires skipping slab offset behavior for this state.
      */
     public static boolean shouldSkipOffset(BlockState state) {
-        if (isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+        if (isModLoaded(TerrainSlabsCompat.MOD_ID) || isModLoaded(TerrainSlabsCompat.LEGACY_MOD_ID)) {
             return TerrainSlabsCompat.shouldSkipOffset(state);
         }
         return false;
@@ -31,7 +31,7 @@ public final class CompatHooks {
      * support-source semantics.
      */
     public static boolean shouldSkipSlabSupport(BlockState state) {
-        if (isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+        if (isModLoaded(TerrainSlabsCompat.MOD_ID) || isModLoaded(TerrainSlabsCompat.LEGACY_MOD_ID)) {
             return TerrainSlabsCompat.shouldSkipSlabSupport(state);
         }
         return false;
@@ -41,7 +41,7 @@ public final class CompatHooks {
      * Named compat-only slab surface role for direct object support decisions.
      */
     public static CompatSlabSurfaceKind customSlabSurfaceKind(BlockState state) {
-        if (isModLoaded(TerrainSlabsCompat.MOD_ID)) {
+        if (isModLoaded(TerrainSlabsCompat.MOD_ID) || isModLoaded(TerrainSlabsCompat.LEGACY_MOD_ID)) {
             return TerrainSlabsCompat.customSlabSurfaceKind(state);
         }
         return CompatSlabSurfaceKind.NONE;

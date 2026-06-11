@@ -378,7 +378,7 @@ public final class OffsetRaycastTargetingTest {
     //     loaded (it is, via run/mods + modLocalRuntime).
     // ──────────────────────────────────────────────────────────────────────────
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void grassBlockLowersOnTerrainSlabsSurface(TestContext ctx) {
+    public void terrainCubeStaysFlushOnTerrainSlabsSurface(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
 
@@ -396,19 +396,24 @@ public final class OffsetRaycastTargetingTest {
                 CompatHooks.customSlabSurfaceKind(world.getBlockState(slab)) == CompatSlabSurfaceKind.BOTTOM_LIKE,
                 "fixture: TS grass slab should classify BOTTOM_LIKE");
 
-        // A stripped log (already worked) and a grass block (the bug) — both must lower.
+        // A stripped log is a CURATED slab-sit object (in the isSlabSitCandidate allow-list) and
+        // still lowers onto a TS surface. A plain GRASS block is generic natural terrain and must
+        // STAY FLUSH: lowering an opaque full terrain cube -0.5 onto a Terrain Slabs surface tears
+        // see-through world holes (the chunk mesher culls at the un-shifted voxel, and the only
+        // cull-redraw hook is renderer-specific / Indigo-only). This was the "DODO" world-hole bug.
         BlockPos log = slab.up();
         world.setBlockState(log, Blocks.STRIPPED_SPRUCE_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
         double logDy = SlabSupport.getYOffset(world, log, world.getBlockState(log));
-        ctx.assertTrue(logDy == -0.5, "control: stripped log on TS surface should lower -0.5, got " + logDy);
+        ctx.assertTrue(logDy == -0.5, "control: stripped log (curated object) on TS surface should lower -0.5, got " + logDy);
 
         BlockPos grassSlab2 = origin.add(5, 2, 3);
         world.setBlockState(grassSlab2, slabState, Block.NOTIFY_LISTENERS);
         BlockPos grass = grassSlab2.up();
         world.setBlockState(grass, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
         double grassDy = SlabSupport.getYOffset(world, grass, world.getBlockState(grass));
-        ctx.assertTrue(grassDy == -0.5,
-                "grass block on Terrain Slabs surface should lower -0.5 (was the bug), got " + grassDy);
+        ctx.assertTrue(grassDy == 0.0,
+                "grass block (generic terrain) on a Terrain Slabs surface must stay FLUSH (0.0) — "
+                        + "lowering opaque terrain cubes tears world holes; got " + grassDy);
         ctx.complete();
     }
 

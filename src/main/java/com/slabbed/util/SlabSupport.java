@@ -921,6 +921,12 @@ public final class SlabSupport {
         // Only explicit ceiling-mounted cases may float into the slab space.
         // Note: isSolidBlock is safe here because getYOffset has a recursion guard.
         Block blk = state.getBlock();
+        // Opaque full cubes always stay flush here. state.isSolidBlock(world,pos) is VIEW-DEPENDENT
+        // (it does region-clamped getOutlineShape reads) and returns FALSE for a solid cube under
+        // ChunkRendererRegion on the render thread, letting natural terrain fall through to the
+        // "non-solid object follows a lowered support down" branch below -> -0.5 model shift while
+        // face-culling stays at the grid voxel -> see-through world holes. isOpaqueFullCube() is a
+        // precomputed, view-independent flag, so it pins terrain flush on every thread.
         if (blk instanceof SlabBlock
                 || blk instanceof StairsBlock
                 || blk instanceof FenceBlock
@@ -929,6 +935,7 @@ public final class SlabSupport {
                 || isThinTopLayer(state)
                 || state.isAir()
                 || !state.getFluidState().isEmpty()
+                || state.isOpaqueFullCube()
                 || state.isSolidBlock(world, pos)) {
             return 0.0;
         }
@@ -1213,13 +1220,30 @@ public final class SlabSupport {
         if (isLogFamilySlabSitCandidate(state)) {
             return true;
         }
-        // Ordinary solid full blocks (grass, stone, dirt, …) also sit on and lower onto a
-        // custom Terrain Slabs surface, matching how they already lower onto a vanilla
-        // bottom slab via hasSlabInColumn. Previously only non-solid blocks qualified here,
-        // so a stripped log lowered but a grass block did not — an inconsistency the player
-        // reported. The exclusions in isDirectCustomSlabSupportSubject (air, non-vanilla
-        // slabs, thin layers, fluids, Terrain Slabs' own blocks) already keep this tight.
-        return true;
+        // Plain solid world cubes (stone, dirt, grass, sand, ore, …) are NOT slab-sit
+        // objects: lowering an opaque full cube -0.5 while the chunk mesher still culls at
+        // its grid-height voxel tears see-through holes across natural Terrain Slabs terrain
+        // (the released-hotfix world-hole bug). They must stay at grid height — only the
+        // curated object cubes / non-solid objects handled above lower onto a TS surface.
+        //
+        // The terrain test MUST be world-view-independent. The render mesher runs this on a
+        // ChunkRendererRegion, where state.isSolidBlock(world,pos) diverges from ClientWorld:
+        // isSolidBlock -> solidBlockPredicate -> isFullCube -> isShapeFullCube ->
+        // getCollisionShape -> getOutlineShape (which SlabSupportStateMixin offsets) resolves
+        // against the region-clamped view and can come back NOT-full-cube for a plain stone
+        // cube, making !isSolidBlock TRUE on the render thread only -> terrain lowers on the
+        // worker mesh while main-thread culling stays put -> world holes (the empirically
+        // traced render-thread divergence). state.isOpaqueFullCube() reads a precomputed
+        // boolean field baked at blockstate construction (AbstractBlockState.opaqueFullCube),
+        // so it returns the SAME answer under ChunkRendererRegion and ClientWorld. Use it to
+        // pin natural terrain flush regardless of which world view asks. Non-opaque / non-cube
+        // objects (fences, panes, torches, lanterns, slabs-on-objects, …) are not opaque full
+        // cubes, so they still fall through to the !isSolidBlock candidate test and keep
+        // lowering exactly as before.
+        if (state.isOpaqueFullCube()) {
+            return false;
+        }
+        return !state.isSolidBlock(world, pos);
     }
 
     private static boolean isLogFamilySlabSitCandidate(BlockState state) {
@@ -1360,6 +1384,14 @@ public final class SlabSupport {
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return false;
             }
+            // Natural-terrain stop: a SOLID full cube below means this block rests on solid
+            // ground, NOT on a slab — so do not walk through it to a slab deeper in the column.
+            // Walking through solid terrain lowered natural Stone/Dirt that merely had a Terrain
+            // Slabs surface 1-16 blocks beneath it, tearing see-through world holes. A genuine
+            // placed tower chains via its per-block anchor (checked above), not this raw walk.
+            if (cur.isOpaqueFullCube()) {
+                return false;
+            }
             cursor = cursor.down();
         }
         return false;
@@ -1381,6 +1413,11 @@ public final class SlabSupport {
                 return -0.5;
             }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
+                return 0.0;
+            }
+            // Natural-terrain stop (see hasSlabInColumn): never walk through a solid full cube to
+            // a slab deeper in the column — that lowered natural terrain over Terrain Slabs -> holes.
+            if (cur.isOpaqueFullCube()) {
                 return 0.0;
             }
             cursor = cursor.down();
