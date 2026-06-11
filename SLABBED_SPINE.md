@@ -10,6 +10,19 @@
 
 ---
 
+## 2026-06-10 — Terrain Slabs world-hole "DODO" fixed (CompatHooks dual-mod-id)
+
+- **Branch:** `release/mc1.21.11-0.4.0-beta.3` (off the released hotfix `eab0d786`) · **HEAD:** `42002295` · **MC:** 1.21.11 · pushed to `peetsamods/slabbed`.
+- **Symptom:** see-through world holes ("DODOs") scattered across natural Stone/Dirt terrain whenever Terrain Slabs is loaded — present in the **shipped `0.4.0-beta.3` jar**. `/slabdy` over a holey block confusingly read `dy=0.000` (main thread) while the render worker shifted it `-0.5`.
+- **ROOT CAUSE (one line):** `CompatHooks` gated every TS-compat hook on `isModLoaded(TerrainSlabsCompat.MOD_ID)` — the **modern id `terrain_slabs` ONLY**, never `LEGACY_MOD_ID "terrainslabs"`. So TS slab blocks (`terrainslabs:gravel_slab`, `terrain_stone_slab`, …) were NOT recognised → treated as vanilla bottom slabs → the slab-column walk lowered the natural terrain sitting above them `-0.5` → the chunk mesher culls at the un-shifted voxel → holes.
+- **Why it hid:** the dev test env loaded the **legacy** TS id while the real release loads the **modern** id — so the compat gate failed in one and "worked" in the other, masking the bug from BOTH automated tests and dev play. (See the false-green tests below.)
+- **Fixes (`42002295`):** (1) `CompatHooks` gates on `MOD_ID || LEGACY_MOD_ID`. (2) `hasSlabInColumn`/`slabColumnYOffset` STOP at a solid full cube (never tunnel through solid terrain to a deep slab; placed towers still chain via per-block anchors). (3) `getYOffsetInner` ceiling guard pins opaque cubes flush via view-independent `isOpaqueFullCube()` (not region-clamped `isSolidBlock(world,pos)`). (4) `isSlabSitCandidate` excludes generic opaque cubes from the TS direct-support path.
+- **Net behaviour:** generic natural terrain (stone/dirt/grass) STAYS FLUSH on Terrain Slabs; curated objects + non-cube things still lower to form combined slabs. The proven principle (Notion BB#41/#48, compat-line `cb0a950c`/`1769e02f`): **lower objects, NOT terrain — never lower an opaque full cube onto a TS surface** (the only cull-redraw is renderer-specific/Indigo-only and is dead under the release's Sodium).
+- **Proof:** 58/58 gametests green (two false-green tests that asserted "grass/stone must lower -0.5 onto TS" were corrected to assert flush). LIVE-CONFIRMED by Julia: DODOs gone across the TS stone hillside.
+- **LESSONS (so this never happens again):** ① any new mod-id MUST be added to **both** the loaded-check AND every namespace gate — prefer one `isLoaded()`/`isTerrainSlabsNamespace()` helper over scattered `isModLoaded(MOD_ID)` calls. ② Dev runtime MUST load the **same Terrain Slabs build/mod-id as the shipped release** (or test both ids) or compat bugs hide. ③ Never lower an **opaque full cube** onto a Terrain Slabs surface — it tears holes. ④ A `dy` that differs between `ClientWorld` and `ChunkRendererRegion` = use a view-independent test (`isOpaqueFullCube()`), never `isSolidBlock(world,pos)`. ⑤ A test that asserts the *hole-causing* behaviour is a **false green** — when behaviour is corrected, fix the assertion, don't trust the green.
+
+---
+
 ## 2026-06-09 — `0.3.0-beta.2` released: Terrain Slabs mod-id hotfix
 
 - **Branch:** `hotfix/0.3.0-beta.2-terrain-slabs-modid` · **HEAD:** `00b6a7c4` · **MC:** 1.21.11

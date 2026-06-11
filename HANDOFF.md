@@ -5,18 +5,33 @@
 
 ## Branch
 
-- **Branch:** `hotfix/0.3.0-beta.2-terrain-slabs-modid`
+- **Branch:** `release/mc1.21.11-0.4.0-beta.3` (off the released hotfix `eab0d786`) · pushed to `peetsamods/slabbed`
 - **Checkout:** `/Users/joolmac/CascadeProjects/Slabbed`
-- **HEAD:** `622bac6a` (run `git rev-parse --short HEAD` to confirm)
-- **Minecraft:** 1.21.11 · **Loader:** Fabric · **Java:** 21 (Gradle toolchain 25)
-- **Latest release tag below HEAD:** `slabbed-0.3.0-beta.2` at `00b6a7c4`
+- **HEAD:** `42002295` (run `git rev-parse --short HEAD` to confirm)
+- **Minecraft:** 1.21.11 · **Loader:** Fabric (dev loader bumped to 0.19.2 for TS 3.x) · **Java:** 21
+- **Prior release tag:** `slabbed-0.4.0-beta.3` at `eab0d786`
 
-## Status: RELEASED `0.3.0-beta.2` + one clean post-tag metadata/docs commit
+## Status: WORLD-HOLE "DODO" FIXED — re-cut of 0.4.0-beta.3 pending
 
-`slabbed-0.3.0-beta.2` is the proof-confirmed release point for the Terrain Slabs mod-id hotfix:
-the optional compat layer now detects both modern `terrain_slabs` and legacy `terrainslabs`.
-The current HEAD `622bac6a` is a narrow follow-up that removes the stale Indium recommendation
-from `fabric.mod.json` and updates the renderer comment; no new gameplay behavior was changed here.
+The released `0.4.0-beta.3` jar (`eab0d786`) shipped a **world-hole bug**: with Terrain Slabs
+loaded, natural Stone/Dirt above TS slab surfaces was lowered −0.5 and tore see-through holes.
+**Root cause:** `CompatHooks` only recognised the modern `terrain_slabs` mod-id, not legacy
+`terrainslabs`, so TS slabs were treated as vanilla bottom slabs and the column walk lowered the
+terrain. **Fixed at HEAD `42002295`** (dual-mod-id + column-walk solid-terrain stop +
+view-independent opaque-cube flush). 58/58 gametests green; LIVE-CONFIRMED by Julia (DODOs gone).
+See `SLABBED_SPINE.md` 2026-06-10 entry for the full root-cause + lessons.
+
+> ⚠️ The Modrinth/CurseForge `slabbed-0.4.0-beta.3.jar` still has this bug — it should be
+> re-cut from this branch (rebuild + re-upload) before being relied on.
+
+### Open / next
+
+- Re-cut + re-upload `0.4.0-beta.3` (or bump to beta.4) from `42002295`.
+- Decorative-hanger "smoosh" + merging step-cull were noted during testing but parked while the
+  world-hole DODO took priority — revisit if still visible after the hole fix.
+- Curated **opaque-cube** objects in the `isSlabSitCandidate` allow-list (logs, bookshelf,
+  crafting table, dried kelp) still lower onto TS and could DODO; decide whether to exclude them
+  too (full "no opaque cube on TS" rule) — generic terrain is already excluded.
 
 ### Done
 
