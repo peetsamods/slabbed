@@ -11,7 +11,7 @@
 - **Minecraft:** 1.21.11 · **Loader:** Fabric (dev loader bumped to 0.19.2 for TS 3.x) · **Java:** 21
 - **Prior release tag:** `slabbed-0.4.0-beta.3` at `eab0d786`
 
-## Status: WORLD-HOLE "DODO" FIXED — re-cut of 0.4.0-beta.3 pending
+## Status: WORLD-HOLE "DODO" FIXED — holed beta.3 pulled; next release cuts from this branch
 
 The released `0.4.0-beta.3` jar (`eab0d786`) shipped a **world-hole bug**: with Terrain Slabs
 loaded, natural Stone/Dirt above TS slab surfaces was lowered −0.5 and tore see-through holes.
@@ -21,8 +21,9 @@ terrain. **Fixed at HEAD `42002295`** (dual-mod-id + column-walk solid-terrain s
 view-independent opaque-cube flush). 58/58 gametests green; LIVE-CONFIRMED by Julia (DODOs gone).
 See `SLABBED_SPINE.md` 2026-06-10 entry for the full root-cause + lessons.
 
-> ⚠️ The Modrinth/CurseForge `slabbed-0.4.0-beta.3.jar` still has this bug — it should be
-> re-cut from this branch (rebuild + re-upload) before being relied on.
+> ✅ The holed `0.4.0-beta.3` was **pulled from Modrinth/CurseForge** as soon as the bug was
+> found — it is **not live**. The latest published 1.21.11 jar is now **`0.3.0`**. The next
+> 1.21.11 release must be cut from this branch's HEAD (`42002295`), not from `eab0d786`.
 
 ### Open / next
 
