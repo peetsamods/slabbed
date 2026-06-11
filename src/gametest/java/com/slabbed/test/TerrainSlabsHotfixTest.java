@@ -56,17 +56,23 @@ public final class TerrainSlabsHotfixTest {
         ctx.complete();
     }
 
-    // Lowering: a full block on a modern terrain_slabs BOTTOM_LIKE surface lowers -0.5.
+    // Terrain stays flush: a generic opaque full terrain cube (stone/dirt/grass) on a modern
+    // terrain_slabs BOTTOM_LIKE surface must NOT be lowered. Lowering an opaque full cube -0.5
+    // onto a Terrain Slabs surface tears see-through world holes (the chunk mesher culls at the
+    // un-shifted voxel; the only cull-redraw hook is renderer-specific/Indigo-only). This is the
+    // "DODO" world-hole bug — its root cause was CompatHooks ignoring the legacy `terrainslabs`
+    // mod-id, so TS slabs were treated as vanilla bottom slabs and the column walk lowered terrain.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void fullBlockOnModernTerrainSlabLowers(TestContext ctx) {
+    public void terrainCubeStaysFlushOnModernTerrainSlab(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
         w.setBlockState(base, tsBottomSlab(), Block.NOTIFY_LISTENERS);
         BlockPos objPos = base.up();
         w.setBlockState(objPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
         double dy = SlabSupport.getYOffset(w, objPos, w.getBlockState(objPos));
-        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
-                "stone on a modern terrain_slabs BOTTOM_LIKE slab must lower -0.5 (got " + dy + ")");
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "stone (generic terrain) on a modern terrain_slabs slab must stay FLUSH (0.0) — "
+                        + "lowering opaque terrain cubes tears world holes; got " + dy);
         ctx.complete();
     }
 
