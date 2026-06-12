@@ -19,6 +19,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
 
 /**
@@ -622,6 +623,82 @@ public final class SlabbedLabFixtureTest {
         double dy = SlabSupport.getYOffset(world, blockPos, placed);
         ctx.assertTrue(dy == -0.5,
                 "control: unfrozen stone over a bottom slab should lower to -0.5; got dy=" + dy);
+
+        ctx.complete();
+    }
+
+    /**
+     * Truth table for {@link SlabSupport#isSlabHeightStepFace} — the renderer-agnostic predicate
+     * a future cull mixin will use to force-draw the see-through "ghost window" seam (see
+     * docs/CULL-WINDOW-FIX-DESIGN.md). Pure logic; no render wiring calls it yet.
+     *
+     * <ul>
+     *   <li>lowered (stone-on-slab, dy=-0.5) | flat (stone-on-stone, dy=0), horizontal seam → TRUE (both directions)</li>
+     *   <li>both lowered → FALSE (no step)</li>
+     *   <li>both flat → FALSE (no step)</li>
+     *   <li>vertical face (DOWN onto the slab) → FALSE (horizontal-only by design)</li>
+     *   <li>air neighbour → FALSE</li>
+     * </ul>
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void slabHeightStepFacePredicate(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = fixtureTestOrigin(ctx);
+
+        // Row A (z+0): lowered stone-on-slab (EAST is the flat neighbour).
+        BlockPos aLow = origin.add(0, 1, 0);
+        world.setBlockState(origin.add(0, 0, 0), slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(aLow, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos aFlat = origin.add(1, 1, 0);
+        world.setBlockState(origin.add(1, 0, 0), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(aFlat, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double lowDy = SlabSupport.getYOffset(world, aLow, world.getBlockState(aLow));
+        double flatDy = SlabSupport.getYOffset(world, aFlat, world.getBlockState(aFlat));
+        ctx.assertTrue(lowDy == -0.5, "row A lowered stone-on-slab should be dy=-0.5; got " + lowDy);
+        ctx.assertTrue(flatDy == 0.0, "row A flat stone-on-stone should be dy=0; got " + flatDy);
+
+        ctx.assertTrue(
+                SlabSupport.isSlabHeightStepFace(world, aLow, world.getBlockState(aLow), Direction.EAST),
+                "lowered|flat horizontal seam must be a step face (EAST from the lowered block)");
+        ctx.assertTrue(
+                SlabSupport.isSlabHeightStepFace(world, aFlat, world.getBlockState(aFlat), Direction.WEST),
+                "lowered|flat horizontal seam must be a step face (WEST from the flat block)");
+
+        // Vertical face: DOWN from the lowered stone onto its slab — different heights, but
+        // horizontal-only ⇒ FALSE.
+        ctx.assertTrue(
+                !SlabSupport.isSlabHeightStepFace(world, aLow, world.getBlockState(aLow), Direction.DOWN),
+                "vertical (DOWN) face must never be a step face (horizontal-only)");
+        // Air neighbour (SOUTH into the empty gap between rows) ⇒ FALSE.
+        ctx.assertTrue(
+                !SlabSupport.isSlabHeightStepFace(world, aLow, world.getBlockState(aLow), Direction.SOUTH),
+                "air neighbour must not be a step face");
+
+        // Row B (z+2): two adjacent lowered stones-on-slabs ⇒ no step.
+        BlockPos bLow1 = origin.add(0, 1, 2);
+        BlockPos bLow2 = origin.add(1, 1, 2);
+        world.setBlockState(origin.add(0, 0, 2), slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(bLow1, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(origin.add(1, 0, 2), slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(bLow2, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(SlabSupport.getYOffset(world, bLow1, world.getBlockState(bLow1)) == -0.5
+                        && SlabSupport.getYOffset(world, bLow2, world.getBlockState(bLow2)) == -0.5,
+                "row B both stones should be lowered -0.5");
+        ctx.assertTrue(
+                !SlabSupport.isSlabHeightStepFace(world, bLow1, world.getBlockState(bLow1), Direction.EAST),
+                "both-lowered adjacent blocks must NOT be a step face");
+
+        // Row C (z+4): two adjacent flat stones-on-stone ⇒ no step.
+        BlockPos cFlat1 = origin.add(0, 1, 4);
+        BlockPos cFlat2 = origin.add(1, 1, 4);
+        world.setBlockState(origin.add(0, 0, 4), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(cFlat1, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(origin.add(1, 0, 4), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(cFlat2, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(
+                !SlabSupport.isSlabHeightStepFace(world, cFlat1, world.getBlockState(cFlat1), Direction.EAST),
+                "both-flat adjacent blocks must NOT be a step face");
 
         ctx.complete();
     }

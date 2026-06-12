@@ -846,6 +846,9 @@ public final class SlabSupport {
     /** Recursion guard: prevents StackOverflow when isSolidBlock triggers getOutlineShape → getYOffset. */
     private static final ThreadLocal<Boolean> IN_GET_Y_OFFSET = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
+    /** Kill switch for the slab-height step-face cull relaxation ({@link #isSlabHeightStepFace}). */
+    private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
+
     /**
      * Returns true if the block state represents a ceiling-attached block —
      * one that hangs from the block above it by nature.
@@ -1047,6 +1050,45 @@ public final class SlabSupport {
         } finally {
             IN_GET_Y_OFFSET.set(Boolean.FALSE);
         }
+    }
+
+    /**
+     * Render cull-relaxation predicate: returns true when {@code direction}'s HORIZONTAL side
+     * face of the block at {@code pos} sits at a SLAB-HEIGHT STEP against its neighbour — i.e.
+     * the two blocks render at different heights ({@code |getYOffset(self) − getYOffset(neighbour)|
+     * > ε}). Vanilla / Indigo / Sodium all cull that shared side face (both are full cubes in
+     * their voxel cells), but the model offset drops one of them, exposing a strip that was never
+     * meshed → a see-through "ghost window". A client cull mixin is expected to force-draw the
+     * face when this returns true.
+     *
+     * <p><b>Contract:</b> only ever used to flip cull→draw (never draw→cull), so it cannot create
+     * new culling/z-fight artifacts: the two coplanar seam faces face opposite ways (GPU
+     * back-face-culls the far one) and the still-occluded portion hides behind the opaque
+     * neighbour body. Uses the SAME {@link #getYOffset} signal the offset model renders with
+     * (via {@code ClientDy.dyFor}), so the un-culled face matches the shifted geometry exactly.
+     *
+     * <p>Horizontal faces only (the common terrace/canopy window). Vertical steps (a frozen-flat
+     * block directly above a lowered one) are a documented follow-up; see
+     * {@code docs/CULL-WINDOW-FIX-DESIGN.md}. Disabled by {@code -Dslabbed.disableStepCull}.
+     *
+     * <p>No render wiring calls this yet — it is pure, recursion-guarded ({@link #getYOffset})
+     * logic, safe to call from the chunk-mesh BlockView context.
+     */
+    public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
+        if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null) {
+            return false;
+        }
+        if (!direction.getAxis().isHorizontal()) {
+            return false;
+        }
+        BlockPos neighborPos = pos.offset(direction);
+        BlockState neighbor = world.getBlockState(neighborPos);
+        if (neighbor.isAir()) {
+            return false;
+        }
+        double selfDy = getYOffset(world, pos, state);
+        double neighborDy = getYOffset(world, neighborPos, neighbor);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
     }
 
     /**
