@@ -1,6 +1,8 @@
 # Cull / "ghost window" fix — design & status (1.21.1)
 
-**Status: ROOT-CAUSED + predicate shipped & tested. Render-mixin wiring DEFERRED for Julia's approval** (it requires touching Sodium internals + new conditional-mixin machinery — too risky to blind-commit unsupervised). Written 2026-06-11 (overnight autonomous session). Investigation backed by a 4-agent workflow + direct jar verification.
+**Status: ROOT-CAUSED + predicate shipped & tested + RENDERER-AGNOSTIC FIX IMPLEMENTED (model-path, mirrors 1.21.11). Live visual confirmation is the one remaining step.** Written 2026-06-11 (overnight autonomous session). Investigation backed by a 4-agent workflow + direct jar verification.
+
+> **UPDATE (same session):** the per-renderer cull-mixin plan below was SUPERSEDED. After reading the 1.21.11 repo I found a renderer-agnostic fix it already ships — clear the *emitted quad's own `cullFace`* on step faces in `OffsetBlockStateModel`. Because the dy-shift already rides `RenderContext.pushTransform` and that path is honoured by Indigo **and Sodium** (blocks already render lowered under Sodium), clearing `cullFace` in the same transform un-culls the exposed strip under every renderer — **no Indigo/Sodium mixin, no conditional machinery, no Sodium-internal coupling.** Implemented on 1.21.1 in `OffsetBlockStateModel.emitBlockQuads` (clears `cullFace`, preserves `nominalFace`, gated by `slabbed$hasLoweredStepFace` so the flat neighbour's exposed face is un-culled too; only flips cull→draw). Compiles, 30/30 gametests green. The per-renderer-mixin analysis below is kept for reference / as the fallback if the model-path approach ever proves insufficient.
 
 ---
 
