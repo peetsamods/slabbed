@@ -249,6 +249,36 @@ public final class SlabAnchorAttachment {
     }
 
     /**
+     * FREEZE-ON-PLACE: locks a piece's lowered height at the moment it is placed so it
+     * NEVER autonomously moves afterwards. Julia's law — "a placed block must stay in
+     * that spot and not autonomously pop." Once a piece is recorded here, the lowered
+     * dy is read from the persistent anchor and {@code getYOffsetInner} never recomputes
+     * it, so breaking a neighbour / source can no longer un-lower it (the pop) and the
+     * value can no longer drift from the rendered mesh (the render-lag).
+     *
+     * <p>Server-side only. No-op if the piece is not lowered (so a block placed on solid
+     * ground or in mid-air stays at 0) or is already anchored by the direct-support /
+     * compound paths (so this only fills the previously-unfrozen cases: cantilevered full
+     * blocks and adjacent-side-merged slabs). The live geometric paths still compute the
+     * value used here and act as the first-frame fallback before the anchor syncs.
+     */
+    public static void freezeLoweredOnPlace(World world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClient() || pos == null || state == null
+                || state.isAir() || !state.getFluidState().isEmpty()) {
+            return;
+        }
+        if (isAnchored(world, pos)) {
+            return;
+        }
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (dy < -1.0e-6) {
+            // addAnchorUnchecked records ANCHOR_TYPE (read as -0.5) and adds the compound
+            // sidecar (-1.0) when the piece qualifies, so both lowered lanes freeze.
+            addAnchorUnchecked(world, pos);
+        }
+    }
+
+    /**
      * Records a beta4 compound full-block anchor at {@code pos}. Server-side only.
      * Idempotent; no-op if {@code pos} does not satisfy
      * {@link #qualifiesForCompoundFullBlockAnchor}.

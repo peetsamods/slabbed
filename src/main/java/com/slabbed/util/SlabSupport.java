@@ -1753,6 +1753,12 @@ public final class SlabSupport {
             if (SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
                 return -1.0;
             }
+            // FREEZE-ON-PLACE: a slab locked lowered at placement (freezeLoweredOnPlace) reads
+            // its anchor and never recomputes — so breaking an adjacent source can no longer
+            // pop it back up, and its rendered mesh never drifts from the value.
+            if (SlabAnchorAttachment.isAnchored(world, pos)) {
+                return -0.5;
+            }
             if (state.contains(SlabBlock.TYPE)
                     && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && isBottomPersistentTracePos(pos)) {
