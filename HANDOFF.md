@@ -22,10 +22,12 @@ Build the messy multi-combined structures players actually build — many slabs 
 - Aim with `/tp @s x y z yaw pitch`; read `/slabdy` overlay; place with `r`; break with left-click.
 
 ## Bugs found (running log)
-_(none confirmed yet — hunt in progress)_
+- **LOGIC SIDE (headless): NO real 1.21.1 bugs found.** 7 adversarial scenarios (compound-stack float, grounded-sink, cantilever 2-out consistency, stale-anchor-after-air, refill-same-cell corruption, geometric recompute after source break, adjacent-compound-column homogenization) all PASS on 1.21.1 @ `062f771f`. The background worktree hunt's "bugs" were against a STALE commit (`6da1643e` = a 1.21.11 line @ `0.3.0-beta.1`, NOT my branch — the linked-worktree isolation branched off the shared repo's HEAD) and do not reproduce on 1.21.1. Notable property confirmed: adjacent compound columns HOMOGENIZE to the same dy (flush, no step) — so the "cull-miss on compound step" concern is moot on 1.21.1 (the dy-difference predicate is also correct regardless).
+- **VISUAL SIDE: NOT TESTED — live-blocked** (notifications, see above). Face-cull render / render-popping / merge-render / placement-disobedience / cull-fix visual confirm remain for a live session.
 
 ## Commits this session
-_(none yet)_
+- `062f771f` docs(1.21.1): handoff savepoint (live-blocker note)
+- (next) test(1.21.1): 7 adversarial regression guards — proof of robustness
 
 ## ⚠️ LIVE-VISUAL TESTING BLOCKED THIS SESSION
 macOS is firing system notifications every ~minute; each makes `UserNotificationCenter` frontmost, which (a) pauses singleplayer MC and (b) blocks every computer-use click. Couldn't suppress it: legacy DND flag is ignored on this macOS, `request_access` needs Julia's approval (she's out), quitting WhatsApp/Messages didn't stop them, and Control-Center UI-scripting for Focus was too fragile. So **visual bug-hunting (face-culls, render popping, merge render) + the cull-fix visual confirm are DEFERRED** — they need the GUI. **Recommend:** Julia enables a Focus/Do-Not-Disturb mode (or identifies the chatty app), then the visual pass can run. Everything testable HEADLESS is being done.
