@@ -10,9 +10,12 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.SlabType;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
 
 /**
@@ -219,6 +222,43 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(outline.getBoundingBox().minY == -0.5,
                 "stone outline minY should be -0.5, got " + outline.getBoundingBox().minY);
 
+        ctx.complete();
+    }
+
+    /**
+     * BUG PROOF: the ghost-window cull predicate only covers TS-direct lowering.
+     *
+     * <p>A full block lowered by a VANILLA bottom slab (dy=-0.5) beside a flat full block is a real
+     * 0.5 horizontal height step, so its side face must be un-culled to avoid a see-through window.
+     * But {@code isSlabHeightStepFace} keys on {@code isDirectCustomSlabSupportedObject} (which only
+     * counts a Terrain Slabs BOTTOM_LIKE support), so it returns FALSE here and BOTH cull mechanisms
+     * (BlockRenderInfoCullMixin + the YOffsetEmitter model path) leave the step face culled → an
+     * unfixed vanilla-slab/compound ghost window. This test asserts the CORRECT behaviour (true);
+     * it fails on the TS-only predicate and passes once the predicate is broadened to a dy-difference
+     * (mirroring the 1.21.1 port).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void advVanillaSlabStepMustUnCull(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        // Lowered via a VANILLA bottom slab.
+        BlockPos lowered = origin.up();
+        world.setBlockState(origin, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(lowered, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        // Flat, grounded neighbour to the east.
+        world.setBlockState(origin.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(origin.east().up(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double loweredDy = SlabSupport.getYOffset(world, lowered, world.getBlockState(lowered));
+        double flatDy = SlabSupport.getYOffset(world, origin.east().up(), world.getBlockState(origin.east().up()));
+        ctx.assertTrue(loweredDy == -0.5, "setup: vanilla-slab-lowered stone should be -0.5; got " + loweredDy);
+        ctx.assertTrue(flatDy == 0.0, "setup: grounded neighbour should be flat 0; got " + flatDy);
+
+        boolean step = SlabSupport.isSlabHeightStepFace(world, lowered, world.getBlockState(lowered), Direction.EAST);
+        ctx.assertTrue(step,
+                "CULL GAP: vanilla-slab-lowered (-0.5) beside flat (0) is a real step, but the predicate returned "
+                + step + " — TS-only gate misses vanilla/compound lowering, leaving an unfixed ghost window");
         ctx.complete();
     }
 

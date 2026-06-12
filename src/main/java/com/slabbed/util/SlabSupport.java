@@ -267,15 +267,24 @@ public final class SlabSupport {
     private static final boolean HANGER_FOLLOW_DISABLED = Boolean.getBoolean("slabbed.disableHangerFollow");
 
     public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
-        if (STEP_CULL_DISABLED || world == null || pos == null || direction == null
+        if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
                 || !direction.getAxis().isHorizontal() || !state.isOpaqueFullCube()) {
             return false;
         }
         BlockPos neighborPos = pos.offset(direction);
-        boolean selfLowered = isDirectCustomSlabSupportedObject(world, pos, state);
-        boolean neighborLowered =
-                isDirectCustomSlabSupportedObject(world, neighborPos, world.getBlockState(neighborPos));
-        return selfLowered != neighborLowered;
+        BlockState neighbor = world.getBlockState(neighborPos);
+        if (neighbor.isAir()) {
+            return false;
+        }
+        // dy-DIFFERENCE, not a TS-only boolean. A height step exists whenever the two blocks render
+        // at different heights, so the cull relaxation now covers VANILLA-slab, compound (-1.0) and
+        // cantilever lowering too — not just Terrain Slabs direct support, which left vanilla/compound
+        // ghost windows unfixed (proven by advVanillaSlabStepMustUnCull). Uses the same getYOffset
+        // signal the offset model renders with (recursion-guarded via IN_GET_Y_OFFSET), so the
+        // un-culled face matches the shifted geometry. Only ever flips cull->draw. Mirrors the 1.21.1 port.
+        double selfDy = getYOffset(world, pos, state);
+        double neighborDy = getYOffset(world, neighborPos, neighbor);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
     }
 
     /**
