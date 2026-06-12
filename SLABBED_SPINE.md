@@ -65,3 +65,16 @@ repro/triage, not a Sodium/Indigo renderer mixin.
 - Do not move release tags unless explicitly running release correction.
 - Do not use dirty/archive roots unless recovery is explicitly requested.
 - Do not edit multiple layers in one slice.
+
+## 2026-06-11 (Claude, autonomous)
+
+HEAD `b231debe` == origin, tree clean (only untracked `tmp/`). The HANDOFF "uncommitted WIP"
+inventory is STALE — that WIP is all committed+pushed at `b231debe`. Build green; headless
+gametests **37/37** (`./gradlew runGameTest`, terrainslabs loaded). Added `a7c20bc7`:
+`tsCanopyRowAllLowerNoMiddlePop` — pins the canopy steady-state invariant (3- and 5-wide rows of
+objects each on their own TS bottom slab all read getYOffset=−0.5, no middle deviation). This
+proves the "middle pops up" symptom is a render-region/chunk-mesh desync, NOT a dy-logic gap.
+Decisive next step needs Julia: `/slabdy` on the popped middle — `−0.500` while popped ⇒ render
+desync; `0.000` ⇒ logic edge (`hasNonLoweredFullBlockSupportBelow`). Remaining to finish: live
+visual accept of placement-parity + MODEL_PATH step-cull, version-line decision, release re-cut —
+all human-gated. See HANDOFF.md status banner.

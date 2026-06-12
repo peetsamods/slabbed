@@ -2,6 +2,40 @@
 
 > Companion to `SLABBED_SPINE.md`. Update this after each session.
 
+---
+
+## ⚠️ STATUS UPDATE — 2026-06-11 (Claude, autonomous; supersedes the stale inventory below)
+
+**The "uncommitted WIP" inventory below is STALE — it was all committed + pushed.** HEAD is
+now **`b231debe` "finish 1.21.11 parity and model cull WIP"** (== `origin`, tree clean except
+untracked `tmp/` evidence). That commit swept the exact WIP this doc lists — compound mixed-slab
+lowering (−1.0), BUG1, decorative hanger follow-down, lowered-cube cull window fix, stepped
+fence/pane, `/slabdy` overlay, **MODEL_PATH step-cull** (`OffsetBlockStateModel`/`YOffsetEmitter`),
+dual mod-id refactor, placement-parity/side-lane + render-region crash guard — into git (the docs
+were committed inside the same commit, so they describe the pre-commit state). Build is GREEN and
+**headless gametests are GREEN at HEAD (`./gradlew runGameTest` → re-confirmed, now 37/37** after
+the canopy invariant test added this session, `a7c20bc7`).
+
+**What actually remains (all human-gated or render-internal):**
+- **Live visual confirmation** of two open lanes: placement parity (TS slab + lowered full block +
+  vanilla side slab → `dy=-0.500` flush; VB+VS vs VS+VB isolation) and the MODEL_PATH step-cull
+  (step face visible, flat face not overdrawn). Code committed; acceptance is Julia's, via client.
+- **"Middle pops up"**: pinned as a render-region/chunk-mesh desync (NOT a logic gap) — see the new
+  `tsCanopyRowAllLowerNoMiddlePop` test + the discriminator below. Decisive next step (no code
+  change): run `/slabdy` on the popped middle block. `dy=-0.500` while popped ⇒ render desync (a
+  re-mesh — break+replace a neighbour / F3+A / walk away+back — snaps it down); `dy=0.000` ⇒ a real
+  logic edge (inspect the support directly below: a TS slab classifying NONE, or a non-lowered full
+  cube via `hasNonLoweredFullBlockSupportBelow`, SlabSupport.java ~681).
+- **Version-line decision**: this repo is `0.2.0-beta.4.1`; the release holder `~/CascadeProjects/Slabbed`
+  is `0.4.0-beta.3`. Pick the canonical next 1.21.11 version + which branch is the release source.
+- **Release re-cut**: the shipped `0.4.0-beta.3` jar (world-hole DODO) was PULLED; published 1.21.11
+  is only `0.3.0`; fix is at `42002295` in the release holder. Pure release mechanics — human only.
+
+**Do NOT, unsupervised:** touch render internals for the middle-pop without Julia's `/slabdy`
+reading; reopen the deferred shadow lane; move release tags; bump the version.
+
+---
+
 ## Repo / branch / HEAD
 
 - Root: `~/CascadeProjects/Slabbed-countered-compat-latest`
