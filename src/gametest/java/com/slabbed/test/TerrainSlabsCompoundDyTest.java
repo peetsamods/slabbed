@@ -102,6 +102,39 @@ public final class TerrainSlabsCompoundDyTest {
         ctx.complete();
     }
 
+    // "Middle pops up" steady-state invariant. A row of full blocks, each resting on its OWN
+    // Terrain Slabs bottom slab (the canopy lane = isDirectCustomSlabSupportedObject, a purely
+    // vertical column walk), must ALL read getYOffset=-0.5 with NO middle-only deviation. The
+    // lane never reads horizontal neighbours, so on a fully-built server world a middle-only
+    // dy=0 is impossible from the logic — proving the in-game "middle pops up" symptom is a
+    // render-region/chunk-mesh desync (the model dy is computed from a ChunkRendererRegion that
+    // momentarily reads the support-below as air), not a dy-logic gap. Guards regression for the
+    // canopy lane at 3-wide and 5-wide.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void tsCanopyRowAllLowerNoMiddlePop(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN).add(1, 2, 1);
+        int[] widths = {3, 5};
+        for (int row = 0; row < widths.length; row++) {
+            int width = widths[row];
+            int z = row * 3; // separate the two rows in Z so they never interact
+            for (int i = 0; i < width; i++) {
+                BlockPos slab = origin.add(i, 0, z);
+                w.setBlockState(slab, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+                w.setBlockState(slab.up(), Blocks.OAK_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+            }
+            for (int i = 0; i < width; i++) {
+                BlockPos obj = origin.add(i, 1, z);
+                double dy = SlabSupport.getYOffset(w, obj, w.getBlockState(obj));
+                ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                        "canopy width=" + width + " index " + i + " (oak log on its own TS bottom slab) "
+                        + "must read -0.5 like every sibling; got " + dy
+                        + " — a middle-only deviation here would be a REAL steady-state logic bug");
+            }
+        }
+        ctx.complete();
+    }
+
     // A vanilla slab placed beside a full block lowered by a Terrain Slabs surface inherits
     // that side-lane lowering; otherwise TS+block+VS leaves the vanilla slab floating at grid height.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
