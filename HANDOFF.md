@@ -4,6 +4,12 @@
 
 ---
 
+## 🐛 BUG FOUND + FIXED — 2026-06-12 (Claude, autonomous adversarial pass)
+
+**Ghost-window cull fix was Terrain-Slabs-ONLY — vanilla-slab / compound / cantilever steps were left unfixed (real see-through windows).** `SlabSupport.isSlabHeightStepFace` keyed on `isDirectCustomSlabSupportedObject` (which only counts a TS BOTTOM_LIKE support), so a full block lowered by a *vanilla* bottom slab (dy=-0.5) beside a flat block returned `false` → BOTH cull paths (`BlockRenderInfoCullMixin` + the `YOffsetEmitter` model path, which share this predicate) left the step face culled. **Fixed** by switching the predicate to a dy-difference `|getYOffset(self) − getYOffset(neighbour)| > ε` (covers vanilla + compound + cantilever, mirrors the 1.21.1 port; uses the same getYOffset signal the model renders with; only ever flips cull→draw; kill switch `-Dslabbed.disableStepCull`). Proven by a new failing→passing gametest `advVanillaSlabStepMustUnCull` in `SlabbedLabFixtureTest`. **38/38 headless green.** ⚠️ RENDER change — VISUAL confirm pending (do an A/B with the kill switch in the live client; a lowered cube on a *vanilla* slab beside a flat cube should have no see-through seam). Local commit only.
+
+---
+
 ## ⚠️ STATUS UPDATE — 2026-06-11 (Claude, autonomous; supersedes the stale inventory below)
 
 **The "uncommitted WIP" inventory below is STALE — it was all committed + pushed.** HEAD is
