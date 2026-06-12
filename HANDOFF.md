@@ -27,7 +27,13 @@ Build the messy multi-combined structures players actually build — many slabs 
 
 ## Commits this session
 - `062f771f` docs(1.21.1): handoff savepoint (live-blocker note)
-- (next) test(1.21.1): 7 adversarial regression guards — proof of robustness
+- `b26c1007` test(1.21.1): 7 adversarial regression guards (37/37) — 1.21.1 dy/cull/freeze/merge logic robust, no real bugs
+
+## Session conclusion (1.21.1)
+- **Logic side: HARDENED + robust.** Hunted hard (7 adversarial scenarios); 1.21.1 held on all. No real logic bugs.
+- **Visual side: NOT done — live-blocked** (recurring macOS notifications stole focus all session). The cull-fix visual confirm + render-cull/pop/merge + placement-disobedience hunt need a live session (enable a Focus/DND mode first).
+- MC stopped; keybind reverted to `mouse.right`; hunt worktrees pruned.
+- Then moved to 1.21.11 (separate repo `Slabbed-countered-compat-latest`): found+fixed the vanilla/compound ghost-window cull gap (`3a3f57e7`); found+deferred the vanilla vertical-compound FLOAT (`13e42ae3`, characterized). See that repo's HANDOFF.
 
 ## ⚠️ LIVE-VISUAL TESTING BLOCKED THIS SESSION
 macOS is firing system notifications every ~minute; each makes `UserNotificationCenter` frontmost, which (a) pauses singleplayer MC and (b) blocks every computer-use click. Couldn't suppress it: legacy DND flag is ignored on this macOS, `request_access` needs Julia's approval (she's out), quitting WhatsApp/Messages didn't stop them, and Control-Center UI-scripting for Focus was too fragile. So **visual bug-hunting (face-culls, render popping, merge render) + the cull-fix visual confirm are DEFERRED** — they need the GUI. **Recommend:** Julia enables a Focus/Do-Not-Disturb mode (or identifies the chatty app), then the visual pass can run. Everything testable HEADLESS is being done.
