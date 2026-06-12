@@ -1759,6 +1759,11 @@ public final class SlabSupport {
             if (SlabAnchorAttachment.isAnchored(world, pos)) {
                 return -0.5;
             }
+            // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
+            // placed beside/under it later can no longer make it inherit a lowered position.
+            if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+                return 0.0;
+            }
             if (state.contains(SlabBlock.TYPE)
                     && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && isBottomPersistentTracePos(pos)) {
@@ -1871,6 +1876,15 @@ public final class SlabSupport {
                         side, pos.toShortString(), state);
             }
             return -0.5;
+        }
+
+        // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a
+        // slab or lowered carrier added under/beside it later can no longer pull it down
+        // (Julia's law: a placed block must not autonomously move). Read before any of the
+        // geometric lowering below. Decorative followers are never frozen-flat, so they keep
+        // tracking their supports.
+        if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+            return 0.0;
         }
 
         // Cantilevered full block (air below, connected to a lowered tower): lower -0.5 to
