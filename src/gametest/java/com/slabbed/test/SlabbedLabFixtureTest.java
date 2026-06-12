@@ -703,6 +703,194 @@ public final class SlabbedLabFixtureTest {
         ctx.complete();
     }
 
+    // ===== Adversarial bug-hunt (ported scenarios, run against the real 1.21.1 branch) =====
+    // We are hunting BUGS: each asserts the geometrically-correct (flush, no float/sink) dy.
+    // A failure = a real visual defect (gap / sink / inconsistency), not a style choice.
+
+    /**
+     * Compound vertical stack: bottom slab / stone / bottom slab / stone. Each layer rests on the
+     * rendered top of the one below, so the top stone must compound to dy=-1.0 to sit FLUSH on the
+     * lowered L2 slab. If it reads -0.5 it FLOATS 0.5 above the slab (a visible gap).
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void advCompoundStackTopMustBeFlush(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = fixtureTestOrigin(ctx);
+        world.setBlockState(base, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);          // L0 slab (air below → dy 0)
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS); // L1 stone on slab → -0.5
+        world.setBlockState(base.up(2), slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);    // L2 slab on lowered stone → -0.5
+        world.setBlockState(base.up(3), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS); // L3 stone on lowered slab → -1.0
+
+        double l1 = SlabSupport.getYOffset(world, base.up(1), world.getBlockState(base.up(1)));
+        double l2 = SlabSupport.getYOffset(world, base.up(2), world.getBlockState(base.up(2)));
+        double l3 = SlabSupport.getYOffset(world, base.up(3), world.getBlockState(base.up(3)));
+        ctx.assertTrue(l1 == -0.5, "L1 stone on bottom slab should be -0.5; got " + l1);
+        ctx.assertTrue(l2 == -0.5, "L2 slab on lowered stone should be -0.5; got " + l2);
+        // The smoking gun: flush needs -1.0. -0.5 ⇒ float (gap 0.5).
+        ctx.assertTrue(l3 == -1.0,
+                "FLOAT BUG: top stone on a lowered bottom slab must compound to -1.0 (flush); got "
+                + l3 + " (gap=" + ((base.up(3).getY() + l3) - (base.up(2).getY() + 0.5 + l2)) + ")");
+        ctx.complete();
+    }
+
+    /**
+     * A full block resting on SOLID GROUND beside a lowered block must NOT sink. Only cantilevered
+     * (air-below) blocks lower; a grounded neighbour must stay dy=0.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void advGroundedBesideLoweredMustNotSink(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = fixtureTestOrigin(ctx);
+        // Lowered source: slab + stone.
+        world.setBlockState(base, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        // Grounded neighbour (east): solid support + stone on top.
+        world.setBlockState(base.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.east().up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double src = SlabSupport.getYOffset(world, base.up(1), world.getBlockState(base.up(1)));
+        double grounded = SlabSupport.getYOffset(world, base.east().up(1), world.getBlockState(base.east().up(1)));
+        ctx.assertTrue(src == -0.5, "source stone on slab should be -0.5; got " + src);
+        ctx.assertTrue(grounded == 0.0,
+                "SINK BUG: stone on solid ground beside a lowered block must stay dy=0; got " + grounded);
+        ctx.complete();
+    }
+
+    /**
+     * Cantilever propagation consistency: a 2-out air-below block connected through a 1-out block to
+     * a lowered source must lower the SAME as the 1-out block (no mid-row pop). If the 2-out block
+     * reads 0 while the 1-out reads -0.5, propagation "stops at one" (inconsistent canopy).
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void advCantileverTwoOutConsistent(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = fixtureTestOrigin(ctx);
+        world.setBlockState(base, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);              // source slab
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS); // source stone -0.5
+        world.setBlockState(base.up(1).east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);      // 1-out (air below)
+        world.setBlockState(base.up(1).east(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);     // 2-out (air below)
+
+        double oneOut = SlabSupport.getYOffset(world, base.up(1).east(), world.getBlockState(base.up(1).east()));
+        double twoOut = SlabSupport.getYOffset(world, base.up(1).east(2), world.getBlockState(base.up(1).east(2)));
+        ctx.assertTrue(oneOut == twoOut,
+                "CANTILEVER INCONSISTENCY: 1-out=" + oneOut + " but 2-out=" + twoOut
+                + " — a connected cantilever row must lower uniformly (no mid-row pop)");
+        ctx.complete();
+    }
+
+    /**
+     * STALE ANCHOR: an anchor recorded by a real placement must be cleared when the block is
+     * removed (setBlockState AIR → onStateReplaced → removeAnchor). If it lingers, a DIFFERENT block
+     * later placed in that cell (with no slab support) would inherit a phantom -0.5 lowering.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void advStaleAnchorClearedAfterAirReplace(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos slabPos = fixtureTestOrigin(ctx);
+        BlockPos cell = slabPos.up(1);
+        world.setBlockState(slabPos, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        BlockState placed = authorBlock(world, cell, Blocks.STONE.getDefaultState()); // onPlaced → anchor -0.5
+        ctx.assertTrue(SlabSupport.getYOffset(world, cell, placed) == -0.5,
+                "setup: stone authored on a bottom slab should anchor -0.5");
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, cell), "setup: cell should be anchored");
+
+        world.setBlockState(cell, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);   // remove → should clear anchor
+        world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL); // remove the slab too
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, cell),
+                "STALE ANCHOR: anchor must clear when the block is removed; it lingered at " + cell.toShortString());
+
+        // A fresh block in the same cell, now with NO slab below, must read flat.
+        world.setBlockState(cell, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        double dy = SlabSupport.getYOffset(world, cell, world.getBlockState(cell));
+        ctx.assertTrue(dy == 0.0,
+                "STALE ANCHOR BUG: a new stone (no slab support) inherited a phantom lowering; dy=" + dy);
+        ctx.complete();
+    }
+
+    /**
+     * Break + re-place in the SAME cell must not accumulate stale state: after authoring a lowered
+     * stone, removing it, then authoring a stone again with the slab still present, the cell stays a
+     * single correct -0.5 anchor (not corrupted/doubled).
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void advRefillSameCellNoCorruption(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos slabPos = fixtureTestOrigin(ctx);
+        BlockPos cell = slabPos.up(1);
+        world.setBlockState(slabPos, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        authorBlock(world, cell, Blocks.STONE.getDefaultState());
+        world.setBlockState(cell, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        BlockState refilled = authorBlock(world, cell, Blocks.STONE.getDefaultState());
+        double dy = SlabSupport.getYOffset(world, cell, refilled);
+        ctx.assertTrue(dy == -0.5,
+                "refilled stone on the (still-present) slab should anchor -0.5; got " + dy);
+
+        // Now pull the slab: the anchor should hold the placed block's frozen height (no pop), but a
+        // FRESH non-placed block elsewhere must be unaffected.
+        world.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        double dyAfter = SlabSupport.getYOffset(world, cell, world.getBlockState(cell));
+        ctx.assertTrue(dyAfter == -0.5,
+                "placed block must keep its frozen -0.5 after the slab is pulled (no pop); got " + dyAfter);
+        ctx.complete();
+    }
+
+    /**
+     * Geometric recompute / no-stale: a NON-placed (setBlockState) cantilever block lowered off a
+     * source must recompute to flat when the source is removed (it was never frozen/anchored).
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void advCantileverRecomputesAfterSourceBreak(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = fixtureTestOrigin(ctx);
+        BlockPos source = base.up(1);
+        BlockPos oneOut = source.east();
+        world.setBlockState(base, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(source, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);  // geometric source -0.5
+        world.setBlockState(oneOut, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);  // cantilever (air below) -0.5
+        ctx.assertTrue(SlabSupport.getYOffset(world, oneOut, world.getBlockState(oneOut)) == -0.5,
+                "setup: 1-out cantilever should be -0.5");
+
+        world.setBlockState(source, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);     // break the source
+        double dy = SlabSupport.getYOffset(world, oneOut, world.getBlockState(oneOut));
+        ctx.assertTrue(dy == 0.0,
+                "STALE GEOMETRIC: a non-placed cantilever must recompute to 0 when its source is gone; got " + dy);
+        ctx.complete();
+    }
+
+    /**
+     * Adjacent compound columns HOMOGENIZE (the consistent merge): placing a stone-on-slab column
+     * beside a dy=-1.0 compound column makes the new column's slab side-merge so its top stone
+     * compounds to -1.0 too — both tops end FLUSH at -1.0. No stable -1.0-vs-(-0.5) step forms, so
+     * there is no compound ghost-window to miss (the predicate correctly returns FALSE: no step).
+     * This is why the 1.21.11 boolean-flag "cull miss on compound step" does not apply on 1.21.1.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void advAdjacentCompoundColumnsHomogenizeFlush(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos o = fixtureTestOrigin(ctx);
+        // Column A: slab/stone/slab/stone → top stone (A) = -1.0.
+        world.setBlockState(o, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(o.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(o.up(2), slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(o.up(3), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos aTop = o.up(3);
+        // Column B beside A's top: a slab (y2) + stone (y3). The slab side-merges with A's lowered slab.
+        world.setBlockState(aTop.down().east(), slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(aTop.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos bTop = aTop.east();
+
+        double aDy = SlabSupport.getYOffset(world, aTop, world.getBlockState(aTop));
+        double bDy = SlabSupport.getYOffset(world, bTop, world.getBlockState(bTop));
+        ctx.assertTrue(aDy == -1.0, "column A top should be compound -1.0; got " + aDy);
+        ctx.assertTrue(bDy == -1.0,
+                "MERGE BUG: a column placed beside a -1.0 compound column must homogenize to -1.0 (flush), got " + bDy);
+        // Flush tops ⇒ no step ⇒ predicate must NOT relax the cull (no phantom window).
+        ctx.assertTrue(
+                !SlabSupport.isSlabHeightStepFace(world, aTop, world.getBlockState(aTop), Direction.EAST),
+                "no step between two flush -1.0 tops; predicate must return false");
+        ctx.complete();
+    }
+
     private static BlockState slab(SlabType type) {
         return Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, type);
     }
