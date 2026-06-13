@@ -4,6 +4,47 @@
 
 ---
 
+## 🟢 PARITY PORT — 2026-06-13 (Claude, opus): bringing 1.21.11 to "law & canon" with 1.21.1
+
+**Root finding (Julia's live bug-hunt):** the 1.21.11 compat branch and the 1.21.1 release branch
+diverged at `f4480ce4`; a whole family of 1.21.1 fixes was **never ported** here, which is why
+1.21.11 still shows: invisible grass on TS, ceiling-hanger gap + pop, and placed-block down-pop.
+`git merge-base --is-ancestor` confirmed `83afed84 9a24670c 9ec27ca4 efad9e79 434e7c41` are all
+MISSING from this branch.
+
+**Ported + headless-proven this session (NOT pushed):**
+1. **`21af4243` — vanilla vertical-compound FLOAT** (also live-confirmed 2026-06-12; see below).
+2. **`2a50335e` — ceiling-hung decorations take dy from the support ABOVE only** (port of `434e7c41`).
+   Hanging roots / spore blossom / hanging signs under a flush slab no longer drop -0.5 (gap) or pop
+   on neighbour break: new `isAlwaysCeilingHungDecoration` + `ceilingHungDecorationDy` (a flush TS
+   slab is never a lowered support), early-dispatched in `getYOffsetInner`, excluded in `shouldOffset`.
+   New gametest `hangingRootsUnderFlushSlabStayFlush`. (pale-hanging-moss helper absent here → scoped
+   to roots/spore/sign.)
+3. **`8aafd1ff` — NEVER-POP freeze-on-place law** (port of `9ec27ca4` + `efad9e79`). The down-pop
+   ("placed slab under a floating log popped it down to flush") is the FROZEN_FLAT case. Added
+   `FROZEN_FLAT_TYPE` (persistent+synced), `freezeLoweredOnPlace` (lowered→anchor, flat structural→
+   FROZEN_FLAT), `isFrozenFlat`, wired into `BlockOnPlacedAnchorMixin.onPlaced`, read in
+   `getYOffsetInner` before geometric lowering, mirrored in `SlabAnchorClientSync`. Two new gametests
+   drive the REAL onPlaced path (`frozenFlatBlockStaysFlatWhenSlabAddedBelow` + unfrozen control).
+
+**Headless: 43/43** (`./gradlew runGameTest`). Jar (`slabbed-0.2.0-beta.4.1.jar`, 124510 B) staged in
+the Modrinth `Slabbed+Terrain Slabs` profile for live testing.
+
+**Needs Julia (right-click, which computer-use can't drive):**
+- Freeze-law live confirm: right-click a log on the ground, then place a bottom slab under it → the
+  log must STAY put (no down-pop). Place hanging roots under a mycelium slab → must hang flush.
+
+**Still open (deferred, distinct work):**
+- **Invisible grass on TS** — short grass is lowered -0.5 via `shouldOffset→hasSlabInColumn` and the
+  offset cross-model renders invisible. Real fix is render-path (the leaner exclude-from-lowering
+  option risks leaving grass floating 0.5 above the slab) → needs a live A/B; NOT shipped.
+- **Compound -1.0 on right-click placement** — 1.21.11's anchor reads a flat -0.5 (no compound
+  sidecar yet), so a *placed* compound stack top freezes at -0.5 not -1.0 (the `21af4243` geometric
+  fix only covers setBlockState/terrain). Pre-existing anchor limitation; port the 1.21.1
+  `isCompoundFullBlockAnchor` sidecar for full parity.
+
+---
+
 ## 🐛 BUG FOUND + FIXED — 2026-06-12 (Claude, autonomous adversarial pass)
 
 **Ghost-window cull fix was Terrain-Slabs-ONLY — vanilla-slab / compound / cantilever steps were left unfixed (real see-through windows).** `SlabSupport.isSlabHeightStepFace` keyed on `isDirectCustomSlabSupportedObject` (which only counts a TS BOTTOM_LIKE support), so a full block lowered by a *vanilla* bottom slab (dy=-0.5) beside a flat block returned `false` → BOTH cull paths (`BlockRenderInfoCullMixin` + the `YOffsetEmitter` model path, which share this predicate) left the step face culled. **Fixed** by switching the predicate to a dy-difference `|getYOffset(self) − getYOffset(neighbour)| > ε` (covers vanilla + compound + cantilever, mirrors the 1.21.1 port; uses the same getYOffset signal the model renders with; only ever flips cull→draw; kill switch `-Dslabbed.disableStepCull`). Proven by a new failing→passing gametest `advVanillaSlabStepMustUnCull` in `SlabbedLabFixtureTest`. **40/40 headless green.** ⚠️ RENDER change — VISUAL confirm pending (do an A/B with the kill switch in the live client; a lowered cube on a *vanilla* slab beside a flat cube should have no see-through seam). Local commit only.

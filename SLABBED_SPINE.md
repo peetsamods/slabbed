@@ -100,3 +100,17 @@ in the Modrinth `Slabbed+Terrain Slabs` profile (`slabbed-0.2.0-beta.4.1.jar`) �
 stone `dy=-1.000 LOWERED VANILLA`, column renders flush (no float). Live route = Modrinth-launched game
 (the Loom `runClient` dev client is a bare `java` process with no bundle id → NOT grantable to
 computer-use; the Modrinth game's window IS drivable). **Local commit only — NOT pushed.**
+
+## 2026-06-13 (Claude, opus) — PARITY PORT: law & canon from 1.21.1
+
+Julia's live bug-hunt exposed that 1.21.11 diverged from 1.21.1 at `f4480ce4` and never got a family
+of fixes (confirmed: `83afed84 9a24670c 9ec27ca4 efad9e79 434e7c41` all NOT ancestors of HEAD).
+Ported + headless-proven (43/43, NOT pushed):
+- `2a50335e` ceiling-hung decorations (roots/spore/sign) take dy from the support ABOVE only — fixes
+  the hanger gap + pop-on-break (port of `434e7c41`, adapted to the leaner 1.21.11 SlabSupport).
+- `8aafd1ff` NEVER-POP freeze-on-place law — `FROZEN_FLAT_TYPE` + `freezeLoweredOnPlace` + getYOffset
+  reads + onPlaced mixin + client sync; fixes the placed-block down-pop (port of `9ec27ca4`+`efad9e79`).
+  Two gametests drive the REAL onPlaced path.
+Jar staged in Modrinth profile. **Pending Julia (right-click): freeze-law live confirm.** Deferred:
+invisible-grass-on-TS (render-path, needs live A/B) and compound -1.0 on right-click placement (needs
+the 1.21.1 compound-anchor sidecar). Do NOT push.
