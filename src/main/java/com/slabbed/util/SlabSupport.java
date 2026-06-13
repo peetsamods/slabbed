@@ -776,6 +776,16 @@ public final class SlabSupport {
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
+            // FREEZE-ON-PLACE: a slab locked lowered at placement (freezeLoweredOnPlace) reads its
+            // anchor and never recomputes — breaking an adjacent source can no longer pop it back up.
+            if (com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+                return -0.5;
+            }
+            // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier placed
+            // beside/under it later can no longer make it inherit a lowered position (Julia's law).
+            if (com.slabbed.anchor.SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+                return 0.0;
+            }
             BlockPos belowPos = pos.down();
             BlockState below = world.getBlockState(belowPos);
             Block belowBlock = below.getBlock();
@@ -809,6 +819,15 @@ public final class SlabSupport {
                         side, pos.toShortString(), state);
             }
             return -0.5;
+        }
+
+        // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a slab or
+        // lowered carrier added under/beside it later can no longer pull it down (Julia's law: a
+        // placed block must not autonomously move). Read before any geometric lowering below.
+        // Decorative followers are never frozen-flat, so they keep tracking their supports.
+        if (!(state.getBlock() instanceof SlabBlock)
+                && com.slabbed.anchor.SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+            return 0.0;
         }
 
         // Terrain Slabs combining / mixed-slab compound: an object (or vanilla slab) resting on a

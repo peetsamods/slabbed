@@ -3,7 +3,9 @@ package com.slabbed.test;
 import com.slabbed.dev.SlabbedLabFixtures;
 import com.slabbed.dev.SlabbedLabFixtures.LaneStatus;
 import com.slabbed.dev.SlabbedLabFixtures.PlaceResult;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import net.minecraft.item.ItemStack;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -337,6 +339,77 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(roots == 0.0,
                 "GAP BUG: hanging roots under a flush slab must stay flush (0), not be dragged down by a "
                 + "carrier lower in the column; got " + roots);
+        ctx.complete();
+    }
+
+    /** Drives the REAL production placement path: setBlockState + Block.onPlaced, which the
+     *  BlockOnPlacedAnchorMixin intercepts to call SlabAnchorAttachment.freezeLoweredOnPlace. */
+    private static BlockState authorBlock(ServerWorld world, BlockPos pos, BlockState state) {
+        world.setBlockState(pos, state, Block.NOTIFY_ALL);
+        state.getBlock().onPlaced(world, pos, state, null, ItemStack.EMPTY);
+        return world.getBlockState(pos);
+    }
+
+    /**
+     * Julia's NEVER-POP law (freeze-flat): a structural block <em>placed</em> flat (dy=0) must STAY
+     * at dy=0 even after a bottom slab is later placed directly under it — no autonomous down-pop, no
+     * retroactively-inherited lowering. Exercises the REAL onPlaced path via {@link #authorBlock}.
+     * This is the exact violation reported live: "I placed the slab, the spruce log popped down."
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void frozenFlatBlockStaysFlatWhenSlabAddedBelow(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos blockPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 3, 2);
+        BlockPos belowPos = blockPos.down();
+        world.setBlockState(belowPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        // REAL placement with air below ⇒ dy=0 ⇒ structural stone recorded frozen-flat (not anchored).
+        BlockState placed = authorBlock(world, blockPos, Blocks.STONE.getDefaultState());
+        ctx.assertTrue(placed.isOf(Blocks.STONE), "stone not present at test position");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, blockPos),
+                "stone placed flat (air below) must be recorded frozen-flat by onPlaced");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, blockPos),
+                "flat-placed stone must NOT be anchored (it was never lowered)");
+        ctx.assertTrue(SlabSupport.getYOffset(world, blockPos, placed) == 0.0,
+                "flat-placed stone dy must be 0 before any slab is added");
+
+        // THE VIOLATION: place a bottom slab directly under the now-floating block.
+        world.setBlockState(belowPos, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_ALL);
+
+        double dy = SlabSupport.getYOffset(world, blockPos, placed);
+        ctx.assertTrue(dy == 0.0,
+                "LAW: flat-placed stone must stay dy=0 after a bottom slab is placed under it; got dy=" + dy);
+
+        VoxelShape outline = placed.getOutlineShape(world, blockPos, ShapeContext.absent());
+        ctx.assertTrue(outline.getBoundingBox().minY == 0.0,
+                "flat-placed stone outline minY must stay 0.0 after slab added; got "
+                + outline.getBoundingBox().minY);
+        ctx.complete();
+    }
+
+    /**
+     * Negative control: a stone placed via {@code setBlockState} never runs {@code onPlaced}, so it
+     * carries no frozen-flat marker (mirrors terrain / non-player blocks) and DOES lower to -0.5 under
+     * a bottom slab. Proves the frozen-flat marker is what suppresses the down-pop (law proof is not
+     * vacuously green).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unfrozenBlockLowersWhenSlabAddedBelow(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos blockPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 3, 2);
+        BlockPos belowPos = blockPos.down();
+        world.setBlockState(belowPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(blockPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockState placed = world.getBlockState(blockPos);
+        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, blockPos),
+                "setBlockState stone must NOT be frozen-flat (no onPlaced ran)");
+
+        world.setBlockState(belowPos, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_ALL);
+        double dy = SlabSupport.getYOffset(world, blockPos, placed);
+        ctx.assertTrue(dy == -0.5,
+                "control: unfrozen stone over a bottom slab should lower to -0.5; got dy=" + dy);
         ctx.complete();
     }
 

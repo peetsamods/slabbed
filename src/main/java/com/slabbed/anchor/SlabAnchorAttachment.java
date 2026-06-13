@@ -54,9 +54,11 @@ public final class SlabAnchorAttachment {
      * in common code.
      */
     public static Predicate<BlockPos> clientAnchorLookup = null;
+    public static Predicate<BlockPos> clientFrozenFlatLookup = null;
     public static Predicate<BlockPos> clientLoweredSlabCarrierLookup = null;
 
     private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
+    private static final Identifier FROZEN_FLAT_ID = Identifier.of(Slabbed.MOD_ID, "frozen_flat");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
             Identifier.of(Slabbed.MOD_ID, "lowered_slab_carriers");
 
@@ -96,6 +98,18 @@ public final class SlabAnchorAttachment {
                     .persistent(SET_CODEC)
                     .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
             );
+    /**
+     * FREEZE-ON-PLACE flat marker: a structural piece (full block / slab) placed at dy=0 is
+     * recorded here so its flat height locks — support placed under or beside it later can no
+     * longer pull it down. The "never autonomously moves" companion of {@link #ANCHOR_TYPE}
+     * (which locks the lowered case). Read as dy=0 by {@code getYOffsetInner}; cleared when the
+     * piece is broken.
+     */
+    public static final AttachmentType<LongOpenHashSet> FROZEN_FLAT_TYPE =
+            AttachmentRegistry.<LongOpenHashSet>create(FROZEN_FLAT_ID, builder -> builder
+                    .persistent(SET_CODEC)
+                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
     public static final AttachmentType<LongOpenHashSet> LOWERED_SLAB_CARRIER_TYPE =
             AttachmentRegistry.<LongOpenHashSet>create(LOWERED_SLAB_CARRIER_ID, builder -> builder
                     .persistent(SET_CODEC)
@@ -108,7 +122,7 @@ public final class SlabAnchorAttachment {
      */
     public static void register() {
         // Touch the class so the static field initializes and registers with Fabric.
-        if (ANCHOR_TYPE == null || LOWERED_SLAB_CARRIER_TYPE == null) {
+        if (ANCHOR_TYPE == null || FROZEN_FLAT_TYPE == null || LOWERED_SLAB_CARRIER_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
     }
@@ -156,6 +170,64 @@ public final class SlabAnchorAttachment {
             BlockPos supportPos = pos.down();
             SlabbedDebugBridge.captureBsFb(world, supportPos, pos, "ANCHOR_ADDED");
         }
+    }
+
+    /**
+     * FREEZE-ON-PLACE: locks a piece's height at the moment it is placed so it NEVER autonomously
+     * moves afterwards. Julia's law — "a placed block must stay in that spot and not autonomously
+     * pop." Server-side only; called from {@code BlockOnPlacedAnchorMixin.onPlaced}.
+     *
+     * <p>If the piece is placed LOWERED (dy &lt; 0) it records an anchor (read as the lowered dy by
+     * {@code getYOffsetInner}), so breaking a neighbour / source can no longer pop it back up. If it
+     * is placed FLAT (dy ≈ 0) and is a STRUCTURAL piece (ordinary full block or slab) it records a
+     * {@link #FROZEN_FLAT_TYPE} marker, so a slab / lowered carrier placed under or beside it later
+     * can no longer pull it down (the exact down-pop Julia reported). No-op for decorative followers
+     * (lanterns / torches / hangers / signs) so they keep tracking their supports, and for pieces
+     * already anchored or frozen. Natural / setBlockState blocks never call onPlaced, so terrain
+     * stays fully geometric.
+     */
+    public static void freezeLoweredOnPlace(World world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClient() || pos == null || state == null
+                || state.isAir() || !state.getFluidState().isEmpty()) {
+            return;
+        }
+        if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
+            return;
+        }
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (dy < -1.0e-6) {
+            addAnchorUnchecked(world, pos);
+            return;
+        }
+        // dy ≈ 0: lock the FLAT height of a STRUCTURAL piece (ordinary full block or slab) so a slab
+        // / lowered carrier placed under or beside it later can no longer pull it down. Gated to
+        // structural pieces so decorative followers stay geometric; non-structural and natural
+        // (setBlockState, which never calls onPlaced) pieces are untouched.
+        boolean structural = isOrdinaryFullBlockAnchorCandidate(world, pos, state)
+                || state.getBlock() instanceof SlabBlock;
+        if (structural) {
+            addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
+        }
+    }
+
+    /**
+     * Returns true if {@code pos} carries a freeze-on-place FLAT marker — a structural piece whose
+     * height was locked at 0 when placed. Safe on server and client (client mirror via
+     * {@link #clientFrozenFlatLookup}); false for non-{@link World} views.
+     */
+    public static boolean isFrozenFlat(BlockView world, BlockPos pos) {
+        if (pos == null) {
+            return false;
+        }
+        if (!(world instanceof World w)) {
+            return clientFrozenFlatLookup != null && clientFrozenFlatLookup.test(pos);
+        }
+        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return false;
+        }
+        LongOpenHashSet set = chunk.getAttached(FROZEN_FLAT_TYPE);
+        return set != null && set.contains(pos.asLong());
     }
 
     public static void updatePersistentLoweredSlabCarrier(World world, BlockPos pos, BlockState state) {
@@ -206,6 +278,10 @@ public final class SlabAnchorAttachment {
      */
     public static void removeAnchor(World world, BlockPos pos) {
         boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
+        // Freeze-on-place flat marker clears when the piece itself is broken/replaced
+        // (onStateReplaced calls removeAnchor for every removal), so a fresh placement in
+        // the same spot re-evaluates from scratch.
+        removeFromAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
         if (removed && SlabbedDebugBridge.bsfbEnabled()) {
             BlockPos supportPos = pos.down();
             SlabbedDebugBridge.captureBsFb(world, supportPos, pos, "ANCHOR_REMOVED");
