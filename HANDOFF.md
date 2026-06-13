@@ -35,10 +35,13 @@ Build the messy multi-combined structures players actually build — many slabs 
 - MC stopped; keybind reverted to `mouse.right`; hunt worktrees pruned.
 - Then moved to 1.21.11 (separate repo `Slabbed-countered-compat-latest`): found+fixed the vanilla/compound ghost-window cull gap (`3a3f57e7`); found+deferred the vanilla vertical-compound FLOAT (`13e42ae3`, characterized). See that repo's HANDOFF.
 
-## ⚠️ LIVE-VISUAL TESTING BLOCKED THIS SESSION
-macOS is firing system notifications every ~minute; each makes `UserNotificationCenter` frontmost, which (a) pauses singleplayer MC and (b) blocks every computer-use click. Couldn't suppress it: legacy DND flag is ignored on this macOS, `request_access` needs Julia's approval (she's out), quitting WhatsApp/Messages didn't stop them, and Control-Center UI-scripting for Focus was too fragile. So **visual bug-hunting (face-culls, render popping, merge render) + the cull-fix visual confirm are DEFERRED** — they need the GUI. **Recommend:** Julia enables a Focus/Do-Not-Disturb mode (or identifies the chatty app), then the visual pass can run. Everything testable HEADLESS is being done.
+## ✅ CRUISE UPDATE (2026-06-12 evening, LIVE — visual block resolved)
+The "live blocked" notifications were macOS asking Julia to approve each computer-use action (she was at work). Solved by `request_access` ONE-TIME grant up front (Minecraft/Modrinth/Finder, full tier) — then smooth solo driving, no per-action prompts. **LESSON: on every live "Cruise", do `request_access` FIRST thing so the user isn't stuck approving.**
 
-## State
-- Adversarial headless workflow: RUNNING (w4d81ztnp) — 4 worktree agents authoring+running failing gametests, then skeptic verify.
-- Live MC: launched once, now paused/blocked by notifications; keybind = `r` (revert to mouse.right when done).
-- Pivoted to: headless hunt + placement-disobedience code analysis + (when hunt returns) triage/fix.
+- **✅ 1.21.1 cull fix CONFIRMED working under Sodium.** Built a lowered-vs-flat step against open sky; the step seam renders SOLID stone from every window-exposing angle (SE + NW). Since Sodium *does* cull faces between adjacent opaque cubes, a solid seam proves the model-path `cullFace`-clearing IS honored by Sodium (the key uncertainty). Ghost-window gone. (Gold-standard kill-switch A/B not run — needs a rebuild/relaunch; evidence already strong.)
+- **✅ Broad visual hunt — clean SAMPLE (not exhaustive).** One varied mixed structure (lowered stone wall + lowered glass + lantern + flat wall behind, on slabs): glass shows solid interior (no sky-window), lantern seated, step seam solid, no gaps/floats/z-fighting. No bugs. NOTE: only one structure — "build many" sweep + placement-disobedience (needs `r`-keybind) still open.
+
+## State (end of session)
+- 1.21.1: HEAD `1b71ccd9`, clean, nothing pushed. Logic hardened (37/37) + cull fix live-confirmed.
+- MC: still RUNNING (New World scratch). Keybind reverted to `mouse.right`. Hunt worktrees pruned.
+- **Open for next thread:** exhaustive broad visual hunt (more player structures), placement-disobedience live (re-enable `r`), the gold-standard cull kill-switch A/B, and the 1.21.11 cull-gap live confirm (needs compat jar in a TS profile). Plus the deferred 1.21.11 vanilla-compound FLOAT fix (core dy change — port the 1.21.1 vertical-compound branch).
