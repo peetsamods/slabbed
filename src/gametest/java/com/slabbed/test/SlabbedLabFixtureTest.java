@@ -315,6 +315,32 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
+     * Ceiling-hung decoration (hanging roots) under a FLUSH slab must stay flush (dy=0) and must NOT
+     * be dragged down by a carrier lower in the column. Reproduces the live bug: a block lower in the
+     * column bridged the downward walk to a slab below, lowering the roots -0.5 (a visible gap under
+     * the flush slab) and letting a neighbor break pop them. The fix dispatches always-ceiling
+     * decorations from the support ABOVE only.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingRootsUnderFlushSlabStayFlush(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 2, 2);
+        BlockState bottomSlab = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        world.setBlockState(base.up(2), bottomSlab, Block.NOTIFY_LISTENERS);                            // flush ceiling slab
+        world.setBlockState(base.up(1), Blocks.HANGING_ROOTS.getDefaultState(), Block.NOTIFY_LISTENERS); // roots hang under it
+        world.setBlockState(base, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);              // bridge (non-air)
+        world.setBlockState(base.down(1), bottomSlab, Block.NOTIFY_LISTENERS);                          // slab 2 cells below roots
+
+        double ceiling = SlabSupport.getYOffset(world, base.up(2), world.getBlockState(base.up(2)));
+        double roots = SlabSupport.getYOffset(world, base.up(1), world.getBlockState(base.up(1)));
+        ctx.assertTrue(ceiling == 0.0, "ceiling slab should be flush; got " + ceiling);
+        ctx.assertTrue(roots == 0.0,
+                "GAP BUG: hanging roots under a flush slab must stay flush (0), not be dragged down by a "
+                + "carrier lower in the column; got " + roots);
+        ctx.complete();
+    }
+
+    /**
      * Regression guard: proves that carpet outline offset is applied exactly once
      * (not doubled) for a carpet placed above a bottom-slab lane on the SERVER.
      *
