@@ -78,3 +78,9 @@ Decisive next step needs Julia: `/slabdy` on the popped middle — `−0.500` wh
 desync; `0.000` ⇒ logic edge (`hasNonLoweredFullBlockSupportBelow`). Remaining to finish: live
 visual accept of placement-parity + MODEL_PATH step-cull, version-line decision, release re-cut —
 all human-gated. See HANDOFF.md status banner.
+
+## 2026-06-12 (Claude, autonomous adversarial pass) — TWO real bugs found
+
+HEAD `13e42ae3` (clean, NOT pushed). Same adversarial gametest probes that proved 1.21.1 robust found two real 1.21.11 bugs:
+1. **FIXED `3a3f57e7` — ghost-window cull was Terrain-Slabs-ONLY.** `isSlabHeightStepFace` keyed on `isDirectCustomSlabSupportedObject` (only TS BOTTOM_LIKE support), so a VANILLA-slab-lowered cube beside a flat cube returned false → both cull paths (BlockRenderInfoCullMixin + YOffsetEmitter model path) left a see-through seam. Fixed → dy-difference `|getYOffset(self)−getYOffset(neighbour)|>ε` (covers vanilla + compound + cantilever; mirrors 1.21.1; only flips cull→draw; kill switch `-Dslabbed.disableStepCull`). Proven by gametest `advVanillaSlabStepMustUnCull`. 40/40 green. ⚠️ RENDER change — live A/B visual confirm still pending (the same mechanism was live-confirmed working under Sodium on 1.21.1, so strong indirect backing).
+2. **FOUND + DEFERRED `13e42ae3` — vanilla VERTICAL compound stack FLOATS.** `slab/stone/slab/stone` → top stone reads −0.5 not −1.0 (floats 0.5 above the L2 slab). 1.21.1 gets this right. Root: compound −1.0 only via `isAdjacentSideSlabLowered` (side-adjacency, ~775); a vertically-lowered vanilla slab doesn't qualify. Core dy change + needs visual confirm → not landed unsupervised. Characterized by `advVanillaCompoundStackFloatsKnownBug` (asserts current −0.5; FLIP to −1.0 when fixed). Reference fix = the 1.21.1 `getYOffsetInner` vertical-compound branch. **This is the top release-blocker to fix next.** See HANDOFF.md bug banner.
