@@ -8,8 +8,19 @@
 
 **Ghost-window cull fix was Terrain-Slabs-ONLY — vanilla-slab / compound / cantilever steps were left unfixed (real see-through windows).** `SlabSupport.isSlabHeightStepFace` keyed on `isDirectCustomSlabSupportedObject` (which only counts a TS BOTTOM_LIKE support), so a full block lowered by a *vanilla* bottom slab (dy=-0.5) beside a flat block returned `false` → BOTH cull paths (`BlockRenderInfoCullMixin` + the `YOffsetEmitter` model path, which share this predicate) left the step face culled. **Fixed** by switching the predicate to a dy-difference `|getYOffset(self) − getYOffset(neighbour)| > ε` (covers vanilla + compound + cantilever, mirrors the 1.21.1 port; uses the same getYOffset signal the model renders with; only ever flips cull→draw; kill switch `-Dslabbed.disableStepCull`). Proven by a new failing→passing gametest `advVanillaSlabStepMustUnCull` in `SlabbedLabFixtureTest`. **40/40 headless green.** ⚠️ RENDER change — VISUAL confirm pending (do an A/B with the kill switch in the live client; a lowered cube on a *vanilla* slab beside a flat cube should have no see-through seam). Local commit only.
 
-### 🐛 BUG FOUND — DEFERRED (needs Julia): vanilla VERTICAL compound stack FLOATS
-A pure-vanilla compound stack — `bottom slab / stone / bottom slab / stone` — leaves the TOP stone at **dy=-0.5**, so it **floats 0.5 above** the lowered L2 slab. Correct value is **-1.0** (flush); **1.21.1 produces -1.0 here** (its `advCompoundStackTopMustBeFlush` passes). Root cause: 1.21.11 grants compound -1.0 only when the slab below is `isAdjacentSideSlabLowered` (side-adjacency, `SlabSupport.java ~775`); a slab lowered **vertically** (resting on a lowered full block) is not side-adjacent-lowered, so the block above never compounds. **Not fixed** — it's a core dy-resolution change (port the 1.21.1 vertical-compound handling) + needs a live visual confirm, too risky to land unsupervised. Tracked by characterization gametest `advVanillaCompoundStackFloatsKnownBug` (asserts the current -0.5; FLIP to -1.0 when fixed). Reference fix = the 1.21.1 `getYOffsetInner` compound branch.
+### ✅ BUG FIXED + LIVE-CONFIRMED — 2026-06-12 (Claude, opus, autonomous): vanilla VERTICAL compound stack FLOAT
+A pure-vanilla compound stack — `bottom slab / stone / bottom slab / stone` — left the TOP stone at **dy=-0.5**, floating 0.5 above the lowered L2 slab. **FIXED to dy=-1.0 (flush).**
+
+Root cause: 1.21.11 granted compound -1.0 only when the slab below was `isAdjacentSideSlabLowered` (side-adjacency); a slab lowered **vertically** (resting on a lowered full-block carrier) never qualified, so the object above never compounded.
+
+Fix (`SlabSupport.java`): new recursion-safe reader `loweredBottomSlabSupportDyForCompound` — mirrors the 1.21.1 `floorTorchBottomSlabSupportDy` — detects a bottom slab lowered by anchor / mixed-vanilla-on-TS / lowered-double-slab-carrier / **vertical lowered full-block carrier** / side-adjacency. The `getYOffsetInner` `shouldOffset` compound branch now drops the object `supportDy - 0.5` (clamped to -1.0) instead of the narrow side-adjacency-only -1.0.
+
+Proven 3 ways:
+1. **Headless 40/40** — the characterization test was renamed `advVanillaCompoundStackFloatsKnownBug` → **`advVanillaCompoundStackTopMustBeFlush`** and now asserts L1=-0.5, L2=-0.5, **L3=-1.0** (would have failed at the old -0.5).
+2. **5-lens adversarial review CLEAN, 0 regressions** (regression-enum / mixed-TS / recursion / DODO-holes / cull+clamp): the new reader is a strict SUPERSET of the old lowering conditions; flush slabs still return -0.5; disjoint from the directCustom lane; all walks bounded by MAX_CHAIN_DEPTH (no `getYOffset` re-entry); only ever deepens an already-lowering object (DODO-clean); `supportDy` is only ever -0.5/0.0/NaN so the -1.0 clamp can't underflow.
+3. **LIVE** — Modrinth `Slabbed+Terrain Slabs` profile (`slabbed-0.2.0-beta.4.1.jar` + Sodium + terrain_slabs 3.2.0): `/slabdy` on the top stone reads `200,123,200 Stone  VANILLA · dy=-1.000 LOWERED`, and the `slab/stone/slab/stone` column renders as one continuous flush pillar (no float gap).
+
+Status: local commit only — **NOT pushed** (Julia's standing "don't push without asking"). The shipped jar in the Modrinth profile was backed up to `_slabbed-backup-20260612/`; the patched candidate jar is the active one for continued live testing.
 
 ---
 

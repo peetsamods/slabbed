@@ -84,3 +84,19 @@ all human-gated. See HANDOFF.md status banner.
 HEAD `13e42ae3` (clean, NOT pushed). Same adversarial gametest probes that proved 1.21.1 robust found two real 1.21.11 bugs:
 1. **FIXED `3a3f57e7` — ghost-window cull was Terrain-Slabs-ONLY.** `isSlabHeightStepFace` keyed on `isDirectCustomSlabSupportedObject` (only TS BOTTOM_LIKE support), so a VANILLA-slab-lowered cube beside a flat cube returned false → both cull paths (BlockRenderInfoCullMixin + YOffsetEmitter model path) left a see-through seam. Fixed → dy-difference `|getYOffset(self)−getYOffset(neighbour)|>ε` (covers vanilla + compound + cantilever; mirrors 1.21.1; only flips cull→draw; kill switch `-Dslabbed.disableStepCull`). Proven by gametest `advVanillaSlabStepMustUnCull`. 40/40 green. ⚠️ RENDER change — live A/B visual confirm still pending (the same mechanism was live-confirmed working under Sodium on 1.21.1, so strong indirect backing).
 2. **FOUND + DEFERRED `13e42ae3` — vanilla VERTICAL compound stack FLOATS.** `slab/stone/slab/stone` → top stone reads −0.5 not −1.0 (floats 0.5 above the L2 slab). 1.21.1 gets this right. Root: compound −1.0 only via `isAdjacentSideSlabLowered` (side-adjacency, ~775); a vertically-lowered vanilla slab doesn't qualify. Core dy change + needs visual confirm → not landed unsupervised. Characterized by `advVanillaCompoundStackFloatsKnownBug` (asserts current −0.5; FLIP to −1.0 when fixed). Reference fix = the 1.21.1 `getYOffsetInner` vertical-compound branch. **This is the top release-blocker to fix next.** See HANDOFF.md bug banner.
+
+## 2026-06-12 (Claude, opus ultracode, autonomous) — compound FLOAT FIXED + LIVE-CONFIRMED
+
+The deferred vanilla vertical-compound FLOAT (bug 2 above) is **FIXED**. New recursion-safe reader
+`loweredBottomSlabSupportDyForCompound` in `SlabSupport.java` (ports the 1.21.1
+`floorTorchBottomSlabSupportDy` semantics) detects a bottom slab lowered vertically (resting on a
+lowered full-block carrier) — plus anchor / mixed-TS / lowered-double-slab / side-adjacency — and the
+`shouldOffset` compound branch now returns `supportDy − 0.5` (clamped to −1.0). The characterization
+test was flipped+renamed to `advVanillaCompoundStackTopMustBeFlush` (asserts L3 = −1.0).
+
+Proven: headless **40/40** (`./gradlew runGameTest`, run in the REAL worktree — NOT an isolation
+worktree, per the linked-worktree gotcha); **5-lens adversarial review CLEAN / 0 regressions**; **LIVE**
+in the Modrinth `Slabbed+Terrain Slabs` profile (`slabbed-0.2.0-beta.4.1.jar`) — `/slabdy` reads the top
+stone `dy=-1.000 LOWERED VANILLA`, column renders flush (no float). Live route = Modrinth-launched game
+(the Loom `runClient` dev client is a bare `java` process with no bundle id → NOT grantable to
+computer-use; the Modrinth game's window IS drivable). **Local commit only — NOT pushed.**
