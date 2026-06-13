@@ -263,34 +263,36 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
-     * ⚠️ KNOWN BUG (characterization — asserts the CURRENT, WRONG behaviour to keep the build green
-     * while tracking it; FLIP to -1.0 when fixed). A PURE-VANILLA compound stack
-     * (bottom slab / stone / bottom slab / stone) leaves the top stone at dy=-0.5 — it FLOATS 0.5
-     * above the lowered L2 slab. The correct value is -1.0 (flush); 1.21.1 produces -1.0 here.
+     * Vanilla vertical-compound stack: bottom slab / stone / bottom slab / stone. Each layer rests on
+     * the rendered top of the one below, so the TOP stone must compound to dy=-1.0 to sit FLUSH on the
+     * lowered L2 slab. If it reads -0.5 it FLOATS 0.5 above the slab (a visible gap). 1.21.1 produces
+     * -1.0 here; this guards the 1.21.11 port of that vertical-compound handling.
      *
-     * <p>Root cause: compound -1.0 is only granted when the slab below is {@code isAdjacentSideSlabLowered}
-     * (side-adjacency, SlabSupport.java ~775). A vanilla slab lowered VERTICALLY (resting on a lowered
-     * full block) is not side-adjacent-lowered, so the block above it never compounds. Deferred: the fix
-     * is a core dy-resolution change (port the 1.21.1 vertical-compound handling) and needs a live visual
-     * confirm — not safe to land unsupervised. See HANDOFF.md.
+     * <p>Root cause of the former float: compound -1.0 was only granted when the slab below was
+     * {@code isAdjacentSideSlabLowered} (side-adjacency). A vanilla slab lowered VERTICALLY (resting on
+     * a lowered full block) was not side-adjacent-lowered, so the block above never compounded. Fixed by
+     * reading the support slab's rendered dy via {@code loweredBottomSlabSupportDyForCompound} (mirrors
+     * the 1.21.1 floorTorchBottomSlabSupportDy reader) and dropping the block an extra -0.5.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void advVanillaCompoundStackFloatsKnownBug(TestContext ctx) {
+    public void advVanillaCompoundStackTopMustBeFlush(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
         BlockState bs = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
-        world.setBlockState(base, bs, Block.NOTIFY_LISTENERS);
-        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
-        world.setBlockState(base.up(2), bs, Block.NOTIFY_LISTENERS);
-        world.setBlockState(base.up(3), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(base, bs, Block.NOTIFY_LISTENERS);                                     // L0 slab (air below → 0)
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);   // L1 stone on slab → -0.5
+        world.setBlockState(base.up(2), bs, Block.NOTIFY_LISTENERS);                               // L2 slab on lowered stone → -0.5
+        world.setBlockState(base.up(3), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);   // L3 stone on lowered slab → -1.0
 
         double l1 = SlabSupport.getYOffset(world, base.up(1), world.getBlockState(base.up(1)));
+        double l2 = SlabSupport.getYOffset(world, base.up(2), world.getBlockState(base.up(2)));
         double l3 = SlabSupport.getYOffset(world, base.up(3), world.getBlockState(base.up(3)));
         ctx.assertTrue(l1 == -0.5, "L1 stone on vanilla bottom slab should be -0.5; got " + l1);
-        // Documents the FLOAT bug: correct is -1.0, current is -0.5. When fixed, change to == -1.0.
-        ctx.assertTrue(l3 == -0.5,
-                "KNOWN BUG characterization changed unexpectedly — vanilla compound top dy was " + l3
-                + " (was -0.5 = float; -1.0 = fixed). Update this guard.");
+        ctx.assertTrue(l2 == -0.5, "L2 slab on lowered stone should be -0.5; got " + l2);
+        // The smoking gun: flush needs -1.0. -0.5 ⇒ float (gap 0.5).
+        ctx.assertTrue(l3 == -1.0,
+                "FLOAT BUG: top stone on a vertically-lowered bottom slab must compound to -1.0 (flush); got "
+                + l3 + " (gap=" + ((base.up(3).getY() + l3) - (base.up(2).getY() + 0.5 + l2)) + ")");
         ctx.complete();
     }
 

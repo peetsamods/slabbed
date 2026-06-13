@@ -768,12 +768,20 @@ public final class SlabSupport {
         }
 
         if (shouldOffset(world, pos, state)) {
-            // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
-            // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
-            // slab's visual top surface, for a total of -1.0.
-            BlockState belowSlab = world.getBlockState(pos.down());
-            if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
-                return -1.0;
+            // Compound case: a non-slab block resting on a LOWERED bottom slab must drop an extra
+            // -0.5 to sit FLUSH on the slab's lowered top surface (total up to -1.0). The support
+            // slab counts as lowered whether it is lowered by side-adjacency (a bottom slab beside
+            // a lowered full block), by a mixed vanilla-on-Terrain-Slabs surface, by an anchor, by a
+            // lowered double-slab carrier, OR VERTICALLY by resting on a lowered full-block carrier
+            // (the pure-vanilla vertical-compound stack slab/stone/slab/stone). Read the support's
+            // rendered dy recursion-safely (the IN_GET_Y_OFFSET guard is already set) and mirror the
+            // 1.21.1 beta35OrdinaryFullBlockContactDy -> floorTorchBottomSlabSupportDy path. Without
+            // the vertical case the top block FLOATS 0.5 above the lowered slab (a visible gap).
+            BlockPos belowPos = pos.down();
+            double supportDy = loweredBottomSlabSupportDyForCompound(world, belowPos);
+            if (Double.isFinite(supportDy) && supportDy < -1.0e-6d) {
+                double dy = supportDy - 0.5d;
+                return dy < -1.0d ? -1.0d : dy;
             }
             double columnDy = slabColumnYOffset(world, pos);
             if (columnDy != 0.0) {
@@ -1004,6 +1012,47 @@ public final class SlabSupport {
             base += -0.5;
         }
         return base;
+    }
+
+    /**
+     * Recursion-safe rendered dy of a BOTTOM-slab support directly beneath an object, for the
+     * vertical-compound lowering in {@link #getYOffsetInner}'s {@code shouldOffset} branch. When the
+     * bottom slab an object rests on is itself lowered, the object must drop an extra -0.5 to sit
+     * flush on the slab's lowered top surface. A bottom slab counts as lowered if it is anchored, a
+     * mixed vanilla-on-Terrain-Slabs slab, resting on a lowered double-slab carrier, resting on a
+     * lowered full-block carrier (VERTICAL compound), or side-adjacent to a lowered full block.
+     *
+     * <p>Returns -0.5 for a lowered bottom slab, 0.0 for a flush bottom slab, and NaN when {@code pos}
+     * is not a (non-fluid) bottom slab. Mirrors the 1.21.1 {@code floorTorchBottomSlabSupportDy}
+     * reader (minus the 1.21.1-only authored-anchor CompoundVisible* cases, which do not exist on
+     * 1.21.11). Never re-enters {@link #getYOffset}, so it is safe to call inside getYOffsetInner
+     * under the IN_GET_Y_OFFSET recursion guard.
+     */
+    private static double loweredBottomSlabSupportDyForCompound(BlockView world, BlockPos pos) {
+        BlockState state = getBlockStateOrNull(world, pos);
+        if (state == null || !isBottomSlab(state) || !state.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            return -0.5d;
+        }
+        double directCustomDy = directCustomSlabSupportDy(world, pos, state);
+        if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6d) {
+            return -0.5d;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = world.getBlockState(belowPos);
+        if (below.getBlock() instanceof SlabBlock) {
+            if (isLoweredDoubleSlabCarrier(world, belowPos, below)) {
+                return -0.5d;
+            }
+        } else if (hasLoweredCarrierBelow(world, pos)) {
+            return -0.5d;
+        }
+        if (isAdjacentSideSlabLowered(world, pos, state)) {
+            return -0.5d;
+        }
+        return 0.0d;
     }
 
     /**
