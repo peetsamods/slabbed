@@ -1794,10 +1794,20 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
-     * Legal state law for orphaned lowered side-lane slabs:
-     * BSFB > TS > TS is allowed while BS/FB support exists; once both original BS and
-     * original FB are removed, the remaining lane must not silently stay lowered.
-     * With no valid lowered support relation left, remaining TS slabs normalize to dy=0.
+     * NEVER-POP law for orphaned lowered side-lane slabs (provenance-aware):
+     * BSFB > TS > TS is allowed while BS/FB support exists. After both the original BS and FB are
+     * removed, dy is governed by HOW each lane slab came to exist:
+     *  - laneTail is HAND-PLACED (interactBlock -> onPlaced -> freezeLoweredOnPlace), so it is frozen
+     *    (anchored) at its placed dy=-0.5 and must STAY there — a placed block must never autonomously
+     *    pop up when a neighbour's support is removed (port of 1.21.1 9ec27ca4, live-confirmed).
+     *  - laneRoot is a server SEED (setLoweredSlabTarget -> setBlockState, which never runs onPlaced),
+     *    so it is NOT frozen and renormalizes geometrically to dy=0 once no lowered carrier remains.
+     * The lane is therefore legitimately split (root=0.0, tail=-0.5) — not a uniform value.
+     *
+     * NOTE: pre-freeze-law revisions of this case asserted the orphaned lane normalized BOTH to dy=0.
+     * That expectation was obsoleted by the freeze-on-place law (8aafd1ff): a placed lowered slab
+     * reads its own anchor first and never recomputes. Forcing the hand-placed tail back to 0.0 would
+     * re-introduce exactly the pop that law was built to kill.
      */
     private static void runOrphanedLoweredLaneSupportRemovalCase(
             ClientGameTestContext ctx,
@@ -1887,7 +1897,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     throw new RuntimeException("anchor persisted after FB removal at tick " + tick
                             + " pos=" + FULL_POS.toShortString());
                 }
-                assertLaneDy(mc.world, laneRootPos, laneTailPos, 0.0d,
+                // NEVER-POP: the hand-placed tail stays frozen at -0.5; the setBlockState-seeded
+                // root (never frozen) renormalizes to 0.0 once the lowered FB is gone.
+                assertLaneDySplit(mc.world, laneRootPos, laneTailPos, 0.0d, -0.5d,
                         "post-FB-break tick " + tick);
             });
         }
@@ -1920,7 +1932,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     || laneTail.get(SlabBlock.TYPE) != SlabType.TOP) {
                 throw new RuntimeException("laneTail state changed unexpectedly after support removal: " + laneTail);
             }
-            assertLaneDy(mc.world, laneRootPos, laneTailPos, 0.0d,
+            assertLaneDySplit(mc.world, laneRootPos, laneTailPos, 0.0d, -0.5d,
                     "post-FB-break final");
         });
     }
@@ -2512,6 +2524,35 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
     }
 
+    /**
+     * Like {@link #assertLaneDy} but allows root and tail to differ — used when a lane legitimately
+     * splits by placement provenance (a frozen hand-placed slab vs an unfrozen server seed).
+     */
+    private static void assertLaneDySplit(
+            net.minecraft.world.BlockView world,
+            BlockPos laneRootPos,
+            BlockPos laneTailPos,
+            double expectedRootDy,
+            double expectedTailDy,
+            String label
+    ) {
+        BlockState laneRoot = world.getBlockState(laneRootPos);
+        BlockState laneTail = world.getBlockState(laneTailPos);
+        if (!laneRoot.isOf(Blocks.STONE_SLAB) || !laneRoot.contains(SlabBlock.TYPE)) {
+            throw new RuntimeException(label + " laneRoot must remain slab, found " + laneRoot);
+        }
+        if (!laneTail.isOf(Blocks.STONE_SLAB) || !laneTail.contains(SlabBlock.TYPE)) {
+            throw new RuntimeException(label + " laneTail must remain slab, found " + laneTail);
+        }
+        double rootDy = SlabSupport.getYOffset(world, laneRootPos, laneRoot);
+        double tailDy = SlabSupport.getYOffset(world, laneTailPos, laneTail);
+        if (Math.abs(rootDy - expectedRootDy) > EPSILON || Math.abs(tailDy - expectedTailDy) > EPSILON) {
+            throw new RuntimeException(label + " expected rootDy=" + expectedRootDy + " tailDy=" + expectedTailDy
+                    + " but rootDy=" + rootDy + " tailDy=" + tailDy
+                    + " rootState=" + laneRoot + " tailState=" + laneTail);
+        }
+    }
+
     private static void assertForbiddenMixedDoubleBottomStateAbsent(
             net.minecraft.world.BlockView world,
             BlockPos laneDoublePos,
@@ -2546,9 +2587,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     ) {
         BlockState laneDouble = world.getBlockState(laneDoublePos);
         BlockState laneBottom = world.getBlockState(laneBottomPos);
+        // NEVER-POP: a hand-placed lowered slab is ANCHORED/frozen at placement and legitimately
+        // stays lowered after its support is torn down — that is not an "unsupported remainder".
+        // Only an UNFROZEN lowered slab (a geometric remnant that should have normalized but did not)
+        // is a real bug. So skip anchored/frozen positions; still flag unfrozen lowered remainders.
         if (laneDouble.isOf(Blocks.STONE_SLAB) && laneDouble.contains(SlabBlock.TYPE)) {
             double doubleDy = SlabSupport.getYOffset(world, laneDoublePos, laneDouble);
-            if (doubleDy < 0.0d) {
+            if (doubleDy < 0.0d
+                    && !SlabAnchorAttachment.isAnchored(world, laneDoublePos)
+                    && !SlabAnchorAttachment.isFrozenFlat(world, laneDoublePos)) {
                 throw new RuntimeException(label + " unsupported lowered remainder at DOUBLE slot "
                         + laneDoublePos.toShortString()
                         + " dy=" + doubleDy + " state=" + laneDouble);
@@ -2556,7 +2603,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
         if (laneBottom.isOf(Blocks.STONE_SLAB) && laneBottom.contains(SlabBlock.TYPE)) {
             double bottomDy = SlabSupport.getYOffset(world, laneBottomPos, laneBottom);
-            if (bottomDy < 0.0d) {
+            if (bottomDy < 0.0d
+                    && !SlabAnchorAttachment.isAnchored(world, laneBottomPos)
+                    && !SlabAnchorAttachment.isFrozenFlat(world, laneBottomPos)) {
                 throw new RuntimeException(label + " unsupported lowered remainder at BOTTOM slot "
                         + laneBottomPos.toShortString()
                         + " dy=" + bottomDy + " state=" + laneBottom);
