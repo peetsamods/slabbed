@@ -1,71 +1,88 @@
-## [Unreleased]
+# Slabbed — Changelog
 
-## [0.2.0-beta.4.1] - Deprecated (Blocked, Unreleased)
+## 0.4.0-beta (changes since 0.3.0)
 
-This beta 4.1 candidate is blocked and not approved for release.
+**Builds in this release**
+- `slabbed-1.21.11-0.4.0-beta.4.jar` — Minecraft **1.21.11**
+- `slabbed-1.21.1-0.4.0-beta.3.jar` — Minecraft **1.21.1**
 
-### Blockers
-- Live gameplay still shows excessive culled faces in Terrain Slabs scenarios.
-- The current candidate is considered game-breaking and deprecated until a fix is proven live.
-- This build has not been released or distributed publicly.
+0.4.0-beta is a large step up from 0.3.0: a ground-up overhaul of the **Terrain Slabs**
+compatibility layer, plus a long list of positioning, rendering, and stability fixes — including
+several found and confirmed during live play-testing. The 1.21.11 build carries the newest fixes
+(`-beta.4`); the 1.21.1 build (`-beta.3`) shares the same core behaviour.
 
-### Fixed
-- Lowered generated Terrain Slabs double surfaces for direct-supported fences, walls, and fence gates.
-- Restored crosshair ownership for lowered direct-supported objects when the support block is the vanilla raycast hit.
-- Kept terrain top faces visible against direct Terrain Slabs bottom-like support.
+---
 
-### Preserved
-- The earlier `release/0.2.0-beta.4.1` tag was a blocked, undistributed candidate from private testing and has been superseded before release.
-- Terrain Slabs compatibility remains direct-only and does not broaden into generic Slabbed support.
+### Terrain Slabs compatibility — overhaul
+- **Objects sit correctly on Terrain Slabs surfaces**, exactly as they do on vanilla slabs: torches,
+  lanterns, fences, walls, glass panes, signs, chests / hoppers / furnaces and other block-entities,
+  the crafting table, and a curated set of decorative full cubes (pumpkin, carved pumpkin, jack
+  o'lantern, melon, bookshelf, hay bale, note block, dried kelp block, sponge/wet sponge, target,
+  redstone lamp, smithing/fletching/cartography tables, loom).
+- **Full range of Terrain Slabs surfaces recognized** (named/extended support surfaces), and works
+  with **both** the modern `terrain_slabs` and the legacy `terrainslabs` mod id.
+- **Natural terrain stays put.** Plain opaque world cubes (stone, dirt, grass block, sand, ore, …)
+  are no longer lowered onto Terrain Slabs surfaces — what keeps natural terrain hole-free.
+- **Stacking on slabs**: objects stack correctly over a slab (a torch on a fence, a fence on a
+  fence, …).
+- **Connections respect height steps**: fences, walls, and panes no longer connect across a Slabbed
+  height step, and stay as single posts down a slab.
 
-## Superseded private beta 4.1 candidate notes
+### Vegetation — FIXED (new in -beta.4, 1.21.11)
+- **Short grass, ferns, and tall grass no longer render invisible or sunk** on Terrain Slabs terrain.
+  They now sit correctly on the slab surface. (Root cause: Slabbed and Terrain Slabs were each
+  offsetting the same plant model, double-lowering it out of sight — fixed so Terrain Slabs owns the
+  vegetation offset and Slabbed does not add a second.)
 
-The original `release/0.2.0-beta.4.1` tag covered this private candidate, was blocked by live Terrain Slabs testing, and was superseded before distribution.
+### Decorations & hangers
+- **Hanging roots, spore blossom, and hanging signs hang flush** under a slab — no gap — and no
+  longer pop up when a neighbouring block is broken.
+- **Hanging lanterns hang flush** under a flush slab (previously dropped with a visible gap). *(new
+  in -beta.4)*
+- **Decorative hangers follow a lowered support block down** instead of clipping into it.
 
-### Fixed in the superseded candidate
-- Added compatibility with Countered's Terrain Slabs custom bottom-slab surfaces.
-- Preserved lowered object support on valid named Terrain Slabs surfaces.
-- Kept live placement support for doors, fences, full blocks, torches, and redstone torch particles.
+### Stacks & compound (mixed) slabs
+- **Vertical compound stacks sit flush.** A `slab / block / slab / block` tower no longer leaves the
+  top block floating half a block above the slab — it compounds to sit flush. *(new in -beta.4)*
+- **Mixed slabs** (a vanilla slab capping a Terrain Slabs surface) **compound to the full lowered
+  height**, and objects resting on them follow down with them.
+- An object on a vanilla **top** slab capping a Terrain Slabs slab now sits flush instead of floating.
 
-### Preserved in the superseded candidate
-- Terrain Slabs remain out of generic Slabbed support and culling-sensitive paths.
-- The release keeps the proven Terrain Slabs live-placement and debug-hook hygiene closures intact.
+### "Never pop" placement law
+- **A block you place stays exactly where you put it.** Slabbed no longer recomputes a placed
+  block's height on the fly, so adding or removing a neighbouring slab can no longer make a placed
+  block autonomously pop **up or down**. *Note:* build support-first — a block placed in mid-air will
+  not retroactively drop when you add support under it later; place it on its support (or break and
+  replace).
 
-## [0.2.0-beta.2] — Side-Slab Torch Stability
+### Rendering
+- **Ghost-window / see-through seams on lowered cubes are gone** — the exposed step faces between a
+  lowered block and a flush neighbour render solid now, across vanilla, compound, and cantilever
+  lowering, on both the Sodium and the vanilla render paths.
+- **World-hole "DODO" fixed** — natural Terrain Slabs terrain no longer tears see-through holes (the
+  bug that pulled the previous `0.4.0-beta.3`). The terrain-flush test is now view-independent, so it
+  can't disagree between the render thread and the main thread.
+- **Powder snow stays flush** on and beside Terrain Slabs terrain (no half-block step across snowy
+  ground).
 
-### Fixed
-- Fixed adjacent side slabs beside lowered slab-supported full blocks so they remain visually lowered.
-- Fixed repeat-click / double-slab behavior on adjacent lowered side slabs.
-- Fixed floor torch placement, selection, and flame particle behavior on BS-FB-0.5S setups.
-- Fixed wall torch flame particles floating above lowered torch visuals.
-- Removed forced ghost wireframe debug boxes from normal runClient.
-- Corrected a stale server proof so ordinary full blocks lowering onto slabs is protected as intended behavior.
+### Targeting & interaction
+- **Lowered chests, torches, and beds target correctly** — the outline/selection box and the raycast
+  align with where the block is actually drawn.
+- **Slabs place correctly against lowered slab and lowered full-block faces.**
 
-### Improved
-- Added proof coverage for adjacent side-slab dy inheritance.
-- Added proof coverage for floor torch compound dy and selectable comfort.
-- Preserved known no-rescue boundaries for chain and crafting table.
-- Enforced release artifact purity by excluding dev/debug tooling from the public jar.
+### Dev / debug
+- `/slabdy` in-game overlay shows the targeted block's computed vertical offset and its source
+  (vanilla vs Terrain Slabs) — for diagnosing positioning.
 
-### Known note
-- Floor torch selection on BS-FB-0.5S may reach slightly downward into the supporting slab area; accepted because breaking that support would break the torch anyway.
+---
 
-## [0.2.0-beta.1-hotfix.1]
-### Fixed
-- Restored stable selection outline/hitbox behavior for slab-supported functional blocks.
-- Removed experimental/debug instrumentation (no [SHAPES]/[RAYCAST_EMPTY]/DIAG_FALLBACK/CrosshairTargetRedirectMixin/RaycastShapeDebugMixin on this hotfix line).
+### Stability / under the hood
+- Headless game-test suite expanded substantially (compound, cull, freeze, hanger, vegetation,
+  powder-snow, terrain-hole, and adversarial-regression guards) — **45 server tests** green on the
+  1.21.11 build.
+- Render-region boundary lookups guarded against world-load crashes.
+- Release jars exclude dev/debug entrypoints.
 
-### Known issues
-- Ghosting in complex slab+block stacking remains; not addressed in this hotfix.
-
-## [0.1.1-alpha]
-### Added / Changed
-- Sodium-compatible rendering: FRAPI quad vertex translation so block models visually align with slab top surfaces (no Indigo/Indium required).
-- Generic model wrapping approach: slab Y-offset determined at render time via SlabSupport single-source-of-truth.
-
-### Fixed
-- Torch + common block model visual alignment on slab tops under Sodium.
-
-### Known issues
-- Redstone on slabs: visual/connection edge cases remain (down-step and power propagation still under investigation).
-- Hanging support under top slabs: needs explicit in-game verification/triage for any remaining blocks beyond lanterns.
+*Compatibility: Minecraft 1.21.11 (Fabric) with Countered's Terrain Slabs; a separate Minecraft
+1.21.1 build is included. Slabbed is inert when Terrain Slabs is not installed (vanilla slab
+behaviour only).*
