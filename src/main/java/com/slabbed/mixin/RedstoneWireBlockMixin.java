@@ -1,6 +1,5 @@
 package com.slabbed.mixin;
 
-import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.RedstoneWireBlock;
@@ -24,7 +23,6 @@ public abstract class RedstoneWireBlockMixin {
     @Inject(method = "canPlaceAt(Lnet/minecraft/block/BlockState;Lnet/minecraft/world/WorldView;Lnet/minecraft/util/math/BlockPos;)Z",
             at = @At("HEAD"), cancellable = true)
     private void slabbed$canPlaceAt(BlockState state, WorldView world, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-        Slabbed.LOGGER.info("[SLABBED] Redstone mixin fired: canPlaceAt pos={} below={}", pos, world.getBlockState(pos.down()).getBlock());
         if (SlabSupport.isRedstoneSupportTopSurface(world, pos.down())) {
             cir.setReturnValue(true);
         }
@@ -34,7 +32,6 @@ public abstract class RedstoneWireBlockMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$getRenderConnectionType3(BlockView world, BlockPos pos, Direction direction,
                                                   CallbackInfoReturnable<WireConnection> cir) {
-        Slabbed.LOGGER.info("[SLABBED] Redstone mixin fired: getRenderConnectionType(3) pos={} dir={} result={}", pos, direction, cir.getReturnValue());
         WireConnection current = cir.getReturnValue();
         if (current == WireConnection.NONE) {
             BlockPos sidePos = pos.offset(direction);
@@ -48,7 +45,6 @@ public abstract class RedstoneWireBlockMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$getRenderConnectionType4(BlockView world, BlockPos pos, Direction direction, boolean canRise,
                                                   CallbackInfoReturnable<WireConnection> cir) {
-        Slabbed.LOGGER.info("[SLABBED] Redstone mixin fired: getRenderConnectionType(4) pos={} dir={} result={} canRise={}", pos, direction, cir.getReturnValue(), canRise);
         WireConnection current = cir.getReturnValue();
         if (current == WireConnection.NONE) {
             BlockPos sidePos = pos.offset(direction);
