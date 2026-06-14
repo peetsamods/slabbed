@@ -18,6 +18,11 @@ fabricApi {
     }
 }
 
+// RELEASE GATE: the maintained automated gate is `./gradlew runGameTest` (headless, 46/46).
+// `runClientGameTest` is NOT a release gate — the Slabbed*ClientGameTest harness is unmaintained
+// dev-repro scaffolding (red since before the freeze law; tests obsolete/BLOCKED behaviour).
+// Do not block a release on runClientGameTest. See RELEASE_GATE.md and HANDOFF.md.
+
 // Forward selected -Dslabbed.* properties from the gradle invocation to the game JVM so e.g.
 // `runClient -Dslabbed.targetDyOverlay=true` actually reaches the client.
 def slabbedForwardedRunPropertyArgs = {

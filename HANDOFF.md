@@ -6,6 +6,8 @@
 
 ## 🚦 RELEASE GATE (read this first — applies to Codex / any pre-release check)
 
+> **Canonical, machine-readable copy: [`RELEASE_GATE.md`](RELEASE_GATE.md) at the repo root.**
+
 The release gate for this branch is: **headless `./gradlew runGameTest` (46/46) + live play-testing
 (Julia, via the Modrinth `Slabbed+Terrain Slabs` profile) + a clean jar** (no `debug/`/`dev/` package
 classes, no `*DebugBridge` / `*AuditBridge` / `*Trace` diagnostic classes, no always-on `LOGGER`
