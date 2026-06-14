@@ -414,6 +414,44 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
+     * DODO guard: powder snow (a full cube, NOT a SnowBlock) must stay FLUSH on a slab — it's natural
+     * terrain fill, never offset. Lowering it -0.5 stepped it below neighbouring powder snow on full
+     * ground (the pulled-hotfix snowy-terrain DODO). PowderSnowBlock isn't a SnowBlock, so isThinTopLayer
+     * never excluded it, and it's a slab-sit candidate (non-opaque), so the directCustom lane would lower it.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void powderSnowOnSlabStaysFlush(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        world.setBlockState(base, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.up(1), Blocks.POWDER_SNOW.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double dy = SlabSupport.getYOffset(world, base.up(1), world.getBlockState(base.up(1)));
+        ctx.assertTrue(dy == 0.0, "powder snow on a slab must stay flush (0), not step -0.5; got " + dy);
+        ctx.complete();
+    }
+
+    /**
+     * DODO guard: a natural (setBlockState, non-anchored) opaque full cube resting on another solid cube
+     * must NOT lower -0.5 just because a slab sits deeper in the column — walking through solid terrain to
+     * a slab is exactly what tore see-through world holes across Terrain Slabs terrain. The column walk
+     * stops at the solid cube. (A genuine PLACED tower still chains via its per-block anchor.)
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void naturalCubeOverSolidDoesNotLowerThroughToSlab(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        world.setBlockState(base, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);                                                           // L0 slab
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);   // L1 stone on slab
+        world.setBlockState(base.up(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);   // L2 stone on L1 (solid ground)
+        double l2 = SlabSupport.getYOffset(world, base.up(2), world.getBlockState(base.up(2)));
+        ctx.assertTrue(l2 == 0.0,
+                "DODO: a stone resting on a solid cube must stay flush, not lower -0.5 through it to a slab below; got " + l2);
+        ctx.complete();
+    }
+
+    /**
      * Regression guard: proves that carpet outline offset is applied exactly once
      * (not doubled) for a carpet placed above a bottom-slab lane on the SERVER.
      *

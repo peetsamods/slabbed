@@ -23,6 +23,7 @@ import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PointedDripstoneBlock;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.PowderSnowBlock;
 import net.minecraft.block.SnowBlock;
 import net.minecraft.block.SporeBlossomBlock;
 import net.minecraft.block.StairsBlock;
@@ -378,8 +379,10 @@ public final class SlabSupport {
             return false;
         }
 
-        // never offset thin top-layer blocks (snow layers, carpet)
-        if (isThinTopLayer(state)) {
+        // never offset thin top-layer blocks (snow layers, carpet) or powder snow — natural surface
+        // terrain fill, not structural objects. Powder snow is a FULL CUBE so it is NOT an
+        // isThinTopLayer (which keys on SnowBlock), hence the explicit guard.
+        if (isThinTopLayer(state) || state.getBlock() instanceof PowderSnowBlock) {
             return false;
         }
 
@@ -775,6 +778,13 @@ public final class SlabSupport {
                 || (state.contains(Properties.HANGING) && state.get(Properties.HANGING))) {
             return ceilingHungDecorationDy(world, pos, state);
         }
+        // Powder snow is natural terrain fill (a full cube), never offset — keep it flush so it stays
+        // consistent with neighbouring powder snow on full ground (no -0.5 step / DODO). PowderSnowBlock
+        // is NOT a SnowBlock, so isThinTopLayer never excluded it, and it IS a slab-sit candidate
+        // (non-opaque, non-solid), so the directCustom lane would otherwise lower it -0.5 onto a TS slab.
+        if (state.getBlock() instanceof PowderSnowBlock) {
+            return 0.0;
+        }
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
@@ -1035,6 +1045,17 @@ public final class SlabSupport {
         if (SLAB_SIT_OBJECT_CUBES.contains(block)) {
             return true;
         }
+        // Opaque full cubes always stay flush: lowering an opaque cube -0.5 while the chunk mesher
+        // still culls at its grid voxel tears see-through holes across Terrain Slabs terrain (the
+        // pulled-hotfix world-hole DODO). Use the view-INDEPENDENT isOpaqueFullCube() (a precomputed
+        // blockstate flag) — NOT isSolidBlock(world,pos), which is view-dependent: under a
+        // ChunkRendererRegion on the render thread it can report a plain stone cube as NOT solid,
+        // lowering natural terrain on the worker mesh while main-thread culling stays put → holes.
+        // Non-opaque / non-cube objects (fences, panes, torches, slabs-on-objects, …) are not opaque
+        // full cubes, so they still fall through to the !isSolidBlock candidate test and lower as before.
+        if (state.isOpaqueFullCube()) {
+            return false;
+        }
         return !state.isSolidBlock(world, pos);
     }
 
@@ -1220,6 +1241,14 @@ public final class SlabSupport {
                     && isAdjacentSideSlabLowered(world, cursor, cur)) {
                 return true;
             }
+            // Natural-terrain stop: a SOLID opaque full cube below means this block rests on solid
+            // ground, NOT on a slab — do NOT walk through it to a slab deeper in the column. Walking
+            // through solid terrain lowered natural stone/dirt that merely had a Terrain Slabs surface
+            // 1-16 blocks beneath it, tearing see-through world holes. A genuine placed tower chains
+            // via its per-block anchor (checked above), not this raw walk.
+            if (cur.isOpaqueFullCube()) {
+                return false;
+            }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return false;
             }
@@ -1244,6 +1273,11 @@ public final class SlabSupport {
             }
             if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return -0.5;
+            }
+            // Natural-terrain stop (see hasSlabInColumn): never walk through a solid opaque full cube
+            // to a slab deeper in the column — that lowered natural terrain over Terrain Slabs → holes.
+            if (cur.isOpaqueFullCube()) {
+                return 0.0;
             }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return 0.0;
