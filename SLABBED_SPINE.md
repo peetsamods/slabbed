@@ -146,3 +146,10 @@ canonical release line:
 LEFT TO SHIP (human): live-verify natural TS terrain (no holes) + powder snow + placed-tower chaining;
 then publish (push + Modrinth/CF). Standing rule: NOT pushed. The other ~13 release-branch commits that
 `--cherry-pick` flags are the same TS-compat fixes implemented in parallel here (not real gaps).
+
+## 2026-06-14 (Claude, opus) — 0.4.0-beta.4 FULLY LIVE-VERIFIED
+
+Julia live-verified the terrain changes ("green"): natural TS terrain = no see-through holes, powder
+snow flush, placed towers still chain. All 5 parity fixes + DODO + powder-snow now live-confirmed.
+`0.4.0-beta.4` is a fully-verified release candidate. ONLY remaining = publish (push + Modrinth/CF),
+which needs Julia's explicit go-ahead. Still NOT pushed (15 commits ahead of origin).

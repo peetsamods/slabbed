@@ -60,9 +60,10 @@ hand-placed block.
   branch (DODO world-hole `42002295` + powder-snow `85537dcd`), adapted to compat's leaner SlabSupport;
   bumped `mod_version` → **`0.4.0-beta.4`**; built+installed `slabbed-0.4.0-beta.4.jar` in the profile.
   Headless **45/45** (added `powderSnowOnSlabStaysFlush` + `naturalCubeOverSolidDoesNotLowerThroughToSlab`).
-  - **LEFT TO SHIP (human):** (1) **live-verify the terrain changes** — natural TS terrain shows NO
-    see-through holes; powder snow on/near TS stays flush; placed towers still chain (not broken by the
-    new column-walk stop). (2) Publish: push + Modrinth/CF upload (Julia's go-ahead; NOT pushed yet).
+  - **LIVE-VERIFIED 2026-06-14 (Julia, "green"):** natural TS terrain shows NO see-through holes;
+    powder snow stays flush; placed towers still chain. `0.4.0-beta.4` is a fully-verified RC.
+  - **LEFT TO SHIP (human only):** publish — push branch + Modrinth/CF upload (Julia's explicit
+    go-ahead; NOT pushed yet).
   - NOTE: `git log --cherry-pick --right-only 831983d9...release/mc1.21.11-0.4.0-beta.3` lists ~13
     other release-branch commits "not in compat", but those are the SAME TS-compat fixes implemented in
     parallel on this branch's lineage (mixed-slab -1.0, lantern follow, cantilever, break-jam — all
