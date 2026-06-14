@@ -56,6 +56,11 @@ several found and confirmed during live play-testing. The 1.21.11 build carries 
   replace).
 
 ### Rendering
+- **Fence, wall, and glass-pane posts sit flush on vanilla slabs** (GitHub #21). Previously the post's
+  *model* floated at full height while its outline/selection box lowered correctly — so the post
+  appeared to hover above its own hitbox on a vanilla slab (it already worked on Terrain Slabs
+  surfaces). The model now renders at the same lowered position as its outline on every slab, and
+  connection arms still break correctly across a height step. *(new in -beta.4)*
 - **Ghost-window / see-through seams on lowered cubes are gone** — the exposed step faces between a
   lowered block and a flush neighbour render solid now, across vanilla, compound, and cantilever
   lowering, on both the Sodium and the vanilla render paths.
@@ -78,10 +83,11 @@ several found and confirmed during live play-testing. The 1.21.11 build carries 
 
 ### Stability / under the hood
 - Headless game-test suite expanded substantially (compound, cull, freeze, hanger, vegetation,
-  powder-snow, terrain-hole, and adversarial-regression guards) — **45 server tests** green on the
-  1.21.11 build.
+  powder-snow, terrain-hole, fence-connection, and adversarial-regression guards) — **46 server
+  tests** green on the 1.21.11 build.
 - Render-region boundary lookups guarded against world-load crashes.
-- Release jars exclude dev/debug entrypoints.
+- Release jars exclude dev/debug entrypoints, and all remaining diagnostic logging is gated off by
+  default (a pre-release hygiene pass stripped the last always-on debug traces).
 
 *Compatibility: Minecraft 1.21.11 (Fabric) with Countered's Terrain Slabs; a separate Minecraft
 1.21.1 build is included. Slabbed is inert when Terrain Slabs is not installed (vanilla slab

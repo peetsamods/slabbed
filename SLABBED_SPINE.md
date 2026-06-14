@@ -169,3 +169,31 @@ all other LOGGER.info gated (TRACE / isEnabled / TorchParticleTrace.enabled); de
 isDevelopmentEnvironment-gated; no println/printStackTrace; my [GD] debug fully removed; /slabdy
 overlay intentionally kept (also in the reference release). Cleaned jar md5 5af1e4c1 re-staged in
 Ready Jars + profile (logging-only change, functionally identical to the live-verified jar). 45/45.
+
+## 2026-06-14 (Claude, opus) — GH #21 floating fence posts FIXED + live-confirmed, RC re-staged
+
+GitHub issue #21: fence/wall/pane on a slab rendered FLOATING — `/slabdy` showed the outline/raycast
+correctly lowered (`VANILLA dy=-0.500 LOWERED`) but the MODEL stayed at grid height. Reproduced on
+VANILLA slabs (oak/smooth-stone/sandstone), NOT on Terrain Slabs surfaces. 1.21.1 was checked live
+by Julia and is FINE.
+
+Root: `OffsetBlockStateModel.emitQuads` forced the model `dy=0` for fence/wall/pane unless the
+support was a named-custom (Terrain Slabs) surface (`isDirectCustomSlabSupportedObject`) — so on a
+vanilla slab the model never got the offset its own outline did. 1.21.1's analogous guard is already
+effectively inert (gated on the always-true `isBeta35FenceWallVariantContactObject`), so 1.21.1 needs
+no change. Fix `92516668`: drop the suppression — the connecting-block model now always tracks
+`getYOffset`; `connectingBlockVisualDy` returns the real dy for vanilla carriers too, so the
+connector-arm break (`isSteppedConnectingNeighbor` → `FencePaneSlabConnectionMixin` /
+`WallSlabConnectionMixin`) still detects the step and doesn't draw an arm across it. New gametest
+`fenceConnectionBreaksAcrossVanillaSlabStep`; suite 46/46. **Julia LIVE-confirmed green** (flush on
+vanilla slab, connections clean, TS unchanged).
+
+Second hygiene pass (per the standing gate): re-grepped shipping code; all `[ANCHOR]` logs are gated
+behind `SlabAnchorAttachment.TRACE` and the crosshair dump behind `slabbed.targetTrace`, but two
+ungated `[Slabbed] AfterBake…` per-model-bake debug logs + the verbose ModelLoadingPlugin init line
+were still shipping — stripped in `c3228bb5` (functional wrapping + TS-skip logic unchanged).
+
+Re-staged: `~/Desktop/Ready Jars/slabbed-1.21.11-0.4.0-beta.4.jar` (md5 1a0bca6b, == the staged
+Modrinth-profile jar Julia live-verified) and `CHANGELOG-0.4.0-beta.md` (fence fix + 46-test count
+folded in); repo `CHANGELOG.md` synced. 1.21.1 jar unchanged. Still NOT pushed — publish (push + tag
+`slabbed-0.4.0-beta.4` + Modrinth/CF upload) awaits Julia's go-ahead. Nothing has been released yet.
