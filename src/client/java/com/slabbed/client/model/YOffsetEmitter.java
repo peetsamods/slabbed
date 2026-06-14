@@ -35,7 +35,16 @@ public final class YOffsetEmitter {
             float dy,
             Predicate<Direction> clearCullFace
     ) throws Throwable {
-        // Intercept emit() to translate vertices right before emission (covers models that don't call pos())
+        // Translate all 4 vertices by dy exactly ONCE, right before emission — emit() reads the
+        // final vertex positions, so this covers EVERY model regardless of how it set them
+        // (fromVanilla / copyFrom / per-vertex pos()).
+        //
+        // We intentionally do NOT also shift inside pos(): doing BOTH double-shifted any model that
+        // sets vertices via per-vertex pos() — cross / tinted plant models (short grass, fern, tall
+        // grass) — pushing them to dy*2 (= -1.0 instead of -0.5) so the whole tuft sank into the
+        // block below and rendered INVISIBLE on Terrain Slabs. Full-cube models emit via fromVanilla
+        // and never hit the old pos() path, so they were single-shifted and correct — which is why
+        // the compound stack rendered right while vegetation vanished.
         if ("emit".equals(method.getName()) && (args == null || args.length == 0)) {
             Direction cullFace = delegate.cullFace();
             if (cullFace != null && clearCullFace.test(cullFace)) {
@@ -49,18 +58,6 @@ public final class YOffsetEmitter {
                 delegate.pos(i, x, y + dy, z);
             }
             return method.invoke(delegate, args);
-        }
-
-        // Intercept pos(int, float, float, float)
-        if ("pos".equals(method.getName())
-                && args != null
-                && args.length == 4
-                && args[0] instanceof Integer
-                && args[1] instanceof Float
-                && args[2] instanceof Float
-                && args[3] instanceof Float) {
-            float y = (Float) args[2];
-            args[2] = y + dy;
         }
 
         Object result = method.invoke(delegate, args);
