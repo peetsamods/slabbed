@@ -26,8 +26,5 @@
     "fabricloader": "*",
     "fabric-api": "*",
     "minecraft": "1.21.11"
-  },
-  "recommends": {
-    "indium": "*"
   }
 }
