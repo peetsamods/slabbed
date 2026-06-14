@@ -6,7 +6,6 @@
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "BlockRenderInfoCullMixin",
-    "ClientWorldParticleTraceMixin",
     "CarpetDyShapeMixin",
     "GameRendererCrosshairRetargetMixin",
     "ItemFrameRenderOffsetMixin",

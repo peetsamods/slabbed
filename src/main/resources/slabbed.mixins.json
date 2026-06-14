@@ -16,7 +16,6 @@
     "RedstoneTorchParticleMixin",
     "WallRedstoneTorchParticleMixin",
     "RedstoneWireBlockMixin",
-    "BlockItemPlaceTraceMixin",
     "BlockItemPlacementIntentMixin",
     "BlockOnPlacedAnchorMixin",
     "BlockOnStateReplacedAnchorMixin"

@@ -2,8 +2,6 @@ package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedAuditBridge;
-import com.slabbed.util.SlabbedDebugBridge;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
@@ -117,22 +115,6 @@ public abstract class BlockItemPlacementIntentMixin {
         return min <= UP_FACE_EDGE_BAND ? nearest : null;
     }
 
-    private static final Class<?>[] REMAP_ATTEMPT_PARAM_TYPES = new Class<?>[]{
-            ItemUsageContext.class,
-            boolean.class,
-            boolean.class,
-            boolean.class,
-            boolean.class,
-            boolean.class,
-            double.class,
-            boolean.class,
-            boolean.class,
-            String.class,
-            Vec3d.class,
-            Direction.class,
-            String.class
-    };
-
     private static void slabbed$recordRemapAttempt(
             ItemUsageContext context,
             boolean itemIsSlab,
@@ -147,28 +129,11 @@ public abstract class BlockItemPlacementIntentMixin {
             Vec3d remappedHitPos,
             Direction effectiveSide,
             String hitDescriptor) {
-        SlabbedAuditBridge.invoke(
-                "recordRemapAttempt",
-                REMAP_ATTEMPT_PARAM_TYPES,
-                context,
-                itemIsSlab,
-                faceHorizontal,
-                targetIsSolid,
-                targetHasBlockEntity,
-                targetIsCraftingTable,
-                yOffset,
-                ordinaryLoweredFullBlockGuard,
-                remapped,
-                rejectionReason,
-                remappedHitPos,
-                effectiveSide,
-                hitDescriptor);
     }
 
     private static ItemUsageContext slabbed$inspectReturn(
             ItemUsageContext incoming, ItemUsageContext outgoing, String reason
     ) {
-        SlabbedDebugBridge.logIntent(incoming, outgoing, reason);
         return outgoing;
     }
 

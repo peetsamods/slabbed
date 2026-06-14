@@ -1,8 +1,6 @@
 package com.slabbed.mixin;
 
-import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.TorchParticleTrace;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.TorchBlock;
 import net.minecraft.particle.ParticleTypes;
@@ -36,11 +34,6 @@ public abstract class TorchParticleMixin {
         double x = pos.getX() + 0.5;
         double y = pos.getY() + 0.7 + dy;
         double z = pos.getZ() + 0.5;
-        if (TorchParticleTrace.enabled()) {
-            TorchParticleTrace.recordHook(pos, dy, y);
-            Slabbed.LOGGER.info("TERRAIN_SLABS_TORCH_PARTICLE_LIVE_TRACE pos={} dy={} particleY={} state={}",
-                    pos.toShortString(), dy, y, state);
-        }
         world.addParticleClient(ParticleTypes.SMOKE, x, y, z, 0.0, 0.0, 0.0);
         world.addParticleClient(this.particle, x, y, z, 0.0, 0.0, 0.0);
         ci.cancel();

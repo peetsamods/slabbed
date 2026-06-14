@@ -4,7 +4,6 @@ import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedDebugBridge;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
@@ -165,11 +164,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static void addAnchorUnchecked(World world, BlockPos pos) {
-        boolean added = addToAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        if (added && SlabbedDebugBridge.bsfbEnabled()) {
-            BlockPos supportPos = pos.down();
-            SlabbedDebugBridge.captureBsFb(world, supportPos, pos, "ANCHOR_ADDED");
-        }
+        addToAttachment(world, pos, ANCHOR_TYPE, "anchor");
     }
 
     /**
@@ -277,15 +272,11 @@ public final class SlabAnchorAttachment {
      * Clears any anchor at {@code pos}. Server-side only.
      */
     public static void removeAnchor(World world, BlockPos pos) {
-        boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
+        removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
         // Freeze-on-place flat marker clears when the piece itself is broken/replaced
         // (onStateReplaced calls removeAnchor for every removal), so a fresh placement in
         // the same spot re-evaluates from scratch.
         removeFromAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
-        if (removed && SlabbedDebugBridge.bsfbEnabled()) {
-            BlockPos supportPos = pos.down();
-            SlabbedDebugBridge.captureBsFb(world, supportPos, pos, "ANCHOR_REMOVED");
-        }
     }
 
     public static void removePersistentLoweredSlabCarrier(World world, BlockPos pos) {
