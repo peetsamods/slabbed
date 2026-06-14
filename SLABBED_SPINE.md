@@ -114,3 +114,18 @@ Ported + headless-proven (43/43, NOT pushed):
 Jar staged in Modrinth profile. **Pending Julia (right-click): freeze-law live confirm.** Deferred:
 invisible-grass-on-TS (render-path, needs live A/B) and compound -1.0 on right-click placement (needs
 the 1.21.1 compound-anchor sidecar). Do NOT push.
+
+## 2026-06-14 (Claude, opus) — vegetation + hanging-lantern LIVE-CONFIRMED
+
+Julia live-drove the Modrinth profile. Two more fixes, both **live "green"** (NOT pushed):
+- `bbe3deb9` hanging lanterns hang flush under a flush TS slab (route HANGING blocks through
+  `ceilingHungDecorationDy`, which has the `shouldSkipOffset` guard the old tail branch lacked).
+- `6f0c73e6` TS vegetation no longer double-offset. ROOT (proven by instrumenting `emitQuads`):
+  Terrain Slabs already wraps vegetation in its OWN `net.countered.terrainslabs.model.SlabOffsetModel`
+  and offsets it; Slabbed wrapped that and offset AGAIN (2× → sank invisible). Fix:
+  `SlabbedModelLoadingPlugin` skips wrapping a model TS already owns; `YOffsetEmitter` shifts once.
+
+LIVE-CONFIRMED this arc: compound float, ceiling-hanger, hanging lantern, vegetation. Remaining:
+freeze-law right-click live confirm (Julia; onPlaced-only — a /setblock block is NOT frozen, by
+design), the compound-on-placement anchor sidecar, and the 0.4.0-beta version/branch reconciliation
+(port DODO `42002295` + powder-snow onto this branch, bump, cut release). Do NOT push.

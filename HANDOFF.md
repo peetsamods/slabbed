@@ -27,21 +27,38 @@ MISSING from this branch.
    `getYOffsetInner` before geometric lowering, mirrored in `SlabAnchorClientSync`. Two new gametests
    drive the REAL onPlaced path (`frozenFlatBlockStaysFlatWhenSlabAddedBelow` + unfrozen control).
 
-**Headless: 43/43** (`./gradlew runGameTest`). Jar (`slabbed-0.2.0-beta.4.1.jar`, 124510 B) staged in
-the Modrinth `Slabbed+Terrain Slabs` profile for live testing.
+**LIVE-CONFIRMED fixes added 2026-06-14 (Julia driving the Modrinth profile):**
+4. **`bbe3deb9` — hanging lanterns hang flush** under a flush TS slab (were dropping -0.5 / gap). A
+   HANGING lantern fell through the old "follow lowered support down" tail, which reads
+   `getYOffsetInner(above)` — and that bypasses `shouldSkipOffset`, so it saw a flush TS slab as -0.5.
+   Fix: route HANGING blocks through `ceilingHungDecorationDy` (has the guard); STANDING lanterns keep
+   the rest-on-support path. **Live "green".**
+5. **`6f0c73e6` — TS vegetation no longer double-offset** (invisible/sunk grass, fern, tall grass).
+   ROOT (proven by instrumenting `emitQuads`): Terrain Slabs already wraps the blocks it positions in
+   its own `net.countered.terrainslabs.model.SlabOffsetModel` (offsetting the model) BEFORE Slabbed's
+   WRAP_PHASE, and Slabbed wrapped that and offset it a SECOND time (TS -0.5 + Slabbed -0.5 = -1.0 →
+   sank into the block below). Fix: `SlabbedModelLoadingPlugin` skips wrapping a model TS already owns
+   (its `SlabOffsetModel`) — TS provides the single model offset; Slabbed still drives the matching
+   outline via getYOffset. Also hardened `YOffsetEmitter` to shift each quad exactly once. **Live "green".**
 
-**Needs Julia (right-click, which computer-use can't drive):**
-- Freeze-law live confirm: right-click a log on the ground, then place a bottom slab under it → the
-  log must STAY put (no down-pop). Place hanging roots under a mycelium slab → must hang flush.
+**Headless: 43/43** (`./gradlew runGameTest`). Jar (`slabbed-0.2.0-beta.4.1.jar`, ~124.6 KB) staged in
+the Modrinth `Slabbed+Terrain Slabs` profile.
+
+**LIVE-CONFIRMED this arc:** compound float, ceiling-hanger (roots/spore/sign), hanging lantern, TS
+vegetation. **Still needs Julia (right-click — computer-use can't drive onPlaced):** freeze-law live
+confirm — right-click a log on the ground, then place a bottom slab under it → it must STAY put
+(no down-pop). NOTE: a `/setblock`'d block is NOT frozen (onPlaced-only, by design), so test with a
+hand-placed block.
 
 **Still open (deferred, distinct work):**
-- **Invisible grass on TS** — short grass is lowered -0.5 via `shouldOffset→hasSlabInColumn` and the
-  offset cross-model renders invisible. Real fix is render-path (the leaner exclude-from-lowering
-  option risks leaving grass floating 0.5 above the slab) → needs a live A/B; NOT shipped.
 - **Compound -1.0 on right-click placement** — 1.21.11's anchor reads a flat -0.5 (no compound
   sidecar yet), so a *placed* compound stack top freezes at -0.5 not -1.0 (the `21af4243` geometric
   fix only covers setBlockState/terrain). Pre-existing anchor limitation; port the 1.21.1
   `isCompoundFullBlockAnchor` sidecar for full parity.
+- **VERSION/BRANCH RECONCILIATION (release gate)** — Julia confirmed canonical version = `0.4.0-beta.x`.
+  This compat branch (`0.2.0-beta.4.1`) holds all the fixes but is MISSING the DODO world-hole fix
+  (`42002295`) + powder-snow (`85537dcd`) that live only on `Slabbed/ release/mc1.21.11-0.4.0-beta.3`.
+  Plan: port those onto this branch, bump to `0.4.0-beta.4`, cut the release from here.
 
 ---
 
