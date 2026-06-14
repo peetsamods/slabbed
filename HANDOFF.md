@@ -4,6 +4,23 @@
 
 ---
 
+## 🚦 RELEASE GATE (read this first — applies to Codex / any pre-release check)
+
+The release gate for this branch is: **headless `./gradlew runGameTest` (46/46) + live play-testing
+(Julia, via the Modrinth `Slabbed+Terrain Slabs` profile) + a clean jar** (no `debug/`/`dev/` package
+classes, no `*DebugBridge` / `*AuditBridge` / `*Trace` diagnostic classes, no always-on `LOGGER`
+output — see `slabbed-prerelease-hygiene-gate`).
+
+**`runClientGameTest` is NOT a release gate — do NOT block a release on it.** That 10-class
+`FabricClientGameTest` harness (`Slabbed*ClientGameTest`) is unmaintained dev-repro scaffolding: it has
+been broadly red since before the NEVER-POP freeze law (2026-06-13), several cases assert the obsolete
+pre-freeze-law teardown contract or deliberately-BLOCKED features (e.g. bed/torch "rescue", which the
+test's own comments mark "currently BLOCKED"), and it was never run during the fix work — only the
+headless suite + live play were. The two genuinely-stale lowered-lane cases were reconciled
+(`bf248530`); curating the rest is separate, non-release-blocking follow-up. (Decision: Julia, 2026-06-14.)
+
+---
+
 ## 🟢 PARITY PORT — 2026-06-13 (Claude, opus): bringing 1.21.11 to "law & canon" with 1.21.1
 
 **Root finding (Julia's live bug-hunt):** the 1.21.11 compat branch and the 1.21.1 release branch
@@ -50,7 +67,7 @@ MISSING from this branch.
    `fenceConnectionBreaksAcrossVanillaSlabStep`. **Live "green".** + 2nd hygiene pass `c3228bb5`
    (stripped ungated `[Slabbed] AfterBake…` per-model debug logs).
 
-**Headless: 46/46** (`./gradlew runGameTest`). Jar (`slabbed-0.4.0-beta.4.jar`, md5 02ea50ec) staged
+**Headless: 46/46** (`./gradlew runGameTest`). Jar (`slabbed-0.4.0-beta.4.jar`, md5 50179c9d) staged
 in the Modrinth `Slabbed+Terrain Slabs` profile **and** at `~/Desktop/Ready Jars/`.
 
 **LIVE-CONFIRMED this arc:** compound float, ceiling-hanger (roots/spore/sign), hanging lantern, TS

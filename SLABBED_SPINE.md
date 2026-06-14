@@ -205,3 +205,31 @@ its own FRAPI on 1.21.11, so Indium is no longer needed). Committed `(indium-rem
 metadata-only, no runtime change, so the live-green verdict stands. New jar `slabbed-0.4.0-beta.4.jar`
 md5 02ea50ec re-staged identically to the Modrinth `Slabbed+Terrain Slabs` profile and
 `~/Desktop/Ready Jars/slabbed-1.21.11-0.4.0-beta.4.jar`. Still NOT pushed.
+
+## 2026-06-14 (Claude, opus) — Codex release block resolved (jar hygiene + stale client gametests)
+
+Codex pre-release hygiene blocked the push. Two real, independent findings (NEITHER from the fence-fix
+RC itself; both pre-existing):
+
+1. **Jar hygiene gap (my miss).** The 1.21.11 jar shipped diagnostic bridge classes — `SlabbedDebugBridge`,
+   `SlabbedAuditBridge`, `TorchParticleTrace`, `BlockItemPlaceTraceMixin`, `ClientWorldParticleTraceMixin` —
+   in `com/slabbed/util` + `com/slabbed/mixin`, which the build.gradle debug-package excludes don't cover
+   (my earlier grep matched `SlabbedDebug.class` but not the `*Bridge` suffix). Fixed `a00543aa`: exclude
+   from jar + remove every production reference (verified no dangling ref → no NoClassDefFoundError; all
+   removals pure trace, functional logic intact). 1.21.1 jar was already clean (different lineage).
+
+2. **`runClientGameTest` red.** Reproduced on CLEAN `1d2b39c9` (not Codex's patch). Root: this 10-class
+   client-gametest harness is unmaintained dev-repro scaffolding, broadly red since before the freeze law
+   (2026-06-13). Two lowered-lane cases asserted the obsolete pre-freeze-law "orphaned lane normalizes to 0"
+   contract — PROVEN stale (runtime `tailAnchored=true` probe + 3 adversarial judges + 2 code-trace lenses:
+   a hand-placed lowered slab is anchored at placement and stays -0.5 by NEVER-POP). Reconciled `bf248530`
+   (no production change): orphaned case asserts the honest provenance split (frozen hand-placed tail stays
+   -0.5; setBlockState seed renormalizes to 0); `assertNoLoweredRemainderWithoutSupport` made anchor-aware.
+   The NEXT failure (`SlabbedLabClientGameTest` bed "rescue") is for a feature the test's own comments mark
+   "currently BLOCKED" — confirming the harness is scaffolding, not a gate.
+
+**Gate decision (Julia, 2026-06-14): release gate = headless `runGameTest` (46/46) + live play + clean jar;
+`runClientGameTest` is NOT a release gate** (documented at the top of HANDOFF.md so Codex respects it).
+Re-staged `slabbed-0.4.0-beta.4.jar` md5 50179c9d (now 109 KB, bridge classes excluded) to the Modrinth
+profile + `~/Desktop/Ready Jars/`. The `slabbed-0.4.0-beta.4` tag will be moved to the new HEAD (no binary
+was ever distributed under it). Nothing uploaded — Julia does Modrinth/CF.
