@@ -763,14 +763,16 @@ public final class SlabSupport {
     }
 
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
-        // Always-ceiling-hung decoration (hanging roots, spore blossom, hanging sign) hangs from the
-        // block ABOVE and has no floor variant, so its dy is a pure function of that support.
-        // Dispatch it here, BEFORE every "object resting on a support below" branch
-        // (directCustomSlabSupportDy, shouldOffset/slab-column, anchors) — those wrongly lower it
-        // when a carrier sits lower in the column (e.g. a placed lantern bridges the downward walk
-        // to a slab below, dragging the hanger down through a flush support). Lanterns are NOT here:
-        // a standing lantern legitimately rests on a slab, so it keeps the normal path.
-        if (isAlwaysCeilingHungDecoration(state)) {
+        // Ceiling-hung blocks (hanging roots, spore blossom, hanging signs, AND a HANGING lantern)
+        // hang from the block ABOVE, so their dy is a pure function of that support. Dispatch them
+        // here, BEFORE every "object resting on a support below" branch (directCustomSlabSupportDy,
+        // shouldOffset/slab-column, the old follow-support-down tail) — those wrongly lower them: the
+        // tail branch reads getYOffsetInner of the support above, which (unlike getYOffset) bypasses
+        // shouldSkipOffset and so sees a FLUSH Terrain Slabs slab as -0.5, dragging the hanger down
+        // through it. A HANGING lantern is included via the HANGING property; a STANDING lantern
+        // (HANGING=false) legitimately rests on a support below and keeps the normal path.
+        if (isAlwaysCeilingHungDecoration(state)
+                || (state.contains(Properties.HANGING) && state.get(Properties.HANGING))) {
             return ceilingHungDecorationDy(world, pos, state);
         }
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
