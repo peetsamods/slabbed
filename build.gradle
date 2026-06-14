@@ -111,6 +111,11 @@ jar {
     exclude("com/slabbed/client/ScreenshotCaptureService*.class")
     exclude("com/slabbed/client/CaptureProfile.class")
     exclude("com/slabbed/util/SlabbedDebug.class")
+    exclude("com/slabbed/util/SlabbedDebugBridge.class")
+    exclude("com/slabbed/util/SlabbedAuditBridge.class")
+    exclude("com/slabbed/util/TorchParticleTrace*.class")
+    exclude("com/slabbed/mixin/BlockItemPlaceTraceMixin*.class")
+    exclude("com/slabbed/mixin/client/ClientWorldParticleTraceMixin.class")
     exclude("slabbed.debug.mixins.json")
 }
 

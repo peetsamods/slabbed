@@ -3,7 +3,6 @@ package com.slabbed.mixin.client;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedDebugBridge;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.ChainBlock;
@@ -723,18 +722,6 @@ public abstract class GameRendererCrosshairRetargetMixin {
         double reach = 6.0;
         Vec3d end = eye.add(dir.multiply(reach));
         ItemStack held = client.player.getMainHandStack();
-        SlabbedDebugBridge.logClientTarget(
-                world,
-                eye,
-                end,
-                client.player.getYaw(),
-                client.player.getPitch(),
-                held,
-                initialTarget,
-                client.crosshairTarget,
-                anchoredDecision,
-                sideSlabRetargetFired);
-
         if (!Boolean.getBoolean("slabbed.target.trace")) {
             return;
         }

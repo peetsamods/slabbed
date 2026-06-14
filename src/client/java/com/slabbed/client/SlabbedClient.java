@@ -1,7 +1,6 @@
 package com.slabbed.client;
 
 import com.slabbed.Slabbed;
-import com.slabbed.util.SlabbedDebugBridge;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -10,10 +9,8 @@ import java.lang.reflect.InvocationTargetException;
 public final class SlabbedClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        SlabbedDebugBridge.logSessionStart();
         SlabbedModelLoadingPlugin.init();
         SlabAnchorClientSync.init();
-        SlabbedDebugBridge.initBsFbLiveTraceClient();
         initGapFillerOverlay();
         initTargetDyOverlay();
         initScreenshotCaptureService();
