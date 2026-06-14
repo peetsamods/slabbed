@@ -707,6 +707,11 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private void slabbed$traceTargeting(
             float tickProgress, HitResult initialTarget, String anchoredDecision, boolean sideSlabRetargetFired
     ) {
+        // Release hygiene: this targeting diagnostic dump is opt-in only (off by default) so it never
+        // spams release logs. Enable with -Dslabbed.targetTrace=true when debugging crosshair retargets.
+        if (!Boolean.getBoolean("slabbed.targetTrace")) {
+            return;
+        }
         ClientWorld world = client.world;
         Entity cam = client.getCameraEntity();
         if (world == null || cam == null || client.player == null) {
