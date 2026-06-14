@@ -55,10 +55,19 @@ hand-placed block.
   sidecar yet), so a *placed* compound stack top freezes at -0.5 not -1.0 (the `21af4243` geometric
   fix only covers setBlockState/terrain). Pre-existing anchor limitation; port the 1.21.1
   `isCompoundFullBlockAnchor` sidecar for full parity.
-- **VERSION/BRANCH RECONCILIATION (release gate)** — Julia confirmed canonical version = `0.4.0-beta.x`.
-  This compat branch (`0.2.0-beta.4.1`) holds all the fixes but is MISSING the DODO world-hole fix
-  (`42002295`) + powder-snow (`85537dcd`) that live only on `Slabbed/ release/mc1.21.11-0.4.0-beta.3`.
-  Plan: port those onto this branch, bump to `0.4.0-beta.4`, cut the release from here.
+- **VERSION/BRANCH RECONCILIATION — DONE 2026-06-14 (port + bump; pending live + publish).** Julia
+  confirmed canonical = `0.4.0-beta.x`. Ported the two genuine gaps from the release line onto this
+  branch (DODO world-hole `42002295` + powder-snow `85537dcd`), adapted to compat's leaner SlabSupport;
+  bumped `mod_version` → **`0.4.0-beta.4`**; built+installed `slabbed-0.4.0-beta.4.jar` in the profile.
+  Headless **45/45** (added `powderSnowOnSlabStaysFlush` + `naturalCubeOverSolidDoesNotLowerThroughToSlab`).
+  - **LEFT TO SHIP (human):** (1) **live-verify the terrain changes** — natural TS terrain shows NO
+    see-through holes; powder snow on/near TS stays flush; placed towers still chain (not broken by the
+    new column-walk stop). (2) Publish: push + Modrinth/CF upload (Julia's go-ahead; NOT pushed yet).
+  - NOTE: `git log --cherry-pick --right-only 831983d9...release/mc1.21.11-0.4.0-beta.3` lists ~13
+    other release-branch commits "not in compat", but those are the SAME TS-compat fixes implemented in
+    parallel on this branch's lineage (mixed-slab -1.0, lantern follow, cantilever, break-jam — all
+    present + live-tested here). DODO + powder-snow were the real functional gaps. A full behavior audit
+    is possible if ever wanted, but the compat branch is the tested, working line.
 
 ---
 

@@ -129,3 +129,20 @@ LIVE-CONFIRMED this arc: compound float, ceiling-hanger, hanging lantern, vegeta
 freeze-law right-click live confirm (Julia; onPlaced-only — a /setblock block is NOT frozen, by
 design), the compound-on-placement anchor sidecar, and the 0.4.0-beta version/branch reconciliation
 (port DODO `42002295` + powder-snow onto this branch, bump, cut release). Do NOT push.
+
+## 2026-06-14 (Claude, opus) — RECONCILED to 0.4.0-beta.4 (release candidate)
+
+All five live-confirmed (compound float, ceiling-hanger, hanging lantern, vegetation, AND the
+NEVER-POP freeze law — Julia confirmed the right-click test "green too"). Then reconciled to the
+canonical release line:
+- Ported the two real gaps from `Slabbed/ release/mc1.21.11-0.4.0-beta.3` onto this branch: DODO
+  world-hole (`42002295`) + powder-snow (`85537dcd`), adapted to compat's SlabSupport. The dual-mod-id
+  gate (DODO primary root) was already here; the missing parts were the view-independent
+  `isOpaqueFullCube()` terrain pin (vs view-dependent isSolidBlock — render-thread divergence) and the
+  column-walk "stop at a solid cube" guards, plus powder-snow exclusion.
+- Bumped `mod_version` → `0.4.0-beta.4`; built+installed `slabbed-0.4.0-beta.4.jar` in the Modrinth profile.
+- Headless **45/45** (+`powderSnowOnSlabStaysFlush`, +`naturalCubeOverSolidDoesNotLowerThroughToSlab`).
+
+LEFT TO SHIP (human): live-verify natural TS terrain (no holes) + powder snow + placed-tower chaining;
+then publish (push + Modrinth/CF). Standing rule: NOT pushed. The other ~13 release-branch commits that
+`--cherry-pick` flags are the same TS-compat fixes implemented in parallel here (not real gaps).
