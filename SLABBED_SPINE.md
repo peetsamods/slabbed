@@ -153,3 +153,7 @@ Julia live-verified the terrain changes ("green"): natural TS terrain = no see-t
 snow flush, placed towers still chain. All 5 parity fixes + DODO + powder-snow now live-confirmed.
 `0.4.0-beta.4` is a fully-verified release candidate. ONLY remaining = publish (push + Modrinth/CF),
 which needs Julia's explicit go-ahead. Still NOT pushed (15 commits ahead of origin).
+
+## 2026-06-14 (Claude, opus) — RC + changelog staged in Ready Jars
+
+`slabbed-0.4.0-beta.4.jar` (md5 c9098b56, == the live-verified jar) staged at `~/Desktop/Ready Jars/slabbed-1.21.11-0.4.0-beta.4.jar`; the 1.21.1 build `slabbed-1.21.1-0.4.0-beta.3.jar` (fresh build of `release/mc1.21.1-0.4.0-beta.3`, NOT re-tested this session) staged alongside; the pulled 1.21.11 beta.3 removed. Full user-facing changelog (since 0.3.0) written to `~/Desktop/Ready Jars/CHANGELOG-0.4.0-beta.md` + committed here as `CHANGELOG.md`. Still NOT pushed; publish (push+tag+upload) awaits Julia.
