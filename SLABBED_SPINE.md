@@ -157,3 +157,15 @@ which needs Julia's explicit go-ahead. Still NOT pushed (15 commits ahead of ori
 ## 2026-06-14 (Claude, opus) — RC + changelog staged in Ready Jars
 
 `slabbed-0.4.0-beta.4.jar` (md5 c9098b56, == the live-verified jar) staged at `~/Desktop/Ready Jars/slabbed-1.21.11-0.4.0-beta.4.jar`; the 1.21.1 build `slabbed-1.21.1-0.4.0-beta.3.jar` (fresh build of `release/mc1.21.1-0.4.0-beta.3`, NOT re-tested this session) staged alongside; the pulled 1.21.11 beta.3 removed. Full user-facing changelog (since 0.3.0) written to `~/Desktop/Ready Jars/CHANGELOG-0.4.0-beta.md` + committed here as `CHANGELOG.md`. Still NOT pushed; publish (push+tag+upload) awaits Julia.
+
+## 2026-06-14 (Claude, opus) — pre-release HYGIENE pass (caught by Julia)
+
+Julia flagged that I had NOT done a hygiene pass before staging the RC. Did it: two debug traces
+fired unconditionally and shipped — `RedstoneWireBlockMixin` (3 always-on LOGGER.info on every
+redstone canPlaceAt/connection) and `GameRendererCrosshairRetargetMixin.slabbed$traceTargeting`
+(ungated targeting dump). Fixed in `badf117a` (redstone logs removed, logic kept; traceTargeting
+gated behind `-Dslabbed.targetTrace`). Verified: dev/debug packages excluded from jar by build.gradle;
+all other LOGGER.info gated (TRACE / isEnabled / TorchParticleTrace.enabled); dev hooks
+isDevelopmentEnvironment-gated; no println/printStackTrace; my [GD] debug fully removed; /slabdy
+overlay intentionally kept (also in the reference release). Cleaned jar md5 5af1e4c1 re-staged in
+Ready Jars + profile (logging-only change, functionally identical to the live-verified jar). 45/45.
