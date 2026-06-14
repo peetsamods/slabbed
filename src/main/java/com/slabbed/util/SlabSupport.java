@@ -220,15 +220,15 @@ public final class SlabSupport {
 
     /**
      * Visual dy of a connecting block (fence/wall/pane), mirroring
-     * {@code OffsetBlockStateModel}: these are only visually lowered when they sit on a
-     * custom Terrain Slabs direct-support surface, never on a vanilla slab support.
+     * {@code OffsetBlockStateModel}: a connecting block lowered onto ANY slab support — vanilla
+     * or custom (Terrain Slabs) — renders at its {@code getYOffset} height, so this reports that
+     * same value. (Previously it collapsed the vanilla-slab case to 0 to match the old model guard
+     * that pinned such fences at grid height; that guard caused the floating-fence bug GH #21 and
+     * is gone, so the visual dy must track the real offset for both carriers — otherwise a fence
+     * lowered on a vanilla slab beside a flat fence would draw a connector arm across the step.)
      */
     public static double connectingBlockVisualDy(BlockView world, BlockPos pos, BlockState state) {
-        double dy = getYOffset(world, pos, state);
-        if (dy != 0.0 && !isDirectCustomSlabSupportedObject(world, pos, state)) {
-            return 0.0;
-        }
-        return dy;
+        return getYOffset(world, pos, state);
     }
 
     /**
