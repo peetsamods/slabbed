@@ -40,9 +40,18 @@ MISSING from this branch.
    sank into the block below). Fix: `SlabbedModelLoadingPlugin` skips wrapping a model TS already owns
    (its `SlabOffsetModel`) — TS provides the single model offset; Slabbed still drives the matching
    outline via getYOffset. Also hardened `YOffsetEmitter` to shift each quad exactly once. **Live "green".**
+6. **`92516668` — GH #21 floating fence posts on VANILLA slabs.** Fence/wall/pane outline lowered
+   correctly but the MODEL floated at grid height. ROOT: `OffsetBlockStateModel.emitQuads` forced
+   model `dy=0` for connecting blocks unless on a named-custom (TS) surface, so vanilla-slab fences
+   never got the offset their outline did. Fix: drop the suppression — connecting-block model now
+   always tracks `getYOffset`; `connectingBlockVisualDy` returns the real dy for vanilla carriers too,
+   so the step-detected connector-arm break (`FencePaneSlabConnectionMixin`/`WallSlabConnectionMixin`)
+   still fires. 1.21.1 already inert here (Julia live-checked it → fine). New gametest
+   `fenceConnectionBreaksAcrossVanillaSlabStep`. **Live "green".** + 2nd hygiene pass `c3228bb5`
+   (stripped ungated `[Slabbed] AfterBake…` per-model debug logs).
 
-**Headless: 43/43** (`./gradlew runGameTest`). Jar (`slabbed-0.2.0-beta.4.1.jar`, ~124.6 KB) staged in
-the Modrinth `Slabbed+Terrain Slabs` profile.
+**Headless: 46/46** (`./gradlew runGameTest`). Jar (`slabbed-0.4.0-beta.4.jar`, md5 1a0bca6b) staged
+in the Modrinth `Slabbed+Terrain Slabs` profile **and** at `~/Desktop/Ready Jars/`.
 
 **LIVE-CONFIRMED this arc:** compound float, ceiling-hanger (roots/spore/sign), hanging lantern, TS
 vegetation. **Still needs Julia (right-click — computer-use can't drive onPlaced):** freeze-law live
