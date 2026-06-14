@@ -50,7 +50,7 @@ MISSING from this branch.
    `fenceConnectionBreaksAcrossVanillaSlabStep`. **Live "green".** + 2nd hygiene pass `c3228bb5`
    (stripped ungated `[Slabbed] AfterBake…` per-model debug logs).
 
-**Headless: 46/46** (`./gradlew runGameTest`). Jar (`slabbed-0.4.0-beta.4.jar`, md5 1a0bca6b) staged
+**Headless: 46/46** (`./gradlew runGameTest`). Jar (`slabbed-0.4.0-beta.4.jar`, md5 02ea50ec) staged
 in the Modrinth `Slabbed+Terrain Slabs` profile **and** at `~/Desktop/Ready Jars/`.
 
 **LIVE-CONFIRMED this arc:** compound float, ceiling-hanger (roots/spore/sign), hanging lantern, TS

@@ -197,3 +197,11 @@ Re-staged: `~/Desktop/Ready Jars/slabbed-1.21.11-0.4.0-beta.4.jar` (md5 1a0bca6b
 Modrinth-profile jar Julia live-verified) and `CHANGELOG-0.4.0-beta.md` (fence fix + 46-test count
 folded in); repo `CHANGELOG.md` synced. 1.21.1 jar unchanged. Still NOT pushed — publish (push + tag
 `slabbed-0.4.0-beta.4` + Modrinth/CF upload) awaits Julia's go-ahead. Nothing has been released yet.
+
+## 2026-06-14 (Claude, opus) — drop Indium recommendation, rebuild RC
+
+Julia OK'd removing the `recommends: indium` hint from both `fabric.mod.json` (Sodium 0.6+ ships
+its own FRAPI on 1.21.11, so Indium is no longer needed). Committed `(indium-removal)`, rebuilt —
+metadata-only, no runtime change, so the live-green verdict stands. New jar `slabbed-0.4.0-beta.4.jar`
+md5 02ea50ec re-staged identically to the Modrinth `Slabbed+Terrain Slabs` profile and
+`~/Desktop/Ready Jars/slabbed-1.21.11-0.4.0-beta.4.jar`. Still NOT pushed.
