@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.AABB;
 
@@ -370,6 +371,57 @@ public final class Slabbed2612LoweringContractTest {
                     + " (the log must follow it, dy=" + (slabDy - 0.5) + "). A stale compound anchor sinks "
                     + "the log -1.0 into the flushed slab.");
         }
+        helper.succeed();
+    }
+
+    private static BlockState hangingLantern() {
+        return Blocks.LANTERN.defaultBlockState().setValue(BlockStateProperties.HANGING, true);
+    }
+
+    /**
+     * LANTERN SMOOSH (port of bbe3deb9): a HANGING lantern hangs from the block ABOVE it, so it must
+     * take its dy from that support. When the support is lowered, the lantern must FOLLOW it down —
+     * otherwise the lantern stays at the grid height and its chain/top pokes UP into the lowered
+     * support (the "smoosh"). RED before the fix: the hanging lantern is not routed through the
+     * ceiling-hung path and reads dy=0.0 while its support reads -0.5.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingLanternFollowsLoweredSupportAbove(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+
+        // Build a lowered, ANCHORED stone support with AIR below it (so the lantern can hang there):
+        // place stone on a temp slab (-> -0.5), anchor it, then remove the slab (freeze keeps -0.5).
+        BlockPos support = new BlockPos(2, 3, 2);
+        helper.setBlock(support.below(), bottomSlab());                          // temp carrier
+        helper.setBlock(support, Blocks.STONE.defaultBlockState());             // stone -> -0.5
+        BlockPos supportAbs = helper.absolutePos(support);
+        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+        helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());        // remove carrier; anchor holds -0.5
+        assertDy(helper, level, support, -0.5, "SETUP: anchored stone support stays lowered -0.5 with air below");
+
+        // Hanging lantern directly under the lowered support.
+        BlockPos lanternRel = support.below();
+        helper.setBlock(lanternRel, hangingLantern());
+
+        assertDy(helper, level, lanternRel, -0.5,
+                "HANGING lantern under a lowered support MUST follow it down (-0.5), not stay at 0.0 and "
+                + "smoosh up into the lowered support");
+        helper.succeed();
+    }
+
+    /**
+     * No-regression companion: a HANGING lantern under a FLUSH support stays flush (0.0) — no -0.5
+     * gap. Holds before and after the fix (ceilingHungDecorationDy returns 0.0 for a flush support).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingLanternUnderFlushSupportStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos support = new BlockPos(2, 4, 2);
+        helper.setBlock(support, Blocks.STONE.defaultBlockState());   // flush support
+        BlockPos lanternRel = support.below();
+        helper.setBlock(lanternRel, hangingLantern());
+        assertDy(helper, level, lanternRel, 0.0,
+                "HANGING lantern under a flush support stays flush (0.0), no -0.5 gap");
         helper.succeed();
     }
 
