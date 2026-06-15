@@ -115,4 +115,32 @@ public final class Slabbed2612LoweringContractTest {
                 "unfrozen (terrain) stone on a bottom slab lowers to -0.5 (control)");
         helper.succeed();
     }
+
+    /**
+     * ceiling-hanger (port of 2a50335e): an always-ceiling-hung decoration (hanging
+     * roots) takes its dy SOLELY from the support ABOVE. A flush support above must
+     * keep it flush (0.0) even when a carrier lower in the column bridges down to a
+     * slab — it must NOT be dragged down to -0.5. RED before the fix: the hanger
+     * falls through the column walk and lowers.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingRootsUnderFlushSupportStayFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos rootsRel = new BlockPos(2, 3, 2);
+
+        // Flush CEILING SLAB directly above the hanger (a bottom slab stays flush, dy=0).
+        helper.setBlock(rootsRel.above(), bottomSlab());
+        // The hanger, hanging under the flush ceiling slab.
+        helper.setBlock(rootsRel, Blocks.HANGING_ROOTS.defaultBlockState());
+        // Carrier bridge (non-air) directly below the roots, then a bottom slab 2 cells below — the
+        // exact configuration that bridged the downward column walk to a slab and wrongly lowered the
+        // hanger -0.5 (a visible gap under the flush ceiling).
+        helper.setBlock(rootsRel.below(), Blocks.STONE.defaultBlockState());
+        helper.setBlock(rootsRel.below(2), bottomSlab());
+
+        assertDy(helper, level, rootsRel.above(), 0.0, "ceiling slab should be flush");
+        assertDy(helper, level, rootsRel, 0.0,
+                "hanging roots under a flush ceiling slab MUST stay flush (0.0), not dragged down by a carrier below");
+        helper.succeed();
+    }
 }
