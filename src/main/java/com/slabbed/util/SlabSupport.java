@@ -1543,6 +1543,24 @@ public final class SlabSupport {
     }
 
     /**
+     * True for a slab whose lowered dy comes ONLY from a lowered SIDE neighbour (slab-lane
+     * inheritance), with NO genuine lowered support directly below it. Used by freeze-on-place: a
+     * freshly PLACED slab in this state must NOT snap down to the neighbour's level (Julia's
+     * NEVER-POP law — a placed block stays where it was put); it freezes flat instead. A slab lowered
+     * by genuine support BELOW (a lowered carrier — slab or full block) is excluded here so it still
+     * legitimately follows that support down (anchored -0.5).
+     */
+    public static boolean slabLoweringIsSideInheritedOnly(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null || !(state.getBlock() instanceof SlabBlock)) {
+            return false;
+        }
+        if (hasLoweredCarrierBelow(world, pos)) {
+            return false;
+        }
+        return isAdjacentSideSlabLowered(world, pos, state);
+    }
+
+    /**
      * True for an always-ceiling-hung decoration — hanging roots, spore blossom, hanging signs.
      * These attach to the block ABOVE and have no floor variant, so their dy must be a pure
      * function of that support and must never be lowered by a block below them in the column.

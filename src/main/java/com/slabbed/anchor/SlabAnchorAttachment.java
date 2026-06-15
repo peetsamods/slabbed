@@ -243,6 +243,15 @@ public final class SlabAnchorAttachment {
         }
         double dy = SlabSupport.getYOffset(world, pos, state);
         if (dy < -1.0e-6) {
+            // A placed SLAB that reads lowered ONLY because of a lowered SIDE neighbour (slab-lane
+            // inheritance), with no genuine lowered support directly below it, must NOT snap down to
+            // that level — Julia's NEVER-POP law: a placed block stays where it was put. Freeze it
+            // FLAT instead of anchoring -0.5 (the reported "snapped slab"). A slab lowered by genuine
+            // support BELOW still follows down (anchored -0.5 in the branch below).
+            if (SlabSupport.slabLoweringIsSideInheritedOnly(world, pos, state)) {
+                addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
+                return;
+            }
             addAnchorUnchecked(world, pos);
             return;
         }

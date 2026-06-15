@@ -501,6 +501,31 @@ public final class Slabbed2612LoweringContractTest {
         helper.succeed();
     }
 
+    /**
+     * SNAPPED SLAB (-2,-56,-1 in Julia's windmill): a slab AUTHORED beside a lowered carrier but
+     * cantilevered over AIR (no genuine support below it) must STAY FLUSH — it must NOT snap down to
+     * the neighbour's -0.5 and anchor there (NEVER-POP). RED before the fix: it reads -0.5 ANCHORED.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabCantileveredBesideLoweredCarrierStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // A lowered full block: stone on a bottom slab (dy=-0.5).
+        BlockPos carrier = new BlockPos(2, 2, 2);
+        helper.setBlock(carrier, bottomSlab());
+        helper.setBlock(carrier.above(), Blocks.STONE.defaultBlockState());
+        BlockPos loweredStone = carrier.above();
+        assertDy(helper, level, loweredStone, -0.5, "SETUP: lowered carrier stone");
+
+        // Author a slab BESIDE the lowered stone, cantilevered over AIR (nothing below it).
+        BlockPos beside = loweredStone.east();          // (3,3,2); below (3,2,2) is air
+        authorBlock(helper, level, beside, bottomSlab());
+
+        assertDy(helper, level, beside, 0.0,
+                "slab cantilevered beside a lowered carrier (air below) MUST stay flush (NEVER-POP); "
+                + "it must not snap to -0.5 from the lowered side neighbour");
+        helper.succeed();
+    }
+
     private static BlockState yChain() {
         return Blocks.IRON_CHAIN.defaultBlockState().setValue(BlockStateProperties.AXIS, net.minecraft.core.Direction.Axis.Y);
     }
