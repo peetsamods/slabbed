@@ -109,12 +109,10 @@ sourceSets {
     }
     gametest {
         java {
-            // 26.1.2 port: the legacy SlabbedLab gametest harness is deferred from release compile.
-            exclude("**/*.java")
-        }
-        resources {
-            // Keep deferred gametest entrypoints from advertising excluded classes at runtime.
-            exclude("fabric.mod.json")
+            // 26.1.2 port: the legacy SlabbedLab gametests are Yarn-named and do NOT compile
+            // under Mojang mappings, so they stay deferred. Compile ONLY the focused,
+            // Mojang-named regression tests that are kept current.
+            include("com/slabbed/test/GhostLoweredCollisionProofTest.java")
         }
     }
 }
