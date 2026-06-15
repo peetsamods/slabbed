@@ -1589,13 +1589,18 @@ public final class SlabSupport {
     }
 
     private static double getYOffsetInner(BlockGetter world, BlockPos pos, BlockState state) {
-        // Always-ceiling-hung decoration (hanging roots, spore blossom, hanging sign) hangs from the
-        // block ABOVE and has no floor variant, so its dy is a pure function of that support.
-        // Dispatch it here, BEFORE every "object resting on a support below" branch — those wrongly
-        // lower it when a carrier sits lower in the column (a placed lantern bridges the downward
-        // walk to a slab below, dragging the hanger down through a flush support). Lanterns are NOT
-        // here: a standing lantern legitimately rests on a slab, so it keeps the normal path.
-        if (isAlwaysCeilingHungDecoration(state)) {
+        // Ceiling-hung blocks (hanging roots, spore blossom, hanging signs, AND a HANGING lantern)
+        // hang from the block ABOVE, so their dy is a pure function of that support. Dispatch them
+        // here, BEFORE every "object resting on a support below" branch — those wrongly lower/raise
+        // them: the follow-support tail reads getYOffsetInner of the support above and, for a
+        // HANGING lantern not routed here, the lantern instead stays at grid height while its support
+        // is lowered, so its chain/top pokes UP into the lowered support (the reported "smoosh"). A
+        // HANGING lantern is included via the HANGING property so it FOLLOWS its support down (and
+        // hangs flush under a flush support, no -0.5 gap); a STANDING lantern (HANGING=false)
+        // legitimately rests on a support below and keeps the normal path. Port of 1.21.1 bbe3deb9.
+        if (isAlwaysCeilingHungDecoration(state)
+                || (state.hasProperty(BlockStateProperties.HANGING)
+                        && state.getValue(BlockStateProperties.HANGING))) {
             return ceilingHungDecorationDy(world, pos, state);
         }
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
