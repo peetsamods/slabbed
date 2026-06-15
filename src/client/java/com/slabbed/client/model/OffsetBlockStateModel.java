@@ -55,6 +55,11 @@ public final class OffsetBlockStateModel implements BlockStateModel {
     @Override
     public void emitQuads(QuadEmitter emitter, BlockAndTintGetter view, BlockPos pos, BlockState state, RandomSource random,
                           Predicate<Direction> cullTest) {
+        // A Y-axis chain hanging under a slab ceiling emits extended geometry so the column connects
+        // continuously to the slab (no gap) — the chainable connect rule, distinct from lantern follow.
+        if (ChainCeilingGeometry.emitIfPresent(fabricWrapped, emitter, view, pos, state, random, cullTest)) {
+            return;
+        }
         float dy = slabbed$modelDy(view, pos, state);
         QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy, slabbed$hasMismatchedNeighborDy(view, pos, dy)) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, slabbed$offsetAwareCullTest(view, pos, state, dy, cullTest));
