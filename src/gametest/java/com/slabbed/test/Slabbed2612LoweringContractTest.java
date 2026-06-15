@@ -501,4 +501,48 @@ public final class Slabbed2612LoweringContractTest {
         helper.succeed();
     }
 
+    private static BlockState yChain() {
+        return Blocks.IRON_CHAIN.defaultBlockState().setValue(BlockStateProperties.AXIS, net.minecraft.core.Direction.Axis.Y);
+    }
+
+    /**
+     * Chain-vs-lantern distinction probe: a Y-axis CHAIN under a LOWERED support must NOT follow it
+     * down the way a hanging lantern does — chains are "chainables" that keep their own connect
+     * behavior (1.21.11 explicitly excludes ChainBlock from the hanger-follow). This documents the
+     * CURRENT 26.1.2 chain dy so we can reason about the gap, and proves the lantern fix did not
+     * sweep chains into the follow-down (which would smoosh/move them).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainUnderLoweredSupportDoesNotFollowDownLikeLantern(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos support = new BlockPos(2, 3, 2);
+        helper.setBlock(support.below(), bottomSlab());
+        helper.setBlock(support, Blocks.STONE.defaultBlockState());
+        BlockPos supportAbs = helper.absolutePos(support);
+        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+        helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());
+        assertDy(helper, level, support, -0.5, "SETUP: lowered anchored support");
+
+        helper.setBlock(support.below(), yChain());
+        assertDy(helper, level, support.below(), 0.0,
+                "Y-axis chain under a lowered support does NOT follow it down (chains keep connect-up; "
+                + "unlike a hanging lantern which follows to -0.5)");
+        helper.succeed();
+    }
+
+    /**
+     * Documents that a Y-axis chain under a TOP slab raises +0.5 (the "connect up" behavior the user
+     * sees as src=geometric dy=+0.500) — identical in 26.1.2 and 1.21.11.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainUnderTopSlabRaisesHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos chain = new BlockPos(2, 3, 2);
+        helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
+        helper.setBlock(chain, yChain());
+        assertDy(helper, level, chain, 0.5,
+                "Y-axis chain directly under a TOP slab raises +0.5 to connect up (vanilla connect-up; same as 1.21.11)");
+        helper.succeed();
+    }
+
 }
