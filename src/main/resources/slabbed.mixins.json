@@ -15,7 +15,8 @@
     "BlockItemPlacementIntentMixin",
     "ServerInteractBlockHitToleranceMixin",
     "BlockOnPlacedAnchorMixin",
-    "BlockOnStateReplacedAnchorMixin"
+    "BlockOnStateReplacedAnchorMixin",
+    "BlockCollisionsLoweredAboveMixin"
   ],
   "client": [],
   "injectors": { "defaultRequire": 1 }
