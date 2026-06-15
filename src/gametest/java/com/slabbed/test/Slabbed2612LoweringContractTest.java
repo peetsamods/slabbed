@@ -331,4 +331,46 @@ public final class Slabbed2612LoweringContractTest {
         helper.succeed();
     }
 
+    /**
+     * MERGE / stale compound anchor (the "log sinks into the flat slab below" + "anti-inheritance
+     * violated"): a full block carrying a compound anchor (-1.0) must FOLLOW the slab directly below
+     * it. If that slab is later flushed to 0.0, the block must sit on it at -0.5 — it must NOT stay
+     * stuck at -1.0 and sink into the flush slab. RED before the fix: the stale compound sidecar
+     * returns -1.0 unconditionally while the slab below reads 0.0 (the visible merge).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void compoundAnchorBlockMustFollowSlabBelowNotSinkWhenFlushed(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos base = new BlockPos(2, 1, 2);
+
+        // Genuine compound stack: ground, slab(0), stone(-0.5), slab(-0.5), log(-1.0).
+        helper.setBlock(base, Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(1), bottomSlab());                       // L0 slab dy 0
+        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone dy -0.5
+        helper.setBlock(base.above(3), bottomSlab());                       // L2 slab dy -0.5
+        BlockPos logRel = base.above(4);
+        helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());     // L3 log
+        BlockPos logAbs = helper.absolutePos(logRel);
+
+        // Record the compound anchor the real placement path would record (log on a lowered slab).
+        SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+        assertDy(helper, level, logRel, -1.0, "SETUP: compound log starts lowered -1.0 on the lowered slab");
+
+        // Now FLUSH the slab directly below the log: remove its lowering source (L1) so L2 -> 0.0.
+        helper.setBlock(base.above(2), Blocks.AIR.defaultBlockState());
+
+        BlockPos slabRel = base.above(3);
+        double slabDy = SlabSupport.getYOffset(level, helper.absolutePos(slabRel), level.getBlockState(helper.absolutePos(slabRel)));
+        double logDy = SlabSupport.getYOffset(level, logAbs, level.getBlockState(logAbs));
+        // The block must sit on the slab below: logDy == slabDy - 0.5. Slab flushed to 0.0 => log -0.5.
+        if (Math.abs(logDy - (slabDy - 0.5)) > EPS) {
+            throw helper.assertionException(logRel,
+                    "MERGE: log dy=" + logDy + " but the slab directly below reads dy=" + slabDy
+                    + " (the log must follow it, dy=" + (slabDy - 0.5) + "). A stale compound anchor sinks "
+                    + "the log -1.0 into the flushed slab.");
+        }
+        helper.succeed();
+    }
+
 }
