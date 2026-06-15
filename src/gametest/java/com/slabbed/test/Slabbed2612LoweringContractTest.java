@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -243,6 +244,90 @@ public final class Slabbed2612LoweringContractTest {
 
         assertDy(helper, level, onTop, -0.5,
                 "slab placed ON a lowered carrier follows it down (-0.5)");
+        helper.succeed();
+    }
+
+    /**
+     * SIDE-CONTAGION / "inheritances" (port of 83afed84): a FULL BLOCK placed against the
+     * horizontal face of a lowered full-block carrier, but standing on its OWN flush ground,
+     * must NOT inherit lowering. The old side-adjacent anchor (driven by
+     * {@code BlockItemPlacementIntentMixin}) gave it a persistent stale anchor → it sank into
+     * the ground and spread lowering onward (tree-canopy contagion). RED before the disable:
+     * after the placement-intent call the block reads dy=-0.5 (anchored).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void sideAdjacentFullBlockMustNotInheritLowering(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+
+        // A genuinely lowered full-block carrier: stone on a bottom slab (dy=-0.5).
+        BlockPos carrier = new BlockPos(2, 2, 2);
+        helper.setBlock(carrier, bottomSlab());
+        helper.setBlock(carrier.above(), Blocks.STONE.defaultBlockState());
+        BlockPos sourcePos = helper.absolutePos(carrier.above());
+        BlockState sourceState = level.getBlockState(sourcePos);
+
+        // A NEW full block beside it (east), standing on its OWN flush ground (stone below).
+        BlockPos besideRel = carrier.above().east();
+        helper.setBlock(besideRel.below(), Blocks.STONE.defaultBlockState());
+        helper.setBlock(besideRel, Blocks.STONE.defaultBlockState());
+        BlockPos besideAbs = helper.absolutePos(besideRel);
+        BlockState besideState = level.getBlockState(besideAbs);
+
+        // Drive the exact side-placement path BlockItemPlacementIntentMixin uses on a horizontal click.
+        SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(level, besideAbs, besideState, sourcePos, sourceState);
+
+        assertDy(helper, level, besideRel, 0.0,
+                "full block placed beside a lowered carrier on its own flush ground MUST stay flush (0.0); "
+                + "it must NOT inherit a side-adjacent anchor (Julia's no-inheritance law)");
+        helper.succeed();
+    }
+
+    /**
+     * CANTILEVER MERGE / "the consistent merge" (port of 9a24670c): a full block cantilevered
+     * over AIR and connected horizontally to a genuinely lowered tower lowers -0.5 to merge,
+     * computed live (never stale). Replaces the removed side-adjacent anchor with geometry.
+     * RED before the feature: the cantilever block reads dy=0.0 (floats above the lowered tower).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cantileverFullBlockOverAirMergesWithLoweredTower(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+
+        // Genuinely lowered tower: stone on a bottom slab (slab-below → genuine lowered source).
+        BlockPos slab = new BlockPos(2, 2, 2);
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(slab.above(), Blocks.STONE.defaultBlockState());
+        assertDy(helper, level, slab.above(), -0.5, "tower stone on a bottom slab is lowered (source)");
+
+        // Cantilever stone beside the lowered stone, with AIR directly below it (nothing placed at
+        // slab.above().east().below()). It hangs out over empty space, connected to the tower.
+        BlockPos cantileverRel = slab.above().east();
+        helper.setBlock(cantileverRel, Blocks.STONE.defaultBlockState());
+
+        assertDy(helper, level, cantileverRel, -0.5,
+                "full block cantilevered over air, connected to a lowered tower, MUST merge to -0.5");
+        helper.succeed();
+    }
+
+    /**
+     * No-sink guard for the cantilever feature: a full block on its OWN solid ground beside a
+     * lowered tower must STAY flush (air-gating) — only air-below blocks cantilever-merge. Must
+     * hold both before and after 9a24670c (it is the safety rail, not a RED).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnSolidGroundBesideLoweredTowerStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+
+        BlockPos slab = new BlockPos(2, 2, 2);
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(slab.above(), Blocks.STONE.defaultBlockState());
+
+        // Beside stone WITH its own solid ground below (so it is NOT a cantilever candidate).
+        BlockPos besideRel = slab.above().east();
+        helper.setBlock(besideRel.below(), Blocks.STONE.defaultBlockState());
+        helper.setBlock(besideRel, Blocks.STONE.defaultBlockState());
+
+        assertDy(helper, level, besideRel, 0.0,
+                "full block on its OWN solid ground beside a lowered tower MUST stay flush (no sink)");
         helper.succeed();
     }
 

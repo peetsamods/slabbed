@@ -1229,6 +1229,20 @@ public final class SlabAnchorAttachment {
             BlockPos sourcePos,
             BlockState sourceState
     ) {
+        // A full block must NOT inherit lowering from a horizontal neighbour. Side-adjacent
+        // anchoring lowered a freestanding full block purely because the block beside it was
+        // lowered, with no slab/lowered support of its own — a persistent anchor that then
+        // (a) sank the block into the ground/air, (b) went stale (it stayed lowered after the
+        // source carrier was removed, since the anchor never recomputes), and (c) spread the
+        // lowering further to ITS neighbours (tree-canopy contagion). This is Julia's "blocks
+        // should not inherit states like this" RED. Lowering for full blocks now comes only from
+        // genuine support directly below (a slab, or a lowered full-block column down to a slab)
+        // via qualifiesForAnchor / the column walk — never sideways. A piece genuinely
+        // cantilevered over air still merges, computed LIVE via
+        // SlabSupport#isCantileverLoweredFullBlock (never stale, never pops). Port of 1.21.1 83afed84.
+        if (true) {
+            return false;
+        }
         if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)
                 || !qualifiesAsSideAdjacentLoweredFullAnchorSource(world, sourcePos, sourceState)) {
             return false;
