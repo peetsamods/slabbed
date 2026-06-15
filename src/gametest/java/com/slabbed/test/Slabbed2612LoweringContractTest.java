@@ -203,4 +203,47 @@ public final class Slabbed2612LoweringContractTest {
         helper.succeed();
     }
 
+    /**
+     * SNAP fix: a slab PLACED beside a lowered block but on flush ground must STAY flush — it must
+     * NOT inherit the neighbour's lowered position (Julia's no-side-contagion law). RED before the
+     * fix: the placed slab snaps to -0.5 (isAdjacentSideSlabLowered, then frozen by the anchor).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void placedSlabBesideLoweredBlockStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // A lowered full block: stone on a bottom slab.
+        BlockPos carrier = new BlockPos(2, 2, 2);
+        helper.setBlock(carrier, bottomSlab());
+        helper.setBlock(carrier.above(), Blocks.STONE.defaultBlockState());
+        BlockPos loweredStone = carrier.above();
+
+        // AUTHOR a bottom slab BESIDE the lowered stone, on FLUSH ground (the user's snap case).
+        BlockPos beside = loweredStone.east();
+        helper.setBlock(beside.below(), Blocks.STONE.defaultBlockState());
+        authorBlock(helper, level, beside, bottomSlab());
+
+        assertDy(helper, level, beside, 0.0,
+                "slab placed beside a lowered block on flush ground MUST stay flush (no side-contagion snap)");
+        helper.succeed();
+    }
+
+    /**
+     * No-regression companion: a slab PLACED on top of a lowered carrier legitimately follows it
+     * down to -0.5 (support-following, not side-contagion). The snap fix must NOT break this.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void placedSlabOnLoweredCarrierStaysLowered(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos carrier = new BlockPos(2, 2, 2);
+        helper.setBlock(carrier, bottomSlab());
+        helper.setBlock(carrier.above(), Blocks.STONE.defaultBlockState());
+
+        BlockPos onTop = carrier.above(2);
+        authorBlock(helper, level, onTop, bottomSlab());
+
+        assertDy(helper, level, onTop, -0.5,
+                "slab placed ON a lowered carrier follows it down (-0.5)");
+        helper.succeed();
+    }
+
 }

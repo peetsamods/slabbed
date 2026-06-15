@@ -1,13 +1,16 @@
 package com.slabbed.client;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.Locale;
 
@@ -64,12 +67,39 @@ public final class TargetDyOverlay {
         String status = dy < -1.0e-6 ? "LOWERED" : (dy > 1.0e-6 ? "RAISED" : "flush");
         String source = "minecraft".equals(namespace) ? "VANILLA" : "MOD:" + namespace;
 
+        // Which half of the targeted block the crosshair is on, relative to its VISUAL shape
+        // (the lowered/offset outline). Drives slab top/bottom placement.
+        String half = "?";
+        VoxelShape outline = state.getShape(client.level, pos);
+        if (!outline.isEmpty()) {
+            double mid = pos.getY() + (outline.min(Direction.Axis.Y) + outline.max(Direction.Axis.Y)) / 2.0;
+            half = blockHit.getLocation().y >= mid ? "UPPER" : "LOWER";
+        }
+
+        // Why is the block at this dy? — distinguishes a frozen/anchored placement from live
+        // geometric/compound-side lowering (the snapping we are diagnosing).
+        String why;
+        if (SlabAnchorAttachment.isFrozenFlat(client.level, pos)) {
+            why = "FROZEN-FLAT";
+        } else if (SlabAnchorAttachment.isAnchored(client.level, pos)) {
+            why = "ANCHORED";
+        } else if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(client.level, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(client.level, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(client.level, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(client.level, pos, state)) {
+            why = "compound-side";
+        } else {
+            why = (dy < -1.0e-6 || dy > 1.0e-6) ? "geometric" : "-";
+        }
+
         String line1 = "[slabdy] " + pos.toShortString() + "  " + state.getBlock().getName().getString();
         String line2 = "  " + source + " · dy=" + format(dy) + " " + status
-                + " · side=" + blockHit.getDirection().getName();
+                + " · side=" + blockHit.getDirection().getName() + " · half=" + half;
+        String line3 = "  src=" + why;
         int color = dy == 0.0d ? 0xffd7d7d7 : (dy < 0.0d ? 0xffffd166 : 0xffff8866);
         drawLine(context, client, line1, 8, 8, color);
         drawLine(context, client, line2, 8, 20, color);
+        drawLine(context, client, line3, 8, 32, color);
     }
 
     private static void drawLine(GuiGraphicsExtractor context, Minecraft client, String line, int x, int y, int color) {
