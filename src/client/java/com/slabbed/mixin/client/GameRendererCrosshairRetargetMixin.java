@@ -1798,6 +1798,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             row.put("interactionBounds", slabbed$shapeBounds(world, cam, pos, state, false));
             row.put("raycastBounds", slabbed$shapeBounds(world, cam, pos, state, false));
             row.put("outlineBounds", slabbed$shapeBounds(world, cam, pos, state, true));
+            slabbed$putPhysicalCollisionProbe(row, world, cam, pos, state);
             row.put("expectedTargetOwner", pos.toShortString());
             row.put("expectedDy", slabbed$formatDouble(SlabSupport.getYOffset(world, pos, state)));
             row.put("expectedAction", slabbed$isSlabPlacementIntent() ? "place_block" : "use_block");
@@ -1813,6 +1814,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             row.put("interactionBounds", "none");
             row.put("raycastBounds", "none");
             row.put("outlineBounds", "none");
+            slabbed$putNoPhysicalCollisionProbe(row);
             row.put("expectedTargetOwner", "MISS");
             row.put("expectedDy", "NaN");
             row.put("expectedAction", "miss");
@@ -1906,6 +1908,114 @@ public abstract class GameRendererCrosshairRetargetMixin {
         } catch (Throwable t) {
             return "error:" + t.getClass().getSimpleName();
         }
+    }
+
+    private void slabbed$putPhysicalCollisionProbe(
+            LinkedHashMap<String, String> row,
+            ClientLevel world,
+            Entity cam,
+            BlockPos pos,
+            BlockState state
+    ) {
+        Entity player = this.slabbed$self().player == null ? cam : this.slabbed$self().player;
+        if (world == null || player == null || pos == null || state == null) {
+            slabbed$putNoPhysicalCollisionProbe(row);
+            return;
+        }
+        try {
+            AABB playerBox = player.getBoundingBox();
+            Vec3 delta = player.getDeltaMovement();
+            AABB queryBox = playerBox.expandTowards(delta).inflate(0.0625d);
+            VoxelShape targetShape = state.getCollisionShape(world, pos, CollisionContext.of(player));
+            AABB targetWorldBox = null;
+            boolean targetIntersectsPlayer = false;
+            boolean targetIntersectsQuery = false;
+            if (targetShape != null && !targetShape.isEmpty()) {
+                targetWorldBox = targetShape.bounds().move(pos);
+                targetIntersectsPlayer = targetWorldBox.intersects(playerBox);
+                targetIntersectsQuery = targetWorldBox.intersects(queryBox);
+            }
+
+            int collisionCount = 0;
+            boolean targetExact = false;
+            boolean targetIntersectsReturned = false;
+            StringBuilder samples = new StringBuilder();
+            for (VoxelShape collision : world.getBlockCollisions(player, queryBox)) {
+                if (collision == null || collision.isEmpty()) {
+                    continue;
+                }
+                AABB collisionBox = collision.bounds();
+                if (collisionCount < 8) {
+                    if (!samples.isEmpty()) {
+                        samples.append(';');
+                    }
+                    samples.append(slabbed$formatBox(collisionBox));
+                }
+                collisionCount++;
+                if (targetWorldBox != null) {
+                    if (slabbed$boxEquals(collisionBox, targetWorldBox, 1.0e-5d)) {
+                        targetExact = true;
+                    }
+                    if (collisionBox.intersects(targetWorldBox)) {
+                        targetIntersectsReturned = true;
+                    }
+                }
+            }
+
+            row.put("playerBox", slabbed$formatBox(playerBox));
+            row.put("playerDelta", slabbed$formatVec(delta));
+            row.put("playerCollisionQueryBox", slabbed$formatBox(queryBox));
+            row.put("targetCollisionWorldBounds", targetWorldBox == null ? "empty" : slabbed$formatBox(targetWorldBox));
+            row.put("targetCollisionIntersectsPlayerBox", Boolean.toString(targetIntersectsPlayer));
+            row.put("targetCollisionIntersectsQueryBox", Boolean.toString(targetIntersectsQuery));
+            row.put("playerBlockCollisionCount", Integer.toString(collisionCount));
+            row.put("playerBlockCollisionSampleBounds", samples.isEmpty() ? "none" : samples.toString());
+            row.put("playerBlockCollisionTargetExact", Boolean.toString(targetExact));
+            row.put("playerBlockCollisionTargetIntersectsReturned", Boolean.toString(targetIntersectsReturned));
+        } catch (Throwable t) {
+            row.put("playerBox", "error:" + t.getClass().getSimpleName());
+            row.put("playerDelta", "error:" + t.getClass().getSimpleName());
+            row.put("playerCollisionQueryBox", "error:" + t.getClass().getSimpleName());
+            row.put("targetCollisionWorldBounds", "error:" + t.getClass().getSimpleName());
+            row.put("targetCollisionIntersectsPlayerBox", "error:" + t.getClass().getSimpleName());
+            row.put("targetCollisionIntersectsQueryBox", "error:" + t.getClass().getSimpleName());
+            row.put("playerBlockCollisionCount", "error:" + t.getClass().getSimpleName());
+            row.put("playerBlockCollisionSampleBounds", "error:" + t.getClass().getSimpleName());
+            row.put("playerBlockCollisionTargetExact", "error:" + t.getClass().getSimpleName());
+            row.put("playerBlockCollisionTargetIntersectsReturned", "error:" + t.getClass().getSimpleName());
+        }
+    }
+
+    private static void slabbed$putNoPhysicalCollisionProbe(LinkedHashMap<String, String> row) {
+        row.put("playerBox", "none");
+        row.put("playerDelta", "none");
+        row.put("playerCollisionQueryBox", "none");
+        row.put("targetCollisionWorldBounds", "none");
+        row.put("targetCollisionIntersectsPlayerBox", "false");
+        row.put("targetCollisionIntersectsQueryBox", "false");
+        row.put("playerBlockCollisionCount", "0");
+        row.put("playerBlockCollisionSampleBounds", "none");
+        row.put("playerBlockCollisionTargetExact", "false");
+        row.put("playerBlockCollisionTargetIntersectsReturned", "false");
+    }
+
+    private static String slabbed$formatBox(AABB box) {
+        return "min=("
+                + slabbed$formatDouble(box.minX) + ','
+                + slabbed$formatDouble(box.minY) + ','
+                + slabbed$formatDouble(box.minZ) + "),max=("
+                + slabbed$formatDouble(box.maxX) + ','
+                + slabbed$formatDouble(box.maxY) + ','
+                + slabbed$formatDouble(box.maxZ) + ')';
+    }
+
+    private static boolean slabbed$boxEquals(AABB a, AABB b, double epsilon) {
+        return Math.abs(a.minX - b.minX) <= epsilon
+                && Math.abs(a.minY - b.minY) <= epsilon
+                && Math.abs(a.minZ - b.minZ) <= epsilon
+                && Math.abs(a.maxX - b.maxX) <= epsilon
+                && Math.abs(a.maxY - b.maxY) <= epsilon
+                && Math.abs(a.maxZ - b.maxZ) <= epsilon;
     }
 
     private static void slabbed$appendSlabHeldAnchoredFbFocusedTrace(

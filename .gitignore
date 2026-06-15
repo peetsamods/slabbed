@@ -23,3 +23,6 @@ Thumbs.db
 # Gallery exports
 Gallery/
 src/main/Gallery/
+
+# Forensic / scratch evidence (large, never release payload)
+tmp/

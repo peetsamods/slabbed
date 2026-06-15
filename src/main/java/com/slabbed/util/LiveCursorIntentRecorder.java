@@ -24,10 +24,18 @@ public final class LiveCursorIntentRecorder {
     private static long ghostSurfaceRows;
     private static long hiddenOwnerRows;
     private static long outlineRaycastSplitRows;
+    private static long renderedOutlineRows;
+    private static long renderedOutlineLargeBoundsRows;
+    private static long renderedOutlineReplayBoundsSplitRows;
+    private static long renderedOutlineTargetSplitRows;
     private static long placementExpectedDyMismatchRows;
     private static long loweredSideSlabPlacementVanillaDyRows;
+    private static long collisionIteratorTargetMissRows;
+    private static long collisionIteratorTargetPresentRows;
     private static long greenCursorTriadRows;
     private static long greenPlacementAuthoringRows;
+    private static long lastCursorRowId;
+    private static LinkedHashMap<String, String> lastCursorRow;
 
     private LiveCursorIntentRecorder() {
     }
@@ -37,7 +45,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static long lastCursorRowId() {
-        return Math.max(0L, ROW_IDS.get());
+        return Math.max(0L, lastCursorRowId);
     }
 
     public static void recordCursor(LinkedHashMap<String, String> fields) {
@@ -61,10 +69,49 @@ public final class LiveCursorIntentRecorder {
             if (markers.contains("LIVE_CURSOR_OUTLINE_RAYCAST_SPLIT")) {
                 outlineRaycastSplitRows++;
             }
+            if (markers.contains("LIVE_COLLISION_ITERATOR_TARGET_MISS")) {
+                collisionIteratorTargetMissRows++;
+            }
+            if (Boolean.parseBoolean(row.getOrDefault("playerBlockCollisionTargetIntersectsReturned", "false"))) {
+                collisionIteratorTargetPresentRows++;
+            }
             if ("LIVE_GREEN_CURSOR_TRIAD".equals(markers)) {
                 greenCursorTriadRows++;
             }
+            lastCursorRowId = parseLong(row.get("rowId"), lastCursorRowId);
+            lastCursorRow = copy(row);
             writeSession(row);
+            writeMismatchRows(row, markers);
+            writeSummary();
+        }
+    }
+
+    public static void recordRenderedOutline(LinkedHashMap<String, String> fields) {
+        if (!enabled()) {
+            return;
+        }
+        LinkedHashMap<String, String> row = copy(fields);
+        row.putIfAbsent("type", "rendered_outline");
+        long cursorRowId = lastCursorRowId();
+        row.putIfAbsent("outlineRenderId", Long.toString(ROW_IDS.incrementAndGet()));
+        row.putIfAbsent("cursorRowId", Long.toString(cursorRowId));
+        row.putIfAbsent("recordedAt", Instant.now().toString());
+        appendLastCursorFields(row);
+        String markers = renderedOutlineMarkers(row);
+        row.put("marker", markers);
+        synchronized (LOCK) {
+            renderedOutlineRows++;
+            if (markers.contains("LIVE_RENDERED_OUTLINE_LARGE_BOUNDS")) {
+                renderedOutlineLargeBoundsRows++;
+            }
+            if (markers.contains("LIVE_RENDERED_OUTLINE_REPLAY_BOUNDS_SPLIT")) {
+                renderedOutlineReplayBoundsSplitRows++;
+            }
+            if (markers.contains("LIVE_RENDERED_OUTLINE_TARGET_SPLIT")) {
+                renderedOutlineTargetSplitRows++;
+            }
+            writeSession(row);
+            writeRenderedOutlineTsv(row);
             writeMismatchRows(row, markers);
             writeSummary();
         }
@@ -120,10 +167,18 @@ public final class LiveCursorIntentRecorder {
             ghostSurfaceRows = 0L;
             hiddenOwnerRows = 0L;
             outlineRaycastSplitRows = 0L;
+            renderedOutlineRows = 0L;
+            renderedOutlineLargeBoundsRows = 0L;
+            renderedOutlineReplayBoundsSplitRows = 0L;
+            renderedOutlineTargetSplitRows = 0L;
             placementExpectedDyMismatchRows = 0L;
             loweredSideSlabPlacementVanillaDyRows = 0L;
+            collisionIteratorTargetMissRows = 0L;
+            collisionIteratorTargetPresentRows = 0L;
             greenCursorTriadRows = 0L;
             greenPlacementAuthoringRows = 0L;
+            lastCursorRowId = 0L;
+            lastCursorRow = null;
         }
     }
 
@@ -139,9 +194,15 @@ public final class LiveCursorIntentRecorder {
         boolean outlineHit = isHit(row.get("finalOutlineReplayHit"));
         boolean raycastHit = isHit(row.get("finalRaycastReplayHit"));
         boolean lawfulLowered = isLawfulLoweredLane(row.get("finalOwnerLaneKind"));
+        boolean targetInCollisionQuery = Boolean.parseBoolean(row.getOrDefault("targetCollisionIntersectsQueryBox", "false"));
+        boolean targetReturnedByIterator = Boolean.parseBoolean(
+                row.getOrDefault("playerBlockCollisionTargetIntersectsReturned", "false"));
         StringBuilder markers = new StringBuilder();
         appendMarker(markers, outlineHit && !raycastHit, "LIVE_CURSOR_OUTLINE_RAYCAST_SPLIT");
         appendMarker(markers, outlineHit && !raycastHit && lawfulLowered, "LIVE_CURSOR_GHOST_SURFACE");
+        appendMarker(markers,
+                lawfulLowered && targetInCollisionQuery && !targetReturnedByIterator,
+                "LIVE_COLLISION_ITERATOR_TARGET_MISS");
         appendMarker(markers, Boolean.parseBoolean(row.getOrDefault("hiddenOwner", "false")), "LIVE_CURSOR_HIDDEN_OWNER");
         if (markers.isEmpty() && "BLOCK".equals(row.get("finalHitType")) && outlineHit && raycastHit) {
             markers.append("LIVE_GREEN_CURSOR_TRIAD");
@@ -190,6 +251,43 @@ public final class LiveCursorIntentRecorder {
         return markers.isEmpty() ? "none" : markers.toString();
     }
 
+    private static void appendLastCursorFields(LinkedHashMap<String, String> row) {
+        LinkedHashMap<String, String> cursor = lastCursorRow;
+        if (cursor == null) {
+            row.putIfAbsent("cursorOutlineBounds", "none");
+            row.putIfAbsent("cursorFinalHitPos", "none");
+            row.putIfAbsent("cursorFinalHitState", "none");
+            row.putIfAbsent("cursorFinalHitVec", "none");
+            row.putIfAbsent("cursorFinalHitFace", "none");
+            row.putIfAbsent("cursorHeldItem", "none");
+            return;
+        }
+        row.putIfAbsent("cursorOutlineBounds", cursor.getOrDefault("outlineBounds", "none"));
+        row.putIfAbsent("cursorFinalHitPos", cursor.getOrDefault("finalHitPos", "none"));
+        row.putIfAbsent("cursorFinalHitState", cursor.getOrDefault("finalHitState", "none"));
+        row.putIfAbsent("cursorFinalHitVec", cursor.getOrDefault("finalHitVec", "none"));
+        row.putIfAbsent("cursorFinalHitFace", cursor.getOrDefault("finalHitFace", "none"));
+        row.putIfAbsent("cursorHeldItem", cursor.getOrDefault("heldItem", "none"));
+    }
+
+    private static String renderedOutlineMarkers(Map<String, String> row) {
+        String renderedBounds = row.getOrDefault("renderedOutlineBounds", "none");
+        String cursorBounds = row.getOrDefault("cursorOutlineBounds", "none");
+        String renderedPos = row.getOrDefault("renderedOutlinePos", "none");
+        String cursorPos = row.getOrDefault("cursorFinalHitPos", "none");
+        StringBuilder markers = new StringBuilder();
+        appendMarker(markers, hasLargeBounds(renderedBounds), "LIVE_RENDERED_OUTLINE_LARGE_BOUNDS");
+        appendMarker(markers, isRealBounds(renderedBounds)
+                        && isRealBounds(cursorBounds)
+                        && !renderedBounds.equals(cursorBounds),
+                "LIVE_RENDERED_OUTLINE_REPLAY_BOUNDS_SPLIT");
+        appendMarker(markers, isRealValue(renderedPos)
+                        && isRealValue(cursorPos)
+                        && !renderedPos.equals(cursorPos),
+                "LIVE_RENDERED_OUTLINE_TARGET_SPLIT");
+        return markers.isEmpty() ? "none" : markers.toString();
+    }
+
     private static boolean isLawfulLoweredLane(String lane) {
         return "persistent_lowered_slab_carrier".equals(lane)
                 || "compound_visible_side_lower_slab".equals(lane)
@@ -213,6 +311,66 @@ public final class LiveCursorIntentRecorder {
             return Math.abs(Double.parseDouble(expected) - Double.parseDouble(actual)) <= 1.0e-6d;
         } catch (NumberFormatException ignored) {
             return expected.equals(actual);
+        }
+    }
+
+    private static long parseLong(String value, long fallback) {
+        try {
+            return Long.parseLong(value);
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private static boolean hasLargeBounds(String bounds) {
+        if (!isRealBounds(bounds)) {
+            return false;
+        }
+        double[] values = parseBounds(bounds);
+        if (values == null) {
+            return false;
+        }
+        return values[3] - values[0] > 2.0d
+                || values[4] - values[1] > 2.0d
+                || values[5] - values[2] > 2.0d;
+    }
+
+    private static boolean isRealBounds(String value) {
+        return isRealValue(value) && value.startsWith("min=(") && value.contains("),max=(");
+    }
+
+    private static boolean isRealValue(String value) {
+        return value != null
+                && !value.isEmpty()
+                && !"none".equals(value)
+                && !"empty".equals(value)
+                && !"null".equals(value)
+                && !value.startsWith("error:");
+    }
+
+    private static double[] parseBounds(String bounds) {
+        try {
+            int minStart = bounds.indexOf("min=(");
+            int minEnd = bounds.indexOf("),max=(");
+            int maxEnd = bounds.indexOf(')', minEnd + 7);
+            if (minStart < 0 || minEnd < 0 || maxEnd < 0) {
+                return null;
+            }
+            String[] min = bounds.substring(minStart + 5, minEnd).split(",");
+            String[] max = bounds.substring(minEnd + 7, maxEnd).split(",");
+            if (min.length != 3 || max.length != 3) {
+                return null;
+            }
+            return new double[]{
+                    Double.parseDouble(min[0]),
+                    Double.parseDouble(min[1]),
+                    Double.parseDouble(min[2]),
+                    Double.parseDouble(max[0]),
+                    Double.parseDouble(max[1]),
+                    Double.parseDouble(max[2])
+            };
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 
@@ -246,16 +404,35 @@ public final class LiveCursorIntentRecorder {
                         + '\t' + tsv(row.get("marker")));
     }
 
+    private static void writeRenderedOutlineTsv(LinkedHashMap<String, String> row) {
+        appendLine("rendered-outlines.tsv",
+                tsv(row.get("outlineRenderId"))
+                        + '\t' + tsv(row.get("cursorRowId"))
+                        + '\t' + tsv(row.get("renderedOutlinePos"))
+                        + '\t' + tsv(row.get("cursorFinalHitPos"))
+                        + '\t' + tsv(row.get("renderedOutlineState"))
+                        + '\t' + tsv(row.get("renderedOutlineBounds"))
+                        + '\t' + tsv(row.get("cursorOutlineBounds"))
+                        + '\t' + tsv(row.get("renderedOutlineWorldBounds"))
+                        + '\t' + tsv(row.get("renderedOutlineCameraRelativeBounds"))
+                        + '\t' + tsv(row.get("renderedOutlineHitVec"))
+                        + '\t' + tsv(row.get("marker")));
+    }
+
     private static void writeMismatchRows(LinkedHashMap<String, String> row, String markers) {
         if (markers == null || markers.equals("none") || markers.startsWith("LIVE_GREEN_")) {
             return;
         }
         appendLine("mismatches.tsv",
                 tsv(row.getOrDefault("type", "unknown"))
-                        + '\t' + tsv(row.getOrDefault("rowId", row.getOrDefault("actionId", "unknown")))
+                        + '\t' + tsv(row.getOrDefault(
+                                "rowId",
+                                row.getOrDefault("actionId", row.getOrDefault("outlineRenderId", "unknown"))))
                         + '\t' + tsv(markers)
-                        + '\t' + tsv(row.getOrDefault("finalHitPos", row.getOrDefault("clickedOwnerPos", "none")))
-                        + '\t' + tsv(row.getOrDefault("heldItem", "none")));
+                        + '\t' + tsv(row.getOrDefault(
+                                "finalHitPos",
+                                row.getOrDefault("clickedOwnerPos", row.getOrDefault("renderedOutlinePos", "none"))))
+                        + '\t' + tsv(row.getOrDefault("heldItem", row.getOrDefault("cursorHeldItem", "none"))));
     }
 
     private static void writeSummary() {
@@ -266,9 +443,16 @@ public final class LiveCursorIntentRecorder {
         text.append("ghostSurfaceRows=").append(ghostSurfaceRows).append('\n');
         text.append("hiddenOwnerRows=").append(hiddenOwnerRows).append('\n');
         text.append("outlineRaycastSplitRows=").append(outlineRaycastSplitRows).append('\n');
+        text.append("renderedOutlineRows=").append(renderedOutlineRows).append('\n');
+        text.append("renderedOutlineLargeBoundsRows=").append(renderedOutlineLargeBoundsRows).append('\n');
+        text.append("renderedOutlineReplayBoundsSplitRows=")
+                .append(renderedOutlineReplayBoundsSplitRows).append('\n');
+        text.append("renderedOutlineTargetSplitRows=").append(renderedOutlineTargetSplitRows).append('\n');
         text.append("placementExpectedDyMismatchRows=").append(placementExpectedDyMismatchRows).append('\n');
         text.append("loweredSideSlabPlacementVanillaDyRows=")
                 .append(loweredSideSlabPlacementVanillaDyRows).append('\n');
+        text.append("collisionIteratorTargetMissRows=").append(collisionIteratorTargetMissRows).append('\n');
+        text.append("collisionIteratorTargetPresentRows=").append(collisionIteratorTargetPresentRows).append('\n');
         text.append("liveGreenCursorTriadRows=").append(greenCursorTriadRows).append('\n');
         text.append("liveGreenPlacementRows=").append(greenPlacementAuthoringRows).append('\n');
         writeFile("summary.md", text.toString(), false);
@@ -305,6 +489,10 @@ public final class LiveCursorIntentRecorder {
             writeHeaderIfMissing(sessionDir.resolve("actions.tsv"),
                     "actionId\tcursorRowId\tactionType\theldItem\tclickedOwnerPos\tclickedFace\tplacementPos"
                             + "\texpectedAfterDy\tafterDy\texpectedAfterLaneKind\tafterLaneKind\tmarker\n");
+            writeHeaderIfMissing(sessionDir.resolve("rendered-outlines.tsv"),
+                    "outlineRenderId\tcursorRowId\trenderedOutlinePos\tcursorFinalHitPos\trenderedOutlineState"
+                            + "\trenderedOutlineBounds\tcursorOutlineBounds\trenderedOutlineWorldBounds"
+                            + "\trenderedOutlineCameraRelativeBounds\trenderedOutlineHitVec\tmarker\n");
             writeHeaderIfMissing(sessionDir.resolve("mismatches.tsv"),
                     "type\trowOrActionId\tmarker\tpos\theldItem\n");
         }

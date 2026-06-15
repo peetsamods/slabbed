@@ -23,7 +23,8 @@ Do not update other Slabbed checkouts from this file. The phase19 checkout remai
 - Branch: `port/mc-26.1.2`
 - HEAD / tag at HEAD: verify live with `git rev-parse --short HEAD` and `git tag --points-at HEAD`.
 - Base release provenance: `release/0.2.0-beta.4` / `f9014fbfcb15af2716f090d038762fd8d3d460de`
-- Current tracked tree after the release savepoint commit should be clean.
+- Current source files after the 2026-05-31 re-certification were restored to HEAD `a1037642`; verify live before code edits.
+- Tracked documentation edits may exist after handoff/update slices and are not source proof.
 - Current untracked evidence is expected under `tmp/` and is not release payload.
 
 Do not rely on this file alone for release proof; Git commands, proof logs, the annotated save tag, and pushed refs are authoritative.
@@ -40,6 +41,34 @@ Fresh dy1.5-2.0 live-recorder closure proof on 2026-05-28:
 - Lowered side-slab placement remains green: live recorder action evidence under `tmp/dy15-20-dy0-slab-shape-dispatch-65f9ce54/live-validation-152432/routes/lowered-carrier-placement-window/window-actions.tsv` has `LIVE_GREEN_PLACEMENT_AUTHORING` with `afterDy=-0.500000` and `persistent_lowered_slab_carrier`.
 - Fresh gates in `tmp/dy15-20-dy0-slab-shape-dispatch-65f9ce54/final-savepoint-audit-162706/`: compile passed, runner3 passed with `RUNNER3_SUMMARY rows=260 placeRows=260 traceMismatches=44 placeMismatches=44 mismatches=88`, hitbox gate passed, culling visual passed with screenshots, default `runClientGameTest` passed, live-cursor recorder contract passed, and `git diff --check` passed.
 - Tracked residual: focused dy15 proof still reports `legalObjectTriadMismatchRows=2` for `dy15_oak_fence_object` and `dy15_cobblestone_wall_object`. This is classified as separate from the `4,-60,30` dy0 slab dispatch regression because those are legal dynamic fence/wall object rows, not unnamed dy0 slabs; hitbox gate separately proves their raycast/collision co-location.
+
+Fresh release re-certification + rearm revert on 2026-05-31 (HEAD `a1037642`):
+
+- A dirty WIP "after-consume rearm" lifecycle (deferred client clear via `clearAfterConsumer` + `consumeAfterConsumeRearmPermit`) was evaluated and reverted. Its own proof (`tmp/placement-intent-rearm-proof-20260531-133850`) fixed chained `placementExpectedDyMismatchRows` 4->0 but introduced `outlineRaycastSplitRows=5999`, all at owner `20,-58,24`. Root cause: deferring the client clear makes the server also consume the same intent snapshot (HEAD has the server see `null`), desyncing the authoritative block from the client outline; it also leaks the client snapshot on real multiplayer. The 3 source files (`PlacementIntentState.java`, `BlockItemPlacementIntentMixin.java`, `GameRendererCrosshairRetargetMixin.java`) were restored to HEAD. WIP archived at `tmp/reverted-rearm-wip-20260531-161302/` (restore via `git apply rearm-wip-3file.diff`).
+- Full-suite re-certification of the restored HEAD passed: compile green; runner3 `mismatches=88`; hitbox `raycastCoLocated=yes`/`collisionCoLocated=yes` with 0 `CoLocated=no`; default `runClientGameTest` green; focused dy15 `classification=GREEN_LEGAL_LOWERED_SIDE_SLAB_PLACEMENT_AUTHORING` with all critical counts 0 and only `legalObjectTriadMismatchRows=2`; recorder contract green. Evidence: `tmp/release-cert-20260531-161833/`.
+- `legalObjectTriadMismatchRows=2` re-confirmed as the two fence/wall objects (`VALID_NAMED_DYNAMIC_DY15_FENCE_WALL_SUPPORTED_OBJECT`); accepted as vanilla-consistent collision-taller-than-visual geometry, not a clipping/placement defect.
+- Release artifact: `clean build` green; `build/libs/slabbed-0.2.0-beta.4+26.1.2-port.jar` (50 classes) passes the documented leakage scan; `git diff --check` clean. Note: `LiveCursorIntentRecorder` ships intentionally (referenced by shipping mixins, gated off by `slabbed.liveCursorIntentRecorder`); it is not a hygiene leak.
+- Open gameplay gap (not a release blocker): aggressive chained lowered-side-slab placement can still author `top/dy0` because the server-side `placement_intent_visible_lane` branch is gated on an intent snapshot that is absent server-side in single-player. Do NOT blind-patch the remap result-type; first build a deterministic gametest RED that reproduces the chained route, then fix and prove red->green.
+- Durable note: `docs/porting/mc-26.1.2-rearm-revert-release-cert.md`.
+
+Fresh manual video anomaly on 2026-05-31:
+
+- Julia's manual branch-client recording after the release re-certification shows a real giant cyan selection-outline box around `video/frames/frame_020.jpg`; this is live visual evidence, not a compile/gametest artifact.
+- Manual recorder evidence: `tmp/manual-live-recorder-20260531-171424/`.
+- Recorder summary: `cursorRows=13528`, `actionRows=8`, `outlineRaycastSplitRows=7111`, `placementExpectedDyMismatchRows=0`, `loweredSideSlabPlacementVanillaDyRows=0`, `ghostSurfaceRows=0`, `hiddenOwnerRows=0`.
+- The 8 action rows were ordinary `minecraft:stone` placements at dy0 with `marker=none`; do not classify this manual anomaly as placement authoring failure from the current evidence.
+- Split rows cover both lowered full-block stone (`dy=-0.5`, outline/collision shifted full cube, interaction/raycast empty) and ordinary dy0 grass/stone (full-cube outline/collision, interaction/raycast empty). The dy0 family means the recorder's interaction/raycast replay may be over-strict, but the giant rendered outline remains unexplained because logged `outlineBounds` are ordinary bounded shapes.
+- Recorder tooling was expanded after this finding: `LevelRenderer.renderHitOutline(...)` now writes `rendered_outline` rows and `rendered-outlines.tsv` when `slabbed.liveCursorIntentRecorder=true`. New counters include `renderedOutlineRows`, `renderedOutlineLargeBoundsRows`, `renderedOutlineReplayBoundsSplitRows`, and `renderedOutlineTargetSplitRows`. Static artifact proof: `tmp/recorder-rendered-outline-contract/out-1780263538993/`; runtime smoke `runClientGameTest` passed and confirmed `LevelRendererRenderedOutlineRecorderMixin` applied.
+- Durable note: `docs/porting/mc-26.1.2-manual-video-anomaly-20260531.md`.
+
+Julia correction / ghost lowered slab physical-presence slice on 2026-05-31:
+
+- Corrected active symptom: lowered slabs can be visible and targetable while behaving like ghost physical geometry the player can pass through. Do not classify this as rendered-outline-only.
+- Latest manual evidence: `tmp/manual-live-recorder-20260531-174825/`.
+- Current evidence disproves only the simple client state-shape hypothesis: `tmp/ghost-lowered-slab-collision-authority-20260531-current/lowered-slab-shape-groups.tsv` has `4171` named lowered slab cursor rows grouped into four rows, all with outline, interaction/raycast, and collision bounds aligned and `LIVE_GREEN_CURSOR_TRIAD`.
+- Movement collision bytecode audit confirms the physical path uses `BlockCollisions` / `CollisionContext.getCollisionShape(...)` and then yields only shapes intersecting the entity/query shape. The previous recorder sampled `BlockState.getCollisionShape(...)`, not whether `Level.getBlockCollisions(player, queryBox)` actually returned the target lowered slab shape.
+- Recorder tooling was expanded again, gated by `slabbed.liveCursorIntentRecorder`, to log `playerBox`, `playerDelta`, `playerCollisionQueryBox`, `targetCollisionWorldBounds`, target/query intersection booleans, block-collision iterator counts/samples, and `playerBlockCollisionTargetExact` / `playerBlockCollisionTargetIntersectsReturned`. New counters: `collisionIteratorTargetMissRows`, `collisionIteratorTargetPresentRows`. New RED marker: `LIVE_COLLISION_ITERATOR_TARGET_MISS`.
+- No collision behavior patch was applied. Durable note: `docs/porting/mc-26.1.2-ghost-lowered-slab-collision-20260531.md`.
 
 The 26.1.2 port has reached a placement/culling closure candidate for the slab-held visual-target / placement-intent fault plus the follow-up placement review fallout. Work so far has focused on release-base provenance, mapping/tooling/classpath proof, Java 25 / Gradle / Loom compatibility, source-set wiring, narrow source API probes, the slab-held visual-target failure, the reviewed placement/retargeting guards, and the post-cull visible-face / partial-collision closure.
 
@@ -66,13 +95,13 @@ Fresh placement/culling closure proof on 2026-05-27:
 - Runtime forbidden marker scan across runner3, hitboxgate, and culling visual logs found no `Invalid player data`, `InvalidInjectionException`, `MixinApplyError`, `updateCrosshairTarget`, `onPlayerInteractBlock`, or `Vec3d.ofCenter` markers.
 - Release hygiene: `JAVA_HOME=$(/usr/libexec/java_home -v 25) ./gradlew --no-daemon clean build --console plain` passed; `build/libs/*.jar` leakage scan found no runner3/gametest/probe/trace/debug/provenance/tmp artifacts; `git diff --check` passed.
 
-The preserved blocker note is:
+The preserved historical mapping-provider note is:
 
 ```text
 docs/porting/mc-26.1.2-mapping-blocker.md
 ```
 
-That note records the original mapping-provider/tooling provenance stop. Later local port forensics indicated the live `compileJava` classpath is Mojang-style rather than Yarn-style, so current source migration should be treated as Mojang-style API drift unless fresh evidence proves otherwise.
+That note records the original mapping-provider/tooling provenance stop. It is no longer the active blocker for HEAD `a1037642`: later local proof compiled and built the port on the active checkout. Current source migration should still treat API drift as Mojang-style unless fresh evidence proves otherwise.
 
 ## Current Operating Rules
 
@@ -111,4 +140,8 @@ For documentation-only work, keep edits limited to port-local docs.
 
 For code migration work, classify the current dominant compile/source blocker first, then patch exactly the requested file or the smallest proven mechanism. If the result remains unclear after one compile gate, stop with tried/observed/proven/unproven/next-smallest-audit.
 
-After the dy0 slab shape-dispatch savepoint, the next safe technical slice is to classify whether `legalObjectTriadMismatchRows=2` is accepted fence/wall visual-vs-collision overhang or a real dy1.5 legal-object triad bug. Do not reopen the `4,-60,30` unnamed dy0 slab dispatch path unless a fresh recorder RED reproduces it.
+`legalObjectTriadMismatchRows=2` is now classified (2026-05-31) as accepted vanilla-consistent fence/wall collision-taller-than-visual geometry, not a bug. Do not reopen the `4,-60,30` unnamed dy0 slab dispatch path unless a fresh recorder RED reproduces it.
+
+The next candidate technical slice from Julia's manual video is a manual `$record` rerun through the ghost lowered slab pass-through route using the expanded physical-collision recorder. Grep `summary.md` and `session.jsonl` for `LIVE_COLLISION_ITERATOR_TARGET_MISS`, `collisionIteratorTargetMissRows`, `targetCollisionWorldBounds`, and `playerBlockCollisionTargetIntersectsReturned`. Do not patch collision behavior unless the live RED names a client collision-iterator target miss or a server authoritative collision/attachment mismatch.
+
+Separate deferred gameplay slice: the chained lowered-side-slab placement gap (server authors `top/dy0` on aggressive chaining) still must begin with a deterministic gametest RED reproducing the chained route before any remap result-type / snapshot-availability patch. The deferred-clear + rearm approach remains rejected (it introduced `outlineRaycastSplitRows=5999` cursor clipping and a multiplayer snapshot leak).

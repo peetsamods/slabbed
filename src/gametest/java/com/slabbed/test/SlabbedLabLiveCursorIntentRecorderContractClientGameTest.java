@@ -31,7 +31,21 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             cursor.put("finalOwnerLaneKind", "persistent_lowered_slab_carrier");
             cursor.put("finalOutlineReplayHit", "hit=true pos=4,-60,30 side=east");
             cursor.put("finalRaycastReplayHit", "miss(empty)");
+            cursor.put("outlineBounds", "min=(0.000000,0.000000,0.000000),max=(1.000000,1.000000,1.000000)");
+            cursor.put("finalHitVec", "4.500000,-60.000000,30.500000");
             LiveCursorIntentRecorder.recordCursor(cursor);
+
+            LinkedHashMap<String, String> renderedOutline = new LinkedHashMap<>();
+            renderedOutline.put("renderedOutlinePos", "4,-60,30");
+            renderedOutline.put("renderedOutlineState", "minecraft:stone_slab[type=bottom]");
+            renderedOutline.put("renderedOutlineBounds",
+                    "min=(0.000000,0.000000,0.000000),max=(3.000000,1.000000,1.000000)");
+            renderedOutline.put("renderedOutlineWorldBounds",
+                    "min=(4.000000,-60.000000,30.000000),max=(7.000000,-59.000000,31.000000)");
+            renderedOutline.put("renderedOutlineCameraRelativeBounds",
+                    "min=(1.000000,-1.000000,2.000000),max=(4.000000,0.000000,3.000000)");
+            renderedOutline.put("renderedOutlineHitVec", "4.500000,-60.000000,30.500000");
+            LiveCursorIntentRecorder.recordRenderedOutline(renderedOutline);
 
             LinkedHashMap<String, String> action = new LinkedHashMap<>();
             action.put("actionType", "place_block");
@@ -47,11 +61,17 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             LiveCursorIntentRecorder.flushSummaryForTests();
 
             assertContains(evidenceDir.resolve("session.jsonl"), "\"type\":\"cursor\"");
+            assertContains(evidenceDir.resolve("session.jsonl"), "\"type\":\"rendered_outline\"");
             assertContains(evidenceDir.resolve("session.jsonl"), "LIVE_CURSOR_GHOST_SURFACE");
-            assertContains(evidenceDir.resolve("actions.tsv"), "2\t1\tplace_block");
+            assertContains(evidenceDir.resolve("rendered-outlines.tsv"), "LIVE_RENDERED_OUTLINE_LARGE_BOUNDS");
+            assertContains(evidenceDir.resolve("rendered-outlines.tsv"), "LIVE_RENDERED_OUTLINE_REPLAY_BOUNDS_SPLIT");
+            assertContains(evidenceDir.resolve("actions.tsv"), "3\t1\tplace_block");
             assertContains(evidenceDir.resolve("actions.tsv"), "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
             assertContains(evidenceDir.resolve("summary.md"), "ghostSurfaceRows=1");
+            assertContains(evidenceDir.resolve("summary.md"), "renderedOutlineRows=1");
+            assertContains(evidenceDir.resolve("summary.md"), "renderedOutlineLargeBoundsRows=1");
+            assertContains(evidenceDir.resolve("summary.md"), "renderedOutlineReplayBoundsSplitRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "loweredSideSlabPlacementVanillaDyRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "placementExpectedDyMismatchRows=1");
         } catch (Exception e) {
