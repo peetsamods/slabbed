@@ -49,7 +49,9 @@ import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.CollisionGetter;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayDeque;
@@ -817,6 +819,53 @@ public final class SlabSupport {
         } finally {
             IN_GET_Y_OFFSET.set(Boolean.FALSE);
         }
+    }
+
+    /**
+     * COLLISION-FOLLOW (movement broadphase): toggle with -Dslabbed.collisionFollow=false.
+     * Slabbed lowers a block's visual/outline/raycast but leaves its per-state collision shape
+     * VANILLA (within-cell) so MC's cell-bounded {@code BlockCollisions} broadphase samples it.
+     * That alone leaves a half-block gap: a lowered slab/block's collision sits at its un-lowered
+     * height, so the player clips INTO the lowered visual from the side. The visual collision lives
+     * partly in the cell BELOW (it hangs down by |dy|), which the cell-bounded broadphase never asks
+     * for. {@link #withHangingLoweredCollisionFromAbove} is the neighbour-aware half: when the
+     * broadphase queries a cell, it also unions in the hanging part of a lowered block directly
+     * above, so the lowered geometry is solid exactly where it is drawn.
+     */
+    public static final boolean COLLISION_FOLLOW =
+            !"false".equalsIgnoreCase(System.getProperty("slabbed.collisionFollow", "true"));
+
+    /**
+     * Given a cell's own collision shape (local frame) and position, unions in the part of a
+     * LOWERED block directly above that hangs down into this cell, so the broadphase yields the
+     * lowered block's collision at its visual position even when the player's box does not reach
+     * the lowered block's own cell. Called from {@code BlockCollisionsLoweredAboveMixin} (the single
+     * {@code getCollisionShape} site in {@code BlockCollisions.computeNext}). Cheap-gated: returns
+     * {@code own} immediately for air-above and non-lowered-above (the overwhelming common case).
+     */
+    public static VoxelShape withHangingLoweredCollisionFromAbove(
+            VoxelShape own, CollisionGetter getter, BlockPos pos) {
+        if (!COLLISION_FOLLOW || getter == null || pos == null) {
+            return own;
+        }
+        BlockPos abovePos = pos.above();
+        BlockState above = getter.getBlockState(abovePos);
+        if (above.isAir() || !above.getFluidState().isEmpty()) {
+            return own;
+        }
+        double dy = getYOffset(getter, abovePos, above);
+        if (dy >= -1.0e-6) {
+            return own;
+        }
+        // The above block's collision stays VANILLA per-state (its outline/visual is lowered by dy).
+        // Its visual collision = vanilla.move(0, dy, 0); the part hanging into THIS cell (the cell
+        // below) is that, expressed in this cell's local frame, i.e. vanilla.move(0, dy + 1, 0).
+        VoxelShape aboveVanilla = above.getCollisionShape(getter, abovePos, CollisionContext.empty());
+        if (aboveVanilla.isEmpty()) {
+            return own;
+        }
+        VoxelShape hanging = aboveVanilla.move(0.0, dy + 1.0, 0.0);
+        return own.isEmpty() ? hanging : Shapes.or(own, hanging);
     }
 
     /**

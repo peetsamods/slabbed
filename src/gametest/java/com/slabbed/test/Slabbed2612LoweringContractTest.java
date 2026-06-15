@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.AABB;
 
 /**
  * Deterministic dy/lowering contract tests for the 26.1.2 port's forward-ported
@@ -160,4 +161,46 @@ public final class Slabbed2612LoweringContractTest {
                 "powder snow (natural terrain full cube) MUST stay flush (0.0) on a slab, not step -0.5");
         helper.succeed();
     }
+
+    /**
+     * COLLISION-FOLLOW (BlockCollisionsLoweredAboveMixin): a lowered slab must be SOLID where it is
+     * drawn. Its per-state collision is vanilla (cell's upper half) but the visual is the lower half,
+     * so a box inside the visible lower-half (not reaching the slab's own cell) would pass straight
+     * through without the broadphase above-check. RED before the mixin: noCollision=true (clip-in).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredSlabIsSolidAtVisualLowerHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // Build a lowered slab, ANCHOR it via the real placement path (freeze law), then remove the
+        // support below so it CANTILEVERS — lowered -0.5 with AIR below it (Julia's exact case).
+        BlockPos base = new BlockPos(2, 2, 2);
+        helper.setBlock(base, bottomSlab());                              // carrier
+        helper.setBlock(base.above(), Blocks.STONE.defaultBlockState());  // lowered stone
+        authorBlock(helper, level, base.above(2), bottomSlab());          // slab -> lowered -0.5 -> anchored
+        BlockPos slabAbs = helper.absolutePos(base.above(2));
+
+        // Remove the support below: the slab cantilevers (freeze-anchor keeps it -0.5; air below).
+        helper.setBlock(base.above(), Blocks.AIR.defaultBlockState());
+        helper.setBlock(base, Blocks.AIR.defaultBlockState());
+
+        double dy = SlabSupport.getYOffset(level, slabAbs, level.getBlockState(slabAbs));
+        if (Math.abs(dy + 0.5) > EPS) {
+            throw helper.assertionException(base.above(2), "SETUP: cantilevered slab dy expected -0.5, got " + dy);
+        }
+
+        // A small box entirely inside the slab's lowered VISUAL lower-half [N-0.5, N] — now AIR (the
+        // cell below was cleared), so ONLY the slab's hanging collision can block it. Vanilla
+        // per-state collision is [N, N+0.5] (the cell's upper half), so without the broadphase
+        // above-check this box passes straight through the visible slab.
+        int n = slabAbs.getY();
+        AABB inVisual = new AABB(slabAbs.getX() + 0.3, n - 0.4, slabAbs.getZ() + 0.3,
+                slabAbs.getX() + 0.7, n - 0.1, slabAbs.getZ() + 0.7);
+        if (level.noCollision(inVisual)) {
+            throw helper.assertionException(base.above(2),
+                    "CLIP-THROUGH: a box inside the cantilevered lowered slab's visible lower-half has NO "
+                    + "collision — player clips through. The broadphase must yield the slab's hanging collision.");
+        }
+        helper.succeed();
+    }
+
 }
