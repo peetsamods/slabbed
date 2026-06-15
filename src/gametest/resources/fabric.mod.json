@@ -6,7 +6,8 @@
   "environment": "*",
   "entrypoints": {
     "fabric-gametest": [
-      "com.slabbed.test.GhostLoweredCollisionProofTest"
+      "com.slabbed.test.GhostLoweredCollisionProofTest",
+      "com.slabbed.test.Slabbed2612LoweringContractTest"
     ]
   },
   "depends": {
