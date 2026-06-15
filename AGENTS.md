@@ -41,11 +41,12 @@ If the tree is dirty, inspect only the files relevant to the intended slice befo
 ## When to Use Superpowers / Subagents
 
 Use the Superpowers plugin to delegate to subagents when the work can be decomposed into independent units with bounded context.
+Subagents are separate model runs and may cost more and slow the session through coordination overhead. Use them only when their outputs will directly reduce main-thread work, risk, or context size.
 
 ### Required invocation sequence
 
 - **Must explicitly invoke** `@Superpowers` before launching any subagent work for this workspace.
-- **Default mode:** when a request can be decomposed into 2+ independent slices and no exception in this section applies, automatically begin that session with `@Superpowers` and proceed with subagent delegation without waiting for additional prompting.
+- **Default mode:** when a request can be decomposed into 2+ independent slices, automatically delegate only if the cost/benefit rule below passes. Otherwise keep the work in the main context, even if `@Superpowers` skills are used.
 - After `@Superpowers` is acknowledged, invoke the dispatcher (`@dispatching-parallel-agents` when there are multiple independent slices, or `@systematic-debugging` / other single-specialist skill as needed) in the same turn.
 - Provide each subagent a fixed contract in one message:
   - Inputs and current file scope.
@@ -70,6 +71,7 @@ Use the Superpowers plugin to delegate to subagents when the work can be decompo
 ### Do not use subagents when:
 - The work is **tightly coupled** and requires continuous shared state across steps.
 - The task is **small enough** that subagent setup and review overhead would dominate the total effort.
+- The task is routine preflight, simple grep, a small edit, live-client/runtime debugging, or any step where the main thread must preserve one continuous evidence chain.
 - The next step depends on information that is only available after the previous step completes, with no meaningful parallelism.
 - The task requires **frequent interactive back-and-forth** with the user to resolve ambiguity before progress can be made.
 - The task requires a single coherent reasoning chain where splitting context would reduce accuracy.
@@ -84,13 +86,13 @@ Use the Superpowers plugin to delegate to subagents when the work can be decompo
 - Re-dispatch with corrected context if a subagent reports `NEEDS_CONTEXT` or `BLOCKED`.
 
 ### Cost/benefit rule
-Use subagents only when at least one of the following is true:
+Use subagents only when there are 2+ genuinely independent subtasks and at least one of the following is true:
 - they enable parallelism,
 - they materially reduce context size,
 - they improve review isolation,
 - or they reduce the chance of cross-contamination in reasoning.
 
-Otherwise, execute directly in the main context.
+Use subagents mainly for parallel read-only lanes: artifact summaries, dirty-tree classification, mod/tag inventories, log-marker extraction, or independent review passes. Otherwise, execute directly in the main context.
 
 - Work one port slice only.
 - Prefer mapping/tooling/classpath proof before source migration.
