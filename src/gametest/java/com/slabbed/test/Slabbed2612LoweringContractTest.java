@@ -143,4 +143,21 @@ public final class Slabbed2612LoweringContractTest {
                 "hanging roots under a flush ceiling slab MUST stay flush (0.0), not dragged down by a carrier below");
         helper.succeed();
     }
+
+    /**
+     * powder-snow (port of da8cc3cb): powder snow is a FULL CUBE but natural terrain
+     * fill — it must NEVER offset onto a slab, so it stays flush with neighbouring
+     * powder snow on full ground (no -0.5 step / snowy-terrain DODO). It is NOT a
+     * SnowBlock so isThinTopLayer never excluded it. RED before the fix: -0.5.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void powderSnowOnSlabStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos snowRel = new BlockPos(2, 3, 2);
+        helper.setBlock(snowRel.below(), bottomSlab());
+        helper.setBlock(snowRel, Blocks.POWDER_SNOW.defaultBlockState());
+        assertDy(helper, level, snowRel, 0.0,
+                "powder snow (natural terrain full cube) MUST stay flush (0.0) on a slab, not step -0.5");
+        helper.succeed();
+    }
 }

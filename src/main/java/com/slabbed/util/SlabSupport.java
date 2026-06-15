@@ -27,6 +27,7 @@ import net.minecraft.world.level.block.HangingSignBlock;
 import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.MossyCarpetBlock;
 import net.minecraft.world.level.block.IronBarsBlock;
+import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
@@ -692,8 +693,11 @@ public final class SlabSupport {
             return false;
         }
 
-        // never offset thin top-layer blocks (snow layers, carpet)
-        if (isThinTopLayer(state)) {
+        // never offset thin top-layer blocks (snow layers, carpet) or powder snow — natural surface
+        // terrain fill, not structural objects. Powder snow is a FULL CUBE so it is NOT an
+        // isThinTopLayer (which keys on SnowBlock), hence the explicit guard (else it steps -0.5 onto
+        // a slab while neighbouring powder snow on full ground stays flush — a snowy-terrain DODO).
+        if (isThinTopLayer(state) || state.getBlock() instanceof PowderSnowBlock) {
             return false;
         }
 
@@ -1681,6 +1685,7 @@ public final class SlabSupport {
                 || blk instanceof FenceBlock
                 || blk instanceof WallBlock
                 || blk instanceof IronBarsBlock
+                || blk instanceof PowderSnowBlock
                 || isThinTopLayer(state)
                 || state.isAir()
                 || !state.getFluidState().isEmpty()
