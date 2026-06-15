@@ -425,4 +425,80 @@ public final class Slabbed2612LoweringContractTest {
         helper.succeed();
     }
 
+    /**
+     * SNAP probe: a bottom slab AUTHORED (real placement path) on its own flush ground, but beside a
+     * NAMED lowered slab lane, must STAY flush (Julia's NEVER-POP). If it snaps to -0.5 at placement
+     * it has inherited the neighbor's lowering — a violation. (Diagnostic for "snapping down slab".)
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabPlacedBesideLoweredSlabLaneOnFlushGroundStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+
+        // A NAMED lowered slab: bottom slab authored on a lowered stone -> anchored -0.5.
+        BlockPos lane = new BlockPos(3, 3, 2);
+        helper.setBlock(lane.below(2), bottomSlab());                          // (3,1,2)
+        helper.setBlock(lane.below(), Blocks.STONE.defaultBlockState());       // (3,2,2) stone -0.5
+        authorBlock(helper, level, lane, bottomSlab());                        // (3,3,2) slab -> anchored -0.5
+        assertDy(helper, level, lane, -0.5, "SETUP: lane slab is a lowered (anchored) carrier");
+
+        // Author a slab BESIDE the lane on its OWN flush ground (the player places it flat).
+        BlockPos placed = new BlockPos(2, 3, 2);
+        helper.setBlock(placed.below(), Blocks.STONE.defaultBlockState());     // (2,2,2) flush ground
+        authorBlock(helper, level, placed, bottomSlab());
+
+        assertDy(helper, level, placed, 0.0,
+                "slab placed on its own flush ground beside a lowered slab lane MUST stay flush (NEVER-POP); "
+                + "if it reads -0.5 it has snapped down / inherited the lane's lowering");
+        helper.succeed();
+    }
+
+    /**
+     * Adversarial pin for the compound-merge fix: a compound-anchored block on a slab that STAYS
+     * genuinely lowered (-0.5) must keep reading -1.0. The fix must not collapse a real compound.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void compoundAnchorBlockStaysMinusOneOnGenuinelyLoweredSlab(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos base = new BlockPos(2, 1, 2);
+        helper.setBlock(base, Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(1), bottomSlab());                       // L0 slab 0
+        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone -0.5
+        helper.setBlock(base.above(3), bottomSlab());                       // L2 slab -0.5 (stays lowered)
+        BlockPos logRel = base.above(4);
+        helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());
+        BlockPos logAbs = helper.absolutePos(logRel);
+        SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+        assertDy(helper, level, logRel, -1.0,
+                "compound log on a genuinely lowered slab (-0.5) MUST stay -1.0 (real compound preserved)");
+        helper.succeed();
+    }
+
+    /**
+     * Adversarial pin for the compound-merge fix: when the slab below is REMOVED ENTIRELY (air below),
+     * the authored compound -1.0 is preserved (NEVER-POP survive-removal) — the fix only follows a
+     * slab that is still present but flushed, it does not pop the lane up on source removal.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void compoundAnchorBlockKeepsMinusOneWhenSlabBelowRemoved(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos base = new BlockPos(2, 1, 2);
+        helper.setBlock(base, Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(1), bottomSlab());                       // L0 slab 0
+        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone -0.5
+        helper.setBlock(base.above(3), bottomSlab());                       // L2 slab -0.5
+        BlockPos logRel = base.above(4);
+        helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());
+        BlockPos logAbs = helper.absolutePos(logRel);
+        SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+        assertDy(helper, level, logRel, -1.0, "SETUP: compound log -1.0");
+
+        // Remove the slab DIRECTLY below the log entirely (air below the log).
+        helper.setBlock(base.above(3), Blocks.AIR.defaultBlockState());
+        assertDy(helper, level, logRel, -1.0,
+                "compound log with the slab below REMOVED (air) keeps -1.0 (survive-removal; no pop-up)");
+        helper.succeed();
+    }
+
 }
