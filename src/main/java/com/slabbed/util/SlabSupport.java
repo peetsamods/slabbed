@@ -1670,17 +1670,27 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
-            // Beta4 sidecar: authored compound full-block anchor preserves dy=-1.0
-            // even after the source slab below is removed. Sidecar truth wins over
-            // the live below-slab predicate so source removal cannot silently
-            // renormalize the authored compound lane.
+            // Beta4 sidecar: an authored compound full-block anchor means the block sits on a slab
+            // that was ITSELF lowered, so it drops an extra -0.5 below the slab's lowered top (total
+            // -1.0). It must FOLLOW the slab directly below it: -1.0 only while that slab is genuinely
+            // lowered (-0.5); if the slab was later flushed to 0.0 (frozen-flat by Julia's NEVER-POP
+            // law, or its own lowering source removed) the block sits ON it at -0.5 — it must NOT stay
+            // stuck at -1.0 and SINK/MERGE into the flush slab (the reported "merging" / "anti-
+            // inheritance violated"). When the slab is REMOVED entirely (air/non-slab below) the
+            // authored compound is preserved (-1.0) so source removal cannot pop the lane up. Floored
+            // at -1.0 so a deeper slab can't push a full block past the dy>=-1.0 invariant.
             if (com.slabbed.anchor.SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)) {
+                BlockState compoundBelow = world.getBlockState(pos.below());
+                double compoundDy = -1.0;
+                if (compoundBelow.getBlock() instanceof SlabBlock) {
+                    compoundDy = Math.max(-1.0, getYOffsetInner(world, pos.below(), compoundBelow) - 0.5);
+                }
                 if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                     String side = (world instanceof net.minecraft.world.level.Level w && w.isClientSide()) ? "CLIENT" : "SERVER";
-                    Slabbed.LOGGER.info("[ANCHOR] compound sidecar dy applied side={} pos={} state={} dy=-1.0",
-                            side, pos.toShortString(), state);
+                    Slabbed.LOGGER.info("[ANCHOR] compound sidecar dy applied side={} pos={} state={} dy={}",
+                            side, pos.toShortString(), state, compoundDy);
                 }
-                return -1.0;
+                return compoundDy;
             }
             // Compound Lowered Full Block on Lowered Bottom Slab Carrier
             // (named legal state). When the bottom slab directly below is itself
