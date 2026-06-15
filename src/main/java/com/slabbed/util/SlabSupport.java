@@ -1323,6 +1323,98 @@ public final class SlabSupport {
     }
 
     /**
+     * A solid, non-slab, non-block-entity full block with AIR directly below it — i.e. a block
+     * cantilevered out over empty space, the only case where merging a full block down to a lowered
+     * neighbour is wanted (a block resting on solid ground must NOT sink). Recursion-safe
+     * ({@link #isSolidRender}-style checks only); never calls {@link #getYOffset}.
+     * Port of 1.21.1 {@code 9a24670c}.
+     */
+    private static boolean isCantileverFullBlockCandidate(BlockGetter world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && state != null
+                && !state.isAir()
+                && !(state.getBlock() instanceof SlabBlock)
+                && !(state.getBlock() instanceof EntityBlock)
+                && state.getFluidState().isEmpty()
+                && state.isSolidRender()
+                && world.getBlockState(pos.below()).isAir();
+    }
+
+    /**
+     * A full block that is GENUINELY lowered by its own support — a slab directly below, a
+     * direct/vertical anchor, or a lowered column reaching a slab beneath it (e.g. an upper log in a
+     * lowered trunk). This is the "anchor" a cantilever lane may hang off of; cantilever-lowered
+     * blocks themselves are deliberately excluded (they are lane members, reached by the walk, not
+     * sources) so lowering can never be self-sustaining without a real support. Recursion-safe:
+     * every predicate here is already invoked by {@link #getYOffsetInner} under the
+     * {@link #IN_GET_Y_OFFSET} guard and none call {@link #getYOffset}. Port of 1.21.1 {@code 9a24670c}.
+     */
+    private static boolean isGenuinelyLoweredFullBlockSource(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isSolidRender()) {
+            return false;
+        }
+        return hasBottomSlabBelow(world, pos)
+                || SlabAnchorAttachment.isAnchored(world, pos)
+                || (shouldOffset(world, pos, state) && slabColumnYOffset(world, pos) < -1.0e-6);
+    }
+
+    /**
+     * Geometric, recursion-safe replacement for the (removed) stale side-adjacent full-block anchor:
+     * a full block cantilevered over air lowers {@code -0.5} to merge flush with a lowered tower it
+     * is connected to, computed live so it recomputes whenever the structure changes — it never goes
+     * stale and never "pops" out of sync with its neighbours.
+     *
+     * <p>Breadth-first walk through connected cantilever full blocks (each over air), bounded by
+     * {@link #MAX_CHAIN_DEPTH}, returning true as soon as the lane reaches a GENUINE lowered source:
+     * a full-block carrier lowered by a slab below it or a direct/vertical anchor
+     * ({@link #isGenuinelyLoweredFullBlockSource}), or a lowered slab
+     * ({@link #isAdjacentSideSlabLowered}) so mixed slab+block canopies settle at one consistent
+     * level. Calls neither {@link #getYOffset} nor itself with circular dependence, so it is safe
+     * inside the {@link #IN_GET_Y_OFFSET} guard. Port of 1.21.1 {@code 9a24670c}.
+     */
+    private static boolean isCantileverLoweredFullBlock(BlockGetter world, BlockPos pos, BlockState state) {
+        if (!isCantileverFullBlockCandidate(world, pos, state)) {
+            return false;
+        }
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
+        queue.add(pos);
+        visited.add(pos.asLong());
+        while (!queue.isEmpty() && visited.size() <= MAX_CHAIN_DEPTH) {
+            BlockPos cursor = queue.removeFirst();
+            for (Direction dir : Direction.Plane.HORIZONTAL) {
+                BlockPos neighborPos = cursor.relative(dir);
+                BlockState neighbor = world.getBlockState(neighborPos);
+                if (neighbor == null || neighbor.isAir()) {
+                    continue;
+                }
+                boolean neighborIsSlab = neighbor.getBlock() instanceof SlabBlock;
+                // Genuine lowered source: a full block lowered by its own support
+                // (slab-below / anchor / lowered column), or a lowered slab. Reaching
+                // one lowers the whole cantilever lane.
+                if (!neighborIsSlab && isGenuinelyLoweredFullBlockSource(world, neighborPos, neighbor)) {
+                    return true;
+                }
+                if (neighborIsSlab && isAdjacentSideSlabLowered(world, neighborPos, neighbor)) {
+                    return true;
+                }
+                // Propagate only through further cantilever full blocks (over air).
+                if (!neighborIsSlab
+                        && isCantileverFullBlockCandidate(world, neighborPos, neighbor)
+                        && visited.add(neighborPos.asLong())) {
+                    queue.addLast(neighborPos);
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns true when the non-slab solid block at {@code pos} carries compound dy=-1.0 —
      * i.e. the same conditions that cause {@link #getYOffsetInner} to return -1.0 for it.
      * Safe to call inside the IN_GET_Y_OFFSET recursion guard: does not delegate to getYOffset.
@@ -1634,6 +1726,17 @@ public final class SlabSupport {
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
                         side, pos.toShortString(), state);
             }
+            return -0.5;
+        }
+
+        // Cantilevered full block (air below, connected to a lowered tower): lower -0.5 to merge,
+        // computed GEOMETRICALLY — it recomputes whenever the structure changes, so it never goes
+        // stale and never pops out of sync (the replacement for the removed side-adjacent anchor;
+        // see SlabAnchorAttachment#qualifiesForSideAdjacentLoweredFullAnchor). Air-gated, so a block
+        // resting on solid ground never sinks. Together with the isAdjacentSideSlabLowered slab
+        // branch above, mixed canopies of slabs and full blocks settle at one consistent lowered
+        // level off the same tower. Port of 1.21.1 9a24670c.
+        if (isCantileverLoweredFullBlock(world, pos, state)) {
             return -0.5;
         }
 
