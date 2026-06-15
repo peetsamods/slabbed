@@ -5,6 +5,8 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -58,6 +60,59 @@ public final class Slabbed2612LoweringContractTest {
         assertDy(helper, level, base.above(3), -0.5, "L2 bottom slab on lowered stone (vertical carrier)");
         assertDy(helper, level, base.above(4), -1.0, "L3 stone on vertically-lowered slab MUST be flush (-1.0)");
 
+        helper.succeed();
+    }
+
+    /**
+     * Authors a block via the real {@code setPlacedBy} path so
+     * {@code BlockOnPlacedAnchorMixin} fires (addAnchor + freezeLoweredOnPlace).
+     * Plain {@code helper.setBlock} is the terrain ({@code setBlockState}) path
+     * that never calls onPlaced and stays geometric.
+     */
+    private static void authorBlock(GameTestHelper helper, ServerLevel level, BlockPos rel, BlockState state) {
+        BlockPos abs = helper.absolutePos(rel);
+        level.setBlock(abs, state, Block.UPDATE_ALL);
+        state.getBlock().setPlacedBy(level, abs, level.getBlockState(abs), null, ItemStack.EMPTY);
+    }
+
+    /**
+     * NEVER-POP freeze law (port of 8aafd1ff): a structural block AUTHORED flat
+     * (dy=0) records FROZEN_FLAT and must stay flat when a bottom slab is later
+     * placed directly under it — it must NOT autonomously pop down to -0.5.
+     * RED before the freeze law: the stone recomputes geometrically and lowers.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void frozenFlatBlockStaysFlatWhenSlabAddedBelow(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos blockRel = new BlockPos(2, 3, 2);
+
+        // Author a flat stone in mid-air (real setPlacedBy path) → records FROZEN_FLAT at dy=0.
+        authorBlock(helper, level, blockRel, Blocks.STONE.defaultBlockState());
+        assertDy(helper, level, blockRel, 0.0, "authored flat stone before slab");
+
+        // Terrain-place a bottom slab directly UNDER it (setBlockState, no onPlaced).
+        helper.setBlock(blockRel.below(), bottomSlab());
+
+        assertDy(helper, level, blockRel, 0.0,
+                "frozen-flat stone MUST stay flat (0.0) after a slab is placed under it (Julia's NEVER-POP law)");
+        helper.succeed();
+    }
+
+    /**
+     * Control: a terrain ({@code setBlockState}) stone has NO FROZEN_FLAT marker,
+     * so it still lowers geometrically to -0.5 on a bottom slab — proving the
+     * freeze is gated to placed pieces and natural terrain stays geometric.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unfrozenBlockLowersWhenSlabAddedBelow(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos blockRel = new BlockPos(2, 3, 2);
+
+        helper.setBlock(blockRel.below(), bottomSlab());
+        helper.setBlock(blockRel, Blocks.STONE.defaultBlockState());
+
+        assertDy(helper, level, blockRel, -0.5,
+                "unfrozen (terrain) stone on a bottom slab lowers to -0.5 (control)");
         helper.succeed();
     }
 }

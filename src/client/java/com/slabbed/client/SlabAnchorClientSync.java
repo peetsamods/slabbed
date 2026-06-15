@@ -81,6 +81,12 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
             return set != null && set.contains(pos.asLong());
         };
+        // Freeze-on-place FLAT marker: same client-world fallback so the model render path sees the
+        // frozen-flat state and keeps the piece at dy=0 (no autonomous lowering after reload).
+        SlabAnchorAttachment.clientFrozenFlatLookup = pos -> {
+            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
 
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
@@ -103,6 +109,7 @@ public final class SlabAnchorClientSync {
 
         // Register listener for future attachment changes (e.g. live anchor add/remove sync).
         registerRerenderListener(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
+        registerRerenderListener(chunk, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
@@ -115,6 +122,7 @@ public final class SlabAnchorClientSync {
         // CHUNK_LOAD (or together with the initial chunk data), so onAttachedSet never
         // fires but the attachment is already populated.
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
