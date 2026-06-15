@@ -339,24 +339,40 @@ public abstract class SlabSupportStateMixin {
         }
     }
 
+    // ── collision: INTENTIONALLY KEPT VANILLA (within-cell) ───────────
+    // Slabbed lowers visual/outline/raycast only; movement collision must stay
+    // vanilla so MC's cell-bounded BlockCollisions broadphase samples it.
+    //
+    // Subtlety on 26.1.2: vanilla's default collision delegates to the outline
+    // shape — getCollisionShape(world,pos,ctx) -> Block.getCollisionShape ->
+    // (hasCollision ? state.getShape(world,pos) : empty) -> getShape -> our
+    // slabbed$offsetOutline. So the outline offset BLEEDS into movement
+    // collision, hanging the shape to min y = dy (e.g. -0.5) into the cell
+    // below, where the broadphase never samples it -> the lowered slab/block
+    // becomes a ghost the player walks through (proven by
+    // GhostLoweredCollisionProofTest).
+    //
+    // Fix: flag the thread while inside a getCollisionShape query so the outline
+    // mixin leaves the shape un-offset for that one delegated getShape call.
+    // This is SOURCE-SCOPED: blocks that override getCollisionShape (fences,
+    // walls, panes) never route through getShape, so they are unaffected. The
+    // old getCollisionShape OFFSET inject (slabbed$offsetOakFence...) is gone.
+    @Unique
+    private static final ThreadLocal<Boolean> SLABBED$IN_COLLISION_QUERY =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+
     @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
-            at = @At("RETURN"), cancellable = true)
-    private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockGetter world, BlockPos pos, CollisionContext ctx,
-                                                              CallbackInfoReturnable<VoxelShape> cir) {
-        BlockState self = (BlockState) (Object) this;
-        if (!SlabSupport.isBeta35FenceWallVariantContactObject(self)
-                && !SlabSupport.isBeta35FenceGateContactObject(self)
-                && !self.is(Blocks.GRINDSTONE)) {
-            return;
-        }
-        double yOff = SlabSupport.getYOffset(world, pos, self);
-        if (yOff != 0.0) {
-            if (SlabSupport.isBeta35FenceWallVariantContactObject(self) && yOff < 0.0) {
-                cir.setReturnValue(self.getShape(world, pos, ctx));
-                return;
-            }
-            cir.setReturnValue(cir.getReturnValue().move(0.0, yOff, 0.0));
-        }
+            at = @At("HEAD"))
+    private void slabbed$collisionQueryEnter(BlockGetter world, BlockPos pos, CollisionContext ctx,
+                                             CallbackInfoReturnable<VoxelShape> cir) {
+        SLABBED$IN_COLLISION_QUERY.set(Boolean.TRUE);
+    }
+
+    @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
+            at = @At("RETURN"))
+    private void slabbed$collisionQueryExit(BlockGetter world, BlockPos pos, CollisionContext ctx,
+                                            CallbackInfoReturnable<VoxelShape> cir) {
+        SLABBED$IN_COLLISION_QUERY.set(Boolean.FALSE);
     }
 
     // ── outline (hit-box) offset ──────────────────────────────────────
@@ -365,6 +381,16 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetOutline(BlockGetter world, BlockPos pos, CollisionContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
+        // Movement collision reaches this getShape via vanilla's
+        // getCollisionShape -> getShape delegation. Leave the shape vanilla
+        // (within-cell) for that path so the cell-bounded broadphase samples it;
+        // only the outline/visual gets lowered. Consume the flag so a stray
+        // set (e.g. getCollisionShape on a non-colliding block) cannot leak.
+        if (Boolean.TRUE.equals(SLABBED$IN_COLLISION_QUERY.get())) {
+            SLABBED$IN_COLLISION_QUERY.set(Boolean.FALSE);
+            return;
+        }
+
         BlockState self = (BlockState) (Object) this;
 
         Block block = self.getBlock();
