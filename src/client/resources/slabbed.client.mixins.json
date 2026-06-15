@@ -10,7 +10,8 @@
     "GameRendererCrosshairRetargetMixin",
     "ItemFrameRenderOffsetMixin",
     "LevelRendererRenderedOutlineRecorderMixin",
-    "MinecartRenderOffsetMixin"
+    "MinecartRenderOffsetMixin",
+    "TargetDyHudMixin"
   ],
   "injectors": {
     "defaultRequire": 1

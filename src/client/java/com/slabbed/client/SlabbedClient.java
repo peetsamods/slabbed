@@ -16,6 +16,7 @@ public final class SlabbedClient implements ClientModInitializer {
         initRuntimeDiagnostics("initBsFbLiveTraceClient", "BS/FB live trace client",
                 Boolean.getBoolean("slabbed.bsfb.live.trace"));
         initGapFillerOverlay();
+        // TargetDyOverlay renders via TargetDyHudMixin (Gui.extractRenderState); on by default.
         initScreenshotCaptureService();
     }
 
