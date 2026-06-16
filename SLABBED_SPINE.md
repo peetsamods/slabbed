@@ -145,3 +145,48 @@ For code migration work, classify the current dominant compile/source blocker fi
 The next candidate technical slice from Julia's manual video is a manual `$record` rerun through the ghost lowered slab pass-through route using the expanded physical-collision recorder. Grep `summary.md` and `session.jsonl` for `LIVE_COLLISION_ITERATOR_TARGET_MISS`, `collisionIteratorTargetMissRows`, `targetCollisionWorldBounds`, and `playerBlockCollisionTargetIntersectsReturned`. Do not patch collision behavior unless the live RED names a client collision-iterator target miss or a server authoritative collision/attachment mismatch.
 
 Separate deferred gameplay slice: the chained lowered-side-slab placement gap (server authors `top/dy0` on aggressive chaining) still must begin with a deterministic gametest RED reproducing the chained route before any remap result-type / snapshot-availability patch. The deferred-clear + rearm approach remains rejected (it introduced `outlineRaycastSplitRows=5999` cursor clipping and a multiplayer snapshot leak).
+
+---
+
+## 2026-06-15/16 — PARITY SPRINT (DODO + snap + lantern + merge + chain + freeze families)
+
+Long marathon. HEAD `3222844a`, branch `port/mc-26.1.2`, tree clean, jar **200367 B** staged in
+Modrinth `Fabric 26.1.2`. Build/test with **Java 25** (`JAVA_HOME=…/temurin-25.jdk/Contents/Home`). 24
+gametests green (`Slabbed2612LoweringContractTest` + `GhostLoweredCollisionProofTest`).
+
+**Method that worked (Julia's law):** for every reported symptom — RED-verify the gap first (gametest
+or live), then port the *current* shipped behaviour (not a stale snapshot), Mojang-adapt, prove
+RED→GREEN. Render/geometry bugs are render-only → **live A/B is mandatory** (see `LIVE-DRIVE-GUIDE.md`).
+
+Commits this sprint (newest first):
+- `3222844a` test: faithful snap repro (slab beside LOWERED SLAB column; CONTROL −0.5, AUTHORED 0.0)
+- `ea4eddd7` fix(render): **DODO** — clear step-face cullFace on flat-vs-lowered seam (port of 1.21.1
+  clearStepCullFaces). `OffsetBlockStateModel.emitQuads` only wrapped dy≠0 blocks → a FROZEN-FLAT slab
+  at a seam kept its baked cullFace → ghost window. Now wraps when `dy≠0 OR anyMismatchedNeighborDy`.
+  **LIVE-CONFIRMED solid.**
+- `fddd248e` fix: **snap** — placed slab whose −0.5 is side-inherited-only (no lowered carrier below)
+  freezes flat (`slabLoweringIsSideInheritedOnly`). **LIVE A/B PROVEN** at (9,−58,5): setblock −0.5
+  geometric, r-placed 0.0 FROZEN-FLAT.
+- `baef1d03` feat: **chain-ceiling** extended baked model (`ChainCeilingGeometry` + chain_ceiling_support
+  .json + addModel + emitQuads hook) — revival of the UNMERGED `fix/chains-*` branches (NEVER shipped in
+  any 1.21.x release; verified via merge-base on every tag). Triggers only when a TOP/DOUBLE slab is
+  directly above the Y-chain — Julia's windmill chain hangs beside the trunk so it may not trigger
+  (separate "chain bottom→ground" geometry, still open).
+- `7507029c` fix: **lantern smoosh** — HANGING blocks route through ceilingHungDecorationDy (port of
+  bbe3deb9). LIVE.
+- `6cb4b909` fix: **compound merge** — stale compound sidecar follows the slab below (max(−1.0, slabDy−
+  0.5)) instead of hardcoded −1.0 (no log-sinks-into-flat-slab). gametest-proven.
+- `472c7b70` fix: **side-inheritance** off (port 83afed84) + **cantilever** geometric merge (port
+  9a24670c). RED→GREEN.
+- `2845ba81` NEVER-POP freeze law · `28991e4d` ceiling-hanger · `0bc4ea84` powder-snow · `3d9c49ab`
+  collision broadphase (lowered solid where drawn) · `1ff995b1` ghost collision · `b528d734` /slabdy.
+
+**KEY FINDINGS:** (1) the chain-shortening was NEVER released — only on `fix/chains-*`. (2) I'd
+forgotten the **keybind rebind** (Use→`r`) that makes placement drivable — now documented in
+`LIVE-DRIVE-GUIDE.md`. (3) Julia's EXISTING snapped arm `(-2,-56,-1)` stays −0.5 = stale anchor from the
+old jar (break+replace clears it). **KEYBIND IS CURRENTLY REBOUND (Use→r; backup options.txt.slabbed-bak)
+— revert before normal play.** Test scratch blocks left at x=8 z=5 column + (9,−58,5) + (8,−60,12).
+
+**GOAL (Julia, 2026-06-16): COMPLETE PARITY with shipped 1.21.1 AND 1.21.11 WITH Terrain Slabs.** The
+remaining-gap roadmap is in `HANDOFF.md` (refreshed this date from a 5-reader parity-gap audit). NOT
+pushed (local only).
