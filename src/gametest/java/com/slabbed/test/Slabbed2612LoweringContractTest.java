@@ -526,6 +526,40 @@ public final class Slabbed2612LoweringContractTest {
         helper.succeed();
     }
 
+    /**
+     * SNAPPED SLAB, faithful repro (live-confirmed config -2,-56,-1): a slab cantilevered (air below)
+     * beside a lowered SLAB geometrically lowers to -0.5 — but an AUTHORED (placed) one must FREEZE
+     * FLAT (NEVER-POP), not snap. Proven live by an A/B at (9,-58,5): /setblock -> -0.5 geometric,
+     * r-placed -> 0.0 FROZEN-FLAT. Control here asserts the geometric snap exists (-0.5); the authored
+     * slab asserts the freeze-guard keeps it flat (0.0).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabBesideLoweredSlabColumnAuthoredFreezesFlat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // Lowered slab column: ground, slab, stone(-0.5), slab(-0.5 via hasLoweredCarrierBelow).
+        BlockPos base = new BlockPos(2, 1, 2);
+        helper.setBlock(base, Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(1), bottomSlab());
+        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(3), bottomSlab());
+        BlockPos loweredSlab = base.above(3);
+        assertDy(helper, level, loweredSlab, -0.5, "SETUP: column top slab is lowered");
+
+        BlockPos arm = loweredSlab.east();                 // cantilevered beside it, air below
+
+        // Control: a TERRAIN slab here geometrically lowers -0.5 (the snap config is real).
+        helper.setBlock(arm, bottomSlab());
+        assertDy(helper, level, arm, -0.5,
+                "CONTROL: terrain slab beside a lowered slab lowers geometrically to -0.5 (the snap)");
+
+        // Authored (real placement path): the freeze-guard must keep it FLAT.
+        helper.setBlock(arm, Blocks.AIR.defaultBlockState());
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, 0.0,
+                "AUTHORED slab beside a lowered slab (air below) MUST freeze flat (0.0), not snap to -0.5");
+        helper.succeed();
+    }
+
     private static BlockState yChain() {
         return Blocks.IRON_CHAIN.defaultBlockState().setValue(BlockStateProperties.AXIS, net.minecraft.core.Direction.Axis.Y);
     }
