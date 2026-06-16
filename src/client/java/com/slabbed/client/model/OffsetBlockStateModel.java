@@ -61,7 +61,14 @@ public final class OffsetBlockStateModel implements BlockStateModel {
             return;
         }
         float dy = slabbed$modelDy(view, pos, state);
-        QuadEmitter out = dy != 0.0f ? YOffsetEmitter.wrap(emitter, dy, slabbed$hasMismatchedNeighborDy(view, pos, dy)) : emitter;
+        // DODO / step-face cull: a FLAT block (dy=0) adjacent to a lowered one ALSO owns a step face
+        // whose cullFace must be cleared — otherwise the strip the neighbour's -0.5 offset exposes
+        // culls into a see-through "ghost window". 26.1.2 previously only wrapped dy!=0 blocks, so the
+        // flat side of a lowered-vs-flat seam was left culled. Wrap (clearing cullFace on mismatched-dy
+        // faces, no Y shift when dy=0) whenever this block is offset OR any neighbour sits at a
+        // different dy. Renderer-agnostic (edits the quad's own cullFace). Port of 1.21.1 clearStepCullFaces.
+        boolean stepSeam = dy != 0.0f || slabbed$anyMismatchedNeighborDy(view, pos, dy);
+        QuadEmitter out = stepSeam ? YOffsetEmitter.wrap(emitter, dy, slabbed$hasMismatchedNeighborDy(view, pos, dy)) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, slabbed$offsetAwareCullTest(view, pos, state, dy, cullTest));
     }
 
@@ -117,6 +124,19 @@ public final class OffsetBlockStateModel implements BlockStateModel {
             float neighborDy = slabbed$modelDy(view, neighborPos, neighborState);
             return Math.abs(neighborDy - dy) > 1.0e-6f;
         };
+    }
+
+    /** True if ANY of the 6 neighbours sits at a different model dy than this block (a lowered-vs-flat
+     *  step seam). Used to clear cull faces even for a dy=0 block at a seam (the DODO ghost-window fix). */
+    private static boolean slabbed$anyMismatchedNeighborDy(BlockAndTintGetter view, BlockPos pos, float dy) {
+        for (Direction direction : Direction.values()) {
+            BlockPos neighborPos = pos.relative(direction);
+            float neighborDy = slabbed$modelDy(view, neighborPos, view.getBlockState(neighborPos));
+            if (Math.abs(neighborDy - dy) > 1.0e-6f) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void slabbed$traceCullDecision(
