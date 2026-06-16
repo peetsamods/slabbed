@@ -84,12 +84,26 @@ cantilever predicates — they ARE present, 8 hits). Port from the shipped sibli
    TS-compat CODE (items 1–4) can be ported + **gametested**, but **cannot be live-render-verified on 26.1.2
    until Julia builds/provides a 26.1.2 `terrain_slabs` jar.** Surface this to her; it gates the headline goal.
 
-### P1 — Connecting blocks (fence/wall/pane) — absent entirely
-- `SlabSupport.connectingBlockVisualDy` + `isSteppedConnectingNeighbor` (a fence/wall/pane pair is "stepped"
-  when visual dy differs). + mixins **`WallSlabConnectionMixin`** (WallShape.NONE/UP across a step) and
-  **`FencePaneSlabConnectionMixin`** (clear FACING props across a step). Copy from
-  `Slabbed-countered-compat-latest` (Mojang-adapt names). Without these, fences/walls/panes draw connector
-  arms across slab-height steps (GH#21). gametest + live.
+### P1 — Connecting blocks (fence/wall/pane) — IN PROGRESS
+- ✅ DONE: `SlabSupport.connectingBlockVisualDy` (=getYOffset) + `isSteppedConnectingNeighbor`
+  (FenceBlock/WallBlock/**IronBarsBlock** neighbour + |dy| differs) ported & compiling (HEAD has them).
+- ⏳ NEXT — the two connection mixins (copy logic from `Slabbed-countered-compat-latest/src/main/java/
+  com/slabbed/mixin/{WallSlabConnectionMixin,FencePaneSlabConnectionMixin}.java`, register both in
+  `slabbed.mixins.json`). **Exact 26.x recipe (verified this session):**
+  - neighbour update: `@Inject(method="updateShape", at=@At("RETURN"), cancellable=true)` — 26.x renamed
+    getStateForNeighborUpdate→`updateShape`. Signature template = `CarpetBlockMixin.slabbed$stayOnSlabs`:
+    `(BlockState state, LevelReader world, ScheduledTickAccess tickView, BlockPos pos, Direction direction,
+    BlockPos neighborPos, BlockState neighborState, RandomSource random, CallbackInfoReturnable<BlockState> cir)`.
+  - placement: `@Inject(method="getPlacementState", at=@At("RETURN"), cancellable=true)` with
+    `BlockPlaceContext ctx` — template = `SlabBlockPlacementFixMixin` (`ctx.getClickedPos()`, `ctx.getLevel()`).
+  - fence/pane property map: `CrossCollisionBlock.PROPERTY_BY_DIRECTION` (Mojang for ConnectingBlock.
+    FACING_PROPERTIES); `@Mixin({FenceBlock.class, IronBarsBlock.class})` (IronBarsBlock = Pane). Use
+    `state.hasProperty/getValue/setValue`. **VERIFY** FenceBlock/IronBarsBlock declare `getPlacementState`/
+    `updateShape` for mixin targeting — if not, target `CrossCollisionBlock.class`.
+  - wall: `@Mixin(WallBlock.class)`; Mojang has no public `WALL_SHAPE_PROPERTIES_BY_DIRECTION` map → build
+    a direction→property switch (EAST→`WallBlock.EAST_WALL` EnumProperty<WallSide>, etc.; `WallShape`→
+    **`WallSide`** in Mojang), set the broken side to `WallSide.NONE` and force `BlockStateProperties.UP=true`.
+  Then gametest (stepped run breaks; flat run connects) + live (fence run down a slab stair = single posts).
 
 ### P2 — Hanger underside-follow (lanterns/spore/roots beneath a LOWERED slab/full block)
 - `loweredSlabUndersideSupportDy`, `loweredFullBlockUndersideSupportDy`, and the

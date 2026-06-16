@@ -1561,6 +1561,33 @@ public final class SlabSupport {
     }
 
     /**
+     * Visual dy of a connecting block (fence / wall / iron-bars / glass-pane) — mirrors the model's
+     * render offset so the stepped-connection check compares the heights things are actually DRAWN at.
+     * Port of the shipped 1.21.1/1.21.11 connecting-block system (GH #21 + break-across-step).
+     */
+    public static double connectingBlockVisualDy(BlockGetter world, BlockPos pos, BlockState state) {
+        return getYOffset(world, pos, state);
+    }
+
+    /**
+     * True when {@code state} (a fence/wall/pane) and a same-family horizontal neighbour sit at
+     * DIFFERENT visual heights (one lowered onto a slab, the other at grid height) — a slab-height
+     * step. The connection mixins ({@code WallSlabConnectionMixin}, {@code FencePaneSlabConnectionMixin})
+     * suppress the connector arm across such a step so the pair render as clean single posts; a flat run
+     * at one height still connects. Port of 1.21.1/1.21.11 (PaneBlock→IronBarsBlock in Mojang names).
+     */
+    public static boolean isSteppedConnectingNeighbor(BlockGetter world, BlockPos pos, BlockState state,
+                                                      BlockPos neighborPos, BlockState neighborState) {
+        Block neighbor = neighborState.getBlock();
+        if (!(neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof IronBarsBlock)) {
+            return false;
+        }
+        double selfDy = connectingBlockVisualDy(world, pos, state);
+        double neighborDy = connectingBlockVisualDy(world, neighborPos, neighborState);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
+    }
+
+    /**
      * True for an always-ceiling-hung decoration — hanging roots, spore blossom, hanging signs.
      * These attach to the block ABOVE and have no floor variant, so their dy must be a pure
      * function of that support and must never be lowered by a block below them in the column.
