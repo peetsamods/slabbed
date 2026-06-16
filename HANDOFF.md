@@ -78,9 +78,11 @@ cantilever predicates — they ARE present, 8 hits). Port from the shipped sibli
    a model TS already owns (check `modelClass` name/package). MAJOR.
 4. **`shouldSkipSlabSupport()` + `CompatSlabSurfaceKind` + named direct-support surfaces** (commits
    `4f2ee4f3` et al.) — TS-named slabs as direct support; TS blocks opt out of generic slab support. MAJOR.
-5. **Get terrain_slabs INTO the test profile** — it's NOT in `Fabric 26.1.2/mods/` today, so none of this is
-   live-testable. Stage the 26.1.2 terrain_slabs jar (Julia's "Countered Terrain Slabs Fabric 0.4.0" on the
-   Desktop?) alongside Slabbed. ALL TS work is **live-render verify** (TS loaded).
+5. **⚠️ NO 26.1.2 terrain_slabs build EXISTS yet** (verified 2026-06-16): the only TS jars on disk are
+   `terrain_slabs-fabric-3.1.2` (1.21.1) and `3.3.0` (1.21.11) — `~/Desktop/Countered Terrain Slabs Fabric
+   0.4.0/{0.4.0+1.21.1,0.4.0+1.21.11}/`. None target 26.1.2, and loading a wrong-MC TS jar will crash. So the
+   TS-compat CODE (items 1–4) can be ported + **gametested**, but **cannot be live-render-verified on 26.1.2
+   until Julia builds/provides a 26.1.2 `terrain_slabs` jar.** Surface this to her; it gates the headline goal.
 
 ### P1 — Connecting blocks (fence/wall/pane) — absent entirely
 - `SlabSupport.connectingBlockVisualDy` + `isSteppedConnectingNeighbor` (a fence/wall/pane pair is "stepped"
