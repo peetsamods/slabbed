@@ -84,11 +84,10 @@ tasks.named("sourcesJar", Jar).configure {
     exclude("slabbed.debug.mixins.json")
 }
 
-// 26.1.2 port: optional Countered Terrain Slabs compat is deferred until core Slabbed compiles.
+// 26.1.2 port: Countered Terrain Slabs compat is now Mojang-mapped and compiles (dual mod-id gate).
 sourceSets {
     main {
         java {
-            exclude("com/slabbed/compat/terrainslabs/**")
             exclude("com/slabbed/util/Beta4ManualLiveTrace.java")
             // 26.1.2 port: recorder diagnostics deferred until core compile is restored.
             exclude("com/slabbed/util/Beta35LiveTorchCaptureRecorder.java")
