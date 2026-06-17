@@ -139,7 +139,18 @@ public final class SlabSupport {
         if (world == null || pos == null) {
             return false;
         }
-        return isBottomSlab(world.getBlockState(pos.below()));
+        BlockState below = world.getBlockState(pos.below());
+        // Terrain Slabs (no-op without the mod): a TS slab is a self-rendering surface, never a lowering
+        // support — so a block placed on it must NOT anchor -0.5. This is the single choke point feeding
+        // every anchor-qualification site; without it, onPlaced anchors the block -0.5 SERVER-side while
+        // the client reads geometric 0.0 (the column walk already stops flush at a TS slab), so the block
+        // visibly SNAPS DOWN into the TS surface when the anchor syncs (Julia's "snapping down after a
+        // short delay" on a terrain slab). Vanilla bottom slabs are untouched (shouldSkipSlabSupport keys
+        // only on terrain_slabs/terrainslabs ids).
+        if (CompatHooks.shouldSkipSlabSupport(below)) {
+            return false;
+        }
+        return isBottomSlab(below);
     }
 
     /**
