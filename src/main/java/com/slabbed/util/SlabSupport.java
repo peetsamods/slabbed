@@ -2152,6 +2152,14 @@ public final class SlabSupport {
         BlockPos cursor = pos.below();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = world.getBlockState(cursor);
+            // Terrain Slabs compat (no-op without the mod): a TS slab is a self-rendering surface that
+            // already sits at slab height. Slabbed stays subtractive and must NOT lower terrain onto it —
+            // 26.1.2's isBottomSlab() returns true for a TS slab (it extends SlabBlock), so without this
+            // guard natural stone/dirt above a TS slab lowered -0.5 and the chunk mesher tore see-through
+            // world holes. Terminate the walk FLUSH at a TS block, as if resting on solid ground.
+            if (CompatHooks.shouldSkipSlabSupport(cur)) {
+                return false;
+            }
             if (isBottomSlab(cur)) {
                 return true;
             }
@@ -2174,6 +2182,11 @@ public final class SlabSupport {
         BlockPos cursor = pos.below();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = world.getBlockState(cursor);
+            // Terrain Slabs compat (see hasSlabInColumn): never lower an object onto a TS slab — it is a
+            // self-rendering surface, and treating it as a vanilla bottom slab tore world holes. Flush.
+            if (CompatHooks.shouldSkipSlabSupport(cur)) {
+                return 0.0;
+            }
             if (cur.getBlock() instanceof SlabBlock
                     && isAdjacentSideSlabLowered(world, cursor, cur)) {
                 return isBottomSlab(cur) ? -1.0 : -0.5;
