@@ -119,11 +119,13 @@ shipped sites in parens; map to 26.1.2's divergent `SlabSupport`):
   `updateShape` path (stepped fence/bars/wall break; flat fence connects). Break is a blockstate change, so
   gametest is authoritative. Optional remaining: live confirm a fence run down a slab stair = single posts.
 
-### P2 — Hanger underside-follow (lanterns/spore/roots beneath a LOWERED slab/full block)
-- `loweredSlabUndersideSupportDy`, `loweredFullBlockUndersideSupportDy`, and the
-  `isBeta35Lowered{Slab,FullBlock}UndersideVisibleOwnerObject` predicates (1.21.1 phase19; confirmed 0 hits
-  here). **VERIFY FIRST** whether the lantern fix (`7507029c`, HANGING→ceilingHungDecorationDy) already
-  covers this case before porting — it may overlap. MAJOR.
+### P2 — Hanger underside-follow — ✅ VERIFIED ALREADY COVERED (`7a9d9f01`, no port needed)
+- RED-verified 2026-06-16: the lantern fix (`7507029c`) unified ALL ceiling-hung dy through
+  `ceilingHungDecorationDy`, which reads the support ABOVE and follows its dy. The always-ceiling-hung
+  family (hanging roots/spore/sign) under a LOWERED support follows it to -0.5 (the roots-droop/sign-smoosh
+  case) — proven by new gametest `hangingRootsFollowLoweredSupportAbove` (29/29). The 1.21.1 underside
+  readers (`loweredSlabUndersideSupportDy` et al., 0 hits here) are NOT needed — porting them would be
+  redundant with the cleaner unified approach. CLOSED.
 
 ### P3 — Render-cull refinement + hygiene
 - **`isSlabHeightStepFace` + `STEP_CULL_DISABLED`**: 26.1.2's DODO fix uses `anyMismatchedNeighborDy`
@@ -141,11 +143,14 @@ shipped sites in parens; map to 26.1.2's divergent `SlabSupport`):
   classes. Residual jar bloat (gametest-only, gated, harmless): `LiveCursorIntentRecorder` +
   `LevelRendererRenderedOutlineRecorderMixin` (~28KB) — exclude from the runtime jar at release time.
 
-### P4 — Targeting (verify, don't assume)
+### P4 — Targeting (verify, don't assume) — NEEDS A LIVE SESSION (not doable overnight)
 - 1.21.1 has `SlabbedOffsetRaycast`; 26.1.2 instead has a large `GameRendererCrosshairRetargetMixin`
   (~3075 lines) + `LoweredSideSlabRetargeter`. A DIVERGENCE, not necessarily a bug — **live-test crosshair
   targeting on lowered/offset blocks** before porting. If mistargeting reproduces, the offset-raycast
-  overhaul is the known cure (memory `slabbed-targeting-root-cause-and-overhaul`).
+  overhaul is the known cure (memory `slabbed-targeting-root-cause-and-overhaul`). Deferred from the
+  2026-06-16 overnight sprint because it requires live verification (keybind was reverted; do not port the
+  ~3k-line overhaul blind). Pick this up in a live session with Julia: aim at lowered/offset blocks via
+  `/tp`, read `/slabdy`, check the crosshair targets the visually-correct block.
 
 ## 3. How to work (the loop that worked)
 
