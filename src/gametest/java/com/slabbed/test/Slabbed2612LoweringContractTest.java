@@ -9,10 +9,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CrossCollisionBlock;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.block.state.properties.WallSide;
 import net.minecraft.world.phys.AABB;
 
 /**
@@ -601,6 +604,106 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(chain, yChain());
         assertDy(helper, level, chain, 0.5,
                 "Y-axis chain directly under a TOP slab raises +0.5 to connect up (vanilla connect-up; same as 1.21.11)");
+        helper.succeed();
+    }
+
+    // ── Connecting-block break-across-step (fence / pane / wall) — P1 ──────────
+    // Port of the shipped 1.21.1/1.21.11 rule: a connector must not draw an arm across a slab-height
+    // STEP (one member lowered onto a slab, the neighbour at grid height). These drive the real
+    // updateShape mixin path: vanilla updateShape adds the connection, the mixin RETURN-injects and
+    // breaks it iff the pair are stepped. The FLAT controls prove the mixin is conservative (a same-
+    // height run still connects). A is WEST of B, so A's EAST side faces B.
+
+    /** Stepped fence run: fence on a bottom slab (-0.5) beside a fence on stone (0.0) — EAST breaks. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void steppedFenceRunBreaksConnection(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 1, 2), bottomSlab());                       // support under A → lowers A
+        helper.setBlock(new BlockPos(3, 1, 2), Blocks.STONE.defaultBlockState());   // support under B → flush
+        BlockPos a = new BlockPos(2, 2, 2);
+        BlockPos b = new BlockPos(3, 2, 2);
+        helper.setBlock(a, Blocks.OAK_FENCE.defaultBlockState());
+        helper.setBlock(b, Blocks.OAK_FENCE.defaultBlockState());
+        assertDy(helper, level, a, -0.5, "SETUP fence A on bottom slab is lowered");
+        assertDy(helper, level, b, 0.0, "SETUP fence B on stone is flush");
+
+        BlockState aAfter = Blocks.OAK_FENCE.defaultBlockState().updateShape(
+                level, level, helper.absolutePos(a), net.minecraft.core.Direction.EAST,
+                helper.absolutePos(b), level.getBlockState(helper.absolutePos(b)), level.getRandom());
+        if (aAfter.getValue(CrossCollisionBlock.EAST)) {
+            throw helper.assertionException(a,
+                    "stepped fence A→B EAST connection must be BROKEN (no arm across a -0.5 step)");
+        }
+        helper.succeed();
+    }
+
+    /** Control: a flat fence run (both flush on stone) still connects — mixin only breaks across a step. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void flatFenceRunStillConnects(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 1, 2), Blocks.STONE.defaultBlockState());
+        helper.setBlock(new BlockPos(3, 1, 2), Blocks.STONE.defaultBlockState());
+        BlockPos a = new BlockPos(2, 2, 2);
+        BlockPos b = new BlockPos(3, 2, 2);
+        helper.setBlock(a, Blocks.OAK_FENCE.defaultBlockState());
+        helper.setBlock(b, Blocks.OAK_FENCE.defaultBlockState());
+        assertDy(helper, level, a, 0.0, "SETUP flat fence A");
+        assertDy(helper, level, b, 0.0, "SETUP flat fence B");
+
+        BlockState aAfter = Blocks.OAK_FENCE.defaultBlockState().updateShape(
+                level, level, helper.absolutePos(a), net.minecraft.core.Direction.EAST,
+                helper.absolutePos(b), level.getBlockState(helper.absolutePos(b)), level.getRandom());
+        if (!aAfter.getValue(CrossCollisionBlock.EAST)) {
+            throw helper.assertionException(a,
+                    "flat fence A→B EAST connection must REMAIN (mixin must not break a same-height run)");
+        }
+        helper.succeed();
+    }
+
+    /** Stepped iron-bars (pane family) run: same CrossCollisionBlock boolean side — EAST breaks. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void steppedIronBarsRunBreaksConnection(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 1, 2), bottomSlab());
+        helper.setBlock(new BlockPos(3, 1, 2), Blocks.STONE.defaultBlockState());
+        BlockPos a = new BlockPos(2, 2, 2);
+        BlockPos b = new BlockPos(3, 2, 2);
+        helper.setBlock(a, Blocks.IRON_BARS.defaultBlockState());
+        helper.setBlock(b, Blocks.IRON_BARS.defaultBlockState());
+        assertDy(helper, level, a, -0.5, "SETUP iron-bars A on bottom slab is lowered");
+        assertDy(helper, level, b, 0.0, "SETUP iron-bars B on stone is flush");
+
+        BlockState aAfter = Blocks.IRON_BARS.defaultBlockState().updateShape(
+                level, level, helper.absolutePos(a), net.minecraft.core.Direction.EAST,
+                helper.absolutePos(b), level.getBlockState(helper.absolutePos(b)), level.getRandom());
+        if (aAfter.getValue(CrossCollisionBlock.EAST)) {
+            throw helper.assertionException(a,
+                    "stepped iron-bars A→B EAST connection must be BROKEN (no arm across a -0.5 step)");
+        }
+        helper.succeed();
+    }
+
+    /** Stepped wall run: walls use WallSide side properties — broken side becomes WallSide.NONE. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void steppedWallRunBreaksConnection(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 1, 2), bottomSlab());
+        helper.setBlock(new BlockPos(3, 1, 2), Blocks.STONE.defaultBlockState());
+        BlockPos a = new BlockPos(2, 2, 2);
+        BlockPos b = new BlockPos(3, 2, 2);
+        helper.setBlock(a, Blocks.COBBLESTONE_WALL.defaultBlockState());
+        helper.setBlock(b, Blocks.COBBLESTONE_WALL.defaultBlockState());
+        assertDy(helper, level, a, -0.5, "SETUP wall A on bottom slab is lowered");
+        assertDy(helper, level, b, 0.0, "SETUP wall B on stone is flush");
+
+        BlockState aAfter = Blocks.COBBLESTONE_WALL.defaultBlockState().updateShape(
+                level, level, helper.absolutePos(a), net.minecraft.core.Direction.EAST,
+                helper.absolutePos(b), level.getBlockState(helper.absolutePos(b)), level.getRandom());
+        if (aAfter.getValue(WallBlock.EAST) != WallSide.NONE) {
+            throw helper.assertionException(a,
+                    "stepped wall A→B EAST side must be NONE (no arm across a -0.5 step), got "
+                    + aAfter.getValue(WallBlock.EAST));
+        }
         helper.succeed();
     }
 

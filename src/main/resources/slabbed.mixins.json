@@ -5,6 +5,8 @@
   "mixins": [
     "HangingSignAttachedMixin",
     "CarpetBlockMixin",
+    "FencePaneSlabConnectionMixin",
+    "WallSlabConnectionMixin",
     "torch.TorchBlockMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
