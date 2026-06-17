@@ -57,8 +57,14 @@ public final class OffsetBlockStateModel implements BlockStateModel {
                           Predicate<Direction> cullTest) {
         // A Y-axis chain hanging under a slab ceiling emits extended geometry so the column connects
         // continuously to the slab (no gap) — the chainable connect rule, distinct from lantern follow.
-        if (ChainCeilingGeometry.emitIfPresent(fabricWrapped, emitter, view, pos, state, random, cullTest)) {
-            return;
+        // Guarded: its support probe reads pos.above(), which can step outside the render-region border
+        // for a block at the section's top edge (26.x throws on OOB) — fall through to normal emission.
+        try {
+            if (ChainCeilingGeometry.emitIfPresent(fabricWrapped, emitter, view, pos, state, random, cullTest)) {
+                return;
+            }
+        } catch (IndexOutOfBoundsException outsideRenderRegion) {
+            // fall through to the standard offset emission below (also render-region guarded)
         }
         float dy = slabbed$modelDy(view, pos, state);
         // DODO / step-face cull: a FLAT block (dy=0) adjacent to a lowered one ALSO owns a step face
@@ -73,23 +79,47 @@ public final class OffsetBlockStateModel implements BlockStateModel {
     }
 
     private static float slabbed$modelDy(BlockAndTintGetter view, BlockPos pos, BlockState state) {
-        if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof MossyCarpetBlock) {
-            return (float) ClientDy.dyFor(view, pos, state);
-        }
+        // Render-region crash guard (26.x): on the chunk-meshing thread `view` is a bounds-limited
+        // RenderSectionRegion that THROWS (ArrayIndexOutOfBoundsException) on a read outside its border.
+        // SlabSupport.getYOffset does wide column-walk + adjacent-column side-support reads that can reach
+        // past that border for a block near the region edge, so tesselating ordinary terrain at a region
+        // boundary crashed the game. Treat any out-of-bounds read as "no offset" (0); the section recompiles
+        // with fuller bounds once neighbouring sections load, so the real offset settles a frame later.
+        // (Older MC render regions clamped OOB reads to air instead of throwing — a 26.x-specific need.)
+        try {
+            if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof MossyCarpetBlock) {
+                return (float) ClientDy.dyFor(view, pos, state);
+            }
 
-        float dy = (float) SlabSupport.getYOffset(view, pos, state);
-        if (dy == 0.0f) {
-            return 0.0f;
-        }
-
-        if (state.getBlock() instanceof FenceBlock
-                || state.getBlock() instanceof WallBlock
-                || state.getBlock() instanceof IronBarsBlock) {
-            if (!SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
+            float dy = (float) SlabSupport.getYOffset(view, pos, state);
+            if (dy == 0.0f) {
                 return 0.0f;
             }
+
+            if (state.getBlock() instanceof FenceBlock
+                    || state.getBlock() instanceof WallBlock
+                    || state.getBlock() instanceof IronBarsBlock) {
+                if (!SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
+                    return 0.0f;
+                }
+            }
+            return dy;
+        } catch (IndexOutOfBoundsException outsideRenderRegion) {
+            return 0.0f;
         }
-        return dy;
+    }
+
+    /**
+     * Neighbour model dy, bounds-safe for the render region. The neighbour's own block read can be the
+     * first thing to step outside the region border, so guard it here too (slabbed$modelDy guards the
+     * deeper resolver walk). Returns 0 (no offset) for an out-of-bounds neighbour.
+     */
+    private static float slabbed$neighborModelDy(BlockAndTintGetter view, BlockPos neighborPos) {
+        try {
+            return slabbed$modelDy(view, neighborPos, view.getBlockState(neighborPos));
+        } catch (IndexOutOfBoundsException outsideRenderRegion) {
+            return 0.0f;
+        }
     }
 
     private static Predicate<Direction> slabbed$offsetAwareCullTest(
@@ -104,10 +134,15 @@ public final class OffsetBlockStateModel implements BlockStateModel {
                 return false;
             }
             BlockPos neighborPos = pos.relative(direction);
-            BlockState neighborState = view.getBlockState(neighborPos);
-            float neighborDy = slabbed$modelDy(view, neighborPos, neighborState);
+            float neighborDy = slabbed$neighborModelDy(view, neighborPos);
             if (Math.abs(neighborDy - dy) > 1.0e-6f) {
                 if (CULL_TRACE) {
+                    BlockState neighborState;
+                    try {
+                        neighborState = view.getBlockState(neighborPos);
+                    } catch (IndexOutOfBoundsException outsideRenderRegion) {
+                        neighborState = null;
+                    }
                     boolean vanillaCull = cullTest.test(direction);
                     slabbed$traceCullDecision(pos, direction, dy, neighborPos, neighborDy, state, neighborState, vanillaCull);
                 }
@@ -119,9 +154,7 @@ public final class OffsetBlockStateModel implements BlockStateModel {
 
     private static Predicate<Direction> slabbed$hasMismatchedNeighborDy(BlockAndTintGetter view, BlockPos pos, float dy) {
         return direction -> {
-            BlockPos neighborPos = pos.relative(direction);
-            BlockState neighborState = view.getBlockState(neighborPos);
-            float neighborDy = slabbed$modelDy(view, neighborPos, neighborState);
+            float neighborDy = slabbed$neighborModelDy(view, pos.relative(direction));
             return Math.abs(neighborDy - dy) > 1.0e-6f;
         };
     }
@@ -130,8 +163,7 @@ public final class OffsetBlockStateModel implements BlockStateModel {
      *  step seam). Used to clear cull faces even for a dy=0 block at a seam (the DODO ghost-window fix). */
     private static boolean slabbed$anyMismatchedNeighborDy(BlockAndTintGetter view, BlockPos pos, float dy) {
         for (Direction direction : Direction.values()) {
-            BlockPos neighborPos = pos.relative(direction);
-            float neighborDy = slabbed$modelDy(view, neighborPos, view.getBlockState(neighborPos));
+            float neighborDy = slabbed$neighborModelDy(view, pos.relative(direction));
             if (Math.abs(neighborDy - dy) > 1.0e-6f) {
                 return true;
             }
