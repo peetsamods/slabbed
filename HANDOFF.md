@@ -17,9 +17,27 @@
 ```
 root:    /Users/joolmac/CascadeProjects/Slabbed-port-26.1.2
 branch:  port/mc-26.1.2
-HEAD:    0bd265dc   (clean tree, local only — NEVER pushed without explicit Julia go-ahead)
+HEAD:    6ba27925   (clean tree, local only — NEVER pushed without explicit Julia go-ahead)
 MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang mappings · v0.2.0-beta.4+26.1.2-port
 ```
+> **2026-06-17 PM — WYSIWYG placement law (active work).** Julia's LAW: "a placed block sits exactly where
+> the crosshair aimed; there is NO case where you aim and it lands elsewhere." She reported placement bugs
+> (place against a lowered block's side → snaps to vanilla; place on a terrain slab → snaps down). An 8-agent
+> background audit mapped them to **4 root causes** (full report: `docs/porting/WYSIWYG-PLACEMENT-AUDIT.md`):
+> - **RC1 ✅ DONE+verified (`6ba27925`):** block-on-TS-slab snap-down — `hasBottomSlabBelow` anchored onto TS
+>   slabs server-side while client read flush. Fixed with a `shouldSkipSlabSupport` guard. (= Julia Problem #1.)
+> - **RC2 ⏳ NEXT (the bulk — Pics 1–4):** cantilever slab/fence/wall beside a lowered block never gets a
+>   geometric −0.5, so it freezes flat / floats at vanilla. **Fix the GEOMETRY, not the anchor** (a placement
+>   anchor still snaps: client predicts 0, server anchors −0.5). 3 air-gated parts in `getYOffsetInner` +
+>   `slabLoweringIsSideInheritedOnly` air-gate. Every clause MUST be `pos.below()==air`-gated (NEVER-POP rail).
+> - **RC3 (compound −1.0 side markers), RC4 (cantilever-FB on-top edge):** queued, see audit doc.
+>
+> **Live rig:** game RUNNING fullscreen in the `TEST_ SLABBED 26.1.2` Modrinth profile; **keybind `Use`→`r`**
+> (revert to `mouse.right` when MC stopped). Debug placement trace = system prop `slabbed.beta4RepeatMergeTrace`
+> (BlockItemPlacementIntentMixin) — logs incoming hit-Y/dy + outgoing remap + placed dy to latest.log; used to
+> pinpoint RC2. **NOTE: `Slabbed2612LoweringContractTest.java` was reverting under concurrent edits — coordinate
+> with Julia before adding RC2 gametests.** RC2/RC3/RC4 have ZERO headless coverage (the SlabbedLab tests are
+> Yarn-named, excluded) — add Mojang-named `onPlaced`-driven tests for each before declaring closed.
 > **2026-06-16/17 sprint (autonomous):** P1 connecting-blocks (`409bf519`), P0.1 dual-mod-id TS gate
 > (`b76cccba`), P3 hygiene (`bcfdff7b`,`dbf5215d`), P2 verified-closed (`7a9d9f01`). **THEN Julia provided
 > a 26.1.2 Terrain Slabs build** (`terrain_slabs-fabric-3.3.1`, profile `TEST_ SLABBED 26.1.2`), unblocking

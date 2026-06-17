@@ -256,3 +256,38 @@ keybind, and live-drove. Two showstoppers found + fixed + LIVE-CONFIRMED via `/s
 REVERTED in both, NOT pushed. **The headline goal — Slabbed running correctly WITH Terrain Slabs on 26.1.2
 (no crash, no world-holes) — is achieved and live-confirmed.** Live-drive lesson: a fresh normal world is
 the real crash test; /setblock in loaded chunks hides render-region OOB.
+
+---
+
+## 2026-06-17 PM (live with Julia): WYSIWYG placement law + multi-agent audit
+
+Julia tested the staged TS jar live and reported placement bugs (4 screenshots): placing a slab/fence
+against a lowered block's SIDE snaps it up to vanilla; placing a block ON a terrain slab snaps it DOWN
+after a short delay. She crystallized the governing **LAW: "a placed block sits exactly where the
+crosshair aimed — there is NO case where you aim to place a block and it lands elsewhere."**
+
+**Method:** with the live game finally drivable (had to QUIT STEAM — its notification overlay was eating
+every computer-use click — then relaunch FULLSCREEN so the bare `java` window is frontmost; windowed mode
+loses focus to Modrinth on every pause), I enabled the existing gated placement trace
+(`slabbed.beta4RepeatMergeTrace`, BlockItemPlacementIntentMixin) and reproduced the side-placement bug. The
+trace proved the slab lands at the CORRECT cell + CORRECT type but with `placedDy=0.0` (frozen flat) — i.e.
+NOT a raycast bug; the dy is just never lowered. Then an 8-agent background Workflow audited the whole
+placement pipeline against the law → **4 root causes** (`docs/porting/WYSIWYG-PLACEMENT-AUDIT.md`):
+
+- **RC1 ✅ (`6ba27925`):** block-on-TS-slab snap-down. `hasBottomSlabBelow` (single choke point for all anchor
+  sites) treated a TS bottom slab as a lowering support → onPlaced anchored -0.5 server-side while the client
+  read geometric 0.0 → snap on sync. Fixed with `CompatHooks.shouldSkipSlabSupport` guard. 29/29, no-op
+  without TS.
+- **RC2 (NEXT):** cantilever slab/fence/wall beside a lowered block never gets a geometric -0.5 (slabs gated
+  by `canUseInheritedSlabLaneYOffset`; fences excluded by `isSolidRender` in `isCantileverFullBlockCandidate`)
+  → freezes flat. **KEY lesson: fix the GEOMETRY, not the anchor** — a placement-time anchor still SNAPS
+  (client predicts geometric 0, server anchors -0.5, pops on sync), same desync class as RC1. My first
+  attempt (placedCantileverMergeDy anchor) was reverted for this reason. 3 air-gated parts; every clause
+  `pos.below()==air`-gated to keep the NEVER-POP rail (place on solid ground beside a lowered lane → stays
+  flat). The windmill-arm "stays flush" rule and Julia's new "merge" ask are NOT contradictory — both are
+  the same law (aim flat → flat; aim at the lowered side → lowered).
+- **RC3 (compound -1.0 side markers), RC4 (cantilever-FB on-top edge):** queued.
+
+**State:** HEAD `6ba27925`, 29 gametests, RC1 done. Game running fullscreen (keybind `Use`→`r`). NOT pushed.
+`Slabbed2612LoweringContractTest.java` reverted twice under concurrent edits — coordinate before adding RC2
+gametests. Lesson: Steam overlay blocks computer-use → quit Steam + relaunch fullscreen restores control.
