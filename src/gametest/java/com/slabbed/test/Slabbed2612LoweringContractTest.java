@@ -151,6 +151,35 @@ public final class Slabbed2612LoweringContractTest {
     }
 
     /**
+     * P2 (hanger underside-follow) — the always-ceiling-hung family. An always-ceiling-hung decoration
+     * (hanging roots/spore/sign) under a LOWERED support must FOLLOW it down so it stays attached to the
+     * support's lowered underside (no gap / no smoosh) — the same rule the HANGING lantern follows, here
+     * for the roots-droop / sign-smoosh family. 26.1.2 unifies this through {@code ceilingHungDecorationDy}
+     * (reads the support ABOVE's dy), so no separate 1.21.1-style underside reader is needed — this test
+     * confirms that coverage. RED if the decoration were not routed through the ceiling-hung path: it
+     * would read 0.0 while its support reads -0.5 (a visible gap, the reported droop).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingRootsFollowLoweredSupportAbove(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // Lowered, anchored stone support with AIR below (so the hanger can occupy that cell).
+        BlockPos support = new BlockPos(2, 3, 2);
+        helper.setBlock(support.below(), bottomSlab());                    // temp carrier
+        helper.setBlock(support, Blocks.STONE.defaultBlockState());        // stone -> -0.5
+        BlockPos supportAbs = helper.absolutePos(support);
+        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+        helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());  // remove carrier; anchor holds -0.5
+        assertDy(helper, level, support, -0.5, "SETUP: anchored stone support stays lowered -0.5 with air below");
+
+        BlockPos rootsRel = support.below();
+        helper.setBlock(rootsRel, Blocks.HANGING_ROOTS.defaultBlockState());
+        assertDy(helper, level, rootsRel, -0.5,
+                "hanging roots under a LOWERED support MUST follow it down (-0.5), staying attached to its "
+                + "lowered underside (no droop/gap) — same rule as the HANGING lantern");
+        helper.succeed();
+    }
+
+    /**
      * powder-snow (port of da8cc3cb): powder snow is a FULL CUBE but natural terrain
      * fill — it must NEVER offset onto a slab, so it stays flush with neighbouring
      * powder snow on full ground (no -0.5 step / snowy-terrain DODO). It is NOT a
