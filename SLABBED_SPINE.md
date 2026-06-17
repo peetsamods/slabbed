@@ -190,3 +190,37 @@ old jar (break+replace clears it). **KEYBIND IS CURRENTLY REBOUND (Use→r; back
 **GOAL (Julia, 2026-06-16): COMPLETE PARITY with shipped 1.21.1 AND 1.21.11 WITH Terrain Slabs.** The
 remaining-gap roadmap is in `HANDOFF.md` (refreshed this date from a 5-reader parity-gap audit). NOT
 pushed (local only).
+
+---
+
+## 2026-06-16 (overnight, autonomous — Julia asleep): P1 connect + P0.1 compat + P3 hygiene
+
+Continued the parity sprint per HANDOFF while Julia slept. Three verifiable items landed; the headline
+TS work is correctly DEFERRED (blocked on a 26.1.2 terrain_slabs jar) rather than ported blind.
+
+- **P1 connecting blocks (`409bf519`):** `FencePaneSlabConnectionMixin` (@Mixin{FenceBlock,IronBarsBlock})
+  + `WallSlabConnectionMixin` (@Mixin WallBlock) break the fence/pane/wall connection across a slab-height
+  step (`getStateForPlacement` + `updateShape` RETURN). 4 new gametests drive the real `updateShape` path:
+  stepped fence/iron-bars/wall break, flat fence still connects. 28/28. KEY GOTCHAS: real placement method
+  is `getStateForPlacement` (the dead `SlabBlockPlacementFixMixin` targets a wrong name + isn't registered);
+  both `WallBlock.PROPERTY_BY_DIRECTION` and `CrossCollisionBlock.PROPERTY_BY_DIRECTION` exist in 26.x;
+  `WallBlock.updateShape` is overloaded → full-descriptor target.
+
+- **P0.1 dual mod-id TS gate (`b76cccba`):** rewrote `TerrainSlabsCompat` in Mojang mappings (was a
+  Yarn-mapped, build-excluded stub that only knew the legacy id), accepting BOTH `terrain_slabs` and
+  `terrainslabs`; `CompatHooks` now dispatches the three hooks; `CompatSlabSurfaceKind` added; build
+  exclusion removed. Subtractive-only (no TS loaded → no-op → non-TS path byte-identical, 32/32). **P0.2–P0.4
+  (the actual world-hole/vegetation/named-surface resolver wiring) are BLOCKED: TS-gated → unverifiable
+  without a 26.1.2 TS jar, and the resolver has diverged from 1.21.11. Porting blind would risk the
+  live-proven baseline. Exact 1.21.11→26.1.2 call-site map is in HANDOFF §2 P0 for the TS-jar session.**
+
+- **P3 hygiene (`bcfdff7b`,`dbf5215d`):** the only two genuinely always-on emitters fixed — removed
+  `RedstoneWireBlockMixin`'s per-canSurvive `LOGGER.info`; gated `ServerInteractBlockHitToleranceMixin`'s 2
+  `System.out` probes behind the existing (but unused) `REPEAT_SEAM_TRACE_OPT_IN`. Deleted the empty no-op
+  `Beta35FenceWallLiveInspectTickMixin`. All other ~58 logs already opt-in-gated. `Beta4ManualLiveTrace` is
+  build-excluded (the old "10 prints ship" note was wrong). Jar `unzip -l` clean.
+
+**State:** HEAD `dbf5215d`, 32 gametests green, jar **207832 B built + STAGED** to the Modrinth profile (old
+200367 backed up to `mods/.slabbed-staged-200367.jar.bak`). **Keybind REVERTED to vanilla right-click** so
+Julia plays normally. NOT pushed (local only). Next verifiable: P2 hanger underside-follow (verify-first,
+may overlap the lantern fix), then P4 targeting (needs live). P0 resumes when the TS jar lands.

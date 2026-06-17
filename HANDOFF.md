@@ -17,9 +17,14 @@
 ```
 root:    /Users/joolmac/CascadeProjects/Slabbed-port-26.1.2
 branch:  port/mc-26.1.2
-HEAD:    3222844a   (clean tree, local only — NEVER pushed without explicit Julia go-ahead)
+HEAD:    dbf5215d   (clean tree, local only — NEVER pushed without explicit Julia go-ahead)
 MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang mappings · v0.2.0-beta.4+26.1.2-port
 ```
+> **2026-06-16 overnight sprint (autonomous, Julia asleep):** delivered P1 connecting-blocks
+> (`409bf519`), P0.1 dual-mod-id TS gate (`b76cccba`), P3 hygiene (`bcfdff7b`,`dbf5215d`). 32 gametests
+> green. Jar **207832 B** built+staged. **Keybind REVERTED to vanilla right-click** (so Julia plays
+> normally); to live-drive again, re-rebind per LIVE-DRIVE-GUIDE §4. P0.2–P0.4 (TS resolver wiring)
+> remain BLOCKED on a 26.1.2 `terrain_slabs` jar — see §2 P0 for the exact call-site map.
 - **Build/test with Java 25:** `export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home`
   then `./gradlew runGameTest` or `./gradlew build -x runGameTest`. (Java 21 javac can't read the MC named
   jar → "cannot access BlockState".)
@@ -29,9 +34,11 @@ MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang m
   checkouts share ONE object store. **Work in-place here. NEVER use `isolation:'worktree'` agents** (they
   branch off the shared/wrong HEAD). **Never edit** `Slabbed-countered-compat-latest` (shipped 1.21.11),
   `Slabbed-phase19-integrate` (1.21.1), or `Slabbed/` — read-only references.
-- **⚠️ KEYBIND STATE:** the test profile's `options.txt` currently has **Use rebound to `r`** (so an agent
-  can place blocks live). Backup: `options.txt.slabbed-bak`. Revert before Julia plays normally:
-  `sed -i '' 's/^key_key.use:key.keyboard.r$/key_key.use:key.mouse.right/' "<profile>/options.txt"` (MC stopped).
+- **⚠️ KEYBIND STATE:** as of 2026-06-16 overnight the Use keybind is **REVERTED to vanilla
+  `key.mouse.right`** — Julia can play normally. To live-drive again (place via keystroke), re-rebind with
+  MC stopped: `sed -i '' 's/^key_key.use:key.mouse.right$/key_key.use:key.keyboard.r/' "<profile>/options.txt"`
+  then press `r` to place (LIVE-DRIVE-GUIDE §4). Backups: `options.txt.slabbed-bak`,
+  `mods/.slabbed-staged-200367.jar.bak` (the prior staged jar).
 
 ## 1. What this sprint DELIVERED (all local, on `port/mc-26.1.2`)
 
@@ -52,6 +59,13 @@ then proven RED→GREEN (gametest) and/or live. 24 gametests green.
 | chain-ceiling extended model (revived unmerged `fix/chains-*`) | `baef1d03` | partial* |
 | snap freeze-guard (side-inherited-only → flat) | `fddd248e` | **live A/B + gametest** |
 | DODO step-face cull (flat-vs-lowered seam) | `ea4eddd7` | **live (solid)** |
+| **P1** connecting blocks break-across-step (fence/pane/wall) | `409bf519` | gametest (×4) |
+| **P0.1** dual mod-id Terrain Slabs gate + compat surface | `b76cccba` | compile + no-regression* |
+| **P3** hygiene: gate 2 always-on emitters, drop empty mixin | `bcfdff7b`,`dbf5215d` | gametest + jar `unzip -l` |
+
+\* P0.1 is subtractive-only: with no TS mod loaded every hook is a no-op, so the non-TS path is unchanged
+(32/32 gametests). The TS-loaded branch CANNOT be verified on 26.1.2 until a 26.1.2 `terrain_slabs` jar
+exists — see §2 P0.
 
 \* chain-ceiling only triggers when a TOP/DOUBLE slab is directly ABOVE the Y-chain. Julia's windmill
 chain hangs BESIDE the trunk → may not trigger; the "chain bottom → ground" geometry is still open.
@@ -66,44 +80,44 @@ persist; break+replace clears it). Scratch test blocks left at x=8 z=5 column + 
 From a 5-reader parity-gap audit (2026-06-16), **hand-validated** (one reader false-negatived the
 cantilever predicates — they ARE present, 8 hits). Port from the shipped siblings; RED-verify each first.
 
-### P0 — Terrain Slabs compat (THE HEADLINE GOAL; 26.1.2 does NOT yet achieve TS parity)
-1. **Dual mod-id gate** — `TerrainSlabsCompat` only checks `MOD_ID="terrainslabs"` (legacy); never the
-   modern `terrain_slabs`. So a modern TS build → ALL compat hooks short-circuit false. Port commit
-   `42002295` gate (`isModLoaded(MOD_ID) || isModLoaded(LEGACY_MOD_ID)` + BOTH namespace checks). BLOCKER.
-2. **World-hole DODO fix** — `SlabSupport.hasSlabInColumn()` walks DOWN through ALL blocks; on TS surfaces
-   it tunnels through solid terrain → see-through world holes. Port `42002295`: stop at `isOpaqueFullCube()`,
-   view-independent flush, `isSlabSitCandidate` excludes opaque cubes. BLOCKER.
-3. **Vegetation double-offset** — `SlabbedModelLoadingPlugin` wraps ALL FabricBlockStateModels, re-offsetting
-   models TS already wrapped in its `SlabOffsetModel` (grass invisible/sunk). Port `6f0c73e6`: skip wrapping
-   a model TS already owns (check `modelClass` name/package). MAJOR.
-4. **`shouldSkipSlabSupport()` + `CompatSlabSurfaceKind` + named direct-support surfaces** (commits
-   `4f2ee4f3` et al.) — TS-named slabs as direct support; TS blocks opt out of generic slab support. MAJOR.
-5. **⚠️ NO 26.1.2 terrain_slabs build EXISTS yet** (verified 2026-06-16): the only TS jars on disk are
-   `terrain_slabs-fabric-3.1.2` (1.21.1) and `3.3.0` (1.21.11) — `~/Desktop/Countered Terrain Slabs Fabric
-   0.4.0/{0.4.0+1.21.1,0.4.0+1.21.11}/`. None target 26.1.2, and loading a wrong-MC TS jar will crash. So the
-   TS-compat CODE (items 1–4) can be ported + **gametested**, but **cannot be live-render-verified on 26.1.2
-   until Julia builds/provides a 26.1.2 `terrain_slabs` jar.** Surface this to her; it gates the headline goal.
+### P0 — Terrain Slabs compat (THE HEADLINE GOAL) — P0.1 DONE, P0.2–P0.4 BLOCKED on a 26.1.2 TS jar
+**✅ P0.1 DONE (`b76cccba`):** dual mod-id gate. `TerrainSlabsCompat` rewritten in Mojang mappings (was a
+Yarn-mapped, build-excluded stub); `LOADED` + every namespace check accept BOTH `terrain_slabs` and legacy
+`terrainslabs`; `CompatHooks` dispatches shouldSkipOffset/shouldSkipSlabSupport/customSlabSurfaceKind; build
+exclusion dropped; `CompatSlabSurfaceKind` added. Subtractive-only → non-TS path unchanged (32/32).
 
-### P1 — Connecting blocks (fence/wall/pane) — IN PROGRESS
-- ✅ DONE: `SlabSupport.connectingBlockVisualDy` (=getYOffset) + `isSteppedConnectingNeighbor`
-  (FenceBlock/WallBlock/**IronBarsBlock** neighbour + |dy| differs) ported & compiling (HEAD has them).
-- ⏳ NEXT — the two connection mixins (copy logic from `Slabbed-countered-compat-latest/src/main/java/
-  com/slabbed/mixin/{WallSlabConnectionMixin,FencePaneSlabConnectionMixin}.java`, register both in
-  `slabbed.mixins.json`). **Exact 26.x recipe (verified this session):**
-  - neighbour update: `@Inject(method="updateShape", at=@At("RETURN"), cancellable=true)` — 26.x renamed
-    getStateForNeighborUpdate→`updateShape`. Signature template = `CarpetBlockMixin.slabbed$stayOnSlabs`:
-    `(BlockState state, LevelReader world, ScheduledTickAccess tickView, BlockPos pos, Direction direction,
-    BlockPos neighborPos, BlockState neighborState, RandomSource random, CallbackInfoReturnable<BlockState> cir)`.
-  - placement: `@Inject(method="getPlacementState", at=@At("RETURN"), cancellable=true)` with
-    `BlockPlaceContext ctx` — template = `SlabBlockPlacementFixMixin` (`ctx.getClickedPos()`, `ctx.getLevel()`).
-  - fence/pane property map: `CrossCollisionBlock.PROPERTY_BY_DIRECTION` (Mojang for ConnectingBlock.
-    FACING_PROPERTIES); `@Mixin({FenceBlock.class, IronBarsBlock.class})` (IronBarsBlock = Pane). Use
-    `state.hasProperty/getValue/setValue`. **VERIFY** FenceBlock/IronBarsBlock declare `getPlacementState`/
-    `updateShape` for mixin targeting — if not, target `CrossCollisionBlock.class`.
-  - wall: `@Mixin(WallBlock.class)`; Mojang has no public `WALL_SHAPE_PROPERTIES_BY_DIRECTION` map → build
-    a direction→property switch (EAST→`WallBlock.EAST_WALL` EnumProperty<WallSide>, etc.; `WallShape`→
-    **`WallSide`** in Mojang), set the broken side to `WallSide.NONE` and force `BlockStateProperties.UP=true`.
-  Then gametest (stepped run breaks; flat run connects) + live (fence run down a slab stair = single posts).
+**⛔ P0.2–P0.4 BLOCKED — need a 26.1.2 `terrain_slabs` jar before doing them (do NOT port blind):** the only
+TS jars on disk are `terrain_slabs-fabric-3.1.2`(1.21.1) / `3.3.0`(1.21.11). The remaining work is TS-gated
+so it CANNOT be gametested (no TS in the test env) NOR live-verified here — and it must be woven into a
+resolver that has DIVERGED from 1.21.11. Porting it blind risks the live-proven baseline and violates
+"RED-verify / prove RED→GREEN". When the jar exists, port these (1.21.11 `Slabbed-countered-compat-latest`
+shipped sites in parens; map to 26.1.2's divergent `SlabSupport`):
+   - **World-hole core (the actual fix):** TS slabs are mis-classified as vanilla bottom slabs in the column
+     walk. In 1.21.11 the walks treat `CompatHooks.customSlabSurfaceKind(cur)==BOTTOM_LIKE` as the found-slab
+     (lines ~1234,1271) and `shouldSkipSlabSupport(state)` opts TS blocks out (line ~87). Wire the same into
+     26.1.2 `hasSlabInColumn`/`slabColumnYOffset` (~2151/2173) and the slab-below checks.
+   - **Cube-stop in the column walks** (1.21.11 ~1249,1279: `if (cur.isOpaqueFullCube()) return false/0.0`).
+     26.1.2 equivalent = `cur.isSolidRender()` (no-arg, view-independent — 26.1.2 already uses it for the
+     ceiling pin at line 1904 and `isSlabSitCandidate` line 2129, so parts 2&3 of `42002295` are ALREADY
+     equivalent here; only the walk-stop is missing). NOTE: alone it does NOT fix the TS hole (a TS slab is
+     not a solid cube) and it CHANGES non-TS unanchored-stack behaviour (anchor-first ordering preserves
+     placed towers) — so do it WITH the TS jar so the end-to-end can be live-confirmed, not standalone.
+   - **Vegetation double-offset** (`6f0c73e6`): `SlabbedModelLoadingPlugin` skip-wraps a model TS already
+     owns (its `SlabOffsetModel`). Needs the TS jar to repro the invisible/sunk grass.
+   - **Named direct-support** (`4f2ee4f3`): `customSlabSurfaceKind==BOTTOM_LIKE` lets curated objects sit on
+     named TS surfaces (1.21.11 lines ~192,205,642). The reader methods are already ported (P0.1) — only the
+     SlabSupport call-sites remain.
+
+### P1 — Connecting blocks (fence/wall/pane) — ✅ DONE (`409bf519`)
+- `FencePaneSlabConnectionMixin` (@Mixin{FenceBlock,IronBarsBlock}) + `WallSlabConnectionMixin`
+  (@Mixin WallBlock), both registered in `slabbed.mixins.json`. Break the connection across a slab-height
+  step in `getStateForPlacement` + `updateShape`(RETURN). **Gotchas found:** the real placement method is
+  **`getStateForPlacement`** (NOT `getPlacementState` — the dead `SlabBlockPlacementFixMixin` uses the wrong
+  name and isn't even registered); `WallBlock.PROPERTY_BY_DIRECTION` (Map<Direction,EnumProperty<WallSide>>)
+  AND `CrossCollisionBlock.PROPERTY_BY_DIRECTION` both EXIST in 26.x (no manual switch needed);
+  `WallBlock.updateShape` is overloaded → target by full descriptor. Proven by 4 gametests driving the real
+  `updateShape` path (stepped fence/bars/wall break; flat fence connects). Break is a blockstate change, so
+  gametest is authoritative. Optional remaining: live confirm a fence run down a slab stair = single posts.
 
 ### P2 — Hanger underside-follow (lanterns/spore/roots beneath a LOWERED slab/full block)
 - `loweredSlabUndersideSupportDy`, `loweredFullBlockUndersideSupportDy`, and the
@@ -115,11 +129,17 @@ cantilever predicates — they ARE present, 8 hits). Port from the shipped sibli
 - **`isSlabHeightStepFace` + `STEP_CULL_DISABLED`**: 26.1.2's DODO fix uses `anyMismatchedNeighborDy`
   (live-confirmed working) instead of the canonical `isSlabHeightStepFace`. Centralize for parity/precision
   (LOW priority — current fix works live). MINOR.
-- **HYGIENE GATE (mandatory before any release claim):** confirmed offenders — `Beta4ManualLiveTrace.java`
-  ships **10 ungated `System.out.println`** in `src/main` (`[JULIA_BETA4_MANUAL_LIVE_*]`); 2 more in
-  `ServerInteractBlockHitToleranceMixin` + `BlockItemPlacementIntentMixin`; audit ~74 `LOGGER.info/warn`
-  (many likely behind `SlabAnchorAttachment.TRACE` — confirm). Flag-gate or remove; `unzip -l` the jar to
-  confirm no debug/dev classes. See memory `slabbed-prerelease-hygiene-gate`.
+- **✅ HYGIENE GATE DONE (`bcfdff7b`,`dbf5215d`):** audited all ~60 LOGGER + System.out in shipping
+  `src/main`+`src/client`. Only TWO were genuinely always-on: `RedstoneWireBlockMixin` (removed an
+  unconditional `LOGGER.info` per redstone canSurvive) and `ServerInteractBlockHitToleranceMixin` (the
+  `REPEAT_SEAM_TRACE_OPT_IN` flag existed but 2 `[JULIA_BETA4_*]` prints didn't check it → now gated). Also
+  deleted the empty no-op `Beta35FenceWallLiveInspectTickMixin` (was injecting Minecraft.tick for nothing).
+  Everything else already behind opt-in gates (`SlabAnchorAttachment.TRACE`/`beta4*Enabled`,
+  `OffsetBlockStateModel.CULL_TRACE`, GameRenderer `Boolean.getBoolean` recorders, BlockItemPlacementIntent
+  getBoolean). **CORRECTION to the old note:** `Beta4ManualLiveTrace.java` is **build-EXCLUDED**
+  (`sourceSets.main.java exclude`), so its prints never ship — moot. Jar `unzip -l` confirms NO debug/dev
+  classes. Residual jar bloat (gametest-only, gated, harmless): `LiveCursorIntentRecorder` +
+  `LevelRendererRenderedOutlineRecorderMixin` (~28KB) — exclude from the runtime jar at release time.
 
 ### P4 — Targeting (verify, don't assume)
 - 1.21.1 has `SlabbedOffsetRaycast`; 26.1.2 instead has a large `GameRendererCrosshairRetargetMixin`
