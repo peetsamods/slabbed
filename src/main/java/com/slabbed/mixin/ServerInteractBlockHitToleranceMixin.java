@@ -62,27 +62,35 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         ServerLevel world = player.level();
         BlockState state = world.getBlockState(pos);
         BlockState mergedState = state.setValue(SlabBlock.TYPE, SlabType.DOUBLE);
-        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
-                + " phase=server-direct-finalization"
-                + " side=SERVER"
-                + " incomingPos=" + pos.toShortString()
-                + " incomingFace=" + hit.getDirection().getSerializedName()
-                + " incomingHit=" + hit.getLocation()
-                + " incomingState=" + state
-                + " incomingDy=" + SlabSupport.getYOffset(world, pos, state)
-                + " heldItem=" + BuiltInRegistries.ITEM.getKey(player.getItemInHand(packet.getHand()).getItem())
-                + " decision=LOWERED_SAME_CELL_SLAB_MERGE");
-        double beforeDy = SlabSupport.getYOffset(world, pos, state);
+        // Opt-in dev trace (default off) — gated by the same property the sibling
+        // BlockItemPlacementIntentMixin uses; the gate was previously missing here so these
+        // [JULIA_BETA4_*] probes printed on every server merge. Keep them flag-gated, not shipped-on.
+        boolean traceEnabled = Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN);
+        if (traceEnabled) {
+            System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
+                    + " phase=server-direct-finalization"
+                    + " side=SERVER"
+                    + " incomingPos=" + pos.toShortString()
+                    + " incomingFace=" + hit.getDirection().getSerializedName()
+                    + " incomingHit=" + hit.getLocation()
+                    + " incomingState=" + state
+                    + " incomingDy=" + SlabSupport.getYOffset(world, pos, state)
+                    + " heldItem=" + BuiltInRegistries.ITEM.getKey(player.getItemInHand(packet.getHand()).getItem())
+                    + " decision=LOWERED_SAME_CELL_SLAB_MERGE");
+        }
+        double beforeDy = traceEnabled ? SlabSupport.getYOffset(world, pos, state) : 0.0;
         boolean changed = world.setBlock(pos, mergedState, Block.UPDATE_ALL);
-        System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
-                + " phase=server-direct-finalization"
-                + " side=SERVER"
-                + " target=" + pos.toShortString()
-                + " beforeState=" + state
-                + " beforeDy=" + beforeDy
-                + " afterState=" + world.getBlockState(pos)
-                + " afterDy=" + SlabSupport.getYOffset(world, pos, world.getBlockState(pos))
-                + " setBlockStateDurable=" + (changed ? "YES" : "NO"));
+        if (traceEnabled) {
+            System.out.println("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
+                    + " phase=server-direct-finalization"
+                    + " side=SERVER"
+                    + " target=" + pos.toShortString()
+                    + " beforeState=" + state
+                    + " beforeDy=" + beforeDy
+                    + " afterState=" + world.getBlockState(pos)
+                    + " afterDy=" + SlabSupport.getYOffset(world, pos, world.getBlockState(pos))
+                    + " setBlockStateDurable=" + (changed ? "YES" : "NO"));
+        }
         if (!changed) {
             return;
         }

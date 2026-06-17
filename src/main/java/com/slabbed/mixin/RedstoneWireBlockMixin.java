@@ -1,6 +1,5 @@
 package com.slabbed.mixin;
 
-import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.RedStoneWireBlock;
@@ -20,7 +19,6 @@ public abstract class RedstoneWireBlockMixin {
     @Inject(method = "canSurvive",
             at = @At("HEAD"), cancellable = true)
     private void slabbed$canPlaceAt(BlockState state, LevelReader world, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-        Slabbed.LOGGER.info("[SLABBED] Redstone mixin fired: canPlaceAt pos={} below={}", pos, world.getBlockState(pos.below()).getBlock());
         if (SlabSupport.isRedstoneSupportTopSurface(world, pos.below())) {
             cir.setReturnValue(true);
         }
