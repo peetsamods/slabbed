@@ -534,12 +534,14 @@ public final class Slabbed2612LoweringContractTest {
     }
 
     /**
-     * SNAPPED SLAB (-2,-56,-1 in Julia's windmill): a slab AUTHORED beside a lowered carrier but
-     * cantilevered over AIR (no genuine support below it) must STAY FLUSH — it must NOT snap down to
-     * the neighbour's -0.5 and anchor there (NEVER-POP). RED before the fix: it reads -0.5 ANCHORED.
+     * RC2-A (WYSIWYG, supersedes the old SNAPPED-SLAB stay-flat decision at -2,-56,-1): a slab AUTHORED
+     * cantilevered over AIR beside a lowered full block must FOLLOW to -0.5 to land exactly where the
+     * crosshair aimed (the lowered surface). This REVERSES the pre-RC2 "stay flush" assertion — there is
+     * no own flush ground here (air below), so WYSIWYG wins over NEVER-POP. The NEVER-POP rail is kept
+     * for the SOLID-ground case (see rc2SlabOnSolidGroundBesideLoweredFullBlockStaysFlush).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void slabCantileveredBesideLoweredCarrierStaysFlush(GameTestHelper helper) {
+    public void slabCantileveredBesideLoweredCarrierFollowsToMinusHalf(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         // A lowered full block: stone on a bottom slab (dy=-0.5).
         BlockPos carrier = new BlockPos(2, 2, 2);
@@ -552,21 +554,22 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos beside = loweredStone.east();          // (3,3,2); below (3,2,2) is air
         authorBlock(helper, level, beside, bottomSlab());
 
-        assertDy(helper, level, beside, 0.0,
-                "slab cantilevered beside a lowered carrier (air below) MUST stay flush (NEVER-POP); "
-                + "it must not snap to -0.5 from the lowered side neighbour");
+        assertDy(helper, level, beside, -0.5,
+                "RC2-A: slab cantilevered over air beside a lowered full block FOLLOWS to -0.5 (WYSIWYG); "
+                + "it lands flush with the aimed lowered surface");
         helper.succeed();
     }
 
     /**
-     * SNAPPED SLAB, faithful repro (live-confirmed config -2,-56,-1): a slab cantilevered (air below)
-     * beside a lowered SLAB geometrically lowers to -0.5 — but an AUTHORED (placed) one must FREEZE
-     * FLAT (NEVER-POP), not snap. Proven live by an A/B at (9,-58,5): /setblock -> -0.5 geometric,
-     * r-placed -> 0.0 FROZEN-FLAT. Control here asserts the geometric snap exists (-0.5); the authored
-     * slab asserts the freeze-guard keeps it flat (0.0).
+     * RC2-C (WYSIWYG, supersedes the old SNAPPED-SLAB freeze-flat decision at -2,-56,-1): a slab
+     * cantilevered (air below) beside a lowered SLAB lowers geometrically to -0.5; an AUTHORED (placed)
+     * one must now ANCHOR -0.5 (Part C: slabLoweringIsSideInheritedOnly returns false when pos.below()
+     * is air), NOT freeze FLAT. The control terrain slab (-0.5) is unchanged; the authored slab assert
+     * is REVERSED from 0.0 to -0.5. The NEVER-POP rail survives for the SOLID-ground case
+     * (see rc2cSlabOnSolidGroundBesideLoweredLaneFreezesFlat).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void slabBesideLoweredSlabColumnAuthoredFreezesFlat(GameTestHelper helper) {
+    public void slabBesideLoweredSlabColumnAuthoredFollowsToMinusHalf(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         // Lowered slab column: ground, slab, stone(-0.5), slab(-0.5 via hasLoweredCarrierBelow).
         BlockPos base = new BlockPos(2, 1, 2);
@@ -582,13 +585,14 @@ public final class Slabbed2612LoweringContractTest {
         // Control: a TERRAIN slab here geometrically lowers -0.5 (the snap config is real).
         helper.setBlock(arm, bottomSlab());
         assertDy(helper, level, arm, -0.5,
-                "CONTROL: terrain slab beside a lowered slab lowers geometrically to -0.5 (the snap)");
+                "CONTROL: terrain slab beside a lowered slab lowers geometrically to -0.5");
 
-        // Authored (real placement path): the freeze-guard must keep it FLAT.
+        // Authored (real placement path): Part C anchors it -0.5 (no longer frozen flat).
         helper.setBlock(arm, Blocks.AIR.defaultBlockState());
         authorBlock(helper, level, arm, bottomSlab());
-        assertDy(helper, level, arm, 0.0,
-                "AUTHORED slab beside a lowered slab (air below) MUST freeze flat (0.0), not snap to -0.5");
+        assertDy(helper, level, arm, -0.5,
+                "RC2-C: AUTHORED slab cantilevered over air beside a lowered slab ANCHORS -0.5 (WYSIWYG), "
+                + "no longer freezes flat");
         helper.succeed();
     }
 

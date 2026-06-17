@@ -1425,6 +1425,109 @@ public final class SlabSupport {
         return false;
     }
 
+    // ── RC2 (WYSIWYG cantilever side-merge) ───────────────────────────────────────────────────────
+
+    /**
+     * RC2-A: true when a same-Y HORIZONTAL neighbour of {@code pos} is a lowered FULL BLOCK — either a
+     * GENUINE lowered source ({@link #isGenuinelyLoweredFullBlockSource}: slab-below / anchor / lowered
+     * column) or a member of a cantilever lane that itself reaches a genuine source
+     * ({@link #isCantileverLoweredFullBlock}). The geometric basis for lowering a SLAB placed
+     * cantilevered over air beside a lowered full block so it lands flush with the aimed -0.5 surface
+     * (WYSIWYG). The caller air-gates {@code pos.below()} (NEVER-POP rail); no air-gate is needed here.
+     *
+     * <p>Recursion-safe: invoked only inside {@link #getYOffsetInner} under the {@link #IN_GET_Y_OFFSET}
+     * guard; calls neither {@link #getYOffset} nor itself; both delegated predicates are already used by
+     * the existing cantilever clause at the bottom of {@link #getYOffsetInner} and are
+     * {@link #MAX_CHAIN_DEPTH}-bounded. No lane self-sustains: this inspects NEIGHBOURS only, and the
+     * sources exclude pure cantilever members ({@link #isGenuinelyLoweredFullBlockSource} requires a
+     * real support; {@link #isCantileverLoweredFullBlock} bottoms out at a genuine source).
+     */
+    private static boolean isAdjacentLoweredFullBlockSource(BlockGetter world, BlockPos pos) {
+        if (world == null || pos == null) {
+            return false;
+        }
+        for (Direction dir : Direction.Plane.HORIZONTAL) {
+            BlockPos nPos = pos.relative(dir);
+            BlockState n = world.getBlockState(nPos);
+            if (n == null || n.isAir() || n.getBlock() instanceof SlabBlock) {
+                continue;
+            }
+            if (isGenuinelyLoweredFullBlockSource(world, nPos, n)
+                    || isCantileverLoweredFullBlock(world, nPos, n)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * RC2-B: a connecting block (fence / wall / iron-bars) is a cantilever START/PROPAGATE candidate
+     * when it is over AIR, not a slab, not a block-entity, fluid-free. Mirrors
+     * {@link #isCantileverFullBlockCandidate} but deliberately DROPS the {@code isSolidRender()} gate —
+     * a fence/wall/bar is not solid-render yet is still a structural connector that must merge flush
+     * with a lowered neighbour. Air-gated ({@code pos.below()} must be air) → the NEVER-POP rail.
+     */
+    private static boolean isCantileverConnectingCandidate(BlockGetter world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && state != null
+                && !state.isAir()
+                && (state.getBlock() instanceof FenceBlock
+                        || state.getBlock() instanceof WallBlock
+                        || state.getBlock() instanceof IronBarsBlock)
+                && !(state.getBlock() instanceof EntityBlock)
+                && state.getFluidState().isEmpty()
+                && world.getBlockState(pos.below()).isAir();
+    }
+
+    /**
+     * RC2-B: a fence / wall / iron-bars cantilevered over AIR and connected — through further
+     * cantilevered connecting blocks — to a GENUINE lowered source merges -0.5 to sit flush with the
+     * aimed lowered surface (WYSIWYG). Connecting-block analogue of {@link #isCantileverLoweredFullBlock};
+     * the only difference is the START/PROPAGATE candidate ({@link #isCantileverConnectingCandidate},
+     * which drops {@code isSolidRender}). Sources are the SOLID-RENDER full-block sources
+     * ({@link #isGenuinelyLoweredFullBlockSource} / {@link #isCantileverLoweredFullBlock}) or a lowered
+     * slab ({@link #isAdjacentSideSlabLowered}) — NEVER another cantilever member — so the lane cannot
+     * self-sustain. Recursion-safe (no {@link #getYOffset}); {@link #MAX_CHAIN_DEPTH}-bounded BFS that
+     * propagates ONLY through further cantilever connecting candidates (each over air).
+     */
+    private static boolean isCantileverLoweredConnectingObject(BlockGetter world, BlockPos pos, BlockState state) {
+        if (!isCantileverConnectingCandidate(world, pos, state)) {
+            return false;
+        }
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
+        queue.add(pos);
+        visited.add(pos.asLong());
+        while (!queue.isEmpty() && visited.size() <= MAX_CHAIN_DEPTH) {
+            BlockPos cursor = queue.removeFirst();
+            for (Direction dir : Direction.Plane.HORIZONTAL) {
+                BlockPos neighborPos = cursor.relative(dir);
+                BlockState neighbor = world.getBlockState(neighborPos);
+                if (neighbor == null || neighbor.isAir()) {
+                    continue;
+                }
+                boolean neighborIsSlab = neighbor.getBlock() instanceof SlabBlock;
+                // GENUINE lowered sources only (a cantilever full block itself bottoms out at one):
+                if (!neighborIsSlab && isGenuinelyLoweredFullBlockSource(world, neighborPos, neighbor)) {
+                    return true;
+                }
+                if (!neighborIsSlab && isCantileverLoweredFullBlock(world, neighborPos, neighbor)) {
+                    return true;
+                }
+                if (neighborIsSlab && isAdjacentSideSlabLowered(world, neighborPos, neighbor)) {
+                    return true;
+                }
+                // Propagate only through further cantilevered connecting blocks (each over air).
+                if (isCantileverConnectingCandidate(world, neighborPos, neighbor)
+                        && visited.add(neighborPos.asLong())) {
+                    queue.addLast(neighborPos);
+                }
+            }
+        }
+        return false;
+    }
+
     /**
      * Returns true when the non-slab solid block at {@code pos} carries compound dy=-1.0 —
      * i.e. the same conditions that cause {@link #getYOffsetInner} to return -1.0 for it.
@@ -1565,6 +1668,17 @@ public final class SlabSupport {
         if (world == null || pos == null || state == null || !(state.getBlock() instanceof SlabBlock)) {
             return false;
         }
+        // RC2-C (WYSIWYG): a slab placed CANTILEVERED over AIR beside a lowered neighbour is GENUINE
+        // cantilever geometry (RC2-A lowered it -0.5 from a lowered full block, or the
+        // isAdjacentSideSlabLowered branch from a lowered slab lane), NOT flush-ground side-inheritance.
+        // freezeLoweredOnPlace must ANCHOR it -0.5 (its dy<0 branch -> addAnchorUnchecked), NOT mark it
+        // FROZEN_FLAT — otherwise the server freezes 0.0 while the client predicts geometric -0.5 and
+        // the slab snaps up (the RC1-class desync). A slab on SOLID ground (pos.below() NOT air) is
+        // unchanged: it falls through to the original logic and still freezes FLAT (Julia's NEVER-POP
+        // rail — a slab on its own flush ground beside a lowered lane stays at dy=0).
+        if (world.getBlockState(pos.below()).isAir()) {
+            return false;
+        }
         if (hasLoweredCarrierBelow(world, pos)) {
             return false;
         }
@@ -1690,6 +1804,21 @@ public final class SlabSupport {
                     && SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
                 return -0.5;
             }
+            // RC2-A (WYSIWYG): a slab placed CANTILEVERED over AIR beside a lowered FULL BLOCK must
+            // inherit the aimed lowered surface (-0.5) for EITHER TYPE. getYOffset never sees the
+            // raycast hit; the TOP/BOTTOM choice was made at placement (upper-half aim -> TOP,
+            // lower-half -> BOTTOM), so this lowers both equally — each face follows the lowered
+            // neighbour down by 0.5 and lands flush. Placed AFTER the four compound -1.0 markers /
+            // anchor / frozen-flat checks above (a compound or recorded placement decision still wins)
+            // and BEFORE the canUseInheritedSlabLaneYOffset gate, which would short-circuit a fresh
+            // unmarked plain slab to 0.0. AIR-GATED at pos.below(): a slab on its own SOLID ground
+            // beside a lowered block keeps dy=0 and stays FROZEN_FLAT (Julia's NEVER-POP rail).
+            if (state.getFluidState().isEmpty()
+                    && world.getBlockState(pos.below()).isAir()
+                    && !isCompoundVisibleOwnerTopSlab(world, pos, state)
+                    && isAdjacentLoweredFullBlockSource(world, pos)) {
+                return -0.5;
+            }
             if (!canUseInheritedSlabLaneYOffset(world, pos, state)) {
                 return 0.0;
             }
@@ -1808,6 +1937,19 @@ public final class SlabSupport {
         // branch above, mixed canopies of slabs and full blocks settle at one consistent lowered
         // level off the same tower. Port of 1.21.1 9a24670c.
         if (isCantileverLoweredFullBlock(world, pos, state)) {
+            return -0.5;
+        }
+
+        // RC2-B (WYSIWYG): a connecting block — fence / wall / iron-bars — placed CANTILEVERED over
+        // AIR and connected (through further cantilevered connectors) to a lowered neighbour merges
+        // -0.5 to land flush with the aimed lowered surface. The existing beta35FenceWallVariantContactDy
+        // reader below (:1853) only lowers from a support DIRECTLY BELOW (NaN over air); this is the
+        // same-Y SIDE/cantilever case. AIR-GATED inside isCantileverConnectingCandidate (NEVER-POP
+        // rail: a connector on solid ground beside a lowered lane stays at dy=0). Reached only when the
+        // block is NOT a slab and NOT anchored / frozen-flat (all returned above), and connecting
+        // blocks carry no compound -1.0 marker, so there is no ordering conflict. Recursion-safe and
+        // MAX_CHAIN_DEPTH-bounded (see isCantileverLoweredConnectingObject).
+        if (isCantileverLoweredConnectingObject(world, pos, state)) {
             return -0.5;
         }
 
