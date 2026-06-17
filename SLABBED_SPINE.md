@@ -224,3 +224,35 @@ TS work is correctly DEFERRED (blocked on a 26.1.2 terrain_slabs jar) rather tha
 200367 backed up to `mods/.slabbed-staged-200367.jar.bak`). **Keybind REVERTED to vanilla right-click** so
 Julia plays normally. NOT pushed (local only). Next verifiable: P2 hanger underside-follow (verify-first,
 may overlap the lantern fix), then P4 targeting (needs live). P0 resumes when the TS jar lands.
+
+---
+
+## 2026-06-17 (autonomous): Julia provided a 26.1.2 TS jar → live TS work unblocked
+
+Julia dropped a real Terrain Slabs 26.1.2 build (`terrain_slabs-fabric-3.3.1`, mod-id `terrain_slabs`) into
+a `TEST_ SLABBED 26.1.2` Modrinth profile and said "Continue." Staged my Slabbed jar there, rebound the
+keybind, and live-drove. Two showstoppers found + fixed + LIVE-CONFIRMED via `/slabdy` + visual:
+
+- **render-region CRASH (`4d758fe8`) — the mod crashed loading ANY fresh world.** AIOOBE tesselating an
+  ordinary `minecraft:stone` at a render-region boundary: SlabSupport's wide column/side-support reads
+  exceed the bounds-limited `RenderSectionRegion`, which THROWS on OOB in 26.x (older MC clamped to air →
+  the sibling never needed a guard; my DODO neighbour-iterating helper made the latent OOB reliable). Fix =
+  catch IndexOutOfBoundsException in the model path (`OffsetBlockStateModel.slabbed$modelDy` +
+  `slabbed$neighborModelDy` + the ChainCeilingGeometry probe) → treat as dy=0. World loads now. NOT
+  TS-specific. This crash was latent in the prior non-TS jar too (only dodged because I'd tested via
+  /setblock in already-loaded chunks, never a fresh world edge).
+
+- **P0.2 world-hole (`0bd265dc`) — LIVE RED→GREEN.** `minecraft:stone` on `terrain_slabs:grass_slab` read
+  `dy=-0.500 LOWERED` (RED) → after fix `dy=0.000 flush` (GREEN). Root: 26.1.2 `isBottomSlab()` returns true
+  for a TS slab. Fix = terminate both column walks flush at any TS block via
+  `CompatHooks.shouldSkipSlabSupport(cur)`. Natural TS sand/badlands terraces render solid (no holes).
+
+- **P0.3 vegetation: VERIFIED NOT AN ISSUE** — P0.2's TS-guard zeroes Slabbed's dy on TS, so no
+  double-offset; placed + natural TS vegetation render correctly. Sibling's `6f0c73e6` model-skip noted as
+  defensive-only (no RED). **P0.4 named direct-support** = optional polish (curated objects rest flush on TS
+  now, acceptable).
+
+**State:** HEAD `0bd265dc`, 29 gametests, jar **208081 B** staged to BOTH Modrinth profiles, keybind
+REVERTED in both, NOT pushed. **The headline goal — Slabbed running correctly WITH Terrain Slabs on 26.1.2
+(no crash, no world-holes) — is achieved and live-confirmed.** Live-drive lesson: a fresh normal world is
+the real crash test; /setblock in loaded chunks hides render-region OOB.
