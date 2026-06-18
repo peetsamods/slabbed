@@ -2228,9 +2228,13 @@ public final class SlabSupport {
 
         BlockState above = world.getBlockState(pos.above());
 
-        // direct: ceiling-attached blocks directly under a top slab
+        // direct: ceiling-attached blocks directly under a top slab. Track the slab's OWN dy so a
+        // LOWERED top slab gives the block a flush 0.0 (slabDy=-0.5 → -0.5+0.5=0.0), NOT +0.5 which
+        // would float it UP into the lowered slab (Julia: "trapdoor placed under a lowered slab merges
+        // into it; breaking the slab drops it to flush 0.0"). A flush top slab (slabDy=0) keeps +0.5.
+        // Recursion-safe: getYOffsetInner runs under the IN_GET_Y_OFFSET guard (mirrors ceilingHungDecorationDy).
         if (isCeilingAttached(state) && isTopSlab(above)) {
-            return 0.5;
+            return getYOffsetInner(world, pos.above(), above) + 0.5d;
         }
 
         // cascading: ceiling-attached block below other ceiling-attached blocks
