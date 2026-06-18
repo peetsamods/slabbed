@@ -1134,6 +1134,15 @@ public final class SlabSupport {
             return false;
         }
         double sourceDy = getYOffset(world, sourcePos, sourceState);
+        // The compound-visible-side concept applies ONLY to a genuine -1.0 COMPOUND source: its visible
+        // body spans a full cell with distinct upper/lower halves a side slab merges into at -1.0. A
+        // merely -0.5 lowered block (or a flush block) has no compound side — a slab placed against it
+        // must merge at the neighbour's actual magnitude via the normal cantilever lane (RC2-A), NOT be
+        // forced to -1.0. Without this gate, aiming at the side of a -0.5 block set the compound marker
+        // and the slab overshot to -1.0 (Julia: "upper-half placement lands wrong").
+        if (sourceDy > -1.0d + 1.0e-6d) {
+            return false;
+        }
         double localVisibleY = hitPos.y - (sourcePos.getY() + sourceDy);
         return localVisibleY >= -1.0e-6d && localVisibleY < 0.5d - 1.0e-6d;
     }
@@ -1148,6 +1157,12 @@ public final class SlabSupport {
             return false;
         }
         double sourceDy = getYOffset(world, sourcePos, sourceState);
+        // Compound-visible-side applies ONLY to a genuine -1.0 COMPOUND source (see the LOWER variant):
+        // a -0.5 lowered block has no compound side, so a slab placed against its upper half merges at
+        // -0.5 via the cantilever lane instead of overshooting to -1.0.
+        if (sourceDy > -1.0d + 1.0e-6d) {
+            return false;
+        }
         double localVisibleY = hitPos.y - (sourcePos.getY() + sourceDy);
         return localVisibleY >= 0.5d - 1.0e-6d && localVisibleY <= 1.0d + 1.0e-6d;
     }
