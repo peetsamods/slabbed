@@ -168,3 +168,18 @@ Not done:
 - the behavior is “probably fine”
 
 Done means the behavior is actually correct. :contentReference[oaicite:25]{index=25} :contentReference[oaicite:26]{index=26}
+
+## 19) The Release Sanity Checklist is the standard gate for every version and port
+- `docs/process/RELEASE_SANITY_CHECKLIST.md` is the single, standardized, repeatable regression matrix. It is **not** optional and **not** ad-hoc per session.
+- It is **mandatory** whenever you:
+  - cut or stage a release candidate,
+  - bump a version,
+  - forward-port or back-port a fix family across MC versions,
+  - or otherwise call a build "release-ready" / "done".
+- The methodical order is fixed:
+  1. **Lane 1 (automated):** run `./gradlew runGameTest` (Java 25). The dy **fingerprint** (`Slabbed2612DyFingerprintTest` + `src/gametest/resources/dy-baseline.txt`) must be GREEN. A red fingerprint line is a behavior change — treat it as a regression until proven intentional.
+  2. **Lane 2 (live dy-cruise):** run the smoke set (§2). RED here stops the release before the full matrix.
+  3. **Lane 3 (human visual/feel):** Julia's eye on the VIS/FEEL/N/A rows — especially the entity-render rows (§R) that no gametest can see.
+- **Comparing versions is a diff, not a memory exercise:** capture the `SLABBED-FP` fingerprint on the old build and the new build and diff them (checklist §3.1). Any differing line is a cross-version behavior change and must be explained.
+- A fingerprint baseline edit must travel with the matching in-code assertion change in one reviewed commit. A lone baseline edit is a smell.
+- This gate is **separate from and additional to** the pre-release hygiene gate (§9 of the checklist / the hygiene memory). Passing one does not waive the other.

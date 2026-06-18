@@ -365,3 +365,41 @@ source removal (NEVER-POP-up preserved). Recursion-safe (no getYOffset), MAX_CHA
 `TEST_ SLABBED 26.1.2` (pre-gap jar → `.jar-backups/`); game STOPPED. **NEXT = RC3** (compound side-placement
 markers + TOP/BOTTOM midline split in `BlockItemPlacementIntentMixin`). Gap live-verify pending (steps in the review
 doc). GAP-3 (FB-to-FB / mixed fence chains beside compound) deferred. NOT pushed.
+
+---
+
+## 2026-06-18 — Standardized Release Sanity Checklist + dy fingerprint regression suite (process, no behavior change)
+
+Codified a single, repeatable release-readiness gate so testing new versions and porting is methodical
+instead of ad-hoc trial-and-error (Julia's ask: "something standardized and repeatable so there is less
+guesswork", "always referred to when creating new versions or porting").
+
+**Docs**
+- NEW `docs/process/RELEASE_SANITY_CHECKLIST.md` — proof-typed (GT/DY/VIS/FEEL/N/A), three lanes
+  (automated / live-dy-cruise / human-visual), a 15-row smoke set, the full per-family matrix, and the
+  dy-fingerprint version-comparison design (§3). Coverage gaps from a 3-subagent audit folded in: beds
+  (either-half), minecart/item-frame/rail render offsets (§R, live-only — no gametest can see them),
+  redstone + double-tall plants (§T), carpet survival, chain break-pop, collision-follow cell-below +
+  `collisionFollow` kill switch, door/trapdoor.
+- `RULES.md` §19 (NEW) — the checklist is the **mandatory** gate for every version bump / release cut /
+  port slice; fixed Lane order; compare versions by diffing the fingerprint, not from memory.
+- `HANDOFF.md` §3 — added the STANDARD GATE step to the work loop. `LESSONS_INDEX.md` S9 (NEW).
+
+**Code (gametest only — excluded from the shipped jar)**
+- NEW `src/gametest/java/com/slabbed/test/Slabbed2612DyFingerprintTest.java` — 19 fixtures, one
+  `@GameTest` per fixture (isolated regions). Each asserts a pinned `dy` (same-version regression → RED on
+  `runGameTest`) and logs `SLABBED-FP | name | dy | src` (grep a run log → flat cross-version diff
+  artifact). Door/trapdoor assert the robust server-hit predicates
+  (`isBeta35Lowered{BottomTrapdoor,RegularDoor}ServerHitTarget`) — this CLOSES the previously-zero
+  door/trapdoor gametest coverage. Registered in `build.gradle` include() + `src/gametest/resources/fabric.mod.json`.
+- NEW `src/gametest/resources/dy-baseline.txt` — committed reference fingerprint capture (MC 26.1.2).
+- **66/66 gametests GREEN** (`./gradlew runGameTest`, Java 25), up from 45.
+
+**Finding surfaced (live-confirm TODO, NOT fixed here):** an anchored `candle` reads `dy=-0.5` via
+getYOffset (generic anchor) — the 1.21.x floor-top CONTACT rule (`supportDy-0.5 = -1.0`, the beta35 candle
+audit) is NOT wired into 26.1.2's anchored getYOffset path. `trapdoor` (anchored) and `door` (geometric)
+also read -0.5. -0.5 is consistent across the three and not an obvious bug, so the fingerprint locks the
+OBSERVED value (`candle_contact_OBSERVED`) and flags it for live verification (possible contact-gap).
+
+**State:** HEAD still `e0f5986b`-era working tree + these process/gametest additions; behavior code
+UNCHANGED (no `src/main` / `src/client` edits). NOT committed yet, NOT pushed. Build green.

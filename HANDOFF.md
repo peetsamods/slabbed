@@ -8,7 +8,7 @@
 >
 > **SELF-INSTRUCTION for the next thread:** read this file top-to-bottom, then `SLABBED_SPINE.md`
 > (tail) + `docs/lessons/LESSONS_INDEX.md` + `docs/porting/PORTING_MAP.md`; for live/client proof also read
-> `docs/process/LIVE_DRIVE_PREFLIGHT.md`, `docs/process/FALSE_GREEN_CHECKLIST.md`, and `LIVE-DRIVE-GUIDE.md`.
+> `docs/process/LIVE_DRIVE_PREFLIGHT.md`, `docs/process/FALSE_GREEN_CHECKLIST.md`, `docs/process/RELEASE_SANITY_CHECKLIST.md`, and `LIVE-DRIVE-GUIDE.md`.
 > Then **keep going** on the roadmap below. The GOAL is
 > **COMPLETE PARITY with the shipped 1.21.1 AND 1.21.11 builds, WITH Terrain Slabs.** Do not stop early;
 > you have full control — build, place (keybind §4 of the drive guide), live-A/B, commit. RED-verify
@@ -215,6 +215,18 @@ Live-verified 2026-06-17 with **Terrain Slabs 3.3.1** in the `TEST_ SLABBED 26.1
    placed A/B is the gold standard). Build (Java 25), stage, restart, verify.
 4. Commit locally (message ends `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`).
    **Never push.** Append to `SLABBED_SPINE.md`; record durable gotchas to memory.
+
+### STANDARD GATE — before calling any version/port "done" (RULES.md §19)
+Run `docs/process/RELEASE_SANITY_CHECKLIST.md`, methodically, in this order — every time you bump a
+version, cut/stage a release, or finish a port slice:
+1. **Lane 1:** `./gradlew runGameTest` (Java 25). The dy **fingerprint** must be GREEN
+   (`Slabbed2612DyFingerprintTest` asserts 19 fixtures; `src/gametest/resources/dy-baseline.txt` is the
+   committed capture). A red fingerprint line = a behavior change → treat as a regression until proven
+   intentional. **Compare versions** by grepping `SLABBED-FP` on old vs new jars and diffing (checklist §3.1).
+2. **Lane 2:** live dy-cruise smoke set (§2) — RED stops the release before the full matrix.
+3. **Lane 3:** Julia's eye on VIS/FEEL/N/A rows — especially §R entity-render (minecart/item-frame) which no
+   gametest can see.
+This gate is **additional to** the pre-release hygiene gate, not a substitute.
 
 ## 4. Guardrails (also see RULES.md)
 - Global slab support is product intent (full blocks anchor on slabs). Single-source through `SlabSupport`.
