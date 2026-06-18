@@ -3,8 +3,11 @@ package com.slabbed.util;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelReader;
@@ -1873,6 +1876,24 @@ public final class SlabSupport {
                         && state.getValue(BlockStateProperties.HANGING))) {
             return ceilingHungDecorationDy(world, pos, state);
         }
+        // Terrain Slabs direct-object lowering (P0.4): an OBJECT (or vanilla slab) resting on a named
+        // TS BOTTOM_LIKE surface lowers -0.5 to sit ON it. Dispatched HERE, before the slab/shouldOffset
+        // split, so both objects and vanilla slabs on a TS surface get it. GEOMETRIC (no anchor → no
+        // snap, RC1 stays fixed). Gated on directCustomSlabSupportDy != NaN, so any column NOT backed by
+        // a TS BOTTOM_LIKE surface (incl. every world without TS loaded) takes the identical path below.
+        // World-hole (P0.2) preserved: opaque full cubes are not subjects (isSlabSitCandidate), so they
+        // never reach here and keep resting flush. A vanilla TOP slab presents its face a cell higher,
+        // so it drops an extra -0.5 (clamped to -1.0).
+        double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
+        if (!Double.isNaN(directCustomSurfaceDy)) {
+            double dy = directCustomSurfaceDy;
+            if (state.getBlock() instanceof SlabBlock
+                    && state.hasProperty(SlabBlock.TYPE)
+                    && state.getValue(SlabBlock.TYPE) == SlabType.TOP) {
+                dy += -0.5;
+            }
+            return dy < -1.0 ? -1.0 : dy;
+        }
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
@@ -2412,6 +2433,89 @@ public final class SlabSupport {
             return true;
         }
         return !state.isSolidRender();
+    }
+
+    // ───────────────────────────────────────────────────────────────────────────────────────────
+    // Terrain Slabs direct-object lowering (P0.4). Port of the shipped 1.21.11 compat path
+    // (isDirectCustomSlabSupportedObject / directCustomSlabSupportDy). An OBJECT (or vanilla slab)
+    // resting on a named Terrain Slabs BOTTOM_LIKE surface lowers -0.5 to sit ON the slab's top
+    // face. GEOMETRIC (computed in getYOffsetInner on BOTH client + server → no anchor, no snap, so
+    // RC1's "snaps down after a delay" stays fixed). WORLD-HOLE PRESERVED (P0.2): the subject gate
+    // routes through isSlabSitCandidate, which EXCLUDES opaque full cubes — natural stone/dirt on a
+    // TS slab keeps hitting the flush column walk, so no see-through holes. No-op without TS loaded
+    // (customSlabSurfaceKind always NONE → directCustomSlabSupportDy returns NaN → identical path).
+    // ───────────────────────────────────────────────────────────────────────────────────────────
+
+    /** True if {@code state} is a vanilla (minecraft-namespace) slab — a valid direct-custom subject. */
+    private static boolean isVanillaDirectCustomSlabSubject(BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock) || !state.hasProperty(SlabBlock.TYPE)) {
+            return false;
+        }
+        Identifier id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        return id != null && "minecraft".equals(id.getNamespace());
+    }
+
+    /**
+     * True if {@code state} is the kind of block that lowers onto a slab support — the same objects
+     * that sit on vanilla slabs (block entities, the crafting table, and every non-full-cube block:
+     * fences, walls, panes, torches, doors, signs, lanterns, …) plus vanilla slabs. Deliberately
+     * EXCLUDES opaque full cubes (via {@link #isSlabSitCandidate}'s {@code !isSolidRender()}): lowering
+     * an opaque cube onto a TS slab would tear see-through world holes (P0.2). TS-owned blocks are
+     * excluded ({@code shouldSkipOffset}) — they are self-rendering surfaces, not subjects.
+     */
+    private static boolean isDirectCustomSlabSupportSubject(BlockGetter world, BlockPos pos, BlockState state) {
+        if (state.isAir()
+                || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
+                || isThinTopLayer(state)
+                || !state.getFluidState().isEmpty()
+                || CompatHooks.shouldSkipOffset(state)) {
+            return false;
+        }
+        return isVanillaDirectCustomSlabSubject(state) || isSlabSitCandidate(world, pos, state);
+    }
+
+    /**
+     * True if the subject at {@code pos} is (directly, or through a stack of further lowered subjects)
+     * supported by a named Terrain Slabs {@code BOTTOM_LIKE} surface — so it lowers -0.5 to rest on it.
+     * The column walk stops at the first non-subject (terrain cube / air), which keeps anything resting
+     * above that at grid height. Double blocks (doors, tall plants): the UPPER half follows its LOWER
+     * half's support. Recursion-safe (no {@link #getYOffset}); {@link #MAX_CHAIN_DEPTH}-bounded.
+     */
+    private static boolean isDirectCustomSlabSupportedObject(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
+            return false;
+        }
+        BlockPos supportPos = pos.below();
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                && state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
+            BlockState lowerState = world.getBlockState(pos.below());
+            if (lowerState.getBlock() != state.getBlock()
+                    || !lowerState.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    || lowerState.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
+                return false;
+            }
+            supportPos = pos.below(2);
+        }
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState supportState = world.getBlockState(supportPos);
+            if (CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
+            if (isDirectCustomSlabSupportSubject(world, supportPos, supportState)) {
+                supportPos = supportPos.below();
+                continue;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    /** -0.5 if {@code state} is an object resting on a Terrain Slabs BOTTOM_LIKE surface, else NaN. */
+    private static double directCustomSlabSupportDy(BlockGetter world, BlockPos pos, BlockState state) {
+        if (!isDirectCustomSlabSupportedObject(world, pos, state)) {
+            return Double.NaN;
+        }
+        return -0.5;
     }
 
     /**
