@@ -13,8 +13,13 @@ Do not apply this file to `/Users/joolmac/CascadeProjects/Slabbed-phase19-integr
 Before any Slabbed 26.1.2 port work, read:
 
 1. `AGENTS.md`
-2. `SLABBED_SPINE.md`
-3. Relevant `docs/porting/*` notes for the active blocker
+2. `HANDOFF.md`
+3. `SLABBED_SPINE.md`
+4. `docs/lessons/LESSONS_INDEX.md`
+5. `docs/porting/PORTING_MAP.md` for port/backport/API/mapping work
+6. `docs/process/LIVE_DRIVE_PREFLIGHT.md` before any live-client or Modrinth-profile work
+7. `docs/process/FALSE_GREEN_CHECKLIST.md` when automation proof and live behavior disagree
+8. Relevant `docs/porting/*` notes for the active blocker
 
 Legacy phase19 source-index/doctrine/status files are not required in this checkout unless they are explicitly added here later. Treat `SLABBED_SPINE.md` as the current operating context for this port, but verify it against Git before edits.
 

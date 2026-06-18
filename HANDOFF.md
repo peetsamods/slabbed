@@ -1,11 +1,15 @@
 # HANDOFF — Slabbed MC 26.1.2 port
 
 > Refreshed **2026-06-16** (replaces the 2026-06-15 "parity-first restart" version, now history).
-> Companion to `SLABBED_SPINE.md` (append-only log) + `LIVE-DRIVE-GUIDE.md` (how to test live) +
-> `RULES.md` (guardrails). Memory index: `slabbed-2612-session-20260615`.
+> Companion to `SLABBED_SPINE.md` (append-only log) + `docs/lessons/LESSONS_INDEX.md` (durable lessons) +
+> `docs/porting/PORTING_MAP.md` (port/backport map) + `docs/process/*` (proof checklists) +
+> `LIVE-DRIVE-GUIDE.md` (how to test live) + `RULES.md` (guardrails). Memory index:
+> `slabbed-2612-session-20260615`.
 >
 > **SELF-INSTRUCTION for the next thread:** read this file top-to-bottom, then `SLABBED_SPINE.md`
-> (tail) + `LIVE-DRIVE-GUIDE.md` + `RULES.md`, then **keep going** on the roadmap below. The GOAL is
+> (tail) + `docs/lessons/LESSONS_INDEX.md` + `docs/porting/PORTING_MAP.md`; for live/client proof also read
+> `docs/process/LIVE_DRIVE_PREFLIGHT.md`, `docs/process/FALSE_GREEN_CHECKLIST.md`, and `LIVE-DRIVE-GUIDE.md`.
+> Then **keep going** on the roadmap below. The GOAL is
 > **COMPLETE PARITY with the shipped 1.21.1 AND 1.21.11 builds, WITH Terrain Slabs.** Do not stop early;
 > you have full control — build, place (keybind §4 of the drive guide), live-A/B, commit. RED-verify
 > every gap before porting; prove RED→GREEN. Fan-out audits CAN be wrong — validate by hand.
