@@ -253,6 +253,17 @@ public final class SlabAnchorAttachment {
                 return;
             }
             addAnchorUnchecked(world, pos);
+            // A CONNECTING block (fence/wall) placed at COMPOUND -1.0 depth — stacked on a deeper-lowered
+            // support (a -1.0 fence, or a fence on a lowered bottom slab) — STORES that depth via the
+            // compound marker so it HOLDS -1.0 when the support is later removed. The regular anchor records
+            // only PRESENCE, so without this the post pops UP from its placed -1.0 to the -0.5 floor the
+            // instant the support is broken (Julia's "break-pop"). getYOffsetInner's compound sidecar then
+            // preserves -1.0 across support removal (returns -1.0 for a non-slab below), exactly like a full
+            // block; removeAnchor clears it when the post itself is broken (no stale marker). addAnchorUnchecked's
+            // own qualifies-gate only covers full blocks, hence this connecting-block extension.
+            if (dy < -0.5d - 1.0e-6d && SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
+                addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
+            }
             return;
         }
         // dy ≈ 0: lock the FLAT height of a STRUCTURAL piece (ordinary full block or slab) so a slab
