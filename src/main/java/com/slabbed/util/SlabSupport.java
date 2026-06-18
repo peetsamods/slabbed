@@ -2087,6 +2087,20 @@ public final class SlabSupport {
                     return anchoredConnMag;   // -1.0 beside a live compound stack
                 }
             }
+            // An anchored CONNECTING block (fence/wall) stacked VERTICALLY on a deeper-lowered support
+            // below — e.g. a fence on a fence on a lowered bottom slab — must follow the stack to its
+            // true magnitude (-1.0), not the generic -0.5 floor below. The anchor records PRESENCE, not
+            // depth, so without this it pops UP from its placed -1.0 to -0.5 the instant it connects and
+            // re-meshes (Julia: "stacking a lowered fencepost on a lowered fencepost snaps the upper one
+            // upward"). Mirrors the GAP-1 cantilever magnitude read for the support-directly-below case
+            // via the geometric beta35 reader; the -0.5 floor still covers the cantilever / source-removed
+            // NEVER-POP case. Recursion-safe (beta35FenceWallVariantContactDy never calls getYOffset).
+            if (isBeta35FenceWallVariantContactObject(state)) {
+                double stackedFenceDy = beta35FenceWallVariantContactDy(world, pos, state);
+                if (Double.isFinite(stackedFenceDy) && stackedFenceDy < -0.5d - 1.0e-6d) {
+                    return stackedFenceDy;
+                }
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.level.Level w && w.isClientSide()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
