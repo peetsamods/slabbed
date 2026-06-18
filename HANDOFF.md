@@ -17,7 +17,7 @@
 ```
 root:    /Users/joolmac/CascadeProjects/Slabbed-port-26.1.2
 branch:  port/mc-26.1.2
-HEAD:    dc4bec2d   (clean tree, local only — NEVER pushed without explicit Julia go-ahead)
+HEAD:    3ef254e2   (clean tree, local only — NEVER pushed without explicit Julia go-ahead)
 MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang mappings · v0.2.0-beta.4+26.1.2-port
 ```
 > **2026-06-17 PM — WYSIWYG placement law (active work).** Julia's LAW: "a placed block sits exactly where
@@ -41,9 +41,24 @@ MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang m
 >   `BlockItemPlacementIntentMixin` (~:1128) + a TOP/BOTTOM midline split bug. **RC4 (cantilever-FB on-top edge):**
 >   queued, see audit doc.
 >
-> **Live rig:** game currently STOPPED; gap-fix jar (`dc4bec2d`, 209275 B) STAGED in the `TEST_ SLABBED 26.1.2`
-> Modrinth profile (pre-gap jar backed up to `.jar-backups/`). **keybind `Use`→`r`**
-> (revert to `mouse.right` when MC stopped, before Julia plays normally). Debug placement trace = system prop `slabbed.beta4RepeatMergeTrace`
+> **2026-06-18 LIVE SESSION (drove the game; Julia "cruise control").** Two new bugs on the `dc4bec2d` jar+TS:
+> - **BUG A "nothing is lowering to TS" ✅ FIXED + LIVE-CONFIRMED (`961249cc`):** the **P0.4** curated-object lowering
+>   onto named TS BOTTOM_LIKE surfaces was **never wired** (`0bd265dc`'s own msg: "P0.4 is not wired"); `customSlabSurfaceKind`
+>   was dead code. Ported the shipped 1.21.11 `directCustom` path (early-dispatch in `getYOffsetInner`, GEOMETRIC). LIVE:
+>   crafting table on a TS `rooted_dirt_slab` reads **-0.500 LOWERED**; STONE on a TS slab stays **0.000 flush** (world-hole
+>   P0.2 preserved via `isSlabSitCandidate`). No-op without TS.
+> - **BUG B "upper-half aim places slab wrong" ⏳ FIXED (`3ef254e2`), live GREEN-verify PENDING:** live RED = slab aimed at
+>   the upper half of a -0.5 lowered block placed at **-1.000** (overshoot). Root: `isCompoundVisibleSideUpper/LowerHit`
+>   (SlabSupport, used only in `findLegalCompoundSlabRemap`) fired for ANY lowered source → compound-visible marker → -1.0.
+>   Fixed by gating both on `sourceDy ≈ -1.0`. 46/46. **Julia to confirm:** right-click a slab against the upper half of a
+>   -0.5 lowered block → reads -0.5 not -1.0. (Distinct from RC3's -1.0-source UNDERshoot "+0.5 above".)
+>
+> **Live rig:** game CLOSED; current jar (`3ef254e2`, 210127 B) STAGED in the `TEST_ SLABBED 26.1.2` Modrinth profile
+> (prior jars backed up to `.jar-backups/`). **keybind REVERTED to `mouse.right`** (Julia can play). Test blocks left in the
+> world as proof (bug-A demo ~`90-92,66,50`; bug-B stone `110,101,50` floating -0.5). **Live-rig lessons:** Escape is NOT
+> delivered to MC → open the Game Menu by switching focus to Modrinth & back, then rebind keys via Options→Controls→Key Binds
+> with NO relaunch (Reset restores Right Button); F11 = macOS Show-Desktop not MC-fullscreen; `/setblock` test blocks inherit
+> stale anchor/compound markers (use FRESH positions). Debug placement trace = system prop `slabbed.beta4RepeatMergeTrace`
 > (BlockItemPlacementIntentMixin) — logs incoming hit-Y/dy + outgoing remap + placed dy to latest.log; used to
 > pinpoint RC2. **NOTE: `Slabbed2612LoweringContractTest.java` was reverting under concurrent edits — coordinate
 > with Julia before adding RC2 gametests.** RC2/RC3/RC4 have ZERO headless coverage (the SlabbedLab tests are

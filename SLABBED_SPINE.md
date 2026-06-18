@@ -2,6 +2,44 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
+## 2026-06-18 — LIVE SESSION (drove the game myself; Julia "cruise control")
+
+Julia live-tested the `dc4bec2d` jar + Terrain Slabs and reported TWO bugs.
+
+**BUG A "nothing is lowering to TS" — FIXED + LIVE-CONFIRMED (`961249cc`).** Investigated (read-only Workflow + my own
+code reading): NOT a regression. The world-hole fix `0bd265dc`'s own commit message says **"P0.4 (curated-object lowering
+onto named TS BOTTOM_LIKE surfaces) is not wired"** — `customSlabSurfaceKind`/`CompatSlabSurfaceKind.BOTTOM_LIKE` existed
+but were DEAD code; the only TS handling was the column-walk flush guard. **Ported the shipped, live-confirmed 1.21.11
+`directCustom` path** (reference: `~/CascadeProjects/Slabbed-countered-compat-latest`): `isVanillaDirectCustomSlabSubject`,
+`isDirectCustomSlabSupportSubject` (the world-hole-preserving gate — routes through `isSlabSitCandidate`, which EXCLUDES
+opaque full cubes), `isDirectCustomSlabSupportedObject` (MAX_CHAIN_DEPTH column walk to a BOTTOM_LIKE surface, double-block
+UPPER follows LOWER), `directCustomSlabSupportDy` → -0.5, and an early-dispatch at the TOP of `getYOffsetInner` (after
+ceiling-hung, before the slab/shouldOffset split). GEOMETRIC (client+server agree → no anchor/snap, RC1 stays fixed).
+World-hole P0.2 preserved. No-op without TS (customSlabSurfaceKind always NONE → NaN). **LIVE: crafting table on a TS
+`rooted_dirt_slab` reads dy=-0.500 LOWERED src=geometric; STONE on a TS slab stays 0.000 flush.** 46/46.
+
+**BUG B "upper-half aim places slab wrong" — REPRODUCED LIVE + FIXED (`3ef254e2`), live GREEN-verify PENDING.** Live RED
+(rebound Use→r in-game without relaunching): a slab aimed at the UPPER half of a -0.5 lowered full block placed at
+**dy=-1.000** (a full block too low). Root traced by CODE (`isCompoundVisibleSideUpperSlab` is a pure placement-set
+attachment lookup, not geometric): `isCompoundVisibleSideUpper/LowerHit` (`SlabSupport.java`, used ONLY in
+`findLegalCompoundSlabRemap`) compute the source's visible-body halves from `sourceDy` and fired for ANY lowered source,
+so a slab against the side of a -0.5 block got the `COMPOUND_VISIBLE_SIDE_*` marker → the slab branch returned -1.0. **Fix:
+gate both hit checks on `sourceDy ≈ -1.0`** (genuine compound only); a -0.5 source falls through to the RC2-A cantilever
+lane and merges at -0.5 as the correct top/bottom type. -1.0 sources unchanged. 46/46. Could not finish live GREEN-verify
+(small windowed view + floating-block aiming + Modrinth intermittently steals focus) → **Julia confirms:** right-click a
+slab against the upper half of a -0.5 lowered block → reads -0.5 not -1.0.
+
+**Live-rig lessons:** the bare `java` MC IS computer-use-drivable (Minecraft grant covers it). **Escape is NOT delivered to
+MC** → open the Game Menu by switching focus to Modrinth (MC pauses on focus loss) then clicking the game title bar back;
+the Game Menu is then clickable → rebind keys via Options→Controls→Key Binds with NO relaunch (binds live in-memory; "Reset"
+restores the default). **F11 = macOS Show Desktop, not MC fullscreen** — drive windowed. `/setblock` test blocks inherit
+STALE anchor/frozen/compound markers from prior placements at the same position → use FRESH positions. Build floating tests
+high to avoid terrain burying them; eye = feet + 1.62 makes side-aiming finicky.
+
+**State:** HEAD `3ef254e2`, 46 gametests green. Jar (210127 B) staged in `TEST_ SLABBED 26.1.2`; **game CLOSED, keybind
+REVERTED to mouse.right** (Julia can play). NOT pushed. NEXT after Julia confirms BUG B: RC3 (compound-side markers,
+the -1.0-source UNDERshoot — distinct from BUG B's -0.5-source overshoot) + RC4 + directCustom mixed-slab compound (-1.0).
+
 Use it to know the current root, branch, HEAD, base tag, port blocker, proof state, and next safe step.
 
 ## Read Order
