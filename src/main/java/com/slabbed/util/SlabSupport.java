@@ -1442,22 +1442,37 @@ public final class SlabSupport {
      * sources exclude pure cantilever members ({@link #isGenuinelyLoweredFullBlockSource} requires a
      * real support; {@link #isCantileverLoweredFullBlock} bottoms out at a genuine source).
      */
-    private static boolean isAdjacentLoweredFullBlockSource(BlockGetter world, BlockPos pos) {
+    private static double adjacentLoweredSideMagnitude(BlockGetter world, BlockPos pos) {
         if (world == null || pos == null) {
-            return false;
+            return Double.NaN;
         }
         for (Direction dir : Direction.Plane.HORIZONTAL) {
             BlockPos nPos = pos.relative(dir);
             BlockState n = world.getBlockState(nPos);
-            if (n == null || n.isAir() || n.getBlock() instanceof SlabBlock) {
+            if (n == null || n.isAir()) {
                 continue;
             }
+            if (n.getBlock() instanceof SlabBlock) {
+                // GAP-2: a BARE single lowered SLAB neighbour (no full-block column under it) is a valid
+                // cantilever source — Julia's scenario #3 in pure form. The old code 'continue'd on every
+                // slab neighbour, so this read 0.0 (the slab floated half a block too high). Detect
+                // recursion-safely and carry its magnitude out (-0.5, or -1.0 for a compound side slab).
+                double m = loweredSlabMagnitude(world, nPos, n);
+                if (!Double.isNaN(m)) {
+                    return m;
+                }
+                continue;
+            }
+            // GAP-1: a lowered full block (genuine source, or a member of a cantilever lane that itself
+            // reaches a genuine source) — carry its ACTUAL magnitude out (-1.0 compound, else -0.5),
+            // instead of the old hardcoded -0.5 at the call-site.
             if (isGenuinelyLoweredFullBlockSource(world, nPos, n)
                     || isCantileverLoweredFullBlock(world, nPos, n)) {
-                return true;
+                double m = loweredFullBlockMagnitude(world, nPos, n);
+                return Double.isNaN(m) ? -0.5 : m;
             }
         }
-        return false;
+        return Double.NaN;
     }
 
     /**
@@ -1491,9 +1506,9 @@ public final class SlabSupport {
      * self-sustain. Recursion-safe (no {@link #getYOffset}); {@link #MAX_CHAIN_DEPTH}-bounded BFS that
      * propagates ONLY through further cantilever connecting candidates (each over air).
      */
-    private static boolean isCantileverLoweredConnectingObject(BlockGetter world, BlockPos pos, BlockState state) {
+    private static double cantileverLoweredConnectingMagnitude(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isCantileverConnectingCandidate(world, pos, state)) {
-            return false;
+            return Double.NaN;
         }
         ArrayDeque<BlockPos> queue = new ArrayDeque<>();
         Set<Long> visited = new HashSet<>();
@@ -1508,15 +1523,16 @@ public final class SlabSupport {
                     continue;
                 }
                 boolean neighborIsSlab = neighbor.getBlock() instanceof SlabBlock;
-                // GENUINE lowered sources only (a cantilever full block itself bottoms out at one):
-                if (!neighborIsSlab && isGenuinelyLoweredFullBlockSource(world, neighborPos, neighbor)) {
-                    return true;
-                }
-                if (!neighborIsSlab && isCantileverLoweredFullBlock(world, neighborPos, neighbor)) {
-                    return true;
+                // GENUINE lowered sources only (a cantilever full block itself bottoms out at one).
+                // GAP-1: carry the source's ACTUAL magnitude out of the BFS (-1.0 compound, else -0.5).
+                if (!neighborIsSlab && (isGenuinelyLoweredFullBlockSource(world, neighborPos, neighbor)
+                        || isCantileverLoweredFullBlock(world, neighborPos, neighbor))) {
+                    double m = loweredFullBlockMagnitude(world, neighborPos, neighbor);
+                    return Double.isNaN(m) ? -0.5 : m;
                 }
                 if (neighborIsSlab && isAdjacentSideSlabLowered(world, neighborPos, neighbor)) {
-                    return true;
+                    double m = loweredSlabMagnitude(world, neighborPos, neighbor);
+                    return Double.isNaN(m) ? -0.5 : m;
                 }
                 // Propagate only through further cantilevered connecting blocks (each over air).
                 if (isCantileverConnectingCandidate(world, neighborPos, neighbor)
@@ -1525,7 +1541,7 @@ public final class SlabSupport {
                 }
             }
         }
-        return false;
+        return Double.NaN;
     }
 
     /**
@@ -1550,6 +1566,90 @@ public final class SlabSupport {
         }
         BlockState below = world.getBlockState(pos.below());
         return isBottomSlab(below) && isAdjacentSideSlabLowered(world, pos.below(), below);
+    }
+
+    /**
+     * RC2 GAP-1 magnitude reader. The actual lowered dy of the FULL BLOCK at {@code pos} as a
+     * magnitude — {@code -1.0} for a compound source, else {@code -0.5} — or {@code NaN} when it is not a
+     * full block at all (air / slab / fluid / non-solid-render). The caller is responsible for first
+     * establishing that {@code pos} is a genuine lowered source
+     * ({@link #isGenuinelyLoweredFullBlockSource} or {@link #isCantileverLoweredFullBlock}); this only
+     * reads how FAR it is lowered.
+     *
+     * <p>It inspects only the SAME recursion-safe conditions {@link #getYOffsetInner} itself uses to
+     * MINT a full block's -1.0: the anchor/compound path ({@link #isOrdinaryFullBlockWithCompoundDy},
+     * which already short-circuits the -1.0 compound-anchor + geometric-below-slab cases) AND the
+     * geometric compound-on-lowered-bottom-slab path — a full block sitting on a bottom slab whose own
+     * lowered dy ({@link #floorTorchBottomSlabSupportDy}) is already < 0 compounds to
+     * {@code supportDy - 0.5} (exactly {@link #beta35OrdinaryFullBlockContactDy}'s rule, which mints the
+     * -1.0 for an unanchored {@code helper.setBlock} terrain stack as in
+     * {@code rc2CompoundStackTopStillMinusOne}). Authored compound stacks fall out the anchor path;
+     * geometric compound stacks fall out the support-slab-dy path. Floored at -1.0 (the dy>=-1.0
+     * invariant); a non-lowered support yields -0.5 (the caller already proved this is a lowered source).
+     *
+     * <p>Recursion-safe: calls neither {@link #getYOffset} nor {@link #getYOffsetInner} nor
+     * {@link #slabColumnYOffset} nor itself. {@code isOrdinaryFullBlockWithCompoundDy} and
+     * {@code floorTorchBottomSlabSupportDy} are both already invoked inside {@link #getYOffsetInner}
+     * under the {@link #IN_GET_Y_OFFSET} guard; {@link #MAX_CHAIN_DEPTH}-bounded.
+     */
+    private static double loweredFullBlockMagnitude(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isSolidRender()) {
+            return Double.NaN;
+        }
+        // -1.0 via the anchor/compound markers (authored compound stacks).
+        if (isOrdinaryFullBlockWithCompoundDy(world, pos, state)) {
+            return -1.0;
+        }
+        // Geometric compound: a full block on a bottom slab that is ITSELF lowered compounds to
+        // supportDy - 0.5 (the same rule as beta35OrdinaryFullBlockContactDy, which mints -1.0 for an
+        // unanchored helper.setBlock terrain stack). floorTorchBottomSlabSupportDy is recursion-safe.
+        BlockState below = world.getBlockState(pos.below());
+        double supportDy = floorTorchBottomSlabSupportDy(world, pos.below(), below);
+        if (Double.isFinite(supportDy) && supportDy < -1.0e-6) {
+            return Math.max(-1.0, supportDy - 0.5);
+        }
+        return -0.5;
+    }
+
+    /**
+     * RC2 GAP-2 magnitude reader. The actual lowered dy of the SLAB at {@code pos} as a magnitude —
+     * {@code -1.0} for a compound-visible side slab, else {@code -0.5} when it is genuinely lowered
+     * (anchored / side-slab lane / persistent lowered carrier) — or {@code NaN} when the slab is not
+     * lowered at all. This is what surfaces a BARE single lowered slab (no full-block column under it)
+     * so a slab/connector cantilevered beside it merges flush instead of reading 0.0.
+     *
+     * <p>Recursion-safe: only the {@code SlabAnchorAttachment.isCompoundVisibleSide*}/{@code isAnchored}
+     * chunk-attachment lookups (the SAME markers the slab branch of {@link #getYOffsetInner} reads),
+     * {@link #isAdjacentSideSlabLowered}, and {@link #isPersistentLoweredBottomSlabCarrier}-style
+     * non-recursive carrier query are consulted; none call {@link #getYOffset}.
+     */
+    private static double loweredSlabMagnitude(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.hasProperty(SlabBlock.TYPE)) {
+            return Double.NaN;
+        }
+        // -1.0 compound side-slab cases (same markers the slab branch reads to mint -1.0).
+        if (SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
+            return -1.0;
+        }
+        // A genuinely-lowered slab is -0.5: an anchored (freeze-on-place) slab, a side-slab lane slab,
+        // or a persistent lowered bottom-slab carrier (a BARE single lowered slab matches one of these).
+        if (SlabAnchorAttachment.isAnchored(world, pos)
+                || isAdjacentSideSlabLowered(world, pos, state)
+                || (state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM
+                        && state.getFluidState().isEmpty()
+                        && SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state))) {
+            return -0.5;
+        }
+        return Double.NaN;
     }
 
     private static boolean hasLoweredCarrierBelow(BlockGetter world, BlockPos pos) {
@@ -1791,6 +1891,20 @@ public final class SlabSupport {
             // FREEZE-ON-PLACE: a slab locked lowered at placement (freezeLoweredOnPlace) reads its
             // anchor and never recomputes — breaking an adjacent source can no longer pop it back up.
             if (SlabAnchorAttachment.isAnchored(world, pos)) {
+                // GAP-1 (one config deeper): an anchored cantilever slab beside a COMPOUND -1.0 neighbour
+                // must read -1.0, not the hardcoded -0.5 — the freeze-on-place anchor only records
+                // PRESENCE, so the magnitude is read live from the current neighbour. AIR-GATED (this is
+                // inside the over-air cantilever region) and bounded via adjacentLoweredSideMagnitude.
+                // NEVER-POP preserved: if the -1.0 source is later removed this falls back to the anchored
+                // -0.5 floor (still lowered, never pops UP to 0.0); a -0.5 neighbour or none yields -0.5.
+                if (state.getFluidState().isEmpty()
+                        && world.getBlockState(pos.below()).isAir()
+                        && !isCompoundVisibleOwnerTopSlab(world, pos, state)) {
+                    double anchoredSideMag = adjacentLoweredSideMagnitude(world, pos);
+                    if (anchoredSideMag < -0.5 - 1.0e-6) {
+                        return anchoredSideMag;   // -1.0 beside a live compound stack
+                    }
+                }
                 return -0.5;
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier placed
@@ -1815,9 +1929,13 @@ public final class SlabSupport {
             // beside a lowered block keeps dy=0 and stays FROZEN_FLAT (Julia's NEVER-POP rail).
             if (state.getFluidState().isEmpty()
                     && world.getBlockState(pos.below()).isAir()
-                    && !isCompoundVisibleOwnerTopSlab(world, pos, state)
-                    && isAdjacentLoweredFullBlockSource(world, pos)) {
-                return -0.5;
+                    && !isCompoundVisibleOwnerTopSlab(world, pos, state)) {
+                // GAP-1: return the NEIGHBOUR's ACTUAL lowered dy (-1.0 beside a compound stack), not a
+                // hardcoded -0.5. GAP-2: a bare single lowered slab neighbour now yields -0.5 (was 0.0).
+                double sideMag = adjacentLoweredSideMagnitude(world, pos);
+                if (!Double.isNaN(sideMag)) {
+                    return sideMag;
+                }
             }
             if (!canUseInheritedSlabLaneYOffset(world, pos, state)) {
                 return 0.0;
@@ -1921,6 +2039,18 @@ public final class SlabSupport {
             if (Double.isFinite(floorButtonContactDy)) {
                 return floorButtonContactDy;
             }
+            // GAP-1 (one config deeper): an anchored CONNECTING block (fence / wall / iron-bars)
+            // cantilevered over air beside a COMPOUND -1.0 neighbour must read -1.0, not the hardcoded
+            // -0.5. The freeze-on-place anchor only records PRESENCE; read the magnitude live from the
+            // current connector lane. Gated to over-air connecting candidates (NEVER-POP rail intact),
+            // recursion-safe and MAX_CHAIN_DEPTH-bounded via cantileverLoweredConnectingMagnitude.
+            // NEVER-POP preserved: if the -1.0 source is later removed this falls back to -0.5.
+            if (isCantileverConnectingCandidate(world, pos, state)) {
+                double anchoredConnMag = cantileverLoweredConnectingMagnitude(world, pos, state);
+                if (anchoredConnMag < -0.5 - 1.0e-6) {
+                    return anchoredConnMag;   // -1.0 beside a live compound stack
+                }
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.level.Level w && w.isClientSide()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
@@ -1948,9 +2078,11 @@ public final class SlabSupport {
         // rail: a connector on solid ground beside a lowered lane stays at dy=0). Reached only when the
         // block is NOT a slab and NOT anchored / frozen-flat (all returned above), and connecting
         // blocks carry no compound -1.0 marker, so there is no ordering conflict. Recursion-safe and
-        // MAX_CHAIN_DEPTH-bounded (see isCantileverLoweredConnectingObject).
-        if (isCantileverLoweredConnectingObject(world, pos, state)) {
-            return -0.5;
+        // MAX_CHAIN_DEPTH-bounded (see cantileverLoweredConnectingMagnitude).
+        double connectingMag = cantileverLoweredConnectingMagnitude(world, pos, state);
+        if (!Double.isNaN(connectingMag)) {
+            // GAP-1: -1.0 beside a compound stack carried out of the BFS, else -0.5.
+            return connectingMag;
         }
 
         if (isFloorTorch(state)) {

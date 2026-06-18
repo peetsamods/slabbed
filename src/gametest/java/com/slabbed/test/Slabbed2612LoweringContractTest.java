@@ -740,4 +740,343 @@ public final class Slabbed2612LoweringContractTest {
         helper.succeed();
     }
 
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+    // RC2 (WYSIWYG cantilever side-merge): a structural/connecting block placed CANTILEVERED over AIR
+    // beside a LOWERED neighbour gets a geometric dy of -0.5 (Parts A/B/C). Every clause is air-gated:
+    // the same block on SOLID ground beside a lowered lane keeps dy=0 / FROZEN_FLAT (NEVER-POP rail).
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+
+    private static BlockState topSlab() {
+        return Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP);
+    }
+
+    /** Builds a genuinely-lowered full-block tower at {@code carrierRel} (bottom slab + stone); returns the lowered stone rel. */
+    private static BlockPos loweredTower(GameTestHelper helper, BlockPos carrierRel) {
+        helper.setBlock(carrierRel, bottomSlab());
+        helper.setBlock(carrierRel.above(), Blocks.STONE.defaultBlockState());
+        return carrierRel.above();
+    }
+
+    // ── RC2-A: slab cantilevered over air beside a lowered FULL BLOCK → -0.5, BOTH halves ─────────
+
+    /** RC2-A: a BOTTOM slab (lower-half aim) authored cantilevered over air beside a lowered full block → -0.5. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2aBottomSlabCantileverBesideLoweredFullBlockLowers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        assertDy(helper, level, lowered, -0.5, "SETUP lowered full block");
+        BlockPos arm = lowered.east();                       // below(arm) is air (cantilever)
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, -0.5,
+                "RC2-A: BOTTOM slab cantilevered over air beside a lowered full block lands -0.5 (WYSIWYG)");
+        helper.succeed();
+    }
+
+    /** RC2-A: a TOP slab (upper-half aim) authored cantilevered over air beside a lowered full block also → -0.5. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2aTopSlabCantileverBesideLoweredFullBlockLowers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        BlockPos arm = lowered.east();
+        authorBlock(helper, level, arm, topSlab());
+        assertDy(helper, level, arm, -0.5,
+                "RC2-A: TOP slab (upper-half aim) cantilevered over air beside a lowered full block also lands -0.5 "
+                + "(dy lowers BOTH types equally; the half only chose the TYPE at placement)");
+        helper.succeed();
+    }
+
+    /** RC2-A NEVER-POP rail: a slab on its OWN solid ground beside a lowered full block stays flush (0.0). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2SlabOnSolidGroundBesideLoweredFullBlockStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        BlockPos arm = lowered.east();
+        helper.setBlock(arm.below(), Blocks.STONE.defaultBlockState());   // OWN solid ground → not a cantilever
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, 0.0,
+                "RC2-A rail: slab on its own solid ground beside a lowered full block MUST stay flush (NEVER-POP)");
+        helper.succeed();
+    }
+
+    // ── RC2-B: fence / wall / iron-bars cantilevered over air beside a lowered neighbour → -0.5 ───
+
+    /** RC2-B: a fence cantilevered over air beside a lowered full block → -0.5. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2bFenceCantileverBesideLoweredFullBlockLowers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        BlockPos arm = lowered.east();
+        authorBlock(helper, level, arm, Blocks.OAK_FENCE.defaultBlockState());
+        assertDy(helper, level, arm, -0.5,
+                "RC2-B: fence cantilevered over air beside a lowered full block lands -0.5 (WYSIWYG)");
+        helper.succeed();
+    }
+
+    /** RC2-B: a wall cantilevered over air beside a lowered full block → -0.5. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2bWallCantileverBesideLoweredFullBlockLowers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        BlockPos arm = lowered.east();
+        authorBlock(helper, level, arm, Blocks.COBBLESTONE_WALL.defaultBlockState());
+        assertDy(helper, level, arm, -0.5,
+                "RC2-B: wall cantilevered over air beside a lowered full block lands -0.5 (WYSIWYG)");
+        helper.succeed();
+    }
+
+    /** RC2-B: iron-bars cantilevered over air beside a lowered full block → -0.5 (excluded from the old fence/wall reader). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2bIronBarsCantileverBesideLoweredFullBlockLowers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        BlockPos arm = lowered.east();
+        authorBlock(helper, level, arm, Blocks.IRON_BARS.defaultBlockState());
+        assertDy(helper, level, arm, -0.5,
+                "RC2-B: iron-bars cantilevered over air beside a lowered full block lands -0.5 (WYSIWYG)");
+        helper.succeed();
+    }
+
+    /** RC2-B: a fence cantilevered over air beside a lowered SLAB lane → -0.5. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2bFenceCantileverBesideLoweredSlabLowers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos base = new BlockPos(2, 1, 2);
+        helper.setBlock(base, Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(1), bottomSlab());
+        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(3), bottomSlab());                     // lowered slab -0.5
+        assertDy(helper, level, base.above(3), -0.5, "SETUP lowered slab lane");
+        BlockPos arm = base.above(3).east();                              // air below
+        authorBlock(helper, level, arm, Blocks.OAK_FENCE.defaultBlockState());
+        assertDy(helper, level, arm, -0.5,
+                "RC2-B: fence cantilevered over air beside a lowered slab lane lands -0.5 (WYSIWYG)");
+        helper.succeed();
+    }
+
+    /** RC2-B NEVER-POP rail: a fence on its OWN solid ground beside a lowered neighbour stays flush (0.0). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2bFenceOnSolidGroundBesideLoweredFullBlockStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        BlockPos arm = lowered.east();
+        helper.setBlock(arm.below(), Blocks.STONE.defaultBlockState());   // own solid ground
+        authorBlock(helper, level, arm, Blocks.OAK_FENCE.defaultBlockState());
+        assertDy(helper, level, arm, 0.0,
+                "RC2-B rail: fence on its own solid ground beside a lowered block MUST stay flush (NEVER-POP)");
+        helper.succeed();
+    }
+
+    // ── RC2-C: freeze ANCHORS -0.5 (does not freeze FLAT) for an over-air cantilever slab ─────────
+
+    /**
+     * RC2-C: a slab AUTHORED cantilevered over air beside a lowered full block must ANCHOR -0.5
+     * (freeze's dy<0 anchor branch), NOT freeze FLAT. Proven by removing the lowered source AFTER
+     * placement: an ANCHORED slab holds -0.5; a FROZEN_FLAT one would already have read 0.0 at placement.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2cCantileverSlabAnchorsNotFreezesFlat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        BlockPos arm = lowered.east();
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, -0.5, "RC2-C: cantilever slab anchored -0.5 at placement (not frozen flat)");
+        BlockPos armAbs = helper.absolutePos(arm);
+        if (!SlabAnchorAttachment.isAnchored(level, armAbs)) {
+            throw helper.assertionException(arm, "RC2-C: cantilever slab must be ANCHORED at placement");
+        }
+        if (SlabAnchorAttachment.isFrozenFlat(level, armAbs)) {
+            throw helper.assertionException(arm, "RC2-C: cantilever slab must NOT be FROZEN_FLAT");
+        }
+        // Break the lowered source: an ANCHORED slab holds -0.5 (NEVER-POP on source removal).
+        helper.setBlock(lowered, Blocks.AIR.defaultBlockState());
+        assertDy(helper, level, arm, -0.5,
+                "RC2-C: the cantilever slab was ANCHORED -0.5 (it holds after the source is removed)");
+        helper.succeed();
+    }
+
+    /**
+     * RC2-C NEVER-POP rail (must stay green): a slab authored on its OWN solid ground beside a lowered
+     * slab LANE still freezes FLAT (0.0) — slabLoweringIsSideInheritedOnly returns true for the
+     * solid-below case, so freeze records FROZEN_FLAT (Julia's law for a block on its own flush ground).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2cSlabOnSolidGroundBesideLoweredLaneFreezesFlat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos base = new BlockPos(2, 1, 2);
+        helper.setBlock(base, Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(1), bottomSlab());
+        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(3), bottomSlab());
+        assertDy(helper, level, base.above(3), -0.5, "SETUP lowered lane slab");
+        BlockPos arm = base.above(3).east();
+        helper.setBlock(arm.below(), Blocks.STONE.defaultBlockState());   // OWN solid ground
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, 0.0,
+                "RC2-C rail: slab on its own solid ground beside a lowered lane freezes FLAT (NEVER-POP)");
+        BlockPos armAbs = helper.absolutePos(arm);
+        if (!SlabAnchorAttachment.isFrozenFlat(level, armAbs)) {
+            throw helper.assertionException(arm, "RC2-C rail: solid-ground slab must be FROZEN_FLAT");
+        }
+        helper.succeed();
+    }
+
+    // ── Compound -1.0 regression: RC2 must NOT intercept a compound hit ───────────────────────────
+
+    /**
+     * Compound -1.0 regression for RC2: the vertical compound stack top (L3 stone on a vertically-
+     * lowered slab) must STILL read -1.0 — RC2-A/B sit AFTER the compound markers / anchor branch in
+     * getYOffsetInner, so they can never down-shift a compound hit. (Pins the ordering constraint.)
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rc2CompoundStackTopStillMinusOne(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos base = new BlockPos(2, 1, 2);
+        helper.setBlock(base, Blocks.STONE.defaultBlockState());
+        helper.setBlock(base.above(1), bottomSlab());                       // L0 = 0
+        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 = -0.5
+        helper.setBlock(base.above(3), bottomSlab());                       // L2 = -0.5
+        helper.setBlock(base.above(4), Blocks.STONE.defaultBlockState());   // L3 = -1.0
+        assertDy(helper, level, base.above(1), 0.0, "L0");
+        assertDy(helper, level, base.above(2), -0.5, "L1");
+        assertDy(helper, level, base.above(3), -0.5, "L2");
+        assertDy(helper, level, base.above(4), -1.0,
+                "RC2 regression: vertical compound stack top still -1.0 (RC2 clauses run after compound markers)");
+        helper.succeed();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+    // RC2 GAP-1 (compound -1.0 magnitude) + GAP-2 (bare single lowered slab): the cantilever clauses
+    // must carry the NEIGHBOUR's ACTUAL lowered dy out (-1.0 beside a compound stack; -0.5 beside a
+    // bare lowered slab), not a hardcoded -0.5 / 0.0. Each scenario has a solid-ground NEVER-POP rail.
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Builds a GEOMETRIC vertical compound stack at {@code baseRel} (STONE / slab / STONE / slab /
+     * STONE) whose TOP full block reads dy=-1.0, and returns that top rel. Same construction as
+     * {@link #rc2CompoundStackTopStillMinusOne} (no anchors) — the -1.0 here comes from the
+     * pure-geometric compound path (shouldOffset + bottom slab below that is itself a lowered lane),
+     * the harder case that loweredFullBlockMagnitude must detect (an anchor-only reader would mis-read
+     * it as -0.5).
+     */
+    private static BlockPos compoundLoweredTower(GameTestHelper helper, BlockPos baseRel) {
+        helper.setBlock(baseRel, Blocks.STONE.defaultBlockState());
+        helper.setBlock(baseRel.above(1), bottomSlab());                       // 0
+        helper.setBlock(baseRel.above(2), Blocks.STONE.defaultBlockState());   // -0.5
+        helper.setBlock(baseRel.above(3), bottomSlab());                       // -0.5
+        helper.setBlock(baseRel.above(4), Blocks.STONE.defaultBlockState());   // -1.0 (compound top)
+        return baseRel.above(4);
+    }
+
+    /**
+     * Builds a BARE single lowered SLAB (anchored -0.5) with AIR directly below it — no full-block
+     * column under it — and returns the bare-slab rel. The slab is authored CANTILEVERED over air
+     * beside a lowered full-block tower (the proven RC2-A anchoring path of
+     * {@link #rc2cCantileverSlabAnchorsNotFreezesFlat}: a cantilever slab ANCHORS -0.5, it does NOT
+     * freeze flat), then the tower is REMOVED so the slab survives purely on its -0.5 anchor with air
+     * below it. This is Julia's scenario #3 source in pure form: a lone lowered slab over air, with no
+     * column the cantilever bridge could otherwise find.
+     */
+    private static BlockPos bareLoweredSlab(GameTestHelper helper, ServerLevel level, BlockPos bareRel) {
+        BlockPos tower = bareRel.west();                                       // tower beside the bare slab
+        loweredTower(helper, tower.below());                                   // genuine lowered full block at `tower`
+        authorBlock(helper, level, bareRel, bottomSlab());                     // cantilever beside tower → anchors -0.5
+        helper.setBlock(tower, Blocks.AIR.defaultBlockState());                // remove the source; the anchor holds
+        helper.setBlock(tower.below(), Blocks.AIR.defaultBlockState());        // and its carrier slab
+        return bareRel;
+    }
+
+    // ── GAP-1: cantilever beside a COMPOUND -1.0 stack → -1.0 (slab AND fence) ─────────────────────
+
+    /** GAP-1: a SLAB cantilevered over air beside a compound -1.0 stack must land -1.0 (not -0.5). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void gap1SlabCantileverBesideCompoundMinusOneStackLowersFull(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos top = compoundLoweredTower(helper, new BlockPos(2, 1, 2));
+        assertDy(helper, level, top, -1.0, "SETUP: compound stack top must be -1.0");
+        BlockPos arm = top.east();                                            // below(arm) is air (cantilever)
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, -1.0,
+                "GAP-1: slab cantilevered over air beside a compound -1.0 stack lands -1.0 (WYSIWYG — matches "
+                + "the aimed -1.0 surface, not half a block above at -0.5)");
+        helper.succeed();
+    }
+
+    /** GAP-1: a FENCE cantilevered over air beside a compound -1.0 stack must land -1.0 (RC2-B magnitude). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void gap1FenceCantileverBesideCompoundMinusOneStackLowersFull(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos top = compoundLoweredTower(helper, new BlockPos(2, 1, 2));
+        assertDy(helper, level, top, -1.0, "SETUP: compound stack top must be -1.0");
+        BlockPos arm = top.east();
+        authorBlock(helper, level, arm, Blocks.OAK_FENCE.defaultBlockState());
+        assertDy(helper, level, arm, -1.0,
+                "GAP-1: fence cantilevered over air beside a compound -1.0 stack lands -1.0 (RC2-B carries the "
+                + "source magnitude out of the BFS, not -0.5)");
+        helper.succeed();
+    }
+
+    /** GAP-1 NEVER-POP rail: a slab on its OWN solid ground beside a compound -1.0 stack stays flush (0.0). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void gap1SlabOnSolidGroundBesideCompoundStackStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos top = compoundLoweredTower(helper, new BlockPos(2, 1, 2));
+        BlockPos arm = top.east();
+        helper.setBlock(arm.below(), Blocks.STONE.defaultBlockState());       // OWN solid ground → not a cantilever
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, 0.0,
+                "GAP-1 rail: slab on its own solid ground beside a compound -1.0 stack MUST stay flush (NEVER-POP)");
+        helper.succeed();
+    }
+
+    /** GAP-1 NEVER-POP rail (fence): a fence on its OWN solid ground beside a compound -1.0 stack stays flush (0.0). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void gap1FenceOnSolidGroundBesideCompoundStackStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos top = compoundLoweredTower(helper, new BlockPos(2, 1, 2));
+        BlockPos arm = top.east();
+        helper.setBlock(arm.below(), Blocks.STONE.defaultBlockState());       // OWN solid ground
+        authorBlock(helper, level, arm, Blocks.OAK_FENCE.defaultBlockState());
+        assertDy(helper, level, arm, 0.0,
+                "GAP-1 rail: fence on its own solid ground beside a compound -1.0 stack MUST stay flush (NEVER-POP)");
+        helper.succeed();
+    }
+
+    // ── GAP-2: slab cantilevered over air beside a BARE single lowered SLAB (no column) → -0.5 ─────
+
+    /**
+     * GAP-2 (Julia's scenario #3 in pure form): a slab cantilevered over air beside a BARE single
+     * lowered SLAB — anchored -0.5 with AIR below it, no full-block column under the neighbour — must
+     * land -0.5, not 0.0. Pre-fix isAdjacentLoweredFullBlockSource 'continue'd on the slab neighbour
+     * and no column bridged it, so the cantilever slab read 0.0 (floated half a block too high).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void gap2SlabCantileverBesideBareLoweredSlabLowers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos bare = bareLoweredSlab(helper, level, new BlockPos(2, 3, 2));
+        assertDy(helper, level, bare, -0.5, "SETUP: bare single lowered slab (anchored -0.5, air below it)");
+        if (!level.getBlockState(helper.absolutePos(bare.below())).isAir()) {
+            throw helper.assertionException(bare, "SETUP: bare slab must have AIR (no column) directly below it");
+        }
+        BlockPos arm = bare.east();                                           // below(arm) is air (cantilever)
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, -0.5,
+                "GAP-2: slab cantilevered over air beside a BARE single lowered slab (no column) lands -0.5 "
+                + "(the neighbour scan now accepts a lowered slab neighbour, not just a full block)");
+        helper.succeed();
+    }
+
+    /** GAP-2 NEVER-POP rail: a slab on its OWN solid ground beside a bare lowered slab stays flush (0.0). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void gap2SlabOnSolidGroundBesideBareLoweredSlabStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos bare = bareLoweredSlab(helper, level, new BlockPos(2, 3, 2));
+        assertDy(helper, level, bare, -0.5, "SETUP: bare single lowered slab");
+        BlockPos arm = bare.east();
+        helper.setBlock(arm.below(), Blocks.STONE.defaultBlockState());       // OWN solid ground → not a cantilever
+        authorBlock(helper, level, arm, bottomSlab());
+        assertDy(helper, level, arm, 0.0,
+                "GAP-2 rail: slab on its own solid ground beside a bare lowered slab MUST stay flush (NEVER-POP)");
+        helper.succeed();
+    }
+
 }
