@@ -291,3 +291,34 @@ placement pipeline against the law → **4 root causes** (`docs/porting/WYSIWYG-
 **State:** HEAD `6ba27925`, 29 gametests, RC1 done. Game running fullscreen (keybind `Use`→`r`). NOT pushed.
 `Slabbed2612LoweringContractTest.java` reverted twice under concurrent edits — coordinate before adding RC2
 gametests. Lesson: Steam overlay blocks computer-use → quit Steam + relaunch fullscreen restores control.
+
+---
+
+## 2026-06-17 PM (cont.) — RC2 cantilever side-merge DONE + 2 HIGH gaps closed
+
+**RC2 base (`e67bbc6e`):** fixed the GEOMETRY in `getYOffsetInner` (NOT a placement anchor — an anchor still
+snaps: client predicts geometric 0, server anchors -0.5). 3 air-gated clauses: RC2-A slab branch
+(`isAdjacentLoweredFullBlockSource`), RC2-B connecting BFS (`isCantileverLoweredConnectingObject`), RC2-C
+`slabLoweringIsSideInheritedOnly` air-gate so freeze ANCHORS -0.5 not FROZEN-FLAT. Every clause `pos.below()==air`-
+gated → NEVER-POP solid-ground rail holds. **LIVE-CONFIRMED both directions** (merge -0.5 no snap; flush on solid
+ground). 40 gametests.
+
+**Adversarial review** (8-agent Workflow → `docs/porting/RC2-ADVERSARIAL-REVIEW.md`): verdict "safe to keep, do not
+revert", no regressions, no safety issues — and the synthesizer caught two sub-reviewers FABRICATING probe output
+(dismissed it, re-ran the build itself: 40/40, 0 probes). Found 2 HIGH completeness gaps, both Julia's "lands too
+high" one config deeper.
+
+**Gap fixes (`dc4bec2d`):** GAP-1 = cantilever beside a COMPOUND -1.0 stack merged to -0.5; now reads the
+neighbour's ACTUAL magnitude (new `loweredFullBlockMagnitude` = anchor path + geometric `floorTorchBottomSlabSupportDy-0.5`;
+new `loweredSlabMagnitude` = compound-visible side slabs; `isAdjacentLoweredFullBlockSource`→`adjacentLoweredSideMagnitude`
+and the connecting BFS both carry -1.0 vs -0.5 out). GAP-2 = slab beside a BARE single lowered slab (no column) read
+0.0; now a lowered slab neighbour (anchored / side-slab lane / persistent carrier) is a valid source. **One config
+DEEPER:** the anchored read-back branches (slab + connecting) also hardcoded -0.5 → would pop -1.0→-0.5 the instant
+the anchor set; both now read the live neighbour magnitude, air-gated, falling back to the -0.5 anchored floor on
+source removal (NEVER-POP-up preserved). Recursion-safe (no getYOffset), MAX_CHAIN_DEPTH-bounded. **46/46 gametests**
+(+6 onPlaced: compound -1.0 slab/fence, bare single slab, 3 solid-ground rails), independently re-verified.
+
+**State:** HEAD `dc4bec2d`, 46 gametests green, RC1+RC2+gaps committed. Gap-fix jar (209275 B) STAGED in
+`TEST_ SLABBED 26.1.2` (pre-gap jar → `.jar-backups/`); game STOPPED. **NEXT = RC3** (compound side-placement
+markers + TOP/BOTTOM midline split in `BlockItemPlacementIntentMixin`). Gap live-verify pending (steps in the review
+doc). GAP-3 (FB-to-FB / mixed fence chains beside compound) deferred. NOT pushed.
