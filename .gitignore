@@ -26,3 +26,6 @@ src/main/Gallery/
 
 # Forensic / scratch evidence (large, never release payload)
 tmp/
+
+# local jar backups for live-test jar swaps (not tracked)
+.jar-backups/
