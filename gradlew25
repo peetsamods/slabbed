@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Slabbed 26.1.2 needs Java 25 (the MC named jar is class version 69; Java 21 javac fails with
+# "cannot access BlockState / class file has wrong version 69.0, should be 65.0"). The committed
+# gradle.properties deliberately does NOT pin a machine-specific java.home, so plain `./gradlew`
+# uses your shell default — which on this machine is Java 21 → build failure.
+#
+# This wrapper resolves JDK 25 dynamically (portable, no hard-coded path) and forwards all args to
+# the normal gradle wrapper. Use it for EVERY gradle task on this project:
+#
+#   ./gradlew25 runClient
+#   ./gradlew25 runGameTest
+#   ./gradlew25 build -x runGameTest
+#
+set -euo pipefail
+
+if ! JAVA_HOME="$(/usr/libexec/java_home -v 25 2>/dev/null)"; then
+  echo "gradlew25: no JDK 25 found. Install Temurin 25 (e.g. 'brew install --cask temurin@25')" >&2
+  echo "           then re-run. Installed JDKs:" >&2
+  /usr/libexec/java_home -V >&2 || true
+  exit 1
+fi
+export JAVA_HOME
+echo "gradlew25: using JAVA_HOME=$JAVA_HOME" >&2
+exec "$(dirname "$0")/gradlew" "$@"
