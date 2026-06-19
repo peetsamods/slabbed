@@ -9,7 +9,9 @@
       "com.slabbed.test.GhostLoweredCollisionProofTest",
       "com.slabbed.test.Slabbed2612LoweringContractTest",
       "com.slabbed.test.Slabbed2612DyFingerprintTest",
-      "com.slabbed.test.Slabbed2612UseOnPlacementTest"
+      "com.slabbed.test.Slabbed2612UseOnPlacementTest",
+      "com.slabbed.test.Slabbed2612RestingDyTest",
+      "com.slabbed.test.Slabbed2612ConnectorSurvivalTest"
     ]
   },
   "depends": {
