@@ -18,6 +18,15 @@ public final class SlabbedClient implements ClientModInitializer {
         initGapFillerOverlay();
         // TargetDyOverlay renders via TargetDyHudMixin (Gui.extractRenderState); on by default.
         initScreenshotCaptureService();
+        initDyFingerprintDump();
+    }
+
+    private static void initDyFingerprintDump() {
+        // Tier-2 client dy-fingerprint dump (RELEASE_SANITY_CHECKLIST §3); dev-only, excluded from the jar.
+        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            return;
+        }
+        invokeStaticInit("com.slabbed.client.DyFingerprintDump", "dy fingerprint dump");
     }
 
     private static void initRuntimeDiagnostics(String methodName, String label, boolean enabled) {

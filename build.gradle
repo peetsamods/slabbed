@@ -132,6 +132,7 @@ jar {
     exclude("com/slabbed/client/GapFillerOverlay.class")
     exclude("com/slabbed/client/ScreenshotCaptureContext*.class")
     exclude("com/slabbed/client/ScreenshotCaptureService*.class")
+    exclude("com/slabbed/client/DyFingerprintDump*.class")
     exclude("com/slabbed/client/CaptureProfile.class")
     exclude("com/slabbed/util/SlabbedDebug.class")
     exclude("com/slabbed/util/Beta4PlacementAuthorRecorder.class")

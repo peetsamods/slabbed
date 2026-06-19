@@ -403,3 +403,23 @@ OBSERVED value (`candle_contact_OBSERVED`) and flags it for live verification (p
 
 **State:** HEAD still `e0f5986b`-era working tree + these process/gametest additions; behavior code
 UNCHANGED (no `src/main` / `src/client` edits). NOT committed yet, NOT pushed. Build green.
+
+### 2026-06-18 (cont.) — Tier-2 client dy-fingerprint dump (dev-only, jar-excluded)
+
+Committed the checklist+suite as `1a655c21`. Then built Tier-2 (the client-side companion to the
+headless fingerprint, RELEASE_SANITY_CHECKLIST §3): `src/client/java/com/slabbed/client/DyFingerprintDump.java`.
+- Catches the one class the server gametest fingerprint is blind to: **client-vs-server getYOffset
+  divergence** ("snaps after a delay" sync bug). Numpad-1 scans a box around the player, logs every
+  lowered/raised block as `SLABBED-FP-CLIENT | pos | block | dy | src` (same src= as the HUD) → diff
+  against the committed server `dy-baseline.txt`.
+- **Trigger = GLFW key-poll** in `ClientTickEvents.END_CLIENT_TICK`, rising-edge debounced. The compiler
+  proved `fabric-key-binding-api-v1` is NOT on this client set's classpath (only lifecycle / renderer /
+  model-loading are), so a registered `KeyMapping`/`KeyBindingHelper` won't compile — polled GLFW directly
+  (`client.getWindow().handle()`), mirroring how the HUD avoids fabric-rendering-v1. Also: this port maps
+  `ResourceLocation` as `Identifier`; chat `addMessage` is 4-arg only → logger-only output.
+- Dev-gated (`isDevelopmentEnvironment`) init from `SlabbedClient`; **excluded from the release jar**
+  (build.gradle `DyFingerprintDump*.class`) — verified via `unzip -l` (absent). Render-mesh desync still
+  NOT visible here (Lane 3 human check).
+- **Status: compile-verified + full build green + 66/66 gametests; jar exclusion confirmed.** ⚠ Needs ONE
+  live smoke from Julia (press numpad 1 in a dev world, confirm SLABBED-FP-CLIENT lines appear) — I can't
+  drive the dev client. NOT committed yet in this sub-step.
