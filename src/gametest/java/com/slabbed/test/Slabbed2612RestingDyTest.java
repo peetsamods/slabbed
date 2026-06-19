@@ -5,6 +5,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -13,9 +14,11 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BellAttachType;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.SlabType;
 
 /**
@@ -256,6 +259,123 @@ public final class Slabbed2612RestingDyTest {
         helper.setBlock(new BlockPos(2, 2, 2),
                 Blocks.BELL.defaultBlockState().setValue(BlockStateProperties.BELL_ATTACHMENT, BellAttachType.FLOOR));
         expect(helper, level, new BlockPos(2, 2, 2), -0.5, "FLOOR bell on a bottom slab lowers -0.5 (no gap)");
+        helper.succeed();
+    }
+
+    // ── stairs on a bottom slab → -0.5 ────────────────────────────────────────────────────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void stairsOnBottomSlabLowerHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slab = new BlockPos(2, 1, 2);
+        BlockPos obj = new BlockPos(2, 2, 2);
+        Block[] stairs = {Blocks.STONE_STAIRS, Blocks.OAK_STAIRS, Blocks.BIRCH_STAIRS};
+        for (Block s : stairs) {
+            helper.setBlock(slab, bottomSlab());
+            helper.setBlock(obj, s.defaultBlockState());
+            expect(helper, level, obj, -0.5, s.getName().getString() + " on a bottom slab lowers -0.5");
+            clear(helper, obj, slab);
+        }
+        helper.succeed();
+    }
+
+    // ── ceiling-attached trapdoor (HALF=TOP) directly under a TOP slab — measure-and-lock ─────────
+
+    /** An OAK_TRAPDOOR[half=TOP] is ceiling-attached; under a top slab it raises +0.5 to hug the underside. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void trapdoorTopUnderTopSlabRaisesHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 3, 2), topSlab());
+        helper.setBlock(new BlockPos(2, 2, 2),
+                Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(BlockStateProperties.HALF, Half.TOP));
+        double got = dy(level, helper, new BlockPos(2, 2, 2));
+        Slabbed.LOGGER.info("RESTING-FP | trapdoor_top_under_top_slab | dy={}", got);
+        expect(helper, level, new BlockPos(2, 2, 2), 0.5,
+                "OAK_TRAPDOOR[TOP] (ceiling-attached) under a top slab raises +0.5 to the underside");
+        helper.succeed();
+    }
+
+    // ── bed either-half coordination: head-on-slab lowers BOTH; bed on a top slab stays flush ──────
+
+    private static BlockState bedFoot() {
+        return Blocks.RED_BED.defaultBlockState()
+                .setValue(BlockStateProperties.BED_PART, BedPart.FOOT)
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
+    }
+
+    private static BlockState bedHead() {
+        return Blocks.RED_BED.defaultBlockState()
+                .setValue(BlockStateProperties.BED_PART, BedPart.HEAD)
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
+    }
+
+    /** Slab under the HEAD only still lowers BOTH halves (either-half rule, complement to the foot fixture). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void bedHeadOnSlabLowersBothHalves(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos foot = new BlockPos(2, 2, 2);
+        BlockPos head = new BlockPos(3, 2, 2);                // foot.relative(EAST)
+        helper.setBlock(new BlockPos(2, 1, 2), Blocks.STONE.defaultBlockState());   // flush under foot
+        helper.setBlock(new BlockPos(3, 1, 2), bottomSlab());                       // slab under HEAD only
+        helper.setBlock(foot, bedFoot());
+        helper.setBlock(head, bedHead());
+        expect(helper, level, foot, -0.5, "bed FOOT follows because the HEAD's column has a slab (either-half)");
+        expect(helper, level, head, -0.5, "bed HEAD on a slab lowers -0.5");
+        helper.succeed();
+    }
+
+    /** A bed resting on a TOP slab stays flush (top slabs don't lower resting objects). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void bedOnTopSlabStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos foot = new BlockPos(2, 2, 2);
+        BlockPos head = new BlockPos(3, 2, 2);
+        helper.setBlock(new BlockPos(2, 1, 2), topSlab());
+        helper.setBlock(new BlockPos(3, 1, 2), topSlab());
+        helper.setBlock(foot, bedFoot());
+        helper.setBlock(head, bedHead());
+        expect(helper, level, foot, 0.0, "bed foot on a TOP slab stays flush");
+        expect(helper, level, head, 0.0, "bed head on a TOP slab stays flush");
+        helper.succeed();
+    }
+
+    // ── object resting on a LOWERED full block (compound contact) — measure-and-lock ──────────────
+
+    /** A floor torch resting on a stone that is itself lowered (-0.5) — does it follow / contact? Measured. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void floorTorchOnLoweredFullBlockContact(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 1, 2), bottomSlab());
+        helper.setBlock(new BlockPos(2, 2, 2), Blocks.STONE.defaultBlockState());   // lowered -0.5
+        helper.setBlock(new BlockPos(2, 3, 2), Blocks.TORCH.defaultBlockState());
+        double got = dy(level, helper, new BlockPos(2, 3, 2));
+        Slabbed.LOGGER.info("RESTING-FP | floor_torch_on_lowered_full_block | dy={}", got);
+        // -0.5: the torch follows the support ONE step to rest flush on the lowered stone's top (world Y
+        // 2.5); -1.0 would bury it. (Contrast candleOnLoweredSlabContactMinusOne, where the candle sits on
+        // a lowered SLAB and its contact reader drops it support-0.5 = -1.0.)
+        expect(helper, level, new BlockPos(2, 3, 2), -0.5,
+                "floor torch on a lowered (-0.5) full block rests flush at -0.5 (follows the support's top)");
+        helper.succeed();
+    }
+
+    // ── wall-attached follow: a wall torch on the side of a lowered block follows it — measure ─────
+
+    /**
+     * A WALL_TORCH attached to a lowered full block's side should follow the block's lowering. FACING=EAST
+     * means the torch sits on the EAST face of the block to its WEST, so torch at (3,2,2) attaches to the
+     * lowered stone at (2,2,2). Measured + locked.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void wallTorchOnLoweredBlockFollows(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 1, 2), bottomSlab());
+        helper.setBlock(new BlockPos(2, 2, 2), Blocks.STONE.defaultBlockState());   // lowered -0.5 (attach block)
+        helper.setBlock(new BlockPos(3, 2, 2),
+                Blocks.WALL_TORCH.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST));
+        double got = dy(level, helper, new BlockPos(3, 2, 2));
+        Slabbed.LOGGER.info("RESTING-FP | wall_torch_on_lowered_block | dy={}", got);
+        expect(helper, level, new BlockPos(3, 2, 2), -0.5,
+                "wall torch attached to a lowered block follows it to -0.5");
         helper.succeed();
     }
 }
