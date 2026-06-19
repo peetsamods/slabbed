@@ -854,6 +854,43 @@ public abstract class BlockItemPlacementIntentMixin {
         }
     }
 
+    /**
+     * WYSIWYG side-click follow (Julia's law, 2026-06-19): when the player places a SLAB by clicking the
+     * SIDE face of a -0.5 lowered block, mark the predicted placement cell so {@code freezeLoweredOnPlace}
+     * anchors it on the lowered surface (where the crosshair clicked) instead of freezing it flat at grid
+     * height (the reported "lands 0.5 high"). Gated to a -0.5 lowered click so it does not touch the
+     * compound (-1.0) side-placement path, which the RC3 compound-visible markers own. The companion
+     * RETURN inject clears the marker so a cancelled/mismatched placement never leaks.
+     */
+    @Inject(method = "useOn", at = @At("HEAD"))
+    private void slabbed$markWysiwygSideClickFollow(
+            UseOnContext context,
+            CallbackInfoReturnable<InteractionResult> cir
+    ) {
+        BlockItem self = (BlockItem) (Object) this;
+        if (!(self.getBlock() instanceof SlabBlock)) {
+            return;
+        }
+        Direction face = context.getClickedFace();
+        if (!face.getAxis().isHorizontal()) {
+            return;   // side clicks only; top/bottom placement is a separate case
+        }
+        Level level = context.getLevel();
+        BlockPos clicked = context.getClickedPos();
+        double clickedDy = SlabSupport.getYOffset(level, clicked, level.getBlockState(clicked));
+        if (Math.abs(clickedDy + 0.5d) < 1.0e-6d) {   // clicked a -0.5 lowered surface
+            SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
+        }
+    }
+
+    @Inject(method = "useOn", at = @At("RETURN"))
+    private void slabbed$clearWysiwygSideClickFollow(
+            UseOnContext context,
+            CallbackInfoReturnable<InteractionResult> cir
+    ) {
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+    }
+
     private static final Class<?>[] REMAP_ATTEMPT_PARAM_TYPES = new Class<?>[]{
             UseOnContext.class,
             boolean.class,

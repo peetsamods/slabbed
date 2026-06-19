@@ -148,15 +148,16 @@ public final class Slabbed2612UseOnPlacementTest {
     }
 
     /**
-     * JULIA WYSIWYG RED (2026-06-19): clicking the SIDE of a lowered (-0.5) block to place a slab, when the
-     * placement cell has SOLID GROUND below it, currently freezes the slab FLAT (0.0) — it lands 0.5 ABOVE
-     * where the crosshair clicked (Julia's screenshots: oak slab dy=0.000 FROZEN-FLAT). WYSIWYG law: a slab
-     * placed by clicking the lowered block's face MUST follow to the lowered surface (-0.5), regardless of
-     * what is below. This test documents the CURRENT (wrong) behaviour so the fix has a RED→GREEN target;
-     * flip the expected to -0.5 once the clicked-the-lowered-face WYSIWYG follow is implemented.
+     * JULIA WYSIWYG (2026-06-19, FIXED): clicking the SIDE face of a -0.5 lowered block to place a slab,
+     * even when the placement cell has SOLID GROUND below it, must FOLLOW to the lowered surface (-0.5) —
+     * it lands where the crosshair clicked, NOT frozen flat 0.5 above (Julia's "lands 0.5 high" bug). The
+     * fix: the placement-intent mixin marks the clicked-lowered-face placement, and freezeLoweredOnPlace
+     * anchors it lowered instead of taking the side-inherited freeze-flat rail. Companion guard:
+     * {@link #useOnSlabOnFlushGroundBesideLoweredStaysFrozenFlat} (clicking the FLAT GROUND's top, not the
+     * lowered block, still stays 0.0 — also WYSIWYG: you aimed at the flat ground).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void useOnSlabClickingLoweredFaceWithSolidGroundBelow_WYSIWYG_RED(GameTestHelper helper) {
+    public void useOnSlabClickingLoweredFaceWithSolidGroundBelowFollowsToMinusHalf(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         // lowered full block at (2,3,2) → -0.5. Beside it (3,3,2) the placement cell, WITH solid ground (3,2,2).
         helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
@@ -166,12 +167,10 @@ public final class Slabbed2612UseOnPlacementTest {
         Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 4, 2)));
 
         BlockPos placed = placeSlabVia(player, lowered, Direction.EAST, eastHit(lowered, 0.75));   // upper-half click
-        log("wysiwyg_red_click_lowered_face_solid_below", level, placed);
-        // CURRENT (wrong) behaviour pinned: freezes flat at 0.0 (0.5 above the aimed lowered surface).
-        // TODO(WYSIWYG): flip to -0.5 when the clicked-the-lowered-face follow lands.
-        assertSlabDy(helper, level, placed, new BlockPos(3, 3, 2), 0.0,
-                "WYSIWYG RED (pinned): slab clicking a lowered face with solid ground below currently freezes "
-                + "flat 0.0 — should follow to -0.5 (Julia's 'lands 0.5 high'). Flip to -0.5 when fixed.");
+        log("wysiwyg_click_lowered_face_solid_below", level, placed);
+        assertSlabDy(helper, level, placed, new BlockPos(3, 3, 2), -0.5,
+                "WYSIWYG: slab placed by clicking a lowered (-0.5) block's side face follows to -0.5 (lands where "
+                + "clicked), even with solid ground below — no longer freezes flat 0.5 high");
         helper.succeed();
     }
 

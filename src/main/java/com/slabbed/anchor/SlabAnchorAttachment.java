@@ -233,12 +233,50 @@ public final class SlabAnchorAttachment {
      * already anchored or frozen. Natural / setBlockState blocks never call onPlaced, so terrain
      * stays fully geometric.
      */
+    /**
+     * WYSIWYG side-click follow (Julia's law, 2026-06-19): set by the placement-intent mixin when the
+     * player places a SLAB by clicking the SIDE face of a lowered block. The placement must then land on
+     * that lowered surface (where the crosshair clicked) instead of freezing flat at grid height. Stores
+     * the predicted placement cell ({@code clickedPos.relative(clickedFace)}); consumed (and cleared) by
+     * {@link #freezeLoweredOnPlace}. Thread-scoped to the placement call; the mixin also clears it on
+     * useOn RETURN so a cancelled/mismatched placement never leaks to the next one.
+     */
+    private static final ThreadLocal<BlockPos> WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE = new ThreadLocal<>();
+
+    /** Mark that the slab about to be placed at {@code placedPos} was placed by clicking a lowered block's side face. */
+    public static void markWysiwygFollowClickedLoweredFace(BlockPos placedPos) {
+        WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.set(placedPos == null ? null : placedPos.immutable());
+    }
+
+    /** Clear the WYSIWYG side-click follow marker (call on useOn RETURN; safe to call when unset). */
+    public static void clearWysiwygFollowClickedLoweredFace() {
+        WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.remove();
+    }
+
+    private static boolean consumeWysiwygFollowClickedLoweredFace(BlockPos pos) {
+        BlockPos marked = WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.get();
+        if (marked != null && marked.equals(pos)) {
+            WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.remove();
+            return true;
+        }
+        return false;
+    }
+
     public static void freezeLoweredOnPlace(Level world, BlockPos pos, BlockState state) {
         if (world == null || world.isClientSide() || pos == null || state == null
                 || state.isAir() || !state.getFluidState().isEmpty()) {
             return;
         }
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
+            return;
+        }
+        // WYSIWYG (Julia's law): a SLAB placed by clicking a lowered block's SIDE face must FOLLOW that
+        // lowered surface — it lands where the crosshair clicked, NOT frozen flat at grid height. Anchor it
+        // lowered so it both lands correctly AND holds its position if the neighbour is later removed
+        // (NEVER-POP-down preserved). This overrides the side-inherited freeze-flat rail below, which only
+        // applies when the slab was placed on its OWN flush ground WITHOUT clicking the lowered block.
+        if (state.getBlock() instanceof SlabBlock && consumeWysiwygFollowClickedLoweredFace(pos)) {
+            addAnchorUnchecked(world, pos);
             return;
         }
         double dy = SlabSupport.getYOffset(world, pos, state);
