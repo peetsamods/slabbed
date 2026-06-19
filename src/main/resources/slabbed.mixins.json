@@ -3,23 +3,26 @@
   "package": "com.slabbed.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "HangingSignAttachedMixin",
+    "BlockCollisionsLoweredAboveMixin",
+    "BlockItemPlacementIntentMixin",
+    "BlockOnPlacedAnchorMixin",
+    "BlockOnStateReplacedAnchorMixin",
     "CarpetBlockMixin",
     "FencePaneSlabConnectionMixin",
-    "WallSlabConnectionMixin",
-    "torch.TorchBlockMixin",
+    "HangingSignAttachedMixin",
+    "RedstoneTorchParticleMixin",
+    "RedstoneWireBlockMixin",
+    "ServerInteractBlockHitToleranceMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleAccessor",
     "TorchParticleMixin",
+    "WallSlabConnectionMixin",
     "WallTorchParticleMixin",
-    "RedstoneWireBlockMixin",
-    "BlockItemPlacementIntentMixin",
-    "ServerInteractBlockHitToleranceMixin",
-    "BlockOnPlacedAnchorMixin",
-    "BlockOnStateReplacedAnchorMixin",
-    "BlockCollisionsLoweredAboveMixin"
+    "torch.TorchBlockMixin"
   ],
   "client": [],
-  "injectors": { "defaultRequire": 1 }
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

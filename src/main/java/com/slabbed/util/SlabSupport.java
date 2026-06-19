@@ -37,6 +37,7 @@ import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.SporeBlossomBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.TorchBlock;
+import net.minecraft.world.level.block.VegetationBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.WallBlock;
@@ -2516,6 +2517,15 @@ public final class SlabSupport {
      */
     private static boolean isDirectCustomSlabSupportedObject(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
+            return false;
+        }
+        // Vegetation (flowers, grass, tall plants, saplings — all VegetationBlock) on a Terrain Slabs
+        // surface must sit FLUSH on top: TS already positions vegetation via its own SlabOffsetModel, so
+        // Slabbed must NOT also lower it -0.5 here (the double-offset sinks it; Julia 2026-06-19).
+        // Excluding it lets getYOffset fall through to the column walk, which terminates flush at the TS
+        // block → dy 0, so TS's offset is the only one applied. No-op without TS (this path needs a TS
+        // BOTTOM_LIKE surface to fire at all).
+        if (state.getBlock() instanceof VegetationBlock) {
             return false;
         }
         BlockPos supportPos = pos.below();
