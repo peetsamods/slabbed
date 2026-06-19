@@ -115,6 +115,8 @@ sourceSets {
             include("com/slabbed/test/Slabbed2612LoweringContractTest.java")
             include("com/slabbed/test/Slabbed2612DyFingerprintTest.java")
             include("com/slabbed/test/Slabbed2612UseOnPlacementTest.java")
+            include("com/slabbed/test/Slabbed2612RestingDyTest.java")
+            include("com/slabbed/test/Slabbed2612ConnectorSurvivalTest.java")
         }
     }
 }
