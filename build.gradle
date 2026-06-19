@@ -114,6 +114,7 @@ sourceSets {
             include("com/slabbed/test/GhostLoweredCollisionProofTest.java")
             include("com/slabbed/test/Slabbed2612LoweringContractTest.java")
             include("com/slabbed/test/Slabbed2612DyFingerprintTest.java")
+            include("com/slabbed/test/Slabbed2612UseOnPlacementTest.java")
         }
     }
 }

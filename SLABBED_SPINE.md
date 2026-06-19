@@ -423,3 +423,24 @@ headless fingerprint, RELEASE_SANITY_CHECKLIST §3): `src/client/java/com/slabbe
 - **Status: compile-verified + full build green + 66/66 gametests; jar exclusion confirmed.** ⚠ Needs ONE
   live smoke from Julia (press P in a dev world, confirm SLABBED-FP-CLIENT lines appear) — I can't
   drive the dev client. NOT committed yet in this sub-step.
+
+### 2026-06-18 (cont.) — useOn placement-path gametest coverage + RC3 headless RED-verify
+
+Added `src/gametest/java/com/slabbed/test/Slabbed2612UseOnPlacementTest.java` — drives the REAL
+`BlockItem.useOn` placement-intent remap (`BlockItemPlacementIntentMixin`) headlessly via
+`helper.makeMockPlayer(GameType.SURVIVAL)` + a hand-built `UseOnContext(player, MAIN_HAND, BlockHitResult)`.
+This closes the long-standing "RC2/RC3/RC4 have NO headless coverage" gap (the SlabbedLab useOn tests are
+Yarn-excluded). Registered in build.gradle include() + fabric.mod.json. **72/72 gametests green.**
+
+**RC3 headlessly RED-verified (the open WYSIWYG item):**
+- **dy DONE:** slab placed via useOn against the side of a compound −1.0 stack reads **dy=−1.000 for BOTH
+  upper- and lower-half aims** → the RC2 GAP-1 fix (`dc4bec2d`) already absorbs RC3's dy magnitude (was only
+  hypothesised in RC3-LIVE-REDVERIFY-PLAN; now proven). RC2 −0.5 side case confirmed both halves too.
+- **TYPE residual is REAL:** every side-merge placement mints `type=TOP` regardless of aimed half, for both
+  −0.5 and −1.0. A CONTROL on a flush block proves the harness reproduces vanilla hit-based type
+  (upper→TOP/lower→BOTTOM), so always-TOP = the `compoundBelowLaneResultType` midline split, as predicted.
+  Test ASSERTS dy only and LOGS type (USEON-FP lines) — the TOP/BOTTOM policy is an unsettled decision.
+
+RC3 residual now precisely scoped: (1) slab-TYPE policy + midline-split fix, (2) client cell-targeting (P4,
+genuinely live). dy is no longer in question. Docs updated: RC3-LIVE-REDVERIFY-PLAN.md (result section),
+WYSIWYG-PLACEMENT-AUDIT.md (caveat). NOT committed→ committing now. RC4 still has no useOn coverage.

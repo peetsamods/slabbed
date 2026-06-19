@@ -71,3 +71,27 @@ GAP-3 (full-block-to-full-block / mixed fence chains beside a compound) stays de
 The full-block side case routes through the LOWER/UPPER branches (`:986-1043`), unaffected. The two reasons
 only arise for slab items at `legalLaneCount==0`. The midline change can flip TOP/BOTTOM near the boundary —
 verify against the compound resting-state contract tests + live both halves.
+
+## Headless RED-verify RESULT (2026-06-18) — `Slabbed2612UseOnPlacementTest`
+
+The "Coverage to add" gametest now EXISTS and runs (real `useOn` via a mock player + hand-built
+`UseOnContext`; 7 methods, all green). It answers the dy half of RC3 headlessly:
+
+- **dy is DONE.** A slab placed (real `useOn`) against the side of a compound −1.0 stack reads **dy=−1.000
+  for BOTH the upper-half and lower-half aim** — GAP-1 (`dc4bec2d`) absorbed RC3's dy magnitude exactly as
+  this plan hypothesised. RC2's −0.5 side case is likewise confirmed (both halves).
+- **TYPE residual is REAL (not a harness artifact).** Every side-merge placement mints **`type=TOP`
+  regardless of the aimed half**, for both the −0.5 and −1.0 cases. A CONTROL (`controlSlabSideTypeTracksHitHalf`)
+  proves the harness reproduces vanilla's hit-based type on a flush block (upper→TOP, lower→BOTTOM), so the
+  always-TOP is the `compoundBelowLaneResultType` midline split, exactly as predicted (`:1117`).
+
+**So RC3's residual is now precisely scoped, and it is NOT the dy:**
+1. **Type policy + midline split** — decide the correct TOP/BOTTOM for an upper- vs lower-half aim at a −1.0
+   side, then fix `compoundBelowLaneResultType` to that threshold. The test logs the current type (`USEON-FP`
+   lines) but does NOT assert it (policy is unsettled — do not enshrine a guess). Once decided, add the type
+   assertion to the two `useOnSlabBesideCompoundStack{Upper,Lower}Half` methods.
+2. **Client cell-targeting** — which cell the crosshair actually hits on a visually-lowered block. This is the
+   only genuinely-live part left (P4 / raycast); the server remap above is now covered headlessly.
+
+The marker-authoring fix in "The fix" above is likely UNNECESSARY for dy (GAP-1's geometric path already
+yields −1.0 with no marker); it may still matter for landing-cell/type. Re-scope before implementing.
