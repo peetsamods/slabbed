@@ -74,9 +74,12 @@ MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang m
 > mod crashed loading ANY fresh world) and the TS world-hole (`0bd265dc`, terrain now flush on TS). 29
 > gametests green. Jar **208081 B** built+staged to BOTH profiles. **Keybind REVERTED to vanilla
 > right-click** in both profiles. See §2 P0 for what's done vs still-optional (P0.4).
-- **Build/test with Java 25:** `export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home`
-  then `./gradlew runGameTest` or `./gradlew build -x runGameTest`. (Java 21 javac can't read the MC named
-  jar → "cannot access BlockState".)
+- **Build/test with Java 25 — use `./gradlew25` (committed wrapper):** plain `./gradlew` uses your shell
+  default (Java 21 here) and FAILS with "cannot access BlockState / class file has wrong version 69.0,
+  should be 65.0" — the MC named jar is class version 69 (Java 25). `./gradlew25` resolves JDK 25 via
+  `/usr/libexec/java_home -v 25` and forwards args: `./gradlew25 runClient`, `./gradlew25 runGameTest`,
+  `./gradlew25 build -x runGameTest`. (Equivalent manual form:
+  `export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home` then `./gradlew …`.)
 - **Staged jar (208081 B)** in TWO Modrinth profiles: `Fabric 26.1.2` (no TS) and **`TEST_ SLABBED 26.1.2`
   (Slabbed + Terrain Slabs 3.3.1 + architectury + fabric-api — the LIVE TS TEST RIG Julia provided)**.
   Restart the Modrinth instance to load a new build. The 26.1.2 `terrain_slabs` jar that was the P0 blocker
