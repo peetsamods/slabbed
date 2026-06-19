@@ -11,7 +11,9 @@
       "com.slabbed.test.Slabbed2612DyFingerprintTest",
       "com.slabbed.test.Slabbed2612UseOnPlacementTest",
       "com.slabbed.test.Slabbed2612RestingDyTest",
-      "com.slabbed.test.Slabbed2612ConnectorSurvivalTest"
+      "com.slabbed.test.Slabbed2612ConnectorSurvivalTest",
+      "com.slabbed.test.Slabbed2612CollisionDepthTest",
+      "com.slabbed.test.Slabbed2612CompoundMatrixTest"
     ]
   },
   "depends": {
