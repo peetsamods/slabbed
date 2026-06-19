@@ -470,3 +470,15 @@ Three new gametest classes from a 3-agent spec, measure-and-lock verified, **95/
    bell lowers -0.5 (correct, no gap).
 
 Commit `5fb4bf28`. The running headless suite (excludes the Yarn SlabbedLab files) is now **95**. NOT pushed.
+
+### 2026-06-18 (cont.) — final headless wave (104 total green)
+
++9 more: stairs (-0.5), ceiling trapdoor[TOP] under top slab (+0.5), bed orderings (head-on-slab lowers
+BOTH, bed on top slab flush), floor-torch/wall-torch on a lowered block (rest flush -0.5), compound -1.0
+collision presence (solid where drawn, `noCollision`), and a combined-chain MATRIX confirming lowering
+CLAMPS at -1.0 (deep stack: g0/slab0/stone-0.5/slab-0.5/stone-1.0/slab-0.5/stone-1.0, never below -1.0).
+Corrected guesses along the way (torch-on-lowered-FB = -0.5 flush not -1.0; bell/RC4-cantilever fine).
+Commit chain: `5fb4bf28`→`47426827`→(this wave). **Running headless suite = 104** (from 45 at session
+start). This is ~the headless ceiling — remaining work is genuinely live-only (render/feel/targeting) +
+the 2 spawned bug tasks (redstone over-air, chain mixin) + 2 flagged policy questions (tall plants flush,
+compound-top one-step). NOT pushed.
