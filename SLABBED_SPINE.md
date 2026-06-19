@@ -562,3 +562,17 @@ crosshair clicked — no exception.
 - GREEN (not flagged): render solidity / ghost-windows, targeting+break, TS world (no holes, no crash).
 
 Jar `slabbed-0.4.1-beta.1+26.1.2-port.jar` staged + live-tested. NEXT: WYSIWYG upper-half placement fix.
+
+### 2026-06-19 (cont.) — WYSIWYG side-click follow fix (RED→GREEN, jar re-staged)
+
+Fixed Julia's #1 bug (slab clicking a lowered block's face lands 0.5 high). Root: the side-inherited
+freeze-flat rail in `freezeLoweredOnPlace` fired on "solid ground below" regardless of what the player
+clicked. Fix (`5383e4a2`): `BlockItemPlacementIntentMixin` useOn HEAD inject marks a slab placed by
+clicking the SIDE face of a -0.5 lowered block (thread-local `WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE`,
+mirrors the compound-intent bridge; cleared on useOn RETURN); `freezeLoweredOnPlace` anchors that slab
+lowered (follows where clicked, holds via anchor = NEVER-POP-down) instead of freezing flat. Gated to a
+-0.5 clicked surface (compound -1.0 side stays on the RC3 path). Guard preserved + tested: clicking the
+FLAT GROUND's top beside a lowered block still stays 0.0 (A1, you aimed at the ground). Headless RED→GREEN
+(`useOnSlabClickingLoweredFaceWithSolidGroundBelowFollowsToMinusHalf` -0.5), **106/106**. Jar 196,360 B
+re-staged to BOTH Modrinth profiles (pre-fix 0.4.1 → `.bak-prewysiwyg`). **PENDING: Julia live-confirm
+both halves.** Still queued: vegetation-flush-on-TS, step-up-collision (minor).
