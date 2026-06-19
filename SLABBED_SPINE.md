@@ -576,3 +576,18 @@ FLAT GROUND's top beside a lowered block still stays 0.0 (A1, you aimed at the g
 (`useOnSlabClickingLoweredFaceWithSolidGroundBelowFollowsToMinusHalf` -0.5), **106/106**. Jar 196,360 B
 re-staged to BOTH Modrinth profiles (pre-fix 0.4.1 → `.bak-prewysiwyg`). **PENDING: Julia live-confirm
 both halves.** Still queued: vegetation-flush-on-TS, step-up-collision (minor).
+
+### 2026-06-19 (cont.) — redstone torch particle + TS vegetation flush (jar re-staged)
+
+Julia LIVE-CONFIRMED the WYSIWYG side-click fix. Two more live findings fixed (`199bc268`):
+- **Redstone torch particle 0.5 above the lowered model.** RedstoneTorchBlock extends BaseTorchBlock (own
+  animateTick), so TorchParticleMixin (on TorchBlock) never covered it. New `RedstoneTorchParticleMixin`
+  (slabbed.mixins.json) re-emits the lit DustParticleOptions.REDSTONE at y+0.7+dy (vanilla jitter), cancels
+  vanilla. Wall variant overrides animateTick → unaffected.
+- **Vegetation not flush on TS.** P0.4 directCustom lowered VegetationBlock -0.5 AND TS positions it via its
+  own SlabOffsetModel = double-offset (sunk). Fix: exclude `VegetationBlock` from
+  `isDirectCustomSlabSupportedObject` → getYOffset 0 on TS → TS's offset is the only one (flush). No-op
+  without TS; vanilla-slab veg already 0.
+Both client-render/TS-only (no headless test). 106/106 gametests, client-load smoke clean (both mixins
+apply). Jar 197,733 B re-staged BOTH profiles (prior → `.bak-prevegtorch`). **PENDING Julia live-confirm:
+redstone torch dust at the head + flowers/grass flush on TS.** Remaining: step-up-collision (minor).
