@@ -457,10 +457,16 @@ Three new gametest classes from a 3-agent spec, measure-and-lock verified, **95/
   slab -0.5, slab-on-compound-top, anchor-survives-source-removal (+isAnchored), slab-on-anchored-cantilever.
 
 **Findings (flagged in-test, observed-locked, NOT faked):**
-1. **`ChainBlockNeighborSurvivalMixin` registered in NO mixin config** → chain break-pop is inert; checklist
-   D6 UNIMPLEMENTED. Did not write a "chain pops" test (would be false). → spawned task `task_505e52f6`.
+1. **`ChainBlockNeighborSurvivalMixin` registered in NO mixin config** → chain break-pop was inert.
+   **RESOLVED 2026-06-18 (Julia: "clean up, match df3a0dd4"):** the inert state was intentional — commit
+   `df3a0dd4` ("restore vanilla floating-chain behavior") deliberately un-registered the pop-off mixin and
+   flipped its repro tests to "chain stays". Deleted the dead `ChainBlockNeighborSurvivalMixin.java` + the
+   orphaned Yarn-mapped `ChainSurvivalReproTest.java` (was excluded from the gametest `include` list, never
+   compiled), rewrote checklist D6 to the vanilla-floating policy, and added
+   `chainDoesNotPopWhenSupportRemoved` to `Slabbed2612ConnectorSurvivalTest` to pin it.
 2. **Redstone wire `canSurvive`==true over AIR** (vanilla=false) → `RedstoneWireBlockMixin` over-permissive;
-   dust could float. → spawned task `task_4c93146d`.
+   dust could float. → spawned task `task_4c93146d`. **[CORRECTED — FALSE READING; see "redstone over-air
+   = false alarm" entry below. Mixin is NOT over-permissive; dust does NOT float.]**
 3. **Double-tall plants (sunflower/large_fern/tall_grass) on a slab stay flush 0.0**, not -0.5 (checklist
    T4-6). Likely intentional (veg handled by TS); flagged as a checklist-vs-code discrepancy.
 4. **Slab on a compound -1.0 TOP follows ONE step to -0.5**, not -1.0 (checklist L5 ideal). Possible
@@ -482,3 +488,29 @@ Commit chain: `5fb4bf28`→`47426827`→(this wave). **Running headless suite = 
 start). This is ~the headless ceiling — remaining work is genuinely live-only (render/feel/targeting) +
 the 2 spawned bug tasks (redstone over-air, chain mixin) + 2 flagged policy questions (tall plants flush,
 compound-top one-step). NOT pushed.
+
+### 2026-06-18 (cont.) — redstone over-air = FALSE ALARM (task_4c93146d resolved, no code bug)
+
+Investigated finding #2 (redstone `canSurvive`==true over air → "mixin over-permissive, dust floats").
+**It was a measurement artifact, not a bug.** `RedstoneWireBlockMixin` only injects `canSurvive` and only
+overrides it to `true` when `SlabSupport.isRedstoneSupportTopSurface(below)` is true; that helper returns
+**false** over air (air is not face-sturdy-up and is not a slab), so over air the mixin defers to vanilla,
+which returns false. Proven headlessly:
+- `Blocks.REDSTONE_WIRE.defaultBlockState().canSurvive(level, pos)` over air = **false**.
+- `isRedstoneSupportTopSurface(air)` = **false**.
+
+Why the old test saw `true`: the test placed the wire, then `setBlock(support, AIR)`. `GameTestHelper.setBlock`
+uses flag 3 (shape-update path runs), so the wire **synchronously pops to air** via vanilla
+`updateShape -> canSurviveOn` (direction DOWN) — a path the mixin does NOT touch. The subsequent
+`level.getBlockState(wirePos).canSurvive(...)` then read **AIR's** default `canSurvive` (=true), not the
+wire's. Diagnostic confirmed `atWireAfter = minecraft:air`.
+
+Bonus check (no asymmetry bug): in 26.1.2 **both** bottom and top slabs have a sturdy UP face
+(`isFaceSturdy(UP)=true`), so vanilla `canSurviveOn` already accepts them and `updateShape` does NOT pop a
+wire resting on either slab type. The mixin's slab clause is therefore redundant-but-harmless here.
+
+Action: **no mixin change** (correct as-is). Tightened the gametest instead — `redstoneWireSurvivesOnSlabTops`
+now asserts (a) the placed wire pops when support is removed, and (b) a FRESH wire `canSurvive==false` over
+air; kept the two positive slab-top assertions; corrected the misleading docstring. **All 105 tests pass.**
+Lesson (again): a "place-then-remove-then-read-the-dependent-block" survival test reads the popped block, not
+the subject — assert on a fresh state (or assert the pop). NOT pushed.

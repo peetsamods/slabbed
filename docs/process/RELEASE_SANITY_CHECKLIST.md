@@ -177,7 +177,7 @@ Run a family's full block list when that family's code changed since last releas
 | D3 | `lantern[hanging=false]` | on bottom slab | `dy=-0.500` (floor lantern) | DY |
 | D4 | `soul_lantern[hanging]` | under top slab | `dy=+0.500`, flush | DY + VIS |
 | D5 | `iron_chain` (Y) | under top slab | hangs flush, no gap | VIS |
-| D6 | `iron_chain` (Y) | break support → chain pops | ⚠ UNIMPLEMENTED: ChainBlockNeighborSurvivalMixin is registered nowhere (inert) — register or strike | GT + VIS |
+| D6 | `iron_chain` (Y) | break support (remove slab) | chain REMAINS — vanilla floating, no survival rule (intentional, `df3a0dd4`); pop mixin deleted, pinned by `chainDoesNotPopWhenSupportRemoved` | GT |
 | D7 | `hanging_roots` | under flush block above | `dy=0.000` (follows above) | GT |
 | D8 | `hanging_roots` | under lowered support | follows to `-0.500` | GT + VIS |
 | D9 | `spore_blossom` | under block on slab | flush against block above | VIS |

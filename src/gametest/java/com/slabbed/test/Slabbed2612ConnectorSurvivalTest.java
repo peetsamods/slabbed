@@ -24,10 +24,13 @@ import net.minecraft.world.level.block.state.properties.WallSide;
  * predicate or by driving {@code updateShape} DIRECTLY — never "place then setBlock(AIR) and read the
  * dependent block", because the neighbour-update tick may not fire within a gametest frame.
  *
- * <p>NOT WRITTEN (flagged by the spec, would be a false test): a "vertical chain pops when support is
- * removed" test. {@code ChainBlockNeighborSurvivalMixin} is present on disk but registered in NO mixin
- * config, so chain survival is pure-vanilla (never pops). Asserting a pop would fail against the build.
- * Surfaced to the maintainer — register the mixin or strike checklist D6 — before adding that test.
+ * <p>Chain survival is intentionally VANILLA FLOATING: a chain does NOT pop when its support is removed.
+ * Julia's commit {@code df3a0dd4} ("restore vanilla floating-chain behavior") un-registered the old
+ * {@code ChainBlockNeighborSurvivalMixin} pop-off mixin and flipped its repro tests to "chain stays";
+ * that dead mixin (and the orphaned Yarn-mapped {@code ChainSurvivalReproTest}) were deleted 2026-06-18.
+ * {@link #chainDoesNotPopWhenSupportRemoved} pins that policy here so a re-registered survival mixin
+ * would turn this suite red. Checklist D6 reflects the same. (Chain <em>dy</em> — flush/raise — is a
+ * separate concern, covered by {@code Slabbed2612LoweringContractTest}.)
  */
 public final class Slabbed2612ConnectorSurvivalTest {
 
@@ -188,11 +191,21 @@ public final class Slabbed2612ConnectorSurvivalTest {
     }
 
     /**
-     * Redstone dust survives on a bottom-slab top AND a top-slab top (the {@code isRedstoneSupportTopSurface}
-     * feature — top slabs are normally non-supporting, so this is the meaningful pin). ⚠ MEASURED + FLAGGED:
-     * the wire ALSO reports canSurvive==true with air below — vanilla returns false there, so the
-     * RedstoneWireBlockMixin is over-permissive (always-survive) in this build. We assert the two intended
-     * slab cases and LOG the air case loudly for review rather than asserting a control that fails.
+     * Redstone dust survives on a bottom-slab top AND a top-slab top, and must NOT survive over air.
+     *
+     * <p>The two slab cases pin the intended support behaviour. The air case pins that the mixin is
+     * NOT over-permissive: {@code RedstoneWireBlockMixin} overrides {@code canSurvive} to true only when
+     * {@code SlabSupport.isRedstoneSupportTopSurface(below)} is true (a sturdy-up face, or a bottom/top
+     * slab) — otherwise it lets vanilla decide, and vanilla returns false over air.
+     *
+     * <p>CORRECTION (was a false reading): an earlier version did {@code setBlock(support, AIR)} then read
+     * {@code level.getBlockState(wirePos).canSurvive(...)} and saw {@code true}, concluding the mixin was
+     * over-permissive. That reading was bogus. Removing the support synchronously POPS the placed wire to
+     * air — via vanilla {@code updateShape -> canSurviveOn} (direction DOWN), which the mixin does not
+     * touch — so the subsequent read measured AIR's default {@code canSurvive} (true), not the wire's.
+     * Verified (2026-06-18): a FRESH redstone state over the emptied column returns {@code canSurvive ==
+     * false}, and {@code isRedstoneSupportTopSurface(air) == false}. So we assert the wire popped, and
+     * assert a fresh wire cannot survive over air.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void redstoneWireSurvivesOnSlabTops(GameTestHelper helper) {
@@ -208,9 +221,45 @@ public final class Slabbed2612ConnectorSurvivalTest {
         if (!level.getBlockState(abs).canSurvive(level, abs)) {
             throw helper.assertionException(wire, "redstone_wire must survive on a top-slab top");
         }
+        // Remove the support. The placed wire pops to air (vanilla updateShape -> canSurviveOn, which the
+        // mixin does not touch), and a FRESH wire must NOT survive over the now-empty column.
         helper.setBlock(new BlockPos(2, 1, 2), Blocks.AIR.defaultBlockState());
-        boolean overAir = level.getBlockState(abs).canSurvive(level, abs);
-        Slabbed.LOGGER.info("CONN-SURV | ⚠ redstone canSurvive over AIR = {} (vanilla=false; mixin appears over-permissive — review RedstoneWireBlockMixin)", overAir);
+        if (!level.getBlockState(abs).isAir()) {
+            throw helper.assertionException(wire, "redstone_wire must pop when its support is removed");
+        }
+        if (Blocks.REDSTONE_WIRE.defaultBlockState().canSurvive(level, abs)) {
+            throw helper.assertionException(wire,
+                    "redstone_wire must NOT survive over air (mixin must defer to vanilla, which returns false)");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Vanilla floating-chain policy (checklist D6): a Y-axis chain hung under a TOP slab must REMAIN
+     * when that slab is removed — chains have no survival rule and must not pop. This pins the decision
+     * in {@code df3a0dd4} (the old pop-off {@code ChainBlockNeighborSurvivalMixin} was un-registered and
+     * is now deleted); if a survival mixin is ever re-registered, {@code updateShape} would return air
+     * here and turn this red. Driven via {@code updateShape} DIRECTLY (no neighbour-tick reliance), which
+     * is the exact path the old mixin hooked.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainDoesNotPopWhenSupportRemoved(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos chain = new BlockPos(2, 2, 2);
+        BlockPos slab = new BlockPos(2, 3, 2);
+        helper.setBlock(slab, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
+        helper.setBlock(chain, Blocks.IRON_CHAIN.defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.Y));
+        BlockPos chainAbs = helper.absolutePos(chain);
+        BlockPos slabAbs = helper.absolutePos(slab);
+        // remove the support, then drive the chain's own neighbour recheck for the now-air slab above
+        helper.setBlock(slab, Blocks.AIR.defaultBlockState());
+        BlockState after = level.getBlockState(chainAbs).updateShape(
+                level, level, chainAbs, Direction.UP, slabAbs, level.getBlockState(slabAbs), level.getRandom());
+        if (after.isAir()) {
+            throw helper.assertionException(chain,
+                    "iron_chain must REMAIN when its TOP-slab support is removed (vanilla floating policy, "
+                            + "df3a0dd4); updateShape returned air — a chain survival mixin has been re-introduced");
+        }
         helper.succeed();
     }
 }
