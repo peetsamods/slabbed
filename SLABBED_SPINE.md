@@ -409,7 +409,7 @@ UNCHANGED (no `src/main` / `src/client` edits). NOT committed yet, NOT pushed. B
 Committed the checklist+suite as `1a655c21`. Then built Tier-2 (the client-side companion to the
 headless fingerprint, RELEASE_SANITY_CHECKLIST §3): `src/client/java/com/slabbed/client/DyFingerprintDump.java`.
 - Catches the one class the server gametest fingerprint is blind to: **client-vs-server getYOffset
-  divergence** ("snaps after a delay" sync bug). Numpad-1 scans a box around the player, logs every
+  divergence** ("snaps after a delay" sync bug). Press P (unbound vanilla, MacBook-friendly; ignored while a screen is open) → scans a box around the player, logs every
   lowered/raised block as `SLABBED-FP-CLIENT | pos | block | dy | src` (same src= as the HUD) → diff
   against the committed server `dy-baseline.txt`.
 - **Trigger = GLFW key-poll** in `ClientTickEvents.END_CLIENT_TICK`, rising-edge debounced. The compiler
@@ -421,5 +421,5 @@ headless fingerprint, RELEASE_SANITY_CHECKLIST §3): `src/client/java/com/slabbe
   (build.gradle `DyFingerprintDump*.class`) — verified via `unzip -l` (absent). Render-mesh desync still
   NOT visible here (Lane 3 human check).
 - **Status: compile-verified + full build green + 66/66 gametests; jar exclusion confirmed.** ⚠ Needs ONE
-  live smoke from Julia (press numpad 1 in a dev world, confirm SLABBED-FP-CLIENT lines appear) — I can't
+  live smoke from Julia (press P in a dev world, confirm SLABBED-FP-CLIENT lines appear) — I can't
   drive the dev client. NOT committed yet in this sub-step.
