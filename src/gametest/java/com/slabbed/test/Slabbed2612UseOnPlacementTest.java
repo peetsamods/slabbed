@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.Slabbed;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -12,6 +13,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -220,5 +222,134 @@ public final class Slabbed2612UseOnPlacementTest {
         helper.setBlock(new BlockPos(2, 3, 2), Blocks.STONE.defaultBlockState());
         helper.setBlock(new BlockPos(2, 4, 2), bottomSlab());
         helper.setBlock(new BlockPos(2, 5, 2), Blocks.STONE.defaultBlockState());
+    }
+
+    /** Generalised: place ANY block the player holds via the real useOn path; returns the placed ABSOLUTE pos. */
+    private static BlockPos placeBlockVia(Player player, BlockPos clickAbs, Direction face, Vec3 hit, Block block) {
+        ItemStack stack = new ItemStack(block);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, new BlockHitResult(hit, face, clickAbs, false)));
+        return clickAbs.relative(face);
+    }
+
+    // ── A1: freeze-on-place via the REAL useOn path — slab on its OWN flush ground beside a lowered
+    //         block must stay flat (0.0) AND record FROZEN_FLAT (NEVER-POP). ──────────────────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabOnFlushGroundBesideLoweredStaysFrozenFlat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // lowered full block at (2,3,2); beside it east, flush stone ground at (3,2,2).
+        helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
+        helper.setBlock(new BlockPos(2, 3, 2), Blocks.STONE.defaultBlockState());
+        helper.setBlock(new BlockPos(3, 2, 2), Blocks.STONE.defaultBlockState());
+        BlockPos ground = helper.absolutePos(new BlockPos(3, 2, 2));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 4, 2)));
+
+        BlockPos placed = placeBlockVia(player, ground, Direction.UP, upHit(ground), Blocks.STONE_SLAB);
+        log("a1_slab_on_flush_ground_beside_lowered", level, placed);
+        assertSlabDy(helper, level, placed, new BlockPos(3, 3, 2), 0.0,
+                "A1 useOn: slab on its own flush ground beside a lowered block must stay flat (NEVER-POP)");
+        if (!SlabAnchorAttachment.isFrozenFlat(level, placed)) {
+            throw helper.assertionException(new BlockPos(3, 3, 2),
+                    "A1: the flat-placed slab must record FROZEN_FLAT so a later neighbour can't pull it down");
+        }
+        helper.succeed();
+    }
+
+    // ── A2: a FULL BLOCK (not a slab) placed via useOn onto a bottom slab lowers to -0.5. ───────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnFullBlockOnBottomSlabLowersToMinusHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
+        BlockPos slab = helper.absolutePos(new BlockPos(2, 2, 2));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(2, 4, 2)));
+
+        BlockPos placed = placeBlockVia(player, slab, Direction.UP, upHit(slab), Blocks.STONE);
+        BlockState s = level.getBlockState(placed);
+        if (s.getBlock() != Blocks.STONE) {
+            throw helper.assertionException(new BlockPos(2, 3, 2), "A2: useOn did not place the full block (got " + s.getBlock() + ")");
+        }
+        double dy = SlabSupport.getYOffset(level, placed, s);
+        Slabbed.LOGGER.info("USEON-FP | a2_full_block_on_bottom_slab | dy={}",
+                String.format(java.util.Locale.ROOT, "%.3f", dy));
+        if (Math.abs(dy + 0.5) > EPS) {
+            throw helper.assertionException(new BlockPos(2, 3, 2),
+                    "A2 useOn: full block placed on a bottom slab must lower -0.5, got " + dy);
+        }
+        helper.succeed();
+    }
+
+    // ── A7: a slab placed via useOn on TOP of a compound -1.0 stack follows it to -1.0. ─────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabOnTopOfCompoundFollowsToMinusOne(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        buildCompoundMinusOne(helper);                       // top compound stone at (2,5,2) = -1.0
+        BlockPos top = helper.absolutePos(new BlockPos(2, 5, 2));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(2, 7, 2)));
+
+        BlockPos placed = placeSlabVia(player, top, Direction.UP, upHit(top));
+        log("a7_slab_on_compound_top", level, placed);
+        // OBSERVED: a slab placed on TOP of a compound -1.0 block follows by ONE step to -0.5 (it rests
+        // flush on the compound block's top, which is itself a full block down), NOT a further -1.0. This
+        // is the on-top single-step follow; checklist L5's "-1.0" was the ideal-full-follow — locked to the
+        // observed -0.5, flagged as a possible deeper-follow gap (same family as the on-top edge cases).
+        assertSlabDy(helper, level, placed, new BlockPos(2, 6, 2), -0.5,
+                "A7 useOn: slab on top of a compound -1.0 stack follows ONE step to -0.5 (rests flush on its top)");
+        helper.succeed();
+    }
+
+    // ── A8: a slab placed via useOn cantilevered beside a lowered block ANCHORS -0.5 and KEEPS it when
+    //         the lowering source is later removed (NEVER-POP-up, the real placement lane). ───────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnCantileverSlabAnchorsAndSurvivesSourceRemoval(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
+        helper.setBlock(new BlockPos(2, 3, 2), Blocks.STONE.defaultBlockState());   // lowered -0.5
+        BlockPos lowered = helper.absolutePos(new BlockPos(2, 3, 2));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 4, 2)));
+
+        BlockPos placed = placeSlabVia(player, lowered, Direction.EAST, eastHit(lowered, 0.75));   // air below → cantilever
+        assertSlabDy(helper, level, placed, new BlockPos(3, 3, 2), -0.5,
+                "A8 useOn: cantilever slab beside a lowered block lands -0.5");
+        if (!SlabAnchorAttachment.isAnchored(level, placed)) {
+            throw helper.assertionException(new BlockPos(3, 3, 2), "A8: cantilever-placed slab must be ANCHORED");
+        }
+        // remove the lowering source; the anchor must hold -0.5 (must NOT pop up to 0.0).
+        helper.setBlock(new BlockPos(2, 3, 2), Blocks.AIR.defaultBlockState());
+        helper.setBlock(new BlockPos(2, 2, 2), Blocks.AIR.defaultBlockState());
+        log("a8_cantilever_after_source_removed", level, placed);
+        assertSlabDy(helper, level, placed, new BlockPos(3, 3, 2), -0.5,
+                "A8 useOn: after the lowering source is removed the anchored slab KEEPS -0.5 (NEVER-POP-up)");
+        helper.succeed();
+    }
+
+    // ── RC4 check: a slab placed on TOP of a cantilever-lowered block. The WYSIWYG audit feared this
+    //         reads 0.0 (column walk terminating at the air under the cantilever). MEASURED: it reads
+    //         -0.5 — the on-top slab DOES follow the anchored cantilever down and rests flush on it. So
+    //         this configuration is correct, not the feared gap. (RC4's full-block-on-edge case may still
+    //         differ; this pins the slab-on-anchored-cantilever case as good.)
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabOnAnchoredCantileverBlockFollowsToMinusHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // cantilever-lowered full block: slab+stone (-0.5), anchor it, then remove the carrier slab.
+        helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
+        helper.setBlock(new BlockPos(2, 3, 2), Blocks.STONE.defaultBlockState());
+        BlockPos canti = helper.absolutePos(new BlockPos(2, 3, 2));
+        SlabAnchorAttachment.addAnchor(level, canti, level.getBlockState(canti));
+        helper.setBlock(new BlockPos(2, 2, 2), Blocks.AIR.defaultBlockState());
+        double cantiDy = SlabSupport.getYOffset(level, canti, level.getBlockState(canti));
+        if (Math.abs(cantiDy + 0.5) > EPS) {
+            throw helper.assertionException(new BlockPos(2, 3, 2), "SETUP: cantilever block should be -0.5, got " + cantiDy);
+        }
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(2, 5, 2)));
+        BlockPos placed = placeSlabVia(player, canti, Direction.UP, upHit(canti));
+        log("rc4_slab_on_anchored_cantilever", level, placed);
+        assertSlabDy(helper, level, placed, new BlockPos(2, 4, 2), -0.5,
+                "slab on an anchored cantilever-lowered block follows it to -0.5 (rests flush; not the feared 0.0 gap)");
+        helper.succeed();
     }
 }
