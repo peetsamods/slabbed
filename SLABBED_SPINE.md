@@ -444,3 +444,29 @@ Yarn-excluded). Registered in build.gradle include() + fabric.mod.json. **72/72 
 RC3 residual now precisely scoped: (1) slab-TYPE policy + midline-split fix, (2) client cell-targeting (P4,
 genuinely live). dy is no longer in question. Docs updated: RC3-LIVE-REDVERIFY-PLAN.md (result section),
 WYSIWYG-PLACEMENT-AUDIT.md (caveat). NOT committed→ committing now. RC4 still has no useOn coverage.
+
+### 2026-06-18 (cont.) — widened the headless net (+23 tests, 95 total) + 5 findings
+
+Three new gametest classes from a 3-agent spec, measure-and-lock verified, **95/95 green**:
+- `Slabbed2612RestingDyTest` — special full blocks / floor objects / ceiling-hung / thin layers / 9-material
+  slab sweep, dy via getYOffset (batched, clear-between to fit the 8x8x8 region).
+- `Slabbed2612ConnectorSurvivalTest` — glass_pane break + flat control, wall UP-post-on-break, extra
+  fence/wall materials; carpet/flower_pot/redstone survival via `canSurvive` predicate + direct `updateShape`
+  (NOT place-then-remove — neighbour tick may not fire headless).
+- extended `Slabbed2612UseOnPlacementTest` — freeze-on-place via real useOn (+isFrozenFlat), full-block on
+  slab -0.5, slab-on-compound-top, anchor-survives-source-removal (+isAnchored), slab-on-anchored-cantilever.
+
+**Findings (flagged in-test, observed-locked, NOT faked):**
+1. **`ChainBlockNeighborSurvivalMixin` registered in NO mixin config** → chain break-pop is inert; checklist
+   D6 UNIMPLEMENTED. Did not write a "chain pops" test (would be false). → spawned task `task_505e52f6`.
+2. **Redstone wire `canSurvive`==true over AIR** (vanilla=false) → `RedstoneWireBlockMixin` over-permissive;
+   dust could float. → spawned task `task_4c93146d`.
+3. **Double-tall plants (sunflower/large_fern/tall_grass) on a slab stay flush 0.0**, not -0.5 (checklist
+   T4-6). Likely intentional (veg handled by TS); flagged as a checklist-vs-code discrepancy.
+4. **Slab on a compound -1.0 TOP follows ONE step to -0.5**, not -1.0 (checklist L5 ideal). Possible
+   deeper-follow gap; locked observed -0.5.
+5. **Flower pot survives regardless of support** (no support rule) → checklist E7 "pot pops" is live-only.
+6. CORRECTED earlier guesses: RC4 slab-on-cantilever reads -0.5 (correct, NOT the feared 0.0 gap); FLOOR
+   bell lowers -0.5 (correct, no gap).
+
+Commit `5fb4bf28`. The running headless suite (excludes the Yarn SlabbedLab files) is now **95**. NOT pushed.

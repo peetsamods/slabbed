@@ -177,7 +177,7 @@ Run a family's full block list when that family's code changed since last releas
 | D3 | `lantern[hanging=false]` | on bottom slab | `dy=-0.500` (floor lantern) | DY |
 | D4 | `soul_lantern[hanging]` | under top slab | `dy=+0.500`, flush | DY + VIS |
 | D5 | `iron_chain` (Y) | under top slab | hangs flush, no gap | VIS |
-| D6 | `iron_chain` (Y) | break support → chain pops | survival (no float) | GT + VIS |
+| D6 | `iron_chain` (Y) | break support → chain pops | ⚠ UNIMPLEMENTED: ChainBlockNeighborSurvivalMixin is registered nowhere (inert) — register or strike | GT + VIS |
 | D7 | `hanging_roots` | under flush block above | `dy=0.000` (follows above) | GT |
 | D8 | `hanging_roots` | under lowered support | follows to `-0.500` | GT + VIS |
 | D9 | `spore_blossom` | under block on slab | flush against block above | VIS |
@@ -195,7 +195,7 @@ Run a family's full block list when that family's code changed since last releas
 | E4 | `candle` | on bottom slab | `dy=-1.000` (support−0.5), no gap | GT + DY |
 | E5 | `candle` | on full block on slab | follows compound support | DY |
 | E6 | `flower_pot` | on bottom slab | placed, survives, flush | GT + VIS |
-| E7 | `flower_pot` | break support | pops (not survive unsupported) | GT |
+| E7 | `flower_pot` | break support | ⚠ LIVE-ONLY: flower_pot reports canSurvive even over air (no support rule) — headless can't prove the pop | VIS |
 | E8 | `oak_button[FLOOR]` | on bottom slab | flush at slab-top | GT + VIS |
 | E9 | `stone_button[FLOOR]` | on bottom slab | flush at slab-top | VIS |
 | E10 | `stone_pressure_plate` | on bottom slab | flush, no gap | VIS |
@@ -324,7 +324,7 @@ Behavior keys on slab TYPE, not material — so this is a thin sweep. Best as a 
 | T1 | `redstone_wire` placed on bottom slab top | places + survives | VIS |
 | T2 | `redstone_wire` on top slab top | places + survives (`isRedstoneSupportTopSurface`) | VIS |
 | T3 | redstone signal across a slab step | propagates (step-up/down) | VIS |
-| T4 | `sunflower` (double-tall) on bottom slab | both halves lower, upper checks `below(2)` | DY + VIS |
+| T4 | `sunflower` (double-tall) on bottom slab | ⚠ OBSERVED 0.0 (NOT lowered) — tall plants stay flush; confirm intended vs -0.5 | DY + VIS |
 | T5 | `large_fern` on bottom slab | both halves lower | VIS |
 | T6 | `tall_grass` on bottom slab | both halves lower | VIS |
 
