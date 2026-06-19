@@ -526,3 +526,16 @@ builds as `slabbed-0.4.1-beta.1+26.1.2-port.jar` and fabric.mod.json bakes the r
 unzip). CHANGELOG entry added; operational version refs in HANDOFF/LIVE-DRIVE-GUIDE updated (historical
 audits/spine left as-is). ⚠ The Modrinth profiles still hold the OLD-named jar — re-stage the 0.4.1 jar
 before the next live session. NOT pushed.
+
+### 2026-06-19 (cont.) — recorder hygiene removal + staged 0.4.1 jar
+
+Removed the dev cursor/outline diagnostic recorders from the release jar (the ~28 KB the hygiene gate
+flagged). Careful approach: gutted `LiveCursorIntentRecorder` (539→~15 line inert stub, API preserved so
+the two complex mixins still compile + zero-cost short-circuit via `enabled()→false`) and deleted
+`LevelRendererRenderedOutlineRecorderMixin` + its mixins.json registration — WITHOUT surgery on the
+untested 3075-line `GameRendererCrosshairRetargetMixin` (judged not worth the risk for ~1 KB). 105/105
+gametests green, runClient load smoke clean (all client mixins apply). Jar **208,215 → 195,665 B**.
+Commit (recorder removal) made. **Staged `slabbed-0.4.1-beta.1+26.1.2-port.jar` (195,665 B) into BOTH
+Modrinth profiles** (`Fabric 26.1.2` + `TEST_ SLABBED 26.1.2`); old 0.2.0 jars renamed
+`.bak-superseded-by-0.4.1` (exactly one active Slabbed jar each; TS rig keeps terrain_slabs-3.3.1 +
+architectury + fabric-api + peetsa-cosmetics). Restart the Modrinth instance to load it. NOT pushed.
