@@ -22,7 +22,7 @@
 root:    /Users/joolmac/CascadeProjects/Slabbed-port-26.1.2
 branch:  port/mc-26.1.2
 HEAD:    3ef254e2   (clean tree, local only — NEVER pushed without explicit Julia go-ahead)
-MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang mappings · v0.2.0-beta.4+26.1.2-port
+MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang mappings · v0.4.1-beta.1+26.1.2-port
 ```
 > **2026-06-17 PM — WYSIWYG placement law (active work).** Julia's LAW: "a placed block sits exactly where
 > the crosshair aimed; there is NO case where you aim and it lands elsewhere." She reported placement bugs

@@ -514,3 +514,15 @@ now asserts (a) the placed wire pops when support is removed, and (b) a FRESH wi
 air; kept the two positive slab-top assertions; corrected the misleading docstring. **All 105 tests pass.**
 Lesson (again): a "place-then-remove-then-read-the-dependent-block" survival test reads the popped block, not
 the subject — assert on a fresh state (or assert the pop). NOT pushed.
+
+### 2026-06-19 — version reconciliation: 0.2.0-beta.4 → 0.4.1-beta.1+26.1.2-port
+
+The 26.1.2 port had been carrying `mod_version=0.2.0-beta.4+26.1.2-port` — it forked from the 0.2.0-beta
+line and was NEVER renumbered, so the version string lagged ~two minor lines behind the 0.4.0-beta.3 the
+1.21.1/1.21.11 siblings shipped, despite this port carrying the full 0.4.0-era content (forward-ported June
+families + TS compat + WYSIWYG fixes). A LABEL bug, not missing content. Julia chose **0.4.1-beta.1** (fresh
+0.4.1 line, signalling 26.1.2 is newer than the siblings' 0.4.0-beta.3). Bumped `gradle.properties`; jar now
+builds as `slabbed-0.4.1-beta.1+26.1.2-port.jar` and fabric.mod.json bakes the right string (verified via
+unzip). CHANGELOG entry added; operational version refs in HANDOFF/LIVE-DRIVE-GUIDE updated (historical
+audits/spine left as-is). ⚠ The Modrinth profiles still hold the OLD-named jar — re-stage the 0.4.1 jar
+before the next live session. NOT pushed.

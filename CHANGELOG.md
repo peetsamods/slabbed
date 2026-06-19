@@ -1,5 +1,27 @@
 ## [Unreleased]
 
+## [0.4.1-beta.1+26.1.2-port] — MC 26.1.2 port
+
+Version reconciliation: this 26.1.2 port branched from the `0.2.0-beta` line and was never renumbered, so
+its `mod_version` lagged at `0.2.0-beta.4+26.1.2-port` even though it carries the full `0.4.0`-era content
+(the forward-ported June fix families, Terrain Slabs compat, and the WYSIWYG placement fixes). Bumped to
+`0.4.1-beta.1+26.1.2-port` to join the `0.4.x` line the 1.21.1 / 1.21.11 builds shipped under.
+
+### Content already in this port (carried forward; not new in this bump)
+- Terrain Slabs compat: render-region crash guard, world-hole fix, dual mod-id gate, P0.4 object lowering.
+- Connecting blocks break-across-step (fence / wall / pane); ceiling-hung dy-from-above; NEVER-POP freeze.
+- WYSIWYG placement: RC1 + RC2 (+ GAP-1/2), live bug fixes A/B/C/D.
+
+### Test / process (this session)
+- Standardized release sanity checklist + a 19-fixture dy FINGERPRINT regression suite (`dy-baseline.txt`).
+- Headless gametest net widened to 105 checks (resting dy, connectors, survival, real `useOn` placement,
+  collision presence, compound chain matrix). RC3 dy RED-verified DONE headlessly.
+- Tier-2 client dy dump (dev-only, jar-excluded). `./gradlew25` Java-25 wrapper.
+
+### Known open (pre-release)
+- Policy calls: tall plants stay flush on slabs; slab-on-deep-stack drops one step; RC3 slab TOP/BOTTOM type.
+- Live (Lane 3) visual/feel pass still required; ~28 KB diagnostic recorders pending removal from the jar.
+
 ## [0.2.0-beta.4] — Slabbed 0.2.0 Beta 4 / Beta 4
 
 ### Highlights

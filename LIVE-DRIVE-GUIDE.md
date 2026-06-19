@@ -29,12 +29,12 @@ you can: you place blocks with a rebound key, and aim with `/tp`.
 
 - **Profile:** Modrinth App → `Fabric 26.1.2`. Mods dir:
   `~/Library/Application Support/ModrinthApp/profiles/Fabric 26.1.2/mods/`
-  (jar `slabbed-0.2.0-beta.4+26.1.2-port.jar` + `fabric-api-0.151.0+26.1.2.jar`). Swap the jar in
+  (jar `slabbed-0.4.1-beta.1+26.1.2-port.jar` + `fabric-api-0.151.0+26.1.2.jar`). Swap the jar in
   **before** launch.
 - **Build the jar with Java 25** (Loom needs it; Java 21 javac can't read the MC named jar →
   "cannot access BlockState"):
   `export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home`
-  then `./gradlew build -x runGameTest`. Output: `build/libs/slabbed-0.2.0-beta.4+26.1.2-port.jar`.
+  then `./gradlew build -x runGameTest`. Output: `build/libs/slabbed-0.4.1-beta.1+26.1.2-port.jar`.
 - **Stage:** `cp -p build/libs/…port.jar "$PROF/mods/…port.jar"`. Restart the instance to load it.
 - **request_access** for `Minecraft`/`java` AND `Modrinth App` (you need Modrinth to Stop/Play). The
   running game is a `java` process; `open_application "Minecraft"` opens the **launcher**, not the game.
