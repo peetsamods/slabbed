@@ -28,11 +28,12 @@ import java.util.Locale;
  * {@code SLABBED-FP | …} shape, so an operator can diff a built fixture's client capture against the
  * committed server baseline ({@code src/gametest/resources/dy-baseline.txt}).
  *
- * <p>Trigger: <b>numpad 1</b> (GLFW key poll on the window handle — this port's Loom setup does NOT
- * expose {@code fabric-key-binding-api-v1} to the client source set, only {@code lifecycle-events}
- * and {@code renderer}/{@code model-loading}, so a registered {@code KeyMapping} is unavailable;
- * we poll GLFW directly, mirroring how the HUD avoids {@code fabric-rendering-v1}). Rising-edge
- * debounced.
+ * <p>Trigger: <b>P</b> (unbound in vanilla; a plain letter so it works on a MacBook with no numpad
+ * and no Fn). GLFW key poll on the window handle — this port's Loom setup does NOT expose
+ * {@code fabric-key-binding-api-v1} to the client source set, only {@code lifecycle-events} and
+ * {@code renderer}/{@code model-loading}, so a registered {@code KeyMapping} is unavailable; we poll
+ * GLFW directly, mirroring how the HUD avoids {@code fabric-rendering-v1}. Rising-edge debounced, and
+ * suppressed while any screen (chat / inventory / menu) is open so typing a "p" never triggers it.
  *
  * <p>Dev-only and EXCLUDED from the release jar (see {@code build.gradle}). Initialized from
  * {@link SlabbedClient} only in a development environment.
@@ -45,7 +46,7 @@ public final class DyFingerprintDump {
     private static final double EPS = 1.0e-6;
     private static final int RADIUS_XZ = 6;
     private static final int RADIUS_Y = 4;
-    private static final int DUMP_KEY = GLFW.GLFW_KEY_KP_1;
+    private static final int DUMP_KEY = GLFW.GLFW_KEY_P;
 
     private static boolean keyDownLastTick;
 
@@ -55,6 +56,11 @@ public final class DyFingerprintDump {
     public static void init() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client == null || client.getWindow() == null) {
+                return;
+            }
+            // Suppress while any screen is open (chat / inventory / menu) so typing a "p" never fires it.
+            if (client.screen != null) {
+                keyDownLastTick = false;
                 return;
             }
             boolean down = GLFW.glfwGetKey(client.getWindow().handle(), DUMP_KEY) == GLFW.GLFW_PRESS;
