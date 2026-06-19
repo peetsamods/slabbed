@@ -539,3 +539,26 @@ Commit (recorder removal) made. **Staged `slabbed-0.4.1-beta.1+26.1.2-port.jar` 
 Modrinth profiles** (`Fabric 26.1.2` + `TEST_ SLABBED 26.1.2`); old 0.2.0 jars renamed
 `.bak-superseded-by-0.4.1` (exactly one active Slabbed jar each; TS rig keeps terrain_slabs-3.3.1 +
 architectury + fabric-api + peetsa-cosmetics). Restart the Modrinth instance to load it. NOT pushed.
+
+### 2026-06-19 (cont.) — Julia live pass on the 0.4.1 jar (TEST_ SLABBED 26.1.2)
+
+WYSIWYG LAW reaffirmed (supersedes the 3 policy questions): a placed slab lands EXACTLY where the
+crosshair clicked — no exception.
+
+- **RED #2 (top priority) — upper-half slab placement lands 0.5 high.** Placing a slab against the UPPER
+  half of a lowered (-0.5) block: one landed `dy=-0.500 ANCHORED` (correct) but another landed
+  `dy=0.000 FROZEN-FLAT` (WRONG — 0.5 above where aimed). The freeze-flat NEVER-POP rail is winning when
+  the player actually aimed at the lowered surface → WYSIWYG violation. Reproduce headlessly via the
+  Slabbed2612UseOnPlacementTest harness (add the SOLID-ground upper-half case → expect it currently
+  freezes flat = RED), then fix so a click on the lowered block's face follows to -0.5. Screenshots:
+  oak slab at (-1,-59,2)=-0.5 ANCHORED vs (1,-60,2)=0.0 FROZEN-FLAT.
+- **RED — vegetation on TS should sit flush on top.** Sunflower on a TS surface reads `dy=-0.500`
+  (src=geometric); Julia wants flowers/grass flush on top of TS. (Plants on a VANILLA slab read 0.0 / not
+  lowered — so this is TS-specific, the P0.4/directCustom path lowering plants -0.5.) Confirm sunk vs
+  floating and make veg flush on TS.
+- **MINOR #4 — can't step up a lowered slab like a vanilla slab at the same visual Y.** Expected: collision
+  stays vanilla (upper-half cell) by design so you don't clip through lowered blocks; the step-up therefore
+  differs. Julia: "not a dealbreaker, just interesting." Logged as known collision/visual tradeoff.
+- GREEN (not flagged): render solidity / ghost-windows, targeting+break, TS world (no holes, no crash).
+
+Jar `slabbed-0.4.1-beta.1+26.1.2-port.jar` staged + live-tested. NEXT: WYSIWYG upper-half placement fix.
