@@ -175,14 +175,23 @@ public final class Slabbed2612RestingDyTest {
     // ── double-tall plants: BOTH halves lower when a slab is under the lower half ──────────────────
 
     /**
-     * ⚠ OBSERVED + FLAGGED: a double-tall PLANT (sunflower/large_fern/tall_grass) on a bottom slab reads
-     * dy=0.0 — it is NOT lowered, even though RELEASE_SANITY_CHECKLIST §T4–T6 expects -0.5. So tall plants
-     * are currently left flush (likely intentional — vegetation is largely handled by Terrain Slabs, and
-     * Slabbed has a history of NOT double-offsetting veg). This pins the OBSERVED 0.0 and flags the
-     * checklist-vs-code discrepancy for a live decision; it does NOT claim 0.0 is the desired look.
+     * A double-tall PLANT (sunflower/large_fern/tall_grass) over a bottom slab lowers BOTH halves -0.5
+     * on a VANILLA slab.
+     *
+     * <p>⚠ DO NOT place the plant with {@code helper.setBlock} and then read the world state: tall
+     * plants do NOT survive on a bare slab top, so the neighbor update from {@code setBlock} immediately
+     * breaks them to {@code minecraft:air}, and {@code getYOffset} on AIR is 0.0 — a FALSE GREEN that
+     * used to "pin" 0.0 here. Instead we compute {@code getYOffset} on the SYNTHETIC plant
+     * {@link BlockState}s directly over the slab, which is the dy the renderer/anchor logic would apply
+     * if the plant were present.
+     *
+     * <p>The LOWER half lowers via {@code hasBottomSlabBelow}; the UPPER half via the {@code pos.below(2)}
+     * {@code isBottomSlab} check. The recent SlabSupport fix TS-gates the UPPER half for vegetation only,
+     * so on a Terrain Slabs surface the UPPER half reads 0.0 — but on a VANILLA slab (no TS loaded in the
+     * gametest runtime) it is UNCHANGED at -0.5. Both halves therefore read -0.5 here.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void doubleTallPlantsOnBottomSlabObservedFlush(GameTestHelper helper) {
+    public void doubleTallPlantsOnBottomSlabLowerBothHalves(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos slab = new BlockPos(2, 1, 2);
         BlockPos lower = new BlockPos(2, 2, 2);
@@ -190,12 +199,18 @@ public final class Slabbed2612RestingDyTest {
         Block[] plants = {Blocks.SUNFLOWER, Blocks.LARGE_FERN, Blocks.TALL_GRASS};
         for (Block p : plants) {
             helper.setBlock(slab, bottomSlab());
-            helper.setBlock(lower, p.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER));
-            helper.setBlock(upper, p.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER));
-            Slabbed.LOGGER.info("RESTING-FP | {}_on_bottom_slab_OBSERVED | lower={} upper={} (checklist expected -0.5)",
-                    p.getName().getString(), dy(level, helper, lower), dy(level, helper, upper));
-            expect(helper, level, lower, 0.0, p.getName().getString() + " lower half OBSERVED flush (checklist expects -0.5 — flagged)");
-            expect(helper, level, upper, 0.0, p.getName().getString() + " upper half OBSERVED flush");
+            BlockState lowerState = p.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER);
+            BlockState upperState = p.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER);
+            double dyLower = SlabSupport.getYOffset(level, helper.absolutePos(lower), lowerState);
+            double dyUpper = SlabSupport.getYOffset(level, helper.absolutePos(upper), upperState);
+            Slabbed.LOGGER.info("RESTING-FP | {}_on_bottom_slab | lower={} upper={}",
+                    p.getName().getString(), dyLower, dyUpper);
+            if (Math.abs(dyLower - (-0.5)) > EPS) {
+                throw helper.assertionException(lower, p.getName().getString() + " lower half on a bottom slab: expected dy=-0.5 got " + dyLower);
+            }
+            if (Math.abs(dyUpper - (-0.5)) > EPS) {
+                throw helper.assertionException(upper, p.getName().getString() + " upper half on a bottom slab: expected dy=-0.5 got " + dyUpper);
+            }
             clear(helper, upper, lower, slab);
         }
         helper.succeed();

@@ -324,7 +324,7 @@ Behavior keys on slab TYPE, not material — so this is a thin sweep. Best as a 
 | T1 | `redstone_wire` placed on bottom slab top | places + survives | VIS |
 | T2 | `redstone_wire` on top slab top | places + survives (`isRedstoneSupportTopSurface`) | VIS |
 | T3 | redstone signal across a slab step | propagates (step-up/down) | VIS |
-| T4 | `sunflower` (double-tall) on bottom slab | ⚠ OBSERVED 0.0 (NOT lowered) — tall plants stay flush; confirm intended vs -0.5 | DY + VIS |
+| T4 | `sunflower` (double-tall) on bottom slab | both halves lower -0.5 on a VANILLA slab (UPPER half TS-gated → 0.0 on a Terrain Slabs surface) | DY + VIS |
 | T5 | `large_fern` on bottom slab | both halves lower | VIS |
 | T6 | `tall_grass` on bottom slab | both halves lower | VIS |
 
