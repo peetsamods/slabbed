@@ -226,7 +226,7 @@ public final class Slabbed2612RestingDyTest {
         Block[] slabs = {
                 Blocks.OAK_SLAB, Blocks.COBBLESTONE_SLAB, Blocks.SANDSTONE_SLAB, Blocks.BRICK_SLAB,
                 Blocks.NETHER_BRICK_SLAB, Blocks.QUARTZ_SLAB, Blocks.PRISMARINE_SLAB,
-                Blocks.DEEPSLATE_TILE_SLAB, Blocks.CUT_COPPER_SLAB
+                Blocks.DEEPSLATE_TILE_SLAB, Blocks.CUT_COPPER_SLAB.weathering().unaffected()
         };
         for (Block sb : slabs) {
             helper.setBlock(slab, sb.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
@@ -313,13 +313,13 @@ public final class Slabbed2612RestingDyTest {
     // ── bed either-half coordination: head-on-slab lowers BOTH; bed on a top slab stays flush ──────
 
     private static BlockState bedFoot() {
-        return Blocks.RED_BED.defaultBlockState()
+        return Blocks.BED.red().defaultBlockState()
                 .setValue(BlockStateProperties.BED_PART, BedPart.FOOT)
                 .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
     }
 
     private static BlockState bedHead() {
-        return Blocks.RED_BED.defaultBlockState()
+        return Blocks.BED.red().defaultBlockState()
                 .setValue(BlockStateProperties.BED_PART, BedPart.HEAD)
                 .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
     }

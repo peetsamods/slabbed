@@ -14,6 +14,26 @@
 > you have full control — build, place (keybind §4 of the drive guide), live-A/B, commit. RED-verify
 > every gap before porting; prove RED→GREEN. Fan-out audits CAN be wrong — validate by hand.
 
+## 2026-06-20 — 26.2 startup compile frontier green
+
+- First 26.2 source retarget is compile-green only, not runtime/gameplay/release proof.
+- Updated build metadata to MC `26.2`, loader `0.19.3`, Fabric API `0.152.2+26.2`, and jar label
+  `0.4.1-beta.1+26.2-port`; `fabric.mod.json` now declares Minecraft `26.2`.
+- Mechanical 26.2 API fixes: screen-open guard now uses `Minecraft.gui.screen()`, client rerender refresh now routes
+  through `ClientLevel.setBlocksDirty` / `setSectionRangeDirty`, and gametest fixtures use 26.2 collection constants
+  for white carpet, red bed, and unweathered cut copper slab.
+- Proof passed: `./gradlew25 --no-daemon compileJava compileClientJava compileGametestJava --console plain`.
+- Next boundary is runtime/proof behavior: run the focused gametest lane before any jar staging or live profile work.
+
+## 2026-06-20 — 26.2 port docs update
+
+- Operating branch is now [port/mc-26.2-0.4.1-beta.1](/Users/joolmac/CascadeProjects/Slabbed) (from
+  `origin/port/mc-26.1.2`) and this Handoff update is docs-only.
+- Added the "Anticipated Problems and Risks" section to [docs/porting/PORTING_MAP.md](/Users/joolmac/CascadeProjects/Slabbed/docs/porting/PORTING_MAP.md)
+  before continuing further 26.2 port implementation.
+- Captured this as the working handoff baseline for the next agent so the 26.2 migration risks stay visible:
+  toolchain/mapping drift, mixin/API signature drift, source-set/test naming drift, and live profile/jar ambiguity.
+
 ---
 
 ## 0. Get oriented (verify BEFORE touching anything)

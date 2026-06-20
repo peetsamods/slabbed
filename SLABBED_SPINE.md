@@ -2,6 +2,28 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
+## 2026-06-20 — 26.2 startup compile frontier green
+
+- Branch/root verified: `/Users/joolmac/CascadeProjects/Slabbed` on `port/mc-26.2-0.4.1-beta.1`, HEAD `457b0767`,
+  tag-at-HEAD `save/port-26-1-2-0-4-1-beta-1-pre-release-clean`.
+- Retargeted metadata to MC `26.2`, loader `0.19.3`, Fabric API `0.152.2+26.2`, mod label
+  `0.4.1-beta.1+26.2-port`, and `fabric.mod.json` Minecraft dependency `26.2`.
+- Compile blockers resolved mechanically: `Minecraft.screen` moved behind `Minecraft.gui.screen()`;
+  client render dirtiness moved from `LevelRenderer` methods to `ClientLevel.setBlocksDirty` /
+  `setSectionRangeDirty`; colored block/weathered copper gametest constants now use 26.2 collection accessors.
+- Proof green: `./gradlew25 --no-daemon compileJava compileClientJava compileGametestJava --console plain`.
+- This is not release-ready or live-ready. Next safe slice is focused `runGameTest`/dy-fingerprint proof against
+  the 26.2 target before any jar staging, live-drive, savepoint, or publication work.
+
+## 2026-06-20 — 26.2 porting preflight handoff + map risk capture
+
+- Starting slice is now tracked on branch `port/mc-26.2-0.4.1-beta.1` (from `origin/port/mc-26.1.2`) while
+  preserving the 26.1.2 line for release-proven source truth.
+- New contributor-facing risk ledger was added to [docs/porting/PORTING_MAP.md](/Users/joolmac/CascadeProjects/Slabbed/docs/porting/PORTING_MAP.md)
+  for this 26.2 migration pass: tooling/mappings drift, mixin signature drift, source-set/test drift, stale markers,
+  and profile/jar ambiguity.
+- No source files were changed in this update; `docs/porting/PORTING_MAP.md` was updated only.
+
 ## 2026-06-20 — 0.4.1 beta.1 pre-release savepoint
 
 Julia confirmed **`0.4.1-beta.1+26.1.2-port`** is the right target for this port line. The proof-only

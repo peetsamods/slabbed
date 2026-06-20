@@ -196,7 +196,7 @@ public final class SlabAnchorClientSync {
                 if (SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType)) {
                     scheduleCompoundVisibleRenderRefresh(mc, rerenderPos, current, attachmentType);
                 } else {
-                    mc.levelRenderer.blockChanged(mc.level, rerenderPos, current, current, 0);
+                    mc.level.setBlocksDirty(rerenderPos, current, current);
                 }
             }
         }
@@ -208,7 +208,7 @@ public final class SlabAnchorClientSync {
             BlockState state,
             AttachmentType<LongOpenHashSet> attachmentType
     ) {
-        mc.levelRenderer.setBlocksDirty(
+        mc.level.setSectionRangeDirty(
                 pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
                 pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1);
         logCompoundVisibleRenderRefresh(mc, pos, state, attachmentType);

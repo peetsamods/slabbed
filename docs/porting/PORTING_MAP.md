@@ -64,3 +64,35 @@ For a port/backport, the card must name the donor version, target version, exact
 - Stop if the active symptom changes.
 - Stop after two failed patch attempts and run a read-only audit.
 - Stop before broad parity sweeps unless Julia explicitly asks for that scope.
+
+## Anticipated Problems and Risks
+
+The 26.2 increment is likely to fail first on plumbing assumptions, not behavior logic. Use this section as a pre-mortem for each slice.
+
+### 1) High-Risk Technical Surfaces
+
+| Failure surface | Why it hurts this port | Hard symptom |
+|---|---|---|
+| Toolchain/mappings drift | 26.x dependency shifts can make the existing 26.1.2 baseline incompatible before behavior review | Compile errors before source diff review |
+| Signature drift in Mojang-mapped APIs | Mixins and authority classes depend on exact method/field signatures | Mixin application failures, runtime injector crashes |
+| `AGENTS.md` scope mismatch | Local canonical docs currently point to `/Users/joolmac/CascadeProjects/Slabbed-port-26.1.2`, while we are on `/Users/joolmac/CascadeProjects/Slabbed` | Wrong preflight assumptions, ambiguous stop condition |
+| Source-set/test drift | Gametests and baselines are 26.1.2-named (`Slabbed2612*`) and must be updated intentionally for 26.2 | Proof runs against mixed-version semantics |
+| Profile/jar ambiguity | Wrong Modrinth profile or stale jar selection hides live regressions or false-green behavior | Duplicate jars, stale behavior evidence |
+| Marker/state contamination | Stale placement anchors/freeze markers can make the same fixture behave differently across runs | Inconsistent dy, placement, or connector results |
+
+### 2) Lessons carried from recent port runs
+
+- Validate proofs on both layers: headless + live; never use only one lane to close placement/culling bugs.
+- Do not equate dependency resolution with correctness. Dependency lookup must be followed by compile/proof of changed authority.
+- Use fresh test coordinates for `/slabdy`/live fixture checks so stale markers or saved state do not mask behavior.
+- Keep proof scoped to one symptom per slice; avoid broad parity sweeps unless they are explicitly requested.
+- Record `Root/profile` explicitly before live actions, and stop immediately if root/profile/jar is unclear.
+- Pause and update `SLABBED_SPINE.md` when operating truth changes (branch, blocker, proof frontier).
+
+### 3) Risk Gate Checklist (quick, before touching source)
+
+- Confirm target mappings/model stack before edits.
+- Keep a single working card per slice with one narrow mechanism target.
+- Verify branch/profile/jar and marker assumptions before any live-driving claim.
+- Keep deferred/optional families outside the slice unless explicitly approved.
+- Treat a green dry run as partial until the targeted lane passes its named proof command.
