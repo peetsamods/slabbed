@@ -2,6 +2,21 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
+## 2026-06-20 — 0.4.1 beta.1 pre-release savepoint
+
+Julia confirmed **`0.4.1-beta.1+26.1.2-port`** is the right target for this port line. The proof-only
+pre-release hygiene pass at HEAD `6384fbb5` passed:
+
+- `./gradlew25 --no-daemon compileJava compileClientJava compileGametestJava --console plain`
+- `./gradlew25 --no-daemon runGameTest --console plain` — all 107 required gametests passed
+- `./gradlew25 --no-daemon clean build --console plain` — build passed and all 107 required gametests passed
+- release jar: `build/libs/slabbed-0.4.1-beta.1+26.1.2-port.jar` (`197778` bytes)
+- strict jar scan: no debug/dev/test/gametest/proof classes and no suspicious `jdeps` hard refs
+- evidence: `tmp/pre-release-hygiene-6384fbb5/pre-release-hygiene-report.md`
+
+Savepoint tag intended for this clean candidate: `save/port-26-1-2-0-4-1-beta-1-pre-release-clean`.
+This is a savepoint candidate, not a Modrinth/CurseForge upload and not a public release tag.
+
 ## 2026-06-18 — LIVE SESSION (drove the game myself; Julia "cruise control")
 
 Julia live-tested the `dc4bec2d` jar + Terrain Slabs and reported TWO bugs.
