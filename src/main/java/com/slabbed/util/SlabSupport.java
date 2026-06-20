@@ -778,7 +778,22 @@ public final class SlabSupport {
         if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
             DoubleBlockHalf half = state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF);
             if (half == DoubleBlockHalf.UPPER) {
-                return isBottomSlab(world.getBlockState(pos.below(2)));
+                BlockState belowTwo = world.getBlockState(pos.below(2));
+                // Vegetation on a Terrain Slabs surface must sit FLUSH (TS positions vegetation via its
+                // own model; Slabbed must not also lower it). The LOWER half is already TS-gated by
+                // hasBottomSlabBelow → shouldSkipSlabSupport, so it reads 0.0 on a TS slab. The UPPER half
+                // checked pos.below(2) with a BARE isBottomSlab, which returns true for a TS slab (it
+                // extends SlabBlock) → shouldOffset(UPPER)=true → the geometric lane returns -0.5 (live:
+                // "Sunflower/Tall Grass dy=-0.500 on TS"), splitting the plant (lower 0.0 / upper -0.5).
+                // Gate the UPPER half the SAME way for vegetation only. NON-vegetation double-blocks
+                // (doors) intentionally keep lowering on TS via the P0.4 directCustom path, so do NOT
+                // gate them here — both their halves stay -0.5. No-op without TS loaded
+                // (shouldSkipSlabSupport is always false → bare isBottomSlab path unchanged on vanilla).
+                if (state.getBlock() instanceof VegetationBlock
+                        && CompatHooks.shouldSkipSlabSupport(belowTwo)) {
+                    return false;
+                }
+                return isBottomSlab(belowTwo);
             }
             return hasBottomSlabBelow(world, pos);
         }

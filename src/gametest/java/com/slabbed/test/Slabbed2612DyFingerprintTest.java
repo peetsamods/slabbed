@@ -385,6 +385,38 @@ public final class Slabbed2612DyFingerprintTest {
         helper.succeed();
     }
 
+    // ── vegetation — double-tall plant over a slab (UPPER half is TS-gated) ────
+
+    /**
+     * A double-tall plant over a bottom slab lowers BOTH halves -0.5 on a VANILLA slab.
+     *
+     * <p>⚠ Tall plants do NOT survive on a bare slab top — placing them with {@code setBlock} pops them
+     * to AIR (reading dy 0.0, a false green). Compute {@code getYOffset} on the SYNTHETIC plant states
+     * directly. The recent SlabSupport fix TS-gates the UPPER half for vegetation only, so it reads 0.0
+     * on a Terrain Slabs surface but is UNCHANGED at -0.5 on a vanilla slab (no TS in this runtime).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fpVegetationLowerOnSlab(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos lower = new BlockPos(2, 2, 2);
+        BlockPos upper = lower.above();
+        helper.setBlock(lower.below(), bottomSlab());
+        BlockState lowerState = Blocks.SUNFLOWER.defaultBlockState()
+                .setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER);
+        BlockState upperState = Blocks.SUNFLOWER.defaultBlockState()
+                .setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER);
+        double dyLower = SlabSupport.getYOffset(level, helper.absolutePos(lower), lowerState);
+        double dyUpper = SlabSupport.getYOffset(level, helper.absolutePos(upper), upperState);
+        Slabbed.LOGGER.info("SLABBED-FP | vegetation_lower_on_slab | dy={} | src=geometric",
+                String.format(java.util.Locale.ROOT, "%.3f", dyLower));
+        if (Math.abs(dyLower - (-0.5)) > EPS || Math.abs(dyUpper - (-0.5)) > EPS) {
+            throw helper.assertionException(lower,
+                    "FINGERPRINT DRIFT [vegetation_lower_on_slab]: expected both halves dy=-0.5 got lower="
+                    + dyLower + " upper=" + dyUpper + " — if intended, update dy-baseline.txt.");
+        }
+        helper.succeed();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void fpDoorFlushIsNotLoweredTarget(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

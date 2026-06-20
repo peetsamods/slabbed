@@ -33,3 +33,4 @@ side_no_contagion         | dy=0.000  | src=geometric
 thin_layer_carpet         | dy=0.000  | src=geometric
 top_slab_flush            | dy=0.000  | src=geometric
 trapdoor_bottom_on_slab   | dy=-0.500 | src=ANCHORED         # + isBeta35LoweredBottomTrapdoorServerHitTarget=true
+vegetation_lower_on_slab  | dy=-0.500 | src=geometric        # synthetic state (plant pops to AIR on a bare slab); UPPER half TS-gated → 0.0 on a TS surface, -0.5 on vanilla
