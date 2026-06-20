@@ -12,15 +12,30 @@ its `mod_version` lagged at `0.2.0-beta.4+26.1.2-port` even though it carries th
 - Connecting blocks break-across-step (fence / wall / pane); ceiling-hung dy-from-above; NEVER-POP freeze.
 - WYSIWYG placement: RC1 + RC2 (+ GAP-1/2), live bug fixes A/B/C/D.
 
-### Test / process (this session)
-- Standardized release sanity checklist + a 19-fixture dy FINGERPRINT regression suite (`dy-baseline.txt`).
-- Headless gametest net widened to 105 checks (resting dy, connectors, survival, real `useOn` placement,
-  collision presence, compound chain matrix). RC3 dy RED-verified DONE headlessly.
-- Tier-2 client dy dump (dev-only, jar-excluded). `./gradlew25` Java-25 wrapper.
+### Fixed + LIVE-CONFIRMED (2026-06-19)
+- **WYSIWYG side-click follow:** a slab placed by clicking a lowered block's SIDE face now follows to that
+  lowered surface (lands where the crosshair clicked) instead of freezing flat 0.5 above; clicking the flat
+  ground beside a lowered block still stays flat (NEVER-POP rail intact).
+- **Redstone torch particle** follows the lowered model (new `RedstoneTorchParticleMixin` — RedstoneTorchBlock
+  has its own animateTick the regular torch mixin didn't cover).
+- **Vegetation flush on Terrain Slabs:** double-tall plants no longer split (upper half was lowering −0.5 via
+  an un-TS-gated `isBottomSlab`); both halves now flush on TS, unchanged on vanilla slabs.
 
-### Known open (pre-release)
-- Policy calls: tall plants stay flush on slabs; slab-on-deep-stack drops one step; RC3 slab TOP/BOTTOM type.
-- Live (Lane 3) visual/feel pass still required; ~28 KB diagnostic recorders pending removal from the jar.
+### Test / process
+- Standardized **Release Sanity Checklist** + a dy **FINGERPRINT** regression suite (`dy-baseline.txt`).
+- Headless gametest net = **107 checks** (resting dy, connectors, survival, real `useOn` placement, collision
+  presence, compound chain matrix, vegetation). RC3 dy RED-verified DONE headlessly. Caught + fixed a
+  false-green (tall plants despawn on a bare slab — the test was measuring air).
+- ~28 KB dev diagnostic recorders removed from the release jar. Tier-2 client dy dump (dev-only, jar-excluded).
+  `./gradlew25` Java-25 wrapper.
+
+### Deferred (post-release, by design — NOT pre-release blockers)
+- **Full VS+TS slab combining.** Vanilla-slab-on-TS already merges into a full block ("mixed slab", P0.4); a
+  *TS* slab itself lowering/combining (TS-on-vanilla, TS+TS, deep chains) is deferred — TS blocks are
+  categorically `shouldSkipOffset` to protect TS terrain rendering (the world-hole guard); relaxing it is a
+  scoped post-release feature needing heavy live terrain testing.
+- **Step-up onto a lowered slab** feels different from a vanilla slab — collision intentionally stays at
+  vanilla cell height so you can't clip through lowered blocks. Known minor quirk.
 
 ## [0.2.0-beta.4] — Slabbed 0.2.0 Beta 4 / Beta 4
 

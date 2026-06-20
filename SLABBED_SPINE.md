@@ -611,3 +611,24 @@ right jar — the redstone-torch fix worked). A 4-probe + synthesis workflow fou
   on the explicit BlockState, not the world readback.
 107/107 gametests. Jar 197778 B re-staged BOTH profiles (prior → `.bak-prevegupper`). **PENDING Julia
 live-confirm: sunflower/tall-grass on TS — BOTH visual halves read dy=0.000 flush.**
+
+### 2026-06-19 (cont.) — VS+TS combining DEFERRED (Julia) + doc sync
+
+Julia: "combine VS and TS?" → recovered the history and DEFERRED (post-release, by design). State:
+- **Vanilla-slab-on-TS already combines** (P0.4 directCustom): a vanilla slab on a TS BOTTOM_LIKE surface
+  lowers −0.5 (TOP slab → −1.0) and merges into a full-looking block = the "mixed slab".
+- **TS-slab combining (TS-on-vanilla, TS+TS, deep chains) deferred.** Reason: TS blocks are categorically
+  `TerrainSlabsCompat.shouldSkipOffset` (any `terrain_slabs`/`terrainslabs` id → getYOffset 0). That
+  exclusion is load-bearing — it's the world-hole guard (Slabbed lowering TS terrain tore see-through holes).
+  Relaxing reaches terrain rendering → scoped post-release feature (selective subject-only un-exclusion +
+  flag + heavy live terrain test); −1.0 pick-raycast cap also limits deep chains. (1.21.1 sibling reached
+  the same defer.)
+
+**Pre-release status: essentially CLEAN on `0.4.1-beta.1+26.1.2-port`.** WYSIWYG law satisfied (side-click
+follow `5383e4a2` live-confirmed), redstone torch (`199bc268`), vegetation flush on TS (`9cce42ce`) — all
+Julia LIVE-CONFIRMED. 107 gametests. Jar 197778 B staged both profiles. Remaining = go/no-go + push.
+Known minors (deferred): step-up-collision on lowered slabs (collision stays vanilla by design); full VS+TS
+combining (above). **Doc sync this turn:** HANDOFF (orientation + CURRENT STATE rewrite + P0.3/P0.4/P4
+status), CHANGELOG (0.4.1 fixes + deferred), LESSONS_INDEX (S10 false-green-on-block-despawn),
+RELEASE_SANITY_CHECKLIST (Tier-2 live-confirmed). NOTE: a parallel thread also committed the veg fix +
+de-false-green; coordinate (working tree had concurrent edits).

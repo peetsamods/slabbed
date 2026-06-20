@@ -20,60 +20,59 @@
 
 ```
 root:    /Users/joolmac/CascadeProjects/Slabbed-port-26.1.2
-branch:  port/mc-26.1.2
-HEAD:    3ef254e2   (clean tree, local only — NEVER pushed without explicit Julia go-ahead)
+branch:  port/mc-26.1.2   (ahead of origin by the 2026-06-19 session commits — NEVER push without explicit Julia go-ahead)
+HEAD:    3c27bbd0   (clean tree)
 MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang mappings · v0.4.1-beta.1+26.1.2-port
 ```
-> **2026-06-17 PM — WYSIWYG placement law (active work).** Julia's LAW: "a placed block sits exactly where
-> the crosshair aimed; there is NO case where you aim and it lands elsewhere." She reported placement bugs
-> (place against a lowered block's side → snaps to vanilla; place on a terrain slab → snaps down). An 8-agent
-> background audit mapped them to **4 root causes** (full report: `docs/porting/WYSIWYG-PLACEMENT-AUDIT.md`):
-> - **RC1 ✅ DONE+verified (`6ba27925`):** block-on-TS-slab snap-down — `hasBottomSlabBelow` anchored onto TS
->   slabs server-side while client read flush. Fixed with a `shouldSkipSlabSupport` guard. (= Julia Problem #1.)
-> - **RC2 ✅ DONE+gametest-proven (`e67bbc6e` base + `dc4bec2d` gaps); base LIVE-confirmed:** cantilever
->   slab/fence/wall/bars beside a lowered block now gets a geometric merge dy. **Fixed the GEOMETRY in
->   `getYOffsetInner`, not the anchor** (an anchor still snaps: client predicts 0, server anchors −0.5).
->   Base = 3 air-gated clauses (RC2-A/B/C). **Adversarial review** (`docs/porting/RC2-ADVERSARIAL-REVIEW.md`)
->   found 2 HIGH gaps = Julia's "lands too high" one config deeper, **now fixed (`dc4bec2d`):** GAP-1 (read the
->   neighbour's true magnitude → −1.0 beside a compound stack, not hardcoded −0.5; new `loweredFullBlockMagnitude`/
->   `loweredSlabMagnitude` + bool→double on the source scan & BFS + the anchored read-back branches), GAP-2 (a
->   BARE single lowered slab is now a valid source → −0.5 not 0.0). Recursion-safe, MAX_CHAIN_DEPTH-bounded, every
->   clause air-gated (NEVER-POP rail). **46/46** gametests (+6 onPlaced). **Gap live-verify pending** (steps in
->   `RC2-ADVERSARIAL-REVIEW.md` / memory). GAP-3 (FB-to-FB / mixed fence chains beside compound) deferred.
-> - **RC3 ⏳ NEXT (compound −1.0 side markers):** two remap reasons (`COMPOUND_BELOW_LANE_SIDE_SLAB`,
->   `COMPOUND_SUPPORT_MISSING_VISIBLE_OWNER_SIDE_SLAB`) never author their intent marker in
->   `BlockItemPlacementIntentMixin` (~:1128) + a TOP/BOTTOM midline split bug. **RC4 (cantilever-FB on-top edge):**
->   queued, see audit doc.
+> ## CURRENT STATE — 2026-06-19: pre-release is essentially CLEAN on `0.4.1-beta.1+26.1.2-port`
 >
-> **2026-06-18 LIVE SESSION (drove the game; Julia "cruise control").** Two new bugs on the `dc4bec2d` jar+TS:
-> - **BUG A "nothing is lowering to TS" ✅ FIXED + LIVE-CONFIRMED (`961249cc`):** the **P0.4** curated-object lowering
->   onto named TS BOTTOM_LIKE surfaces was **never wired** (`0bd265dc`'s own msg: "P0.4 is not wired"); `customSlabSurfaceKind`
->   was dead code. Ported the shipped 1.21.11 `directCustom` path (early-dispatch in `getYOffsetInner`, GEOMETRIC). LIVE:
->   crafting table on a TS `rooted_dirt_slab` reads **-0.500 LOWERED**; STONE on a TS slab stays **0.000 flush** (world-hole
->   P0.2 preserved via `isSlabSitCandidate`). No-op without TS.
-> - **BUG B "upper-half aim places slab wrong" ⏳ FIXED (`3ef254e2`), live GREEN-verify PENDING:** live RED = slab aimed at
->   the upper half of a -0.5 lowered block placed at **-1.000** (overshoot). Root: `isCompoundVisibleSideUpper/LowerHit`
->   (SlabSupport, used only in `findLegalCompoundSlabRemap`) fired for ANY lowered source → compound-visible marker → -1.0.
->   Fixed by gating both on `sourceDy ≈ -1.0`. 46/46. **Julia to confirm:** right-click a slab against the upper half of a
->   -0.5 lowered block → reads -0.5 not -1.0. (Distinct from RC3's -1.0-source UNDERshoot "+0.5 above".)
+> The whole WYSIWYG / placement / TS-compat arc is DONE and Julia LIVE-CONFIRMED. What remains before a
+> release is the go/no-go + push — no open engineering. Earlier "active work" narratives (RC1–RC4, BUG A/B,
+> the P0 sprint) are now history; their fixes all landed and are folded into the parity table below.
 >
-> **Live rig:** game CLOSED; current jar (`3ef254e2`, 210127 B) STAGED in the `TEST_ SLABBED 26.1.2` Modrinth profile
-> (prior jars backed up to `.jar-backups/`). **keybind REVERTED to `mouse.right`** (Julia can play). Test blocks left in the
-> world as proof (bug-A demo ~`90-92,66,50`; bug-B stone `110,101,50` floating -0.5). **Live-rig lessons:** Escape is NOT
-> delivered to MC → open the Game Menu by switching focus to Modrinth & back, then rebind keys via Options→Controls→Key Binds
-> with NO relaunch (Reset restores Right Button); F11 = macOS Show-Desktop not MC-fullscreen; `/setblock` test blocks inherit
-> stale anchor/compound markers (use FRESH positions). Debug placement trace = system prop `slabbed.beta4RepeatMergeTrace`
-> (BlockItemPlacementIntentMixin) — logs incoming hit-Y/dy + outgoing remap + placed dy to latest.log; used to
-> pinpoint RC2. **NOTE: `Slabbed2612LoweringContractTest.java` was reverting under concurrent edits — coordinate
-> with Julia before adding RC2 gametests.** RC2/RC3/RC4 have ZERO headless coverage (the SlabbedLab tests are
-> Yarn-named, excluded) — add Mojang-named `onPlaced`-driven tests for each before declaring closed.
-> **2026-06-16/17 sprint (autonomous):** P1 connecting-blocks (`409bf519`), P0.1 dual-mod-id TS gate
-> (`b76cccba`), P3 hygiene (`bcfdff7b`,`dbf5215d`), P2 verified-closed (`7a9d9f01`). **THEN Julia provided
-> a 26.1.2 Terrain Slabs build** (`terrain_slabs-fabric-3.3.1`, profile `TEST_ SLABBED 26.1.2`), unblocking
-> live TS work → **two showstoppers found + fixed + LIVE-CONFIRMED:** render-region crash (`4d758fe8`, the
-> mod crashed loading ANY fresh world) and the TS world-hole (`0bd265dc`, terrain now flush on TS). 29
-> gametests green. Jar **208081 B** built+staged to BOTH profiles. **Keybind REVERTED to vanilla
-> right-click** in both profiles. See §2 P0 for what's done vs still-optional (P0.4).
+> **Fixed + LIVE-CONFIRMED this arc (the headline product law — "a placed block / slab sits exactly where the
+> crosshair aimed" — now holds):**
+> - **WYSIWYG side-click follow (`5383e4a2`):** a slab placed by clicking a lowered block's SIDE face now
+>   FOLLOWS to that lowered surface (anchored −0.5) instead of freezing flat 0.5 high. The freeze-flat
+>   NEVER-POP rail still holds when you click the FLAT GROUND beside a lowered block (you aimed at the ground).
+>   This was the real remaining WYSIWYG bug; RC1 (`6ba27925`), RC2+gaps (`e67bbc6e`+`dc4bec2d`), BUG A
+>   (`961249cc`), BUG B (`3ef254e2`) all landed before it, and RC3's dy is RED-verified DONE headlessly via the
+>   useOn harness (residual RC3 was only a slab-TYPE policy + client cell-targeting, subsumed by the law).
+> - **Redstone torch particle (`199bc268`):** the lit dust now emits at the lowered torch head (RedstoneTorchBlock
+>   has its own animateTick, not covered by TorchParticleMixin → new `RedstoneTorchParticleMixin`).
+> - **Vegetation flush on Terrain Slabs (`9cce42ce`):** double-tall plants (sunflower/tall grass) were SPLITTING
+>   on TS — lower half flush, UPPER half −0.5 — because `shouldOffset`'s UPPER branch used a bare
+>   `isBottomSlab(below(2))` with no TS gate (a TS slab extends SlabBlock). Gated it for VegetationBlock on TS.
+>   (This fix also exposed + de-false-greened a gametest: tall plants DESPAWN to air on a bare slab, so the old
+>   test was measuring air — see `docs/lessons/LESSONS_INDEX.md`.)
+> - All the prior showstoppers stay fixed: render-region crash (`4d758fe8`), TS world-hole (`0bd265dc`),
+>   P0.4 TS object/vanilla-slab lowering (`961249cc`).
+>
+> **Release mechanics done:** version reconciled `0.2.0-beta.4` → **`0.4.1-beta.1+26.1.2-port`** (`135f1c69`,
+> Julia's choice); 28 KB dev recorders removed from the jar (`ec6e2429`); standardized **Release Sanity
+> Checklist** + a **dy fingerprint** regression suite (`docs/process/RELEASE_SANITY_CHECKLIST.md`,
+> `src/gametest/resources/dy-baseline.txt`) — **107 headless gametests green**. `./gradlew25` wraps Java 25.
+>
+> **DEFERRED (post-release, Julia's explicit call — NOT pre-release blockers):**
+> - **Full VS+TS slab combining.** What WORKS today: a VANILLA slab placed ON a TS slab lowers −0.5 and merges
+>   into a full-looking block (the "mixed slab", P0.4 directCustom). What's DEFERRED: a *TS* slab itself
+>   lowering/combining (TS-on-vanilla, TS+TS, deep chains). Reason: TS blocks are categorically
+>   `shouldSkipOffset` (any `terrain_slabs`/`terrainslabs` id → getYOffset returns 0), and that exclusion is
+>   load-bearing — it's exactly what stops Slabbed tearing see-through world-holes in TS natural terrain.
+>   Relaxing it reaches into terrain rendering. Would be a scoped post-release feature (selective subject-only
+>   un-exclusion behind a flag + heavy live terrain testing); the −1.0 pick-raycast cap also limits deep chains.
+> - **Step-up onto a lowered slab feels different from a vanilla slab.** By design: collision stays at the
+>   vanilla cell height (so you can't clip through lowered blocks), so a lowered slab's step-up differs. Julia:
+>   "not a dealbreaker, just interesting." Known minor quirk.
+>
+> **Live rig:** jar **`slabbed-0.4.1-beta.1+26.1.2-port.jar` (197778 B)** STAGED in BOTH Modrinth profiles
+> (`Fabric 26.1.2`, `TEST_ SLABBED 26.1.2`); prior jars backed up alongside as `.bak-*`. **Keybind = vanilla
+> `mouse.right`** (Julia can play). Restart the Modrinth instance to load a fresh build. **Live-rig lessons:**
+> Escape is NOT delivered to MC → open the Game Menu via a Modrinth focus-flip, rebind via Options→Controls→Key
+> Binds (no relaunch); F11 = macOS Show-Desktop; `/setblock` inherits stale anchor/compound markers (use FRESH
+> positions); mods load only at LAUNCH (swapping the jar mid-session does nothing — relaunch).
+> **2026-06-16/17 sprint (history):** P1 connecting-blocks (`409bf519`), P0.1 dual-mod-id TS gate
+> (`b76cccba`), P3 hygiene (`bcfdff7b`,`dbf5215d`), P2 verified-closed (`7a9d9f01`).
 - **Build/test with Java 25 — use `./gradlew25` (committed wrapper):** plain `./gradlew` uses your shell
   default (Java 21 here) and FAILS with "cannot access BlockState / class file has wrong version 69.0,
   should be 65.0" — the MC named jar is class version 69 (Java 25). `./gradlew25` resolves JDK 25 via
@@ -98,7 +97,8 @@ MC 26.1.2 · Java 25 · Gradle 9.4.1 · Loom 1.15.5 · loader 0.19.2 · Mojang m
 ## 1. What this sprint DELIVERED (all local, on `port/mc-26.1.2`)
 
 Forward-ported the shipped 1.21.1/1.21.11 fix families + revived an unmerged one. Every fix RED-verified
-then proven RED→GREEN (gametest) and/or live. 24 gametests green.
+then proven RED→GREEN (gametest) and/or live. (Headless suite has since grown to **107 gametests green** —
+see `docs/process/RELEASE_SANITY_CHECKLIST.md`; the table below is the original forward-port sprint.)
 
 | Fix | commit | verified |
 |---|---|---|
@@ -150,16 +150,18 @@ Live-verified 2026-06-17 with **Terrain Slabs 3.3.1** in the `TEST_ SLABBED 26.1
   any TS block via `CompatHooks.shouldSkipSlabSupport(cur)` (a TS slab is a self-rendering surface; rest
   terrain flush on it). No-op without TS. Natural TS sand/badlands terraces render solid (no holes), TS
   grass_slab top renders correctly.
-- **✅ P0.3 vegetation double-offset — VERIFIED NOT AN ISSUE in 26.1.2 (no port).** The plugin DOES
-  double-wrap TS's `SlabOffsetModel`, but P0.2's column-walk TS-guard makes Slabbed's getYOffset return 0
-  for blocks on TS, so there is no second offset — placed short-grass and natural TS vegetation render at
-  correct height live. The sibling's `6f0c73e6` model-skip (skip wrapping a `SlabOffsetModel` whose package
-  contains `terrainslabs` — matches TS 3.3.1's `net.countered.terrainslabs.fabric.model.SlabOffsetModel`)
-  is a DEFENSIVE option if a vegetation issue ever surfaces; not ported (no RED).
-- **⏳ P0.4 named direct-support (OPTIONAL, not release-critical):** lets CURATED objects (logs, etc.) lower
-  onto named TS `BOTTOM_LIKE` surfaces to form combined slabs (1.21.11 `4f2ee4f3`, lines ~192,205,642). The
-  reader methods are ported (P0.1); only the SlabSupport call-sites remain. With P0.2, curated objects now
-  rest FLUSH on TS instead of lowering — acceptable; this is polish, do it WITH live A/B if pursued.
+- **✅ P0.3 vegetation flush on TS — FIXED + LIVE-CONFIRMED (`9cce42ce`).** (Superseded the earlier
+  "not-an-issue" note: P0.4's directCustom lowering DID lower vegetation, and double-tall plants then SPLIT
+  — lower half flush, UPPER half −0.5 — because `shouldOffset`'s UPPER branch used a bare
+  `isBottomSlab(below(2))` with no TS gate.) Fix = TS-gate that UPPER check for `VegetationBlock` on a TS
+  surface → both halves flush; doors/vanilla slabs unchanged. Also de-false-greened the resting test
+  (plants despawn on a bare slab → was measuring air).
+- **✅ P0.4 TS direct object/vanilla-slab lowering — DONE + LIVE-CONFIRMED (`961249cc`).** Ported the
+  shipped 1.21.11 `directCustom` early-dispatch in `getYOffsetInner`: an OBJECT or a VANILLA slab resting on
+  a named TS `BOTTOM_LIKE` surface lowers −0.5 to sit ON it (vanilla TOP slab → −1.0, clamped) — this IS the
+  "mixed slab" combine (vanilla-on-TS). GEOMETRIC (no anchor → no snap); world-hole (P0.2) preserved (opaque
+  full cubes are not subjects). **Full TS-SLAB combining (TS-on-vanilla, TS+TS, deep chains) is DEFERRED** —
+  see the CURRENT STATE block at the top of this file for the reason (TS `shouldSkipOffset` is load-bearing).
 
 ### P1 — Connecting blocks (fence/wall/pane) — ✅ DONE (`409bf519`)
 - `FencePaneSlabConnectionMixin` (@Mixin{FenceBlock,IronBarsBlock}) + `WallSlabConnectionMixin`
@@ -193,10 +195,17 @@ Live-verified 2026-06-17 with **Terrain Slabs 3.3.1** in the `TEST_ SLABBED 26.1
   `OffsetBlockStateModel.CULL_TRACE`, GameRenderer `Boolean.getBoolean` recorders, BlockItemPlacementIntent
   getBoolean). **CORRECTION to the old note:** `Beta4ManualLiveTrace.java` is **build-EXCLUDED**
   (`sourceSets.main.java exclude`), so its prints never ship — moot. Jar `unzip -l` confirms NO debug/dev
-  classes. Residual jar bloat (gametest-only, gated, harmless): `LiveCursorIntentRecorder` +
-  `LevelRendererRenderedOutlineRecorderMixin` (~28KB) — exclude from the runtime jar at release time.
+  classes. **✅ Residual recorder bloat REMOVED (`ec6e2429`):** `LiveCursorIntentRecorder` gutted to an inert
+  stub + `LevelRendererRenderedOutlineRecorderMixin` deleted/unregistered (~28 KB; jar 208,215 → 195,665 B).
 
-### P4 — Targeting (verify, don't assume) — NEEDS A LIVE SESSION (not doable overnight)
+### P4 — Targeting — ✅ NOT REPRODUCED (placement is WYSIWYG-confirmed live)
+- 26.1.2 keeps the large `GameRendererCrosshairRetargetMixin` (~3075 lines) + `LoweredSideSlabRetargeter`
+  (a divergence from 1.21.1's `SlabbedOffsetRaycast`, not a bug). Across the 2026-06-18/19 live sessions Julia
+  did NOT report crosshair mistargeting; placement now lands exactly where aimed (WYSIWYG law satisfied,
+  `5383e4a2`). So the offset-raycast overhaul port is NOT needed. (If mistargeting ever resurfaces, the
+  overhaul is the known cure — memory `slabbed-targeting-root-cause-and-overhaul`.)
+
+### P4-OLD — Targeting (legacy note, superseded by the line above)
 - 1.21.1 has `SlabbedOffsetRaycast`; 26.1.2 instead has a large `GameRendererCrosshairRetargetMixin`
   (~3075 lines) + `LoweredSideSlabRetargeter`. A DIVERGENCE, not necessarily a bug — **live-test crosshair
   targeting on lowered/offset blocks** before porting. If mistargeting reproduces, the offset-raycast
