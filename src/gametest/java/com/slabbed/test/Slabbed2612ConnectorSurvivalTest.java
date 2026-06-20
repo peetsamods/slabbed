@@ -137,7 +137,7 @@ public final class Slabbed2612ConnectorSurvivalTest {
         BlockPos abs = helper.absolutePos(carpet);
         // bottom slab
         helper.setBlock(new BlockPos(2, 1, 2), bottomSlab());
-        helper.setBlock(carpet, Blocks.WHITE_CARPET.defaultBlockState());
+        helper.setBlock(carpet, Blocks.CARPET.white().defaultBlockState());
         if (!level.getBlockState(abs).canSurvive(level, abs)) {
             throw helper.assertionException(carpet, "white_carpet must survive on a bottom-slab top");
         }
@@ -155,7 +155,7 @@ public final class Slabbed2612ConnectorSurvivalTest {
         ServerLevel level = helper.getLevel();
         helper.setBlock(new BlockPos(2, 1, 2), bottomSlab());
         BlockPos carpet = new BlockPos(2, 2, 2);
-        helper.setBlock(carpet, Blocks.WHITE_CARPET.defaultBlockState());
+        helper.setBlock(carpet, Blocks.CARPET.white().defaultBlockState());
         BlockPos abs = helper.absolutePos(carpet);
         BlockPos north = abs.north();
         BlockState after = level.getBlockState(abs).updateShape(
