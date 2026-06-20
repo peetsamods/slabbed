@@ -591,3 +591,23 @@ Julia LIVE-CONFIRMED the WYSIWYG side-click fix. Two more live findings fixed (`
 Both client-render/TS-only (no headless test). 106/106 gametests, client-load smoke clean (both mixins
 apply). Jar 197,733 B re-staged BOTH profiles (prior → `.bak-prevegtorch`). **PENDING Julia live-confirm:
 redstone torch dust at the head + flowers/grass flush on TS.** Remaining: step-up-collision (minor).
+
+### 2026-06-19 (cont.) — TS vegetation root cause (UPPER-half split) + a FALSE-GREEN caught
+
+Julia: veg still -0.5 on TS despite the directCustom VegetationBlock exclusion (and confirmed it was the
+right jar — the redstone-torch fix worked). A 4-probe + synthesis workflow found the real root cause:
+- **The double-tall plant's UPPER half**, not directCustom. `shouldOffset` UPPER branch used a BARE
+  `isBottomSlab(pos.below(2))` with NO TS gate; a TS slab extends SlabBlock → returns true →
+  `shouldOffset(UPPER)=true` → the geometric lane in getYOffsetInner falls through to a hardcoded
+  `return -0.5`. The LOWER half was already TS-gated (hasBottomSlabBelow → shouldSkipSlabSupport → 0.0),
+  so the plant SPLIT: lower flush, upper lowered. (The HUD `half=LOWER` was a red herring — it's the
+  crosshair-relative half, not DOUBLE_BLOCK_HALF; Julia was targeting the UPPER blockstate.)
+- **Fix (`9cce42ce`):** gate the UPPER-half `isBottomSlab` for `VegetationBlock` on a TS surface only
+  (`shouldSkipSlabSupport(belowTwo)`) → flush on TS; doors and vanilla slabs unchanged (still -0.5).
+- **FALSE GREEN caught:** `doubleTallPlantsOnBottomSlabObservedFlush` read 0.0 because the plant blocks
+  DESPAWN to air on a bare slab (setBlock neighbour-break) → it was measuring AIR, not vegetation. The
+  real value is -0.5 on a vanilla slab. Test de-false-greened (synthetic-state read) + new fingerprint
+  `vegetation_lower_on_slab=-0.5`. Lesson: a plant placed via setBlock on a slab does not survive — assert
+  on the explicit BlockState, not the world readback.
+107/107 gametests. Jar 197778 B re-staged BOTH profiles (prior → `.bak-prevegupper`). **PENDING Julia
+live-confirm: sunflower/tall-grass on TS — BOTH visual halves read dy=0.000 flush.**
