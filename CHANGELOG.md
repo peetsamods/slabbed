@@ -4,6 +4,14 @@
 
 Forward-port of the 26.1.2 build to Minecraft 26.2, plus a crosshair-targeting overhaul.
 
+### Improvements over the 1.21.1 / 1.21.11 releases
+This is the **first shipped Slabbed build on any Minecraft version to use the offset-aware targeting
+overhaul.** The 1.21.1 and 1.21.11 releases (and the 26.1.2 base) still run the legacy ~3k-line post-hoc
+retargeter, which only repaired targeting *after* vanilla's raycast and broke WYSIWYG while holding a slab.
+26.2 replaces that whole approach with `SlabbedOffsetRaycast` (details below), so crosshair, outline, HUD,
+pick owner, and placement face agree by construction — a meaningful correctness + maintainability step the
+other versions have not yet received. The opposite-side compound placement fix is likewise new here.
+
 ### Fixed + LIVE-CONFIRMED
 - **Crosshair targeting overhaul.** Replaced the legacy post-hoc retarget (a ~3k-line pass that rewrote the
   hit *after* vanilla's raycast and broke only while holding a slab — displaced outlines, `target: none`,
