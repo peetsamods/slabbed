@@ -59,6 +59,10 @@ live-confirmed cleanup work below. It is now finalized as `0.4.2-beta.1+26.1.2` 
   aligned with the visible target.
 - Kept lowered-block movement collision vanilla where required, while adding the neighbor-aware broadphase
   path that makes lowered blocks solid where they are drawn.
+- Made stairs slab-friendly: stairs sitting on lowered slab-supported surfaces now keep collision aligned
+  with the lowered visual body.
+- Made scaffolds slab-friendly: lowered scaffolding can be climbed and passed through at the slab-adjusted
+  visual height.
 - Contained y-offset emitter cull state so render culling decisions do not leak between emitted quads.
 - Fixed the DODO/ghost-window seam: flat-vs-lowered step faces no longer incorrectly keep baked cull faces
   that make a face disappear from certain angles.
