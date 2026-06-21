@@ -79,6 +79,9 @@ build.
 
 ## Status
 
-Headless/client-harness fix is a false green for release purposes because the staged candidate was live-rejected. Release
-remains blocked. Do not tag, upload, resume pre-release hygiene, or restage `27a03f...`. Next work is a focused
-rollback-baseline proof of model/outline/hitResult disagreement with live-matching evidence before another client patch.
+**RESOLVED + SHIPPED (`0.4.2-beta.1+26.2`, 2026-06-21).** The earlier targeted slab-held owner-guard patch
+(`27a03f...`) was a live-rejected false green — patching the legacy post-hoc retargeter was the wrong approach.
+The fix that landed instead replaced the targeting ARCHITECTURE with the offset-aware nearest-hit raycast
+(`SlabbedOffsetRaycast` + `LocalPlayerPickOffsetRaycastMixin`); Julia LIVE-CONFIRMED. Released jar `5140fb50…`.
+The `27a03f...` jar stays archived under `_codex-backups/` — do not restage it. (Historical detail above is
+retained for the false-green lesson; the release is no longer blocked.)

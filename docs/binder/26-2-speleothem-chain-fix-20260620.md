@@ -6,8 +6,10 @@
 
 After the 26.2 manual queue was marked live-closed, Julia re-tested before release and found a remaining merge glitch for
 chained downward speleothems: pointed dripstone, and likely sulfur spike. The first follow-up fixed the ceiling-bridged
-iron-chain subset, but Julia's next spin showed the direct top-slab speleothem-column case was still glitched. Release
-hygiene and publication stay blocked until this new jar gets a fresh live pass.
+iron-chain subset, but Julia's next spin showed the direct top-slab speleothem-column case was still glitched.
+
+**RESOLVED:** this speleothem fix shipped in the released `0.4.2-beta.1+26.2` (jar `5140fb50…`), and Julia's
+live pass covered it. Release hygiene resumed and the release was cut.
 
 ## Current truth recorded
 

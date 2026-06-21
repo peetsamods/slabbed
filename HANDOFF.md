@@ -62,8 +62,9 @@ LESSONS_INDEX **S11**, PORTING_MAP (targeting authority = `SlabbedOffsetRaycast`
   `ba19ebe6f1f8a75ce3de123bcd7179fbf5b062233c01cc4a49de865684e182db`. The live-rejected slab-held targeting jar
   `27a03f1f9a07ce16ad68b6b59b256e453d45113e4af0a087653933f75111391e` remains preserved under
   `mods/_codex-backups/slabbed-0.4.2-beta.1+26.2.bad-targeting-27a03f-20260621-120417.jar`.
-- Current live blocker on the rollback baseline: slab-held WYSIWYG/selector truth is still wrong even without the
-  rejected experiment. Julia's newest evidence shows all of these on the rollback jar:
+- (SUPERSEDED — RESOLVED by the offset-raycast overhaul, shipped `0.4.2-beta.1+26.2`; see CURRENT STATE at
+  top.) Historical: the rollback baseline's slab-held WYSIWYG/selector truth was wrong even without the
+  rejected experiment. Julia's evidence at the time showed all of these on the rollback jar:
   - selector/crosshair displacement on lowered upper slab targeting:
     `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-94402963-32f4-4c0e-bd53-c75a5c95c8d4.png`
   - fallback to `[slabdy] target: none` on the same family:
@@ -75,10 +76,9 @@ LESSONS_INDEX **S11**, PORTING_MAP (targeting authority = `SlabbedOffsetRaycast`
     `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-5c7d39f7-b21f-4863-b282-ac0b89645bfb.png`
   - wrong-side placement / slab not targetable:
     `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-cfc1ed40-34a6-459c-9e8d-12d191ab5d25.png`
-- Current diagnosis boundary: the lowered top-slab UP-face placement fix is still headless-green, so the next slice is
-  not another broad placement-grammar patch. It is a rollback-baseline proof of where client-visible model,
-  selectable/outline shape, and final `hitResult` diverge while slab-held placement is active. Do not resume
-  pre-release hygiene or stage another jar before that red is classified.
+- (SUPERSEDED — see the CURRENT STATE section at the top.) This diagnosis boundary was resolved by the
+  offset-raycast overhaul, shipped in `0.4.2-beta.1+26.2`. Pre-release hygiene has resumed and the release was
+  cut; this paragraph is history.
 
 ## 2026-06-21 — 26.2 WYSIWYG lowered top-slab UP-face placement fixed headlessly
 
@@ -125,8 +125,9 @@ LESSONS_INDEX **S11**, PORTING_MAP (targeting authority = `SlabbedOffsetRaycast`
   `mods/_codex-backups/slabbed-0.4.2-beta.1+26.2.bad-targeting-27a03f-20260621-120417.jar`.
 - Audit finding at that moment was the new early slab-held raw-owner override in
   `GameRendererCrosshairRetargetMixin` (`slab-held-offset-only-slab-raw-owner` / object-owner suppress). That
-  experiment has now been removed from active source, so the current blocker is the rollback-baseline live red, not that
-  rejected candidate path itself. Do not resume pre-release hygiene or restage `27a03f...`.
+  experiment was removed from active source. (SUPERSEDED — the rollback-baseline red was then resolved by the
+  offset-raycast overhaul and shipped in `0.4.2-beta.1+26.2`; see the CURRENT STATE section at the top.
+  Hygiene has resumed; the `27a03f...` jar stays archived, do not restage it.)
 
 ## 2026-06-20 — release blocker after live spin: chained speleothems
 
@@ -144,7 +145,8 @@ LESSONS_INDEX **S11**, PORTING_MAP (targeting authority = `SlabbedOffsetRaycast`
 - Fresh jar staged into Modrinth profile `SLABBED-MC 26.2`: SHA-256
   `fc600d3f7ac502b52289e7e34bb37c8a2172b62267073333453a0856250423b1`. Restart the profile before live retesting;
   swapping the jar does not affect an already-running client.
-- Release hygiene remains paused until Julia accepts that fresh live retest. No release tag/upload/publication yet.
+- (SUPERSEDED — the speleothem fix and the targeting overhaul shipped in `0.4.2-beta.1+26.2`; release was cut
+  and pushed. See CURRENT STATE at top.)
 
 ## 2026-06-20 — 0.4.2-beta.1+26.2 release metadata bump
 

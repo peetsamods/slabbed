@@ -20,10 +20,9 @@ This is the active operating spine for the dedicated Slabbed MC 26.1.2 port chec
   `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-7ce390e9-7e00-4627-97a2-f907c6be0910.png`,
   `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-5c7d39f7-b21f-4863-b282-ac0b89645bfb.png`, and
   `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-cfc1ed40-34a6-459c-9e8d-12d191ab5d25.png`.
-- Operating read: the lowered top-slab UP-face placement fix remains headless-green, so the next safe slice is not a
-  broad placement or dy patch. It is a focused rollback-baseline red proof for disagreement between visible model,
-  selectable/outline shape, and final `Minecraft.pick` / placement target while slab-held placement is in play.
-- Release hygiene, new jar staging, and publication remain blocked behind that live-red classification.
+- (SUPERSEDED — see the 2026-06-21 (cont.) "targeting overhaul" entry at the tail of this file.) The
+  rollback-baseline red was resolved by porting the offset-aware raycast overhaul and shipped in
+  `0.4.2-beta.1+26.2`; release hygiene resumed and the release was cut. This entry is history.
 
 ## 2026-06-21 — 26.2 WYSIWYG lowered top-slab UP-face placement fixed headlessly
 
