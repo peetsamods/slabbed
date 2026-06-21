@@ -7,10 +7,17 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * Collision-PRESENCE for the deepest lowered cases — a lowered block must be SOLID where it is drawn,
@@ -27,6 +34,12 @@ public final class Slabbed2612CollisionDepthTest {
 
     private static net.minecraft.world.level.block.state.BlockState bottomSlabState() {
         return Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+    }
+
+    private static BlockState stableScaffoldingState() {
+        return Blocks.SCAFFOLDING.defaultBlockState()
+                .setValue(BlockStateProperties.STABILITY_DISTANCE, 0)
+                .setValue(BlockStateProperties.BOTTOM, false);
     }
 
     /**
@@ -70,5 +83,163 @@ public final class Slabbed2612CollisionDepthTest {
                     + "the hanging collision must keep it solid where drawn");
         }
         helper.succeed();
+    }
+
+    /**
+     * P26-1 guard: lowered scaffolding must stay pass-through in its side/interior movement region.
+     * This does not prove climb feel or rendered VIS, but it catches the server collision failure that
+     * would make scaffolding behave like a solid wall after its visual body lowers onto a slab.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredScaffoldingSideInteriorStaysPassThrough(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slabRel = new BlockPos(2, 1, 2);
+        BlockPos scaffoldingRel = slabRel.above();
+        helper.setBlock(slabRel, bottomSlabState());
+        helper.setBlock(scaffoldingRel, stableScaffoldingState());
+
+        BlockPos scaffoldingAbs = helper.absolutePos(scaffoldingRel);
+        BlockState scaffolding = level.getBlockState(scaffoldingAbs);
+        double dy = SlabSupport.getYOffset(level, scaffoldingAbs, scaffolding);
+        if (Math.abs(dy + 0.5d) > EPS) {
+            throw helper.assertionException(scaffoldingRel,
+                    "SETUP: scaffolding on a bottom slab should be visually lowered -0.5, got dy=" + dy);
+        }
+
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        player.setPos(scaffoldingAbs.getX() + 0.5d, scaffoldingAbs.getY() - 0.25d, scaffoldingAbs.getZ() + 0.5d);
+        int n = scaffoldingAbs.getY();
+        AABB sideInterior = new AABB(
+                scaffoldingAbs.getX() + 0.25d, n - 0.45d, scaffoldingAbs.getZ() + 0.25d,
+                scaffoldingAbs.getX() + 0.75d, n - 0.05d, scaffoldingAbs.getZ() + 0.75d);
+        boolean passThrough = level.noCollision(player, sideInterior);
+        Slabbed.LOGGER.info("COLLISION-SCAFFOLDING | lowered side/interior passThrough={}", passThrough);
+        if (!passThrough) {
+            throw helper.assertionException(scaffoldingRel,
+                    "P26-1: lowered scaffolding side/interior collision is solid; it should stay pass-through, not act like a wall");
+        }
+
+        helper.succeed();
+    }
+
+    /**
+     * P26-1 RED guard: scaffolding is not a generic solid-where-drawn object. Vanilla uses
+     * player-aware scaffolding collision and climb state; Slabbed's lowered-above broadphase helper
+     * must not inject an unconditional solid scaffolding shape into the cell below.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredScaffoldingDoesNotInjectSolidHangingCollision(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slabRel = new BlockPos(2, 1, 2);
+        BlockPos scaffoldingRel = slabRel.above();
+        helper.setBlock(slabRel, bottomSlabState());
+        helper.setBlock(scaffoldingRel, stableScaffoldingState());
+
+        BlockPos belowScaffoldingAbs = helper.absolutePos(slabRel);
+        VoxelShape merged = SlabSupport.withHangingLoweredCollisionFromAbove(
+                Shapes.empty(), level, belowScaffoldingAbs);
+        boolean passThrough = merged.isEmpty();
+        Slabbed.LOGGER.info("COLLISION-SCAFFOLDING | lowered hanging helper empty={}", passThrough);
+        if (!passThrough) {
+            throw helper.assertionException(scaffoldingRel,
+                    "P26-1: lowered scaffolding must not use generic solid hanging collision; vanilla scaffolding stays player-contextual");
+        }
+
+        helper.succeed();
+    }
+
+    /**
+     * P26-1 FEEL guard: when scaffolding is visually lowered into the cell below, a player occupying
+     * that lowered visual volume must still count as being inside climbable scaffolding.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredScaffoldingVisualVolumeIsClimbable(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slabRel = new BlockPos(2, 1, 2);
+        BlockPos scaffoldingRel = slabRel.above();
+        helper.setBlock(slabRel, bottomSlabState());
+        helper.setBlock(scaffoldingRel, stableScaffoldingState());
+
+        BlockPos scaffoldingAbs = helper.absolutePos(scaffoldingRel);
+        BlockState scaffolding = level.getBlockState(scaffoldingAbs);
+        double dy = SlabSupport.getYOffset(level, scaffoldingAbs, scaffolding);
+        if (Math.abs(dy + 0.5d) > EPS) {
+            throw helper.assertionException(scaffoldingRel,
+                    "SETUP: scaffolding on a bottom slab should be visually lowered -0.5, got dy=" + dy);
+        }
+
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        player.setPos(scaffoldingAbs.getX() + 0.5d, scaffoldingAbs.getY() - 0.25d, scaffoldingAbs.getZ() + 0.5d);
+        AABB visualScaffoldingVolume = new AABB(scaffoldingAbs).move(0.0d, dy, 0.0d);
+        if (!player.getBoundingBox().intersects(visualScaffoldingVolume)) {
+            throw helper.assertionException(scaffoldingRel,
+                    "SETUP: mock player should intersect the lowered visual scaffolding volume");
+        }
+        boolean climbable = player.onClimbable();
+        Slabbed.LOGGER.info("COLLISION-SCAFFOLDING | lowered visual volume climbable={}", climbable);
+        if (!climbable) {
+            throw helper.assertionException(scaffoldingRel,
+                    "P26-1: player inside lowered visual scaffolding must be climbable for vanilla space/shift traversal");
+        }
+
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredStairCollisionFollowsVisualStepableHeight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slabRel = new BlockPos(2, 1, 2);
+        BlockPos stairRel = slabRel.above();
+        helper.setBlock(slabRel, bottomSlabState());
+        helper.setBlock(stairRel, Blocks.OAK_STAIRS.defaultBlockState());
+
+        assertLoweredStairCollisionFollowsVisual(helper, level, stairRel, "direct stair on bottom slab");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainedLoweredStairCollisionFollowsVisualStepableHeight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slabRel = new BlockPos(2, 1, 2);
+        BlockPos supportRel = slabRel.above();
+        BlockPos stairRel = supportRel.above();
+        helper.setBlock(slabRel, bottomSlabState());
+        helper.setBlock(supportRel, Blocks.OAK_PLANKS.defaultBlockState());
+        helper.setBlock(stairRel, Blocks.OAK_STAIRS.defaultBlockState());
+
+        assertDy(helper, level, supportRel, -0.5d, "setup lowered chained support");
+        assertLoweredStairCollisionFollowsVisual(helper, level, stairRel, "chained stair on lowered support");
+        helper.succeed();
+    }
+
+    private static void assertDy(GameTestHelper helper, ServerLevel level, BlockPos rel, double expected, String label) {
+        BlockPos abs = helper.absolutePos(rel);
+        double got = SlabSupport.getYOffset(level, abs, level.getBlockState(abs));
+        if (Math.abs(got - expected) > EPS) {
+            throw helper.assertionException(rel, "SETUP: " + label + " expected dy=" + expected + ", got " + got);
+        }
+    }
+
+    private static void assertLoweredStairCollisionFollowsVisual(
+            GameTestHelper helper, ServerLevel level, BlockPos rel, String label) {
+        BlockPos abs = helper.absolutePos(rel);
+        BlockState state = level.getBlockState(abs);
+        double dy = SlabSupport.getYOffset(level, abs, state);
+        if (Math.abs(dy + 0.5d) > EPS) {
+            throw helper.assertionException(rel, "SETUP: " + label + " expected dy=-0.5, got " + dy);
+        }
+        VoxelShape collision = state.getCollisionShape(level, abs, CollisionContext.empty());
+        if (collision.isEmpty()) {
+            throw helper.assertionException(rel, "SETUP: " + label + " collision shape is empty");
+        }
+        AABB bounds = collision.bounds();
+        Slabbed.LOGGER.info("COLLISION-STAIR | {} | dy={} minY={} maxY={}",
+                label, dy, bounds.minY, bounds.maxY);
+        if (Math.abs(bounds.minY - dy) > EPS || Math.abs(bounds.maxY - 0.5d) > EPS) {
+            throw helper.assertionException(rel,
+                    "STAIR-STEP: " + label + " collision still has an unlowered ghost stair "
+                    + "boundsY=[" + bounds.minY + ", " + bounds.maxY + "]; expected [-0.5, 0.5] "
+                    + "so slab-to-stair ascent stays within vanilla step height");
+        }
     }
 }

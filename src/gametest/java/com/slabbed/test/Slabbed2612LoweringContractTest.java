@@ -17,6 +17,10 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.block.state.properties.WallSide;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * Deterministic dy/lowering contract tests for the 26.1.2 port's forward-ported
@@ -637,6 +641,75 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(chain, yChain());
         assertDy(helper, level, chain, 0.5,
                 "Y-axis chain directly under a TOP slab raises +0.5 to connect up (vanilla connect-up; same as 1.21.11)");
+        helper.succeed();
+    }
+
+    /**
+     * P26-8 targeting guard: the ceiling-bridged top chain model renders at the grid cell while the
+     * normal +0.5 ceiling-attach outline shifts upward. The selection proxy must still cover the
+     * visible lower end of the extended chain model.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void ceilingBridgedChainSelectionExtendsToVisibleBridge(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos chain = new BlockPos(2, 3, 2);
+        helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
+        helper.setBlock(chain, yChain());
+        assertDy(helper, level, chain, 0.5,
+                "P26-8 setup: direct Y-chain under a TOP slab still reports +0.5 for ceiling attach");
+
+        BlockPos abs = helper.absolutePos(chain);
+        BlockState actual = level.getBlockState(abs);
+        VoxelShape outline = actual.getShape(level, abs, CollisionContext.empty());
+        Vec3 from = new Vec3(abs.getX() + 0.5d, abs.getY() + 0.25d, abs.getZ() - 0.5d);
+        Vec3 to = new Vec3(abs.getX() + 0.5d, abs.getY() + 0.25d, abs.getZ() + 1.5d);
+
+        BlockHitResult outlineHit = outline.clip(from, to, abs);
+        if (outlineHit == null || !outlineHit.getBlockPos().equals(abs)) {
+            throw helper.assertionException(chain,
+                    "P26-8: ceiling-bridged iron_chain is visible at local y=0.25 but the outline/raycast proxy misses");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * P26-6 render-path guard: the direct chain under a TOP slab is emitted through the extended
+     * chain-ceiling model, which already bridges the half-block up to the slab. Descendant chains must
+     * therefore stay at grid height; if they also inherit +0.5, they overlap the extended top chain and
+     * visually merge.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainColumnUnderTopSlabKeepsDescendantsGridHeight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos upperChain = new BlockPos(2, 3, 2);
+        BlockPos lowerChain = upperChain.below();
+        helper.setBlock(upperChain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
+        helper.setBlock(upperChain, yChain());
+        helper.setBlock(lowerChain, yChain());
+        assertDy(helper, level, upperChain, 0.5,
+                "P26-6 setup: direct Y-chain under a TOP slab still reports +0.5 for ceiling attach");
+        assertDy(helper, level, lowerChain, 0.0,
+                "P26-6: lower Y-chain under the extended top-chain model must stay grid-height, not overlap it");
+        helper.succeed();
+    }
+
+    /**
+     * P26-7 render-path guard: a hanging lantern under a ceiling-bridged chain column follows the
+     * visible chain bottom, not the TOP-slab +0.5 inherited through the chain column. Otherwise the
+     * lantern rises into the chain and looks merged/smooshed.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingLanternUnderCeilingBridgedChainStaysGridHeight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos chain = new BlockPos(2, 3, 2);
+        BlockPos lantern = chain.below();
+        helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
+        helper.setBlock(chain, yChain());
+        helper.setBlock(lantern, hangingLantern());
+        assertDy(helper, level, chain, 0.5,
+                "P26-7 setup: direct Y-chain under a TOP slab still reports +0.5 for ceiling attach");
+        assertDy(helper, level, lantern, 0.0,
+                "P26-7: hanging lantern under the extended top-chain model must stay grid-height, not merge into the chain");
         helper.succeed();
     }
 
