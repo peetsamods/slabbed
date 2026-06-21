@@ -871,15 +871,17 @@ public abstract class BlockItemPlacementIntentMixin {
         if (!(self.getBlock() instanceof SlabBlock)) {
             return;
         }
-        Direction face = context.getClickedFace();
-        if (!face.getAxis().isHorizontal()) {
-            return;   // side clicks only; top/bottom placement is a separate case
-        }
         Level level = context.getLevel();
         BlockPos clicked = context.getClickedPos();
-        double clickedDy = SlabSupport.getYOffset(level, clicked, level.getBlockState(clicked));
+        BlockState clickedState = level.getBlockState(clicked);
+        Direction face = context.getClickedFace();
+        double clickedDy = SlabSupport.getYOffset(level, clicked, clickedState);
         if (Math.abs(clickedDy + 0.5d) < 1.0e-6d) {   // clicked a -0.5 lowered surface
-            SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
+            if (face.getAxis().isHorizontal()) {
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
+            } else if (face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above());
+            }
         }
     }
 
@@ -1200,7 +1202,13 @@ public abstract class BlockItemPlacementIntentMixin {
             boolean currentOwnerWouldSecondHopAwayFromVisibleLane = outwardPlacementPos.equals(remapDecision.candidatePlacementPos())
                     && !outwardPlacementPos.equals(expectedVisibleLanePos);
             boolean replaceabilityGuardRemapped = false;
-            if (remappedOwnerOccupiedNonReplaceable
+            // The "visible lane" walk to originalSide.getOpposite() only existed to chase the OLD post-hoc
+            // retargeter's lie about the visible owner. With the offset-aware raycast active the crosshair hit
+            // is honest, so a click on a given face must place a slab on THAT side, never the opposite — this
+            // guard would otherwise flip a compound side placement to the wrong side once neighbour lanes
+            // exist. Restrict it to the legacy retarget regime (-Dslabbed.offsetRaycast=false).
+            if (!com.slabbed.util.SlabbedOffsetRaycast.ENABLED
+                    && remappedOwnerOccupiedNonReplaceable
                     && expectedVisibleLaneKnown
                     && currentOwnerWouldSecondHopAwayFromVisibleLane
                     && slabbed$canPlaceInClickedCell(context, expectedVisibleLanePos, originalSide, visibleLaneHitPos)) {
@@ -1242,7 +1250,8 @@ public abstract class BlockItemPlacementIntentMixin {
         boolean targetIsLoweredSlab = slabbed$isLoweredSlab(targetState, context.getLevel(), targetPos);
         boolean targetSupportsTopMerge = targetState.getBlock() instanceof SlabBlock
                 && targetState.getValue(SlabBlock.TYPE) == SlabType.TOP
-                && originalSide == Direction.UP;
+                && originalSide == Direction.UP
+                && !targetIsLoweredSlab;
         if (targetSupportsTopMerge) {
             effectiveSide = Direction.DOWN;
         }
