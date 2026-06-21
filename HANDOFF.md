@@ -1,4 +1,4 @@
-# HANDOFF — Slabbed MC 26.1.2 port
+# HANDOFF — Slabbed active branch
 
 > Refreshed **2026-06-16** (replaces the 2026-06-15 "parity-first restart" version, now history).
 > Companion to `SLABBED_SPINE.md` (append-only log) + `docs/lessons/LESSONS_INDEX.md` (durable lessons) +
@@ -13,6 +13,83 @@
 > **COMPLETE PARITY with the shipped 1.21.1 AND 1.21.11 builds, WITH Terrain Slabs.** Do not stop early;
 > you have full control — build, place (keybind §4 of the drive guide), live-A/B, commit. RED-verify
 > every gap before porting; prove RED→GREEN. Fan-out audits CAN be wrong — validate by hand.
+
+## 2026-06-21 — docs sync after slab-held rollback cleanup
+
+- Source/profile alignment is restored after the live-rejected slab-held targeting experiment. Active source no longer
+  carries the rejected slab-held owner-guard logic: `GameRendererCrosshairRetargetMixin` and
+  `LoweredSideSlabRetargeter` are back to rollback alignment, and the false-green client gametest is no longer
+  registered in `build.gradle` or `src/gametest/resources/fabric.mod.json`.
+- Proof: `tmp/compile-source-aligned-targeting-rollback.log` passed `compileClientJava` and `compileGametestJava`.
+- Profile truth is still the rollback jar, not a fresh candidate. `SLABBED-MC 26.2` currently points to SHA-256
+  `ba19ebe6f1f8a75ce3de123bcd7179fbf5b062233c01cc4a49de865684e182db`. The live-rejected slab-held targeting jar
+  `27a03f1f9a07ce16ad68b6b59b256e453d45113e4af0a087653933f75111391e` remains preserved under
+  `mods/_codex-backups/slabbed-0.4.2-beta.1+26.2.bad-targeting-27a03f-20260621-120417.jar`.
+- Current live blocker on the rollback baseline: slab-held WYSIWYG/selector truth is still wrong even without the
+  rejected experiment. Julia's newest evidence shows all of these on the rollback jar:
+  - selector/crosshair displacement on lowered upper slab targeting:
+    `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-94402963-32f4-4c0e-bd53-c75a5c95c8d4.png`
+  - fallback to `[slabdy] target: none` on the same family:
+    `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-3d11eb71-13d7-4614-8b5e-d21f959e2c1b.png`
+  - microscopic snap window where one exact aim spot places correctly but nearby spots jump into vanilla dy / wrong
+    visual placement:
+    `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-92a82608-8f52-4fbb-b70e-0eb9af6a8a47.png`,
+    `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-7ce390e9-7e00-4627-97a2-f907c6be0910.png`,
+    `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-5c7d39f7-b21f-4863-b282-ac0b89645bfb.png`
+  - wrong-side placement / slab not targetable:
+    `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-cfc1ed40-34a6-459c-9e8d-12d191ab5d25.png`
+- Current diagnosis boundary: the lowered top-slab UP-face placement fix is still headless-green, so the next slice is
+  not another broad placement-grammar patch. It is a rollback-baseline proof of where client-visible model,
+  selectable/outline shape, and final `hitResult` diverge while slab-held placement is active. Do not resume
+  pre-release hygiene or stage another jar before that red is classified.
+
+## 2026-06-21 — 26.2 WYSIWYG lowered top-slab UP-face placement fixed headlessly
+
+- Julia found a release-blocking WYSIWYG violation in live 26.2: placing a slab on the visible UP face of a lowered,
+  side-placed TOP slab put the new slab underneath/into the clicked slab instead of stacking it on top of the visible
+  surface.
+- Fix: the slab placement intent now treats `UP` clicks on a lowered slab like the existing lowered side-face WYSIWYG
+  path: it marks the predicted above cell so `freezeLoweredOnPlace` anchors that placed slab lowered. The top-slab
+  merge rewrite no longer turns lowered `TOP` slab `UP` clicks into a synthetic `DOWN` merge.
+- Proof: `tmp/runGameTest-wysiwyg-lowered-top-slab.log` passed 131/131 required tests and logs
+  `USEON-FP | wysiwyg_slab_on_lowered_top_slab_up_face | dy=-0.500 | type=bottom`.
+- Follow-up live retest confirmed stacking works, but exposed a separate slab-held targeting violation: while holding a
+  slab, the selection/raycast owner can differ from the block under the crosshair compared with a non-slab item. This is
+  not acceptable as an "intentional deep-stack mechanic"; the crosshair-visible owner is a fundamental Minecraft law.
+  A first parity-preserve patch in `GameRendererCrosshairRetargetMixin` was live-rejected immediately: holding a slab
+  grabbed a lowered `UPPER` side slab at the seam and drew an incoherent split/diagonal outline. Evidence:
+  `tmp/live-slab-held-targeting-parity-regression-20260621.png`.
+- The rejected patch was removed. Rollback proof: `tmp/compileClientJava-slab-held-parity-rollback.log` and
+  `tmp/build-slab-held-parity-rollback.log` passed. The `SLABBED-MC 26.2` profile jar was restaged to SHA-256
+  `ba19ebe6f1f8a75ce3de123bcd7179fbf5b062233c01cc4a49de865684e182db`; the rejected jar SHA
+  `a6c8a71e5f9d3756f54729b6a50d95e37e81a29a5885d7c67bb5963d9f7da916` is backed up under `_codex-backups/`.
+- Narrower headless/client fix now rejects offset-only slab-lane owners while holding a slab when the raw vanilla slab
+  shape is not actually hit. The focused client proof covers both the ordinary lowered bottom-slab lane from Julia's
+  latest screenshot and the `half=UPPER` compound-visible lane path: `tmp/runClientGameTest-slab-held-owner-guard.log`
+  passed with final `Minecraft.pick` landing on honest owners (`18, -59, 0` and `28, -59, 0`) instead of the dangerous
+  shifted-outline-only slab candidates (`17, -58, -1` and `27, -58, -1`). Positive controls:
+  `tmp/runGameTest-slab-held-owner-guard.log` passed all 131 required tests, including the lowered top-slab UP-face
+  stacking row; `tmp/build-slab-held-owner-guard.log` passed.
+- Candidate jar was staged into `SLABBED-MC 26.2` and later live-rejected: SHA-256
+  `27a03f1f9a07ce16ad68b6b59b256e453d45113e4af0a087653933f75111391e`; the previous candidate SHA
+  `675acd71b1098d8ec632c118dc70dc30e70f9c48afac51d8b29fd0918ca9d8fd` is backed up as
+  `_codex-backups/before-slab-held-target-owner-ordinary-guard-20260621-104316.jar`, and the rollback jar SHA
+  `ba19ebe6f1f8a75ce3de123bcd7179fbf5b062233c01cc4a49de865684e182db` remains backed up as
+  `_codex-backups/before-slab-held-owner-guard-20260621-1017.jar`.
+- Live rejection after restart: Julia tested the `27a03f...` jar and found targeting was worse in general, not just a
+  corner case. Fresh screenshots show slab-held `Oak Slab`, `dy=-0.500 LOWERED`, `side=up`, `half=UPPER`,
+  `sro=ANCHORED` with the selector displaced from the crosshair-visible owner, then `target: none`:
+  `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-94402963-32f4-4c0e-bd53-c75a5c95c8d4.png` and
+  `/var/folders/qd/dqqdc7fd5pndvbpcrbqkshdh0000gn/T/codex-clipboard-3d11eb71-13d7-4614-8b5e-d21f959e2c1b.png`.
+  `latest.log` shows that session loaded Minecraft 26.2 with `slabbed 0.4.2-beta.1+26.2` at 11:57 and stopped at
+  11:58:47.
+- Profile rollback: the `SLABBED-MC 26.2` profile jar is now back to SHA-256
+  `ba19ebe6f1f8a75ce3de123bcd7179fbf5b062233c01cc4a49de865684e182db`; the rejected `27a03f...` jar is preserved as
+  `mods/_codex-backups/slabbed-0.4.2-beta.1+26.2.bad-targeting-27a03f-20260621-120417.jar`.
+- Audit finding at that moment was the new early slab-held raw-owner override in
+  `GameRendererCrosshairRetargetMixin` (`slab-held-offset-only-slab-raw-owner` / object-owner suppress). That
+  experiment has now been removed from active source, so the current blocker is the rollback-baseline live red, not that
+  rejected candidate path itself. Do not resume pre-release hygiene or restage `27a03f...`.
 
 ## 2026-06-20 — release blocker after live spin: chained speleothems
 

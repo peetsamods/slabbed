@@ -64,14 +64,68 @@ public final class Slabbed2612UseOnPlacementTest {
         return clickAbs.relative(face);
     }
 
+    /** Fires useOn and returns the actual nearby slab cell whose blockstate changed. */
+    private static BlockPos placeSlabViaAndFindChangedSlab(
+            GameTestHelper helper,
+            Player player,
+            BlockPos clickAbs,
+            Direction face,
+            Vec3 hit
+    ) {
+        ServerLevel level = helper.getLevel();
+        BlockPos[] candidates = new BlockPos[]{
+                clickAbs,
+                clickAbs.relative(face),
+                clickAbs.above(),
+                clickAbs.below(),
+                clickAbs.north(),
+                clickAbs.south(),
+                clickAbs.east(),
+                clickAbs.west()
+        };
+        BlockState[] before = new BlockState[candidates.length];
+        for (int i = 0; i < candidates.length; i++) {
+            before[i] = level.getBlockState(candidates[i]);
+        }
+
+        placeSlabVia(player, clickAbs, face, hit);
+
+        for (int i = 0; i < candidates.length; i++) {
+            BlockState after = level.getBlockState(candidates[i]);
+            if (!after.equals(before[i]) && after.getBlock() instanceof SlabBlock) {
+                return candidates[i];
+            }
+        }
+        throw helper.assertionException(
+                helper.relativePos(clickAbs),
+                "useOn did not mutate a nearby slab cell for click=" + clickAbs.toShortString()
+                        + " face=" + face + " hit=" + hit);
+    }
+
     /** Hit point on the UP face of a cell (centre, top plane). */
     private static Vec3 upHit(BlockPos abs) {
         return new Vec3(abs.getX() + 0.5, abs.getY() + 1.0, abs.getZ() + 0.5);
     }
 
+    /** Hit point on the visible UP face of a lowered TOP slab (its model is shifted down by 0.5). */
+    private static Vec3 loweredTopSlabVisibleUpHit(BlockPos abs, double localX, double localZ) {
+        return new Vec3(abs.getX() + localX, abs.getY() + 0.5, abs.getZ() + localZ);
+    }
+
     /** Hit point on the EAST face of a cell at vertical fraction {@code vy} of the cell (0=bottom,1=top). */
     private static Vec3 eastHit(BlockPos abs, double vy) {
         return new Vec3(abs.getX() + 1.0, abs.getY() + vy, abs.getZ() + 0.5);
+    }
+
+    /**
+     * Hit on the EAST face at the VISIBLE band of a lowered block: its visible body is shifted by
+     * {@code sourceDy}, so the honest offset raycast reports hit Y at {@code abs.y + sourceDy + vy} (a full
+     * cell below the logical cell for a -1.0 block). This is what crosshair targeting now feeds placement;
+     * the legacy {@link #eastHit} fed the LOGICAL band, which is why the logical-band tests were green while
+     * live (honest-band) placement floated.
+     */
+    private static Vec3 eastHitOffset(BlockPos abs, double sourceDy, double vy) {
+        return new Vec3(abs.getX() + 1.0, abs.getY() + sourceDy + vy, abs.getZ() + 0.5);
     }
 
     private static Player mockPlayerNear(GameTestHelper helper, BlockPos abs) {
@@ -256,6 +310,142 @@ public final class Slabbed2612UseOnPlacementTest {
         helper.succeed();
     }
 
+    /**
+     * P26-9 RED: with honest (offset-raycast) targeting, a slab placed by clicking the EAST face of a -1.0
+     * COMPOUND owner must land on the EAST (clicked) side — NEVER flip to the WEST (opposite) side. The legacy
+     * {@code replaceabilityGuard} "visible lane" walk to {@code originalSide.getOpposite()} existed only to
+     * chase the old post-hoc retargeter's lie about the visible owner; once compound markers/lanes exist it
+     * flipped a side placement to the wrong side (Julia's live build: aim east, slab lands west). The compound
+     * markers here reproduce a genuine built compound owner (the bare-column tests above reject the remap and
+     * place via vanilla, so they never exercised the flip).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabBesideCompoundOwnerPlacesClickedSideNotOpposite(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        buildCompoundMinusOne(helper);                       // top compound stone at (2,5,2) reads -1.0
+        BlockPos owner = helper.absolutePos(new BlockPos(2, 5, 2));
+        // Mark it a genuine compound owner (as a built compound stack is live) so the compound side remap engages.
+        SlabAnchorAttachment.addAnchor(level, owner, level.getBlockState(owner));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, owner, level.getBlockState(owner));
+
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 6, 2)));
+        placeSlabVia(player, owner, Direction.EAST, eastHit(owner, 0.25));   // aim the EAST face, lower half
+
+        BlockPos eastCell = helper.absolutePos(new BlockPos(3, 5, 2));       // clicked side
+        BlockPos westCell = helper.absolutePos(new BlockPos(1, 5, 2));       // opposite side
+        boolean east = level.getBlockState(eastCell).getBlock() instanceof SlabBlock;
+        boolean west = level.getBlockState(westCell).getBlock() instanceof SlabBlock;
+        log("p26_compound_side_clicked_east", level, eastCell);
+        if (west) {
+            throw helper.assertionException(new BlockPos(1, 5, 2),
+                    "P26-9 useOn: slab placed on the OPPOSITE (west) side of the clicked east face"
+                            + " (legacy replaceabilityGuard flip must not fire under honest targeting)");
+        }
+        if (!east) {
+            throw helper.assertionException(new BlockPos(3, 5, 2),
+                    "P26-9 useOn: slab clicking the east face of a -1.0 compound owner must land on the EAST (clicked) side");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * P26-10 RED: honest-band repro of the live "floating / misplaced slab" against a -1.0 compound. The
+     * crosshair raycast now reports the hit at the VISIBLE band (a full cell below logical), so a slab placed
+     * against the EAST face of a -1.0 column must STILL land at the east logical cell (3,5,2) lowered to -1.0
+     * (flush beside the body) — not float in a wrong cell. Mirrors the green logical-band tests but with the
+     * honest hit Y. Geometric (un-anchored) compound owner.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabBesideCompoundHonestBandLowerHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        buildCompoundMinusOne(helper);
+        BlockPos owner = helper.absolutePos(new BlockPos(2, 5, 2));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 6, 2)));
+        BlockPos placed = placeSlabViaAndFindChangedSlab(helper, player, owner, Direction.EAST,
+                eastHitOffset(owner, -1.0, 0.25));            // honest visible lower-half hit (= owner.y-0.75)
+        log("p26_honest_band_lower", level, placed);
+        BlockPos eastCell = helper.absolutePos(new BlockPos(3, 5, 2));
+        if (!placed.equals(eastCell)) {
+            throw helper.assertionException(new BlockPos(3, 5, 2),
+                    "P26-10 honest-band: slab landed at " + helper.relativePos(placed).toShortString()
+                            + " not the east cell (3,5,2)");
+        }
+        assertSlabDy(helper, level, eastCell, new BlockPos(3, 5, 2), -1.0,
+                "P26-10 honest-band lower-half: slab beside a -1.0 compound must land -1.0 (flush, no gap)");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabBesideCompoundHonestBandUpperHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        buildCompoundMinusOne(helper);
+        BlockPos owner = helper.absolutePos(new BlockPos(2, 5, 2));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 6, 2)));
+        BlockPos placed = placeSlabViaAndFindChangedSlab(helper, player, owner, Direction.EAST,
+                eastHitOffset(owner, -1.0, 0.75));            // honest visible upper-half hit (= owner.y-0.25)
+        log("p26_honest_band_upper", level, placed);
+        BlockPos eastCell = helper.absolutePos(new BlockPos(3, 5, 2));
+        if (!placed.equals(eastCell)) {
+            throw helper.assertionException(new BlockPos(3, 5, 2),
+                    "P26-10 honest-band: slab landed at " + helper.relativePos(placed).toShortString()
+                            + " not the east cell (3,5,2)");
+        }
+        assertSlabDy(helper, level, eastCell, new BlockPos(3, 5, 2), -1.0,
+                "P26-10 honest-band upper-half: slab beside a -1.0 compound must land -1.0 (flush, no gap)");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabBesideCompoundAnchoredHonestBand(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        buildCompoundMinusOne(helper);
+        BlockPos owner = helper.absolutePos(new BlockPos(2, 5, 2));
+        SlabAnchorAttachment.addAnchor(level, owner, level.getBlockState(owner));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, owner, level.getBlockState(owner));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 6, 2)));
+        BlockPos placed = placeSlabViaAndFindChangedSlab(helper, player, owner, Direction.EAST,
+                eastHitOffset(owner, -1.0, 0.25));            // honest visible band, compound-anchored owner
+        log("p26_honest_band_anchored", level, placed);
+        BlockPos eastCell = helper.absolutePos(new BlockPos(3, 5, 2));
+        if (!placed.equals(eastCell)) {
+            throw helper.assertionException(new BlockPos(3, 5, 2),
+                    "P26-10 honest-band (anchored): slab landed at " + helper.relativePos(placed).toShortString()
+                            + " not the east cell (3,5,2)");
+        }
+        assertSlabDy(helper, level, eastCell, new BlockPos(3, 5, 2), -1.0,
+                "P26-10 honest-band (anchored): slab beside a -1.0 compound must land -1.0 (flush)");
+        helper.succeed();
+    }
+
+    /**
+     * P26-12 RED: cantilever-against-cantilever. Slab A is placed beside a lowered block (anchored -0.5).
+     * Placing slab B by clicking A's lowered side face must ALSO land -0.5 (WYSIWYG follow) and must NOT pop
+     * A back up to 0.0. Julia's live report: placing B sent BOTH to vanilla 0.0 (0.5 high). Drives the real
+     * useOn path on the SERVER (the authoritative dy the client now mirrors). Honest (visible-band) hit.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnCantileverSlabAgainstCantileverSlabBothStayMinusHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
+        helper.setBlock(new BlockPos(2, 3, 2), Blocks.STONE.defaultBlockState());   // lowered -0.5 full block
+        BlockPos lowered = helper.absolutePos(new BlockPos(2, 3, 2));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 5, 2)));
+
+        // Slab A: cantilever beside the lowered full block (air below) -> -0.5 anchored.
+        BlockPos a = placeSlabViaAndFindChangedSlab(helper, player, lowered, Direction.EAST, eastHit(lowered, 0.75));
+        assertSlabDy(helper, level, a, new BlockPos(3, 3, 2), -0.5, "P26-12: first cantilever slab A must be -0.5");
+
+        // Slab B: cantilever beside A by clicking A's lowered EAST face (honest visible band: A is at -0.5).
+        BlockPos b = placeSlabViaAndFindChangedSlab(helper, player, a, Direction.EAST, eastHitOffset(a, -0.5, 0.75));
+        log("p26_cantilever_vs_cantilever_B", level, b);
+        assertSlabDy(helper, level, b, new BlockPos(4, 3, 2), -0.5,
+                "P26-12: second cantilever slab B (clicking A's lowered face) must FOLLOW to -0.5, not freeze flat");
+        // A must NOT have popped up.
+        assertSlabDy(helper, level, a, new BlockPos(3, 3, 2), -0.5,
+                "P26-12: placing B must NOT pop the existing cantilever A back up to 0.0 (NEVER-POP)");
+        helper.succeed();
+    }
+
     /** ground/slab/stone/slab/stone vertical compound; the top stone at (2,5,2) reads dy=-1.0. East column stays air. */
     private static void buildCompoundMinusOne(GameTestHelper helper) {
         helper.setBlock(new BlockPos(2, 1, 2), Blocks.STONE.defaultBlockState());
@@ -393,6 +583,50 @@ public final class Slabbed2612UseOnPlacementTest {
         log("a8_cantilever_after_source_removed", level, placed);
         assertSlabDy(helper, level, placed, new BlockPos(3, 3, 2), -0.5,
                 "A8 useOn: after the lowering source is removed the anchored slab KEEPS -0.5 (NEVER-POP-up)");
+        helper.succeed();
+    }
+
+    /**
+     * Julia live RED (2026-06-21): clicking the visible UP face of an anchored lowered TOP slab must stack
+     * a new bottom slab on that lowered surface. It must not reinterpret the UP hit as a DOWN merge and
+     * fill the lower half underneath the clicked slab.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabOnTopOfLoweredTopSlabPlacesAboveVisibleFace(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
+        helper.setBlock(new BlockPos(2, 3, 2), Blocks.STONE.defaultBlockState());
+        BlockPos loweredSource = helper.absolutePos(new BlockPos(2, 3, 2));
+
+        Player sourcePlayer = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 4, 2)));
+        BlockPos support = placeSlabVia(sourcePlayer, loweredSource, Direction.EAST, eastHit(loweredSource, 0.75));
+        assertSlabDy(helper, level, support, new BlockPos(3, 3, 2), -0.5,
+                "SETUP: side-placed top slab support should be lowered before placing on its visible UP face");
+        if (level.getBlockState(support).getValue(SlabBlock.TYPE) != SlabType.TOP) {
+            throw helper.assertionException(new BlockPos(3, 3, 2),
+                    "SETUP: upper-half side placement should create a TOP slab support");
+        }
+
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 5, 2)));
+        BlockPos placed = placeSlabViaAndFindChangedSlab(
+                helper,
+                player,
+                support,
+                Direction.UP,
+                loweredTopSlabVisibleUpHit(support, 0.5, 0.5));
+        log("wysiwyg_slab_on_lowered_top_slab_up_face", level, placed);
+
+        if (!placed.equals(support.above())) {
+            throw helper.assertionException(new BlockPos(3, 4, 2),
+                    "WYSIWYG: UP-face placement on a lowered top slab must choose the cell above, got "
+                            + placed.toShortString());
+        }
+        assertSlabDy(helper, level, placed, new BlockPos(3, 4, 2), -0.5,
+                "WYSIWYG: slab placed on the visible top of a lowered top slab must sit on that lowered surface");
+        if (level.getBlockState(support).getValue(SlabBlock.TYPE) != SlabType.TOP) {
+            throw helper.assertionException(new BlockPos(3, 3, 2),
+                    "WYSIWYG: clicked lowered top slab must not merge into a double slab underneath");
+        }
         helper.succeed();
     }
 

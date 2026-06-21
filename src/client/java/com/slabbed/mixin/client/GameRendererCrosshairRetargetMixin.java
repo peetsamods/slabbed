@@ -87,6 +87,13 @@ public abstract class GameRendererCrosshairRetargetMixin {
 
     @Inject(method = "pick", at = @At("TAIL"))
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
+        if (com.slabbed.util.SlabbedOffsetRaycast.ENABLED) {
+            // The offset-aware nearest-hit raycast (LocalPlayerPickOffsetRaycastMixin) is
+            // authoritative: Minecraft.hitResult is already the honest visible-owner hit.
+            // Skip the legacy post-hoc retarget lanes entirely so they cannot re-mangle it.
+            // Flip -Dslabbed.offsetRaycast=false to restore this rollback-baseline path.
+            return;
+        }
         slabbed$logBeta4LiveRetargetRecorderStart();
         slabbed$recordBeta4ReloadJumpRecorder(tickProgress);
         slabbed$recordBeta4OutlineRecorder(tickProgress);

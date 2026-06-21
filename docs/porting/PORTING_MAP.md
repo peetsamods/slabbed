@@ -82,6 +82,18 @@ The 26.2 increment is likely to fail first on plumbing assumptions, not behavior
 
 ### 2) Lessons carried from recent port runs
 
+- **Targeting authority = `SlabbedOffsetRaycast`, NOT `GameRendererCrosshairRetargetMixin`.** The offset-aware
+  nearest-hit raycast (single `@Redirect` on `Entity.pick(DFZ)` inside `LocalPlayer.pick(Entity,DDF)` on 26.x;
+  on the visible-owner outline shape) is the canonical cure and the thing to port forward. The 3075-line
+  post-hoc retargeter is the OLD, fragile architecture that was carried by mistake (cut from the shipped
+  baseline rather than the unshipped overhaul) and is being retired — see LESSONS_INDEX S11 and memory
+  `slabbed-targeting-overhaul-never-ported-trap`. Do NOT port or patch the retargeter on new versions.
+- **Known-better-but-unshipped fixes are port debt.** When the best fix lives only on a candidate branch, name
+  it at the top of the port card; "port the shipped build" silently reproduces the inferior version.
+- **Targeting is closed by a WYSIWYG matrix + a geometry invariant, never by the client gametest** (it is a
+  documented false green). Matrix = lane (lowered-bottom / lowered-upper / -1.0-compound) × held-item
+  (slab / non-slab), live. Invariant (headless-safe) = a block with `getYOffset != 0` must be resolved by the
+  offset raycast to its offset `getShape` outline.
 - Validate proofs on both layers: headless + live; never use only one lane to close placement/culling bugs.
 - Do not equate dependency resolution with correctness. Dependency lookup must be followed by compile/proof of changed authority.
 - Use fresh test coordinates for `/slabdy`/live fixture checks so stale markers or saved state do not mask behavior.
