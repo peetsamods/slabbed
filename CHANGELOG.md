@@ -1,5 +1,32 @@
 ## [Unreleased]
 
+## [0.4.2-beta.1+26.2] — MC 26.2 port
+
+Forward-port of the 26.1.2 build to Minecraft 26.2, plus a crosshair-targeting overhaul.
+
+### Fixed + LIVE-CONFIRMED
+- **Crosshair targeting overhaul.** Replaced the legacy post-hoc retarget (a ~3k-line pass that rewrote the
+  hit *after* vanilla's raycast and broke only while holding a slab — displaced outlines, `target: none`,
+  wrong-block selection) with `SlabbedOffsetRaycast`: an offset-aware *nearest-hit* block raycast installed
+  via a single redirect on the block-pick call. The crosshair, selection outline, `[slabdy]` HUD, pick owner,
+  and placement face now agree (WYSIWYG). Gated by `-Dslabbed.offsetRaycast=false` (restores the legacy lanes).
+- **Opposite-side slab placement on −1.0 compounds.** Clicking the side face of a compound column no longer
+  places the slab on the *opposite* side; the legacy "visible-lane" guard that flipped placement (a workaround
+  for the old broken targeting) is now confined to the legacy regime.
+
+### Known issues (deferred to a future version)
+- **On-top placement flicker.** A slab placed on top of a deeply-lowered (−1.0) stack briefly renders one
+  step lower before settling at its final (server-authoritative) height — a one-tick client-prediction flicker.
+  The final placement is correct and consistent; only the placement instant flickers.
+- **Gaps on deep mixed-offset stacks.** Per-block lowering can leave half-/full-cell gaps where pieces at
+  different offsets (−0.5 vs −1.0) meet, since the model doesn't yet tile mixed offsets into a seamless
+  surface. Same family as the deferred **slab-combining** feature; planned next focus.
+
+### Test / process
+- Headless gametest net at **136 checks** (incl. honest-band placement against −1.0 compounds, compound
+  side-placement clicked-side, cantilever-against-cantilever, dy fingerprint). Targeting correctness is a
+  live/recorder-verified concern (the client raycast can't be asserted server-side).
+
 ## [0.4.1-beta.1+26.1.2-port] — MC 26.1.2 port
 
 Version reconciliation: this 26.1.2 port branched from the `0.2.0-beta` line and was never renumbered, so
