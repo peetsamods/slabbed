@@ -647,3 +647,29 @@ combining (above). **Doc sync this turn:** HANDOFF (orientation + CURRENT STATE 
 status), CHANGELOG (0.4.1 fixes + deferred), LESSONS_INDEX (S10 false-green-on-block-despawn),
 RELEASE_SANITY_CHECKLIST (Tier-2 live-confirmed). NOTE: a parallel thread also committed the veg fix +
 de-false-green; coordinate (working tree had concurrent edits).
+
+### 2026-06-21 — manual 0.4.2-beta.1 functional backport from 26.2 to 26.1.2
+
+Mutation-approved selective port from `slabbed-0.4.2-beta.1+26.2` into this 26.1.2 checkout. This was NOT
+a literal cherry-pick: release/version/docs commits were skipped, and API drift from 26.2 was adapted to
+26.1.2 names. Functional donors covered the 26.2 manual-proof closure, lowered stair collision,
+chained/top-slab pointed-dripstone bridge fixes, and the offset-aware crosshair targeting overhaul.
+
+26.1.2 adaptations:
+- `SpeleothemBlock` / `SpeleothemThickness` / `SPELEOTHEM_THICKNESS` map back to
+  `PointedDripstoneBlock` / `DripstoneThickness` / `DRIPSTONE_THICKNESS`.
+- `SULFUR_SPIKE` has no 26.1.2 equivalent, so sulfur-only gametest rows were not carried.
+- 26.2 metadata, version bump, `SlabAnchorClientSync` rerender API changes, `DyFingerprintDump`
+  screen API change, and `TargetDyHudMixin` `Gui` -> `Hud` retarget were left out unless future compile
+  or live proof proves they are needed on 26.1.2.
+
+Proof passed:
+- `./gradlew25 --no-daemon compileJava compileClientJava --console plain`
+- `./gradlew25 --no-daemon compileGametestJava --console plain`
+- `./gradlew25 --no-daemon runGameTest --console plain` -> 130 required tests passed.
+- `./gradlew25 --no-daemon build --console plain` -> clean build plus 130 required tests passed.
+
+Julia live-tested the staged jar in `TEST_ SLABBED 26.1.2` and reported ALL GREEN on the first try. Version
+truth is now `0.4.2-beta.1+26.1.2` (not `+26.1.2-port`). Jar was staged in the TS Modrinth profile before
+this savepoint. Next action: commit, annotated `slabbed-0.4.2-beta.1+26.1.2` tag, push branch and tag, then
+run proof-only pre-release hygiene from the clean tagged tip.

@@ -234,12 +234,12 @@ public final class SlabAnchorAttachment {
      * stays fully geometric.
      */
     /**
-     * WYSIWYG side-click follow (Julia's law, 2026-06-19): set by the placement-intent mixin when the
-     * player places a SLAB by clicking the SIDE face of a lowered block. The placement must then land on
-     * that lowered surface (where the crosshair clicked) instead of freezing flat at grid height. Stores
-     * the predicted placement cell ({@code clickedPos.relative(clickedFace)}); consumed (and cleared) by
-     * {@link #freezeLoweredOnPlace}. Thread-scoped to the placement call; the mixin also clears it on
-     * useOn RETURN so a cancelled/mismatched placement never leaks to the next one.
+     * WYSIWYG click follow (Julia's law): set by the placement-intent mixin when the player places a
+     * SLAB by clicking a lowered block/slab face whose visible surface should own the new slab height.
+     * The placement must then land on that lowered surface (where the crosshair clicked) instead of
+     * freezing flat at grid height or merging into the underside. Stores the predicted placement cell;
+     * consumed (and cleared) by {@link #freezeLoweredOnPlace}. Thread-scoped to the placement call; the
+     * mixin also clears it on useOn RETURN so a cancelled/mismatched placement never leaks to the next one.
      */
     private static final ThreadLocal<BlockPos> WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE = new ThreadLocal<>();
 
