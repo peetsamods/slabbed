@@ -285,6 +285,27 @@ public final class SlabSupport {
                 && state.getValue(BlockStateProperties.VERTICAL_DIRECTION) == Direction.DOWN;
     }
 
+    private static boolean downwardSpeleothemColumnRootsAtTopSlab(
+            BlockGetter world, BlockPos supportPos, BlockState supportState
+    ) {
+        if (!isDownwardSpeleothem(supportState)) {
+            return false;
+        }
+        BlockPos cursor = supportPos;
+        BlockState cur = supportState;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            if (isTopSlab(cur)) {
+                return true;
+            }
+            if (!isDownwardSpeleothem(cur)) {
+                return false;
+            }
+            cursor = cursor.above();
+            cur = world.getBlockState(cursor);
+        }
+        return false;
+    }
+
     public static boolean isBeta35RailVisibleOwnerObject(BlockState state) {
         return state != null && state.getBlock() instanceof BaseRailBlock;
     }
@@ -1992,6 +2013,10 @@ public final class SlabSupport {
         BlockPos supportPos = pos.above();
         BlockState above = world.getBlockState(supportPos);
         if (isCeilingBridgedVerticalChainColumnMember(world, supportPos, above)) {
+            return 0.0d;
+        }
+        if (isDownwardSpeleothem(state)
+                && downwardSpeleothemColumnRootsAtTopSlab(world, supportPos, above)) {
             return 0.0d;
         }
         if (!above.isAir() && !isCeilingAttached(above) && !CompatHooks.shouldSkipOffset(above)) {
