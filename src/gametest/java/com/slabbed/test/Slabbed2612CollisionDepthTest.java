@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -182,5 +183,63 @@ public final class Slabbed2612CollisionDepthTest {
         }
 
         helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredStairCollisionFollowsVisualStepableHeight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slabRel = new BlockPos(2, 1, 2);
+        BlockPos stairRel = slabRel.above();
+        helper.setBlock(slabRel, bottomSlabState());
+        helper.setBlock(stairRel, Blocks.OAK_STAIRS.defaultBlockState());
+
+        assertLoweredStairCollisionFollowsVisual(helper, level, stairRel, "direct stair on bottom slab");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainedLoweredStairCollisionFollowsVisualStepableHeight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slabRel = new BlockPos(2, 1, 2);
+        BlockPos supportRel = slabRel.above();
+        BlockPos stairRel = supportRel.above();
+        helper.setBlock(slabRel, bottomSlabState());
+        helper.setBlock(supportRel, Blocks.OAK_PLANKS.defaultBlockState());
+        helper.setBlock(stairRel, Blocks.OAK_STAIRS.defaultBlockState());
+
+        assertDy(helper, level, supportRel, -0.5d, "setup lowered chained support");
+        assertLoweredStairCollisionFollowsVisual(helper, level, stairRel, "chained stair on lowered support");
+        helper.succeed();
+    }
+
+    private static void assertDy(GameTestHelper helper, ServerLevel level, BlockPos rel, double expected, String label) {
+        BlockPos abs = helper.absolutePos(rel);
+        double got = SlabSupport.getYOffset(level, abs, level.getBlockState(abs));
+        if (Math.abs(got - expected) > EPS) {
+            throw helper.assertionException(rel, "SETUP: " + label + " expected dy=" + expected + ", got " + got);
+        }
+    }
+
+    private static void assertLoweredStairCollisionFollowsVisual(
+            GameTestHelper helper, ServerLevel level, BlockPos rel, String label) {
+        BlockPos abs = helper.absolutePos(rel);
+        BlockState state = level.getBlockState(abs);
+        double dy = SlabSupport.getYOffset(level, abs, state);
+        if (Math.abs(dy + 0.5d) > EPS) {
+            throw helper.assertionException(rel, "SETUP: " + label + " expected dy=-0.5, got " + dy);
+        }
+        VoxelShape collision = state.getCollisionShape(level, abs, CollisionContext.empty());
+        if (collision.isEmpty()) {
+            throw helper.assertionException(rel, "SETUP: " + label + " collision shape is empty");
+        }
+        AABB bounds = collision.bounds();
+        Slabbed.LOGGER.info("COLLISION-STAIR | {} | dy={} minY={} maxY={}",
+                label, dy, bounds.minY, bounds.maxY);
+        if (Math.abs(bounds.minY - dy) > EPS || Math.abs(bounds.maxY - 0.5d) > EPS) {
+            throw helper.assertionException(rel,
+                    "STAIR-STEP: " + label + " collision still has an unlowered ghost stair "
+                    + "boundsY=[" + bounds.minY + ", " + bounds.maxY + "]; expected [-0.5, 0.5] "
+                    + "so slab-to-stair ascent stays within vanilla step height");
+        }
     }
 }
