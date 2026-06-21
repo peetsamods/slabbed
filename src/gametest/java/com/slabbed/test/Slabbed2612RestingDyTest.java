@@ -535,6 +535,40 @@ public final class Slabbed2612RestingDyTest {
         helper.succeed();
     }
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardPointedDripstoneColumnUnderTopSlabKeepsDescendantsGridHeight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos upper = new BlockPos(2, 3, 2);
+        BlockPos lower = new BlockPos(2, 2, 2);
+
+        helper.setBlock(upper.above(), topSlab());
+        helper.setBlock(upper, pointedDripstoneDownBase());
+        helper.setBlock(lower, pointedDripstoneDownTip());
+
+        expect(helper, level, upper, 0.5,
+                "SETUP: direct downward pointed-dripstone segment under a top slab attaches upward");
+        expect(helper, level, lower, 0.0,
+                "P26 chained pointed-dripstone descendant must stay grid-height, not merge into the raised segment");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardSulfurSpikeColumnUnderTopSlabKeepsDescendantsGridHeight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos upper = new BlockPos(2, 3, 2);
+        BlockPos lower = new BlockPos(2, 2, 2);
+
+        helper.setBlock(upper.above(), topSlab());
+        helper.setBlock(upper, sulfurSpikeDownBase());
+        helper.setBlock(lower, sulfurSpikeDownTip());
+
+        expect(helper, level, upper, 0.5,
+                "SETUP: direct downward sulfur-spike segment under a top slab attaches upward");
+        expect(helper, level, lower, 0.0,
+                "P26 chained sulfur-spike descendant must stay grid-height, not merge into the raised segment");
+        helper.succeed();
+    }
+
     // ── ceiling-hung decorations directly under a TOP slab → +0.5 ─────────────────────────────────
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")

@@ -2,23 +2,29 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
-## 2026-06-20 — 26.2 chained speleothem release blocker fixed headlessly
+## 2026-06-20 — 26.2 direct top-slab speleothem chain release blocker fixed headlessly
 
-- Julia's pre-release spin rescinded the prior full live-closeout for one family: chained downward pointed dripstone still
-  merged under the ceiling-bridged iron-chain setup, and sulfur spike was presumed same-family risk. Stairs were
-  live-confirmed fixed first and committed as `fcd8aba3` (`Fix lowered stair step collision`).
-- Speleothem fix savepoint is `c2f3dc94` (`Fix chained speleothem bridge offsets`) on
-  `port/mc-26.2-0.4.1-beta.1`; branch is ahead of origin by the stair and speleothem commits until pushed.
+- Julia's pre-release spin rescinded the prior full live-closeout for one family: stairs are fixed, but chained downward
+  pointed dripstone still merged when speleothem segments were chained directly under a top slab. Sulfur spike is the
+  same `SpeleothemBlock` family and is covered by the same guard.
+- Stair fix is already committed and pushed as `fcd8aba3` (`Fix lowered stair step collision`). The earlier speleothem
+  savepoint `c2f3dc94` (`Fix chained speleothem bridge offsets`) covered only the ceiling-bridged iron-chain subset, not
+  the direct top-slab speleothem-column path Julia re-tested.
 - Red proof: `tmp/runGameTest-speleothem-ceiling-bridged-chain-red.log` failed because lower pointed-dripstone and
   sulfur-spike segments under a ceiling-bridged iron-chain column got `dy=+0.5` while the upper segment stayed flush.
-- Fix: downward `SpeleothemBlock` states route through the ceiling-hung decoration dy path, and that path now stops at
-  any encountered ceiling-bridged vertical chain column instead of climbing through it to the top slab.
+- New red proof: `tmp/runGameTest-speleothem-direct-top-red.log` failed because lower pointed-dripstone and sulfur-spike
+  descendants directly under a top-slab-rooted speleothem column still got `dy=+0.5`.
+- Fix: downward `SpeleothemBlock` states still route through the ceiling-hung decoration dy path, but descendant
+  speleothem segments now stop at grid height when their speleothem column roots at a top slab. The direct ceiling
+  segment keeps its upward attach; lower descendants no longer rise into it.
 - Green proof: `tmp/runGameTest-speleothem-ceiling-bridged-chain-green.log` passed 128/128 required tests; build proof
-  `tmp/build-speleothem-bridge-fix.log` passed and produced `slabbed-0.4.2-beta.1+26.2.jar`.
+  `tmp/build-speleothem-bridge-fix.log` passed. New green proof `tmp/runGameTest-speleothem-direct-top-green.log`
+  passed 130/130 required tests; `tmp/build-speleothem-direct-top-fix.log` passed and produced
+  `slabbed-0.4.2-beta.1+26.2.jar`.
 - Profile state: `SLABBED-MC 26.2` was restaged with jar SHA-256
-  `d1bd572d26c9cd58ea5591bf6fc02280b7dd9899088ef78654f4a5e2392d3c62`; previous false-green jar SHA
-  `903dcc5e9df5e3876d79a05123554ad8f01dbf9f2e431e5edfaebe37c1c434bc` is backed up under the profile
-  `_codex-backups/` directory.
+  `fc600d3f7ac502b52289e7e34bb37c8a2172b62267073333453a0856250423b1`; previous false-green jar SHA
+  `d1bd572d26c9cd58ea5591bf6fc02280b7dd9899088ef78654f4a5e2392d3c62` is backed up under the profile
+  `_codex-backups/` directory as `before-direct-top-speleothem-fix-20260620-230527`.
 - Current operating action: Julia needs a fresh live retest from a restarted `SLABBED-MC 26.2` session. Resume
   `$slabbed-pre-release-hygiene` only after that live retest is accepted. No release tag/upload/publication yet.
 
