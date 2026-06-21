@@ -14,6 +14,21 @@
 > you have full control — build, place (keybind §4 of the drive guide), live-A/B, commit. RED-verify
 > every gap before porting; prove RED→GREEN. Fan-out audits CAN be wrong — validate by hand.
 
+## 2026-06-20 — 26.2 manual queue closed, docs caught up
+
+- Current branch/root truth for this checkout is `/Users/joolmac/CascadeProjects/Slabbed` on
+  `port/mc-26.2-0.4.1-beta.1`, HEAD `60cd5cb5`, tag `pre-testing-pass`.
+- The 26.2 follow-up families that were still reading as live/manual-open earlier today are now closed by Julia's own
+  in-game confirmation: scaffolding traversal/feel, chain continuity and targeting, fence WYSIWYG, and the rest of the
+  `Proofs 26.2.pdf` queue are working in the current branch state.
+- Fresh branch proof also re-ran green on the current dirty tree:
+  `tmp/26-2-proof-fails/runGameTest-26-2-post-live-confirm.log` shows compile gates plus `runGameTest` all green with
+  120/120 required tests passed.
+- The release/process docs were stale after the code and live proof moved ahead. This docs-sync slice exists to move
+  `SLABBED_SPINE.md`, `docs/process/RELEASE_SANITY_CHECKLIST.md`, and a new local `docs/binder/` note to the real
+  branch truth.
+- Boundaries preserved: no savepoint, push, release, or publication happened here. This is status/docs catch-up only.
+
 ## 2026-06-20 — 26.2 startup compile frontier green
 
 - First 26.2 source retarget is compile-green only, not runtime/gameplay/release proof.

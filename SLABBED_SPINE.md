@@ -2,6 +2,184 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
+## 2026-06-20 — 26.2 manual queue live-confirmed closed + docs sync
+
+- Julia manually re-tested the active 26.2 branch/client and confirmed the previously open PDF/live rows are now behaving
+  correctly in-game: scaffolding, chains, fences, and the rest of the 26.2 follow-up items are working.
+- Fresh proof on the current dirty tree is green: `tmp/26-2-proof-fails/runGameTest-26-2-post-live-confirm.log` passed
+  compileJava, compileClientJava, compileGametestJava, and `runGameTest`; all 120 required tests passed.
+- This closes the stale "manual queue still open" language from the earlier same-day 26.2 notes. Those entries remain as
+  the red->green implementation history, but the current operating truth is that Julia's live pass closed the remaining
+  release-eye/manual gates for the 26.2 fixes already in this tree.
+- Docs sync in this slice updates `HANDOFF.md`, `docs/process/RELEASE_SANITY_CHECKLIST.md`, and a new `docs/binder/`
+  running log so the branch state no longer reads as half-open after the live confirmation.
+- No savepoint, push, or release was done in this slice.
+
+## 2026-06-20 — 26.2 ceiling-bridged iron_chain targeting follow-up
+
+- Input evidence: Julia's screenshots showed the direct top `minecraft:iron_chain` under a top slab rendered correctly,
+  but the crosshair target/outline only covered the upper shifted selector; aiming at the visible lower end reported
+  `[slabdy] target: none`.
+- Root cause: `ChainCeilingGeometry` emits the direct top chain's 1.5-block bridge at grid height, while the normal
+  outline/raycast path still shifted the vanilla chain shape upward by `dy=+0.5`. The model was correct; the selectable
+  proxy was missing the lower visible half.
+- Fix: `SlabSupport.ceilingBridgedVerticalChainSelectionShape` extends only direct ceiling-bridged vertical-chain
+  outline/interaction shapes to the same 1.5-block vertical span as the alternate model; `SlabSupportStateMixin` wires
+  that shape into `getShape` and `getInteractionShape`.
+- Red proof: `tmp/26-2-proof-fails/runGameTest-chain-selection-lower-red.log` failed one required test,
+  `Slabbed2612LoweringContractTest.ceilingBridgedChainSelectionExtendsToVisibleBridge`, at local `y=0.25`.
+- Green proof: `tmp/26-2-proof-fails/runGameTest-chain-selector-final.log` passed 120/120 required tests after
+  `tmp/26-2-proof-fails/compile-chain-selector-final.log` passed compile gates.
+- Jar/profile state: `tmp/26-2-proof-fails/build-chain-selector-final-jar.log` built
+  `build/libs/slabbed-0.4.1-beta.1+26.2-port.jar`, SHA-256
+  `32a6c13c1e305050f96957d5d5d3b9712d218e58f74b41b8bb465e04f1d974a5`, and
+  `tmp/26-2-proof-fails/stage-chain-selector-profile-jar.txt` staged it into Modrinth profile `SLABBED-MC 26.2`.
+  The replaced jar SHA was `5270a1bc56283fb419e462939462f56572f2c8eaa36d96a8293f100da0ceeadf`.
+- Live launch state: the staged profile launched and `latest.log` proved `Loading Minecraft 26.2`, `slabbed
+  0.4.1-beta.1+26.2-port`, and `Slabbed initialized`. Exact-window selector screenshot proof is still open because
+  live-control helpers found a visible vanilla Minecraft Launcher window and another visible `Minecraft* 26.1.2`
+  Java window, so they refused to select a target.
+- No savepoint, push, or release was done in this slice.
+
+## 2026-06-20 — 26.2 video follow-up: scaffolding traversal + chain bridge merge
+
+- Input evidence: `/Users/joolmac/Desktop/Screen Recording 2026-06-20 at 7.23.45 PM.mov`, dissected in
+  `tmp/video-dissect-20260620-192345/triage.md`. The video narrowed the still-open rows to P26-1 scaffolding
+  traversal and P26-6/P26-7 chain/lantern visual continuity.
+- Scaffolding red proof: `tmp/26-2-proof-fails/runGameTest-scaffolding-red.log` failed because lowered scaffolding
+  still received generic solid hanging collision and a player inside the lowered visual scaffolding volume did not
+  count as climbable.
+- Scaffolding fix: `SlabSupport.withHangingLoweredCollisionFromAbove` now skips scaffolding, and
+  `LivingEntityLoweredScaffoldingMixin` treats the lowered visual scaffolding volume as climbable/scaffolding for
+  vanilla space/shift traversal checks.
+- Chain red proof: `tmp/26-2-proof-fails/runGameTest-chain-render-red-jdk25.log` failed because the lower Y-chain
+  and lantern under the extended top-chain model both inherited `dy=+0.5`, overlapping/merging with the direct
+  top chain's 1.5-block ceiling bridge.
+- Chain fix: `SlabSupport.isCeilingBridgedVerticalChainColumnMember` identifies chain columns whose direct top chain
+  is rendered by `chain_ceiling_support`; descendant chains and lanterns stay grid-height, while the direct top chain
+  keeps its ceiling-attach `+0.5` semantic and the client renderer uses the shared direct-chain predicate.
+- Green proof: `tmp/26-2-proof-fails/runGameTest-scaffolding-chain-final.log` passed with 119/119 required tests
+  (including the scaffolding rows), and `tmp/26-2-proof-fails/compileClientJava-scaffolding-chain-final.log` passed.
+- Current jar proof: `tmp/26-2-proof-fails/build-current-scaffolding-chain-jar.log` built
+  `build/libs/slabbed-0.4.1-beta.1+26.2-port.jar` and staged it into Modrinth profile `SLABBED-MC 26.2`; SHA-256
+  `5270a1bc56283fb419e462939462f56572f2c8eaa36d96a8293f100da0ceeadf`. The replaced profile jar was backed up under
+  that profile's `_codex-backups/` directory.
+- Live current-jar proof: `tmp/26-2-proof-fails/live-scaffolding-chain/01-scaffolding-before-space.png` shows the
+  lowered scaffolding survival start at `Y=-59.5`; `02-scaffolding-after-space.png` shows space traversal to
+  `Y=-55.0`; `03-scaffolding-after-shift.png` shows shift descent back to `Y=-59.5`. Chain VIS proof is
+  `05-chain-wide-continuity.png` and `06-chain-close-continuity.png`, using the 26.2 command id `minecraft:iron_chain`
+  and showing the top-slab -> chain -> hanging-lantern stack without the prior merge/gap.
+- This supersedes the earlier same-day "probe only/no production patch" notes for P26-1/P26-6/P26-7. No savepoint,
+  push, or release was done in this slice.
+
+## 2026-06-20 — 26.2 lowered rail target rescue
+
+- P26-2 from `/Users/joolmac/Documents/Proofs 26.2.pdf` has two layers: minecart visual fit on lowered rails, and
+  lowered rail targeting. The minecart layer remains VIS/eye-only, but the rail targeting layer is now headless-proven.
+- Red proof: `tmp/26-2-proof-fails/runGameTest-rail-target-red.log` failed because the lowered rail lower body was
+  directly hittable, but vanilla world clip resolved `MISS`; rails were not in the visible-owner rescue family.
+- Fix: `SlabSupport.isBeta35SlabHeightVisibleOwnerObject` now accepts lowered `BaseRailBlock` states, so lowered rails
+  use the same visible-owner retarget path as other thin lowered target owners.
+- Green proof: `tmp/26-2-proof-fails/runGameTest-rail-target-green.log` passed with 117/117 required tests.
+- Combined proof after the rail fix: `tmp/26-2-proof-fails/runGameTest-26-2-full-queue-after-rail.log` passed 117/117
+  required tests and `compileClientJava`.
+- The matching jar was rebuilt and staged into Modrinth profile `SLABBED-MC 26.2`; SHA-256:
+  `3c4b2f5cf8172692bc78541de0592b4b9c7233ce5edd9e8ec34b81f5a3ce04ec`. The previous staged jar was backed up in the
+  profile `_codex-backups/` directory.
+- Remaining P26-2 gate: live VIS for minecart-on-lowered-rail fit and release-eye confirmation that the rail is easy
+  enough to target in the staged Modrinth profile.
+
+## 2026-06-20 — 26.2 sulfur spike + live pre-screen
+
+- The active 26.2 runtime does have the sulfur target from Julia's PDF review:
+  `minecraft:sulfur_spike` (`SulfurSpikeBlock`, a `SpeleothemBlock`) exists in the Modrinth profile's 26.2 client jar.
+- P26-4/P26-5 now cover both upward pointed dripstone and upward sulfur spike in `Slabbed2612RestingDyTest`.
+- Red proof: `tmp/26-2-proof-fails/runGameTest-sulfur-spike-red.log` failed because the lowered sulfur spike lower body
+  was directly hittable, but vanilla world clip resolved `MISS` and sulfur was not yet in the visible-owner rescue
+  family.
+- Fix: `SlabSupport.isBeta35SlabHeightVisibleOwnerObject` now accepts upward `SpeleothemBlock` objects, covering both
+  pointed dripstone and sulfur spike through the same visible-owner mechanism.
+- Green proof: `tmp/26-2-proof-fails/runGameTest-sulfur-spike-green.log` passed with 116/116 required tests.
+- A patched jar was built and staged into Modrinth profile `SLABBED-MC 26.2`; the previous profile jar was backed up
+  under that profile's `_codex-backups/` directory instead of left in `mods/`.
+- Agent live pre-screen evidence lives in `tmp/26-2-live-proof-20260620-181328/`, including:
+  `p26-1-scaffolding-live.png`, `p26-3-glass-panes-live.png`, `p26-4-5-dripstone-sulfur-live.png`,
+  `p26-6-7-chain-lantern-live.png`, and `p26-2-8-minecart-fence-live.png`.
+- The live screenshots make the fixture row visually plausible, but they do not close human VIS/FEEL gates. P26-1 still
+  needs Julia's movement/climb/pass-through check, and P26-2/P26-3/P26-4/P26-5/P26-6/P26-7/P26-8 still need a human
+  release-eye pass before any release-ready claim.
+
+## 2026-06-20 — 26.2 pointed-dripstone visible-owner rescue
+
+- P26-4/P26-5 from `/Users/joolmac/Documents/Proofs 26.2.pdf` now have headless pointed-dripstone coverage in
+  `Slabbed2612RestingDyTest`.
+- First probe was green immediately: upward pointed dripstone on a bottom slab already reads `dy=-0.5` and its direct
+  outline follows the lowered body, so the failure was not dy classification or raw outline offset.
+- Red proof: `tmp/26-2-proof-fails/runGameTest-dripstone-visible-owner-red.log` failed because a ray aimed through the
+  visible lowered lower body hit the pointed-dripstone outline directly, but vanilla world clip resolved `MISS`; the
+  block was not in the lowered visible-owner retarget family.
+- Fix: `SlabSupport.isBeta35SlabHeightVisibleOwnerObject` now includes upward pointed dripstone, allowing the existing
+  client lowered-owner retarget scan to rescue ownership for the visible lowered body.
+- Green proof: `tmp/26-2-proof-fails/runGameTest-dripstone-visible-owner-green.log` passed with 111/111 required tests;
+  `tmp/26-2-proof-fails/compileClientJava-dripstone-visible-owner.log` also passed. Later 26.2 runtime inspection found
+  sulfur spike; see the sulfur spike entry above for the broader speleothem fix and proof.
+
+## 2026-06-20 — 26.2 scaffolding FEEL guard
+
+- P26-1 now has a server-collision regression guard:
+  `Slabbed2612CollisionDepthTest.loweredScaffoldingSideInteriorStaysPassThrough`.
+- Probe result: `tmp/26-2-proof-fails/runGameTest-scaffolding-feel-probe.log` passed with `passThrough=true`, so the
+  current headless server collision path does not reproduce "lowered scaffolding acts like a wall."
+- No production patch was applied for scaffolding. Keep P26-1 live FEEL/VIS open; the next live pass must identify
+  whether the failure is client movement feel, climb behavior, targeting, or visual interpretation.
+
+## 2026-06-20 — 26.2 raised chain/lantern dy guards
+
+- P26-6/P26-7 now have mechanical dy guards in `Slabbed2612LoweringContractTest`:
+  `chainColumnUnderTopSlabRaisesTogether` and `hangingLanternUnderRaisedChainRaisesWithChain`.
+- Probe result: `tmp/26-2-proof-fails/runGameTest-chain-lantern-probe.log` passed with 114/114 required tests. No
+  production patch was applied.
+- Interpretation: the server dy math already raises a chain column together and raises a hanging lantern with the
+  raised chain. The remaining P26-6/P26-7 questions are rendered geometry/VIS: continuous chain mesh, no pop artifact,
+  and no lantern smoosh. P26-2 minecart remains Lane 3 only because the row is entity-render/visual-fit proof.
+
+## 2026-06-20 — 26.2 fence-against-lowered-fence WYSIWYG harness
+
+- P26-8 from `/Users/joolmac/Documents/Proofs 26.2.pdf` now has a real player-placement gametest:
+  `Slabbed2612UseOnPlacementTest.useOnFenceClickingLoweredFenceOverAirFollowsToMinusHalf`.
+- Red proof: `tmp/26-2-proof-fails/runGameTest-fence-red.log` failed exactly because a fence placed by clicking an
+  already-lowered fence over air landed at `dy=0.0` instead of `dy=-0.5`.
+- Mechanism: the connector cantilever BFS only treated lowered full blocks or lowered slabs as genuine source nodes.
+  A supported lowered connector already sitting at `dy=-0.5` was not accepted as a source, so the newly placed adjacent
+  fence fell through to vanilla height and the no-step connection rule then broke the visual arm.
+- Fix: `cantileverLoweredConnectingMagnitude` now accepts a supported lowered connector source through
+  `loweredSupportedConnectingMagnitude`, while still treating over-air connectors only as propagation nodes so a lane
+  cannot self-sustain without a real lowered source.
+- Green proof: `tmp/26-2-proof-fails/runGameTest-fence-green.log` passed with 109/109 required tests, including the
+  existing stepped-fence/no-cross-step policy rows. P26-8 still needs VIS/live confirmation before it is fully closed
+  as a manual PDF item.
+
+## 2026-06-20 — 26.2 manual proof failure triage
+
+- Branch/root verified: `/Users/joolmac/CascadeProjects/Slabbed` on `port/mc-26.2-0.4.1-beta.1`, HEAD `60cd5cb5`,
+  tag-at-HEAD `pre-testing-pass`.
+- Input evidence: `/Users/joolmac/Documents/Proofs 26.2.pdf` lists live/manual failures for lowered scaffolding,
+  minecart/rail fit and rail targeting, glass pane visual dy, pointed dripstone/sulfur targeting and stacking,
+  raised chain connection/pop artifacts, raised lantern-on-chain smoosh, and fence-against-lowered-fence WYSIWYG.
+- Headless baseline before patch was green: `./gradlew25 --no-daemon runGameTest --console plain` passed with
+  107/107 required tests. This means the PDF findings are live/manual false-green gaps unless a new symptom-specific
+  harness row is added.
+- Glass-pane root cause was small and harnessable: `SlabSupport.getYOffset` could lower the pane raycast/outline path,
+  but the model gate filtered `IronBarsBlock`/pane family out of the lowered connector-contact family, so the visual
+  stayed flush. Added `Slabbed2612ConnectorSurvivalTest.glassPaneParticipatesInLoweredConnectorVisualFamily` and widened
+  `isBeta35FenceWallVariantContactObject` to include `IronBarsBlock`.
+- Proof: the new row failed red in `tmp/26-2-proof-fails/runGameTest-glass-pane-red.log`; after the predicate fix,
+  `tmp/26-2-proof-fails/runGameTest-glass-pane-green.log` passed with 108/108 required tests.
+- Remaining PDF items are now queued in `docs/process/RELEASE_SANITY_CHECKLIST.md` §2.1 and are not closed by this
+  headless fix. Next safe slice is one live/manual symptom at a time, starting with a proof surface that matches the
+  failure: FEEL/VIS for scaffolding, N/A/VIS for minecarts, VIS/DY for dripstone/sulfur, VIS for raised chains/lantern,
+  and DY/VIS plus a policy check for fence WYSIWYG.
+
 ## 2026-06-20 — 26.2 startup compile frontier green
 
 - Branch/root verified: `/Users/joolmac/CascadeProjects/Slabbed` on `port/mc-26.2-0.4.1-beta.1`, HEAD `457b0767`,

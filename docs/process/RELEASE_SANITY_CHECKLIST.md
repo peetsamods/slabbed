@@ -51,6 +51,50 @@ One representative per behavior family. If any of these is RED, stop and triage 
 | S14 | TS compat | `stone` on a Terrain Slabs slab | `dy=0.000` flush, no world hole | DY + VIS |
 | S15 | Reload | relog with an anchored lowered block | dy unchanged after relog | DY |
 
+### 2.1 26.2 manual-failure queue
+
+These rows came from Julia's `Proofs 26.2.pdf` review. They started as exact live/manual symptoms that could not be closed from headless `runGameTest` alone. Current status after the 2026-06-20 implementation pass plus Julia's later in-game re-test: closed on this branch state. Keep the rows as a regression ledger for future 26.2 reruns.
+
+| # | Failure | Expected | Proof |
+|---|---|---|---|
+| P26-1 | Lowered scaffolding acts like a wall | player can use/climb/pass through scaffolding as vanilla, while visual/targeting stay lowered | GT + FEEL + VIS |
+| P26-2 | Minecart on lowered rails / lowered rail targeting | minecart renders/rides on the lowered rail, with targetable rail hitbox | GT + **N/A** + VIS |
+| P26-3 | Glass panes | visual pane lowers to match the already-lowered raycast/outline | GT + VIS |
+| P26-4 | Lowered pointed dripstone / sulfur stone targeting | narrow blocks remain targetable at their visible lowered body | GT + VIS |
+| P26-5 | Lowered pointed dripstone / sulfur stone stacking | player can combine/stack the lowered narrow blocks where aimed | GT + DY + VIS |
+| P26-6 | Raised chain column | raised chains connect continuously to each other and to the vanilla-dy block without merge/pop artifacts | GT + VIS |
+| P26-7 | Raised lantern on raised chain | lantern hangs from the raised chain without smooshing/merging into it | GT + VIS |
+| P26-8 | Fence placed against lowered fence | placement obeys the WYSIWYG target while preserving the intentional no-connection-across-step rule | GT + DY + VIS + policy check |
+
+P26-4/P26-5 now have pointed-dripstone and sulfur-spike headless coverage: `Slabbed2612RestingDyTest.upwardPointedDripstoneOnBottomSlabLowersHalf`, `Slabbed2612RestingDyTest.loweredPointedDripstoneLowerBodyHasVisibleOwnerRescue`, `Slabbed2612RestingDyTest.upwardSulfurSpikeOnBottomSlabLowersHalf`, and `Slabbed2612RestingDyTest.loweredSulfurSpikeLowerBodyHasVisibleOwnerRescue`. The visible-owner rescue rows were RED because vanilla world clip missed the visible lower body while the direct outline hit succeeded. The fix routes upward speleothems through the existing lowered visible-owner retarget family. Green proof: `tmp/26-2-proof-fails/runGameTest-sulfur-spike-green.log` passed 116/116.
+
+P26-1 now has red/green headless coverage for the two automatable scaffolding layers: `Slabbed2612CollisionDepthTest.loweredScaffoldingDoesNotInjectSolidHangingCollision` and `Slabbed2612CollisionDepthTest.loweredScaffoldingVisualVolumeIsClimbable`. The RED proof showed lowered scaffolding receiving generic solid hanging collision and not counting as climbable inside its lowered visual volume; the GREEN proof passed after scaffolding was excluded from generic hanging collision and lowered visual scaffolding was wired into `LivingEntity.onClimbable` / shift-descent checks. Current-jar live proof in `tmp/26-2-proof-fails/live-scaffolding-chain/` covers survival space/shift traversal: before space `Y=-59.5`, after space `Y=-55.0`, after shift `Y=-59.5`.
+
+P26-2 now has rail-targeting headless coverage: `Slabbed2612RestingDyTest.loweredRailLowerBodyHasVisibleOwnerRescue` was RED because the lowered rail lower body was directly hittable but vanilla world clip resolved `MISS`. The fix routes lowered `BaseRailBlock` states through the existing visible-owner rescue family. Green proof: `tmp/26-2-proof-fails/runGameTest-rail-target-green.log` passed 117/117. The minecart render/ride fit part remains `N/A -- eye`, so keep VIS open for the cart-on-rail view.
+
+P26-6/P26-7 now have red/green render-path dy guards: `Slabbed2612LoweringContractTest.chainColumnUnderTopSlabKeepsDescendantsGridHeight` and `Slabbed2612LoweringContractTest.hangingLanternUnderCeilingBridgedChainStaysGridHeight`. The old "raises together" guard was a false green for the video symptom: the direct top chain is already emitted with the extended ceiling-bridge model, so descendant chains and lanterns must stay grid-height to avoid overlap/merge. Current-jar VIS proof is in `tmp/26-2-proof-fails/live-scaffolding-chain/05-chain-wide-continuity.png` and `06-chain-close-continuity.png`; the 26.2 command fixture uses `minecraft:iron_chain`, not `minecraft:chain`.
+
+P26-6 targeting follow-up now has headless coverage for Julia's screenshot symptom: `Slabbed2612LoweringContractTest.ceilingBridgedChainSelectionExtendsToVisibleBridge` was RED because the direct top `minecraft:iron_chain` model was visible at local `y=0.25` while the shifted outline/raycast proxy missed it. The fix extends only direct ceiling-bridged vertical-chain outline/interaction shapes to the same 1.5-block vertical span as `chain_ceiling_support`. Green proof: `tmp/26-2-proof-fails/runGameTest-chain-selector-final.log` passed 120/120. The selector-fix jar was rebuilt and staged into Modrinth profile `SLABBED-MC 26.2` with SHA-256 `32a6c13c1e305050f96957d5d5d3b9712d218e58f74b41b8bb465e04f1d974a5`; Julia later live-confirmed the in-game target behavior is fixed, so the old exact-window screenshot blocker is no longer a release gate.
+
+P26-8 now has headless coverage for the player-placement path: `Slabbed2612UseOnPlacementTest.useOnFenceClickingLoweredFenceOverAirFollowsToMinusHalf` was RED at `dy=0.0` and GREEN at `dy=-0.5` while preserving the stepped-connection policy checks. Julia later live-confirmed the rendered same-height fence behavior is working too.
+
+Agent live pre-screen screenshots for the full P26 queue are in `tmp/26-2-live-proof-20260620-181328/`: `p26-1-scaffolding-live.png`, `p26-3-glass-panes-live.png`, `p26-4-5-dripstone-sulfur-live.png`, `p26-6-7-chain-lantern-live.png`, and `p26-2-8-minecart-fence-live.png`. The tighter current-jar proof for the video follow-up is in `tmp/26-2-proof-fails/live-scaffolding-chain/`, with numeric scaffolding movement screenshots and chain/lantern continuity screenshots. Julia's later manual play pass is the final live closeout for this queue on the current branch state.
+
+Current queue status after the 2026-06-20 proof pass plus Julia's live confirmation:
+
+| # | Status | Evidence | Remaining gate |
+|---|---|---|---|
+| P26-1 | Closed: scaffolding solid-collision/climbability red->green and Julia live-confirmed traversal/feel | `runGameTest-scaffolding-red.log`, `runGameTest-scaffolding-chain-final.log`, `01-scaffolding-before-space.png`, `02-scaffolding-after-space.png`, `03-scaffolding-after-shift.png`, Julia live pass | none |
+| P26-2 | Closed on current branch state: rail targeting red->green, minecart fit manually confirmed | `runGameTest-rail-target-red.log`, `runGameTest-rail-target-green.log`, `p26-2-8-minecart-fence-live.png`, Julia live pass | none |
+| P26-3 | Closed: glass-pane lowered visual-family red->green and visually confirmed | `runGameTest-glass-pane-red.log`, `runGameTest-glass-pane-green.log`, `p26-3-glass-panes-live.png`, Julia live pass | none |
+| P26-4 | Closed: pointed dripstone and sulfur spike targeting red->green and visually confirmed | `runGameTest-dripstone-visible-owner-red.log`, `runGameTest-dripstone-visible-owner-green.log`, `runGameTest-sulfur-spike-red.log`, `runGameTest-sulfur-spike-green.log`, `p26-4-5-dripstone-sulfur-live.png`, Julia live pass | none |
+| P26-5 | Closed on current branch state: stacking/combine manual action confirmed | `runGameTest-sulfur-spike-green.log`, `p26-4-5-dripstone-sulfur-live.png`, Julia live pass | none |
+| P26-6 | Closed: chain continuity and selector targeting red->green, then live-confirmed | `runGameTest-chain-render-red-jdk25.log`, `runGameTest-scaffolding-chain-final.log`, `runGameTest-chain-selection-lower-red.log`, `runGameTest-chain-selector-final.log`, `stage-chain-selector-profile-jar.txt`, `05-chain-wide-continuity.png`, `06-chain-close-continuity.png`, Julia live pass | none |
+| P26-7 | Closed: lantern-under-chain no-smoosh path red->green and visually confirmed | `runGameTest-chain-render-red-jdk25.log`, `runGameTest-scaffolding-chain-final.log`, `05-chain-wide-continuity.png`, `06-chain-close-continuity.png`, Julia live pass | none |
+| P26-8 | Closed: fence WYSIWYG placement red->green with policy preserved, then live-confirmed | `runGameTest-fence-red.log`, `runGameTest-fence-green.log`, `p26-2-8-minecart-fence-live.png`, Julia live pass | none |
+
+Latest combined proof before the manual closeout: `tmp/26-2-proof-fails/runGameTest-scaffolding-chain-final.log` passed 119/119 required tests and `tmp/26-2-proof-fails/compileClientJava-scaffolding-chain-final.log` passed. Latest source/profile proof after the selector follow-up: `tmp/26-2-proof-fails/runGameTest-chain-selector-final.log` passed 120/120 required tests, `tmp/26-2-proof-fails/build-chain-selector-final-jar.log` built a new jar, and `tmp/26-2-proof-fails/stage-chain-selector-profile-jar.txt` staged SHA-256 `32a6c13c1e305050f96957d5d5d3b9712d218e58f74b41b8bb465e04f1d974a5` into the profile. Fresh branch proof after Julia's live closeout: `tmp/26-2-proof-fails/runGameTest-26-2-post-live-confirm.log` passed compile gates plus `runGameTest`; all 120 required tests passed.
+
 ---
 
 ## 3. Version comparison — the dy-fingerprint baseline (THE answer to "old vs current")
