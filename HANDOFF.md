@@ -14,6 +14,18 @@
 > you have full control — build, place (keybind §4 of the drive guide), live-A/B, commit. RED-verify
 > every gap before porting; prove RED→GREEN. Fan-out audits CAN be wrong — validate by hand.
 
+## 2026-06-20 — 0.4.2-beta.1+26.2 release metadata bump
+
+- The 26.2 P26 savepoint was committed, tagged, and pushed at `689a8196` with tag
+  `save/port-26-2-0-4-1-beta-1-p26-live-green`.
+- Pre-release hygiene against the proposed `0.4.2-beta.1+26.2` target passed compile, `runGameTest`, clean build,
+  jar-content scan, and hard-reference scan, but correctly stopped because the jar still identified as
+  `0.4.1-beta.1+26.2-port`.
+- Current slice bumps `gradle.properties` to `mod_version=0.4.2-beta.1+26.2`. After this commit, rerun
+  `$slabbed-pre-release-hygiene`; if it returns A, the next separate release slice can create the actual
+  release-candidate/version tag and upload artifacts.
+- Boundaries: this is a metadata/docs bump only, not an upload, release tag, or publication.
+
 ## 2026-06-20 — 26.2 manual queue closed, docs caught up
 
 - Current branch/root truth for this checkout is `/Users/joolmac/CascadeProjects/Slabbed` on

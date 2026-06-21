@@ -2,6 +2,16 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
+## 2026-06-20 — 0.4.2-beta.1+26.2 release metadata bump
+
+- The P26 live-green savepoint is `689a8196`, tag `save/port-26-2-0-4-1-beta-1-p26-live-green`, pushed to
+  `origin/port/mc-26.2-0.4.1-beta.1`.
+- First proof-only hygiene for intended target `0.4.2-beta.1+26.2` passed compile, `runGameTest`, clean build,
+  release-jar purity scan, and hard-reference scan, but stopped with Decision C because the jar still reported
+  `0.4.1-beta.1+26.2-port`.
+- Current operating action: bump release metadata to `mod_version=0.4.2-beta.1+26.2`, then rerun
+  `$slabbed-pre-release-hygiene` from the bumped commit. Do not upload or create a release tag in this slice.
+
 ## 2026-06-20 — 26.2 manual queue live-confirmed closed + docs sync
 
 - Julia manually re-tested the active 26.2 branch/client and confirmed the previously open PDF/live rows are now behaving
