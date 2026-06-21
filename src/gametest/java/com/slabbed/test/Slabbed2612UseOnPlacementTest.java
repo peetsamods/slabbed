@@ -15,6 +15,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CrossCollisionBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
@@ -93,6 +94,19 @@ public final class Slabbed2612UseOnPlacementTest {
         BlockState s = level.getBlockState(abs);
         if (!(s.getBlock() instanceof SlabBlock)) {
             throw helper.assertionException(relForErr, what + ": no slab placed (got " + s.getBlock() + ")");
+        }
+        double dy = SlabSupport.getYOffset(level, abs, s);
+        if (Math.abs(dy - expectedDy) > EPS) {
+            throw helper.assertionException(relForErr,
+                    what + ": expected dy=" + expectedDy + " got " + dy);
+        }
+    }
+
+    private static void assertBlockDy(GameTestHelper helper, ServerLevel level, BlockPos abs,
+                                      BlockPos relForErr, Block expectedBlock, double expectedDy, String what) {
+        BlockState s = level.getBlockState(abs);
+        if (s.getBlock() != expectedBlock) {
+            throw helper.assertionException(relForErr, what + ": wrong block placed (got " + s.getBlock() + ")");
         }
         double dy = SlabSupport.getYOffset(level, abs, s);
         if (Math.abs(dy - expectedDy) > EPS) {
@@ -257,6 +271,35 @@ public final class Slabbed2612UseOnPlacementTest {
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, new BlockHitResult(hit, face, clickAbs, false)));
         return clickAbs.relative(face);
+    }
+
+    /**
+     * P26-8 RED: a fence placed by clicking an already-lowered fence over air must follow the visible
+     * lowered target instead of falling back to vanilla height. Once both fences are at the same dy, the
+     * ordinary same-level fence connection is allowed; the no-connection rule only applies across a step.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnFenceClickingLoweredFenceOverAirFollowsToMinusHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
+        helper.setBlock(new BlockPos(2, 3, 2), Blocks.OAK_FENCE.defaultBlockState());
+        BlockPos loweredFence = helper.absolutePos(new BlockPos(2, 3, 2));
+        assertBlockDy(helper, level, loweredFence, new BlockPos(2, 3, 2), Blocks.OAK_FENCE, -0.5,
+                "P26-8 setup: existing fence on bottom slab is lowered");
+
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 4, 2)));
+        BlockPos placed = placeBlockVia(player, loweredFence, Direction.EAST, eastHit(loweredFence, 0.75),
+                Blocks.OAK_FENCE);
+        log("p26_fence_against_lowered_fence", level, placed);
+        assertBlockDy(helper, level, placed, new BlockPos(3, 3, 2), Blocks.OAK_FENCE, -0.5,
+                "P26-8 useOn: fence placed against a lowered fence over air must follow to -0.5");
+
+        BlockState placedState = level.getBlockState(placed);
+        if (!placedState.getValue(CrossCollisionBlock.WEST)) {
+            throw helper.assertionException(new BlockPos(3, 3, 2),
+                    "P26-8 useOn: same-height lowered fence should connect WEST to the clicked lowered fence");
+        }
+        helper.succeed();
     }
 
     // ── A1: freeze-on-place via the REAL useOn path — slab on its OWN flush ground beside a lowered

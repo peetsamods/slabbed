@@ -2,8 +2,8 @@ package com.slabbed.mixin.client;
 
 import com.slabbed.client.TargetDyOverlay;
 import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.Hud;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * {@code HudRenderCallback} because this port's non-standard Loom setup does
  * not expose {@code fabric-rendering-v1} to the client source set.
  */
-@Mixin(Gui.class)
+@Mixin(Hud.class)
 public class TargetDyHudMixin {
 
     @Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
