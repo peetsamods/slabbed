@@ -335,7 +335,15 @@ public abstract class SlabSupportStateMixin {
             } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
                 shape = Shapes.block();
             }
-            cir.setReturnValue(shape.move(0.0, yOff, 0.0));
+            shape = shape.move(0.0, yOff, 0.0);
+            if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+                shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
+            }
+            cir.setReturnValue(shape);
+            return;
+        }
+        if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+            cir.setReturnValue(SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape));
         }
     }
 
@@ -407,6 +415,11 @@ public abstract class SlabSupportStateMixin {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             }
             shape = shape.move(0.0, yOff, 0.0);
+            changed = true;
+        }
+
+        if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+            shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
             changed = true;
         }
 

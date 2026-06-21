@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.Slabbed;
+import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -84,6 +85,16 @@ public final class Slabbed2612ConnectorSurvivalTest {
         if (!after.getValue(CrossCollisionBlock.EAST)) {
             throw helper.assertionException(new BlockPos(2, 2, 2),
                     "flat glass_pane EAST must REMAIN (mixin must not break a same-height pane run)");
+        }
+        helper.succeed();
+    }
+
+    /** Glass pane must be in the same lowered connector-contact family used by the visual model gate. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void glassPaneParticipatesInLoweredConnectorVisualFamily(GameTestHelper helper) {
+        if (!SlabSupport.isBeta35FenceWallVariantContactObject(Blocks.GLASS_PANE.defaultBlockState())) {
+            throw helper.assertionException(new BlockPos(2, 2, 2),
+                    "glass_pane must participate in lowered connector-contact model/raycast gating");
         }
         helper.succeed();
     }
