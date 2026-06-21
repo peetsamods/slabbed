@@ -278,6 +278,13 @@ public final class SlabSupport {
                 && state.getValue(BlockStateProperties.VERTICAL_DIRECTION) == Direction.UP;
     }
 
+    private static boolean isDownwardSpeleothem(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof SpeleothemBlock
+                && state.hasProperty(BlockStateProperties.VERTICAL_DIRECTION)
+                && state.getValue(BlockStateProperties.VERTICAL_DIRECTION) == Direction.DOWN;
+    }
+
     public static boolean isBeta35RailVisibleOwnerObject(BlockState state) {
         return state != null && state.getBlock() instanceof BaseRailBlock;
     }
@@ -747,7 +754,7 @@ public final class SlabSupport {
         // Specific ceiling-only block types
         if (block instanceof SporeBlossomBlock
                 || block instanceof HangingRootsBlock
-                || block instanceof PointedDripstoneBlock
+                || isDownwardSpeleothem(state)
                 || block instanceof CaveVinesBlock
                 || block instanceof CaveVinesPlantBlock) {
             return true;
@@ -1998,12 +2005,21 @@ public final class SlabSupport {
         BlockPos cursor = supportPos;
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = world.getBlockState(cursor);
+            if (isCeilingBridgedVerticalChainColumnMember(world, cursor, cur)) {
+                return 0.0d;
+            }
             if (isTopSlab(cur)) {
                 return 0.5d;
             }
             if (isCeilingAttached(cur)) {
                 cursor = cursor.above();
                 continue;
+            }
+            if (!cur.isAir() && !CompatHooks.shouldSkipOffset(cur)) {
+                double supportDy = getYOffsetInner(world, cursor, cur);
+                if (supportDy < -1.0e-6d) {
+                    return supportDy;
+                }
             }
             break;
         }
@@ -2021,6 +2037,7 @@ public final class SlabSupport {
         // hangs flush under a flush support, no -0.5 gap); a STANDING lantern (HANGING=false)
         // legitimately rests on a support below and keeps the normal path. Port of 1.21.1 bbe3deb9.
         if (isAlwaysCeilingHungDecoration(state)
+                || isDownwardSpeleothem(state)
                 || (state.hasProperty(BlockStateProperties.HANGING)
                         && state.getValue(BlockStateProperties.HANGING))) {
             return ceilingHungDecorationDy(world, pos, state);

@@ -53,15 +53,43 @@ public final class Slabbed2612RestingDyTest {
         return Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE);
     }
 
+    private static BlockState yChain() {
+        return Blocks.IRON_CHAIN.defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.Y);
+    }
+
     private static BlockState pointedDripstoneUpTip() {
         return Blocks.POINTED_DRIPSTONE.defaultBlockState()
                 .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.UP)
                 .setValue(BlockStateProperties.SPELEOTHEM_THICKNESS, SpeleothemThickness.TIP);
     }
 
+    private static BlockState pointedDripstoneDownBase() {
+        return Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN)
+                .setValue(BlockStateProperties.SPELEOTHEM_THICKNESS, SpeleothemThickness.BASE);
+    }
+
+    private static BlockState pointedDripstoneDownTip() {
+        return Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN)
+                .setValue(BlockStateProperties.SPELEOTHEM_THICKNESS, SpeleothemThickness.TIP);
+    }
+
     private static BlockState sulfurSpikeUpTip() {
         return Blocks.SULFUR_SPIKE.defaultBlockState()
                 .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.UP)
+                .setValue(BlockStateProperties.SPELEOTHEM_THICKNESS, SpeleothemThickness.TIP);
+    }
+
+    private static BlockState sulfurSpikeDownBase() {
+        return Blocks.SULFUR_SPIKE.defaultBlockState()
+                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN)
+                .setValue(BlockStateProperties.SPELEOTHEM_THICKNESS, SpeleothemThickness.BASE);
+    }
+
+    private static BlockState sulfurSpikeDownTip() {
+        return Blocks.SULFUR_SPIKE.defaultBlockState()
+                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN)
                 .setValue(BlockStateProperties.SPELEOTHEM_THICKNESS, SpeleothemThickness.TIP);
     }
 
@@ -362,6 +390,148 @@ public final class Slabbed2612RestingDyTest {
                             + "; it must qualify for the visible-owner retarget family so client crosshair ownership can rescue it");
         }
 
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardPointedDripstoneChainFollowsLoweredCeilingSupport(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos temporarySlab = new BlockPos(2, 3, 2);
+        BlockPos support = new BlockPos(2, 4, 2);
+        BlockPos upper = new BlockPos(2, 3, 2);
+        BlockPos lower = new BlockPos(2, 2, 2);
+
+        helper.setBlock(temporarySlab, bottomSlab());
+        helper.setBlock(support, Blocks.OAK_PLANKS.defaultBlockState());
+        BlockPos supportAbs = helper.absolutePos(support);
+        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+        expect(helper, level, support, -0.5,
+                "SETUP: ceiling support must be anchored lowered before hanging chained pointed dripstone");
+
+        helper.setBlock(upper, pointedDripstoneDownBase());
+        helper.setBlock(lower, pointedDripstoneDownTip());
+
+        expect(helper, level, upper, -0.5,
+                "P26 chained pointed dripstone upper segment must follow the lowered ceiling support");
+        expect(helper, level, lower, -0.5,
+                "P26 chained pointed dripstone lower segment must inherit the same lowered ceiling support dy");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardSulfurSpikeChainFollowsLoweredCeilingSupport(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos temporarySlab = new BlockPos(2, 3, 2);
+        BlockPos support = new BlockPos(2, 4, 2);
+        BlockPos upper = new BlockPos(2, 3, 2);
+        BlockPos lower = new BlockPos(2, 2, 2);
+
+        helper.setBlock(temporarySlab, bottomSlab());
+        helper.setBlock(support, Blocks.OAK_PLANKS.defaultBlockState());
+        BlockPos supportAbs = helper.absolutePos(support);
+        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+        expect(helper, level, support, -0.5,
+                "SETUP: ceiling support must be anchored lowered before hanging chained sulfur spike");
+
+        helper.setBlock(upper, sulfurSpikeDownBase());
+        helper.setBlock(lower, sulfurSpikeDownTip());
+
+        expect(helper, level, upper, -0.5,
+                "P26 chained sulfur spike upper segment must follow the lowered ceiling support");
+        expect(helper, level, lower, -0.5,
+                "P26 chained sulfur spike lower segment must inherit the same lowered ceiling support dy");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardPointedDripstoneUnderIronChainFollowsLoweredCeilingSupport(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos temporarySlab = new BlockPos(2, 4, 2);
+        BlockPos support = new BlockPos(2, 5, 2);
+        BlockPos chain = new BlockPos(2, 4, 2);
+        BlockPos dripstone = new BlockPos(2, 3, 2);
+
+        helper.setBlock(temporarySlab, bottomSlab());
+        helper.setBlock(support, Blocks.OAK_PLANKS.defaultBlockState());
+        BlockPos supportAbs = helper.absolutePos(support);
+        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+        expect(helper, level, support, -0.5,
+                "SETUP: ceiling support must be anchored lowered before iron-chain pointed dripstone");
+
+        helper.setBlock(chain, yChain());
+        helper.setBlock(dripstone, pointedDripstoneDownBase());
+
+        expect(helper, level, chain, 0.0,
+                "CONTROL: iron chain under a lowered support keeps its own grid-height chain behavior");
+        expect(helper, level, dripstone, -0.5,
+                "P26 chained pointed dripstone under an iron chain must inherit the lowered ceiling support dy");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardSulfurSpikeUnderIronChainFollowsLoweredCeilingSupport(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos temporarySlab = new BlockPos(2, 4, 2);
+        BlockPos support = new BlockPos(2, 5, 2);
+        BlockPos chain = new BlockPos(2, 4, 2);
+        BlockPos spike = new BlockPos(2, 3, 2);
+
+        helper.setBlock(temporarySlab, bottomSlab());
+        helper.setBlock(support, Blocks.OAK_PLANKS.defaultBlockState());
+        BlockPos supportAbs = helper.absolutePos(support);
+        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+        expect(helper, level, support, -0.5,
+                "SETUP: ceiling support must be anchored lowered before iron-chain sulfur spike");
+
+        helper.setBlock(chain, yChain());
+        helper.setBlock(spike, sulfurSpikeDownBase());
+
+        expect(helper, level, chain, 0.0,
+                "CONTROL: iron chain under a lowered support keeps its own grid-height chain behavior");
+        expect(helper, level, spike, -0.5,
+                "P26 chained sulfur spike under an iron chain must inherit the lowered ceiling support dy");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardPointedDripstoneColumnUnderCeilingBridgedChainStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos chain = new BlockPos(2, 4, 2);
+        BlockPos upper = new BlockPos(2, 3, 2);
+        BlockPos lower = new BlockPos(2, 2, 2);
+
+        helper.setBlock(chain.above(), topSlab());
+        helper.setBlock(chain, yChain());
+        helper.setBlock(upper, pointedDripstoneDownBase());
+        helper.setBlock(lower, pointedDripstoneDownTip());
+
+        expect(helper, level, chain, 0.5,
+                "SETUP: direct Y-chain under a top slab keeps its ceiling-attach dy");
+        expect(helper, level, upper, 0.0,
+                "P26 ceiling-bridged pointed dripstone upper segment follows the visible chain bottom");
+        expect(helper, level, lower, 0.0,
+                "P26 ceiling-bridged pointed dripstone lower segment must not rise into the upper segment");
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardSulfurSpikeColumnUnderCeilingBridgedChainStaysFlush(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos chain = new BlockPos(2, 4, 2);
+        BlockPos upper = new BlockPos(2, 3, 2);
+        BlockPos lower = new BlockPos(2, 2, 2);
+
+        helper.setBlock(chain.above(), topSlab());
+        helper.setBlock(chain, yChain());
+        helper.setBlock(upper, sulfurSpikeDownBase());
+        helper.setBlock(lower, sulfurSpikeDownTip());
+
+        expect(helper, level, chain, 0.5,
+                "SETUP: direct Y-chain under a top slab keeps its ceiling-attach dy");
+        expect(helper, level, upper, 0.0,
+                "P26 ceiling-bridged sulfur spike upper segment follows the visible chain bottom");
+        expect(helper, level, lower, 0.0,
+                "P26 ceiling-bridged sulfur spike lower segment must not rise into the upper segment");
         helper.succeed();
     }
 
