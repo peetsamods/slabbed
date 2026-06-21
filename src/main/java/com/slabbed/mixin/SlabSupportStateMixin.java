@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CarpetBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.MossyCarpetBlock;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.SupportType;
 import net.minecraft.world.level.block.SlabBlock;
@@ -377,10 +378,21 @@ public abstract class SlabSupportStateMixin {
     }
 
     @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
-            at = @At("RETURN"))
+            at = @At("RETURN"), cancellable = true)
     private void slabbed$collisionQueryExit(BlockGetter world, BlockPos pos, CollisionContext ctx,
                                             CallbackInfoReturnable<VoxelShape> cir) {
         SLABBED$IN_COLLISION_QUERY.set(Boolean.FALSE);
+        BlockState self = (BlockState) (Object) this;
+        if (SlabSupport.isVanillaCollisionShapeQuery() || !(self.getBlock() instanceof StairBlock)) {
+            return;
+        }
+        double yOff = SlabSupport.getYOffset(world, pos, self);
+        if (yOff < -1.0e-6d) {
+            VoxelShape shape = cir.getReturnValue();
+            if (shape != null && !shape.isEmpty()) {
+                cir.setReturnValue(shape.move(0.0d, yOff, 0.0d));
+            }
+        }
     }
 
     // ── outline (hit-box) offset ──────────────────────────────────────
