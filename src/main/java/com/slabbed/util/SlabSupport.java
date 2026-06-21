@@ -933,6 +933,23 @@ public final class SlabSupport {
     public static final boolean COLLISION_FOLLOW =
             !"false".equalsIgnoreCase(System.getProperty("slabbed.collisionFollow", "true"));
 
+    private static final ThreadLocal<Boolean> VANILLA_COLLISION_SHAPE_QUERY =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    public static boolean isVanillaCollisionShapeQuery() {
+        return Boolean.TRUE.equals(VANILLA_COLLISION_SHAPE_QUERY.get());
+    }
+
+    private static VoxelShape vanillaCollisionShape(BlockState state, CollisionGetter getter, BlockPos pos) {
+        boolean previous = isVanillaCollisionShapeQuery();
+        VANILLA_COLLISION_SHAPE_QUERY.set(Boolean.TRUE);
+        try {
+            return state.getCollisionShape(getter, pos, CollisionContext.empty());
+        } finally {
+            VANILLA_COLLISION_SHAPE_QUERY.set(previous);
+        }
+    }
+
     /**
      * Given a cell's own collision shape (local frame) and position, unions in the part of a
      * LOWERED block directly above that hangs down into this cell, so the broadphase yields the
@@ -961,7 +978,7 @@ public final class SlabSupport {
         // The above block's collision stays VANILLA per-state (its outline/visual is lowered by dy).
         // Its visual collision = vanilla.move(0, dy, 0); the part hanging into THIS cell (the cell
         // below) is that, expressed in this cell's local frame, i.e. vanilla.move(0, dy + 1, 0).
-        VoxelShape aboveVanilla = above.getCollisionShape(getter, abovePos, CollisionContext.empty());
+        VoxelShape aboveVanilla = vanillaCollisionShape(above, getter, abovePos);
         if (aboveVanilla.isEmpty()) {
             return own;
         }
