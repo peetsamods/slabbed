@@ -9,6 +9,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -20,6 +21,12 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.block.state.properties.SpeleothemThickness;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * Headless dy coverage for objects RESTING ON slabs — the "where does it sit" math, asserted via
@@ -44,6 +51,18 @@ public final class Slabbed2612RestingDyTest {
 
     private static BlockState doubleSlab() {
         return Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE);
+    }
+
+    private static BlockState pointedDripstoneUpTip() {
+        return Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.UP)
+                .setValue(BlockStateProperties.SPELEOTHEM_THICKNESS, SpeleothemThickness.TIP);
+    }
+
+    private static BlockState sulfurSpikeUpTip() {
+        return Blocks.SULFUR_SPIKE.defaultBlockState()
+                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.UP)
+                .setValue(BlockStateProperties.SPELEOTHEM_THICKNESS, SpeleothemThickness.TIP);
     }
 
     private static double dy(ServerLevel level, GameTestHelper helper, BlockPos rel) {
@@ -126,6 +145,223 @@ public final class Slabbed2612RestingDyTest {
             expect(helper, level, obj, -0.5, s.getBlock().getName().getString() + " (floor) on a bottom slab lowers -0.5");
             clear(helper, obj, slab);
         }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredRailLowerBodyHasVisibleOwnerRescue(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slab = new BlockPos(2, 1, 2);
+        BlockPos obj = new BlockPos(2, 2, 2);
+
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(obj, Blocks.RAIL.defaultBlockState());
+
+        BlockPos abs = helper.absolutePos(obj);
+        BlockState actual = level.getBlockState(abs);
+        if (!actual.is(Blocks.RAIL)) {
+            throw helper.assertionException(obj,
+                    "SETUP: rail did not survive on a bottom slab; got "
+                            + actual.getBlock().getName().getString());
+        }
+
+        expect(helper, level, obj, -0.5,
+                "P26-2 setup: rail on a bottom slab must lower -0.5 before testing target rescue");
+
+        Vec3 from = new Vec3(abs.getX() + 1.5d, abs.getY() - 0.4375d, abs.getZ() + 0.5d);
+        Vec3 to = new Vec3(abs.getX() - 0.5d, abs.getY() - 0.4375d, abs.getZ() + 0.5d);
+        VoxelShape outline = actual.getShape(level, abs, CollisionContext.empty());
+        BlockHitResult directHit = outline.clip(from, to, abs);
+        if (directHit == null || !directHit.getBlockPos().equals(abs)) {
+            throw helper.assertionException(obj,
+                    "SETUP: direct outline ray must hit the lowered rail lower body");
+        }
+
+        BlockHitResult worldHit = level.clip(new ClipContext(
+                from,
+                to,
+                ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.NONE,
+                CollisionContext.empty()));
+        if (worldHit.getType() == HitResult.Type.BLOCK && worldHit.getBlockPos().equals(abs)) {
+            helper.succeed();
+            return;
+        }
+
+        if (!SlabSupport.isBeta35SlabHeightVisibleOwnerObject(level, abs, actual)) {
+            String worldHitDesc = worldHit.getType() == HitResult.Type.BLOCK
+                    ? worldHit.getBlockPos().toShortString()
+                    : worldHit.getType().name();
+            throw helper.assertionException(obj,
+                    "P26-2: lowered rail lower-body ray is hittable directly, but vanilla world clip resolved "
+                            + worldHitDesc
+                            + "; lowered rails must qualify for visible-owner retargeting so the player can target the lowered rail body");
+        }
+
+        helper.succeed();
+    }
+
+    // ── upward pointed dripstone on a bottom slab → -0.5 and lowered target shape ─────────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void upwardPointedDripstoneOnBottomSlabLowersHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slab = new BlockPos(2, 1, 2);
+        BlockPos obj = new BlockPos(2, 2, 2);
+
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(obj, pointedDripstoneUpTip());
+
+        BlockPos abs = helper.absolutePos(obj);
+        BlockState actual = level.getBlockState(abs);
+        if (!actual.is(Blocks.POINTED_DRIPSTONE)) {
+            throw helper.assertionException(obj,
+                    "SETUP: upward pointed dripstone did not survive on a bottom slab; got "
+                            + actual.getBlock().getName().getString());
+        }
+
+        expect(helper, level, obj, -0.5,
+                "upward pointed dripstone on a bottom slab must lower -0.5 like a floor object");
+
+        VoxelShape outline = actual.getShape(level, abs, CollisionContext.empty());
+        if (outline.isEmpty()) {
+            throw helper.assertionException(obj,
+                    "upward pointed dripstone outline must remain targetable after lowering");
+        }
+        double minY = outline.min(Direction.Axis.Y);
+        if (minY >= -EPS) {
+            throw helper.assertionException(obj,
+                    "upward pointed dripstone outline did not follow the lowered body; minY=" + minY);
+        }
+
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredPointedDripstoneLowerBodyHasVisibleOwnerRescue(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slab = new BlockPos(2, 1, 2);
+        BlockPos obj = new BlockPos(2, 2, 2);
+
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(obj, pointedDripstoneUpTip());
+
+        BlockPos abs = helper.absolutePos(obj);
+        BlockState actual = level.getBlockState(abs);
+        expect(helper, level, obj, -0.5,
+                "SETUP: upward pointed dripstone on a bottom slab must lower before testing target rescue");
+
+        Vec3 from = new Vec3(abs.getX() + 1.5d, abs.getY() - 0.25d, abs.getZ() + 0.5d);
+        Vec3 to = new Vec3(abs.getX() - 0.5d, abs.getY() - 0.25d, abs.getZ() + 0.5d);
+        VoxelShape outline = actual.getShape(level, abs, CollisionContext.empty());
+        BlockHitResult directHit = outline.clip(from, to, abs);
+        if (directHit == null || !directHit.getBlockPos().equals(abs)) {
+            throw helper.assertionException(obj,
+                    "SETUP: direct outline ray must hit the lowered pointed dripstone lower body");
+        }
+
+        BlockHitResult worldHit = level.clip(new ClipContext(
+                from,
+                to,
+                ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.NONE,
+                CollisionContext.empty()));
+        if (worldHit.getType() == HitResult.Type.BLOCK && worldHit.getBlockPos().equals(abs)) {
+            helper.succeed();
+            return;
+        }
+
+        if (!SlabSupport.isBeta35SlabHeightVisibleOwnerObject(level, abs, actual)) {
+            String worldHitDesc = worldHit.getType() == HitResult.Type.BLOCK
+                    ? worldHit.getBlockPos().toShortString()
+                    : worldHit.getType().name();
+            throw helper.assertionException(obj,
+                    "P26-4: lowered pointed dripstone lower-body ray is hittable directly, but vanilla world clip resolved "
+                            + worldHitDesc
+                            + "; it must qualify for the visible-owner retarget family so client crosshair ownership can rescue it");
+        }
+
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void upwardSulfurSpikeOnBottomSlabLowersHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slab = new BlockPos(2, 1, 2);
+        BlockPos obj = new BlockPos(2, 2, 2);
+
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(obj, sulfurSpikeUpTip());
+
+        BlockPos abs = helper.absolutePos(obj);
+        BlockState actual = level.getBlockState(abs);
+        if (!actual.is(Blocks.SULFUR_SPIKE)) {
+            throw helper.assertionException(obj,
+                    "SETUP: upward sulfur spike did not survive on a bottom slab; got "
+                            + actual.getBlock().getName().getString());
+        }
+
+        expect(helper, level, obj, -0.5,
+                "upward sulfur spike on a bottom slab must lower -0.5 like a floor speleothem");
+
+        VoxelShape outline = actual.getShape(level, abs, CollisionContext.empty());
+        if (outline.isEmpty()) {
+            throw helper.assertionException(obj,
+                    "upward sulfur spike outline must remain targetable after lowering");
+        }
+        double minY = outline.min(Direction.Axis.Y);
+        if (minY >= -EPS) {
+            throw helper.assertionException(obj,
+                    "upward sulfur spike outline did not follow the lowered body; minY=" + minY);
+        }
+
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredSulfurSpikeLowerBodyHasVisibleOwnerRescue(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slab = new BlockPos(2, 1, 2);
+        BlockPos obj = new BlockPos(2, 2, 2);
+
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(obj, sulfurSpikeUpTip());
+
+        BlockPos abs = helper.absolutePos(obj);
+        BlockState actual = level.getBlockState(abs);
+        expect(helper, level, obj, -0.5,
+                "SETUP: upward sulfur spike on a bottom slab must lower before testing target rescue");
+
+        Vec3 from = new Vec3(abs.getX() + 1.5d, abs.getY() - 0.25d, abs.getZ() + 0.5d);
+        Vec3 to = new Vec3(abs.getX() - 0.5d, abs.getY() - 0.25d, abs.getZ() + 0.5d);
+        VoxelShape outline = actual.getShape(level, abs, CollisionContext.empty());
+        BlockHitResult directHit = outline.clip(from, to, abs);
+        if (directHit == null || !directHit.getBlockPos().equals(abs)) {
+            throw helper.assertionException(obj,
+                    "SETUP: direct outline ray must hit the lowered sulfur spike lower body");
+        }
+
+        BlockHitResult worldHit = level.clip(new ClipContext(
+                from,
+                to,
+                ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.NONE,
+                CollisionContext.empty()));
+        if (worldHit.getType() == HitResult.Type.BLOCK && worldHit.getBlockPos().equals(abs)) {
+            helper.succeed();
+            return;
+        }
+
+        if (!SlabSupport.isBeta35SlabHeightVisibleOwnerObject(level, abs, actual)) {
+            String worldHitDesc = worldHit.getType() == HitResult.Type.BLOCK
+                    ? worldHit.getBlockPos().toShortString()
+                    : worldHit.getType().name();
+            throw helper.assertionException(obj,
+                    "P26-4/P26-5: lowered sulfur spike lower-body ray is hittable directly, but vanilla world clip resolved "
+                            + worldHitDesc
+                            + "; it must qualify for the visible-owner retarget family so client crosshair ownership can rescue it");
+        }
+
         helper.succeed();
     }
 

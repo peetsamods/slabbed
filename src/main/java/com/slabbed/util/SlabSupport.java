@@ -11,6 +11,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.BaseRailBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.BellBlock;
 import net.minecraft.world.level.block.Block;
@@ -32,8 +33,10 @@ import net.minecraft.world.level.block.MossyCarpetBlock;
 import net.minecraft.world.level.block.IronBarsBlock;
 import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
+import net.minecraft.world.level.block.ScaffoldingBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.SpeleothemBlock;
 import net.minecraft.world.level.block.SporeBlossomBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.TorchBlock;
@@ -53,6 +56,7 @@ import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.CollisionGetter;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -217,6 +221,67 @@ public final class SlabSupport {
                 && state.getValue(BlockStateProperties.AXIS) == Direction.Axis.Y;
     }
 
+    public static boolean isVerticalChainDirectlyUnderCeilingSupport(BlockGetter world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && isBeta35VerticalChainVisibleOwnerObject(state)
+                && isCeilingSupportBottomSurface(world, pos.above());
+    }
+
+    public static VoxelShape ceilingBridgedVerticalChainSelectionShape(
+            BlockGetter world, BlockPos pos, BlockState state, VoxelShape fallback
+    ) {
+        VoxelShape base = fallback == null ? Shapes.empty() : fallback;
+        if (!isVerticalChainDirectlyUnderCeilingSupport(world, pos, state)) {
+            return base;
+        }
+        if (base.isEmpty()) {
+            return Block.box(6.5d, 0.0d, 6.5d, 9.5d, 24.0d, 9.5d);
+        }
+
+        AABB bounds = base.bounds();
+        VoxelShape selection = base;
+        if (bounds.minY > 0.0d) {
+            selection = Shapes.or(selection, base.move(0.0d, -bounds.minY, 0.0d));
+        }
+        if (bounds.maxY < 1.5d) {
+            selection = Shapes.or(selection, base.move(0.0d, 1.5d - bounds.maxY, 0.0d));
+        }
+        return selection;
+    }
+
+    public static boolean isCeilingBridgedVerticalChainColumnMember(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35VerticalChainVisibleOwnerObject(state)) {
+            return false;
+        }
+        BlockPos cursor = pos;
+        BlockState cursorState = state;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            if (isVerticalChainDirectlyUnderCeilingSupport(world, cursor, cursorState)) {
+                return true;
+            }
+            BlockPos abovePos = cursor.above();
+            BlockState above = world.getBlockState(abovePos);
+            if (!isBeta35VerticalChainVisibleOwnerObject(above)) {
+                return false;
+            }
+            cursor = abovePos;
+            cursorState = above;
+        }
+        return false;
+    }
+
+    public static boolean isBeta35UpwardSpeleothemVisibleOwnerObject(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof SpeleothemBlock
+                && state.hasProperty(BlockStateProperties.VERTICAL_DIRECTION)
+                && state.getValue(BlockStateProperties.VERTICAL_DIRECTION) == Direction.UP;
+    }
+
+    public static boolean isBeta35RailVisibleOwnerObject(BlockState state) {
+        return state != null && state.getBlock() instanceof BaseRailBlock;
+    }
+
     public static boolean isBeta35RegularDoorVisibleOwnerObject(
             BlockGetter world, BlockPos pos, BlockState state
     ) {
@@ -361,6 +426,8 @@ public final class SlabSupport {
         if (!isBeta35FloorButtonContactObject(state)
                 && !isBeta35BottomTrapdoorVisibleOwnerObject(state)
                 && !isBeta35VerticalChainVisibleOwnerObject(state)
+                && !isBeta35UpwardSpeleothemVisibleOwnerObject(state)
+                && !isBeta35RailVisibleOwnerObject(state)
                 && !isBeta35RegularDoorVisibleOwnerObject(world, pos, state)) {
             return false;
         }
@@ -371,7 +438,8 @@ public final class SlabSupport {
     public static boolean isBeta35FenceWallVariantContactObject(BlockState state) {
         return state != null
                 && (state.getBlock() instanceof FenceBlock
-                        || state.getBlock() instanceof WallBlock);
+                        || state.getBlock() instanceof WallBlock
+                        || state.getBlock() instanceof IronBarsBlock);
     }
 
     public static boolean isBeta35FenceGateContactObject(BlockState state) {
@@ -881,6 +949,9 @@ public final class SlabSupport {
         BlockPos abovePos = pos.above();
         BlockState above = getter.getBlockState(abovePos);
         if (above.isAir() || !above.getFluidState().isEmpty()) {
+            return own;
+        }
+        if (above.getBlock() instanceof ScaffoldingBlock) {
             return own;
         }
         double dy = getYOffset(getter, abovePos, above);
@@ -1568,6 +1639,10 @@ public final class SlabSupport {
                     double m = loweredSlabMagnitude(world, neighborPos, neighbor);
                     return Double.isNaN(m) ? -0.5 : m;
                 }
+                double connectingSource = loweredSupportedConnectingMagnitude(world, neighborPos, neighbor);
+                if (!Double.isNaN(connectingSource)) {
+                    return connectingSource;
+                }
                 // Propagate only through further cantilevered connecting blocks (each over air).
                 if (isCantileverConnectingCandidate(world, neighborPos, neighbor)
                         && visited.add(neighborPos.asLong())) {
@@ -1576,6 +1651,29 @@ public final class SlabSupport {
             }
         }
         return Double.NaN;
+    }
+
+    private static double loweredSupportedConnectingMagnitude(BlockGetter world, BlockPos pos, BlockState state) {
+        if (!isBeta35FenceWallVariantContactObject(state)
+                || isCantileverConnectingCandidate(world, pos, state)) {
+            return Double.NaN;
+        }
+        double contactDy = beta35FenceWallVariantContactDy(world, pos, state);
+        if (Double.isFinite(contactDy) && contactDy < -1.0e-6d) {
+            return contactDy;
+        }
+        if (!shouldOffset(world, pos, state)) {
+            return Double.NaN;
+        }
+        BlockState below = world.getBlockState(pos.below());
+        if (isBottomSlab(below) && isAdjacentSideSlabLowered(world, pos.below(), below)) {
+            return -1.0d;
+        }
+        double columnDy = slabColumnYOffset(world, pos);
+        if (columnDy < -1.0e-6d) {
+            return columnDy;
+        }
+        return -0.5d;
     }
 
     /**
@@ -1869,6 +1967,9 @@ public final class SlabSupport {
     private static double ceilingHungDecorationDy(BlockGetter world, BlockPos pos, BlockState state) {
         BlockPos supportPos = pos.above();
         BlockState above = world.getBlockState(supportPos);
+        if (isCeilingBridgedVerticalChainColumnMember(world, supportPos, above)) {
+            return 0.0d;
+        }
         if (!above.isAir() && !isCeilingAttached(above) && !CompatHooks.shouldSkipOffset(above)) {
             // The IN_GET_Y_OFFSET guard is already set, so this resolves the support's raw shape
             // recursion-safely. Skipping ceiling-attached supports bounds any hanger-chain recursion.
@@ -2265,6 +2366,14 @@ public final class SlabSupport {
         // Recursion-safe: getYOffsetInner runs under the IN_GET_Y_OFFSET guard (mirrors ceilingHungDecorationDy).
         if (isCeilingAttached(state) && isTopSlab(above)) {
             return getYOffsetInner(world, pos.above(), above) + 0.5d;
+        }
+
+        // The direct top chain is rendered with a 1.5-block ceiling bridge model. Descendant chains
+        // in that column must stay grid-height, otherwise their normal +0.5 model offset overlaps the
+        // bridge segment and the column visually merges.
+        if (isBeta35VerticalChainVisibleOwnerObject(state)
+                && isCeilingBridgedVerticalChainColumnMember(world, pos, state)) {
+            return 0.0d;
         }
 
         // cascading: ceiling-attached block below other ceiling-attached blocks
