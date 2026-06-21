@@ -2,6 +2,26 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
+## 2026-06-20 — 26.2 chained speleothem release blocker fixed headlessly
+
+- Julia's pre-release spin rescinded the prior full live-closeout for one family: chained downward pointed dripstone still
+  merged under the ceiling-bridged iron-chain setup, and sulfur spike was presumed same-family risk. Stairs were
+  live-confirmed fixed first and committed as `fcd8aba3` (`Fix lowered stair step collision`).
+- Speleothem fix savepoint is `c2f3dc94` (`Fix chained speleothem bridge offsets`) on
+  `port/mc-26.2-0.4.1-beta.1`; branch is ahead of origin by the stair and speleothem commits until pushed.
+- Red proof: `tmp/runGameTest-speleothem-ceiling-bridged-chain-red.log` failed because lower pointed-dripstone and
+  sulfur-spike segments under a ceiling-bridged iron-chain column got `dy=+0.5` while the upper segment stayed flush.
+- Fix: downward `SpeleothemBlock` states route through the ceiling-hung decoration dy path, and that path now stops at
+  any encountered ceiling-bridged vertical chain column instead of climbing through it to the top slab.
+- Green proof: `tmp/runGameTest-speleothem-ceiling-bridged-chain-green.log` passed 128/128 required tests; build proof
+  `tmp/build-speleothem-bridge-fix.log` passed and produced `slabbed-0.4.2-beta.1+26.2.jar`.
+- Profile state: `SLABBED-MC 26.2` was restaged with jar SHA-256
+  `d1bd572d26c9cd58ea5591bf6fc02280b7dd9899088ef78654f4a5e2392d3c62`; previous false-green jar SHA
+  `903dcc5e9df5e3876d79a05123554ad8f01dbf9f2e431e5edfaebe37c1c434bc` is backed up under the profile
+  `_codex-backups/` directory.
+- Current operating action: Julia needs a fresh live retest from a restarted `SLABBED-MC 26.2` session. Resume
+  `$slabbed-pre-release-hygiene` only after that live retest is accepted. No release tag/upload/publication yet.
+
 ## 2026-06-20 — 0.4.2-beta.1+26.2 release metadata bump
 
 - The P26 live-green savepoint is `689a8196`, tag `save/port-26-2-0-4-1-beta-1-p26-live-green`, pushed to

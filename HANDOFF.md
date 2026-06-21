@@ -14,6 +14,21 @@
 > you have full control — build, place (keybind §4 of the drive guide), live-A/B, commit. RED-verify
 > every gap before porting; prove RED→GREEN. Fan-out audits CAN be wrong — validate by hand.
 
+## 2026-06-20 — release blocker after live spin: chained speleothems
+
+- Julia re-tested before release and found one remaining false-green: chained downward pointed dripstone still merged
+  under the ceiling-bridged iron-chain setup; sulfur spike is treated as same-family risk. Stairs were confirmed fixed
+  and committed first at `fcd8aba3`.
+- Current HEAD is `c2f3dc94` on `port/mc-26.2-0.4.1-beta.1`, with the speleothem fix committed as
+  `Fix chained speleothem bridge offsets`. Branch is ahead of origin by the stair and speleothem commits until pushed.
+- Proof: `tmp/runGameTest-speleothem-ceiling-bridged-chain-red.log` failed on lower pointed-dripstone/sulfur-spike
+  segments getting `dy=+0.5`; `tmp/runGameTest-speleothem-ceiling-bridged-chain-green.log` passed 128/128 after the
+  hanger walk stopped at the ceiling-bridged chain column.
+- Fresh jar staged into Modrinth profile `SLABBED-MC 26.2`: SHA-256
+  `d1bd572d26c9cd58ea5591bf6fc02280b7dd9899088ef78654f4a5e2392d3c62`. Restart the profile before live retesting;
+  swapping the jar does not affect an already-running client.
+- Release hygiene remains paused until Julia accepts that fresh live retest. No release tag/upload/publication yet.
+
 ## 2026-06-20 — 0.4.2-beta.1+26.2 release metadata bump
 
 - The 26.2 P26 savepoint was committed, tagged, and pushed at `689a8196` with tag
