@@ -14,7 +14,44 @@
 > you have full control — build, place (keybind §4 of the drive guide), live-A/B, commit. RED-verify
 > every gap before porting; prove RED→GREEN. Fan-out audits CAN be wrong — validate by hand.
 
-## 2026-06-21 — docs sync after slab-held rollback cleanup
+## 2026-06-21 — 26.2 targeting overhaul SHIPPED (0.4.2-beta.1+26.2) — CURRENT STATE
+
+**Released:** branch `port/mc-26.2-0.4.1-beta.1` @ `fcb1b57c` (feature commit `8ba3414f`), tags
+`slabbed-0.4.2-beta.1+26.2` + `save/port-26-2-0-4-2-beta-1-targeting-overhaul-green`, **pushed** to
+`peetsamods/slabbed`. Released jar SHA-256 `5140fb50…` staged in Modrinth `SLABBED-MC 26.2`. Git release only
+— NOT published to Modrinth/CurseForge (that's Julia's separate upload step; jar at
+`build/libs/slabbed-0.4.2-beta.1+26.2.jar`).
+
+**The slab-held rollback-baseline live red (the prior blocker below) is RESOLVED.** Root cause was the
+targeting ARCHITECTURE — the ~3075-line `GameRendererCrosshairRetargetMixin` post-hoc-rewrites vanilla's
+hitResult through slab-only "rescue lanes" gated on `slabHeld` (so only slab-in-hand broke). Fixed by porting
+the clean cure (which had only ever lived on the 1.21.1 candidate branch, never shipped on ANY version):
+
+- **`SlabbedOffsetRaycast`** (new, `src/main/.../util/`) — offset-aware NEAREST-hit raycast (Mojang-mapped
+  ~175-line port). Installed via a single `@Redirect` on `Entity.pick(DFZ)` inside
+  `LocalPlayer.pick(Entity,DDF)` (`LocalPlayerPickOffsetRaycastMixin`, new). Default-on flag
+  `-Dslabbed.offsetRaycast=false` restores the legacy lanes (the old retargeter early-returns when on).
+  Crosshair = outline = HUD = pick = placement by construction. **Live-confirmed.**
+- **Opposite-side placement** on −1.0 compounds fixed: the legacy `replaceabilityGuard` getOpposite() flip in
+  `BlockItemPlacementIntentMixin` is gated to `!offsetRaycast`. RED→GREEN
+  (`useOnSlabBesideCompoundOwnerPlacesClickedSideNotOpposite`). **136 gametests + dy fingerprint green.**
+
+**KNOWN ISSUES (deferred to a future version, in CHANGELOG):**
+- **On-top placement flicker** — slab on a −1.0 stack reads client −0.5 / server 0.0 (NEVER-POP freeze-flat is
+  server-only) → one-tick pop. A client-prediction fix was attempted + REVERTED (it couldn't see the WYSIWYG
+  marker during client prediction → over-froze cantilever-against-cantilever to 0.0). Server placement is
+  correct. Final state is correct; only the placement instant flickers.
+- **Gaps on deep mixed-offset stacks** = the deferred slab-**COMBINING** feature. **This is the planned next
+  focus.** Recorder finding: most of the "snapping/target:none jank" is NOT a targeting bug — the offset
+  raycast is stable and agrees with vanilla; the dropouts are aiming across the empty logical cells the
+  per-block lowering leaves. To diagnose combining work, rebuild the throwaway `SlabbedRecorder` (logs every
+  pick + placement, client vs server; removed from the release — see git history / the binder note).
+
+See `docs/binder/26-2-offset-raycast-overhaul-candidate-20260621.md`, SPINE tail (2026-06-21 cont.),
+LESSONS_INDEX **S11**, PORTING_MAP (targeting authority = `SlabbedOffsetRaycast`), and memory
+`slabbed-targeting-overhaul-never-ported-trap`.
+
+## 2026-06-21 — docs sync after slab-held rollback cleanup (history — superseded by the section above)
 
 - Source/profile alignment is restored after the live-rejected slab-held targeting experiment. Active source no longer
   carries the rejected slab-held owner-guard logic: `GameRendererCrosshairRetargetMixin` and
