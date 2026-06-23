@@ -1,49 +1,49 @@
 package com.slabbed.mixin.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.AbstractRailBlock;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.MinecartEntityRenderer;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.vehicle.AbstractMinecartEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.MinecartRenderer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.vehicle.AbstractMinecart;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BaseRailBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Offsets minecart rendering down by 0.5 when the minecart sits on a rail
- * visually anchored to a bottom slab.
+ * Offsets minecart rendering when the minecart sits on a Slabbed-lowered rail.
  */
-@Mixin(MinecartEntityRenderer.class)
+@Mixin(MinecartRenderer.class)
 public abstract class MinecartRenderOffsetMixin {
 
-    @Inject(method = "render(Lnet/minecraft/entity/vehicle/AbstractMinecartEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V",
+    @Inject(method = "render(Lnet/minecraft/world/entity/vehicle/AbstractMinecart;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
             at = @At("HEAD"))
-    private void slabbed$adjustMinecartOffset(AbstractMinecartEntity entity,
+    private void slabbed$adjustMinecartOffset(AbstractMinecart entity,
                                               float yaw,
                                               float tickDelta,
-                                              MatrixStack matrices,
-                                              VertexConsumerProvider vertexConsumers,
+                                              PoseStack matrices,
+                                              MultiBufferSource vertexConsumers,
                                               int light,
                                               CallbackInfo ci) {
-        World world = entity.getEntityWorld();
+        Level world = entity.level();
         if (world == null) {
             return;
         }
 
-        BlockPos pos = entity.getBlockPos();
+        BlockPos pos = entity.getOnPos();
         BlockState blockState = world.getBlockState(pos);
 
-        if (!(blockState.getBlock() instanceof AbstractRailBlock)) {
+        if (!(blockState.getBlock() instanceof BaseRailBlock)) {
             return;
         }
 
-        if (SlabSupport.shouldOffset(world, pos, blockState)) {
-            matrices.translate(0.0, -0.5, 0.0);
+        double dy = SlabSupport.getYOffset(world, pos, blockState);
+        if (dy != 0.0) {
+            matrices.translate(0.0, dy, 0.0);
         }
     }
 }

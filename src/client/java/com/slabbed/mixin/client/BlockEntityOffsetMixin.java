@@ -1,14 +1,14 @@
 package com.slabbed.mixin.client;
 
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.block.entity.BlockEntityRenderDispatcher;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -29,20 +29,20 @@ public abstract class BlockEntityOffsetMixin {
 
     @Inject(method = "render", at = @At("HEAD"))
     private <E extends BlockEntity> void slabbed$offsetBlockEntity(
-            E blockEntity, float tickDelta, MatrixStack matrices, VertexConsumerProvider vertexConsumers,
+            E blockEntity, float tickDelta, PoseStack matrices, MultiBufferSource vertexConsumers,
             CallbackInfo ci
     ) {
         if (blockEntity == null) {
             return;
         }
-        BlockPos pos = blockEntity.getPos();
-        BlockState blockState = blockEntity.getCachedState();
+        BlockPos pos = blockEntity.getBlockPos();
+        BlockState blockState = blockEntity.getBlockState();
 
         if (pos == null || blockState == null) {
             return;
         }
 
-        World world = MinecraftClient.getInstance().world;
+        Level world = Minecraft.getInstance().level;
         if (world == null) {
             return;
         }

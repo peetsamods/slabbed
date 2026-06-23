@@ -4,18 +4,18 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.BlockRenderView;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.Level;
 
 public final class ModelDyTranslateTraceBridge {
     private static volatile BlockPos slabbed$tracePos = null;
     private static volatile Trace slabbed$lastTrace = Trace.missing();
-    private static volatile ClientWorld slabbed$beta4RecorderWorld = null;
+    private static volatile ClientLevel slabbed$beta4RecorderLevel = null;
     private static volatile boolean slabbed$beta4RecorderStartLogged = false;
     private static volatile long slabbed$beta4RecorderLastTick = Long.MIN_VALUE;
     private static volatile int slabbed$beta4RecorderTicksRemaining = 0;
@@ -42,7 +42,7 @@ public final class ModelDyTranslateTraceBridge {
     }
 
     public static void reset(BlockPos pos) {
-        slabbed$tracePos = pos == null ? null : pos.toImmutable();
+        slabbed$tracePos = pos == null ? null : pos.immutable();
         slabbed$lastTrace = Trace.missing();
     }
 
@@ -50,7 +50,7 @@ public final class ModelDyTranslateTraceBridge {
         return slabbed$lastTrace;
     }
 
-    public static void record(String method, BlockRenderView world, BlockPos pos, BlockState state, double dy) {
+    public static void record(String method, BlockAndTintGetter world, BlockPos pos, BlockState state, double dy) {
         recordBeta4ModelDy(method, world, pos, state, dy);
         BlockPos target = slabbed$tracePos;
         if (target == null || !target.equals(pos)) {
@@ -72,7 +72,7 @@ public final class ModelDyTranslateTraceBridge {
 
     public static void recordBeta4ModelDy(
             String method,
-            BlockRenderView view,
+            BlockAndTintGetter view,
             BlockPos pos,
             BlockState state,
             double modelDy
@@ -80,9 +80,9 @@ public final class ModelDyTranslateTraceBridge {
         if (!Boolean.getBoolean("slabbed.beta4ModelDyRecorder")) {
             return;
         }
-        MinecraftClient mc = MinecraftClient.getInstance();
-        ClientWorld clientWorld = mc == null ? null : mc.world;
-        if (clientWorld == null || !slabbed$beta4RecorderTick(clientWorld)) {
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel clientLevel = mc == null ? null : mc.level;
+        if (clientLevel == null || !slabbed$beta4RecorderTick(clientLevel)) {
             return;
         }
         int watchIndex = slabbed$watchIndex(pos);
@@ -92,37 +92,39 @@ public final class ModelDyTranslateTraceBridge {
 
         double viewClientDy = ClientDy.dyFor(view, pos, state);
         double viewSlabSupportDy = SlabSupport.getYOffset(view, pos, state);
-        boolean viewIsWorld = view instanceof World;
+        boolean viewIsLevel = view instanceof Level;
         boolean viewAnchored = SlabAnchorAttachment.isAnchored(view, pos);
         boolean viewPersistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(view, pos, state);
         boolean viewBottomCarrier = SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(view, pos, state);
 
-        BlockState clientState = clientWorld.getBlockState(pos);
-        double clientDy = ClientDy.dyFor(clientWorld, pos, clientState);
-        double clientSlabSupportDy = SlabSupport.getYOffset(clientWorld, pos, clientState);
-        boolean anchored = SlabAnchorAttachment.isAnchored(clientWorld, pos);
-        boolean persistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(clientWorld, pos, clientState);
-        boolean bottomCarrier = SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(clientWorld, pos, clientState);
+        BlockState clientState = clientLevel.getBlockState(pos);
+        double clientDy = ClientDy.dyFor(clientLevel, pos, clientState);
+        double clientSlabSupportDy = SlabSupport.getYOffset(clientLevel, pos, clientState);
+        boolean anchored = SlabAnchorAttachment.isAnchored(clientLevel, pos);
+        boolean persistentCarrier = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(clientLevel, pos, clientState);
+        boolean bottomCarrier = SlabAnchorAttachment.isPersistentLoweredBottomSlabCarrierNonRecursive(clientLevel, pos, clientState);
         boolean lowered = slabbed$isLowered(clientDy);
         boolean modelDyLowered = slabbed$isLowered(modelDy);
         boolean modelDyZeroClientTruthLowered = modelDy == 0.0d && lowered;
         boolean slab = clientState.getBlock() instanceof SlabBlock;
-        String slabType = clientState.contains(SlabBlock.TYPE) ? clientState.get(SlabBlock.TYPE).asString() : "none";
+        String slabType = clientState.hasProperty(SlabBlock.TYPE)
+                ? clientState.getValue(SlabBlock.TYPE).getSerializedName()
+                : "none";
         String sourceMode = persistentCarrier
                 ? "persistentLoweredSlabCarrier"
                 : (lowered ? "dynamicLoweredOrAnchored" : "normal");
 
         Slabbed.LOGGER.info(
-                "[BETA4_MODEL_DY_RECORDER] tick={} ticksRemaining={} watch={} method={} pos={} state={} viewClass={} viewIsWorld={} worldKey={} modelDy={} viewClientDy={} viewSlabSupportDy={} viewAnchored={} viewPersistentLoweredSlabCarrier={} viewPersistentLoweredBottomSlabCarrier={} clientState={} clientDy={} clientSlabSupportDy={} anchored={} persistentFullBlockAnchor={} persistentLoweredSlabCarrier={} persistentLoweredBottomSlabCarrier={} lowered={} slabType={} sourceMode={} nonWorldBridgeAnchor={} nonWorldBridgeCarrier={} nonWorldBridgeBottomCarrier={} modelDyZeroClientTruthLowered={} modelDyLowered={}",
-                clientWorld.getTime(),
+                "[BETA4_MODEL_DY_RECORDER] tick={} ticksRemaining={} watch={} method={} pos={} state={} viewClass={} viewIsLevel={} worldKey={} modelDy={} viewClientDy={} viewSlabSupportDy={} viewAnchored={} viewPersistentLoweredSlabCarrier={} viewPersistentLoweredBottomSlabCarrier={} clientState={} clientDy={} clientSlabSupportDy={} anchored={} persistentFullBlockAnchor={} persistentLoweredSlabCarrier={} persistentLoweredBottomSlabCarrier={} lowered={} slabType={} sourceMode={} nonWorldBridgeAnchor={} nonWorldBridgeCarrier={} nonWorldBridgeBottomCarrier={} modelDyZeroClientTruthLowered={} modelDyLowered={}",
+                clientLevel.getGameTime(),
                 slabbed$beta4RecorderTicksRemaining,
                 watchIndex,
                 method,
                 pos.toShortString(),
                 state,
                 view.getClass().getName(),
-                viewIsWorld,
-                slabbed$worldKey(view, clientWorld),
+                viewIsLevel,
+                slabbed$worldKey(view, clientLevel),
                 slabbed$formatDouble(modelDy),
                 slabbed$formatDouble(viewClientDy),
                 slabbed$formatDouble(viewSlabSupportDy),
@@ -139,16 +141,16 @@ public final class ModelDyTranslateTraceBridge {
                 lowered,
                 slabType,
                 sourceMode,
-                !viewIsWorld && anchored,
-                !viewIsWorld && persistentCarrier,
-                !viewIsWorld && bottomCarrier,
+                !viewIsLevel && anchored,
+                !viewIsLevel && persistentCarrier,
+                !viewIsLevel && bottomCarrier,
                 modelDyZeroClientTruthLowered,
                 modelDyLowered);
     }
 
-    private static boolean slabbed$beta4RecorderTick(ClientWorld world) {
-        if (world != slabbed$beta4RecorderWorld) {
-            slabbed$beta4RecorderWorld = world;
+    private static boolean slabbed$beta4RecorderTick(ClientLevel world) {
+        if (world != slabbed$beta4RecorderLevel) {
+            slabbed$beta4RecorderLevel = world;
             slabbed$beta4RecorderStartLogged = false;
             slabbed$beta4RecorderLastTick = Long.MIN_VALUE;
             slabbed$beta4RecorderTicksRemaining = slabbed$intProperty("slabbed.beta4ModelDyRecorderTicks", 700);
@@ -158,10 +160,10 @@ public final class ModelDyTranslateTraceBridge {
             Slabbed.LOGGER.info(
                     "[BETA4_MODEL_DY_RECORDER_START] enabled=true ticks={} world={} watch={}",
                     slabbed$beta4RecorderTicksRemaining,
-                    world.getRegistryKey().getValue(),
+                    world.dimension().location(),
                     System.getProperty("slabbed.beta4ModelDyRecorderWatch", ""));
         }
-        long tick = world.getTime();
+        long tick = world.getGameTime();
         if (tick != slabbed$beta4RecorderLastTick) {
             slabbed$beta4RecorderLastTick = tick;
             slabbed$beta4RecorderTicksRemaining--;
@@ -235,10 +237,10 @@ public final class ModelDyTranslateTraceBridge {
         return String.format("%.6f", value);
     }
 
-    private static String slabbed$worldKey(BlockRenderView view, ClientWorld clientWorld) {
-        if (view instanceof World world) {
-            return world.getRegistryKey().getValue().toString();
+    private static String slabbed$worldKey(BlockAndTintGetter view, ClientLevel clientLevel) {
+        if (view instanceof Level world) {
+            return world.dimension().location().toString();
         }
-        return clientWorld.getRegistryKey().getValue().toString();
+        return clientLevel.dimension().location().toString();
     }
 }

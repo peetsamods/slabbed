@@ -1,23 +1,23 @@
 package com.slabbed.util;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 
 public final class Mc1211TrapdoorUnderBottomRecorder {
     private static final String OPT_IN = "slabbed.mc1211.trapdoorLoweredSeamMp4Red";
@@ -36,7 +36,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
     }
 
     public static ClickSnapshot startClientClick(
-            World world,
+            Level world,
             ItemStack heldStack,
             BlockHitResult hit,
             HitResult crosshairTarget
@@ -48,8 +48,8 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
         ClickSnapshot snapshot = new ClickSnapshot(
                 clickIndex,
                 hit.getBlockPos(),
-                hit.getSide(),
-                hit.getPos(),
+                hit.getDirection(),
+                hit.getLocation(),
                 expectedTrapdoorPos(hit),
                 heldItem(heldStack));
         System.out.println("[MC1211_TRAPDOOR_PLACEMENT_CLICK_START]"
@@ -61,7 +61,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
         return snapshot;
     }
 
-    public static void finishClientClick(World world, ClickSnapshot snapshot, ActionResult result) {
+    public static void finishClientClick(Level world, ClickSnapshot snapshot, InteractionResult result) {
         if (!enabled() || world == null || snapshot == null) {
             return;
         }
@@ -70,83 +70,83 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
                 + " clickIndex=" + snapshot.clickIndex()
                 + commonClickFields(world, snapshot)
                 + " interactionResult=" + result
-                + " interactionAccepted=" + (result != null && result.isAccepted())
+                + " interactionAccepted=" + (result != null && result.consumesAction())
                 + " expectedTrapdoorState=" + expectedState
                 + " expectedTrapdoorDy=" + SlabSupport.getYOffset(world, snapshot.expectedTrapdoorPos(), expectedState)
-                + " trapdoorPresent=" + expectedState.isOf(Blocks.OAK_TRAPDOOR)
+                + " trapdoorPresent=" + expectedState.is(Blocks.OAK_TRAPDOOR)
                 + " trapdoorResolvedToAir=" + expectedState.isAir()
                 + " sourceTruth=manual-live-recorder"
                 + " gameplayPatch=false");
     }
 
-    public static boolean recordUseHead(ItemUsageContext context, Identifier itemId) {
+    public static boolean recordUseHead(UseOnContext context, ResourceLocation itemId) {
         if (!isOakTrapdoorUse(context, itemId)) {
             return false;
         }
-        World world = context.getWorld();
-        BlockPos expected = context.getBlockPos().offset(context.getSide());
+        Level world = context.getLevel();
+        BlockPos expected = context.getClickedPos().relative(context.getClickedFace());
         System.out.println("[MC1211_TRAPDOOR_PLACEMENT_USE_HEAD]"
-                + useFields("useOnBlock-head", world, itemId, context.getBlockPos(), context.getSide(),
-                context.getHitPos(), expected)
+                + useFields("useOnBlock-head", world, itemId, context.getClickedPos(), context.getClickedFace(),
+                context.getClickLocation(), expected)
                 + " gameplayPatch=false");
         return true;
     }
 
     public static void recordUseReturn(
-            ItemUsageContext context,
-            Identifier itemId,
-            ActionResult result,
+            UseOnContext context,
+            ResourceLocation itemId,
+            InteractionResult result,
             boolean placeCalled
     ) {
         if (!isOakTrapdoorUse(context, itemId)) {
             return;
         }
-        World world = context.getWorld();
-        BlockPos expected = context.getBlockPos().offset(context.getSide());
+        Level world = context.getLevel();
+        BlockPos expected = context.getClickedPos().relative(context.getClickedFace());
         BlockState expectedState = world.getBlockState(expected);
         System.out.println("[MC1211_TRAPDOOR_PLACEMENT_USE_RETURN]"
-                + useFields("useOnBlock-return", world, itemId, context.getBlockPos(), context.getSide(),
-                context.getHitPos(), expected)
+                + useFields("useOnBlock-return", world, itemId, context.getClickedPos(), context.getClickedFace(),
+                context.getClickLocation(), expected)
                 + " useOnBlockResult=" + result
-                + " useOnBlockAccepted=" + (result != null && result.isAccepted())
+                + " useOnBlockAccepted=" + (result != null && result.consumesAction())
                 + " blockItemPlaceCalled=" + placeCalled
                 + " expectedTrapdoorState=" + expectedState
-                + " trapdoorPresent=" + expectedState.isOf(Blocks.OAK_TRAPDOOR)
+                + " trapdoorPresent=" + expectedState.is(Blocks.OAK_TRAPDOOR)
                 + " trapdoorResolvedToAir=" + expectedState.isAir()
                 + " gameplayPatch=false");
     }
 
-    public static boolean recordPlaceHead(ItemPlacementContext context, Identifier itemId) {
+    public static boolean recordPlaceHead(BlockPlaceContext context, ResourceLocation itemId) {
         if (!isOakTrapdoorPlace(context, itemId)) {
             return false;
         }
-        World world = context.getWorld();
-        Direction face = context.getSide();
-        BlockPos placePos = context.getBlockPos();
-        BlockPos clickedPos = placePos.offset(face.getOpposite());
+        Level world = context.getLevel();
+        Direction face = context.getClickedFace();
+        BlockPos placePos = context.getClickedPos();
+        BlockPos clickedPos = placePos.relative(face.getOpposite());
         System.out.println("[MC1211_TRAPDOOR_PLACEMENT_PLACE_HEAD]"
-                + placeFields("place-head", world, itemId, clickedPos, face, context.getHitPos(), placePos)
+                + placeFields("place-head", world, itemId, clickedPos, face, context.getClickLocation(), placePos)
                 + " gameplayPatch=false");
         return true;
     }
 
-    public static void recordPlaceReturn(ItemPlacementContext context, Identifier itemId, ActionResult result) {
+    public static void recordPlaceReturn(BlockPlaceContext context, ResourceLocation itemId, InteractionResult result) {
         if (!isOakTrapdoorPlace(context, itemId)) {
             return;
         }
-        World world = context.getWorld();
-        Direction face = context.getSide();
-        BlockPos placePos = context.getBlockPos();
-        BlockPos clickedPos = placePos.offset(face.getOpposite());
-        logPlaceReturn("place-return", world, itemId, clickedPos, face, context.getHitPos(), placePos, result);
-        if (!world.isClient() && world.getServer() != null) {
+        Level world = context.getLevel();
+        Direction face = context.getClickedFace();
+        BlockPos placePos = context.getClickedPos();
+        BlockPos clickedPos = placePos.relative(face.getOpposite());
+        logPlaceReturn("place-return", world, itemId, clickedPos, face, context.getClickLocation(), placePos, result);
+        if (!world.isClientSide() && world.getServer() != null) {
             world.getServer().execute(() -> logPlaceReturn(
                     "server-after-queued-tick",
                     world,
                     itemId,
                     clickedPos,
                     face,
-                    context.getHitPos(),
+                    context.getClickLocation(),
                     placePos,
                     result));
         }
@@ -154,64 +154,64 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
 
     private static void logPlaceReturn(
             String phase,
-            World world,
-            Identifier itemId,
+            Level world,
+            ResourceLocation itemId,
             BlockPos clickedPos,
             Direction face,
-            Vec3d hit,
+            Vec3 hit,
             BlockPos placePos,
-            ActionResult result
+            InteractionResult result
     ) {
         BlockState finalState = world.getBlockState(placePos);
         System.out.println("[MC1211_TRAPDOOR_PLACEMENT_PLACE_RETURN]"
                 + placeFields(phase, world, itemId, clickedPos, face, hit, placePos)
                 + " placementResult=" + result
-                + " placementAccepted=" + (result != null && result.isAccepted())
+                + " placementAccepted=" + (result != null && result.consumesAction())
                 + " finalTrapdoorState=" + finalState
                 + " finalTrapdoorDy=" + SlabSupport.getYOffset(world, placePos, finalState)
-                + " trapdoorPresent=" + finalState.isOf(Blocks.OAK_TRAPDOOR)
+                + " trapdoorPresent=" + finalState.is(Blocks.OAK_TRAPDOOR)
                 + " trapdoorResolvedToAir=" + finalState.isAir()
                 + " classification=" + placeClassification(result, finalState)
                 + " gameplayPatch=false");
     }
 
-    private static boolean isOakTrapdoorClick(World world, ItemStack heldStack, BlockHitResult hit) {
+    private static boolean isOakTrapdoorClick(Level world, ItemStack heldStack, BlockHitResult hit) {
         if (!enabled() || world == null || heldStack == null || hit == null) {
             return false;
         }
         return heldStack.getItem() instanceof BlockItem blockItem && blockItem.getBlock().equals(Blocks.OAK_TRAPDOOR);
     }
 
-    private static boolean isOakTrapdoorUse(ItemUsageContext context, Identifier itemId) {
-        if (!enabled() || context == null || context.getWorld() == null) {
+    private static boolean isOakTrapdoorUse(UseOnContext context, ResourceLocation itemId) {
+        if (!enabled() || context == null || context.getLevel() == null) {
             return false;
         }
         return isOakTrapdoor(itemId);
     }
 
-    private static boolean isOakTrapdoorPlace(ItemPlacementContext context, Identifier itemId) {
-        if (!enabled() || context == null || context.getWorld() == null) {
+    private static boolean isOakTrapdoorPlace(BlockPlaceContext context, ResourceLocation itemId) {
+        if (!enabled() || context == null || context.getLevel() == null) {
             return false;
         }
         return isOakTrapdoor(itemId);
     }
 
-    private static boolean isOakTrapdoor(Identifier itemId) {
+    private static boolean isOakTrapdoor(ResourceLocation itemId) {
         return "minecraft:oak_trapdoor".equals(String.valueOf(itemId));
     }
 
     private static boolean isBottomSlab(BlockState state) {
         return state != null
                 && state.getBlock() instanceof SlabBlock
-                && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+                && state.hasProperty(SlabBlock.TYPE)
+                && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 
     private static BlockPos expectedTrapdoorPos(BlockHitResult hit) {
-        return hit.getBlockPos().offset(hit.getSide());
+        return hit.getBlockPos().relative(hit.getDirection());
     }
 
-    private static String commonClickFields(World world, ClickSnapshot snapshot) {
+    private static String commonClickFields(Level world, ClickSnapshot snapshot) {
         BlockState targetState = world.getBlockState(snapshot.targetPos());
         BlockState expectedState = world.getBlockState(snapshot.expectedTrapdoorPos());
         return " side=" + side(world)
@@ -229,11 +229,11 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
 
     private static String useFields(
             String phase,
-            World world,
-            Identifier itemId,
+            Level world,
+            ResourceLocation itemId,
             BlockPos clickedPos,
             Direction face,
-            Vec3d hit,
+            Vec3 hit,
             BlockPos expected
     ) {
         BlockState clickedState = world.getBlockState(clickedPos);
@@ -254,11 +254,11 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
 
     private static String placeFields(
             String phase,
-            World world,
-            Identifier itemId,
+            Level world,
+            ResourceLocation itemId,
             BlockPos clickedPos,
             Direction face,
-            Vec3d hit,
+            Vec3 hit,
             BlockPos placePos
     ) {
         BlockState clickedState = world.getBlockState(clickedPos);
@@ -272,20 +272,20 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
                 + " targetFace=" + face
                 + " bottomSlabUndersideCandidate=" + bottomSlabUnderside(face, clickedState)
                 + " hitVec=" + formatVec(hit)
-                + " expectedTrapdoorPos=" + shortPos(clickedPos.offset(face))
+                + " expectedTrapdoorPos=" + shortPos(clickedPos.relative(face))
                 + " nativePlacePos=" + shortPos(placePos)
                 + " nativePlaceState=" + placeState
                 + " nativePlaceDy=" + SlabSupport.getYOffset(world, placePos, placeState);
     }
 
-    private static String placeClassification(ActionResult result, BlockState finalState) {
-        if (finalState.isOf(Blocks.OAK_TRAPDOOR)) {
+    private static String placeClassification(InteractionResult result, BlockState finalState) {
+        if (finalState.is(Blocks.OAK_TRAPDOOR)) {
             return "TRAPDOOR_PRESENT";
         }
-        if (result != null && result.isAccepted() && finalState.isAir()) {
+        if (result != null && result.consumesAction() && finalState.isAir()) {
             return "ACCEPTED_BUT_AIR";
         }
-        if (result != null && !result.isAccepted()) {
+        if (result != null && !result.consumesAction()) {
             return "PLACEMENT_REJECTED";
         }
         return "TRAPDOOR_ABSENT";
@@ -295,33 +295,33 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
         return face == Direction.DOWN && isBottomSlab(state);
     }
 
-    private static String formatHit(World world, HitResult hit) {
+    private static String formatHit(Level world, HitResult hit) {
         if (!(hit instanceof BlockHitResult blockHit)) {
             return hit == null ? "null" : hit.getType().toString();
         }
         BlockPos pos = blockHit.getBlockPos();
         BlockState state = world.getBlockState(pos);
         return "{pos=" + shortPos(pos)
-                + " face=" + blockHit.getSide()
-                + " hit=" + formatVec(blockHit.getPos())
+                + " face=" + blockHit.getDirection()
+                + " hit=" + formatVec(blockHit.getLocation())
                 + " state=" + state
                 + " dy=" + SlabSupport.getYOffset(world, pos, state)
                 + "}";
     }
 
-    private static String side(World world) {
-        return world.isClient() ? "CLIENT" : "SERVER";
+    private static String side(Level world) {
+        return world.isClientSide() ? "CLIENT" : "SERVER";
     }
 
     private static String heldItem(ItemStack stack) {
-        return stack == null || stack.isEmpty() ? "empty" : String.valueOf(Registries.ITEM.getId(stack.getItem()));
+        return stack == null || stack.isEmpty() ? "empty" : String.valueOf(BuiltInRegistries.ITEM.getKey(stack.getItem()));
     }
 
     private static String shortPos(BlockPos pos) {
-        return pos == null ? "null" : pos.toShortString().replace(" ", "");
+        return pos == null ? "null" : pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
-    private static String formatVec(Vec3d vec) {
+    private static String formatVec(Vec3 vec) {
         if (vec == null) {
             return "null";
         }
@@ -332,7 +332,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
             int clickIndex,
             BlockPos targetPos,
             Direction face,
-            Vec3d hit,
+            Vec3 hit,
             BlockPos expectedTrapdoorPos,
             String heldItem
     ) {

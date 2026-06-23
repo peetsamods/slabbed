@@ -1,13 +1,13 @@
 package com.slabbed.dev;
 
-import com.slabbed.util.SlabbedAuditBridge;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
+import com.slabbed.util.RuntimeDiagnostics;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,9 +46,9 @@ public final class SlabbedLabFixtures {
      */
     private static LinkedHashMap<String, BlockState> buildLanes() {
         LinkedHashMap<String, BlockState> lanes = new LinkedHashMap<>();
-        lanes.put("FULL",        Blocks.STONE.getDefaultState());
-        lanes.put("BOTTOM_SLAB", Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
-        lanes.put("TOP_SLAB",    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP));
+        lanes.put("FULL",        Blocks.STONE.defaultBlockState());
+        lanes.put("BOTTOM_SLAB", Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
+        lanes.put("TOP_SLAB",    Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         return lanes;
     }
 
@@ -60,7 +60,7 @@ public final class SlabbedLabFixtures {
         LinkedHashMap<String, BlockPos> positions = new LinkedHashMap<>();
         int idx = 0;
         for (String name : buildLanes().keySet()) {
-            positions.put(name, origin.add(idx * LANE_STRIDE, 0, 0));
+            positions.put(name, origin.offset(idx * LANE_STRIDE, 0, 0));
             idx++;
         }
         return positions;
@@ -121,7 +121,7 @@ public final class SlabbedLabFixtures {
      *
      * @return {@link PlaceResult} indicating success or the reason for abort
      */
-    public static PlaceResult placeBasicFixture(ServerWorld world, BlockPos origin) {
+    public static PlaceResult placeBasicFixture(ServerLevel world, BlockPos origin) {
         LinkedHashMap<String, BlockState> lanes     = buildLanes();
         LinkedHashMap<String, BlockPos>   positions = buildPositions(origin);
 
@@ -131,10 +131,10 @@ public final class SlabbedLabFixtures {
         // Full scan before any edit — no partial world state on abort.
         for (Map.Entry<String, BlockPos> entry : positions.entrySet()) {
             for (int dy = 0; dy <= CHECK_HEIGHT; dy++) {
-                BlockPos check = entry.getValue().up(dy);
+                BlockPos check = entry.getValue().above(dy);
                 if (!world.getBlockState(check).isAir()) {
                     return PlaceResult.fail(
-                            "area occupied at " + check.toShortString()
+                            "area occupied at " + check.toString()
                             + " (lane " + entry.getKey() + ", dy=" + dy + "). No blocks placed.");
                 }
             }
@@ -142,7 +142,7 @@ public final class SlabbedLabFixtures {
 
         // Place support blocks quietly — no neighbor cascade during fixture setup.
         for (Map.Entry<String, BlockState> entry : lanes.entrySet()) {
-            world.setBlockState(positions.get(entry.getKey()), entry.getValue(), Block.NOTIFY_LISTENERS);
+            world.setBlock(positions.get(entry.getKey()), entry.getValue(), Block.UPDATE_CLIENTS);
         }
 
         return PlaceResult.success(origin, positions);
@@ -157,7 +157,7 @@ public final class SlabbedLabFixtures {
      *
      * @return {@link PlaceResult} indicating success (with cleared positions) or the reason for abort
      */
-    public static PlaceResult clearBasicFixture(ServerWorld world, BlockPos origin) {
+    public static PlaceResult clearBasicFixture(ServerLevel world, BlockPos origin) {
         LinkedHashMap<String, BlockState> lanes     = buildLanes();
         LinkedHashMap<String, BlockPos>   positions = buildPositions(origin);
 
@@ -170,17 +170,17 @@ public final class SlabbedLabFixtures {
 
             if (!actual.equals(expected)) {
                 return PlaceResult.fail(
-                        "unexpected block at " + pos.toShortString()
+                        "unexpected block at " + pos.toString()
                         + " (lane " + entry.getKey() + "): expected "
-                        + expected.getBlock().getTranslationKey()
-                        + ", found " + actual.getBlock().getTranslationKey()
+                        + expected.getBlock().getDescriptionId()
+                        + ", found " + actual.getBlock().getDescriptionId()
                         + ". No blocks changed.");
             }
         }
 
         // All positions verified — remove fixture support blocks quietly.
         for (BlockPos pos : positions.values()) {
-            world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
         }
 
         return PlaceResult.success(origin, positions);
@@ -203,7 +203,7 @@ public final class SlabbedLabFixtures {
      *                 {@code "top_slab"}), or {@code null} for all lanes
      * @return {@link PlaceResult} with affected positions on success, or fail reason
      */
-    public static PlaceResult breakSupport(ServerWorld world, BlockPos origin, String laneName) {
+    public static PlaceResult breakSupport(ServerLevel world, BlockPos origin, String laneName) {
         LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
         if (targetLanes == null) {
             return PlaceResult.fail("unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.");
@@ -226,43 +226,43 @@ public final class SlabbedLabFixtures {
         // BS-FB Live Trace: capture before breaking support (Moment A)
         for (String name : targetLanes.keySet()) {
             BlockPos supportPos = allPositions.get(name);
-            BlockPos fullPos = supportPos.up();
-            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, "BEFORE_BREAK_" + name);
-            SlabbedAuditBridge.captureClientBsFbLiveTrace(supportPos, fullPos, "BEFORE_BREAK_" + name);
+            BlockPos fullPos = supportPos.above();
+            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, fullPos, "BEFORE_BREAK_" + name);
+            RuntimeDiagnostics.captureClientBsFbLiveTrace(supportPos, fullPos, "BEFORE_BREAK_" + name);
         }
 
         // Remove support blocks with full neighbor notification — reproduces real support loss.
         LinkedHashMap<String, BlockPos> affected = new LinkedHashMap<>();
         for (String name : targetLanes.keySet()) {
             BlockPos pos = allPositions.get(name);
-            world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+            world.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
             affected.put(name, pos);
         }
 
         // BS-FB Live Trace: capture immediately after breaking support (Moment B)
         for (String name : targetLanes.keySet()) {
             BlockPos supportPos = allPositions.get(name);
-            BlockPos fullPos = supportPos.up();
-            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, "AFTER_BREAK_" + name);
-            SlabbedAuditBridge.captureClientBsFbLiveTrace(supportPos, fullPos, "AFTER_BREAK_" + name);
+            BlockPos fullPos = supportPos.above();
+            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, fullPos, "AFTER_BREAK_" + name);
+            RuntimeDiagnostics.captureClientBsFbLiveTrace(supportPos, fullPos, "AFTER_BREAK_" + name);
         }
 
         // BS-FB Live Trace: schedule delayed captures (Moments C: 1, 2, 5 ticks after break)
-        if (SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
-            long currentTick = world.getServer().getTicks();
+        if (RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
+            long currentTick = world.getServer().getTickCount();
             int[] delays = new int[] {1, 2, 5};
             for (int d : delays) {
                 final int finalDelay = d;
                 world.getServer().execute(new Runnable() {
                     @Override
                     public void run() {
-                        if (world.getServer().getTicks() >= currentTick + finalDelay) {
+                        if (world.getServer().getTickCount() >= currentTick + finalDelay) {
                             for (String name : targetLanes.keySet()) {
                                 BlockPos supportPos = allPositions.get(name);
-                                BlockPos fullPos = supportPos.up();
+                                BlockPos fullPos = supportPos.above();
                                 String label = "DELAY_" + finalDelay + "TICKS_AFTER_BREAK_" + name;
-                                SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, label);
-                                SlabbedAuditBridge.captureClientBsFbLiveTrace(supportPos, fullPos, label);
+                                RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, fullPos, label);
+                                RuntimeDiagnostics.captureClientBsFbLiveTrace(supportPos, fullPos, label);
                             }
                         }
                     }
@@ -285,7 +285,7 @@ public final class SlabbedLabFixtures {
      *                 {@code "top_slab"}), or {@code null} for all lanes
      * @return {@link PlaceResult} with affected positions on success, or fail reason
      */
-    public static PlaceResult restoreSupport(ServerWorld world, BlockPos origin, String laneName) {
+    public static PlaceResult restoreSupport(ServerLevel world, BlockPos origin, String laneName) {
         LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
         if (targetLanes == null) {
             return PlaceResult.fail("unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.");
@@ -300,7 +300,7 @@ public final class SlabbedLabFixtures {
 
             if (!actual.isAir()) {
                 return PlaceResult.fail(
-                        laneMismatchMessage("restore", entry.getKey(), pos, Blocks.AIR.getDefaultState(), actual));
+                        laneMismatchMessage("restore", entry.getKey(), pos, Blocks.AIR.defaultBlockState(), actual));
             }
         }
 
@@ -308,30 +308,30 @@ public final class SlabbedLabFixtures {
         LinkedHashMap<String, BlockPos> affected = new LinkedHashMap<>();
         for (Map.Entry<String, BlockState> entry : targetLanes.entrySet()) {
             BlockPos pos = allPositions.get(entry.getKey());
-            world.setBlockState(pos, entry.getValue(), Block.NOTIFY_ALL);
+            world.setBlock(pos, entry.getValue(), Block.UPDATE_ALL);
             affected.put(entry.getKey(), pos);
         }
 
         // BS-FB Live Trace: capture immediately after placement (Moment D)
         for (String name : targetLanes.keySet()) {
             BlockPos supportPos = allPositions.get(name);
-            BlockPos fullPos = supportPos.up();
-            SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, "AFTER_PLACEMENT_" + name);
+            BlockPos fullPos = supportPos.above();
+            RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, fullPos, "AFTER_PLACEMENT_" + name);
         }
 
         // BS-FB Live Trace: schedule delayed captures (Moments E: 2-10 ticks after placement)
-        if (SlabbedAuditBridge.isBsFbLiveTraceEnabled()) {
-            long currentTick = world.getServer().getTicks();
+        if (RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
+            long currentTick = world.getServer().getTickCount();
             for (int delay = 2; delay <= 10; delay++) {
                 final int finalDelay = delay;
                 world.getServer().execute(new Runnable() {
                     @Override
                     public void run() {
-                        if (world.getServer().getTicks() >= currentTick + finalDelay) {
+                        if (world.getServer().getTickCount() >= currentTick + finalDelay) {
                             for (String name : targetLanes.keySet()) {
                                 BlockPos supportPos = allPositions.get(name);
-                                BlockPos fullPos = supportPos.up();
-                                SlabbedAuditBridge.captureBsFbLiveTrace(world, supportPos, fullPos, "DELAY_" + finalDelay + "TICKS_AFTER_PLACE_" + name);
+                                BlockPos fullPos = supportPos.above();
+                                RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, fullPos, "DELAY_" + finalDelay + "TICKS_AFTER_PLACE_" + name);
                             }
                         }
                     }
@@ -347,7 +347,7 @@ public final class SlabbedLabFixtures {
      * cell of each targeted lane.
      *
      * <p>Pulse position: one block <em>south</em> of each candidate cell
-     * ({@code supportPos.up().south()}). South (+Z) is chosen because the fixture
+     * ({@code supportPos.above().south()}). South (+Z) is chosen because the fixture
      * sits at origin.Z, the player stands at origin.Z-3 (north), and south is the
      * direction away from the player — clear of the fixture footprint and the operator.
      *
@@ -365,7 +365,7 @@ public final class SlabbedLabFixtures {
      *                 {@code "top_slab"}), or {@code null} for all lanes
      * @return {@link PlaceResult} with candidate positions on success, or fail reason
      */
-    public static PlaceResult neighborUpdatePulse(ServerWorld world, BlockPos origin, String laneName) {
+    public static PlaceResult neighborUpdatePulse(ServerLevel world, BlockPos origin, String laneName) {
         LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
         if (targetLanes == null) {
             return PlaceResult.fail("unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.");
@@ -376,14 +376,14 @@ public final class SlabbedLabFixtures {
         // Resolve pulse positions: south of candidate cell for each targeted lane.
         LinkedHashMap<String, BlockPos> pulsePositions = new LinkedHashMap<>();
         for (String name : targetLanes.keySet()) {
-            pulsePositions.put(name, allPositions.get(name).up().south());
+            pulsePositions.put(name, allPositions.get(name).above().south());
         }
 
         // Safety scan: all pulse positions must be air before any edit.
         for (Map.Entry<String, BlockPos> entry : pulsePositions.entrySet()) {
             if (!world.getBlockState(entry.getValue()).isAir()) {
                 return PlaceResult.fail(
-                        "pulse position occupied at " + entry.getValue().toShortString()
+                        "pulse position occupied at " + entry.getValue().toString()
                         + " (lane " + entry.getKey() + "). No edits made.");
             }
         }
@@ -391,14 +391,14 @@ public final class SlabbedLabFixtures {
         // Execute pulse: place then remove stone at each pulse position with NOTIFY_ALL.
         // Stone is used as it is stable (non-falling), neutral, and already present in the fixture.
         for (BlockPos pulsePos : pulsePositions.values()) {
-            world.setBlockState(pulsePos, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
-            world.setBlockState(pulsePos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+            world.setBlock(pulsePos, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            world.setBlock(pulsePos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         }
 
-        // Return candidate positions (supportPos.up()) — the cells that received the updates.
+        // Return candidate positions (supportPos.above()) — the cells that received the updates.
         LinkedHashMap<String, BlockPos> candidatePositions = new LinkedHashMap<>();
         for (String name : targetLanes.keySet()) {
-            candidatePositions.put(name, allPositions.get(name).up());
+            candidatePositions.put(name, allPositions.get(name).above());
         }
 
         return PlaceResult.success(origin, candidatePositions);
@@ -411,7 +411,7 @@ public final class SlabbedLabFixtures {
      * <p>Data captured per lane:
      * <ul>
      *   <li>support position, expected state, actual state, match flag
-     *   <li>candidate cell position (supportPos.up()), whether it is air
+     *   <li>candidate cell position (supportPos.above()), whether it is air
      *   <li>pulse position (candidatePos.south()), whether it is air
      * </ul>
      *
@@ -419,7 +419,7 @@ public final class SlabbedLabFixtures {
      * @return ordered list of {@link LaneStatus} entries, or {@code null} if {@code laneName}
      *         is not a known lane
      */
-    public static List<LaneStatus> queryStatus(ServerWorld world, BlockPos origin, String laneName) {
+    public static List<LaneStatus> queryStatus(ServerLevel world, BlockPos origin, String laneName) {
         LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
         if (targetLanes == null) return null;
 
@@ -431,7 +431,7 @@ public final class SlabbedLabFixtures {
             BlockState expectedSupport = entry.getValue();
             BlockPos   supportPos      = allPositions.get(name);
             BlockState actualSupport   = world.getBlockState(supportPos);
-            BlockPos   candidatePos    = supportPos.up();
+            BlockPos   candidatePos    = supportPos.above();
             boolean    candidateFree   = world.getBlockState(candidatePos).isAir();
             BlockPos   pulsePos        = candidatePos.south();
             boolean    pulseFree       = world.getBlockState(pulsePos).isAir();
@@ -443,7 +443,7 @@ public final class SlabbedLabFixtures {
         return result;
     }
 
-    public static String describeLane(ServerWorld world, BlockPos origin, String laneName) {
+    public static String describeLane(ServerLevel world, BlockPos origin, String laneName) {
         LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
         if (targetLanes == null) {
             return "unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.";
@@ -453,7 +453,7 @@ public final class SlabbedLabFixtures {
         BlockState actual = world.getBlockState(supportPos);
         StringBuilder sb = new StringBuilder();
         sb.append("expected lane=").append(laneName.toUpperCase())
-          .append(" supportPos=").append(supportPos.toShortString())
+          .append(" supportPos=").append(supportPos.toString())
           .append(" actualState=").append(actual)
           .append(" expectedState=").append(expected)
           .append(" suggestion=");
@@ -465,7 +465,7 @@ public final class SlabbedLabFixtures {
         return sb.toString();
     }
 
-    public static String describeLaneInspection(ServerWorld world, BlockPos origin, String laneName) {
+    public static String describeLaneInspection(ServerLevel world, BlockPos origin, String laneName) {
         LinkedHashMap<String, BlockState> targetLanes = resolveLanes(laneName);
         if (targetLanes == null) {
             return "unknown lane '" + laneName + "'. Valid: full, bottom_slab, top_slab.";
@@ -473,7 +473,7 @@ public final class SlabbedLabFixtures {
 
         String key = laneName.toUpperCase();
         BlockPos supportPos = buildPositions(origin).get(key);
-        BlockPos fullPos = supportPos.up();
+        BlockPos fullPos = supportPos.above();
         BlockPos slabPos = supportPos;
 
         BlockState supportState = world.getBlockState(supportPos);
@@ -484,21 +484,21 @@ public final class SlabbedLabFixtures {
 
         StringBuilder sb = new StringBuilder();
         sb.append("lane=").append(key)
-          .append(" supportPos=").append(supportPos.toShortString())
+          .append(" supportPos=").append(supportPos.toString())
           .append(" supportState=").append(supportState)
-          .append(" fullPos=").append(fullPos.toShortString())
+          .append(" fullPos=").append(fullPos.toString())
           .append(" fullState=").append(fullState)
-          .append(" slabPos=").append(slabPos.toShortString())
-          .append(" slabPosUp=").append(fullPos.toShortString())
+          .append(" slabPos=").append(slabPos.toString())
+          .append(" slabPosUp=").append(fullPos.toString())
           .append(" anchor=").append(anchored)
           .append(" fullDy=").append(fullDy)
           .append(" slabDy=").append(slabDy);
 
-        if (supportState.getBlock() instanceof SlabBlock && supportState.contains(SlabBlock.TYPE)) {
-            sb.append(" slabTypeAtSupport=").append(supportState.get(SlabBlock.TYPE));
+        if (supportState.getBlock() instanceof SlabBlock && supportState.hasProperty(SlabBlock.TYPE)) {
+            sb.append(" slabTypeAtSupport=").append(supportState.getValue(SlabBlock.TYPE));
         }
-        if (fullState.getBlock() instanceof SlabBlock && fullState.contains(SlabBlock.TYPE)) {
-            sb.append(" slabTypeAtFull=").append(fullState.get(SlabBlock.TYPE));
+        if (fullState.getBlock() instanceof SlabBlock && fullState.hasProperty(SlabBlock.TYPE)) {
+            sb.append(" slabTypeAtFull=").append(fullState.getValue(SlabBlock.TYPE));
         }
 
         return sb.toString();
@@ -508,7 +508,7 @@ public final class SlabbedLabFixtures {
         StringBuilder sb = new StringBuilder();
         sb.append("cannot ").append(action).append(' ')
           .append("lane=").append(laneName)
-          .append(" supportPos=").append(pos.toShortString())
+          .append(" supportPos=").append(pos.toString())
           .append(" actualState=").append(actual)
           .append(" expectedState=").append(expected)
           .append(" suggestion=");

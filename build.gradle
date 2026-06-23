@@ -1,157 +1,153 @@
 plugins {
-    id 'fabric-loom' version '1.14-SNAPSHOT'
+    id 'java-library'
     id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.141'
 }
 
-loom {
-    splitEnvironmentSourceSets()
-    runs {
-        client {
-            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true", "-Dslabbed.debug.sbsb=true"
-        }
-    }
+version = project.mod_version
+group = project.mod_group_id
+
+base {
+    archivesName = project.mod_id
 }
 
-fabricApi {
-    configureTests {
-        createSourceSet = true
-    }
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
 }
 
 sourceSets {
+    main {
+        java {
+            srcDir "src/client/java"
+            // NeoForge bootstrap: keep dev/debug/manual recorder implementations out
+            // of main compile until that optional tooling lane is ported deliberately.
+            exclude "com/slabbed/debug/**"
+            exclude "com/slabbed/dev/**"
+            exclude "com/slabbed/client/debug/**"
+            exclude "com/slabbed/client/CaptureProfile.java"
+            exclude "com/slabbed/client/GapFillerOverlay.java"
+            exclude "com/slabbed/client/ScreenshotCaptureContext.java"
+            exclude "com/slabbed/client/ScreenshotCaptureService.java"
+            exclude "com/slabbed/client/ScreenshotFlightLock.java"
+            exclude "com/slabbed/client/SlabbedClientFlags.java"
+            exclude "com/slabbed/client/TargetDyOverlay.java"
+            exclude "com/slabbed/mixin/client/Beta*.java"
+            exclude "com/slabbed/mixin/debug/**"
+            exclude "com/slabbed/util/Beta4ManualLiveTrace.java"
+            exclude "com/slabbed/util/Beta4PlacementAuthorRecorder.java"
+            exclude "com/slabbed/util/Beta35FenceWallLiveInspectRecorder.java"
+            exclude "com/slabbed/util/Beta35LiveTorchCaptureRecorder.java"
+            exclude "com/slabbed/util/Beta35SlabHeightHitAcceptanceRecorder.java"
+            exclude "com/slabbed/util/Beta35SlabJumpSourceTruthRecorder.java"
+            exclude "com/slabbed/util/DebugTraceContext.java"
+            exclude "com/slabbed/util/SlabbedAuditBridge.java"
+        }
+        resources {
+            srcDir "src/client/resources"
+            exclude "fabric.mod.json"
+            exclude "slabbed.debug.mixins.json"
+        }
+    }
     gametest {
         java {
-            // Explicit deferred-client-proof split for MC 1.21.1:
-            // keep client proof classes present in-tree, but compile only the
-            // two server-compatible classes in this source set.
+            setSrcDirs(["src/gametest/java", "src/main/java"])
             setIncludes([
                     "com/slabbed/test/ChainSurvivalReproTest.java",
                     "com/slabbed/test/SlabbedLabFixtureTest.java",
                     "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
-                    "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java"
+                    "com/slabbed/dev/SlabbedLabFixtures.java"
             ])
         }
+        resources {
+            setSrcDirs([])
+        }
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += output + compileClasspath
     }
-}
-
-version = project.mod_version
-group = project.maven_group
-
-base {
-    archivesName = project.archives_base_name
 }
 
 repositories {
     maven {
-        name = "Fabric"
-        url = "https://maven.fabricmc.net/"
+        name = "Sinytra"
+        url = "https://maven.su5ed.dev/releases"
     }
-    mavenCentral()
+}
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+        }
+        server {
+            server()
+            programArgument "--nogui"
+        }
+        serverGameTest {
+            server()
+            programArgument "--nogui"
+            systemProperty "neoforge.gameTestServer", "true"
+            systemProperty "neoforge.enabledGameTestNamespaces", "fabric-gametest-api-v1"
+            taskBefore tasks.named("gametestClasses")
+        }
+        configureEach {
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.gametest
+        }
+    }
+}
+
+configurations {
+    gametestImplementation.extendsFrom implementation
 }
 
 dependencies {
-    // To change the versions see the gradle.properties file
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-    // Fabric API. This is technically optional, but you probably want it anyway.
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    // Client-only modules for the client source set when splitEnvironmentSourceSets is enabled.
-    modClientImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modClientImplementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
-    modClientImplementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
-
-    // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
-    // extended to the gametest source set by configureTests { createSourceSet = true })
+    implementation "org.sinytra.forgified-fabric-api:forgified-fabric-api:${project.ffapi_version}"
+    gametestImplementation "org.sinytra.forgified-fabric-api:forgified-fabric-api:${project.ffapi_version}"
 }
 
-processResources {
-    inputs.property "version", project.version
-
-    filesMatching("fabric.mod.json") {
-        expand "version": project.version
+tasks.named("processResources", ProcessResources).configure {
+    def replaceProperties = [
+            minecraft_version      : project.minecraft_version,
+            minecraft_version_range: project.minecraft_version_range,
+            neo_version            : project.neo_version,
+            loader_version_range   : project.loader_version_range,
+            mod_id                 : project.mod_id,
+            mod_name               : project.mod_name,
+            mod_license            : project.mod_license,
+            mod_version            : project.mod_version
+    ]
+    inputs.properties replaceProperties
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand replaceProperties
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
-}
-
-java {
-    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-    // if it's present.
-    // If you remove this line, sources will not be generated.
-    withSourcesJar()
-
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-def slabbedForwardedRunPropertyArgs = {
-    System.properties.findAll { key, value ->
-        key instanceof String
-                && value != null
-                && (key.startsWith("slabbed.mc1211.")
-                || key == "slabbed.bsfb.live.trace")
-    }.collect { key, value -> "-D${key}=${value}" }
-}
-
-tasks.withType(JavaExec).configureEach {
-    doFirst {
-        jvmArgs slabbedForwardedRunPropertyArgs()
-    }
+    options.encoding = "UTF-8"
+    options.release = 21
 }
 
 jar {
     from("LICENSE") {
-        rename { "${it}_${project.base.archivesName.get()}"}
+        rename { "${it}_${project.base.archivesName.get()}" }
     }
-
-    // Exclude dev-only and debug-only content from public release jar
-    exclude("com/slabbed/dev/**")
-    exclude("com/slabbed/debug/**")
-    exclude("com/slabbed/client/debug/**")
-    exclude("com/slabbed/mixin/debug/**")
-    exclude("com/slabbed/util/DebugTraceContext.class")
-    exclude("com/slabbed/client/GapFillerOverlay.class")
-    exclude("com/slabbed/client/ScreenshotCaptureContext*.class")
-    exclude("com/slabbed/client/ScreenshotCaptureService*.class")
-    exclude("com/slabbed/client/CaptureProfile.class")
-    exclude("com/slabbed/util/SlabbedDebug.class")
-    exclude("com/slabbed/util/Beta4PlacementAuthorRecorder.class")
-    exclude("com/slabbed/util/Beta4ManualLiveTrace*.class")
-    exclude("com/slabbed/util/Beta35FenceWallLiveInspectRecorder*.class")
-    exclude("com/slabbed/util/Beta35LiveTorchCaptureRecorder*.class")
-    exclude("com/slabbed/util/Beta35SlabHeightHitAcceptanceRecorder*.class")
-    exclude("com/slabbed/util/Beta35SlabJumpSourceTruthRecorder*.class")
-    exclude("com/slabbed/util/Mc1211TrapdoorUnderBottomRecorder*.class")
-    exclude("com/slabbed/client/runtime/ModelDyTranslateTraceBridge*.class")
-    exclude("com/slabbed/mixin/BlockItemPlaceTraceMixin*.class")
-    exclude("com/slabbed/mixin/client/Beta35FenceWallLiveInspectTickMixin.class")
-    exclude("com/slabbed/mixin/client/Beta35LiveTorchCaptureMixin.class")
-    exclude("com/slabbed/mixin/client/Beta35LiveTorchDualTraceInteractionMixin.class")
-    exclude("com/slabbed/mixin/client/Beta35SlabHeightHitAcceptanceTickMixin.class")
-    exclude("com/slabbed/mixin/client/Beta4ManualLiveClientTickTraceMixin.class")
-    exclude("com/slabbed/mixin/client/Beta4ManualLiveInteractionTraceMixin.class")
-    exclude("com/slabbed/util/SlabbedAuditBridge.class")
-    exclude("slabbed.debug.mixins.json")
 }
 
-// configure the maven publication
 publishing {
     publications {
-        create("mavenJava", MavenPublication) {
-            artifactId = project.archives_base_name
+        register("mavenJava", MavenPublication) {
             from components.java
         }
     }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
     repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // fetching dependencies.
     }
 }

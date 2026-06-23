@@ -1,13 +1,13 @@
 package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.ChainBlock;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.WorldAccess;
-import net.minecraft.world.WorldView;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChainBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,12 +29,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ChainBlock.class)
 public abstract class ChainBlockNeighborSurvivalMixin {
 
-    @Inject(method = "getStateForNeighborUpdate", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "updateShape", at = @At("RETURN"), cancellable = true)
     private void slabbed$survivalGuard(
             BlockState state,
             Direction direction,
             BlockState neighborState,
-            WorldAccess world,
+            LevelAccessor world,
             BlockPos pos,
             BlockPos neighborPos,
             CallbackInfoReturnable<BlockState> cir
@@ -42,7 +42,7 @@ public abstract class ChainBlockNeighborSurvivalMixin {
         BlockState result = cir.getReturnValue();
         if (result.isAir()) return;
         if (!slabbed$hasAxisSupport(state, world, pos)) {
-            cir.setReturnValue(Blocks.AIR.getDefaultState());
+            cir.setReturnValue(Blocks.AIR.defaultBlockState());
         }
     }
 
@@ -50,10 +50,10 @@ public abstract class ChainBlockNeighborSurvivalMixin {
     private static final int MAX_CHAIN_WALK = 16;
 
     @Unique
-    private static boolean slabbed$hasAxisSupport(BlockState state, WorldView world, BlockPos pos) {
-        Direction.Axis axis = state.get(ChainBlock.AXIS);
-        Direction positive = Direction.from(axis, Direction.AxisDirection.POSITIVE);
-        Direction negative = Direction.from(axis, Direction.AxisDirection.NEGATIVE);
+    private static boolean slabbed$hasAxisSupport(BlockState state, LevelReader world, BlockPos pos) {
+        Direction.Axis axis = state.getValue(ChainBlock.AXIS);
+        Direction positive = Direction.fromAxisAndDirection(axis, Direction.AxisDirection.POSITIVE);
+        Direction negative = Direction.fromAxisAndDirection(axis, Direction.AxisDirection.NEGATIVE);
 
         // walk positive direction through same-axis chains until we find solid support
         if (slabbed$walkChainForSupport(world, pos, axis, positive, negative)) {
@@ -64,23 +64,23 @@ public abstract class ChainBlockNeighborSurvivalMixin {
     }
 
     @Unique
-    private static boolean slabbed$walkChainForSupport(WorldView world, BlockPos pos,
+    private static boolean slabbed$walkChainForSupport(LevelReader world, BlockPos pos,
                                                         Direction.Axis axis, Direction walkDir, Direction faceDir) {
-        BlockPos cursor = pos.offset(walkDir);
+        BlockPos cursor = pos.relative(walkDir);
         for (int i = 0; i < MAX_CHAIN_WALK; i++) {
             BlockState cur = world.getBlockState(cursor);
             if (faceDir == Direction.DOWN && SlabSupport.isCeilingSupportBottomSurface(world, cursor)) {
                 return true;
             }
             // found solid support
-            if (cur.isSideSolidFullSquare(world, cursor, faceDir)) {
+            if (cur.isFaceSturdy(world, cursor, faceDir)) {
                 return true;
             }
             // continue through same-axis chains
             if (cur.getBlock() instanceof ChainBlock
-                    && cur.contains(ChainBlock.AXIS)
-                    && cur.get(ChainBlock.AXIS) == axis) {
-                cursor = cursor.offset(walkDir);
+                    && cur.hasProperty(ChainBlock.AXIS)
+                    && cur.getValue(ChainBlock.AXIS) == axis) {
+                cursor = cursor.relative(walkDir);
                 continue;
             }
             break;
