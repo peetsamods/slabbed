@@ -1,22 +1,39 @@
 package com.slabbed;
 
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationTargetException;
 
-public class Slabbed implements ModInitializer {
+@Mod(Slabbed.MOD_ID)
+public class Slabbed {
     public static final String MOD_ID = "slabbed";
     public static final Logger LOGGER = LoggerFactory.getLogger(Slabbed.class);
 
-    @Override
-    public void onInitialize() {
+    public Slabbed(IEventBus modEventBus) {
         LOGGER.info("Slabbed initialized");
-        com.slabbed.anchor.SlabAnchorAttachment.register();
-        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+        com.slabbed.anchor.SlabAnchorAttachment.register(modEventBus);
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            initClientFeatures(modEventBus);
+        }
+        if (!FMLLoader.isProduction()) {
             initDevFeatures();
+        }
+    }
+
+    private static void initClientFeatures(IEventBus modEventBus) {
+        try {
+            Class<?> hookClass = Class.forName("com.slabbed.client.SlabbedClient");
+            hookClass.getMethod("init", IEventBus.class).invoke(null, modEventBus);
+        } catch (ClassNotFoundException e) {
+            LOGGER.warn("Client hook is unavailable in this environment");
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException | LinkageError e) {
+            LOGGER.warn("Failed to initialize client hook", e);
         }
     }
 

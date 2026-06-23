@@ -1,32 +1,36 @@
 package com.slabbed.test;
 
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.test.GameTest;
-import net.minecraft.test.TestContext;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
- * Server-compatible MC1211 goblin route canary for the active runClientGameTest path.
+ * Server-compatible MC1211 goblin route canary for the active NeoForge gametest path.
  *
  * <p>This preserves the deferred legacy client-gametest class while proving that the
  * intended goblin route now compiles, registers, and executes under the active
  * MC1211 server-compatible harness.
  */
+@GameTestHolder("fabric-gametest-api-v1")
+@PrefixGameTestTemplate(false)
 public final class Mc1211GoblinRouteCanaryGameTest {
     private static final String GOBLIN_ONLY_PROPERTY = "slabbed.mc1211.goblinOnly";
     private static final String OVERLAP_ONLY_PROPERTY = "slabbed.mc1211.overlapMatrixOnly";
     private static final String LEGACY_CLASS =
             "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest";
     private static final String LEGACY_PREFIX = "[SBSB-ULTRA2]";
-    private static final String ROUTE = "runClientGameTest";
+    private static final String ROUTE = "runServerGameTest";
 
-    @GameTest(templateName = "fabric-gametest-api-v1:empty")
-    public void mc1211GoblinRouteCanary(TestContext ctx) {
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void mc1211GoblinRouteCanary(GameTestHelper ctx) {
         boolean goblinOnly = Boolean.getBoolean(GOBLIN_ONLY_PROPERTY);
         boolean overlapOnly = Boolean.getBoolean(OVERLAP_ONLY_PROPERTY);
 
@@ -37,25 +41,25 @@ public final class Mc1211GoblinRouteCanaryGameTest {
                     + " reason=overlap_matrix_only"
                     + " property=" + OVERLAP_ONLY_PROPERTY
                     + " legacyClass=" + LEGACY_CLASS);
-            ctx.complete();
+            ctx.succeed();
             return;
         }
 
-        ServerWorld world = ctx.getWorld();
-        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        ServerLevel world = ctx.getLevel();
+        BlockPos origin = ctx.absolutePos(BlockPos.ZERO);
         BlockPos support = origin;
-        BlockPos source = support.up();
-        BlockPos upperDouble = source.up();
+        BlockPos source = support.above();
+        BlockPos upperDouble = source.above();
 
-        world.setBlockState(
+        world.setBlock(
                 support,
-                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
-                Block.NOTIFY_ALL);
-        world.setBlockState(source, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
-        world.setBlockState(
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.UPDATE_ALL);
+        world.setBlock(source, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(
                 upperDouble,
-                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
-                Block.NOTIFY_ALL);
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE),
+                Block.UPDATE_ALL);
 
         System.out.println("[MC1211_GOBLIN_ROUTE_CANARY]"
                 + " class=" + getClass().getSimpleName()
@@ -114,7 +118,7 @@ public final class Mc1211GoblinRouteCanaryGameTest {
                 + " route=" + ROUTE
                 + " legacyClass=" + LEGACY_CLASS
                 + " rowsExecuted=4");
-        ctx.complete();
+        ctx.succeed();
     }
 
     private static void emitRow(
@@ -123,17 +127,17 @@ public final class Mc1211GoblinRouteCanaryGameTest {
             BlockPos support,
             BlockPos source,
             BlockPos upperDouble,
-            ServerWorld world
+            ServerLevel world
     ) {
         System.out.println("[MC1211_GOBLIN_ROW]"
                 + " class=" + Mc1211GoblinRouteCanaryGameTest.class.getSimpleName()
                 + " route=" + ROUTE
                 + " row=" + row
-                + " supportPos=" + support.toShortString()
+                + " supportPos=" + support.toString()
                 + " supportState=" + compact(world.getBlockState(support))
-                + " sourcePos=" + source.toShortString()
+                + " sourcePos=" + source.toString()
                 + " sourceState=" + compact(world.getBlockState(source))
-                + " upperDoublePos=" + upperDouble.toShortString()
+                + " upperDoublePos=" + upperDouble.toString()
                 + " upperDoubleState=" + compact(world.getBlockState(upperDouble))
                 + " result=GREEN"
                 + " note=" + note);

@@ -4,28 +4,28 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
-import net.minecraft.block.BlockEntityProvider;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.CraftingTableBlock;
-import net.minecraft.block.ShapeContext;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.TrapdoorBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.function.BooleanBiFunction;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CraftingTableBlock;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -58,45 +58,45 @@ public abstract class BlockItemPlacementIntentMixin {
     private record CompoundVisibleOwnerTopIntent(BlockPos sourcePos, BlockPos candidatePos) {
     }
 
-    private static boolean slabbed$isOrdinaryLoweredFullBlock(ItemUsageContext context, BlockPos pos, BlockState state) {
-        return state.isSolidBlock(context.getWorld(), pos)
-                && !(state.getBlock() instanceof BlockEntityProvider)
+    private static boolean slabbed$isOrdinaryLoweredFullBlock(UseOnContext context, BlockPos pos, BlockState state) {
+        return state.isSolidRender(context.getLevel(), pos)
+                && !(state.getBlock() instanceof EntityBlock)
                 && !(state.getBlock() instanceof CraftingTableBlock)
-                && SlabSupport.getYOffset(context.getWorld(), pos, state) < 0.0d;
+                && SlabSupport.getYOffset(context.getLevel(), pos, state) < 0.0d;
     }
 
-    private static boolean slabbed$isLoweredSlab(BlockState state, World world, BlockPos pos) {
+    private static boolean slabbed$isLoweredSlab(BlockState state, Level world, BlockPos pos) {
         return state.getBlock() instanceof SlabBlock
                 && SlabSupport.getYOffset(world, pos, state) < 0.0d;
     }
 
     private static boolean slabbed$isLoweredBottomSlabUndersideBand(
-            ItemUsageContext context,
+            UseOnContext context,
             BlockPos targetPos,
             BlockState targetState
     ) {
-        if (context.getSide().getAxis().isVertical()
+        if (context.getClickedFace().getAxis().isVertical()
                 || !(targetState.getBlock() instanceof SlabBlock)
-                || !targetState.contains(SlabBlock.TYPE)
-                || targetState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !targetState.hasProperty(SlabBlock.TYPE)
+                || targetState.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !targetState.getFluidState().isEmpty()
-                || Math.abs(SlabSupport.getYOffset(context.getWorld(), targetPos, targetState) + 0.5d)
+                || Math.abs(SlabSupport.getYOffset(context.getLevel(), targetPos, targetState) + 0.5d)
                 > LOWERED_VISUAL_BOUNDARY_EPSILON) {
             return false;
         }
-        double hitY = context.getHitPos().y;
+        double hitY = context.getClickLocation().y;
         return hitY >= targetPos.getY() - 0.5d - LOWERED_VISUAL_BOUNDARY_EPSILON
                 && hitY <= targetPos.getY() + LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
-    private static ItemUsageContext slabbed$remapTrapdoorLoweredBottomSlabUnderside(ItemUsageContext context) {
-        BlockPos targetPos = context.getBlockPos();
-        BlockState targetState = context.getWorld().getBlockState(targetPos);
+    private static UseOnContext slabbed$remapTrapdoorLoweredBottomSlabUnderside(UseOnContext context) {
+        BlockPos targetPos = context.getClickedPos();
+        BlockState targetState = context.getLevel().getBlockState(targetPos);
         if (!slabbed$isLoweredBottomSlabUndersideBand(context, targetPos, targetState)) {
             return context;
         }
-        Vec3d originalHit = context.getHitPos();
-        Vec3d remappedHitPos = new Vec3d(
+        Vec3 originalHit = context.getClickLocation();
+        Vec3 remappedHitPos = new Vec3(
                 originalHit.x,
                 targetPos.getY() - 0.001d,
                 originalHit.z);
@@ -104,62 +104,62 @@ public abstract class BlockItemPlacementIntentMixin {
                 remappedHitPos,
                 Direction.DOWN,
                 targetPos,
-                context.hitsInsideBlock());
-        return new ItemUsageContext(
-                context.getWorld(),
+                context.isInside());
+        return new UseOnContext(
+                context.getLevel(),
                 context.getPlayer(),
                 context.getHand(),
-                context.getStack(),
+                context.getItemInHand(),
                 remappedHit) {
         };
     }
 
-    private static boolean slabbed$isCompoundSideHit(ItemUsageContext context, BlockPos pos, BlockState state) {
-        if (context.getSide().getAxis().isVertical()) {
+    private static boolean slabbed$isCompoundSideHit(UseOnContext context, BlockPos pos, BlockState state) {
+        if (context.getClickedFace().getAxis().isVertical()) {
             return false;
         }
-        double yOffset = SlabSupport.getYOffset(context.getWorld(), pos, state);
+        double yOffset = SlabSupport.getYOffset(context.getLevel(), pos, state);
         if (state.getBlock() instanceof SlabBlock) {
-            return SlabSupport.isCompoundVisibleSlabLaneOwner(context.getWorld(), pos, state)
+            return SlabSupport.isCompoundVisibleSlabLaneOwner(context.getLevel(), pos, state)
                     && Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
         }
-        if (!SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), pos)) {
+        if (!SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), pos)) {
             return false;
         }
         return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
-    private static boolean slabbed$isCompoundTopHit(ItemUsageContext context, BlockPos pos, BlockState state) {
-        if (context.getSide() != Direction.UP
+    private static boolean slabbed$isCompoundTopHit(UseOnContext context, BlockPos pos, BlockState state) {
+        if (context.getClickedFace() != Direction.UP
                 || state.getBlock() instanceof SlabBlock
-                || !SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), pos)) {
+                || !SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), pos)) {
             return false;
         }
-        double yOffset = SlabSupport.getYOffset(context.getWorld(), pos, state);
+        double yOffset = SlabSupport.getYOffset(context.getLevel(), pos, state);
         return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
-    private static boolean slabbed$isPersistentLoweredBottomSlabCarrierCandidate(World world, BlockPos pos, BlockState state) {
+    private static boolean slabbed$isPersistentLoweredBottomSlabCarrierCandidate(Level world, BlockPos pos, BlockState state) {
         if (!(state.getBlock() instanceof SlabBlock)
-                || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !state.hasProperty(SlabBlock.TYPE)
+                || state.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !state.getFluidState().isEmpty()) {
             return false;
         }
-        BlockPos belowPos = pos.down();
+        BlockPos belowPos = pos.below();
         BlockState below = world.getBlockState(belowPos);
         return SlabAnchorAttachment.isLoweredFullBlockSlabCarrierSupport(world, belowPos, below);
     }
 
     private static boolean slabbed$isCompoundVisibleOwnerTopSlabResult(
-            ItemPlacementContext context,
+            BlockPlaceContext context,
             BlockPos placePos,
             BlockState placedState
     ) {
-        if (context.getSide() != Direction.UP
+        if (context.getClickedFace() != Direction.UP
                 || !(placedState.getBlock() instanceof SlabBlock)
-                || !placedState.contains(SlabBlock.TYPE)
-                || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+                || !placedState.hasProperty(SlabBlock.TYPE)
+                || placedState.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !placedState.getFluidState().isEmpty()) {
             return false;
         }
@@ -168,88 +168,88 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private static boolean slabbed$isCompoundVisibleSideLowerSlabResult(
-            ItemPlacementContext context,
+            BlockPlaceContext context,
             BlockPos placePos,
             BlockState placedState
     ) {
-        if (context.getSide().getAxis().isVertical()
-                || !placedState.isOf(Blocks.STONE_SLAB)
-                || !placedState.contains(SlabBlock.TYPE)
-                || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM
+        if (context.getClickedFace().getAxis().isVertical()
+                || !placedState.is(Blocks.STONE_SLAB)
+                || !placedState.hasProperty(SlabBlock.TYPE)
+                || placedState.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !placedState.getFluidState().isEmpty()) {
             return false;
         }
-        BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
-        BlockState sourceState = context.getWorld().getBlockState(sourcePos);
+        BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
+        BlockState sourceState = context.getLevel().getBlockState(sourcePos);
         CompoundVisibleSideLowerIntent intent = COMPOUND_VISIBLE_SIDE_LOWER_INTENT.get();
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getWorld(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getWorld(), sourcePos, sourceState) + 1.0d)
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getLevel(), sourcePos, sourceState)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), sourcePos)
+                && Math.abs(SlabSupport.getYOffset(context.getLevel(), sourcePos, sourceState) + 1.0d)
                 <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
     private static boolean slabbed$isCompoundVisibleSideUpperSlabResult(
-            ItemPlacementContext context,
+            BlockPlaceContext context,
             BlockPos placePos,
             BlockState placedState
     ) {
-        if (context.getSide().getAxis().isVertical()
-                || !placedState.isOf(Blocks.STONE_SLAB)
-                || !placedState.contains(SlabBlock.TYPE)
-                || placedState.get(SlabBlock.TYPE) != SlabType.TOP
+        if (context.getClickedFace().getAxis().isVertical()
+                || !placedState.is(Blocks.STONE_SLAB)
+                || !placedState.hasProperty(SlabBlock.TYPE)
+                || placedState.getValue(SlabBlock.TYPE) != SlabType.TOP
                 || !placedState.getFluidState().isEmpty()) {
             return false;
         }
-        BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
-        BlockState sourceState = context.getWorld().getBlockState(sourcePos);
+        BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
+        BlockState sourceState = context.getLevel().getBlockState(sourcePos);
         CompoundVisibleSideUpperIntent intent = COMPOUND_VISIBLE_SIDE_UPPER_INTENT.get();
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getWorld(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getWorld(), sourcePos, sourceState) + 1.0d)
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getLevel(), sourcePos, sourceState)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), sourcePos)
+                && Math.abs(SlabSupport.getYOffset(context.getLevel(), sourcePos, sourceState) + 1.0d)
                 <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
     private static boolean slabbed$isCompoundVisibleSideDoubleSlabResult(
-            ItemPlacementContext context,
+            BlockPlaceContext context,
             BlockPos placePos,
             BlockState placedState
     ) {
-        if (context.getSide().getAxis().isVertical()
-                || !placedState.isOf(Blocks.STONE_SLAB)
-                || !placedState.contains(SlabBlock.TYPE)
-                || placedState.get(SlabBlock.TYPE) != SlabType.DOUBLE
+        if (context.getClickedFace().getAxis().isVertical()
+                || !placedState.is(Blocks.STONE_SLAB)
+                || !placedState.hasProperty(SlabBlock.TYPE)
+                || placedState.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
                 || !placedState.getFluidState().isEmpty()) {
             return false;
         }
-        BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
-        BlockState sourceState = context.getWorld().getBlockState(sourcePos);
+        BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
+        BlockState sourceState = context.getLevel().getBlockState(sourcePos);
         CompoundVisibleSideDoubleIntent intent = COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.get();
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getWorld(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getWorld(), sourcePos, sourceState) + 1.0d)
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getLevel(), sourcePos, sourceState)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), sourcePos)
+                && Math.abs(SlabSupport.getYOffset(context.getLevel(), sourcePos, sourceState) + 1.0d)
                 <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
 
     private static SlabType slabbed$getExpectedLoweredSidePlacementType(
-            World world,
+            Level world,
             BlockPos targetPos,
             BlockState targetState,
-            Vec3d hitPos
+            Vec3 hitPos
     ) {
-        if (!targetState.contains(SlabBlock.TYPE)) {
+        if (!targetState.hasProperty(SlabBlock.TYPE)) {
             return SlabType.BOTTOM;
         }
-        SlabType targetType = targetState.get(SlabBlock.TYPE);
+        SlabType targetType = targetState.getValue(SlabBlock.TYPE);
         if (targetType == SlabType.BOTTOM) {
             return SlabType.BOTTOM;
         }
@@ -259,7 +259,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return SlabType.TOP;
     }
 
-    private static SlabType slabbed$getLoweredDoubleHitIntentType(BlockPos targetPos, Vec3d hitPos) {
+    private static SlabType slabbed$getLoweredDoubleHitIntentType(BlockPos targetPos, Vec3 hitPos) {
         // Lowered DOUBLE occupies [y-0.5, y+0.5]. Its visual half split is at block y.
         double loweredMidY = targetPos.getY();
         boolean exactMid = Math.abs(hitPos.y - loweredMidY) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
@@ -270,7 +270,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return targetPos.getY() + (expectedType == SlabType.BOTTOM ? 0.499d : 0.501d);
     }
 
-    private static Vec3d slabbed$hitPosOnFace(BlockPos targetPos, Direction side, Vec3d originalHitPos, double y) {
+    private static Vec3 slabbed$hitPosOnFace(BlockPos targetPos, Direction side, Vec3 originalHitPos, double y) {
         double x = originalHitPos.x;
         double z = originalHitPos.z;
         if (side == Direction.EAST) {
@@ -282,66 +282,66 @@ public abstract class BlockItemPlacementIntentMixin {
         } else if (side == Direction.NORTH) {
             z = targetPos.getZ();
         }
-        return new Vec3d(x, y, z);
+        return new Vec3(x, y, z);
     }
 
-    private static boolean slabbed$isLoweredSlabFacePlacement(ItemPlacementContext context, BlockState state) {
+    private static boolean slabbed$isLoweredSlabFacePlacement(BlockPlaceContext context, BlockState state) {
         if (!(state.getBlock() instanceof SlabBlock)
-                || context.getSide().getAxis().isVertical()) {
+                || context.getClickedFace().getAxis().isVertical()) {
             return false;
         }
-        World world = context.getWorld();
-        BlockPos targetPos = context.getBlockPos().offset(context.getSide().getOpposite());
+        Level world = context.getLevel();
+        BlockPos targetPos = context.getClickedPos().relative(context.getClickedFace().getOpposite());
         BlockState targetState = world.getBlockState(targetPos);
         return slabbed$isLoweredSlab(targetState, world, targetPos)
-                && state.contains(SlabBlock.TYPE)
-                && targetState.contains(SlabBlock.TYPE)
+                && state.hasProperty(SlabBlock.TYPE)
+                && targetState.hasProperty(SlabBlock.TYPE)
                 && SlabSupport.isCompatibleLoweredSlabLane(
-                        targetState.get(SlabBlock.TYPE),
-                        state.get(SlabBlock.TYPE));
+                        targetState.getValue(SlabBlock.TYPE),
+                        state.getValue(SlabBlock.TYPE));
     }
 
-    @Inject(method = "useOnBlock", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "useOn", at = @At("HEAD"), cancellable = true)
     private void slabbed$rejectCompoundSlabSidePlacement(
-            ItemUsageContext context,
-            CallbackInfoReturnable<ActionResult> cir
+            UseOnContext context,
+            CallbackInfoReturnable<InteractionResult> cir
     ) {
         BlockItem self = (BlockItem) (Object) this;
         slabbed$traceRepeatPlacementContext("useOnBlock-head", context, context, "head");
         if (!(self.getBlock() instanceof SlabBlock)) {
             return;
         }
-        BlockPos targetPos = context.getBlockPos();
-        BlockState targetState = context.getWorld().getBlockState(targetPos);
+        BlockPos targetPos = context.getClickedPos();
+        BlockState targetState = context.getLevel().getBlockState(targetPos);
         if (slabbed$isCompoundTopHit(context, targetPos, targetState)) {
             SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
-                    context.getWorld(),
+                    context.getLevel(),
                     targetPos,
                     targetState,
-                    context.getSide(),
-                    context.getHitPos());
+                    context.getClickedFace(),
+                    context.getClickLocation());
             if (remapDecision.legal()) {
                 return;
             }
-            cir.setReturnValue(ActionResult.PASS);
+            cir.setReturnValue(InteractionResult.PASS);
             return;
         }
         if (slabbed$isCompoundSideHit(context, targetPos, targetState)) {
             SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
-                    context.getWorld(),
+                    context.getLevel(),
                     targetPos,
                     targetState,
-                    context.getSide(),
-                    context.getHitPos());
+                    context.getClickedFace(),
+                    context.getClickLocation());
             if (remapDecision.legal()) {
                 return;
             }
-            cir.setReturnValue(ActionResult.PASS);
+            cir.setReturnValue(InteractionResult.PASS);
         }
     }
 
     private static final Class<?>[] REMAP_ATTEMPT_PARAM_TYPES = new Class<?>[]{
-            ItemUsageContext.class,
+            UseOnContext.class,
             boolean.class,
             boolean.class,
             boolean.class,
@@ -351,13 +351,13 @@ public abstract class BlockItemPlacementIntentMixin {
             boolean.class,
             boolean.class,
             String.class,
-            Vec3d.class,
+            Vec3.class,
             Direction.class,
             String.class
     };
 
     private static void slabbed$recordRemapAttempt(
-            ItemUsageContext context,
+            UseOnContext context,
             boolean itemIsSlab,
             boolean faceHorizontal,
             boolean targetIsSolid,
@@ -367,7 +367,7 @@ public abstract class BlockItemPlacementIntentMixin {
             boolean ordinaryLoweredFullBlockGuard,
             boolean remapped,
             String rejectionReason,
-            Vec3d remappedHitPos,
+            Vec3 remappedHitPos,
             Direction effectiveSide,
             String hitDescriptor) {
         RuntimeDiagnostics.invoke(
@@ -394,75 +394,75 @@ public abstract class BlockItemPlacementIntentMixin {
 
     private static void slabbed$traceRepeatPlacementContext(
             String phase,
-            ItemUsageContext incoming,
-            ItemUsageContext outgoing,
+            UseOnContext incoming,
+            UseOnContext outgoing,
             String decision
     ) {
-        if (!slabbed$repeatSeamTraceEnabled() || incoming == null || incoming.getWorld() == null) {
+        if (!slabbed$repeatSeamTraceEnabled() || incoming == null || incoming.getLevel() == null) {
             return;
         }
-        World world = incoming.getWorld();
-        BlockPos incomingPos = incoming.getBlockPos();
+        Level world = incoming.getLevel();
+        BlockPos incomingPos = incoming.getClickedPos();
         BlockState incomingState = world.getBlockState(incomingPos);
-        BlockPos outgoingPos = outgoing == null ? incomingPos : outgoing.getBlockPos();
-        World outgoingWorld = outgoing == null ? world : outgoing.getWorld();
+        BlockPos outgoingPos = outgoing == null ? incomingPos : outgoing.getClickedPos();
+        Level outgoingWorld = outgoing == null ? world : outgoing.getLevel();
         BlockState outgoingState = outgoingWorld.getBlockState(outgoingPos);
         Slabbed.LOGGER.info("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_CONTEXT]"
                 + " phase=" + phase
-                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
-                + " incomingPos=" + incomingPos.toShortString()
-                + " incomingFace=" + incoming.getSide()
-                + " incomingHit=" + incoming.getHitPos()
+                + " side=" + (world.isClientSide() ? "CLIENT" : "SERVER")
+                + " incomingPos=" + slabbed$shortPos(incomingPos)
+                + " incomingFace=" + incoming.getClickedFace()
+                + " incomingHit=" + incoming.getClickLocation()
                 + " incomingState=" + incomingState
                 + " incomingDy=" + SlabSupport.getYOffset(world, incomingPos, incomingState)
-                + " outgoingPos=" + outgoingPos.toShortString()
-                + " outgoingFace=" + (outgoing == null ? "null" : outgoing.getSide())
-                + " outgoingHit=" + (outgoing == null ? "null" : outgoing.getHitPos())
+                + " outgoingPos=" + slabbed$shortPos(outgoingPos)
+                + " outgoingFace=" + (outgoing == null ? "null" : outgoing.getClickedFace())
+                + " outgoingHit=" + (outgoing == null ? "null" : outgoing.getClickLocation())
                 + " outgoingState=" + outgoingState
                 + " outgoingDy=" + SlabSupport.getYOffset(outgoingWorld, outgoingPos, outgoingState)
-                + " heldItem=" + Registries.ITEM.getId(incoming.getStack().getItem())
+                + " heldItem=" + BuiltInRegistries.ITEM.getKey(incoming.getItemInHand().getItem())
                 + " decision=" + decision);
         if (phase.contains("exit")) {
             Slabbed.LOGGER.info("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
                     + " phase=" + phase
-                    + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
-                    + " incomingPos=" + incomingPos.toShortString()
-                    + " outgoingPos=" + outgoingPos.toShortString()
+                    + " side=" + (world.isClientSide() ? "CLIENT" : "SERVER")
+                    + " incomingPos=" + slabbed$shortPos(incomingPos)
+                    + " outgoingPos=" + slabbed$shortPos(outgoingPos)
                     + " decision=" + decision);
         }
     }
 
     private static void slabbed$traceRepeatFinalization(
-            ItemPlacementContext context,
-            ActionResult result,
+            BlockPlaceContext context,
+            InteractionResult result,
             BlockState placedState
     ) {
-        if (!slabbed$repeatSeamTraceEnabled() || context == null || context.getWorld() == null) {
+        if (!slabbed$repeatSeamTraceEnabled() || context == null || context.getLevel() == null) {
             return;
         }
-        World world = context.getWorld();
-        BlockPos placePos = context.getBlockPos();
+        Level world = context.getLevel();
+        BlockPos placePos = context.getClickedPos();
         boolean durableDouble = placedState.getBlock() instanceof SlabBlock
-                && placedState.contains(SlabBlock.TYPE)
-                && placedState.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                && placedState.hasProperty(SlabBlock.TYPE)
+                && placedState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
                 && Math.abs(SlabSupport.getYOffset(world, placePos, placedState) + 0.5d)
                 <= LOWERED_VISUAL_BOUNDARY_EPSILON;
         Slabbed.LOGGER.info("[JULIA_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
                 + " phase=finalization-return"
-                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
+                + " side=" + (world.isClientSide() ? "CLIENT" : "SERVER")
                 + " result=" + result
-                + " accepted=" + (result != null && result.isAccepted())
-                + " placePos=" + placePos.toShortString()
-                + " face=" + context.getSide()
-                + " hit=" + context.getHitPos()
+                + " accepted=" + (result != null && result.consumesAction())
+                + " placePos=" + slabbed$shortPos(placePos)
+                + " face=" + context.getClickedFace()
+                + " hit=" + context.getClickLocation()
                 + " placedState=" + placedState
                 + " placedDy=" + SlabSupport.getYOffset(world, placePos, placedState)
                 + " durableDouble=" + durableDouble
                 + " setBlockStateDurable=" + (durableDouble ? "YES" : "NO_OR_NOT_DOUBLE"));
     }
 
-    private static ItemUsageContext slabbed$inspectReturn(
-            ItemUsageContext incoming, ItemUsageContext outgoing, String reason
+    private static UseOnContext slabbed$inspectReturn(
+            UseOnContext incoming, UseOnContext outgoing, String reason
     ) {
         RuntimeDiagnostics.logManualPlacementIntent(incoming, outgoing, reason);
         RuntimeDiagnostics.logInspectIntent(incoming, outgoing, reason);
@@ -471,7 +471,7 @@ public abstract class BlockItemPlacementIntentMixin {
 
     @Inject(method = "canPlace", at = @At("HEAD"), cancellable = true)
     private void slabbed$allowLoweredSlabLanePlayerOverlap(
-            ItemPlacementContext context,
+            BlockPlaceContext context,
             BlockState state,
             CallbackInfoReturnable<Boolean> cir
     ) {
@@ -479,43 +479,74 @@ public abstract class BlockItemPlacementIntentMixin {
             return;
         }
 
-        World world = context.getWorld();
-        PlayerEntity player = context.getPlayer();
-        BlockPos placePos = context.getBlockPos();
+        Level world = context.getLevel();
+        Player player = context.getPlayer();
+        BlockPos placePos = context.getClickedPos();
         if (player == null
                 || !context.canPlace()
-                || !state.canPlaceAt(world, placePos)) {
+                || !state.canSurvive(world, placePos)) {
             return;
         }
 
-        ShapeContext shapeContext = ShapeContext.of(player);
-        if (world.canPlace(state, placePos, shapeContext)) {
+        CollisionContext shapeContext = CollisionContext.of(player);
+        if (world.isUnobstructed(state, placePos, shapeContext)) {
             return;
         }
 
         VoxelShape placementShape = state.getCollisionShape(world, placePos, shapeContext)
-                .offset(placePos.getX(), placePos.getY(), placePos.getZ());
+                .move(placePos.getX(), placePos.getY(), placePos.getZ());
         if (placementShape.isEmpty()) {
             return;
         }
 
-        boolean hitsPlacingPlayer = VoxelShapes.matchesAnywhere(
+        boolean hitsPlacingPlayer = Shapes.joinIsNotEmpty(
                 placementShape,
-                VoxelShapes.cuboid(player.getBoundingBox()),
-                BooleanBiFunction.AND);
-        if (hitsPlacingPlayer && world.doesNotIntersectEntities(player, placementShape)) {
+                Shapes.create(player.getBoundingBox()),
+                BooleanOp.AND);
+        if (hitsPlacingPlayer && world.isUnobstructed(player, placementShape)) {
             cir.setReturnValue(true);
         }
     }
 
+    @Inject(method = "useOn", at = @At("HEAD"))
+    private void slabbed$markWysiwygSideClickFollow(
+            UseOnContext context,
+            CallbackInfoReturnable<InteractionResult> cir
+    ) {
+        BlockItem self = (BlockItem) (Object) this;
+        if (!(self.getBlock() instanceof SlabBlock)) {
+            return;
+        }
+        Level level = context.getLevel();
+        BlockPos clicked = context.getClickedPos();
+        BlockState clickedState = level.getBlockState(clicked);
+        Direction face = context.getClickedFace();
+        double clickedDy = SlabSupport.getYOffset(level, clicked, clickedState);
+        if (Math.abs(clickedDy + 0.5d) < 1.0e-6d) {
+            if (face.getAxis().isHorizontal()) {
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
+            } else if (face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above());
+            }
+        }
+    }
+
+    @Inject(method = "useOn", at = @At("RETURN"))
+    private void slabbed$clearWysiwygSideClickFollow(
+            UseOnContext context,
+            CallbackInfoReturnable<InteractionResult> cir
+    ) {
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+    }
+
     @ModifyArg(
-            method = "useOnBlock",
+            method = "useOn",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/item/ItemPlacementContext;<init>(Lnet/minecraft/item/ItemUsageContext;)V"
+                    target = "Lnet/minecraft/world/item/context/BlockPlaceContext;<init>(Lnet/minecraft/world/item/context/UseOnContext;)V"
             )
     )
-    private ItemUsageContext slabbed$remapLoweredFullBlockSideHit(ItemUsageContext context) {
+    private UseOnContext slabbed$remapLoweredFullBlockSideHit(UseOnContext context) {
         COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
         COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
         COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
@@ -523,8 +554,8 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockItem self = (BlockItem) (Object) this;
         boolean itemIsSlab = self.getBlock() instanceof SlabBlock;
         if (!itemIsSlab) {
-            if (self.getBlock() instanceof TrapdoorBlock) {
-                ItemUsageContext remappedTrapdoorContext =
+            if (self.getBlock() instanceof TrapDoorBlock) {
+                UseOnContext remappedTrapdoorContext =
                         slabbed$remapTrapdoorLoweredBottomSlabUnderside(context);
                 if (remappedTrapdoorContext != context) {
                     slabbed$recordRemapAttempt(
@@ -535,13 +566,13 @@ public abstract class BlockItemPlacementIntentMixin {
                             false,
                             false,
                             SlabSupport.getYOffset(
-                                    context.getWorld(),
-                                    context.getBlockPos(),
-                                    context.getWorld().getBlockState(context.getBlockPos())),
+                                    context.getLevel(),
+                                    context.getClickedPos(),
+                                    context.getLevel().getBlockState(context.getClickedPos())),
                             false,
                             true,
                             "trapdoor_lowered_bottom_slab_underside",
-                            remappedTrapdoorContext.getHitPos(),
+                            remappedTrapdoorContext.getClickLocation(),
                             Direction.DOWN,
                             "trapdoor_lowered_bottom_slab_underside");
                     return slabbed$inspectReturn(
@@ -567,19 +598,19 @@ public abstract class BlockItemPlacementIntentMixin {
             return slabbed$inspectReturn(context, context, "item_not_slab");
         }
 
-        Direction originalSide = context.getSide();
-        Vec3d originalHitPos = context.getHitPos();
+        Direction originalSide = context.getClickedFace();
+        Vec3 originalHitPos = context.getClickLocation();
         Direction effectiveSide = originalSide;
         String remapMode = originalSide.getAxis().isHorizontal() ? "horizontal_face" : "top_face";
 
-        BlockPos targetPos = context.getBlockPos();
-        BlockState targetState = context.getWorld().getBlockState(targetPos);
+        BlockPos targetPos = context.getClickedPos();
+        BlockState targetState = context.getLevel().getBlockState(targetPos);
         slabbed$traceRepeatPlacementContext("placement-context", context, context,
                 "initial targetState=" + targetState
-                        + " targetDy=" + SlabSupport.getYOffset(context.getWorld(), targetPos, targetState));
+                        + " targetDy=" + SlabSupport.getYOffset(context.getLevel(), targetPos, targetState));
         if (slabbed$isCompoundTopHit(context, targetPos, targetState)) {
             SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
-                    context.getWorld(),
+                    context.getLevel(),
                     targetPos,
                     targetState,
                     originalSide,
@@ -596,7 +627,7 @@ public abstract class BlockItemPlacementIntentMixin {
                         true,
                         false,
                         false,
-                        SlabSupport.getYOffset(context.getWorld(), targetPos, targetState),
+                        SlabSupport.getYOffset(context.getLevel(), targetPos, targetState),
                         true,
                         true,
                         remapDecision.reason(),
@@ -608,7 +639,7 @@ public abstract class BlockItemPlacementIntentMixin {
         }
         if (slabbed$isCompoundSideHit(context, targetPos, targetState)) {
             SlabSupport.CompoundSlabRemapDecision remapDecision = SlabSupport.findLegalCompoundSlabRemap(
-                    context.getWorld(),
+                    context.getLevel(),
                     targetPos,
                     targetState,
                     originalSide,
@@ -618,10 +649,10 @@ public abstract class BlockItemPlacementIntentMixin {
                         context,
                         true,
                         originalSide.getAxis().isHorizontal(),
-                        targetState.isSolidBlock(context.getWorld(), targetPos),
-                        targetState.getBlock() instanceof BlockEntityProvider,
+                        targetState.isSolidRender(context.getLevel(), targetPos),
+                        targetState.getBlock() instanceof EntityBlock,
                         targetState.getBlock() instanceof CraftingTableBlock,
-                        SlabSupport.getYOffset(context.getWorld(), targetPos, targetState),
+                        SlabSupport.getYOffset(context.getLevel(), targetPos, targetState),
                         true,
                         false,
                         remapDecision.reason(),
@@ -645,7 +676,7 @@ public abstract class BlockItemPlacementIntentMixin {
             }
 
             double remappedY = slabbed$placementYForType(remapDecision.legalLanePos(), remapDecision.resultType());
-            Vec3d remappedHitPos = slabbed$hitPosOnFace(
+            Vec3 remappedHitPos = slabbed$hitPosOnFace(
                     remapDecision.legalLanePos(),
                     originalSide,
                     originalHitPos,
@@ -657,7 +688,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     true,
                     false,
                     false,
-                    SlabSupport.getYOffset(context.getWorld(), targetPos, targetState),
+                    SlabSupport.getYOffset(context.getLevel(), targetPos, targetState),
                     true,
                     true,
                     remapDecision.reason(),
@@ -668,22 +699,23 @@ public abstract class BlockItemPlacementIntentMixin {
                     remappedHitPos,
                     originalSide,
                     remapDecision.legalLanePos(),
-                    context.hitsInsideBlock()
+                    context.isInside()
             );
-            ItemUsageContext remappedContext = new ItemUsageContext(
-                    context.getWorld(),
+            UseOnContext remappedContext = new UseOnContext(
+                    context.getLevel(),
                     context.getPlayer(),
                     context.getHand(),
-                    context.getStack(),
+                    context.getItemInHand(),
                     remappedHit) {
             };
             return slabbed$inspectReturn(context, remappedContext, "compound_slab_legal_lane_remap");
         }
-        boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
-        boolean targetIsLoweredSlab = slabbed$isLoweredSlab(targetState, context.getWorld(), targetPos);
+        boolean targetIsSolid = targetState.isSolidRender(context.getLevel(), targetPos);
+        boolean targetIsLoweredSlab = slabbed$isLoweredSlab(targetState, context.getLevel(), targetPos);
         boolean targetSupportsTopMerge = targetState.getBlock() instanceof SlabBlock
-                && targetState.get(SlabBlock.TYPE) == SlabType.TOP
-                && originalSide == Direction.UP;
+                && targetState.getValue(SlabBlock.TYPE) == SlabType.TOP
+                && originalSide == Direction.UP
+                && !targetIsLoweredSlab;
         if (targetSupportsTopMerge) {
             effectiveSide = Direction.DOWN;
         }
@@ -707,9 +739,9 @@ public abstract class BlockItemPlacementIntentMixin {
                     "exit=face_not_horizontal targetSupportsTopMerge=" + targetSupportsTopMerge);
             return slabbed$inspectReturn(context, context, "face_not_horizontal");
         }
-        boolean targetHasBlockEntity = targetState.getBlock() instanceof BlockEntityProvider;
+        boolean targetHasBlockEntity = targetState.getBlock() instanceof EntityBlock;
         boolean targetIsCraftingTable = targetState.getBlock() instanceof CraftingTableBlock;
-        double yOffset = SlabSupport.getYOffset(context.getWorld(), targetPos, targetState);
+        double yOffset = SlabSupport.getYOffset(context.getLevel(), targetPos, targetState);
         boolean ordinaryLoweredFullBlockGuard = targetIsSolid
                 && !targetHasBlockEntity
                 && !targetIsCraftingTable
@@ -784,8 +816,8 @@ public abstract class BlockItemPlacementIntentMixin {
             return slabbed$inspectReturn(context, context, "y_offset_not_negative");
         }
 
-        BlockPos abovePos = targetPos.up();
-        BlockState aboveState = context.getWorld().getBlockState(abovePos);
+        BlockPos abovePos = targetPos.above();
+        BlockState aboveState = context.getLevel().getBlockState(abovePos);
         boolean upperVisibleHitBelongsToAboveLoweredFullBlock =
                 originalHitPos.y >= abovePos.getY()
                         && originalHitPos.y <= abovePos.getY() + 0.5d + LOWERED_VISUAL_BOUNDARY_EPSILON
@@ -793,7 +825,7 @@ public abstract class BlockItemPlacementIntentMixin {
         if (upperVisibleHitBelongsToAboveLoweredFullBlock) {
             targetPos = abovePos;
             targetState = aboveState;
-            yOffset = SlabSupport.getYOffset(context.getWorld(), targetPos, targetState);
+            yOffset = SlabSupport.getYOffset(context.getLevel(), targetPos, targetState);
             ordinaryLoweredFullBlockGuard = true;
         }
 
@@ -804,14 +836,14 @@ public abstract class BlockItemPlacementIntentMixin {
         double remappedY;
         if (targetState.getBlock() instanceof SlabBlock) {
             if (originalSide == Direction.UP
-                    && targetState.get(SlabBlock.TYPE) == SlabType.TOP) {
+                    && targetState.getValue(SlabBlock.TYPE) == SlabType.TOP) {
                 expectedType = SlabType.DOUBLE;
-            } else if (targetState.get(SlabBlock.TYPE) == SlabType.DOUBLE
+            } else if (targetState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
                     && effectiveSide.getAxis().isHorizontal()) {
                 expectedType = slabbed$getLoweredDoubleHitIntentType(targetPos, originalHitPos);
             } else {
                 expectedType = slabbed$getExpectedLoweredSidePlacementType(
-                        context.getWorld(),
+                        context.getLevel(),
                         targetPos,
                         targetState,
                         originalHitPos);
@@ -831,13 +863,13 @@ public abstract class BlockItemPlacementIntentMixin {
         }
         BlockPos remappedBlockPos = targetPos;
         if (targetState.getBlock() instanceof SlabBlock
-                && targetState.contains(SlabBlock.TYPE)
-                && targetState.get(SlabBlock.TYPE) == SlabType.TOP
+                && targetState.hasProperty(SlabBlock.TYPE)
+                && targetState.getValue(SlabBlock.TYPE) == SlabType.TOP
                 && expectedType == SlabType.BOTTOM
                 && effectiveSide.getAxis().isHorizontal()) {
-            remappedBlockPos = targetPos.offset(effectiveSide);
+            remappedBlockPos = targetPos.relative(effectiveSide);
         }
-        Vec3d remappedHitPos = new Vec3d(originalHitPos.x, remappedY, originalHitPos.z);
+        Vec3 remappedHitPos = new Vec3(originalHitPos.x, remappedY, originalHitPos.z);
         slabbed$recordRemapAttempt(
                 context,
                 true,
@@ -856,10 +888,10 @@ public abstract class BlockItemPlacementIntentMixin {
                 remappedHitPos,
                 effectiveSide,
                 remappedBlockPos,
-                context.hitsInsideBlock()
+                context.isInside()
         );
 
-        ItemUsageContext remappedContext = new ItemUsageContext(context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit) {
+        UseOnContext remappedContext = new UseOnContext(context.getLevel(), context.getPlayer(), context.getHand(), context.getItemInHand(), remappedHit) {
         };
         slabbed$traceRepeatPlacementContext("placement-exit", context, remappedContext,
                 "exit=remapped expectedType=" + expectedType + " remappedY=" + remappedY);
@@ -868,27 +900,27 @@ public abstract class BlockItemPlacementIntentMixin {
 
     @Inject(method = "place", at = @At("RETURN"))
     private void slabbed$anchorLoweredFullBlockSidePlacement(
-            ItemPlacementContext context,
-            CallbackInfoReturnable<net.minecraft.util.ActionResult> cir
+            BlockPlaceContext context,
+            CallbackInfoReturnable<InteractionResult> cir
     ) {
         BlockItem self = (BlockItem) (Object) this;
         boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
-        if (!cir.getReturnValue().isAccepted()) {
+        if (!cir.getReturnValue().consumesAction()) {
             RuntimeDiagnostics.recordPlace(
                     "finalization-return",
-                    Registries.ITEM.getId(self),
+                    BuiltInRegistries.ITEM.getKey(self),
                     heldIsSlab,
                     context,
                     cir.getReturnValue(),
                     "anchorFinalization=skipped_result_not_accepted");
             RuntimeDiagnostics.recordCompoundFinalization(
                     "finalization-return",
-                    Registries.ITEM.getId(self),
+                    BuiltInRegistries.ITEM.getKey(self),
                     heldIsSlab,
                     context,
                     cir.getReturnValue(),
                     "skipped_result_not_accepted",
-                    context.getBlockPos().offset(context.getSide().getOpposite()),
+                    context.getClickedPos().relative(context.getClickedFace().getOpposite()),
                     false,
                     false,
                     false,
@@ -897,13 +929,13 @@ public abstract class BlockItemPlacementIntentMixin {
             return;
         }
 
-        World world = context.getWorld();
-        BlockPos placePos = context.getBlockPos();
+        Level world = context.getLevel();
+        BlockPos placePos = context.getClickedPos();
         BlockState placedState = world.getBlockState(placePos);
         slabbed$traceRepeatFinalization(context, cir.getReturnValue(), placedState);
         if (heldIsSlab) {
             if (slabbed$isCompoundVisibleSideLowerSlabResult(context, placePos, placedState)) {
-                BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
+                BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
                 BlockState sourceState = world.getBlockState(sourcePos);
                 boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, placePos,
                         placedState);
@@ -913,18 +945,18 @@ public abstract class BlockItemPlacementIntentMixin {
                         placedState);
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
                         "anchorFinalization=ran_compound_visible_side_lower_slab markerBefore="
                                 + markerBefore
                                 + " markerAfter=" + markerAfter
-                                + " sourcePos=" + sourcePos.toShortString()
+                                + " sourcePos=" + slabbed$shortPos(sourcePos)
                                 + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
                 RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
@@ -936,7 +968,7 @@ public abstract class BlockItemPlacementIntentMixin {
                         false,
                         "COMPOUND_VISIBLE_SIDE_LOWER_SLAB");
             } else if (slabbed$isCompoundVisibleSideUpperSlabResult(context, placePos, placedState)) {
-                BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
+                BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
                 BlockState sourceState = world.getBlockState(sourcePos);
                 boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, placePos,
                         placedState);
@@ -946,18 +978,18 @@ public abstract class BlockItemPlacementIntentMixin {
                         placedState);
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
                         "anchorFinalization=ran_compound_visible_side_upper_slab markerBefore="
                                 + markerBefore
                                 + " markerAfter=" + markerAfter
-                                + " sourcePos=" + sourcePos.toShortString()
+                                + " sourcePos=" + slabbed$shortPos(sourcePos)
                                 + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
                 RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
@@ -969,7 +1001,7 @@ public abstract class BlockItemPlacementIntentMixin {
                         false,
                         "COMPOUND_VISIBLE_SIDE_UPPER_SLAB");
             } else if (slabbed$isCompoundVisibleSideDoubleSlabResult(context, placePos, placedState)) {
-                BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
+                BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
                 BlockState sourceState = world.getBlockState(sourcePos);
                 boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, placePos,
                         placedState);
@@ -979,18 +1011,18 @@ public abstract class BlockItemPlacementIntentMixin {
                         placedState);
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
                         "anchorFinalization=ran_compound_visible_side_double_slab markerBefore="
                                 + markerBefore
                                 + " markerAfter=" + markerAfter
-                                + " sourcePos=" + sourcePos.toShortString()
+                                + " sourcePos=" + slabbed$shortPos(sourcePos)
                                 + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
                 RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
@@ -1002,7 +1034,7 @@ public abstract class BlockItemPlacementIntentMixin {
                         false,
                         "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB");
             } else if (slabbed$isCompoundVisibleOwnerTopSlabResult(context, placePos, placedState)) {
-                BlockPos sourcePos = placePos.down();
+                BlockPos sourcePos = placePos.below();
                 BlockState sourceState = world.getBlockState(sourcePos);
                 boolean markerBefore = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, placePos,
                         placedState);
@@ -1012,18 +1044,18 @@ public abstract class BlockItemPlacementIntentMixin {
                         placedState);
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
                         "anchorFinalization=ran_compound_visible_owner_top_slab markerBefore="
                                 + markerBefore
                                 + " markerAfter=" + markerAfter
-                                + " sourcePos=" + sourcePos.toShortString()
+                                + " sourcePos=" + slabbed$shortPos(sourcePos)
                                 + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
                 RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
@@ -1042,7 +1074,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 boolean persistentAfter = SlabAnchorAttachment.isAnchored(world, placePos);
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
@@ -1050,12 +1082,12 @@ public abstract class BlockItemPlacementIntentMixin {
                                 + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, placedState));
                 RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
                         "ran_update_persistent_lowered_slab_carrier",
-                        placePos.down(),
+                        placePos.below(),
                         compoundBefore,
                         compoundAfter,
                         persistentBefore,
@@ -1064,19 +1096,19 @@ public abstract class BlockItemPlacementIntentMixin {
             } else {
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
                         "anchorFinalization=skipped_slab_not_persistent_carrier_candidate");
                 RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         true,
                         context,
                         cir.getReturnValue(),
                         "rejected_compound_slab_side",
-                        placePos.offset(context.getSide().getOpposite()),
+                        placePos.relative(context.getClickedFace().getOpposite()),
                         SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
                         SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
                         SlabAnchorAttachment.isAnchored(world, placePos),
@@ -1090,8 +1122,8 @@ public abstract class BlockItemPlacementIntentMixin {
             return;
         }
 
-        if (context.getSide() == Direction.UP) {
-            BlockPos sourcePos = placePos.down();
+        if (context.getClickedFace() == Direction.UP) {
+            BlockPos sourcePos = placePos.below();
             BlockState sourceState = world.getBlockState(sourcePos);
             boolean anchorBefore = SlabAnchorAttachment.isAnchored(world, placePos);
             boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
@@ -1101,7 +1133,7 @@ public abstract class BlockItemPlacementIntentMixin {
             if (compoundAnchorAfter) {
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         false,
                         context,
                         cir.getReturnValue(),
@@ -1109,11 +1141,11 @@ public abstract class BlockItemPlacementIntentMixin {
                                 + anchorBefore
                                 + " anchorAfter=" + anchorAfter
                                 + " compoundAnchorAfter=" + compoundAnchorAfter
-                                + " sourcePos=" + sourcePos.toShortString()
+                                + " sourcePos=" + slabbed$shortPos(sourcePos)
                                 + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
                 RuntimeDiagnostics.recordCompoundFinalization(
                         "finalization-return",
-                        Registries.ITEM.getId(self),
+                        BuiltInRegistries.ITEM.getKey(self),
                         false,
                         context,
                         cir.getReturnValue(),
@@ -1128,22 +1160,22 @@ public abstract class BlockItemPlacementIntentMixin {
             }
         }
 
-        if (context.getSide().getAxis().isVertical()) {
+        if (context.getClickedFace().getAxis().isVertical()) {
             RuntimeDiagnostics.recordPlace(
                     "finalization-return",
-                    Registries.ITEM.getId(self),
+                    BuiltInRegistries.ITEM.getKey(self),
                     false,
                     context,
                     cir.getReturnValue(),
                     "anchorFinalization=skipped_vertical_face");
             RuntimeDiagnostics.recordCompoundFinalization(
                     "finalization-return",
-                    Registries.ITEM.getId(self),
+                    BuiltInRegistries.ITEM.getKey(self),
                     false,
                     context,
                     cir.getReturnValue(),
                     "skipped_vertical_face",
-                    placePos.down(),
+                    placePos.below(),
                     SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
                     SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
                     SlabAnchorAttachment.isAnchored(world, placePos),
@@ -1155,19 +1187,19 @@ public abstract class BlockItemPlacementIntentMixin {
         if (!SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, placePos, placedState)) {
             RuntimeDiagnostics.recordPlace(
                     "finalization-return",
-                    Registries.ITEM.getId(self),
+                    BuiltInRegistries.ITEM.getKey(self),
                     false,
                     context,
                     cir.getReturnValue(),
                     "anchorFinalization=skipped_not_ordinary_full_block_anchor_candidate");
             RuntimeDiagnostics.recordCompoundFinalization(
                     "finalization-return",
-                    Registries.ITEM.getId(self),
+                    BuiltInRegistries.ITEM.getKey(self),
                     false,
                     context,
                     cir.getReturnValue(),
                     "skipped_not_ordinary_full_block_anchor_candidate",
-                    placePos.offset(context.getSide().getOpposite()),
+                    placePos.relative(context.getClickedFace().getOpposite()),
                     SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
                     SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos),
                     SlabAnchorAttachment.isAnchored(world, placePos),
@@ -1176,7 +1208,7 @@ public abstract class BlockItemPlacementIntentMixin {
             return;
         }
 
-        BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
+        BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
         BlockState sourceState = world.getBlockState(sourcePos);
         boolean anchorBefore = SlabAnchorAttachment.isAnchored(world, placePos);
         boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
@@ -1185,18 +1217,18 @@ public abstract class BlockItemPlacementIntentMixin {
         boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
         RuntimeDiagnostics.recordPlace(
                 "finalization-return",
-                Registries.ITEM.getId(self),
+                BuiltInRegistries.ITEM.getKey(self),
                 false,
                 context,
                 cir.getReturnValue(),
                 "anchorFinalization=ran_side_adjacent_lowered_full_anchor anchorBefore="
                         + anchorBefore
                         + " anchorAfter=" + anchorAfter
-                        + " sourcePos=" + sourcePos.toShortString()
+                        + " sourcePos=" + slabbed$shortPos(sourcePos)
                         + " sourceDy=" + SlabSupport.getYOffset(world, sourcePos, sourceState));
         RuntimeDiagnostics.recordCompoundFinalization(
                 "finalization-return",
-                Registries.ITEM.getId(self),
+                BuiltInRegistries.ITEM.getKey(self),
                 false,
                 context,
                 cir.getReturnValue(),
@@ -1207,5 +1239,9 @@ public abstract class BlockItemPlacementIntentMixin {
                 anchorBefore,
                 anchorAfter,
                 "side_adjacent_lowered_full_anchor_attempt");
+    }
+
+    private static String slabbed$shortPos(BlockPos pos) {
+        return pos.getX() + ", " + pos.getY() + ", " + pos.getZ();
     }
 }

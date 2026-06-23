@@ -1,17 +1,17 @@
 package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.ConnectingBlock;
-import net.minecraft.block.FenceBlock;
-import net.minecraft.block.PaneBlock;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.state.property.BooleanProperty;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.BlockView;
-import net.minecraft.world.WorldAccess;
-import net.minecraft.world.WorldView;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.IronBarsBlock;
+import net.minecraft.world.level.block.PipeBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,15 +24,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * across the height step and produces the "split" / illegal fence connection. Mirrors the
  * 1.21.11 compat fix, adapted to the 1.21.1 6-arg {@code getStateForNeighborUpdate} signature.
  */
-@Mixin({FenceBlock.class, PaneBlock.class})
+@Mixin({FenceBlock.class, IronBarsBlock.class})
 public abstract class FencePaneSlabConnectionMixin {
 
-    @Inject(method = "getStateForNeighborUpdate", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "updateShape", at = @At("RETURN"), cancellable = true)
     private void slabbed$breakSteppedNeighborConnection(
             BlockState state,
             Direction direction,
             BlockState neighborState,
-            WorldAccess world,
+            LevelAccessor world,
             BlockPos pos,
             BlockPos neighborPos,
             CallbackInfoReturnable<BlockState> cir) {
@@ -46,18 +46,18 @@ public abstract class FencePaneSlabConnectionMixin {
         }
     }
 
-    @Inject(method = "getPlacementState", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "getStateForPlacement", at = @At("RETURN"), cancellable = true)
     private void slabbed$breakSteppedPlacementConnection(
-            ItemPlacementContext ctx, CallbackInfoReturnable<BlockState> cir) {
+            BlockPlaceContext ctx, CallbackInfoReturnable<BlockState> cir) {
         BlockState result = cir.getReturnValue();
         if (result == null) {
             return;
         }
-        WorldView world = ctx.getWorld();
-        BlockPos pos = ctx.getBlockPos();
+        LevelReader world = ctx.getLevel();
+        BlockPos pos = ctx.getClickedPos();
         BlockState changed = result;
-        for (Direction dir : Direction.Type.HORIZONTAL) {
-            BlockPos neighborPos = pos.offset(dir);
+        for (Direction dir : Direction.Plane.HORIZONTAL) {
+            BlockPos neighborPos = pos.relative(dir);
             changed = slabbed$breakConnection(world, pos, changed, dir, neighborPos,
                     world.getBlockState(neighborPos));
         }
@@ -68,14 +68,14 @@ public abstract class FencePaneSlabConnectionMixin {
 
     @Unique
     private static BlockState slabbed$breakConnection(
-            BlockView world, BlockPos pos, BlockState state, Direction direction,
+            BlockGetter world, BlockPos pos, BlockState state, Direction direction,
             BlockPos neighborPos, BlockState neighborState) {
-        BooleanProperty prop = ConnectingBlock.FACING_PROPERTIES.get(direction);
-        if (prop == null || !state.contains(prop) || !state.get(prop)) {
+        BooleanProperty prop = PipeBlock.PROPERTY_BY_DIRECTION.get(direction);
+        if (prop == null || !state.hasProperty(prop) || !state.getValue(prop)) {
             return state;
         }
         if (SlabSupport.isSteppedConnectingNeighbor(world, pos, state, neighborPos, neighborState)) {
-            return state.with(prop, false);
+            return state.setValue(prop, false);
         }
         return state;
     }

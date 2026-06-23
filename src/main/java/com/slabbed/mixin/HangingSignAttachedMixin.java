@@ -1,11 +1,11 @@
 package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.HangingSignBlock;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.CeilingHangingSignBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,22 +19,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * collision shape of the block above, which returns false for top
  * slabs (their DOWN face is at y=0.5, not y=0.0).
  */
-@Mixin(HangingSignBlock.class)
+@Mixin(CeilingHangingSignBlock.class)
 public abstract class HangingSignAttachedMixin {
 
-    @Inject(method = "getPlacementState", at = @At("RETURN"), cancellable = true)
-    private void slabbed$attachToTopSlab(ItemPlacementContext ctx,
+    @Inject(method = "getStateForPlacement", at = @At("RETURN"), cancellable = true)
+    private void slabbed$attachToTopSlab(BlockPlaceContext ctx,
                                           CallbackInfoReturnable<BlockState> cir) {
         BlockState result = cir.getReturnValue();
         if (result == null) return;
-        World world = ctx.getWorld();
-        BlockPos placementPos = ctx.getBlockPos();
-        BlockPos above = placementPos.up();
+        Level world = ctx.getLevel();
+        BlockPos placementPos = ctx.getClickedPos();
+        BlockPos above = placementPos.above();
         BlockState stateAbove = world.getBlockState(above);
         if (SlabSupport.isTopSlab(stateAbove)) {
             // ATTACHED=false → CEILING type → double-chain model (directly under solid block)
             // ATTACHED=true  → CEILING_MIDDLE type → loop model (middle of sign chain)
-            cir.setReturnValue(result.with(HangingSignBlock.ATTACHED, false));
+            cir.setReturnValue(result.setValue(CeilingHangingSignBlock.ATTACHED, false));
         }
     }
 }

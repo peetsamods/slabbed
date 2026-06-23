@@ -7,24 +7,24 @@ import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.fabricmc.fabric.api.renderer.v1.model.ForwardingBakedModel;
 import net.fabricmc.fabric.api.renderer.v1.render.RenderContext;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.ChainBlock;
-import net.minecraft.block.FenceBlock;
-import net.minecraft.block.PaneBlock;
-import net.minecraft.block.WallBlock;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.model.BakedModel;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.BlockRenderView;
-import net.minecraft.world.World;
-import net.minecraft.block.ShapeContext;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.ChainBlock;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.IronBarsBlock;
+import net.minecraft.world.level.block.WallBlock;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.core.Direction;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.Locale;
 import java.util.Set;
@@ -34,7 +34,7 @@ import java.util.function.Supplier;
 
 /**
  * Wraps a BakedModel to apply a vertical offset to emitted quads
- * (e.g., torches on bottom slabs) without relying on MatrixStack hacks.
+ * (e.g., torches on bottom slabs) without relying on PoseStack hacks.
  */
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
 public final class OffsetBlockStateModel extends ForwardingBakedModel {
@@ -44,6 +44,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     private static volatile ModelDyOwnerSample slabbed$modelDyOwnerLastTrace = ModelDyOwnerSample.missing();
     private static volatile BlockPos slabbed$fullMeshBoundsTracePos = null;
     private static volatile FullMeshBoundsSample slabbed$fullMeshBoundsLastTrace = FullMeshBoundsSample.missing();
+    private static volatile BlockPos slabbed$stepCullTracePos = null;
+    private static volatile StepCullSample slabbed$stepCullLastTrace = StepCullSample.missing();
     private static final Set<String> slabbed$mc1211FullMeshBoundsSampleRows = ConcurrentHashMap.newKeySet();
     private static final AtomicInteger slabbed$mc1211FullMeshBoundsPassSequence = new AtomicInteger();
     private static final Set<String> slabbed$mc1211LiveModelTraceRows = ConcurrentHashMap.newKeySet();
@@ -152,6 +154,37 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
     }
 
+    public record StepCullSample(
+            boolean seen,
+            String viewClass,
+            String pos,
+            String state,
+            double dy,
+            boolean clearStepCullFaces,
+            int totalQuadsSeen,
+            int cullFacesSeen,
+            int stepFacesSeen,
+            int stepCullFacesCleared,
+            String clearedFaces,
+            String reason
+    ) {
+        public static StepCullSample missing() {
+            return new StepCullSample(
+                    false,
+                    "none",
+                    "none",
+                    "none",
+                    Double.NaN,
+                    false,
+                    0,
+                    0,
+                    0,
+                    0,
+                    "none",
+                    "missing");
+        }
+    }
+
     public static void resetRenderOffsetSample(BlockPos pos) {
         slabbed$tracePos = pos;
         slabbed$lastTrace = RenderOffsetSample.missing();
@@ -162,7 +195,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     }
 
     public static void resetModelDyOwnerSample(BlockPos pos) {
-        slabbed$modelDyOwnerTracePos = pos == null ? null : pos.toImmutable();
+        slabbed$modelDyOwnerTracePos = pos == null ? null : pos.immutable();
         slabbed$modelDyOwnerLastTrace = ModelDyOwnerSample.missing();
     }
 
@@ -171,7 +204,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     }
 
     public static void resetFullMeshBoundsSample(BlockPos pos) {
-        slabbed$fullMeshBoundsTracePos = pos == null ? null : pos.toImmutable();
+        slabbed$fullMeshBoundsTracePos = pos == null ? null : pos.immutable();
         slabbed$fullMeshBoundsLastTrace = FullMeshBoundsSample.missing();
     }
 
@@ -179,11 +212,20 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         return slabbed$fullMeshBoundsLastTrace;
     }
 
+    public static void resetStepCullSample(BlockPos pos) {
+        slabbed$stepCullTracePos = pos == null ? null : pos.immutable();
+        slabbed$stepCullLastTrace = StepCullSample.missing();
+    }
+
+    public static StepCullSample snapshotStepCullSample() {
+        return slabbed$stepCullLastTrace;
+    }
+
     /**
      * Fabric renderer entry point used by Indigo/Sodium+Indium.
      */
     @Override
-    public void emitBlockQuads(BlockRenderView view, BlockState state, BlockPos pos, Supplier<Random> randomSupplier,
+    public void emitBlockQuads(BlockAndTintGetter view, BlockState state, BlockPos pos, Supplier<RandomSource> randomSupplier,
                                RenderContext context) {
         float sourceDy;
         String dySourcePath;
@@ -199,7 +241,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             if (dy != 0.0f) {
                 // Prevent visual connection offsets for fences/walls/panes,
                 // except for the explicitly proven Beta 3.5 fence/wall variants.
-                if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof PaneBlock) {
+                if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof IronBarsBlock) {
                     if (!SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
                         dy = 0.0f;
                         dySourcePath = dySourcePath + ":visualConnectionExcluded";
@@ -231,7 +273,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 && pos.equals(slabbed$tracePos)) {
             boolean excluded = state.getBlock() instanceof FenceBlock
                     || state.getBlock() instanceof WallBlock
-                    || state.getBlock() instanceof PaneBlock;
+                    || state.getBlock() instanceof IronBarsBlock;
             slabbed$lastTrace = new RenderOffsetSample(
                     true,
                     view.getClass().getName(),
@@ -243,13 +285,13 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     excluded);
         }
 
-        // Prove that the render-path BlockView is not a World, causing isAnchored to return false.
-        // Fires only when -Dslabbed.anchor.trace=true AND view is NOT a World instance.
-        if (SlabAnchorAttachment.TRACE && !(view instanceof World)) {
+        // Prove that the render-path BlockGetter is not a Level, causing isAnchored to return false.
+        // Fires only when -Dslabbed.anchor.trace=true AND view is NOT a Level instance.
+        if (SlabAnchorAttachment.TRACE && !(view instanceof Level)) {
             boolean anchoredViaFallback = false;
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc != null && mc.world != null) {
-                anchoredViaFallback = SlabAnchorAttachment.isAnchored(mc.world, pos);
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null && mc.level != null) {
+                anchoredViaFallback = SlabAnchorAttachment.isAnchored(mc.level, pos);
             }
             if (anchoredViaFallback || dy != 0.0f) {
                 Slabbed.LOGGER.info("[ANCHOR] model dy view={} pos={} dy={} anchoredViaWorldFallback={}",
@@ -265,11 +307,26 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         // one ALSO owns a step face, so the transform must run even when dy==0.
         // Mirrors the 1.21.11 model-path fix; see docs/CULL-WINDOW-FIX-DESIGN.md.
         final boolean clearStepCullFaces = slabbed$hasLoweredStepFace(view, pos, state);
+        final boolean observeStepCull = slabbed$isStepCullTracePos(pos);
 
         if (dy == 0.0f && !clearStepCullFaces) {
             slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, wrapped, dy,
                     0, 0, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
                     "dy_zero_no_transform");
+            if (observeStepCull) {
+                slabbed$recordStepCullSample(
+                        view,
+                        pos,
+                        state,
+                        dy,
+                        clearStepCullFaces,
+                        0,
+                        0,
+                        0,
+                        0,
+                        "none",
+                        "dy_zero_no_step_faces");
+            }
             emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
             return;
         }
@@ -277,7 +334,11 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         final float yOffset = dy;
         final BakedModel traceModel = wrapped;
         final int[] totalQuadsSeen = {0};
+        final int[] cullFacesSeen = {0};
+        final int[] stepFacesSeen = {0};
+        final int[] stepCullFacesCleared = {0};
         final int[] verticesVisited = {0};
+        final StringBuilder clearedFaces = new StringBuilder();
         final double[] meshBounds = {
                 Double.POSITIVE_INFINITY,
                 Double.NEGATIVE_INFINITY,
@@ -285,13 +346,22 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 Double.NEGATIVE_INFINITY};
         context.pushTransform(quad -> {
             totalQuadsSeen[0]++;
+            Direction cullFace = quad.cullFace();
+            if (cullFace != null) {
+                cullFacesSeen[0]++;
+            }
             // Un-cull lowered-step seam faces so the strip exposed by the offset is drawn,
             // not culled into a see-through window. Preserve nominalFace so lighting/orientation
             // are unchanged. Only flips cull->draw, so it cannot remove geometry or z-fight
             // (the opposite-facing coplanar seam face is GPU back-face-culled).
             if (clearStepCullFaces) {
-                Direction cullFace = quad.cullFace();
                 if (cullFace != null && SlabSupport.isSlabHeightStepFace(view, pos, state, cullFace)) {
+                    stepFacesSeen[0]++;
+                    if (clearedFaces.length() > 0) {
+                        clearedFaces.append(',');
+                    }
+                    clearedFaces.append(cullFace.getName());
+                    stepCullFacesCleared[0]++;
                     quad.cullFace(null);
                     quad.nominalFace(cullFace);
                 }
@@ -318,6 +388,20 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     meshBounds[2],
                     meshBounds[3],
                     "quad_transform_aggregate");
+            if (observeStepCull) {
+                slabbed$recordStepCullSample(
+                        view,
+                        pos,
+                        state,
+                        dy,
+                        clearStepCullFaces,
+                        totalQuadsSeen[0],
+                        cullFacesSeen[0],
+                        stepFacesSeen[0],
+                        stepCullFacesCleared[0],
+                        clearedFaces.length() == 0 ? "none" : clearedFaces.toString(),
+                        "quad_transform_aggregate");
+            }
         } finally {
             context.popTransform();
         }
@@ -326,8 +410,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     /** True if any horizontal side face of {@code pos} sits at a slab-height step (see
      * {@link SlabSupport#isSlabHeightStepFace}). Drives the cull relaxation for BOTH the
      * lowered block and its flat neighbour, so neither side leaves a see-through seam. */
-    private static boolean slabbed$hasLoweredStepFace(BlockRenderView view, BlockPos pos, BlockState state) {
-        for (Direction direction : Direction.Type.HORIZONTAL) {
+    private static boolean slabbed$hasLoweredStepFace(BlockAndTintGetter view, BlockPos pos, BlockState state) {
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
             if (SlabSupport.isSlabHeightStepFace(view, pos, state, direction)) {
                 return true;
             }
@@ -335,8 +419,41 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         return false;
     }
 
-    private void emitWrappedBlockQuads(BlockRenderView view, BlockState state, BlockPos pos,
-                                       Supplier<Random> randomSupplier, RenderContext context) {
+    private static boolean slabbed$isStepCullTracePos(BlockPos pos) {
+        BlockPos observedPos = slabbed$stepCullTracePos;
+        return observedPos != null && observedPos.equals(pos);
+    }
+
+    private static void slabbed$recordStepCullSample(
+            BlockAndTintGetter view,
+            BlockPos pos,
+            BlockState state,
+            float dy,
+            boolean clearStepCullFaces,
+            int totalQuadsSeen,
+            int cullFacesSeen,
+            int stepFacesSeen,
+            int stepCullFacesCleared,
+            String clearedFaces,
+            String reason
+    ) {
+        slabbed$stepCullLastTrace = new StepCullSample(
+                true,
+                view == null ? "null" : view.getClass().getName(),
+                pos == null ? "null" : pos.toShortString(),
+                state == null ? "null" : state.toString(),
+                dy,
+                clearStepCullFaces,
+                totalQuadsSeen,
+                cullFacesSeen,
+                stepFacesSeen,
+                stepCullFacesCleared,
+                clearedFaces,
+                reason);
+    }
+
+    private void emitWrappedBlockQuads(BlockAndTintGetter view, BlockState state, BlockPos pos,
+                                       Supplier<RandomSource> randomSupplier, RenderContext context) {
         if (wrapped instanceof FabricBakedModel fabricWrapped) {
             fabricWrapped.emitBlockQuads(view, state, pos, randomSupplier, context);
             return;
@@ -346,7 +463,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     }
 
     private static void slabbed$logCompoundVisibleRenderTraceModelDy(
-            BlockRenderView view,
+            BlockAndTintGetter view,
             BlockPos pos,
             BlockState state,
             float modelDy
@@ -370,7 +487,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 clientDy);
     }
 
-    private static String slabbed$compoundVisibleMarker(BlockRenderView view, BlockPos pos, BlockState state) {
+    private static String slabbed$compoundVisibleMarker(BlockAndTintGetter view, BlockPos pos, BlockState state) {
         if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(view, pos, state)) {
             return "lower";
         }
@@ -387,7 +504,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     }
 
     private static void slabbed$logMc1211LiveModelTrace(
-            BlockRenderView view,
+            BlockAndTintGetter view,
             BlockPos pos,
             BlockState state,
             String dySourcePath,
@@ -398,7 +515,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             return;
         }
 
-        String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+        String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         String blockFilter = System.getProperty("slabbed.mc1211.liveModelTraceBlock", "minecraft:stone").trim();
         if (blockFilter.isEmpty()) {
             blockFilter = "minecraft:stone";
@@ -436,11 +553,11 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         }
 
         double outlineDy = ClientDy.dyFor(view, pos, state);
-        MinecraftClient mc = MinecraftClient.getInstance();
-        ClientWorld clientWorld = mc == null ? null : mc.world;
-        BlockState clientState = clientWorld == null ? state : clientWorld.getBlockState(pos);
-        double clientWorldDy = clientWorld == null ? Double.NaN : ClientDy.dyFor(clientWorld, pos, clientState);
-        boolean renderViewCarrierMismatch = clientWorld != null
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel clientLevel = mc == null ? null : mc.level;
+        BlockState clientState = clientLevel == null ? state : clientLevel.getBlockState(pos);
+        double clientWorldDy = clientLevel == null ? Double.NaN : ClientDy.dyFor(clientLevel, pos, clientState);
+        boolean renderViewCarrierMismatch = clientLevel != null
                 && Math.abs(outlineDy - clientWorldDy) > 1.0e-6;
         boolean translationApplied = modelDyAfterWrapper != 0.0f;
         String reason = slabbed$mc1211LiveModelTraceReason(
@@ -458,13 +575,13 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         int rowCount = ++slabbed$mc1211LiveModelTraceRowCount;
 
         Slabbed.LOGGER.info(
-                "[MC1211_LIVE_MODEL_TRACE_ROW] pos={} blockState={} blockId={} renderViewClass={} viewIsWorld={} clientWorldPresent={} nearFilter={} relativeToNear={} distanceFromNear={} renderSection={} modelDySourcePath={} modelDyBeforeWrapper={} modelDyAfterWrapper={} outlineDy={} clientWorldDy={} deltaModelMinusOutline={} modelLowerThanOutline={} modelTranslationApplied={} targetDy=omitted currentBounds={} inferredModelYTranslation={} reason={}",
+                "[MC1211_LIVE_MODEL_TRACE_ROW] pos={} blockState={} blockId={} renderViewClass={} viewIsLevel={} clientWorldPresent={} nearFilter={} relativeToNear={} distanceFromNear={} renderSection={} modelDySourcePath={} modelDyBeforeWrapper={} modelDyAfterWrapper={} outlineDy={} clientWorldDy={} deltaModelMinusOutline={} modelLowerThanOutline={} modelTranslationApplied={} targetDy=omitted currentBounds={} inferredModelYTranslation={} reason={}",
                 pos.toShortString(),
                 state,
                 blockId,
                 view.getClass().getName(),
-                view instanceof World,
-                clientWorld != null,
+                view instanceof Level,
+                clientLevel != null,
                 nearFilter,
                 relativePos,
                 distanceFromNear < 0 ? "n/a" : Integer.toString(distanceFromNear),
@@ -486,7 +603,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     }
 
     private static void slabbed$recordMc1211FullMeshBoundsSample(
-            BlockRenderView view,
+            BlockAndTintGetter view,
             BlockPos pos,
             BlockState state,
             BakedModel model,
@@ -499,7 +616,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             double maxAfterY,
             String reason
     ) {
-        String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+        String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         String matrixKey = blockId + "@" + pos.toShortString();
         String matrixRow = slabbed$mc1211FamilyMatrixRow(blockId);
         String modelClass = model == null ? "null" : model.getClass().getName();
@@ -662,11 +779,11 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     }
 
     private static String slabbed$mc1211ClientTickOrUnknown() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null || mc.world == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.level == null) {
             return "unknown";
         }
-        return Long.toString(mc.world.getTime());
+        return Long.toString(mc.level.getGameTime());
     }
 
     private static void slabbed$logMc1211LiveModelTraceCanary(String blockFilter, BlockPos near, int radius, boolean parseFailed) {
@@ -793,13 +910,13 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         return "chunk(" + chunkX + "," + chunkZ + ")/sectionY(" + sectionY + ")";
     }
 
-    private static String slabbed$outlineBounds(BlockRenderView view, BlockPos pos, BlockState state) {
+    private static String slabbed$outlineBounds(BlockAndTintGetter view, BlockPos pos, BlockState state) {
         try {
-            VoxelShape outline = state.getOutlineShape(view, pos, ShapeContext.absent());
+            VoxelShape outline = state.getShape(view, pos, CollisionContext.empty());
             if (outline == null || outline.isEmpty()) {
                 return "empty";
             }
-            Box box = outline.getBoundingBox();
+            AABB box = outline.bounds();
             return String.format(
                     Locale.ROOT,
                     "[%.6f,%.6f]",

@@ -4,20 +4,20 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.attachment.AttachmentType;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Schedules a client-side block rerender for every anchored/lowered-carrier
@@ -33,9 +33,8 @@ import java.util.Map;
  * client chunk and refresh each position in the union of the old and new
  * anchor sets.
  */
-@Environment(EnvType.CLIENT)
 public final class SlabAnchorClientSync {
-    private static final Map<Long, WorldChunk> TRACKED_CHUNKS = new HashMap<>();
+    private static final Map<Long, LevelChunk> TRACKED_CHUNKS = new HashMap<>();
     private static final Map<AttachmentSnapshotKey, LongOpenHashSet> ATTACHMENT_SNAPSHOTS = new HashMap<>();
     private static boolean initialized;
 
@@ -45,25 +44,25 @@ public final class SlabAnchorClientSync {
     private SlabAnchorClientSync() {
     }
 
-    public static void init() {
+    public static void init(IEventBus eventBus) {
         if (initialized) {
             return;
         }
         initialized = true;
 
-        // Bridge: chunk render paths receive ChunkRendererRegion (not a World) and cannot
+        // Bridge: chunk render paths receive ChunkRendererRegion (not a Level) and cannot
         // access chunk attachments.  Register a client-world fallback so anchor queries
         // from the model render path resolve correctly after a supporting BS is broken.
         SlabAnchorAttachment.clientAnchorLookup = pos -> {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc == null || mc.world == null) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.level == null) {
                 return false;
             }
-            WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             if (chunk == null) {
                 return false;
             }
-            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE);
+            LongOpenHashSet set = chunk.getExistingDataOrNull(SlabAnchorAttachment.ANCHOR_TYPE.get());
             return set != null && set.contains(pos.asLong());
         };
         SlabAnchorAttachment.clientFrozenFlatLookup = pos -> {
@@ -71,15 +70,15 @@ public final class SlabAnchorClientSync {
             return set != null && set.contains(pos.asLong());
         };
         SlabAnchorAttachment.clientLoweredSlabCarrierLookup = pos -> {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc == null || mc.world == null) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.level == null) {
                 return false;
             }
-            WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             if (chunk == null) {
                 return false;
             }
-            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+            LongOpenHashSet set = chunk.getExistingDataOrNull(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE.get());
             return set != null && set.contains(pos.asLong());
         };
         SlabAnchorAttachment.clientCompoundFullBlockAnchorLookup = pos -> {
@@ -103,28 +102,31 @@ public final class SlabAnchorClientSync {
             return set != null && set.contains(pos.asLong());
         };
 
-        ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
-        ClientChunkEvents.CHUNK_UNLOAD.register(SlabAnchorClientSync::onChunkUnload);
-        ClientTickEvents.END_CLIENT_TICK.register(SlabAnchorClientSync::pollAttachmentChanges);
+        eventBus.addListener(SlabAnchorClientSync::onChunkLoad);
+        eventBus.addListener(SlabAnchorClientSync::onChunkUnload);
+        eventBus.addListener(SlabAnchorClientSync::pollAttachmentChanges);
     }
 
-    private static void onChunkLoad(ClientWorld world, WorldChunk chunk) {
+    private static void onChunkLoad(ChunkEvent.Load event) {
+        if (!(event.getChunk() instanceof LevelChunk chunk) || !(chunk.getLevel() instanceof ClientLevel)) {
+            return;
+        }
         TRACKED_CHUNKS.put(chunk.getPos().toLong(), chunk);
 
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.ANCHOR_TYPE, null,
-                chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE));
+                chunk.getExistingDataOrNull(SlabAnchorAttachment.ANCHOR_TYPE.get()));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE, null,
-                chunk.getAttached(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE));
+                chunk.getExistingDataOrNull(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE.get()));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE, null,
-                chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE));
+                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE.get()));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE, null,
-                chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE));
+                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE.get()));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE, null,
-                chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE));
+                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE.get()));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE, null,
-                chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE));
+                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE.get()));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE, null,
-                chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE));
+                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE.get()));
 
         // Also handle any attachment value already present at chunk-load time.
         // This covers the case where the chunk attachment sync packet arrived before
@@ -149,7 +151,10 @@ public final class SlabAnchorClientSync {
         snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
     }
 
-    private static void onChunkUnload(ClientWorld world, WorldChunk chunk) {
+    private static void onChunkUnload(ChunkEvent.Unload event) {
+        if (!(event.getChunk() instanceof LevelChunk chunk) || !(chunk.getLevel() instanceof ClientLevel)) {
+            return;
+        }
         long chunkPos = chunk.getPos().toLong();
         TRACKED_CHUNKS.remove(chunkPos);
         ATTACHMENT_SNAPSHOTS.keySet().removeIf(key -> key.chunkPos() == chunkPos);
@@ -157,27 +162,28 @@ public final class SlabAnchorClientSync {
 
     private static LongOpenHashSet clientAttachmentSet(
             BlockPos pos,
-            AttachmentType<LongOpenHashSet> attachmentType
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null || mc.world == null || pos == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.level == null || pos == null) {
             return null;
         }
-        WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-        return chunk == null ? null : chunk.getAttached(attachmentType);
+        LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        return chunk == null ? null : chunk.getExistingDataOrNull(attachmentType.get());
     }
 
-    private static void pollAttachmentChanges(MinecraftClient mc) {
-        if (mc.world == null) {
+    private static void pollAttachmentChanges(ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
             TRACKED_CHUNKS.clear();
             ATTACHMENT_SNAPSHOTS.clear();
             return;
         }
-        if (mc.worldRenderer == null) {
+        if (mc.levelRenderer == null) {
             return;
         }
 
-        for (WorldChunk chunk : new ArrayList<>(TRACKED_CHUNKS.values())) {
+        for (LevelChunk chunk : new ArrayList<>(TRACKED_CHUNKS.values())) {
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.ANCHOR_TYPE);
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
@@ -190,13 +196,13 @@ public final class SlabAnchorClientSync {
     }
 
     private static void pollAttachmentChange(
-            MinecraftClient mc,
-            WorldChunk chunk,
-            AttachmentType<LongOpenHashSet> attachmentType
+            Minecraft mc,
+            LevelChunk chunk,
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
-        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType);
+        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType.get());
         LongOpenHashSet oldSet = ATTACHMENT_SNAPSHOTS.get(key);
-        LongOpenHashSet newSet = copyAttachmentSet(chunk.getAttached(attachmentType));
+        LongOpenHashSet newSet = copyAttachmentSet(chunk.getExistingDataOrNull(attachmentType.get()));
         if (attachmentSetsEqual(oldSet, newSet)) {
             return;
         }
@@ -208,11 +214,11 @@ public final class SlabAnchorClientSync {
     }
 
     private static void snapshotAttachment(
-            WorldChunk chunk,
-            AttachmentType<LongOpenHashSet> attachmentType
+            LevelChunk chunk,
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
-        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType);
-        ATTACHMENT_SNAPSHOTS.put(key, copyAttachmentSet(chunk.getAttached(attachmentType)));
+        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType.get());
+        ATTACHMENT_SNAPSHOTS.put(key, copyAttachmentSet(chunk.getExistingDataOrNull(attachmentType.get())));
     }
 
     private static LongOpenHashSet copyAttachmentSet(LongOpenHashSet set) {
@@ -229,33 +235,33 @@ public final class SlabAnchorClientSync {
     }
 
     private static void scheduleInitialRerenders(
-            WorldChunk chunk,
-            AttachmentType<LongOpenHashSet> attachmentType
+            LevelChunk chunk,
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
-        LongOpenHashSet initial = chunk.getAttached(attachmentType);
+        LongOpenHashSet initial = chunk.getExistingDataOrNull(attachmentType.get());
         logReloadJumpSync("initialRerenderCheck", chunk, attachmentType, null, initial);
         if (initial != null && !initial.isEmpty()) {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc.worldRenderer != null) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.levelRenderer != null) {
                 scheduleRerendersForSet(mc, initial, attachmentType);
             }
         }
     }
 
     private static void scheduleRerendersForSet(
-            MinecraftClient mc,
+            Minecraft mc,
             LongOpenHashSet set,
-            AttachmentType<LongOpenHashSet> attachmentType
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
         if (set == null || set.isEmpty()) {
             return;
         }
-        BlockPos.Mutable mutable = new BlockPos.Mutable();
+        BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
         for (long packed : set) {
             mutable.set(packed);
-            BlockPos rerenderPos = mutable.toImmutable();
-            BlockState current = mc.world != null
-                    ? mc.world.getBlockState(rerenderPos)
+            BlockPos rerenderPos = mutable.immutable();
+            BlockState current = mc.level != null
+                    ? mc.level.getBlockState(rerenderPos)
                     : null;
             if (current != null) {
                 if (SlabAnchorAttachment.TRACE) {
@@ -263,22 +269,22 @@ public final class SlabAnchorClientSync {
                             rerenderPos.toShortString());
                 }
                 logReloadJumpSyncRerender(rerenderPos, current);
-                if (SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType)) {
+                if (SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType.get())) {
                     scheduleCompoundVisibleRenderRefresh(mc, rerenderPos, current, attachmentType);
                 } else {
-                    mc.worldRenderer.scheduleBlockRerenderIfNeeded(rerenderPos, current, current);
+                    mc.levelRenderer.setBlockDirty(rerenderPos, current, current);
                 }
             }
         }
     }
 
     private static void scheduleCompoundVisibleRenderRefresh(
-            MinecraftClient mc,
+            Minecraft mc,
             BlockPos pos,
             BlockState state,
-            AttachmentType<LongOpenHashSet> attachmentType
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
-        mc.worldRenderer.scheduleBlockRenders(
+        mc.levelRenderer.setBlocksDirty(
                 pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
                 pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1);
         logCompoundVisibleRenderRefresh(mc, pos, state, attachmentType);
@@ -288,7 +294,7 @@ public final class SlabAnchorClientSync {
         return Boolean.getBoolean("slabbed.beta4ReloadJumpRecorder");
     }
 
-    private static String labelForAttachment(AttachmentType<LongOpenHashSet> attachmentType) {
+    private static String labelForAttachment(Supplier<AttachmentType<LongOpenHashSet>> attachmentType) {
         if (attachmentType == SlabAnchorAttachment.ANCHOR_TYPE) {
             return "persistentFullBlockAnchor";
         }
@@ -319,8 +325,8 @@ public final class SlabAnchorClientSync {
 
     private static void logReloadJumpSync(
             String event,
-            WorldChunk chunk,
-            AttachmentType<LongOpenHashSet> attachmentType,
+            LevelChunk chunk,
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType,
             LongOpenHashSet oldSet,
             LongOpenHashSet newSet
     ) {
@@ -358,7 +364,7 @@ public final class SlabAnchorClientSync {
     private static void logModelDyRerenderEvent(
             String event,
             String type,
-            WorldChunk chunk,
+            LevelChunk chunk,
             LongOpenHashSet oldSet,
             LongOpenHashSet newSet
     ) {
@@ -392,13 +398,13 @@ public final class SlabAnchorClientSync {
     private static void logCompoundVisibleClientSync(
             String event,
             String type,
-            WorldChunk chunk,
-            AttachmentType<LongOpenHashSet> attachmentType,
+            LevelChunk chunk,
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType,
             LongOpenHashSet oldSet,
             LongOpenHashSet newSet
     ) {
         if (!SlabAnchorAttachment.beta4CompoundVisibleRenderTraceEnabled()
-                || !SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType)) {
+                || !SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType.get())) {
             return;
         }
         boolean oldPresent = oldSet != null && !oldSet.isEmpty();
@@ -407,7 +413,7 @@ public final class SlabAnchorClientSync {
             return;
         }
         Slabbed.LOGGER.info(
-                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_CLIENT_SYNC] event={} pos=chunk marker={} serverMarker=n/a clientMarker={} modelViewType=World slabSupportDy=n/a clientDy=n/a candidateRerenderScheduled={} neighborRerenderScheduled={}",
+                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_CLIENT_SYNC] event={} pos=chunk marker={} serverMarker=n/a clientMarker={} modelViewType=Level slabSupportDy=n/a clientDy=n/a candidateRerenderScheduled={} neighborRerenderScheduled={}",
                 event,
                 type,
                 newPresent,
@@ -416,20 +422,20 @@ public final class SlabAnchorClientSync {
     }
 
     private static void logCompoundVisibleRenderRefresh(
-            MinecraftClient mc,
+            Minecraft mc,
             BlockPos pos,
             BlockState state,
-            AttachmentType<LongOpenHashSet> attachmentType
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
         if (!SlabAnchorAttachment.beta4CompoundVisibleRenderTraceEnabled()) {
             return;
         }
-        String marker = SlabAnchorAttachment.compoundVisibleAttachmentLabel(attachmentType);
+        String marker = SlabAnchorAttachment.compoundVisibleAttachmentLabel(attachmentType.get());
         boolean clientMarker = compoundVisibleClientMarker(mc, pos, state, attachmentType);
-        double slabSupportDy = mc.world == null ? 0.0d : SlabSupport.getYOffset(mc.world, pos, state);
-        double clientDy = mc.world == null ? 0.0d : ClientDy.dyFor(mc.world, pos, state);
+        double slabSupportDy = mc.level == null ? 0.0d : SlabSupport.getYOffset(mc.level, pos, state);
+        double clientDy = mc.level == null ? 0.0d : ClientDy.dyFor(mc.level, pos, state);
         Slabbed.LOGGER.info(
-                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_RERENDER] pos={} marker={} serverMarker=n/a clientMarker={} modelViewType=World slabSupportDy={} clientDy={} candidateRerenderScheduled=true neighborRerenderScheduled=true sourceRerenderScheduled=true",
+                "[JULIA_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_RERENDER] pos={} marker={} serverMarker=n/a clientMarker={} modelViewType=Level slabSupportDy={} clientDy={} candidateRerenderScheduled=true neighborRerenderScheduled=true sourceRerenderScheduled=true",
                 pos.toShortString(),
                 marker,
                 clientMarker,
@@ -447,30 +453,30 @@ public final class SlabAnchorClientSync {
     }
 
     private static boolean compoundVisibleClientMarker(
-            MinecraftClient mc,
+            Minecraft mc,
             BlockPos pos,
             BlockState state,
-            AttachmentType<LongOpenHashSet> attachmentType
+            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
-        if (mc.world == null) {
+        if (mc.level == null) {
             return false;
         }
         if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE) {
-            return SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(mc.world, pos, state);
+            return SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(mc.level, pos, state);
         }
         if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE) {
-            return SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(mc.world, pos, state);
+            return SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(mc.level, pos, state);
         }
         if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE) {
-            return SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(mc.world, pos, state);
+            return SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(mc.level, pos, state);
         }
         if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE) {
-            return SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(mc.world, pos, state);
+            return SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(mc.level, pos, state);
         }
         return false;
     }
 
-    private static String watchedPositionsInsideChunk(WorldChunk chunk) {
+    private static String watchedPositionsInsideChunk(LevelChunk chunk) {
         String raw = System.getProperty("slabbed.beta4ModelDyRecorderWatch", "");
         if (raw.isBlank()) {
             return "none";

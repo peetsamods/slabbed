@@ -7,21 +7,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.BlockView;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 public final class Beta4ManualLiveTrace {
     private static final String OPT_IN = "slabbed.beta4ManualLiveTrace";
@@ -40,7 +39,7 @@ public final class Beta4ManualLiveTrace {
         return Boolean.getBoolean(OPT_IN);
     }
 
-    public static ClickSnapshot startClientClick(World world, ItemStack heldStack, BlockHitResult hit, HitResult crosshairTarget) {
+    public static ClickSnapshot startClientClick(Level world, ItemStack heldStack, BlockHitResult hit, HitResult crosshairTarget) {
         if (!enabled() || world == null || hit == null || !heldIsSlab(heldStack)) {
             return null;
         }
@@ -72,7 +71,7 @@ public final class Beta4ManualLiveTrace {
         return snapshot;
     }
 
-    public static void finishClientClick(World world, ClickSnapshot snapshot, ActionResult result) {
+    public static void finishClientClick(Level world, ClickSnapshot snapshot, InteractionResult result) {
         if (!enabled() || world == null || snapshot == null) {
             return;
         }
@@ -92,7 +91,7 @@ public final class Beta4ManualLiveTrace {
             System.out.println("[JULIA_BETA4_MANUAL_LIVE_FINAL]"
                     + baseFields(snapshot.clickIndex(), world, snapshot.hit(), snapshot.heldItem())
                     + " result=" + result
-                    + " accepted=" + (result != null && result.isAccepted())
+                    + " accepted=" + (result != null && result.consumesAction())
                     + " expectedCandidate=" + formatPos(expected)
                     + " expectedFinalState=" + formatState(expectedState)
                     + " expectedFinalDy=" + formatDy(world, expected, expectedState)
@@ -102,7 +101,7 @@ public final class Beta4ManualLiveTrace {
                     + " heldItem=" + snapshot.heldItem()
                     + " classification=" + snapshot.classification()
                     + " targetPos=" + formatPos(snapshot.hit().getBlockPos())
-                    + " face=" + snapshot.hit().getSide()
+                    + " face=" + snapshot.hit().getDirection()
                     + " predictedCandidate=" + formatPos(expected)
                     + " result=" + result
                     + " changedCount=" + delta.changedCount()
@@ -115,7 +114,7 @@ public final class Beta4ManualLiveTrace {
         }
     }
 
-    public static void tickClient(World world) {
+    public static void tickClient(Level world) {
         if (!enabled() || world == null) {
             PENDING_DELAYED_CLICKS.clear();
             return;
@@ -135,29 +134,29 @@ public final class Beta4ManualLiveTrace {
         }
     }
 
-    public static void logPlacementIntent(ItemUsageContext incoming, ItemUsageContext outgoing, String decision) {
-        if (!enabled() || incoming == null || incoming.getWorld() == null || !heldIsSlab(incoming.getStack())) {
+    public static void logPlacementIntent(UseOnContext incoming, UseOnContext outgoing, String decision) {
+        if (!enabled() || incoming == null || incoming.getLevel() == null || !heldIsSlab(incoming.getItemInHand())) {
             return;
         }
-        World world = incoming.getWorld();
+        Level world = incoming.getLevel();
         int clickIndex = currentClickIndex();
         BlockHitResult incomingHit = new BlockHitResult(
-                incoming.getHitPos(),
-                incoming.getSide(),
-                incoming.getBlockPos(),
-                incoming.hitsInsideBlock());
-        BlockPos outgoingPos = outgoing == null ? null : outgoing.getBlockPos();
-        BlockState outgoingState = outgoingPos == null ? null : outgoing.getWorld().getBlockState(outgoingPos);
+                incoming.getClickLocation(),
+                incoming.getClickedFace(),
+                incoming.getClickedPos(),
+                incoming.isInside());
+        BlockPos outgoingPos = outgoing == null ? null : outgoing.getClickedPos();
+        BlockState outgoingState = outgoingPos == null ? null : outgoing.getLevel().getBlockState(outgoingPos);
         SlabSupport.CompoundSlabRemapDecision predicted = predictedDecision(world, incomingHit);
         System.out.println("[JULIA_BETA4_MANUAL_LIVE_PLACEMENT_INTENT]"
-                + baseFields(clickIndex, world, incomingHit, incoming.getStack())
+                + baseFields(clickIndex, world, incomingHit, incoming.getItemInHand())
                 + " ran=true"
-                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
+                + " side=" + (world.isClientSide() ? "CLIENT" : "SERVER")
                 + " outgoingPos=" + formatPos(outgoingPos)
-                + " outgoingFace=" + (outgoing == null ? "null" : outgoing.getSide())
-                + " outgoingHit=" + (outgoing == null ? "null" : formatVec(outgoing.getHitPos()))
+                + " outgoingFace=" + (outgoing == null ? "null" : outgoing.getClickedFace())
+                + " outgoingHit=" + (outgoing == null ? "null" : formatVec(outgoing.getClickLocation()))
                 + " outgoingState=" + formatState(outgoingState)
-                + " outgoingDy=" + formatDy(outgoing == null ? world : outgoing.getWorld(), outgoingPos, outgoingState)
+                + " outgoingDy=" + formatDy(outgoing == null ? world : outgoing.getLevel(), outgoingPos, outgoingState)
                 + " predictedCandidate=" + formatPos(predicted == null ? null : predicted.candidatePlacementPos())
                 + " predictedReason=" + (predicted == null ? "none" : predicted.reason())
                 + " result=pending"
@@ -165,11 +164,11 @@ public final class Beta4ManualLiveTrace {
     }
 
     public static void logServerTolerance(
-            World world,
+            Level world,
             BlockHitResult hit,
             ItemStack heldStack,
-            Vec3d centerBefore,
-            Vec3d centerAfter,
+            Vec3 centerBefore,
+            Vec3 centerAfter,
             String reason
     ) {
         if (!enabled() || world == null || hit == null || !heldIsSlab(heldStack)) {
@@ -185,17 +184,17 @@ public final class Beta4ManualLiveTrace {
     }
 
     public static void logSlabSupportDecision(
-            BlockView world,
+            BlockGetter world,
             BlockPos sourcePos,
             BlockState sourceState,
             Direction intendedDirection,
-            Vec3d hitPos,
+            Vec3 hitPos,
             SlabSupport.CompoundSlabRemapDecision decision
     ) {
         if (!enabled() || SUPPRESS_SUPPORT_TRACE.get() || world == null || decision == null) {
             return;
         }
-        String side = world instanceof World realWorld ? (realWorld.isClient() ? "CLIENT" : "SERVER") : "BLOCK_VIEW";
+        String side = world instanceof Level realWorld ? (realWorld.isClientSide() ? "CLIENT" : "SERVER") : "BLOCK_VIEW";
         System.out.println("[JULIA_BETA4_MANUAL_LIVE_SLAB_SUPPORT_DECISION]"
                 + " clickIndex=" + currentClickIndex()
                 + " side=" + side
@@ -228,77 +227,77 @@ public final class Beta4ManualLiveTrace {
                 && blockItem.getBlock() instanceof SlabBlock;
     }
 
-    public static String formatHit(World world, HitResult hit) {
+    public static String formatHit(Level world, HitResult hit) {
         if (!(hit instanceof BlockHitResult blockHit)) {
             return hit == null ? "null" : hit.getType().toString();
         }
         BlockPos pos = blockHit.getBlockPos();
         BlockState state = world == null ? null : world.getBlockState(pos);
         return "{pos=" + formatPos(pos)
-                + " face=" + blockHit.getSide()
-                + " hit=" + formatVec(blockHit.getPos())
+                + " face=" + blockHit.getDirection()
+                + " hit=" + formatVec(blockHit.getLocation())
                 + " state=" + formatState(state)
                 + " dy=" + formatDy(world, pos, state)
                 + "}";
     }
 
-    private static String baseFields(int clickIndex, World world, BlockHitResult hit, ItemStack heldStack) {
+    private static String baseFields(int clickIndex, Level world, BlockHitResult hit, ItemStack heldStack) {
         BlockPos targetPos = hit.getBlockPos();
         BlockState targetState = world.getBlockState(targetPos);
         SlabSupport.CompoundSlabRemapDecision predicted = predictedDecision(world, hit);
         return " clickIndex=" + clickIndex
-                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
+                + " side=" + (world.isClientSide() ? "CLIENT" : "SERVER")
                 + " heldItem=" + heldItem(heldStack)
                 + " targetPos=" + formatPos(targetPos)
                 + " targetState=" + formatState(targetState)
                 + " targetDy=" + formatDy(world, targetPos, targetState)
-                + " face=" + hit.getSide()
-                + " hit=" + formatVec(hit.getPos())
-                + " localX=" + local(targetPos, hit.getPos(), 'x')
-                + " localY=" + local(targetPos, hit.getPos(), 'y')
-                + " localZ=" + local(targetPos, hit.getPos(), 'z')
-                + " visualLocalY=" + visualLocalY(world, targetPos, targetState, hit.getPos())
-                + " band=" + band(world, targetPos, targetState, hit.getPos())
+                + " face=" + hit.getDirection()
+                + " hit=" + formatVec(hit.getLocation())
+                + " localX=" + local(targetPos, hit.getLocation(), 'x')
+                + " localY=" + local(targetPos, hit.getLocation(), 'y')
+                + " localZ=" + local(targetPos, hit.getLocation(), 'z')
+                + " visualLocalY=" + visualLocalY(world, targetPos, targetState, hit.getLocation())
+                + " band=" + band(world, targetPos, targetState, hit.getLocation())
                 + " ownerClass=" + ownerClass(world, targetPos, targetState)
                 + " sourceCompoundAnchor=" + SlabAnchorAttachment.isCompoundFullBlockAnchor(world, targetPos)
                 + " expectedCandidate=" + formatPos(expectedCandidate(world, hit, predicted));
     }
 
-    private static String baseFields(int clickIndex, World world, BlockHitResult hit, String heldItem) {
+    private static String baseFields(int clickIndex, Level world, BlockHitResult hit, String heldItem) {
         BlockPos targetPos = hit.getBlockPos();
         BlockState targetState = world.getBlockState(targetPos);
         return " clickIndex=" + clickIndex
-                + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
+                + " side=" + (world.isClientSide() ? "CLIENT" : "SERVER")
                 + " heldItem=" + heldItem
                 + " targetPos=" + formatPos(targetPos)
                 + " targetState=" + formatState(targetState)
                 + " targetDy=" + formatDy(world, targetPos, targetState)
-                + " face=" + hit.getSide()
-                + " hit=" + formatVec(hit.getPos())
-                + " localX=" + local(targetPos, hit.getPos(), 'x')
-                + " localY=" + local(targetPos, hit.getPos(), 'y')
-                + " localZ=" + local(targetPos, hit.getPos(), 'z')
-                + " visualLocalY=" + visualLocalY(world, targetPos, targetState, hit.getPos())
-                + " band=" + band(world, targetPos, targetState, hit.getPos())
+                + " face=" + hit.getDirection()
+                + " hit=" + formatVec(hit.getLocation())
+                + " localX=" + local(targetPos, hit.getLocation(), 'x')
+                + " localY=" + local(targetPos, hit.getLocation(), 'y')
+                + " localZ=" + local(targetPos, hit.getLocation(), 'z')
+                + " visualLocalY=" + visualLocalY(world, targetPos, targetState, hit.getLocation())
+                + " band=" + band(world, targetPos, targetState, hit.getLocation())
                 + " ownerClass=" + ownerClass(world, targetPos, targetState)
                 + " sourceCompoundAnchor=" + SlabAnchorAttachment.isCompoundFullBlockAnchor(world, targetPos);
     }
 
-    private static Map<BlockPos, Cell> snapshotAround(World world, BlockHitResult hit, BlockPos expectedCandidate) {
+    private static Map<BlockPos, Cell> snapshotAround(Level world, BlockHitResult hit, BlockPos expectedCandidate) {
         Map<BlockPos, Cell> cells = new LinkedHashMap<>();
         BlockPos center = hit.getBlockPos();
-        for (BlockPos pos : BlockPos.iterate(center.add(-2, -2, -2), center.add(2, 2, 2))) {
-            BlockPos immutable = pos.toImmutable();
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-2, -2, -2), center.offset(2, 2, 2))) {
+            BlockPos immutable = pos.immutable();
             cells.put(immutable, cellAt(world, immutable));
         }
         BlockPos candidate = expectedCandidate == null ? defaultCandidate(hit) : expectedCandidate;
         if (candidate != null && !cells.containsKey(candidate)) {
-            cells.put(candidate.toImmutable(), cellAt(world, candidate));
+            cells.put(candidate.immutable(), cellAt(world, candidate));
         }
         return cells;
     }
 
-    private static Cell cellAt(World world, BlockPos pos) {
+    private static Cell cellAt(Level world, BlockPos pos) {
         if (world == null || pos == null) {
             return new Cell("null", Double.NaN);
         }
@@ -317,7 +316,7 @@ public final class Beta4ManualLiveTrace {
         return new Delta(changes);
     }
 
-    private static SlabSupport.CompoundSlabRemapDecision predictedDecision(World world, BlockHitResult hit) {
+    private static SlabSupport.CompoundSlabRemapDecision predictedDecision(Level world, BlockHitResult hit) {
         if (world == null || hit == null) {
             return null;
         }
@@ -325,18 +324,18 @@ public final class Beta4ManualLiveTrace {
         BlockState state = world.getBlockState(pos);
         SUPPRESS_SUPPORT_TRACE.set(true);
         try {
-            return SlabSupport.findLegalCompoundSlabRemap(world, pos, state, hit.getSide(), hit.getPos());
+            return SlabSupport.findLegalCompoundSlabRemap(world, pos, state, hit.getDirection(), hit.getLocation());
         } finally {
             SUPPRESS_SUPPORT_TRACE.set(false);
         }
     }
 
-    private static boolean sameVec(Vec3d first, Vec3d second) {
+    private static boolean sameVec(Vec3 first, Vec3 second) {
         return first == null ? second == null : first.equals(second);
     }
 
     private static BlockPos expectedCandidate(
-            World world,
+            Level world,
             BlockHitResult hit,
             SlabSupport.CompoundSlabRemapDecision decision
     ) {
@@ -350,11 +349,11 @@ public final class Beta4ManualLiveTrace {
     }
 
     private static BlockPos defaultCandidate(BlockHitResult hit) {
-        return hit == null ? null : hit.getBlockPos().offset(hit.getSide());
+        return hit == null ? null : hit.getBlockPos().relative(hit.getDirection());
     }
 
     private static String targetReason(
-            World world,
+            Level world,
             BlockHitResult hit,
             SlabSupport.CompoundSlabRemapDecision decision
     ) {
@@ -368,22 +367,22 @@ public final class Beta4ManualLiveTrace {
         return decision == null ? "no_prediction" : decision.reason();
     }
 
-    private static String classify(World world, BlockHitResult hit, ItemStack heldStack) {
-        return classify(world, hit.getBlockPos(), world.getBlockState(hit.getBlockPos()), hit.getSide(), hit.getPos(),
+    private static String classify(Level world, BlockHitResult hit, ItemStack heldStack) {
+        return classify(world, hit.getBlockPos(), world.getBlockState(hit.getBlockPos()), hit.getDirection(), hit.getLocation(),
                 heldIsSlab(heldStack) ? predictedDecision(world, hit) : null);
     }
 
-    private static String classify(World world, BlockHitResult hit, String heldItem) {
-        return classify(world, hit.getBlockPos(), world.getBlockState(hit.getBlockPos()), hit.getSide(), hit.getPos(),
+    private static String classify(Level world, BlockHitResult hit, String heldItem) {
+        return classify(world, hit.getBlockPos(), world.getBlockState(hit.getBlockPos()), hit.getDirection(), hit.getLocation(),
                 predictedDecision(world, hit));
     }
 
     private static String classify(
-            BlockView world,
+            BlockGetter world,
             BlockPos pos,
             BlockState state,
             Direction face,
-            Vec3d hitPos,
+            Vec3 hitPos,
             SlabSupport.CompoundSlabRemapDecision decision
     ) {
         if (decision != null && "COMPOUND_SUPPORT_MISSING_VISIBLE_OWNER_SIDE_SLAB".equals(decision.reason())) {
@@ -414,7 +413,7 @@ public final class Beta4ManualLiveTrace {
         return "UNKNOWN";
     }
 
-    private static String ownerClass(BlockView world, BlockPos pos, BlockState state) {
+    private static String ownerClass(BlockGetter world, BlockPos pos, BlockState state) {
         if (state == null) {
             return "none";
         }
@@ -430,10 +429,10 @@ public final class Beta4ManualLiveTrace {
         if (state.isAir()) {
             return "air";
         }
-        return state.isSolidBlock(world, pos) ? "solid" : "other";
+        return state.isSolidRender(world, pos) ? "solid" : "other";
     }
 
-    private static String band(BlockView world, BlockPos pos, BlockState state, Vec3d hitPos) {
+    private static String band(BlockGetter world, BlockPos pos, BlockState state, Vec3 hitPos) {
         double value = visualLocalYValue(world, pos, state, hitPos);
         if (Double.isNaN(value)) {
             return "unknown";
@@ -444,19 +443,19 @@ public final class Beta4ManualLiveTrace {
         return value < 0.5d ? "lower" : "upper";
     }
 
-    private static String visualLocalY(BlockView world, BlockPos pos, BlockState state, Vec3d hitPos) {
+    private static String visualLocalY(BlockGetter world, BlockPos pos, BlockState state, Vec3 hitPos) {
         double value = visualLocalYValue(world, pos, state, hitPos);
         return Double.isNaN(value) ? "NaN" : String.format("%.6f", value);
     }
 
-    private static double visualLocalYValue(BlockView world, BlockPos pos, BlockState state, Vec3d hitPos) {
+    private static double visualLocalYValue(BlockGetter world, BlockPos pos, BlockState state, Vec3 hitPos) {
         if (world == null || pos == null || state == null || hitPos == null) {
             return Double.NaN;
         }
         return hitPos.y - (pos.getY() + SlabSupport.getYOffset(world, pos, state));
     }
 
-    private static String local(BlockPos pos, Vec3d hitPos, char axis) {
+    private static String local(BlockPos pos, Vec3 hitPos, char axis) {
         if (pos == null || hitPos == null) {
             return "NaN";
         }
@@ -470,14 +469,14 @@ public final class Beta4ManualLiveTrace {
     }
 
     private static String heldItem(ItemStack stack) {
-        return stack == null ? "null" : Registries.ITEM.getId(stack.getItem()).toString();
+        return stack == null ? "null" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
     private static String formatPos(BlockPos pos) {
-        return pos == null ? "null" : pos.toShortString();
+        return pos == null ? "null" : pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
-    private static String formatVec(Vec3d vec) {
+    private static String formatVec(Vec3 vec) {
         return vec == null ? "null" : String.format("%.6f,%.6f,%.6f", vec.x, vec.y, vec.z);
     }
 
@@ -485,32 +484,32 @@ public final class Beta4ManualLiveTrace {
         return state == null ? "null" : state.toString().replace(' ', '_');
     }
 
-    private static BlockState candidateState(BlockView world, BlockPos pos) {
+    private static BlockState candidateState(BlockGetter world, BlockPos pos) {
         return world == null || pos == null ? null : world.getBlockState(pos);
     }
 
-    private static String candidateDy(BlockView world, BlockPos pos) {
+    private static String candidateDy(BlockGetter world, BlockPos pos) {
         BlockState state = candidateState(world, pos);
         return formatDy(world, pos, state);
     }
 
-    private static String formatDy(BlockView world, BlockPos pos, BlockState state) {
+    private static String formatDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null) {
             return "NaN";
         }
         return String.format("%.6f", SlabSupport.getYOffset(world, pos, state));
     }
 
-    private static void scheduleDelayed(ClickSnapshot snapshot, ActionResult result, Delta immediateDelta, Map<BlockPos, Cell> immediateAfter) {
+    private static void scheduleDelayed(ClickSnapshot snapshot, InteractionResult result, Delta immediateDelta, Map<BlockPos, Cell> immediateAfter) {
         PENDING_DELAYED_CLICKS.add(new DelayedClick(
                 snapshot,
                 result == null ? "null" : result.toString(),
-                result != null && result.isAccepted(),
+                result != null && result.consumesAction(),
                 immediateDelta,
                 immediateAfter));
     }
 
-    private static void logDelayed(World world, DelayedClick pending, int delayTicks) {
+    private static void logDelayed(Level world, DelayedClick pending, int delayTicks) {
         ClickSnapshot snapshot = pending.snapshot;
         BlockPos expected = snapshot.expectedCandidate();
         Cell immediateExpected = pending.immediateAfter.get(expected);
@@ -530,7 +529,7 @@ public final class Beta4ManualLiveTrace {
                 + " originalTargetPos=" + formatPos(snapshot.hit().getBlockPos())
                 + " originalTargetState=" + snapshot.targetAtStart().state()
                 + " originalTargetDy=" + snapshot.targetAtStart().dyText()
-                + " originalFace=" + snapshot.hit().getSide()
+                + " originalFace=" + snapshot.hit().getDirection()
                 + " predictedCandidate=" + formatPos(expected)
                 + " expectedFinalState=" + (immediateExpected == null ? "null" : immediateExpected.state())
                 + " expectedFinalDy=" + (immediateExpected == null ? "NaN" : immediateExpected.dyText())
@@ -607,7 +606,7 @@ public final class Beta4ManualLiveTrace {
         return first.state().equals(second.state()) && Math.abs(first.dy() - second.dy()) <= EPSILON;
     }
 
-    private static String changedPositionsNowText(World world, Delta immediateDelta) {
+    private static String changedPositionsNowText(Level world, Delta immediateDelta) {
         if (immediateDelta.changedCount() == 0) {
             return "[]";
         }
@@ -617,7 +616,7 @@ public final class Beta4ManualLiveTrace {
             if (!first) {
                 builder.append(',');
             }
-            builder.append(pos.toShortString()).append('=').append(cellAt(world, pos));
+            builder.append(formatPos(pos)).append('=').append(cellAt(world, pos));
             first = false;
         }
         return builder.append(']').toString();
@@ -695,7 +694,7 @@ public final class Beta4ManualLiveTrace {
                 if (!first) {
                     builder.append(',');
                 }
-                builder.append(pos.toShortString());
+                builder.append(formatPos(pos));
                 first = false;
             }
             return builder.append(']').toString();
@@ -711,7 +710,7 @@ public final class Beta4ManualLiveTrace {
                 if (!first) {
                     builder.append(',');
                 }
-                builder.append(entry.getKey().toShortString()).append('=').append(entry.getValue());
+                builder.append(formatPos(entry.getKey())).append('=').append(entry.getValue());
                 first = false;
             }
             return builder.append(']').toString();

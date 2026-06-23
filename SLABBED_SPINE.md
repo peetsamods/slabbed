@@ -5,13 +5,15 @@ This file is the current repo-local truth for Codex. Keep it short. Update it af
 ## Current active root
 
 ```text
-/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
+/Users/joolmac/CascadeProjects/Slabbed-neoforge-1.21.1-port
 ```
 
-Known alternate active port root when explicitly working MC 26.1.2:
+This is a dedicated NeoForge 1.21.1 port worktree. Do not mutate these older Slabbed roots from this checkout:
 
 ```text
-/Users/joolmac/CascadeProjects/Slabbed-port-26.1.2
+/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
+/Users/joolmac/CascadeProjects/Slabbed
+/Users/joolmac/CascadeProjects/Slabbed-countered-compat-latest
 ```
 
 Stop if the actual root does not match the intended current root.
@@ -19,7 +21,7 @@ Stop if the actual root does not match the intended current root.
 ## Current branch
 
 ```text
-port/mc-1.21.1
+port/neoforge-1.21.1
 ```
 
 ## Current known-good savepoint
@@ -27,72 +29,115 @@ port/mc-1.21.1
 Commit:
 
 ```text
-94a5643e
+3dcab83c
 ```
 
 Tag:
 
 ```text
-save/mc1211-decorative-hanger-followdown-live-confirmed
+none at port start
 ```
 
-Pushed branch: yes
-Pushed tag: yes
+Pushed branch: no port push authorized
+Pushed tag: no tag authorized
 
-Live-confirmed 2026-06-03: decorative-hanger follow-down under lowered FULL blocks
-AND lowered TOP slabs (SlabSupport.java; lantern/soul lantern/spore blossom/
-hanging roots/pale hanging moss, chains excluded). Supersedes prior tagged+pushed
-savepoint `eab0880a` (tag `save/mc1211-sbbs-underside-pre-manual-testing`), which
-remains in history. Historical note: 94a5643e deliberately excluded the
-then-uncommitted `LoweredSideSlabRetargeter.java` WIP; that later work is
-tracked in commit `817f1cc0` and is not part of the hanger savepoint tag.
+Port baseline created from the 1.21.1 beta.3 behavior line. No NeoForge
+savepoint exists yet. Current NeoForge implementation proof is still unsaved WIP.
+
+## Current proof-candidate state
+
+```text
+Broad unstaged NeoForge WIP across build/src plus repo-local truth docs.
+No staged files. No tag at HEAD. No push authorized.
+```
 
 ## Current objective
 
-Keep the MC 1.21.1 port on the pushed hanger closure plus tracked side-carrier
-commits, with the VS/lowered-full-block merge issue accepted as resolved by
-Julia's 2026-06-10 manual branch-local check. The remaining pictured face
-culling/shadow artifact is deferred for post-beta follow-up. Current work is
-the beta.3 release/manual-Modrinth-test gate Julia explicitly requested.
+Hold the current NeoForge 1.21.1 functional WIP at an honest proof boundary
+and decide savepoint readiness without overclaiming release readiness, source
+parity, or clean server exit proof.
 
 ## Current blocker
 
 Visible symptom:
 
 ```text
-deferred pictured face culling/shadow artifact beside VS/lowered full-block
-checkerboard setup
+Repo-local truth and savepoint boundary lag the actual worktree.
 ```
 
 Failing layer:
 
 ```text
-render/culling surface; not placement/rescue/survival
+proof/reporting boundary, not a new gameplay red
 ```
 
 Protected invariant:
 
 ```text
-Model, outline, raycast, placement, and post-settle behavior must agree on the
-same live-equivalent dy and owner. Julia accepted the former merge issue as
-resolved; the pictured face culling/shadow artifact is explicitly deferred.
-No render/culling production patch is allowed unless a fresh RED names culling
-and proves the active runtime render path first.
+Do not assume Fabric entrypoints work as NeoForge entrypoints. Use a
+NeoForge-native @Mod shell and prove every retained Fabric API surface through
+compile. Do not call this port file-for-file `26.2` complete or savepoint-final
+unless the evidence supports that exact claim. Rendering remains a mandatory
+later proof because the ghost-window fix depends on the FRAPI RenderContext/model
+path and Sodium behavior.
 ```
 
 Latest proof:
 
 ```text
-2026-06-10 release hygiene and beta.2 version proof passed on port/mc-1.21.1.
-Julia later reported the merge issue resolved and requested beta.3 parity with
-the MC 1.21.11 port, with the pictured culling/shadow issue deferred.
+2026-06-22/23 current-tree proof bundle:
+- compile: tmp/neoforge-port-20260623/compile-p26-dripstone-chain-green2.log
+  -> BUILD SUCCESSFUL
+- client: tmp/neoforge-port-20260623/run-client-neoforge-offset-raycast-current-after-dripstone.log
+  -> GREEN triad/cull proof with diagnosticsOnly=true and releaseReady=false
+- server: tmp/neoforge-port-20260623/run-server-gametest-final-current.log
+  and run-server-gametest-final-current-cleanexit.log
+  -> All 71 required tests passed :)
+- caveat: the fresh server rerun lingered after the green footer and was
+  interrupted manually, so there is still no natural zero-exit server proof log
+- path audit: source tag 8ba3414f touched many files not mirrored path-for-path
+  here; treat full file-path parity as false/unproven, not as the current claim
 ```
 
 Live status:
 
 ```text
-hanger local-live confirmed; merge issue resolved by Julia; pictured
-render/culling artifact deferred
+No live NeoForge Minecraft proof has been run in this worktree. Existing proof
+is compile/client/server-log only.
+```
+
+## NeoForge port bootstrap notes (2026-06-15)
+
+Read first:
+
+```text
+HANDOFF.md
+build.gradle
+settings.gradle
+gradle.properties
+src/main/resources/fabric.mod.json
+src/main/java/com/slabbed/Slabbed.java
+src/client/java/com/slabbed/client/SlabbedClient.java
+src/client/java/com/slabbed/client/SlabbedModelLoadingPlugin.java
+src/main/java/com/slabbed/anchor/SlabAnchorAttachment.java
+src/client/java/com/slabbed/client/SlabAnchorClientSync.java
+```
+
+Known starting facts:
+
+```text
+The worktree is still Fabric Loom/Yarn/Fabric-loader based. Main/client
+entrypoints are Fabric ModInitializer/ClientModInitializer. The model hook uses
+Fabric ModelLoadingPlugin. Anchor storage and client sync use Fabric attachment
+and client-event APIs. Existing gametest wiring is Fabric-specific and must be
+treated as unproven for NeoForge.
+```
+
+Stale descriptor warning:
+
+```text
+Top-level fabric.mod.json says 0.1.2-alpha, MIT, and minecraft 1.21.11. Do not
+use it as the NeoForge port descriptor.
 ```
 
 ## Deferred visual/culling REDs
@@ -140,37 +185,39 @@ tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 Type:
 
 ```text
-savepoint-then-raycast-proof
+neoforge-savepoint-readiness-closure
 ```
 
 Allowed files:
 
 ```text
-SLABBED_SPINE.md, docs/codex/06-bug-blaster-case-law.md,
-docs/codex/source-pack/02_SLABBED_ACTIVE_STATUS.md, proof logs under tmp/
+HANDOFF.md, SLABBED_SPINE.md, proof logs under tmp/, and only the narrowest
+proof-boundary commands needed to classify the current WIP honestly
 ```
 
 Forbidden files:
 
 ```text
-src/**, build.gradle, settings.gradle, gradle.properties, fabric.mod.json, *.mixins.json, release/version/changelog files
+Original source checkout roots, release/version/changelog files, publishing
+metadata, tags, pushes, deletion of evidence, live Minecraft, and broad
+gameplay rewrites unless a fresh red proof reopens a concrete mechanism.
 ```
 
 Required proof:
 
 ```text
-Use the branch-local current-HEAD Gradle dev client only. Do not use
-Applications/Minecraft, stale jars, wrong-head jars, or the vanilla launcher.
-After hanger closure, first bug slice is raycast-only proof for
-TARGETING_DID_NOT_HIT_BOTTOM_SLAB_UNDERSIDE.
+Use the existing compile/client proof bundle under tmp/neoforge-port-20260623/.
+If trying to strengthen the server lane, preserve the new full output under the
+same evidence folder and report whether the wrapper exits naturally or lingers
+after the green footer.
 ```
 
 Stop condition:
 
 ```text
-Unexpected tracked dirt in the savepoint worktree, stale/wrong-head proof
-source, production render/culling edit without fresh culling RED, or any attempt
-to call the port release-ready before the release gate.
+Wrong root/branch/HEAD, staged changes, a concrete uncovered functional gap in
+the current WIP, proof regression, a return to bootstrap-only claims, or any
+push/tag/publish action.
 ```
 
 ## Do not touch boundaries

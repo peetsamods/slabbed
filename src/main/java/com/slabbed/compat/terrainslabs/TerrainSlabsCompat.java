@@ -1,10 +1,10 @@
 package com.slabbed.compat.terrainslabs;
 
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.fml.ModList;
 
 /**
  * Countered Terrain Slabs compatibility: subtractive-only. When the mod is present,
@@ -16,7 +16,7 @@ public final class TerrainSlabsCompat {
     }
 
     public static final String MOD_ID = "terrainslabs";
-    private static final boolean LOADED = FabricLoader.getInstance().isModLoaded(MOD_ID);
+    private static final boolean LOADED = ModList.get().isLoaded(MOD_ID);
 
     /** Returns true if slab offsets should be skipped for this state. */
     public static boolean shouldSkipOffset(BlockState state) {
@@ -25,7 +25,7 @@ public final class TerrainSlabsCompat {
         }
 
         Block block = state.getBlock();
-        Identifier id = Registries.BLOCK.getId(block);
+        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
         return id != null && MOD_ID.equals(id.getNamespace());
     }
 
