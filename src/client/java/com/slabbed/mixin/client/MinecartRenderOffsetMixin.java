@@ -1,7 +1,7 @@
 package com.slabbed.mixin.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.slabbed.util.SlabSupport;
+import com.slabbed.client.ClientDy;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.MinecartRenderer;
 import net.minecraft.core.BlockPos;
@@ -34,14 +34,14 @@ public abstract class MinecartRenderOffsetMixin {
             return;
         }
 
-        BlockPos pos = entity.getOnPos();
+        BlockPos pos = entity.blockPosition();
         BlockState blockState = world.getBlockState(pos);
 
         if (!(blockState.getBlock() instanceof BaseRailBlock)) {
             return;
         }
 
-        double dy = SlabSupport.getYOffset(world, pos, blockState);
+        double dy = ClientDy.dyFor(world, pos, blockState);
         if (dy != 0.0) {
             matrices.translate(0.0, dy, 0.0);
         }

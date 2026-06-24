@@ -295,7 +295,8 @@ public final class SlabAnchorAttachment {
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }
-        if (state.getBlock() instanceof SlabBlock && consumeWysiwygFollowClickedLoweredFace(pos)) {
+        if ((state.getBlock() instanceof SlabBlock || SlabSupport.isBeta35FenceWallVariantContactObject(state))
+                && consumeWysiwygFollowClickedLoweredFace(pos)) {
             addAnchorUnchecked(world, pos);
             return;
         }
@@ -306,14 +307,15 @@ public final class SlabAnchorAttachment {
             addAnchorUnchecked(world, pos);
             return;
         }
-        // dy ≈ 0: lock the FLAT height of a STRUCTURAL piece (ordinary full block or slab)
-        // so a slab / lowered carrier placed under or beside it later can no longer pull it
-        // down (Julia's "placed slab under a floating block must not lower it"). Gated to
-        // structural pieces so decorative followers (lanterns/torches/hangers/signs) keep
-        // tracking their supports. Non-structural and natural (terrain / setBlockState, which
-        // never call onPlaced) pieces stay fully geometric.
+        // dy ≈ 0: lock the FLAT height of a STRUCTURAL piece (ordinary full block, slab,
+        // or connector post) so a slab / lowered carrier placed under or beside it later
+        // can no longer pull it down. Gated to structural pieces so decorative followers
+        // (lanterns/torches/hangers/signs) keep tracking their supports. Non-structural
+        // and natural (terrain / setBlockState, which never call onPlaced) pieces stay
+        // fully geometric.
         boolean structural = isOrdinaryFullBlockAnchorCandidate(world, pos, state)
-                || state.getBlock() instanceof SlabBlock;
+                || state.getBlock() instanceof SlabBlock
+                || SlabSupport.isBeta35FenceWallVariantContactObject(state);
         if (structural) {
             addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
         }

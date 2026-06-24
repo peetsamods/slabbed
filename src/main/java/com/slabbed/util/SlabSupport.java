@@ -4,6 +4,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.world.level.block.BellBlock;
+import net.minecraft.world.level.block.BaseRailBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -48,6 +49,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -211,11 +213,75 @@ public final class SlabSupport {
                 && state.getValue(BlockStateProperties.AXIS) == Direction.Axis.Y;
     }
 
+    public static boolean isVerticalChainDirectlyUnderCeilingSupport(BlockGetter world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && isBeta35VerticalChainVisibleOwnerObject(state)
+                && isCeilingSupportBottomSurface(world, pos.above());
+    }
+
+    public static VoxelShape ceilingBridgedVerticalChainSelectionShape(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state,
+            VoxelShape fallback
+    ) {
+        VoxelShape base = fallback == null ? Shapes.empty() : fallback;
+        if (!isVerticalChainDirectlyUnderCeilingSupport(world, pos, state)) {
+            return base;
+        }
+        if (base.isEmpty()) {
+            return Block.box(6.5d, 0.0d, 6.5d, 9.5d, 24.0d, 9.5d);
+        }
+
+        VoxelShape selection = base;
+        AABB bounds = base.bounds();
+        if (bounds.minY > 0.0d) {
+            selection = Shapes.or(selection, base.move(0.0d, -bounds.minY, 0.0d));
+        }
+        if (bounds.maxY < 1.5d) {
+            selection = Shapes.or(selection, base.move(0.0d, 1.5d - bounds.maxY, 0.0d));
+        }
+        return selection;
+    }
+
+    public static boolean isCeilingBridgedVerticalChainColumnMember(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35VerticalChainVisibleOwnerObject(state)) {
+            return false;
+        }
+        BlockPos cursor = pos;
+        BlockState cursorState = state;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            if (isVerticalChainDirectlyUnderCeilingSupport(world, cursor, cursorState)) {
+                return true;
+            }
+            BlockPos abovePos = cursor.above();
+            BlockState above = world.getBlockState(abovePos);
+            if (!isBeta35VerticalChainVisibleOwnerObject(above)) {
+                return false;
+            }
+            cursor = abovePos;
+            cursorState = above;
+        }
+        return false;
+    }
+
+    public static boolean isBeta35UpwardPointedDripstoneVisibleOwnerObject(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof PointedDripstoneBlock
+                && state.hasProperty(BlockStateProperties.VERTICAL_DIRECTION)
+                && state.getValue(BlockStateProperties.VERTICAL_DIRECTION) == Direction.UP;
+    }
+
     private static boolean isDownwardPointedDripstone(BlockState state) {
         return state != null
                 && state.getBlock() instanceof PointedDripstoneBlock
                 && state.hasProperty(BlockStateProperties.VERTICAL_DIRECTION)
                 && state.getValue(BlockStateProperties.VERTICAL_DIRECTION) == Direction.DOWN;
+    }
+
+    public static boolean isBeta35RailVisibleOwnerObject(BlockState state) {
+        return state != null && state.getBlock() instanceof BaseRailBlock;
     }
 
     private static boolean verticalChainColumnRootsAtTopSlab(
@@ -434,6 +500,8 @@ public final class SlabSupport {
         if (!isBeta35FloorButtonContactObject(state)
                 && !isBeta35BottomTrapdoorVisibleOwnerObject(state)
                 && !isBeta35VerticalChainVisibleOwnerObject(state)
+                && !isBeta35UpwardPointedDripstoneVisibleOwnerObject(state)
+                && !isBeta35RailVisibleOwnerObject(state)
                 && !isBeta35RegularDoorVisibleOwnerObject(world, pos, state)
                 && !isBeta35LoweredSlabUndersideVisibleOwnerObject(world, pos, state)) {
             return false;
@@ -506,6 +574,63 @@ public final class SlabSupport {
         BlockState supportState = world.getBlockState(supportPos);
         double supportDy = loweredFullBlockUndersideSupportDy(world, supportPos, supportState);
         return Double.isFinite(supportDy) && supportDy < -1.0e-6d;
+    }
+
+    private static boolean isAlwaysCeilingHungDecoration(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return block instanceof HangingRootsBlock
+                || block instanceof SporeBlossomBlock
+                || block instanceof CeilingHangingSignBlock
+                || isPaleHangingMossBlock(state);
+    }
+
+    /**
+     * Dy for objects whose only legal support is the block above them. A hanging
+     * lantern below a ceiling-bridged chain is not another raised chain segment;
+     * the chain bridge is already raised, so the lantern stays grid-height and
+     * hangs as an addendum below it.
+     */
+    private static double ceilingHungDecorationDy(BlockGetter world, BlockPos pos, BlockState state) {
+        BlockPos supportPos = pos.above();
+        BlockState above = world.getBlockState(supportPos);
+        if (isCeilingBridgedVerticalChainColumnMember(world, supportPos, above)) {
+            return 0.0d;
+        }
+        if (isDownwardPointedDripstone(state)
+                && downwardPointedDripstoneColumnRootsAtTopSlab(world, supportPos, above)) {
+            return 0.0d;
+        }
+        if (!above.isAir() && !isCeilingAttached(above) && !CompatHooks.shouldSkipOffset(above)) {
+            double supportDy = getYOffsetInner(world, supportPos, above);
+            if (supportDy < -1.0e-6d) {
+                return isTopSlab(above) ? supportDy + 0.5d : supportDy;
+            }
+        }
+        BlockPos cursor = supportPos;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState cur = world.getBlockState(cursor);
+            if (isCeilingBridgedVerticalChainColumnMember(world, cursor, cur)) {
+                return 0.0d;
+            }
+            if (isTopSlab(cur)) {
+                return 0.5d;
+            }
+            if (isCeilingAttached(cur)) {
+                cursor = cursor.above();
+                continue;
+            }
+            if (!cur.isAir() && !CompatHooks.shouldSkipOffset(cur)) {
+                double supportDy = getYOffsetInner(world, cursor, cur);
+                if (supportDy < -1.0e-6d) {
+                    return supportDy;
+                }
+            }
+            break;
+        }
+        return 0.0d;
     }
 
     public static boolean isBeta35FenceWallVariantContactObject(BlockState state) {
@@ -1024,6 +1149,10 @@ public final class SlabSupport {
         // blocks hanging from above (lanterns, etc.) — don't offset DOWN by slab below
         // (they may get a separate +0.5 UP offset via getYOffset)
         if (state.hasProperty(BlockStateProperties.HANGING) && state.getValue(BlockStateProperties.HANGING)) {
+            return false;
+        }
+
+        if (isAlwaysCeilingHungDecoration(state)) {
             return false;
         }
 
@@ -2042,6 +2171,17 @@ public final class SlabSupport {
     }
 
     private static double getYOffsetInner(BlockGetter world, BlockPos pos, BlockState state) {
+        // Ceiling-hung blocks hang from the block above, so they must not be
+        // reclassified by floor/support-below branches. This mirrors the 26.2
+        // source line and keeps hanging lanterns below raised chain bridges from
+        // inheriting +0.5 and merging into the chain model.
+        if (isAlwaysCeilingHungDecoration(state)
+                || isDownwardPointedDripstone(state)
+                || (state.hasProperty(BlockStateProperties.HANGING)
+                        && state.getValue(BlockStateProperties.HANGING))) {
+            return ceilingHungDecorationDy(world, pos, state);
+        }
+
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
@@ -2400,9 +2540,25 @@ public final class SlabSupport {
             }
         }
 
+        // A lantern hung from the bottom of a ceiling-bridged chain is a descendant of the
+        // raised chain model, not a second raised segment. Keeping it at grid height avoids
+        // the visible merge/jitter where its top cap rises into the chain.
+        if (state.hasProperty(BlockStateProperties.HANGING)
+                && state.getValue(BlockStateProperties.HANGING)
+                && isCeilingBridgedVerticalChainColumnMember(world, pos.above(), above)) {
+            return 0.0d;
+        }
+
         // direct: ceiling-attached blocks directly under a top slab
         if (isCeilingAttached(state) && isTopSlab(above)) {
             return 0.5;
+        }
+
+        // Descendant chains in a ceiling-bridged column stay grid-height; the direct top chain
+        // kept the +0.5 ceiling-attach semantic dy above and is model-bypassed on the client.
+        if (isBeta35VerticalChainVisibleOwnerObject(state)
+                && isCeilingBridgedVerticalChainColumnMember(world, pos, state)) {
+            return 0.0d;
         }
 
         // cascading: ceiling-attached block below other ceiling-attached blocks

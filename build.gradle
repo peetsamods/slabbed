@@ -30,8 +30,6 @@ sourceSets {
             exclude "com/slabbed/client/ScreenshotCaptureContext.java"
             exclude "com/slabbed/client/ScreenshotCaptureService.java"
             exclude "com/slabbed/client/ScreenshotFlightLock.java"
-            exclude "com/slabbed/client/SlabbedClientFlags.java"
-            exclude "com/slabbed/client/TargetDyOverlay.java"
             exclude "com/slabbed/mixin/client/Beta*.java"
             exclude "com/slabbed/mixin/debug/**"
             exclude "com/slabbed/util/Beta4ManualLiveTrace.java"
@@ -110,8 +108,16 @@ configurations {
 }
 
 dependencies {
-    implementation "org.sinytra.forgified-fabric-api:forgified-fabric-api:${project.ffapi_version}"
     gametestImplementation "org.sinytra.forgified-fabric-api:forgified-fabric-api:${project.ffapi_version}"
+}
+
+tasks.register("syncGameTestStructures", Sync) {
+    from("gameteststructures")
+    into(layout.projectDirectory.dir("run/gameteststructures"))
+}
+
+tasks.named("runServerGameTest").configure {
+    dependsOn(tasks.named("syncGameTestStructures"))
 }
 
 tasks.named("processResources", ProcessResources).configure {

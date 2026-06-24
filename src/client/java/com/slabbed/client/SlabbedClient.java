@@ -17,6 +17,9 @@ public final class SlabbedClient {
         SlabAnchorClientSync.init(NeoForge.EVENT_BUS);
         NeoForgeClientProofCanary.init(NeoForge.EVENT_BUS);
         NeoForgeClientWorldProof.init(NeoForge.EVENT_BUS);
+        NeoForgeFenceGateClientProof.init(NeoForge.EVENT_BUS);
+        NeoForgeChainCeilingClientProof.init(NeoForge.EVENT_BUS);
+        TargetDyOverlay.init(NeoForge.EVENT_BUS);
         RuntimeDiagnostics.initBsFbLiveTraceClient();
     }
 

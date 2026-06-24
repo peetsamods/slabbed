@@ -514,7 +514,9 @@ public abstract class BlockItemPlacementIntentMixin {
             CallbackInfoReturnable<InteractionResult> cir
     ) {
         BlockItem self = (BlockItem) (Object) this;
-        if (!(self.getBlock() instanceof SlabBlock)) {
+        boolean heldIsSlab = self.getBlock() instanceof SlabBlock;
+        boolean heldIsConnector = SlabSupport.isBeta35FenceWallVariantContactObject(self.getBlock().defaultBlockState());
+        if (!heldIsSlab && !heldIsConnector) {
             return;
         }
         Level level = context.getLevel();
@@ -523,10 +525,12 @@ public abstract class BlockItemPlacementIntentMixin {
         Direction face = context.getClickedFace();
         double clickedDy = SlabSupport.getYOffset(level, clicked, clickedState);
         if (Math.abs(clickedDy + 0.5d) < 1.0e-6d) {
-            if (face.getAxis().isHorizontal()) {
+            if (heldIsSlab && face.getAxis().isHorizontal()) {
                 SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
-            } else if (face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
+            } else if (heldIsSlab && face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
                 SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above());
+            } else if (heldIsConnector && face == Direction.DOWN && clickedState.getBlock() instanceof SlabBlock) {
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.below());
             }
         }
     }

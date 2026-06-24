@@ -4,6 +4,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.dev.SlabbedLabFixtures;
 import com.slabbed.dev.SlabbedLabFixtures.LaneStatus;
 import com.slabbed.dev.SlabbedLabFixtures.PlaceResult;
+import com.slabbed.util.SlabbedOffsetRaycast;
 import com.slabbed.util.SlabSupport;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,11 +25,16 @@ import net.minecraft.world.level.block.CrossCollisionBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.BellAttachType;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.DripstoneThickness;
+import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.block.state.properties.WallSide;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -792,6 +798,178 @@ public final class SlabbedLabFixtureTest {
     }
 
     @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26DoubleTallPlantsOnBottomSlabLowerBothHalves(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
+        BlockPos lower = ctx.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos upper = ctx.absolutePos(new BlockPos(2, 3, 2));
+        Block[] plants = {Blocks.SUNFLOWER, Blocks.LARGE_FERN, Blocks.TALL_GRASS};
+
+        for (Block plant : plants) {
+            world.setBlock(support, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+            BlockState lowerState = plant.defaultBlockState()
+                    .setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER);
+            BlockState upperState = plant.defaultBlockState()
+                    .setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER);
+            double lowerDy = SlabSupport.getYOffset(world, lower, lowerState);
+            double upperDy = SlabSupport.getYOffset(world, upper, upperState);
+
+            ctx.assertTrue(near(lowerDy, -0.5d),
+                    "P26 double-tall plant lower half must lower on a bottom slab: block="
+                            + blockName(lowerState) + " dy=" + lowerDy);
+            ctx.assertTrue(near(upperDy, -0.5d),
+                    "P26 double-tall plant upper half must inherit lower-half slab dy: block="
+                            + blockName(upperState) + " dy=" + upperDy);
+            System.out.println("[NEOFORGE_P26_DOUBLE_TALL_PLANT_ROW]"
+                    + " block=" + blockName(lowerState)
+                    + " lowerDy=" + text(lowerDy)
+                    + " upperDy=" + text(upperDy)
+                    + " result=GREEN");
+            world.setBlock(support, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        }
+
+        System.out.println("[NEOFORGE_P26_DOUBLE_TALL_PLANT_SUMMARY]"
+                + " rows=3 result=GREEN proofScope=server_explicit_state_double_tall_plant_dy_only");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26CandleOnLoweredSlabContactMinusOne(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos base = ctx.absolutePos(new BlockPos(2, 1, 2));
+        world.setBlock(base, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(base.above(), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(base.above(3), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        BlockPos candle = base.above(4);
+
+        authorBlock(world, candle, Blocks.CANDLE.defaultBlockState());
+        assertStateDy(ctx, world, candle, -1.0d,
+                "P26 resting dy: candle on an already-lowered slab must contact at -1.0");
+
+        System.out.println("[NEOFORGE_P26_RESTING_DY_ROW]"
+                + " row=candle_on_lowered_slab"
+                + " dy=" + text(SlabSupport.getYOffset(world, candle, world.getBlockState(candle)))
+                + " result=GREEN");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26FloorBellOnBottomSlabLowersHalf(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
+        BlockPos bell = ctx.absolutePos(new BlockPos(2, 2, 2));
+
+        world.setBlock(support, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(bell, Blocks.BELL.defaultBlockState()
+                .setValue(BlockStateProperties.BELL_ATTACHMENT, BellAttachType.FLOOR), Block.UPDATE_ALL);
+        assertStateDy(ctx, world, bell, -0.5d,
+                "P26 resting dy: floor bell on a bottom slab must lower -0.5");
+
+        System.out.println("[NEOFORGE_P26_RESTING_DY_ROW]"
+                + " row=floor_bell_on_bottom_slab"
+                + " dy=" + text(SlabSupport.getYOffset(world, bell, world.getBlockState(bell)))
+                + " result=GREEN");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26TrapdoorTopUnderTopSlabRaisesHalf(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos trapdoor = ctx.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos ceiling = trapdoor.above();
+
+        world.setBlock(ceiling, slab(SlabType.TOP), Block.UPDATE_ALL);
+        world.setBlock(trapdoor, Blocks.OAK_TRAPDOOR.defaultBlockState()
+                .setValue(BlockStateProperties.HALF, Half.TOP), Block.UPDATE_ALL);
+        assertStateDy(ctx, world, trapdoor, 0.5d,
+                "P26 resting dy: top-half trapdoor under a top slab must raise +0.5");
+
+        System.out.println("[NEOFORGE_P26_RESTING_DY_ROW]"
+                + " row=trapdoor_top_under_top_slab"
+                + " dy=" + text(SlabSupport.getYOffset(world, trapdoor, world.getBlockState(trapdoor)))
+                + " result=GREEN");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26BedHeadOnSlabLowersBothHalves(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos foot = ctx.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos head = foot.east();
+
+        world.setBlock(foot.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(head.below(), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(foot, bedFoot(), Block.UPDATE_ALL);
+        world.setBlock(head, bedHead(), Block.UPDATE_ALL);
+
+        assertStateDy(ctx, world, foot, -0.5d,
+                "P26 resting dy: bed foot must follow a slab under the head half");
+        assertStateDy(ctx, world, head, -0.5d,
+                "P26 resting dy: bed head on a bottom slab must lower -0.5");
+
+        System.out.println("[NEOFORGE_P26_RESTING_DY_ROW]"
+                + " row=bed_head_on_slab"
+                + " footDy=" + text(SlabSupport.getYOffset(world, foot, world.getBlockState(foot)))
+                + " headDy=" + text(SlabSupport.getYOffset(world, head, world.getBlockState(head)))
+                + " result=GREEN");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26BedOnTopSlabStaysFlush(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos foot = ctx.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos head = foot.east();
+
+        world.setBlock(foot.below(), slab(SlabType.TOP), Block.UPDATE_ALL);
+        world.setBlock(head.below(), slab(SlabType.TOP), Block.UPDATE_ALL);
+        world.setBlock(foot, bedFoot(), Block.UPDATE_ALL);
+        world.setBlock(head, bedHead(), Block.UPDATE_ALL);
+
+        assertStateDy(ctx, world, foot, 0.0d,
+                "P26 resting dy: bed foot on a top slab must stay flush");
+        assertStateDy(ctx, world, head, 0.0d,
+                "P26 resting dy: bed head on a top slab must stay flush");
+
+        System.out.println("[NEOFORGE_P26_RESTING_DY_ROW]"
+                + " row=bed_on_top_slab"
+                + " footDy=" + text(SlabSupport.getYOffset(world, foot, world.getBlockState(foot)))
+                + " headDy=" + text(SlabSupport.getYOffset(world, head, world.getBlockState(head)))
+                + " result=GREEN");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26TorchesFollowLoweredFullBlock(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
+        BlockPos loweredFull = support.above();
+        BlockPos floorTorch = loweredFull.above();
+        BlockPos wallTorch = loweredFull.east();
+
+        world.setBlock(support, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(loweredFull, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(floorTorch, Blocks.TORCH.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(wallTorch, Blocks.WALL_TORCH.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST), Block.UPDATE_ALL);
+
+        assertStateDy(ctx, world, floorTorch, -0.5d,
+                "P26 resting dy: floor torch on a lowered full block must follow to -0.5");
+        assertStateDy(ctx, world, wallTorch, -0.5d,
+                "P26 resting dy: wall torch attached to a lowered full block must follow to -0.5");
+
+        System.out.println("[NEOFORGE_P26_RESTING_DY_ROW]"
+                + " row=torch_on_lowered_full_block"
+                + " floorDy=" + text(SlabSupport.getYOffset(world, floorTorch, world.getBlockState(floorTorch)))
+                + " wallDy=" + text(SlabSupport.getYOffset(world, wallTorch, world.getBlockState(wallTorch)))
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_RESTING_DY_SUMMARY]"
+                + " rows=7 result=GREEN proofScope=server_source_backed_resting_dy_rows_only");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
     public void flowerPotSurvivesOnSlabTop(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1145,6 +1323,94 @@ public final class SlabbedLabFixtureTest {
                 + " west=" + placedState.getValue(CrossCollisionBlock.WEST));
         System.out.println("[NEOFORGE_P26_FENCE_SUMMARY]"
                 + " rows=1 green=1 red=0 proofScope=server_useon_connector_placement_authority_only");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void flatPlacedFenceBesideLaterLoweredColumnStaysFrozenFlat(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos column = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos columnSupport = column.below();
+        world.setBlock(columnSupport, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(column, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState(), Block.UPDATE_ALL);
+
+        Player player = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(3, 4, 2)));
+        BlockPos placed = placeBlockVia(player, column, Direction.EAST, eastHit(column, 0.75d), Blocks.BIRCH_FENCE);
+        BlockPos expected = ctx.absolutePos(new BlockPos(3, 3, 2));
+        ctx.assertTrue(placed.equals(expected),
+                "P26 fence WYSIWYG: fence landed at " + shortPos(placed)
+                        + " not side cell " + shortPos(expected));
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence WYSIWYG: side-authored fence must start at dy=0");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, placed),
+                "P26 fence WYSIWYG: side-authored vanilla fence must record FROZEN_FLAT");
+
+        world.setBlock(columnSupport, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        double columnDy = SlabSupport.getYOffset(world, column, world.getBlockState(column));
+        ctx.assertTrue(Math.abs(columnDy + 0.5d) <= MC1211_SERVER_STATE_EPSILON,
+                "P26 fence WYSIWYG setup: column should become lowered after support slab; got " + columnDy);
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence WYSIWYG: later-lowered neighbor must not pull flat-authored fence down");
+
+        System.out.println("[NEOFORGE_P26_FENCE_FROZEN_FLAT_ROW] placed=" + shortPos(placed)
+                + " dy=" + SlabSupport.getYOffset(world, placed, world.getBlockState(placed))
+                + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, placed)
+                + " neighborColumnDy=" + columnDy);
+        System.out.println("[NEOFORGE_P26_FENCE_FROZEN_FLAT_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_wysiwyg_no_snap_only");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void useOnFenceUnderLoweredSlabDownFaceFollowsUnderside(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos loweredSource = support.above();
+
+        world.setBlock(support, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        authorBlock(world, loweredSource, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState());
+        assertBlockDy(ctx, world, loweredSource, Blocks.STRIPPED_JUNGLE_LOG, -0.5d,
+                "P26 fence under slab setup: source log must be lowered");
+
+        Player slabPlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(3, 4, 2)));
+        BlockPos loweredSlab = placeBlockVia(
+                slabPlayer,
+                loweredSource,
+                Direction.EAST,
+                eastHit(loweredSource, 0.75d),
+                Blocks.BIRCH_SLAB);
+        assertBlockDy(ctx, world, loweredSlab, Blocks.BIRCH_SLAB, -0.5d,
+                "P26 fence under slab setup: side-authored birch slab must be lowered");
+
+        Player fencePlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(3, 3, 2)));
+        BlockPos placed = placeBlockVia(
+                fencePlayer,
+                loweredSlab,
+                Direction.DOWN,
+                loweredUndersideHit(loweredSlab),
+                Blocks.BIRCH_FENCE);
+        BlockPos expected = loweredSlab.below();
+        ctx.assertTrue(placed.equals(expected),
+                "P26 fence under slab WYSIWYG: fence landed at " + shortPos(placed)
+                        + " not below clicked lowered slab " + shortPos(expected));
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, -0.5d,
+                "P26 fence under slab WYSIWYG: fence placed on a lowered slab underside must follow dy=-0.5");
+        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, placed),
+                "P26 fence under slab WYSIWYG: under-slab fence must not be recorded FROZEN_FLAT");
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, placed),
+                "P26 fence under slab WYSIWYG: under-slab fence must be anchored lowered");
+
+        BlockState placedState = world.getBlockState(placed);
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_SLAB_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " placed=" + shortPos(placed)
+                + " fenceDy=" + text(SlabSupport.getYOffset(world, placed, placedState))
+                + " anchored=" + SlabAnchorAttachment.isAnchored(world, placed)
+                + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, placed)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_SLAB_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_slab_down_face_wysiwyg_only");
         ctx.succeed();
     }
 
@@ -1597,6 +1863,98 @@ public final class SlabbedLabFixtureTest {
     }
 
     @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26RailAndUpwardPointedDripstoneVisibleOwnerTargets(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+
+        BlockPos railSupport = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos rail = railSupport.above();
+        world.setBlock(railSupport, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(rail, Blocks.RAIL.defaultBlockState(), Block.UPDATE_ALL);
+        assertBlockDy(ctx, world, rail, Blocks.RAIL, -0.5d,
+                "P26 setup: rail on a bottom slab must lower to -0.5");
+        assertSlabHeightVisibleOwner(ctx, world, rail,
+                "P26 lowered rail lower body must qualify for visible-owner targeting");
+        assertLoweredOutline(ctx, world, rail,
+                "P26 lowered rail outline must follow the lowered body");
+        assertOffsetRaycastOwner(ctx, world, rail, -0.4375d,
+                "P26 lowered rail lower-body ray must target the rail owner");
+        System.out.println("[NEOFORGE_P26_VISIBLE_OWNER_ROW]"
+                + " case=lowered_rail"
+                + " dy=" + text(SlabSupport.getYOffset(world, rail, world.getBlockState(rail)))
+                + " visibleOwner=true"
+                + " finalOwner=" + shortPos(rail)
+                + " result=GREEN");
+
+        BlockPos dripstoneSupport = ctx.absolutePos(new BlockPos(4, 3, 2));
+        BlockPos dripstone = dripstoneSupport.above();
+        world.setBlock(dripstoneSupport, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(dripstone, pointedDripstoneUpTip(), Block.UPDATE_ALL);
+        assertBlockDy(ctx, world, dripstone, Blocks.POINTED_DRIPSTONE, -0.5d,
+                "P26 setup: upward pointed dripstone on a bottom slab must lower to -0.5");
+        assertSlabHeightVisibleOwner(ctx, world, dripstone,
+                "P26 lowered upward pointed dripstone lower body must qualify for visible-owner targeting");
+        assertLoweredOutline(ctx, world, dripstone,
+                "P26 lowered upward pointed dripstone outline must follow the lowered body");
+        assertOffsetRaycastOwner(ctx, world, dripstone, -0.25d,
+                "P26 lowered upward pointed dripstone lower-body ray must target the dripstone owner");
+        System.out.println("[NEOFORGE_P26_VISIBLE_OWNER_ROW]"
+                + " case=upward_pointed_dripstone"
+                + " dy=" + text(SlabSupport.getYOffset(world, dripstone, world.getBlockState(dripstone)))
+                + " visibleOwner=true"
+                + " finalOwner=" + shortPos(dripstone)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_VISIBLE_OWNER_SUMMARY]"
+                + " rows=2 result=GREEN proofScope=server_lowered_visible_owner_rail_upward_dripstone");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26AlwaysCeilingHungDecorationsIgnoreSlabBelow(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos supportBelow = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos object = supportBelow.above();
+        BlockState[] states = {
+                Blocks.SPORE_BLOSSOM.defaultBlockState(),
+                Blocks.HANGING_ROOTS.defaultBlockState(),
+                Blocks.OAK_HANGING_SIGN.defaultBlockState()
+        };
+
+        for (BlockState state : states) {
+            world.setBlock(supportBelow, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+            world.setBlock(object, state, Block.UPDATE_ALL);
+            assertStateDy(ctx, world, object, 0.0d,
+                    "P26 always-ceiling-hung decoration must ignore a slab below it");
+            System.out.println("[NEOFORGE_P26_CEILING_HUNG_ROW]"
+                    + " case=ignore_slab_below"
+                    + " block=" + blockName(state)
+                    + " dy=" + text(SlabSupport.getYOffset(world, object, world.getBlockState(object)))
+                    + " result=GREEN");
+            world.setBlock(object, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            world.setBlock(supportBelow, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        }
+
+        BlockPos ceiling = ctx.absolutePos(new BlockPos(6, 5, 2));
+        BlockPos hangingObject = ceiling.below();
+        for (BlockState state : states) {
+            world.setBlock(ceiling, slab(SlabType.TOP), Block.UPDATE_ALL);
+            world.setBlock(hangingObject, state, Block.UPDATE_ALL);
+            assertStateDy(ctx, world, hangingObject, 0.5d,
+                    "P26 always-ceiling-hung decoration under a top slab must raise +0.5");
+            System.out.println("[NEOFORGE_P26_CEILING_HUNG_ROW]"
+                    + " case=top_slab_raise"
+                    + " block=" + blockName(state)
+                    + " dy=" + text(SlabSupport.getYOffset(world, hangingObject, world.getBlockState(hangingObject)))
+                    + " result=GREEN");
+            world.setBlock(hangingObject, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            world.setBlock(ceiling, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        }
+
+        System.out.println("[NEOFORGE_P26_CEILING_HUNG_SUMMARY]"
+                + " rows=6 result=GREEN proofScope=server_always_ceiling_hung_dy_only");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
     public void p26DownwardPointedDripstoneChainFollowsLoweredCeilingSupport(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos temporarySlab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -1682,6 +2040,43 @@ public final class SlabbedLabFixtureTest {
     }
 
     @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26HangingLanternUnderTopSlabBridgedChainStaysFlush(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos chain = ctx.absolutePos(new BlockPos(2, 4, 2));
+        BlockPos lantern = ctx.absolutePos(new BlockPos(2, 3, 2));
+
+        world.setBlock(chain.above(), slab(SlabType.TOP), Block.UPDATE_ALL);
+        world.setBlock(chain, yChain(), Block.UPDATE_ALL);
+        world.setBlock(lantern, hangingLantern(), Block.UPDATE_ALL);
+
+        assertBlockDy(ctx, world, chain, Blocks.CHAIN, 0.5,
+                "P26 setup: direct Y-chain under a top slab keeps its ceiling-attach dy");
+        assertBlockDy(ctx, world, lantern, Blocks.LANTERN, 0.0,
+                "P26 hanging lantern below a ceiling-bridged chain must not rise into the chain model");
+        BlockState lanternState = world.getBlockState(lantern);
+        VoxelShape lanternShape = lanternState.getShape(world, lantern, CollisionContext.empty());
+        VoxelShape lanternRaycast = lanternState.getInteractionShape(world, lantern);
+        ctx.assertTrue(!lanternShape.isEmpty(),
+                "P26 hanging lantern below a ceiling-bridged chain must keep a selectable hanging shape");
+        ctx.assertTrue(lanternShape.bounds().maxY > 0.5d,
+                "P26 hanging lantern below a ceiling-bridged chain must keep its outline upper attachment selectable"
+                        + " (shapeMaxY=" + lanternShape.bounds().maxY + ")");
+        ctx.assertTrue(!lanternRaycast.isEmpty(),
+                "P26 hanging lantern below a ceiling-bridged chain must keep a non-empty raycast shape");
+        ctx.assertTrue(lanternRaycast.bounds().maxY > 0.5d,
+                "P26 hanging lantern below a ceiling-bridged chain must keep its raycast upper attachment selectable"
+                        + " (raycastMaxY=" + lanternRaycast.bounds().maxY + ")");
+        System.out.println("[NEOFORGE_P26_LANTERN_CHAIN_ROW]"
+                + " case=top_slab_bridged_chain"
+                + " chainDy=" + text(SlabSupport.getYOffset(world, chain, world.getBlockState(chain)))
+                + " lanternDy=" + text(SlabSupport.getYOffset(world, lantern, world.getBlockState(lantern)))
+                + " lanternOutlineY=" + text(lanternShape.bounds().minY) + ".." + text(lanternShape.bounds().maxY)
+                + " lanternRaycastY=" + text(lanternRaycast.bounds().minY) + ".." + text(lanternRaycast.bounds().maxY)
+                + " result=GREEN");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
     public void p26DownwardPointedDripstoneUnderTopSlabKeepsDescendantsGridHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos upper = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -1714,16 +2109,39 @@ public final class SlabbedLabFixtureTest {
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.Y);
     }
 
+    private static BlockState hangingLantern() {
+        return Blocks.LANTERN.defaultBlockState()
+                .setValue(BlockStateProperties.HANGING, true);
+    }
+
     private static BlockState pointedDripstoneDownBase() {
         return Blocks.POINTED_DRIPSTONE.defaultBlockState()
                 .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN)
                 .setValue(BlockStateProperties.DRIPSTONE_THICKNESS, DripstoneThickness.BASE);
     }
 
+    private static BlockState pointedDripstoneUpTip() {
+        return Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.UP)
+                .setValue(BlockStateProperties.DRIPSTONE_THICKNESS, DripstoneThickness.TIP);
+    }
+
     private static BlockState pointedDripstoneDownTip() {
         return Blocks.POINTED_DRIPSTONE.defaultBlockState()
                 .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN)
                 .setValue(BlockStateProperties.DRIPSTONE_THICKNESS, DripstoneThickness.TIP);
+    }
+
+    private static BlockState bedFoot() {
+        return Blocks.RED_BED.defaultBlockState()
+                .setValue(BlockStateProperties.BED_PART, BedPart.FOOT)
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
+    }
+
+    private static BlockState bedHead() {
+        return Blocks.RED_BED.defaultBlockState()
+                .setValue(BlockStateProperties.BED_PART, BedPart.HEAD)
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
     }
 
     private static BlockState stableScaffoldingState() {
@@ -1785,6 +2203,10 @@ public final class SlabbedLabFixtureTest {
 
     private static Vec3 upHit(BlockPos abs) {
         return new Vec3(abs.getX() + 0.5d, abs.getY() + 1.0d, abs.getZ() + 0.5d);
+    }
+
+    private static Vec3 loweredUndersideHit(BlockPos abs) {
+        return new Vec3(abs.getX() + 0.5d, abs.getY() - 0.5d, abs.getZ() + 0.5d);
     }
 
     private static Vec3 loweredTopSlabVisibleUpHit(BlockPos abs, double localX, double localZ) {
@@ -1857,6 +2279,66 @@ public final class SlabbedLabFixtureTest {
         double dy = SlabSupport.getYOffset(world, abs, state);
         ctx.assertTrue(Math.abs(dy - expectedDy) <= MC1211_SERVER_STATE_EPSILON,
                 message + ": expected dy=" + expectedDy + " got " + dy);
+    }
+
+    private static void assertStateDy(
+            GameTestHelper ctx,
+            ServerLevel world,
+            BlockPos abs,
+            double expectedDy,
+            String message
+    ) {
+        BlockState state = world.getBlockState(abs);
+        double dy = SlabSupport.getYOffset(world, abs, state);
+        ctx.assertTrue(Math.abs(dy - expectedDy) <= MC1211_SERVER_STATE_EPSILON,
+                message + ": state=" + state + " expected dy=" + expectedDy + " got " + dy);
+    }
+
+    private static String blockName(BlockState state) {
+        return state.getBlock().builtInRegistryHolder().key().location().toString();
+    }
+
+    private static void assertSlabHeightVisibleOwner(
+            GameTestHelper ctx,
+            ServerLevel world,
+            BlockPos abs,
+            String message
+    ) {
+        BlockState state = world.getBlockState(abs);
+        ctx.assertTrue(SlabSupport.isBeta35SlabHeightVisibleOwnerObject(world, abs, state),
+                message + "; state=" + state + " dy=" + SlabSupport.getYOffset(world, abs, state));
+    }
+
+    private static void assertLoweredOutline(
+            GameTestHelper ctx,
+            ServerLevel world,
+            BlockPos abs,
+            String message
+    ) {
+        BlockState state = world.getBlockState(abs);
+        VoxelShape outline = state.getShape(world, abs, CollisionContext.empty());
+        ctx.assertTrue(!outline.isEmpty(), message + ": outline is empty");
+        double minY = outline.min(Direction.Axis.Y);
+        ctx.assertTrue(minY < -MC1211_SERVER_STATE_EPSILON,
+                message + ": expected minY below 0.0, got " + minY);
+    }
+
+    private static void assertOffsetRaycastOwner(
+            GameTestHelper ctx,
+            ServerLevel world,
+            BlockPos abs,
+            double localY,
+            String message
+    ) {
+        Vec3 from = new Vec3(abs.getX() + 1.5d, abs.getY() + localY, abs.getZ() + 0.5d);
+        Vec3 to = new Vec3(abs.getX() - 0.5d, abs.getY() + localY, abs.getZ() + 0.5d);
+        BlockHitResult hit = SlabbedOffsetRaycast.raycast(world, from, to, CollisionContext.empty());
+        boolean ownerMatched = hit.getType() == HitResult.Type.BLOCK && abs.equals(hit.getBlockPos());
+        ctx.assertTrue(ownerMatched,
+                message + "; hitType=" + hit.getType()
+                        + " hitPos=" + shortPos(hit.getBlockPos())
+                        + " expected=" + shortPos(abs)
+                        + " hitVec=" + hit.getLocation());
     }
 
     private static void assertLoweredStairCollisionFollowsVisual(
