@@ -3,6 +3,8 @@ package com.slabbed.mixin.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.slabbed.client.ClientDy;
+import com.slabbed.client.model.ChainCeilingGeometry;
+import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.resources.model.BakedModel;
@@ -30,6 +32,16 @@ public class BlockModelDyTranslateMixin {
         RuntimeDiagnostics.recordModelDyTrace(method, world, pos, state, dy);
     }
 
+    private static double slabbed$modelDy(BakedModel model, BlockAndTintGetter world, BlockPos pos, BlockState state) {
+        if (model instanceof OffsetBlockStateModel) {
+            return 0.0d;
+        }
+        if (ChainCeilingGeometry.usesAlternateGeometry(world, pos, state)) {
+            return 0.0d;
+        }
+        return ClientDy.dyFor(world, pos, state);
+    }
+
     @Inject(method = "tesselateBlock(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
             at = @At("HEAD"))
     private void slabbed$pushDy(BlockAndTintGetter world,
@@ -43,7 +55,7 @@ public class BlockModelDyTranslateMixin {
                                 long seed,
                                 int overlay,
                                 CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
         slabbed$recordTrace("tesselateBlock", world, pos, state, dy);
         if (dy == 0.0) {
             return;
@@ -65,7 +77,7 @@ public class BlockModelDyTranslateMixin {
                                long seed,
                                int overlay,
                                CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
         if (dy == 0.0) {
             return;
         }
@@ -85,7 +97,7 @@ public class BlockModelDyTranslateMixin {
                                       long seed,
                                       int overlay,
                                       CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
         slabbed$recordTrace("tesselateWithAO", world, pos, state, dy);
         if (dy == 0.0) {
             return;
@@ -107,7 +119,7 @@ public class BlockModelDyTranslateMixin {
                                      long seed,
                                      int overlay,
                                      CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
         if (dy == 0.0) {
             return;
         }
@@ -127,7 +139,7 @@ public class BlockModelDyTranslateMixin {
                                     long seed,
                                     int overlay,
                                     CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
         slabbed$recordTrace("tesselateWithoutAO", world, pos, state, dy);
         if (dy == 0.0) {
             return;
@@ -149,7 +161,7 @@ public class BlockModelDyTranslateMixin {
                                    long seed,
                                    int overlay,
                                    CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
         if (dy == 0.0) {
             return;
         }

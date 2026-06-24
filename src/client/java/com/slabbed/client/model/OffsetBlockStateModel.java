@@ -4,9 +4,8 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
-import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
-import net.fabricmc.fabric.api.renderer.v1.model.ForwardingBakedModel;
-import net.fabricmc.fabric.api.renderer.v1.render.RenderContext;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.CarpetBlock;
 import net.minecraft.world.level.block.ChainBlock;
@@ -25,19 +24,28 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.neoforged.neoforge.client.model.BakedModelWrapper;
+import net.neoforged.neoforge.client.model.IQuadTransformer;
+import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.client.model.data.ModelProperty;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
 
 /**
- * Wraps a BakedModel to apply a vertical offset to emitted quads
- * (e.g., torches on bottom slabs) without relying on PoseStack hacks.
+ * Wraps a BakedModel with NeoForge-native diagnostics and slab-height cull handling.
+ *
+ * <p>Actual model lowering is applied to the returned baked quads so renderer replacements
+ * still see the same dy that outline and raycast use.
  */
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
-public final class OffsetBlockStateModel extends ForwardingBakedModel {
+public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
+    private static final ModelProperty<RenderContextInfo> SLABBED_RENDER_CONTEXT = new ModelProperty<>();
     private static volatile BlockPos slabbed$tracePos = null;
     private static volatile RenderOffsetSample slabbed$lastTrace = RenderOffsetSample.missing();
     private static volatile BlockPos slabbed$modelDyOwnerTracePos = null;
@@ -63,12 +71,10 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     private static volatile int slabbed$mc1211LiveModelTraceNotVideoEquivalentCount = 0;
 
     public OffsetBlockStateModel(BakedModel wrapped) {
-        this.wrapped = wrapped;
+        super(wrapped);
     }
 
-    @Override
-    public boolean isVanillaAdapter() {
-        return false;
+    private record RenderContextInfo(BlockAndTintGetter view, BlockPos pos, BlockState state) {
     }
 
     public record RenderOffsetSample(
@@ -126,7 +132,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             String snapshotSource,
             String aggregateDedupKey
     ) {
-        static FullMeshBoundsSample missing() {
+        public static FullMeshBoundsSample missing() {
             return new FullMeshBoundsSample(
                     false,
                     "none",
@@ -221,190 +227,180 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         return slabbed$stepCullLastTrace;
     }
 
+    @Override
+    public ModelData getModelData(
+            BlockAndTintGetter view,
+            BlockPos pos,
+            BlockState state,
+            ModelData modelData
+    ) {
+        ModelData delegateData = super.getModelData(view, pos, state, modelData);
+        ModelData baseData = delegateData == null ? ModelData.EMPTY : delegateData;
+        if (view == null || pos == null || state == null) {
+            return baseData;
+        }
+        return baseData.derive()
+                .with(SLABBED_RENDER_CONTEXT, new RenderContextInfo(view, pos.immutable(), state))
+                .build();
+    }
+
     /**
-     * Fabric renderer entry point used by Indigo/Sodium+Indium.
+     * NeoForge baked-model path. This wrapper applies dy to baked quad vertices and moves
+     * slab-step cull faces into the unculled pass so lowered-vs-flat seams can draw.
      */
     @Override
-    public void emitBlockQuads(BlockAndTintGetter view, BlockState state, BlockPos pos, Supplier<RandomSource> randomSupplier,
-                               RenderContext context) {
-        float sourceDy;
-        String dySourcePath;
-        float dy;
-        if (state.getBlock() instanceof CarpetBlock) {
-            sourceDy = (float) ClientDy.dyFor(view, pos, state);
-            dySourcePath = "fabricEmitBlockQuads:ClientDy:carpet";
-            dy = sourceDy;
-        } else {
-            sourceDy = (float) SlabSupport.getYOffset(view, pos, state);
-            dySourcePath = "fabricEmitBlockQuads:SlabSupport";
-            dy = sourceDy;
-            if (dy != 0.0f) {
-                // Prevent visual connection offsets for fences/walls/panes,
-                // except for the explicitly proven Beta 3.5 fence/wall variants.
-                if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof IronBarsBlock) {
-                    if (!SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
-                        dy = 0.0f;
-                        dySourcePath = dySourcePath + ":visualConnectionExcluded";
-                    }
-                }
-            }
+    public List<BakedQuad> getQuads(
+            BlockState state,
+            Direction side,
+            RandomSource random,
+            ModelData modelData,
+            RenderType renderType
+    ) {
+        List<BakedQuad> baseQuads = super.getQuads(state, side, random, modelData, renderType);
+        RenderContextInfo renderContext = modelData == null ? null : modelData.get(SLABBED_RENDER_CONTEXT);
+        if (renderContext == null || state == null) {
+            return baseQuads;
         }
-        RuntimeDiagnostics.recordBeta4ModelDyTrace("fabricEmitQuads", view, pos, state, dy);
-        slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
-        slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, sourceDy, dy);
+        return slabbed$neoForgeQuads(
+                renderContext.view(),
+                renderContext.pos(),
+                state,
+                side,
+                random,
+                modelData,
+                renderType,
+                baseQuads);
+    }
 
-        BlockPos modelDyTracePos = slabbed$modelDyOwnerTracePos;
-        if (modelDyTracePos != null && modelDyTracePos.equals(pos)) {
-            ModelDyOwnerSample prev = slabbed$modelDyOwnerLastTrace;
-            boolean applied = dy != 0.0f;
-            slabbed$modelDyOwnerLastTrace = new ModelDyOwnerSample(
-                    true,
-                    view.getClass().getName(),
-                    pos.toShortString(),
-                    state.toString(),
-                    prev.emitCalls() + 1,
-                    prev.appliedCalls() + (applied ? 1 : 0),
-                    prev.totalAppliedDy() + (applied ? dy : 0.0),
-                    dy);
-        }
+    private List<BakedQuad> slabbed$neoForgeQuads(
+            BlockAndTintGetter view,
+            BlockPos pos,
+            BlockState state,
+            Direction side,
+            RandomSource random,
+            ModelData modelData,
+            RenderType renderType,
+            List<BakedQuad> baseQuads
+    ) {
+        List<BakedQuad> chainCeilingQuads = ChainCeilingGeometry.quadsIfPresent(
+                view,
+                pos,
+                state,
+                side,
+                random,
+                renderType);
+        if (chainCeilingQuads != null) {
+            float dy = 0.0f;
+            String dySourcePath = "neoForgeGetQuads:ChainCeilingGeometry";
+            RuntimeDiagnostics.recordBeta4ModelDyTrace("neoForgeGetQuads", view, pos, state, dy);
+            slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
+            slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, dy, (float) ClientDy.dyFor(view, pos, state));
+            slabbed$recordModelDyOwnerSample(view, pos, state, dy);
+            slabbed$recordLegacyRenderOffsetSample(view, pos, state, dy);
+            slabbed$maybeLogAnchorTrace(view, pos, dy);
 
-        if (Boolean.getBoolean("slabbed.render.offset.trace")
-                && state.getBlock() instanceof ChainBlock
-                && pos.equals(slabbed$tracePos)) {
-            boolean excluded = state.getBlock() instanceof FenceBlock
-                    || state.getBlock() instanceof WallBlock
-                    || state.getBlock() instanceof IronBarsBlock;
-            slabbed$lastTrace = new RenderOffsetSample(
-                    true,
-                    view.getClass().getName(),
-                    pos.toShortString(),
-                    state.toString(),
-                    dy,
-                    ClientDy.dyFor(view, pos, state),
-                    SlabSupport.getYOffset(view, pos, state),
-                    excluded);
-        }
-
-        // Prove that the render-path BlockGetter is not a Level, causing isAnchored to return false.
-        // Fires only when -Dslabbed.anchor.trace=true AND view is NOT a Level instance.
-        if (SlabAnchorAttachment.TRACE && !(view instanceof Level)) {
-            boolean anchoredViaFallback = false;
-            Minecraft mc = Minecraft.getInstance();
-            if (mc != null && mc.level != null) {
-                anchoredViaFallback = SlabAnchorAttachment.isAnchored(mc.level, pos);
-            }
-            if (anchoredViaFallback || dy != 0.0f) {
-                Slabbed.LOGGER.info("[ANCHOR] model dy view={} pos={} dy={} anchoredViaWorldFallback={}",
-                        view.getClass().getSimpleName(), pos.toShortString(), dy, anchoredViaFallback);
-            }
-        }
-
-        // Slab-height step-face cull relaxation (renderer-agnostic — works under Indigo AND
-        // Sodium because it edits the emitted quad's OWN cullFace, which every renderer
-        // honours, rather than a per-renderer cull gate). Clear cullFace on faces that sit at
-        // a lowered-vs-flat seam so the strip exposed by the model offset is drawn instead of
-        // culled into a see-through "ghost window". A FLAT block (dy=0) adjacent to a lowered
-        // one ALSO owns a step face, so the transform must run even when dy==0.
-        // Mirrors the 1.21.11 model-path fix; see docs/CULL-WINDOW-FIX-DESIGN.md.
-        final boolean clearStepCullFaces = slabbed$hasLoweredStepFace(view, pos, state);
-        final boolean observeStepCull = slabbed$isStepCullTracePos(pos);
-
-        if (dy == 0.0f && !clearStepCullFaces) {
-            slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, wrapped, dy,
-                    0, 0, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
-                    "dy_zero_no_transform");
-            if (observeStepCull) {
+            MeshBounds bounds = measureBounds(chainCeilingQuads, dy);
+            slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, originalModel, dy,
+                    chainCeilingQuads.size(),
+                    bounds.verticesVisited(),
+                    bounds.minBeforeY(),
+                    bounds.maxBeforeY(),
+                    bounds.minAfterY(),
+                    bounds.maxAfterY(),
+                    "chain_ceiling_alternate_geometry");
+            if (slabbed$isStepCullTracePos(pos)) {
                 slabbed$recordStepCullSample(
                         view,
                         pos,
                         state,
                         dy,
-                        clearStepCullFaces,
-                        0,
-                        0,
+                        false,
+                        chainCeilingQuads.size(),
+                        side == null ? 0 : chainCeilingQuads.size(),
                         0,
                         0,
                         "none",
-                        "dy_zero_no_step_faces");
+                        "chain_ceiling_alternate_geometry");
             }
-            emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
-            return;
+            return chainCeilingQuads;
         }
 
-        final float yOffset = dy;
-        final BakedModel traceModel = wrapped;
-        final int[] totalQuadsSeen = {0};
-        final int[] cullFacesSeen = {0};
-        final int[] stepFacesSeen = {0};
-        final int[] stepCullFacesCleared = {0};
-        final int[] verticesVisited = {0};
-        final StringBuilder clearedFaces = new StringBuilder();
-        final double[] meshBounds = {
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY,
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY};
-        context.pushTransform(quad -> {
-            totalQuadsSeen[0]++;
-            Direction cullFace = quad.cullFace();
-            if (cullFace != null) {
-                cullFacesSeen[0]++;
-            }
-            // Un-cull lowered-step seam faces so the strip exposed by the offset is drawn,
-            // not culled into a see-through window. Preserve nominalFace so lighting/orientation
-            // are unchanged. Only flips cull->draw, so it cannot remove geometry or z-fight
-            // (the opposite-facing coplanar seam face is GPU back-face-culled).
-            if (clearStepCullFaces) {
-                if (cullFace != null && SlabSupport.isSlabHeightStepFace(view, pos, state, cullFace)) {
-                    stepFacesSeen[0]++;
-                    if (clearedFaces.length() > 0) {
-                        clearedFaces.append(',');
-                    }
-                    clearedFaces.append(cullFace.getName());
-                    stepCullFacesCleared[0]++;
-                    quad.cullFace(null);
-                    quad.nominalFace(cullFace);
+        float dy = (float) ClientDy.dyFor(view, pos, state);
+        String dySourcePath = "neoForgeGetQuads:ClientDy";
+        RuntimeDiagnostics.recordBeta4ModelDyTrace("neoForgeGetQuads", view, pos, state, dy);
+        slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
+        slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, dy, dy);
+        slabbed$recordModelDyOwnerSample(view, pos, state, dy);
+        slabbed$recordLegacyRenderOffsetSample(view, pos, state, dy);
+        slabbed$maybeLogAnchorTrace(view, pos, dy);
+
+        boolean clearStepCullFaces = slabbed$hasLoweredStepFace(view, pos, state);
+        boolean observeStepCull = slabbed$isStepCullTracePos(pos);
+        boolean stepSide = side != null && SlabSupport.isSlabHeightStepFace(view, pos, state, side);
+
+        List<BakedQuad> quads = baseQuads;
+        int totalQuadsSeen = baseQuads.size();
+        int cullFacesSeen = side == null ? 0 : baseQuads.size();
+        int stepFacesSeen = 0;
+        int stepCullFacesCleared = 0;
+        StringBuilder clearedFaces = new StringBuilder();
+        String reason = "quad_translate";
+
+        if (clearStepCullFaces && stepSide) {
+            stepFacesSeen = baseQuads.size();
+            stepCullFacesCleared = baseQuads.size();
+            appendFace(clearedFaces, side);
+            quads = Collections.emptyList();
+            reason = "side_quads_relocated_to_unculled_pass";
+        } else if (clearStepCullFaces && side == null) {
+            ArrayList<BakedQuad> unculled = new ArrayList<>(baseQuads);
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                if (!SlabSupport.isSlabHeightStepFace(view, pos, state, direction)) {
+                    continue;
+                }
+                List<BakedQuad> stepQuads = super.getQuads(state, direction, random, modelData, renderType);
+                if (stepQuads.isEmpty()) {
+                    continue;
+                }
+                stepFacesSeen += stepQuads.size();
+                stepCullFacesCleared += stepQuads.size();
+                cullFacesSeen += stepQuads.size();
+                totalQuadsSeen += stepQuads.size();
+                appendFace(clearedFaces, direction);
+                for (BakedQuad quad : stepQuads) {
+                    unculled.add(copyQuad(quad));
                 }
             }
-            for (int i = 0; i < 4; i++) {
-                verticesVisited[0]++;
-                float beforeY = quad.y(i);
-                float afterY = beforeY + yOffset;
-                meshBounds[0] = Math.min(meshBounds[0], beforeY);
-                meshBounds[1] = Math.max(meshBounds[1], beforeY);
-                meshBounds[2] = Math.min(meshBounds[2], afterY);
-                meshBounds[3] = Math.max(meshBounds[3], afterY);
-                quad.pos(i, quad.x(i), afterY, quad.z(i));
-            }
-            return true;
-        });
-        try {
-            emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
-            slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, traceModel, dy,
-                    totalQuadsSeen[0],
-                    verticesVisited[0],
-                    meshBounds[0],
-                    meshBounds[1],
-                    meshBounds[2],
-                    meshBounds[3],
-                    "quad_transform_aggregate");
-            if (observeStepCull) {
-                slabbed$recordStepCullSample(
-                        view,
-                        pos,
-                        state,
-                        dy,
-                        clearStepCullFaces,
-                        totalQuadsSeen[0],
-                        cullFacesSeen[0],
-                        stepFacesSeen[0],
-                        stepCullFacesCleared[0],
-                        clearedFaces.length() == 0 ? "none" : clearedFaces.toString(),
-                        "quad_transform_aggregate");
-            }
-        } finally {
-            context.popTransform();
+            quads = unculled;
+            reason = "step_quads_added_to_unculled_pass";
+        } else if (dy == 0.0f) {
+            reason = "dy_zero_no_step_faces";
         }
+
+        MeshBounds bounds = measureBounds(quads, dy);
+        slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, originalModel, dy,
+                totalQuadsSeen,
+                bounds.verticesVisited(),
+                bounds.minBeforeY(),
+                bounds.maxBeforeY(),
+                bounds.minAfterY(),
+                bounds.maxAfterY(),
+                reason);
+        if (observeStepCull) {
+            slabbed$recordStepCullSample(
+                    view,
+                    pos,
+                    state,
+                    dy,
+                    clearStepCullFaces,
+                    totalQuadsSeen,
+                    cullFacesSeen,
+                    stepFacesSeen,
+                    stepCullFacesCleared,
+                    clearedFaces.length() == 0 ? "none" : clearedFaces.toString(),
+                    reason);
+        }
+        return dy == 0.0f || quads.isEmpty() ? quads : translateQuads(quads, dy);
     }
 
     /** True if any horizontal side face of {@code pos} sits at a slab-height step (see
@@ -424,6 +420,150 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         return observedPos != null && observedPos.equals(pos);
     }
 
+    private static void slabbed$recordModelDyOwnerSample(BlockAndTintGetter view, BlockPos pos, BlockState state, float dy) {
+        BlockPos modelDyTracePos = slabbed$modelDyOwnerTracePos;
+        if (modelDyTracePos == null || !modelDyTracePos.equals(pos)) {
+            return;
+        }
+        ModelDyOwnerSample prev = slabbed$modelDyOwnerLastTrace;
+        boolean applied = dy != 0.0f;
+        slabbed$modelDyOwnerLastTrace = new ModelDyOwnerSample(
+                true,
+                view.getClass().getName(),
+                pos.toShortString(),
+                state.toString(),
+                prev.emitCalls() + 1,
+                prev.appliedCalls() + (applied ? 1 : 0),
+                prev.totalAppliedDy() + (applied ? dy : 0.0),
+                dy);
+    }
+
+    private static void slabbed$recordLegacyRenderOffsetSample(BlockAndTintGetter view, BlockPos pos, BlockState state, float dy) {
+        if (!Boolean.getBoolean("slabbed.render.offset.trace")
+                || !(state.getBlock() instanceof ChainBlock)
+                || !pos.equals(slabbed$tracePos)) {
+            return;
+        }
+        boolean excluded = state.getBlock() instanceof FenceBlock
+                || state.getBlock() instanceof WallBlock
+                || state.getBlock() instanceof IronBarsBlock;
+        slabbed$lastTrace = new RenderOffsetSample(
+                true,
+                view.getClass().getName(),
+                pos.toShortString(),
+                state.toString(),
+                dy,
+                ClientDy.dyFor(view, pos, state),
+                SlabSupport.getYOffset(view, pos, state),
+                excluded);
+    }
+
+    private static void slabbed$maybeLogAnchorTrace(BlockAndTintGetter view, BlockPos pos, float dy) {
+        // Proves when render-path BlockGetter is not a Level, without changing behavior.
+        if (!SlabAnchorAttachment.TRACE || view instanceof Level) {
+            return;
+        }
+        boolean anchoredViaFallback = false;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null && mc.level != null) {
+            anchoredViaFallback = SlabAnchorAttachment.isAnchored(mc.level, pos);
+        }
+        if (anchoredViaFallback || dy != 0.0f) {
+            Slabbed.LOGGER.info("[ANCHOR] model dy view={} pos={} dy={} anchoredViaWorldFallback={}",
+                    view.getClass().getSimpleName(), pos.toShortString(), dy, anchoredViaFallback);
+        }
+    }
+
+    private static void appendFace(StringBuilder faces, Direction direction) {
+        if (faces.indexOf(direction.getName()) >= 0) {
+            return;
+        }
+        if (faces.length() > 0) {
+            faces.append(',');
+        }
+        faces.append(direction.getName());
+    }
+
+    private static BakedQuad copyQuad(BakedQuad quad) {
+        return new BakedQuad(
+                quad.getVertices().clone(),
+                quad.getTintIndex(),
+                quad.getDirection(),
+                quad.getSprite(),
+                quad.isShade(),
+                quad.hasAmbientOcclusion());
+    }
+
+    private static List<BakedQuad> translateQuads(List<BakedQuad> quads, float dy) {
+        ArrayList<BakedQuad> translated = new ArrayList<>(quads.size());
+        for (BakedQuad quad : quads) {
+            translated.add(translateQuad(quad, dy));
+        }
+        return translated;
+    }
+
+    private static BakedQuad translateQuad(BakedQuad quad, float dy) {
+        int[] vertices = quad.getVertices().clone();
+        for (int i = 0; i < 4; i++) {
+            int base = i * IQuadTransformer.STRIDE + IQuadTransformer.POSITION;
+            if (base + 1 >= vertices.length) {
+                continue;
+            }
+            float y = Float.intBitsToFloat(vertices[base + 1]);
+            vertices[base + 1] = Float.floatToRawIntBits(y + dy);
+        }
+        return new BakedQuad(
+                vertices,
+                quad.getTintIndex(),
+                quad.getDirection(),
+                quad.getSprite(),
+                quad.isShade(),
+                quad.hasAmbientOcclusion());
+    }
+
+    private static MeshBounds measureBounds(List<BakedQuad> quads, float dy) {
+        if (quads.isEmpty()) {
+            return MeshBounds.empty();
+        }
+        int verticesVisited = 0;
+        double minBeforeY = Double.POSITIVE_INFINITY;
+        double maxBeforeY = Double.NEGATIVE_INFINITY;
+        double minAfterY = Double.POSITIVE_INFINITY;
+        double maxAfterY = Double.NEGATIVE_INFINITY;
+        for (BakedQuad quad : quads) {
+            int[] vertices = quad.getVertices();
+            for (int i = 0; i < 4; i++) {
+                int base = i * IQuadTransformer.STRIDE + IQuadTransformer.POSITION;
+                if (base + 1 >= vertices.length) {
+                    continue;
+                }
+                verticesVisited++;
+                float beforeY = Float.intBitsToFloat(vertices[base + 1]);
+                float afterY = beforeY + dy;
+                minBeforeY = Math.min(minBeforeY, beforeY);
+                maxBeforeY = Math.max(maxBeforeY, beforeY);
+                minAfterY = Math.min(minAfterY, afterY);
+                maxAfterY = Math.max(maxAfterY, afterY);
+            }
+        }
+        if (verticesVisited == 0) {
+            return MeshBounds.empty();
+        }
+        return new MeshBounds(verticesVisited, minBeforeY, maxBeforeY, minAfterY, maxAfterY);
+    }
+
+    private record MeshBounds(
+            int verticesVisited,
+            double minBeforeY,
+            double maxBeforeY,
+            double minAfterY,
+            double maxAfterY
+    ) {
+        static MeshBounds empty() {
+            return new MeshBounds(0, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+        }
+    }
+
     private static void slabbed$recordStepCullSample(
             BlockAndTintGetter view,
             BlockPos pos,
@@ -437,6 +577,10 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             String clearedFaces,
             String reason
     ) {
+        StepCullSample previous = slabbed$stepCullLastTrace;
+        if (previous.seen() && previous.stepCullFacesCleared() > 0 && stepCullFacesCleared <= 0) {
+            return;
+        }
         slabbed$stepCullLastTrace = new StepCullSample(
                 true,
                 view == null ? "null" : view.getClass().getName(),
@@ -450,16 +594,6 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 stepCullFacesCleared,
                 clearedFaces,
                 reason);
-    }
-
-    private void emitWrappedBlockQuads(BlockAndTintGetter view, BlockState state, BlockPos pos,
-                                       Supplier<RandomSource> randomSupplier, RenderContext context) {
-        if (wrapped instanceof FabricBakedModel fabricWrapped) {
-            fabricWrapped.emitBlockQuads(view, state, pos, randomSupplier, context);
-            return;
-        }
-
-        context.bakedModelConsumer().accept(wrapped, state);
     }
 
     private static void slabbed$logCompoundVisibleRenderTraceModelDy(

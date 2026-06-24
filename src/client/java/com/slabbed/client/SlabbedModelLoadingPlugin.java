@@ -1,9 +1,10 @@
 package com.slabbed.client;
 
 import com.slabbed.Slabbed;
+import com.slabbed.client.model.ChainCeilingGeometry;
 import com.slabbed.client.model.OffsetBlockStateModel;
 import net.minecraft.client.resources.model.BakedModel;
-import net.minecraft.client.resources.model.MultiPartBakedModel;
+import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ModelEvent;
 
@@ -17,12 +18,14 @@ public final class SlabbedModelLoadingPlugin {
 
     public static void init(IEventBus modEventBus) {
         Slabbed.LOGGER.info("[Slabbed] ModelLoadingPlugin init: registering baked model wrapper");
+        modEventBus.addListener(ChainCeilingGeometry::registerAdditional);
         modEventBus.addListener(SlabbedModelLoadingPlugin::modifyBakingResult);
     }
 
     private static void modifyBakingResult(ModelEvent.ModifyBakingResult event) {
+        ChainCeilingGeometry.captureBakedModel(event.getModels());
         if (!Boolean.getBoolean(MODEL_WRAPPER_PROOF_PROPERTY)) {
-            event.getModels().replaceAll((id, model) -> wrapModel(model));
+            event.getModels().replaceAll(SlabbedModelLoadingPlugin::wrapModel);
             return;
         }
 
@@ -31,7 +34,7 @@ public final class SlabbedModelLoadingPlugin {
         AtomicInteger skipped = new AtomicInteger();
         event.getModels().replaceAll((id, model) -> {
             total.incrementAndGet();
-            BakedModel wrappedModel = wrapModel(model);
+            BakedModel wrappedModel = wrapModel(id, model);
             if (wrappedModel == model) {
                 skipped.incrementAndGet();
             } else {
@@ -46,10 +49,10 @@ public final class SlabbedModelLoadingPlugin {
                 skipped.get());
     }
 
-    private static BakedModel wrapModel(BakedModel model) {
+    private static BakedModel wrapModel(ModelResourceLocation id, BakedModel model) {
         if (model == null
-                || model instanceof OffsetBlockStateModel
-                || model instanceof MultiPartBakedModel) {
+                || ChainCeilingGeometry.isModelLocation(id)
+                || model instanceof OffsetBlockStateModel) {
             return model;
         }
         return new OffsetBlockStateModel(model);

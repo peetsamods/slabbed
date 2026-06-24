@@ -1,16 +1,17 @@
 package com.slabbed.mixin.client;
 
-import com.slabbed.util.SlabSupport;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.slabbed.client.ClientDy;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.ItemFrameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Offsets item frame rendering when the block the frame is attached to is Slabbed-lowered.
@@ -18,11 +19,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ItemFrameRenderer.class)
 public abstract class ItemFrameRenderOffsetMixin {
 
-    @Inject(method = "getRenderOffset(Lnet/minecraft/world/entity/decoration/ItemFrame;F)Lnet/minecraft/world/phys/Vec3;",
-            at = @At("RETURN"), cancellable = true)
+    @Inject(method = "render(Lnet/minecraft/world/entity/decoration/ItemFrame;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
+            at = @At(value = "INVOKE",
+                    target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(DDD)V",
+                    ordinal = 0,
+                    shift = At.Shift.AFTER))
     private void slabbed$adjustItemFrameOffset(ItemFrame entity,
+                                               float yaw,
                                                float tickDelta,
-                                               CallbackInfoReturnable<Vec3> cir) {
+                                               PoseStack matrices,
+                                               MultiBufferSource vertexConsumers,
+                                               int light,
+                                               CallbackInfo ci) {
         Level world = entity.level();
         if (world == null) {
             return;
@@ -34,10 +42,9 @@ public abstract class ItemFrameRenderOffsetMixin {
         }
 
         BlockState attachedState = world.getBlockState(attachedPos);
-        double dy = SlabSupport.getYOffset(world, attachedPos, attachedState);
+        double dy = ClientDy.dyFor(world, attachedPos, attachedState);
         if (dy != 0.0) {
-            Vec3 current = cir.getReturnValue();
-            cir.setReturnValue((current == null ? Vec3.ZERO : current).add(0.0, dy, 0.0));
+            matrices.translate(0.0, dy, 0.0);
         }
     }
 }

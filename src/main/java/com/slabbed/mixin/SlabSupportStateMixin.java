@@ -289,6 +289,17 @@ public abstract class SlabSupportStateMixin {
                 return;
             }
         }
+        if ((shape == null || shape.isEmpty())
+                && (self.is(Blocks.LANTERN) || self.is(Blocks.SOUL_LANTERN))
+                && self.hasProperty(BlockStateProperties.HANGING)
+                && self.getValue(BlockStateProperties.HANGING)) {
+            BlockPos supportPos = pos.above();
+            BlockState supportState = world.getBlockState(supportPos);
+            if (SlabSupport.isCeilingBridgedVerticalChainColumnMember(world, supportPos, supportState)) {
+                cir.setReturnValue(self.getShape(world, pos, CollisionContext.empty()));
+                return;
+            }
+        }
 
         // Fence/wall/pane render un-lowered (see OffsetBlockStateModel.emitBlockQuads);
         // their raycast shape must match, so do not offset it. Mirrors the render path.
@@ -330,7 +341,15 @@ public abstract class SlabSupportStateMixin {
             } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
                 shape = Shapes.block();
             }
-            cir.setReturnValue(shape.move(0.0, yOff, 0.0));
+            shape = shape.move(0.0, yOff, 0.0);
+            if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+                shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
+            }
+            cir.setReturnValue(shape);
+            return;
+        }
+        if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+            cir.setReturnValue(SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape));
         }
     }
 
@@ -422,6 +441,11 @@ public abstract class SlabSupportStateMixin {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             }
             shape = shape.move(0.0, yOff, 0.0);
+            changed = true;
+        }
+
+        if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+            shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
             changed = true;
         }
 
