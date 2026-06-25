@@ -1362,7 +1362,7 @@ public final class SlabbedLabFixtureTest {
     }
 
     @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
-    public void useOnFenceUnderLoweredSlabDownFaceFollowsUnderside(GameTestHelper ctx) {
+    public void useOnFenceUnderLoweredSlabDownFacePreservesVanillaDyAndStaysStable(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
         BlockPos loweredSource = support.above();
@@ -1393,12 +1393,43 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(placed.equals(expected),
                 "P26 fence under slab WYSIWYG: fence landed at " + shortPos(placed)
                         + " not below clicked lowered slab " + shortPos(expected));
-        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, -0.5d,
-                "P26 fence under slab WYSIWYG: fence placed on a lowered slab underside must follow dy=-0.5");
-        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, placed),
-                "P26 fence under slab WYSIWYG: under-slab fence must not be recorded FROZEN_FLAT");
-        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, placed),
-                "P26 fence under slab WYSIWYG: under-slab fence must be anchored lowered");
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence under slab WYSIWYG: fence placed below a lowered slab underside must preserve vanilla dy=0");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, placed),
+                "P26 fence under slab WYSIWYG: under-slab fence must be recorded FROZEN_FLAT");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, placed),
+                "P26 fence under slab WYSIWYG: under-slab fence must not be anchored lowered");
+
+        Player lowerFencePlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(3, 1, 2)));
+        BlockPos lowerPlaced = placeBlockViaAndFindChangedBlock(
+                ctx,
+                lowerFencePlayer,
+                placed,
+                Direction.DOWN,
+                new Vec3(placed.getX() + 0.5d, placed.getY(), placed.getZ() + 0.5d),
+                Blocks.BIRCH_FENCE);
+        ctx.assertTrue(lowerPlaced.equals(placed.below()),
+                "P26 fence under slab WYSIWYG: second fence landed at " + shortPos(lowerPlaced)
+                        + " not below first fence " + shortPos(placed.below()));
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence under slab WYSIWYG: placing a fence underneath must not pop the first fence upward/downward");
+        assertBlockDy(ctx, world, lowerPlaced, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence under slab WYSIWYG: second fence under a vanilla under-slab fence must also stay vanilla dy=0");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, lowerPlaced),
+                "P26 fence under slab WYSIWYG: second under-fence must record FROZEN_FLAT");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, lowerPlaced),
+                "P26 fence under slab WYSIWYG: second under-fence must not be anchored lowered");
+        AABB upperFenceBounds = world.getBlockState(placed)
+                .getShape(world, placed, CollisionContext.empty())
+                .bounds();
+        AABB lowerFenceBounds = world.getBlockState(lowerPlaced)
+                .getShape(world, lowerPlaced, CollisionContext.empty())
+                .bounds();
+        double upperFenceWorldMinY = placed.getY() + upperFenceBounds.minY;
+        double lowerFenceWorldMaxY = lowerPlaced.getY() + lowerFenceBounds.maxY;
+        ctx.assertTrue(lowerFenceWorldMaxY >= upperFenceWorldMinY - MC1211_SERVER_STATE_EPSILON,
+                "P26 fence under slab WYSIWYG: stacked vanilla-dy fences must vertically touch/overlap; lowerMaxY="
+                        + lowerFenceWorldMaxY + " upperMinY=" + upperFenceWorldMinY);
 
         BlockState placedState = world.getBlockState(placed);
         System.out.println("[NEOFORGE_P26_FENCE_UNDER_SLAB_ROW]"
@@ -1408,9 +1439,701 @@ public final class SlabbedLabFixtureTest {
                 + " fenceDy=" + text(SlabSupport.getYOffset(world, placed, placedState))
                 + " anchored=" + SlabAnchorAttachment.isAnchored(world, placed)
                 + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, placed)
+                + " lowerPlaced=" + shortPos(lowerPlaced)
+                + " lowerFenceDy=" + text(SlabSupport.getYOffset(world, lowerPlaced, world.getBlockState(lowerPlaced)))
+                + " lowerAnchored=" + SlabAnchorAttachment.isAnchored(world, lowerPlaced)
+                + " lowerFrozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, lowerPlaced)
+                + " verticalTouch=" + (lowerFenceWorldMaxY >= upperFenceWorldMinY - MC1211_SERVER_STATE_EPSILON)
                 + " result=GREEN");
         System.out.println("[NEOFORGE_P26_FENCE_UNDER_SLAB_SUMMARY]"
-                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_slab_down_face_wysiwyg_only");
+                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_slab_down_face_vanilla_dy_and_stability");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void useOnFenceUnderLoweredSlabHorizontalUndersideBandPreservesVanillaDy(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos loweredSource = support.above();
+
+        world.setBlock(support, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        authorBlock(world, loweredSource, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState());
+        assertBlockDy(ctx, world, loweredSource, Blocks.STRIPPED_JUNGLE_LOG, -0.5d,
+                "P26 fence under slab side-band setup: source log must be lowered");
+
+        Player slabPlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(3, 4, 2)));
+        BlockPos loweredSlab = placeBlockVia(
+                slabPlayer,
+                loweredSource,
+                Direction.EAST,
+                eastHitOffset(loweredSource, -0.5d, 0.25d),
+                Blocks.BIRCH_SLAB);
+        BlockState loweredSlabState = world.getBlockState(loweredSlab);
+        ctx.assertTrue(loweredSlabState.getBlock() instanceof SlabBlock
+                        && loweredSlabState.hasProperty(SlabBlock.TYPE)
+                        && loweredSlabState.getValue(SlabBlock.TYPE) == SlabType.BOTTOM,
+                "P26 fence under slab side-band setup: expected lowered BOTTOM slab, got "
+                        + loweredSlabState);
+        assertBlockDy(ctx, world, loweredSlab, Blocks.BIRCH_SLAB, -0.5d,
+                "P26 fence under slab side-band setup: side-authored bottom birch slab must be lowered");
+
+        Player fencePlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(4, 3, 2)));
+        BlockPos placed = placeBlockViaAndFindChangedBlock(
+                ctx,
+                fencePlayer,
+                loweredSlab,
+                Direction.EAST,
+                eastHitOffset(loweredSlab, -0.5d, 0.25d),
+                Blocks.BIRCH_FENCE);
+        BlockPos expected = loweredSlab.below();
+        BlockPos vanillaSideCell = loweredSlab.east();
+        ctx.assertTrue(placed.equals(expected),
+                "P26 fence under slab side-band WYSIWYG: fence landed at " + shortPos(placed)
+                        + " not below visually clicked lowered slab " + shortPos(expected)
+                        + " (vanilla side cell would be " + shortPos(vanillaSideCell) + ")");
+        ctx.assertTrue(world.getBlockState(vanillaSideCell).isAir(),
+                "P26 fence under slab side-band WYSIWYG: vanilla side cell should stay empty, got "
+                        + world.getBlockState(vanillaSideCell));
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence under slab side-band WYSIWYG: fence placed below visual underside must preserve vanilla dy=0");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, placed),
+                "P26 fence under slab side-band WYSIWYG: vanilla under-slab fence must record FROZEN_FLAT");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, placed),
+                "P26 fence under slab side-band WYSIWYG: vanilla under-slab fence must not be anchored lowered");
+
+        BlockState placedState = world.getBlockState(placed);
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_SLAB_SIDE_BAND_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabState=" + world.getBlockState(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " clickedFace=EAST"
+                + " visualBand=underside"
+                + " vanillaSideCell=" + shortPos(vanillaSideCell)
+                + " placed=" + shortPos(placed)
+                + " fenceDy=" + text(SlabSupport.getYOffset(world, placed, placedState))
+                + " anchored=" + SlabAnchorAttachment.isAnchored(world, placed)
+                + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, placed)
+                + " expectedDy=0.000000 result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_SLAB_SIDE_BAND_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_slab_horizontal_underside_band_vanilla_dy_only");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void geometricFenceUnderLoweredSlabBesideLoweredFenceStaysFlatBeforeFreezeSync(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos loweredSource = support.above();
+
+        world.setBlock(support, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        authorBlock(world, loweredSource, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState());
+        assertBlockDy(ctx, world, loweredSource, Blocks.STRIPPED_JUNGLE_LOG, -0.5d,
+                "P26 fence pre-sync setup: source log must be lowered");
+
+        Player slabPlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(3, 4, 2)));
+        BlockPos loweredSlab = placeBlockVia(
+                slabPlayer,
+                loweredSource,
+                Direction.EAST,
+                eastHitOffset(loweredSource, -0.5d, 0.25d),
+                Blocks.BIRCH_SLAB);
+        assertBlockDy(ctx, world, loweredSlab, Blocks.BIRCH_SLAB, -0.5d,
+                "P26 fence pre-sync setup: side-authored bottom slab must be lowered");
+
+        BlockPos underSlabFence = loweredSlab.below();
+        BlockPos loweredNeighbor = underSlabFence.east();
+        world.setBlock(loweredNeighbor.below(), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(loweredNeighbor, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        double loweredNeighborDy = SlabSupport.getYOffset(world, loweredNeighbor, world.getBlockState(loweredNeighbor));
+        ctx.assertTrue(loweredNeighborDy < -MC1211_SERVER_STATE_EPSILON,
+                "P26 fence pre-sync setup: neighbor fence must be lowered, got " + loweredNeighborDy);
+
+        world.setBlock(underSlabFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, underSlabFence),
+                "P26 fence pre-sync setup: target fence intentionally has no frozen-flat marker");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, underSlabFence),
+                "P26 fence pre-sync setup: target fence intentionally has no lowered anchor");
+
+        BlockState underSlabFenceState = world.getBlockState(underSlabFence);
+        double underSlabFenceDy = SlabSupport.getYOffset(world, underSlabFence, underSlabFenceState);
+        ctx.assertTrue(Math.abs(underSlabFenceDy) <= MC1211_SERVER_STATE_EPSILON,
+                "P26 fence pre-sync WYSIWYG: under-lowered-slab fence must not inherit neighbor lowered dy before freeze sync; got "
+                        + underSlabFenceDy);
+
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_SLAB_PRESYNC_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " fence=" + shortPos(underSlabFence)
+                + " fenceDy=" + text(underSlabFenceDy)
+                + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, underSlabFence)
+                + " anchored=" + SlabAnchorAttachment.isAnchored(world, underSlabFence)
+                + " loweredNeighbor=" + shortPos(loweredNeighbor)
+                + " loweredNeighborDy=" + text(loweredNeighborDy)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_SLAB_PRESYNC_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_slab_presync_geometry_vanilla_dy");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void geometricFenceUnderAnchoredLoweredSlabBesideLoweredFenceStaysFlatBeforeFreezeSync(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos underSlabFence = loweredSlab.below();
+        BlockPos loweredNeighbor = underSlabFence.east();
+
+        world.setBlock(loweredSlab, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, loweredSlab),
+                "P26 fence anchored-slab setup: lowered slab must be anchored like the live Modrinth repro");
+        assertBlockDy(ctx, world, loweredSlab, Blocks.STONE_SLAB, -0.5d,
+                "P26 fence anchored-slab setup: anchored bottom slab must render lowered");
+
+        world.setBlock(loweredNeighbor.below(), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(loweredNeighbor, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        double loweredNeighborDy = SlabSupport.getYOffset(world, loweredNeighbor, world.getBlockState(loweredNeighbor));
+        ctx.assertTrue(loweredNeighborDy < -MC1211_SERVER_STATE_EPSILON,
+                "P26 fence anchored-slab setup: side neighbor fence must be lowered, got " + loweredNeighborDy);
+
+        world.setBlock(underSlabFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, underSlabFence),
+                "P26 fence anchored-slab setup: target fence intentionally has no frozen-flat marker");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, underSlabFence),
+                "P26 fence anchored-slab setup: target fence intentionally has no lowered anchor");
+
+        BlockState underSlabFenceState = world.getBlockState(underSlabFence);
+        double underSlabFenceDy = SlabSupport.getYOffset(world, underSlabFence, underSlabFenceState);
+        ctx.assertTrue(Math.abs(underSlabFenceDy) <= MC1211_SERVER_STATE_EPSILON,
+                "P26 fence anchored-slab WYSIWYG: under anchored lowered slab fence must not inherit neighbor lowered dy before freeze sync; got "
+                        + underSlabFenceDy);
+
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_ANCHORED_SLAB_PRESYNC_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " slabAnchored=" + SlabAnchorAttachment.isAnchored(world, loweredSlab)
+                + " fence=" + shortPos(underSlabFence)
+                + " fenceDy=" + text(underSlabFenceDy)
+                + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, underSlabFence)
+                + " anchored=" + SlabAnchorAttachment.isAnchored(world, underSlabFence)
+                + " loweredNeighbor=" + shortPos(loweredNeighbor)
+                + " loweredNeighborDy=" + text(loweredNeighborDy)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_ANCHORED_SLAB_PRESYNC_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_under_anchored_lowered_slab_presync_geometry_vanilla_dy");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void useOnFenceUnderAnchoredLoweredTopSlabConnectsToAdjacentLog(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos underSlabFence = loweredSlab.below();
+        BlockPos adjacentLog = underSlabFence.south();
+
+        world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, loweredSlab),
+                "P26 fence/log setup: lowered top slab must be anchored like the live Modrinth target");
+        assertSlabDy(ctx, world, loweredSlab, -0.5d,
+                "P26 fence/log setup: anchored top slab must render in the visible lower half");
+
+        world.setBlock(adjacentLog, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState(), Block.UPDATE_ALL);
+
+        Player fencePlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(2, 2, 1)));
+        BlockPos placed = placeBlockViaAndFindChangedBlock(
+                ctx,
+                fencePlayer,
+                loweredSlab,
+                Direction.DOWN,
+                loweredTopSlabVisibleDownHit(loweredSlab),
+                Blocks.BIRCH_FENCE);
+        ctx.assertTrue(placed.equals(underSlabFence),
+                "P26 fence/log WYSIWYG: fence landed at " + shortPos(placed)
+                        + " not under the clicked lowered slab " + shortPos(underSlabFence));
+
+        BlockState placedState = world.getBlockState(placed);
+        ctx.assertTrue(placedState.hasProperty(CrossCollisionBlock.SOUTH),
+                "P26 fence/log WYSIWYG setup: birch fence must expose SOUTH connection property");
+        ctx.assertTrue(placedState.getValue(CrossCollisionBlock.SOUTH),
+                "P26 fence/log WYSIWYG: under-slab fence must connect to adjacent stripped log after landing in the intended cell");
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence/log WYSIWYG: under-slab fence keeps vanilla dy=0 while retaining the log connection");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, placed),
+                "P26 fence/log WYSIWYG: under-slab fence must be FROZEN_FLAT");
+
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_TOP_SLAB_LOG_CONNECTOR_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabState=" + world.getBlockState(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " placed=" + shortPos(placed)
+                + " adjacentLog=" + shortPos(adjacentLog)
+                + " south=" + placedState.getValue(CrossCollisionBlock.SOUTH)
+                + " fenceDy=" + text(SlabSupport.getYOffset(world, placed, placedState))
+                + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, placed)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_TOP_SLAB_LOG_CONNECTOR_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_top_slab_places_intended_cell_and_connects_log");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void useOnFenceUnderAnchoredLoweredTopSlabKeepsFenceLogAndDownwardConnections(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos underSlabFence = loweredSlab.below();
+        BlockPos adjacentFence = underSlabFence.north();
+        BlockPos adjacentLog = underSlabFence.south();
+        BlockPos lowerFence = underSlabFence.below();
+
+        world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        assertSlabDy(ctx, world, loweredSlab, -0.5d,
+                "P26 fence/log/down setup: anchored top slab must render in the visible lower half");
+
+        world.setBlock(adjacentFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(adjacentLog, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(lowerFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+
+        Player fencePlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(2, 2, 1)));
+        BlockPos placed = placeBlockViaAndFindChangedBlock(
+                ctx,
+                fencePlayer,
+                loweredSlab,
+                Direction.DOWN,
+                loweredTopSlabVisibleDownHit(loweredSlab),
+                Blocks.BIRCH_FENCE);
+        ctx.assertTrue(placed.equals(underSlabFence),
+                "P26 fence/log/down WYSIWYG: fence landed at " + shortPos(placed)
+                        + " not under the clicked lowered slab " + shortPos(underSlabFence));
+
+        BlockState placedState = world.getBlockState(placed);
+        ctx.assertTrue(placedState.getValue(CrossCollisionBlock.NORTH),
+                "P26 fence/log/down WYSIWYG: under-slab fence must retain same-height fence connection");
+        ctx.assertTrue(placedState.getValue(CrossCollisionBlock.SOUTH),
+                "P26 fence/log/down WYSIWYG: under-slab fence must retain stripped-log connection");
+        BlockState adjacentFenceState = world.getBlockState(adjacentFence);
+        ctx.assertTrue(adjacentFenceState.getValue(CrossCollisionBlock.SOUTH),
+                "P26 fence/log/down WYSIWYG: existing neighboring fence must update back toward new fence");
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence/log/down WYSIWYG: under-slab fence keeps vanilla dy=0 with both side connections");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, placed),
+                "P26 fence/log/down WYSIWYG: under-slab fence must be FROZEN_FLAT");
+
+        AABB upperBounds = placedState
+                .getShape(world, placed, CollisionContext.empty())
+                .bounds();
+        AABB lowerBounds = world.getBlockState(lowerFence)
+                .getShape(world, lowerFence, CollisionContext.empty())
+                .bounds();
+        double upperMinY = placed.getY() + upperBounds.minY;
+        double lowerMaxY = lowerFence.getY() + lowerBounds.maxY;
+        boolean verticalTouch = lowerMaxY >= upperMinY - MC1211_SERVER_STATE_EPSILON;
+        ctx.assertTrue(verticalTouch,
+                "P26 fence/log/down WYSIWYG: stacked fences must visually chain downward; lowerMaxY="
+                        + lowerMaxY + " upperMinY=" + upperMinY);
+
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_TOP_SLAB_LOG_AND_DOWN_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " placed=" + shortPos(placed)
+                + " northFence=" + shortPos(adjacentFence)
+                + " southLog=" + shortPos(adjacentLog)
+                + " lowerFence=" + shortPos(lowerFence)
+                + " north=" + placedState.getValue(CrossCollisionBlock.NORTH)
+                + " south=" + placedState.getValue(CrossCollisionBlock.SOUTH)
+                + " neighborSouth=" + adjacentFenceState.getValue(CrossCollisionBlock.SOUTH)
+                + " fenceDy=" + text(SlabSupport.getYOffset(world, placed, placedState))
+                + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, placed)
+                + " verticalTouch=" + verticalTouch
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_TOP_SLAB_LOG_AND_DOWN_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_top_slab_keeps_fence_log_and_downward_connections");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void useOnFenceUnderAnchoredLoweredTopSlabChainsDownwardRepeatedly(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 6, 2));
+        BlockPos firstFence = loweredSlab.below();
+        BlockPos[] chain = new BlockPos[]{
+                firstFence,
+                firstFence.offset(0, -1, 0),
+                firstFence.offset(0, -2, 0),
+                firstFence.offset(0, -3, 0)
+        };
+
+        world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        assertSlabDy(ctx, world, loweredSlab, -0.5d,
+                "P26 fence repeated-chain setup: anchored top slab must render in the visible lower half");
+
+        for (BlockPos fencePos : chain) {
+            world.setBlock(fencePos.south(), Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState(), Block.UPDATE_ALL);
+        }
+
+        Player firstPlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(2, 5, 1)));
+        BlockPos placed = placeBlockViaAndFindChangedBlock(
+                ctx,
+                firstPlayer,
+                loweredSlab,
+                Direction.DOWN,
+                loweredTopSlabVisibleDownHit(loweredSlab),
+                Blocks.BIRCH_FENCE);
+        ctx.assertTrue(placed.equals(firstFence),
+                "P26 fence repeated-chain WYSIWYG: first fence landed at " + shortPos(placed)
+                        + " not under the clicked lowered slab " + shortPos(firstFence));
+
+        for (int i = 1; i < chain.length; i++) {
+            Player chainPlayer = mockPlayerNear(ctx, chain[i - 1].east());
+            BlockPos lowerPlaced = placeBlockViaAndFindChangedBlock(
+                    ctx,
+                    chainPlayer,
+                    chain[i - 1],
+                    Direction.DOWN,
+                    new Vec3(chain[i - 1].getX() + 0.5d, chain[i - 1].getY(), chain[i - 1].getZ() + 0.5d),
+                    Blocks.BIRCH_FENCE);
+            ctx.assertTrue(lowerPlaced.equals(chain[i]),
+                    "P26 fence repeated-chain WYSIWYG: depth " + i + " fence landed at "
+                            + shortPos(lowerPlaced) + " not below previous link " + shortPos(chain[i]));
+        }
+
+        StringBuilder dySummary = new StringBuilder();
+        StringBuilder frozenSummary = new StringBuilder();
+        StringBuilder southSummary = new StringBuilder();
+        StringBuilder touchSummary = new StringBuilder();
+        for (int i = 0; i < chain.length; i++) {
+            BlockPos fencePos = chain[i];
+            BlockState state = world.getBlockState(fencePos);
+            ctx.assertTrue(state.is(Blocks.BIRCH_FENCE),
+                    "P26 fence repeated-chain WYSIWYG: depth " + i + " expected birch fence at "
+                            + shortPos(fencePos) + ", got " + state);
+            assertBlockDy(ctx, world, fencePos, Blocks.BIRCH_FENCE, 0.0d,
+                    "P26 fence repeated-chain WYSIWYG: depth " + i
+                            + " must preserve player-authored vanilla dy=0");
+            ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, fencePos),
+                    "P26 fence repeated-chain WYSIWYG: depth " + i + " must be FROZEN_FLAT");
+            ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, fencePos),
+                    "P26 fence repeated-chain WYSIWYG: depth " + i + " must not be anchored lowered");
+            ctx.assertTrue(state.getValue(CrossCollisionBlock.SOUTH),
+                    "P26 fence repeated-chain WYSIWYG: depth " + i
+                            + " must keep same-height stripped-log connection");
+            if (i > 0) {
+                AABB upperBounds = world.getBlockState(chain[i - 1])
+                        .getShape(world, chain[i - 1], CollisionContext.empty())
+                        .bounds();
+                AABB lowerBounds = state
+                        .getShape(world, fencePos, CollisionContext.empty())
+                        .bounds();
+                double upperMinY = chain[i - 1].getY() + upperBounds.minY;
+                double lowerMaxY = fencePos.getY() + lowerBounds.maxY;
+                boolean verticalTouch = lowerMaxY >= upperMinY - MC1211_SERVER_STATE_EPSILON;
+                ctx.assertTrue(verticalTouch,
+                        "P26 fence repeated-chain WYSIWYG: depth " + i
+                                + " must visually chain to previous link; lowerMaxY="
+                                + lowerMaxY + " upperMinY=" + upperMinY);
+                if (touchSummary.length() > 0) {
+                    touchSummary.append(',');
+                }
+                touchSummary.append(i).append('=').append(verticalTouch);
+            }
+            if (dySummary.length() > 0) {
+                dySummary.append(',');
+                frozenSummary.append(',');
+                southSummary.append(',');
+            }
+            dySummary.append(i).append('=').append(text(SlabSupport.getYOffset(world, fencePos, state)));
+            frozenSummary.append(i).append('=').append(SlabAnchorAttachment.isFrozenFlat(world, fencePos));
+            southSummary.append(i).append('=').append(state.getValue(CrossCollisionBlock.SOUTH));
+        }
+
+        System.out.println("[NEOFORGE_P26_FENCE_MULTI_DEPTH_CHAIN_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " chain0=" + shortPos(chain[0])
+                + " chain1=" + shortPos(chain[1])
+                + " chain2=" + shortPos(chain[2])
+                + " chain3=" + shortPos(chain[3])
+                + " dys=" + dySummary
+                + " frozenFlat=" + frozenSummary
+                + " southLogConnections=" + southSummary
+                + " verticalTouches=" + touchSummary
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_MULTI_DEPTH_CHAIN_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_top_slab_repeated_downward_chain_wysiwyg");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void bottomFenceInFlatChainConnectsToAdjacentFullBlockColumn(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 6, 2));
+        BlockPos firstFence = loweredSlab.below();
+        BlockPos[] chain = new BlockPos[]{
+                firstFence,
+                firstFence.offset(0, -1, 0),
+                firstFence.offset(0, -2, 0),
+                firstFence.offset(0, -3, 0)
+        };
+
+        world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        assertSlabDy(ctx, world, loweredSlab, -0.5d,
+                "P26 fence bottom/full-block setup: anchored top slab must render in the visible lower half");
+
+        for (BlockPos fencePos : chain) {
+            world.setBlock(fencePos.west(), Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+        }
+
+        Player firstPlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(2, 5, 1)));
+        BlockPos placed = placeBlockViaAndFindChangedBlock(
+                ctx,
+                firstPlayer,
+                loweredSlab,
+                Direction.DOWN,
+                loweredTopSlabVisibleDownHit(loweredSlab),
+                Blocks.BIRCH_FENCE);
+        ctx.assertTrue(placed.equals(firstFence),
+                "P26 fence bottom/full-block WYSIWYG: first fence landed at " + shortPos(placed)
+                        + " not under the clicked lowered slab " + shortPos(firstFence));
+
+        for (int i = 1; i < chain.length; i++) {
+            Player chainPlayer = mockPlayerNear(ctx, chain[i - 1].east());
+            BlockPos lowerPlaced = placeBlockViaAndFindChangedBlock(
+                    ctx,
+                    chainPlayer,
+                    chain[i - 1],
+                    Direction.DOWN,
+                    new Vec3(chain[i - 1].getX() + 0.5d, chain[i - 1].getY(), chain[i - 1].getZ() + 0.5d),
+                    Blocks.BIRCH_FENCE);
+            ctx.assertTrue(lowerPlaced.equals(chain[i]),
+                    "P26 fence bottom/full-block WYSIWYG: depth " + i + " fence landed at "
+                            + shortPos(lowerPlaced) + " not below previous link " + shortPos(chain[i]));
+        }
+
+        StringBuilder westSummary = new StringBuilder();
+        for (int i = 0; i < chain.length; i++) {
+            BlockPos fencePos = chain[i];
+            BlockState state = world.getBlockState(fencePos);
+            ctx.assertTrue(state.is(Blocks.BIRCH_FENCE),
+                    "P26 fence bottom/full-block WYSIWYG: depth " + i + " expected birch fence at "
+                            + shortPos(fencePos) + ", got " + state);
+            assertBlockDy(ctx, world, fencePos, Blocks.BIRCH_FENCE, 0.0d,
+                    "P26 fence bottom/full-block WYSIWYG: depth " + i
+                            + " must preserve player-authored vanilla dy=0");
+            ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, fencePos),
+                    "P26 fence bottom/full-block WYSIWYG: depth " + i + " must be FROZEN_FLAT");
+            ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, fencePos),
+                    "P26 fence bottom/full-block WYSIWYG: depth " + i + " must not be anchored lowered");
+            ctx.assertTrue(state.getValue(CrossCollisionBlock.WEST),
+                    "P26 fence bottom/full-block WYSIWYG: depth " + i
+                            + " must keep the legal side connection to the full block on its left");
+            AABB bounds = state.getShape(world, fencePos, CollisionContext.empty()).bounds();
+            ctx.assertTrue(bounds.minX <= MC1211_SERVER_STATE_EPSILON,
+                    "P26 fence bottom/full-block WYSIWYG: depth " + i
+                            + " outline must extend west to the adjacent full block; minX=" + bounds.minX);
+            if (westSummary.length() > 0) {
+                westSummary.append(',');
+            }
+            westSummary.append(i).append('=').append(state.getValue(CrossCollisionBlock.WEST))
+                    .append('@').append(text(bounds.minX));
+        }
+
+        BlockPos bottomFence = chain[chain.length - 1];
+        BlockState bottomState = world.getBlockState(bottomFence);
+        System.out.println("[NEOFORGE_P26_FENCE_BOTTOM_FULL_BLOCK_COLUMN_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " bottomFence=" + shortPos(bottomFence)
+                + " leftFullBlock=" + shortPos(bottomFence.west())
+                + " bottomWest=" + bottomState.getValue(CrossCollisionBlock.WEST)
+                + " bottomDy=" + text(SlabSupport.getYOffset(world, bottomFence, bottomState))
+                + " bottomFrozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, bottomFence)
+                + " westConnections=" + westSummary
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_BOTTOM_FULL_BLOCK_COLUMN_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_flat_fence_chain_bottom_connects_adjacent_full_block_column");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void staleAnchoredFenceBelowFlatNoSnapRootStaysFlat(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 6, 2));
+        BlockPos flatRootFence = loweredSlab.below();
+        BlockPos staleAnchoredFence = flatRootFence.below();
+
+        world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        assertSlabDy(ctx, world, loweredSlab, -0.5d,
+                "P26 fence stale-chain setup: anchored top slab must render in the visible lower half");
+
+        world.setBlock(flatRootFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, flatRootFence),
+                "P26 fence stale-chain setup: root fence intentionally mirrors an old live save with no FROZEN_FLAT");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, flatRootFence),
+                "P26 fence stale-chain setup: root fence should rely on no-snap geometry, not an anchor");
+        assertBlockDy(ctx, world, flatRootFence, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence stale-chain setup: direct under-slab connector root must be flat even without marker");
+
+        world.setBlock(staleAnchoredFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(staleAnchoredFence);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, staleAnchoredFence, world.getBlockState(staleAnchoredFence));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, staleAnchoredFence),
+                "P26 fence stale-chain setup: descendant intentionally carries a stale lowered anchor");
+        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, staleAnchoredFence),
+                "P26 fence stale-chain setup: stale descendant intentionally has no FROZEN_FLAT marker");
+        assertBlockDy(ctx, world, staleAnchoredFence, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence stale-chain WYSIWYG: descendant below a flat no-snap root must ignore stale lowered anchor");
+
+        System.out.println("[NEOFORGE_P26_FENCE_STALE_ANCHOR_FLAT_CHAIN_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " root=" + shortPos(flatRootFence)
+                + " rootDy=" + text(SlabSupport.getYOffset(world, flatRootFence, world.getBlockState(flatRootFence)))
+                + " rootFrozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, flatRootFence)
+                + " descendant=" + shortPos(staleAnchoredFence)
+                + " descendantDy=" + text(SlabSupport.getYOffset(world, staleAnchoredFence, world.getBlockState(staleAnchoredFence)))
+                + " descendantAnchored=" + SlabAnchorAttachment.isAnchored(world, staleAnchoredFence)
+                + " descendantFrozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, staleAnchoredFence)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_STALE_ANCHOR_FLAT_CHAIN_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_stale_anchored_fence_descendant_under_no_snap_root");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void useOnFenceUnderAnchoredLoweredTopSlabIgnoresLoweredFenceBelowForFlatLane(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos underSlabFence = loweredSlab.below();
+        BlockPos adjacentFence = underSlabFence.north();
+        BlockPos adjacentFenceSlab = adjacentFence.above();
+        BlockPos adjacentLog = underSlabFence.south();
+        BlockPos loweredFenceBelow = underSlabFence.below();
+
+        world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        assertSlabDy(ctx, world, loweredSlab, -0.5d,
+                "P26 fence/live repro setup: clicked top slab must render in the lowered visible lane");
+
+        world.setBlock(adjacentFenceSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(adjacentFenceSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, adjacentFenceSlab, world.getBlockState(adjacentFenceSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        world.setBlock(adjacentFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, adjacentFence, world.getBlockState(adjacentFence));
+        assertBlockDy(ctx, world, adjacentFence, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence/live repro setup: same-height under-slab neighbor must be flat");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, adjacentFence),
+                "P26 fence/live repro setup: same-height under-slab neighbor must be FROZEN_FLAT");
+
+        world.setBlock(adjacentLog, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(loweredFenceBelow.below(), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(loweredFenceBelow, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
+        double loweredFenceBelowDy = SlabSupport.getYOffset(world, loweredFenceBelow, world.getBlockState(loweredFenceBelow));
+        ctx.assertTrue(loweredFenceBelowDy < -MC1211_SERVER_STATE_EPSILON,
+                "P26 fence/live repro setup: lower fence must be a lowered/stale connector source; dy="
+                        + loweredFenceBelowDy);
+
+        Player fencePlayer = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(2, 2, 1)));
+        BlockPos placed = placeBlockViaAndFindChangedBlock(
+                ctx,
+                fencePlayer,
+                loweredSlab,
+                Direction.DOWN,
+                loweredTopSlabVisibleDownHit(loweredSlab),
+                Blocks.BIRCH_FENCE);
+        ctx.assertTrue(placed.equals(underSlabFence),
+                "P26 fence/live repro WYSIWYG: fence landed at " + shortPos(placed)
+                        + " not under the clicked lowered slab " + shortPos(underSlabFence));
+
+        BlockState placedState = world.getBlockState(placed);
+        assertBlockDy(ctx, world, placed, Blocks.BIRCH_FENCE, 0.0d,
+                "P26 fence/live repro WYSIWYG: lowered fence below must not pull an under-slab placement down");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, placed),
+                "P26 fence/live repro WYSIWYG: fresh under-slab fence must freeze flat");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, placed),
+                "P26 fence/live repro WYSIWYG: fresh under-slab fence must not be anchored lowered");
+        ctx.assertTrue(placedState.getValue(CrossCollisionBlock.NORTH),
+                "P26 fence/live repro WYSIWYG: fresh flat fence must connect to the same-height under-slab fence");
+        ctx.assertTrue(placedState.getValue(CrossCollisionBlock.SOUTH),
+                "P26 fence/live repro WYSIWYG: fresh flat fence must retain the adjacent stripped-log connection");
+
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_TOP_SLAB_IGNORES_LOWERED_FENCE_BELOW_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " placed=" + shortPos(placed)
+                + " northFence=" + shortPos(adjacentFence)
+                + " southLog=" + shortPos(adjacentLog)
+                + " loweredFenceBelow=" + shortPos(loweredFenceBelow)
+                + " north=" + placedState.getValue(CrossCollisionBlock.NORTH)
+                + " south=" + placedState.getValue(CrossCollisionBlock.SOUTH)
+                + " fenceDy=" + text(SlabSupport.getYOffset(world, placed, placedState))
+                + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, placed)
+                + " anchored=" + SlabAnchorAttachment.isAnchored(world, placed)
+                + " loweredFenceBelowDy=" + text(loweredFenceBelowDy)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_FENCE_UNDER_TOP_SLAB_IGNORES_LOWERED_FENCE_BELOW_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_fence_under_lowered_top_slab_flat_lane_ignores_lowered_fence_below");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void staleFenceUnderAnchoredLoweredTopSlabLogConnectorKeepsSouthRuntimeShape(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos underSlabFence = loweredSlab.below();
+        BlockPos adjacentLog = underSlabFence.south();
+
+        world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
+        SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
+        assertSlabDy(ctx, world, loweredSlab, -0.5d,
+                "P26 stale fence/log setup: anchored top slab must render in the visible lower half");
+
+        world.setBlock(adjacentLog, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState(), Block.UPDATE_CLIENTS);
+        BlockState staleFenceState = Blocks.BIRCH_FENCE.defaultBlockState()
+                .setValue(CrossCollisionBlock.SOUTH, true);
+        world.setBlock(underSlabFence, staleFenceState, Block.UPDATE_CLIENTS);
+        BlockState savedState = world.getBlockState(underSlabFence);
+        ctx.assertTrue(savedState.hasProperty(CrossCollisionBlock.SOUTH)
+                        && savedState.getValue(CrossCollisionBlock.SOUTH),
+                "P26 stale fence/log setup: saved repro fence must retain stale south=true");
+
+        VoxelShape runtimeShape = savedState.getShape(world, underSlabFence, CollisionContext.empty());
+        AABB bounds = runtimeShape.bounds();
+        ctx.assertTrue(bounds.maxZ > 0.625d + MC1211_SERVER_STATE_EPSILON,
+                "P26 stale fence/log WYSIWYG: runtime outline must keep legitimate south connector arm; maxZ="
+                        + bounds.maxZ);
+
+        System.out.println("[NEOFORGE_P26_STALE_FENCE_UNDER_TOP_SLAB_LOG_SHAPE_ROW]"
+                + " slab=" + shortPos(loweredSlab)
+                + " slabState=" + world.getBlockState(loweredSlab)
+                + " slabDy=" + text(SlabSupport.getYOffset(world, loweredSlab, world.getBlockState(loweredSlab)))
+                + " fence=" + shortPos(underSlabFence)
+                + " savedSouth=" + savedState.getValue(CrossCollisionBlock.SOUTH)
+                + " adjacentLog=" + shortPos(adjacentLog)
+                + " shapeMaxZ=" + text(bounds.maxZ)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_STALE_FENCE_UNDER_TOP_SLAB_LOG_SHAPE_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_stale_saved_fence_under_lowered_top_slab_keeps_log_side_outline");
         ctx.succeed();
     }
 
@@ -1593,6 +2316,51 @@ public final class SlabbedLabFixtureTest {
                 + " frozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, placed));
         System.out.println("[NEOFORGE_P26_FROZEN_FLAT_SUMMARY]"
                 + " rows=1 green=1 red=0 proofScope=server_useon_frozen_flat_guard_only");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void unmarkedStoneSlabBesideLoweredBlockDoesNotInheritDy(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos loweredSource = support.above();
+        BlockPos slabPos = loweredSource.east();
+
+        world.setBlock(support, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        authorBlock(world, loweredSource, Blocks.STRIPPED_JUNGLE_LOG.defaultBlockState());
+        assertBlockDy(ctx, world, loweredSource, Blocks.STRIPPED_JUNGLE_LOG, -0.5d,
+                "slab inheritance setup: source log must be legally lowered by its own bottom slab");
+
+        world.setBlock(slabPos, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        BlockState slabState = world.getBlockState(slabPos);
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, slabPos),
+                "slab inheritance setup: red target must not carry an authored lowered anchor");
+        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, slabPos),
+                "slab inheritance setup: red target intentionally lacks frozen-flat marker like stale live worlds");
+        ctx.assertTrue(!SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, slabPos, slabState),
+                "slab inheritance setup: red target must not carry lowered-slab-carrier truth");
+        ctx.assertTrue(!SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, slabPos, slabState)
+                        && !SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, slabPos, slabState)
+                        && !SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, slabPos, slabState)
+                        && !SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, slabPos, slabState),
+                "slab inheritance setup: red target must not carry compound visible slab truth");
+
+        double slabDy = SlabSupport.getYOffset(world, slabPos, slabState);
+        ctx.assertTrue(Math.abs(slabDy) <= MC1211_SERVER_STATE_EPSILON,
+                "WYSIWYG inheritance law: unmarked stone slab beside a lowered block must stay dy=0, got "
+                        + slabDy);
+
+        System.out.println("[NEOFORGE_P26_SLAB_INHERITANCE_ROW]"
+                + " source=" + shortPos(loweredSource)
+                + " sourceDy=" + text(SlabSupport.getYOffset(world, loweredSource, world.getBlockState(loweredSource)))
+                + " slab=" + shortPos(slabPos)
+                + " slabDy=" + text(slabDy)
+                + " slabAnchored=" + SlabAnchorAttachment.isAnchored(world, slabPos)
+                + " slabFrozenFlat=" + SlabAnchorAttachment.isFrozenFlat(world, slabPos)
+                + " slabCarrier=" + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, slabPos, slabState)
+                + " result=GREEN");
+        System.out.println("[NEOFORGE_P26_SLAB_INHERITANCE_SUMMARY]"
+                + " rows=1 result=GREEN proofScope=server_stale_unmarked_slab_must_not_inherit_neighbor_dy");
         ctx.succeed();
     }
 
@@ -2193,6 +2961,46 @@ public final class SlabbedLabFixtureTest {
         return clickAbs.relative(face);
     }
 
+    private static BlockPos placeBlockViaAndFindChangedBlock(
+            GameTestHelper ctx,
+            Player player,
+            BlockPos clickAbs,
+            Direction face,
+            Vec3 hit,
+            Block block
+    ) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos[] candidates = new BlockPos[]{
+                clickAbs,
+                clickAbs.relative(face),
+                clickAbs.below(),
+                clickAbs.above(),
+                clickAbs.north(),
+                clickAbs.south(),
+                clickAbs.east(),
+                clickAbs.west()
+        };
+        BlockState[] before = new BlockState[candidates.length];
+        for (int i = 0; i < candidates.length; i++) {
+            before[i] = world.getBlockState(candidates[i]);
+        }
+
+        placeBlockVia(player, clickAbs, face, hit, block);
+
+        for (int i = 0; i < candidates.length; i++) {
+            BlockState after = world.getBlockState(candidates[i]);
+            if (after.is(block) && !before[i].is(block)) {
+                return candidates[i];
+            }
+        }
+        ctx.assertTrue(false,
+                "useOn did not place " + block.builtInRegistryHolder().key().location()
+                        + " near click=" + shortPos(clickAbs)
+                        + " face=" + face
+                        + " hit=" + hit);
+        return clickAbs.relative(face);
+    }
+
     private static Vec3 eastHit(BlockPos abs, double yOffset) {
         return new Vec3(abs.getX() + 1.0d, abs.getY() + yOffset, abs.getZ() + 0.5d);
     }
@@ -2207,6 +3015,10 @@ public final class SlabbedLabFixtureTest {
 
     private static Vec3 loweredUndersideHit(BlockPos abs) {
         return new Vec3(abs.getX() + 0.5d, abs.getY() - 0.5d, abs.getZ() + 0.5d);
+    }
+
+    private static Vec3 loweredTopSlabVisibleDownHit(BlockPos abs) {
+        return new Vec3(abs.getX() + 0.5d, abs.getY(), abs.getZ() + 0.5d);
     }
 
     private static Vec3 loweredTopSlabVisibleUpHit(BlockPos abs, double localX, double localZ) {

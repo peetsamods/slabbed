@@ -89,7 +89,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 && hitY <= targetPos.getY() + LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
-    private static UseOnContext slabbed$remapTrapdoorLoweredBottomSlabUnderside(UseOnContext context) {
+    private static UseOnContext slabbed$remapLoweredBottomSlabUnderside(UseOnContext context) {
         BlockPos targetPos = context.getClickedPos();
         BlockState targetState = context.getLevel().getBlockState(targetPos);
         if (!slabbed$isLoweredBottomSlabUndersideBand(context, targetPos, targetState)) {
@@ -123,10 +123,7 @@ public abstract class BlockItemPlacementIntentMixin {
             return SlabSupport.isCompoundVisibleSlabLaneOwner(context.getLevel(), pos, state)
                     && Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
         }
-        if (!SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), pos)) {
-            return false;
-        }
-        return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+        return SlabSupport.isCompoundVisibleFullBlockSource(context.getLevel(), pos, state);
     }
 
     private static boolean slabbed$isCompoundTopHit(UseOnContext context, BlockPos pos, BlockState state) {
@@ -185,10 +182,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getLevel(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getLevel(), sourcePos, sourceState) + 1.0d)
-                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+                && SlabSupport.isCompoundVisibleFullBlockSource(context.getLevel(), sourcePos, sourceState);
     }
 
     private static boolean slabbed$isCompoundVisibleSideUpperSlabResult(
@@ -209,10 +203,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getLevel(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getLevel(), sourcePos, sourceState) + 1.0d)
-                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+                && SlabSupport.isCompoundVisibleFullBlockSource(context.getLevel(), sourcePos, sourceState);
     }
 
     private static boolean slabbed$isCompoundVisibleSideDoubleSlabResult(
@@ -233,10 +224,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getLevel(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getLevel(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getLevel(), sourcePos, sourceState) + 1.0d)
-                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+                && SlabSupport.isCompoundVisibleFullBlockSource(context.getLevel(), sourcePos, sourceState);
     }
 
 
@@ -529,8 +517,6 @@ public abstract class BlockItemPlacementIntentMixin {
                 SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
             } else if (heldIsSlab && face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
                 SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above());
-            } else if (heldIsConnector && face == Direction.DOWN && clickedState.getBlock() instanceof SlabBlock) {
-                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.below());
             }
         }
     }
@@ -557,10 +543,38 @@ public abstract class BlockItemPlacementIntentMixin {
         COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
         BlockItem self = (BlockItem) (Object) this;
         boolean itemIsSlab = self.getBlock() instanceof SlabBlock;
+        boolean itemIsConnector = SlabSupport.isBeta35FenceWallVariantContactObject(self.getBlock().defaultBlockState());
         if (!itemIsSlab) {
+            if (itemIsConnector) {
+                UseOnContext remappedConnectorContext =
+                        slabbed$remapLoweredBottomSlabUnderside(context);
+                if (remappedConnectorContext != context) {
+                    slabbed$recordRemapAttempt(
+                            context,
+                            false,
+                            true,
+                            false,
+                            false,
+                            false,
+                            SlabSupport.getYOffset(
+                                    context.getLevel(),
+                                    context.getClickedPos(),
+                                    context.getLevel().getBlockState(context.getClickedPos())),
+                            false,
+                            true,
+                            "connector_lowered_bottom_slab_underside",
+                            remappedConnectorContext.getClickLocation(),
+                            Direction.DOWN,
+                            "connector_lowered_bottom_slab_underside");
+                    return slabbed$inspectReturn(
+                            context,
+                            remappedConnectorContext,
+                            "connector_lowered_bottom_slab_underside");
+                }
+            }
             if (self.getBlock() instanceof TrapDoorBlock) {
                 UseOnContext remappedTrapdoorContext =
-                        slabbed$remapTrapdoorLoweredBottomSlabUnderside(context);
+                        slabbed$remapLoweredBottomSlabUnderside(context);
                 if (remappedTrapdoorContext != context) {
                     slabbed$recordRemapAttempt(
                             context,

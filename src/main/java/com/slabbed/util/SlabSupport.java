@@ -648,21 +648,20 @@ public final class SlabSupport {
     }
 
     /**
-     * True if {@code neighborState} is a fence/wall/pane sitting at a different visual height
-     * than {@code state} — i.e. one was lowered onto a slab and the other was not. Such a pair
-     * must stay as single posts instead of drawing a connector arm across the height step
-     * (the "split" / illegal fence connection). Cross-family joins are left alone because the
-     * neighbour is not a connecting block here.
+     * True if a same-family connector arm would visually advertise the wrong owner.
+     * Height-step joins are broken, but ordinary solid side owners such as logs remain
+     * vanilla-legal: WYSIWYG controls where the fence is authored, not whether a placed
+     * fence may connect to its neighbor.
      */
     public static boolean isSteppedConnectingNeighbor(BlockGetter world, BlockPos pos, BlockState state,
                                                       BlockPos neighborPos, BlockState neighborState) {
         Block neighbor = neighborState.getBlock();
-        if (!(neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof IronBarsBlock)) {
-            return false;
+        if (neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof IronBarsBlock) {
+            double selfDy = connectingBlockVisualDy(world, pos, state);
+            double neighborDy = connectingBlockVisualDy(world, neighborPos, neighborState);
+            return Math.abs(selfDy - neighborDy) > 1.0e-6;
         }
-        double selfDy = connectingBlockVisualDy(world, pos, state);
-        double neighborDy = connectingBlockVisualDy(world, neighborPos, neighborState);
-        return Math.abs(selfDy - neighborDy) > 1.0e-6;
+        return false;
     }
 
     public static boolean isBeta35FenceGateContactObject(BlockState state) {
@@ -1389,10 +1388,7 @@ public final class SlabSupport {
             return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
                     CompoundSlabRemapDecision.rejected(sourcePos, null, null, "missing_context"));
         }
-        boolean compoundFullBlockSource = !(sourceState.getBlock() instanceof SlabBlock)
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos)
-                && Math.abs(getYOffset(world, sourcePos, sourceState) + 1.0d) <= 1.0e-6d;
+        boolean compoundFullBlockSource = isCompoundVisibleFullBlockSource(world, sourcePos, sourceState);
         boolean compoundVisibleSlabLaneSource = sourceState.getBlock() instanceof SlabBlock
                 && isCompoundVisibleSlabLaneOwner(world, sourcePos, sourceState)
                 && Math.abs(getYOffset(world, sourcePos, sourceState) + 1.0d) <= 1.0e-6d;
@@ -1623,6 +1619,15 @@ public final class SlabSupport {
     private static boolean isMarkedCompoundVisibleSideSlab(BlockGetter world, BlockPos pos, BlockState state) {
         return SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state);
+    }
+
+    public static boolean isCompoundVisibleFullBlockSource(BlockGetter world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && state != null
+                && !(state.getBlock() instanceof SlabBlock)
+                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, pos, state)
+                && Math.abs(getYOffset(world, pos, state) + 1.0d) <= 1.0e-6d;
     }
 
     private static boolean isPersistentVisibleCompoundOwner(BlockGetter world, BlockPos pos, BlockState state) {
@@ -1910,7 +1915,56 @@ public final class SlabSupport {
                         || state.getBlock() instanceof IronBarsBlock)
                 && !(state.getBlock() instanceof EntityBlock)
                 && state.getFluidState().isEmpty()
+                && !isNoSnapConnectorFlatLane(world, pos, state)
                 && world.getBlockState(pos.below()).isAir();
+    }
+
+    private static boolean isNoSnapConnectorUnderLoweredSlab(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null
+                || pos == null
+                || !isBeta35FenceWallVariantContactObject(state)
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        BlockPos abovePos = pos.above();
+        BlockState above = world.getBlockState(abovePos);
+        return above != null
+                && above.getBlock() instanceof SlabBlock
+                && above.hasProperty(SlabBlock.TYPE)
+                && above.getFluidState().isEmpty()
+                && !Double.isNaN(loweredSlabMagnitude(world, abovePos, above));
+    }
+
+    private static boolean isNoSnapConnectorFlatLane(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null
+                || pos == null
+                || !isBeta35FenceWallVariantContactObject(state)
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        BlockPos cursor = pos;
+        BlockState cursorState = state;
+        for (int depth = 0; depth < MAX_CHAIN_DEPTH; depth++) {
+            if (isNoSnapConnectorUnderLoweredSlab(world, cursor, cursorState)) {
+                return true;
+            }
+            BlockPos abovePos = cursor.above();
+            BlockState above = world.getBlockState(abovePos);
+            if (!isBeta35FenceWallVariantContactObject(above) || !isSameConnectorFlatLaneFamily(state, above)) {
+                return false;
+            }
+            cursor = abovePos;
+            cursorState = above;
+        }
+        return false;
+    }
+
+    private static boolean isSameConnectorFlatLaneFamily(BlockState state, BlockState other) {
+        Block block = state.getBlock();
+        Block otherBlock = other.getBlock();
+        return (block instanceof FenceBlock && otherBlock instanceof FenceBlock)
+                || (block instanceof WallBlock && otherBlock instanceof WallBlock)
+                || (block instanceof IronBarsBlock && otherBlock instanceof IronBarsBlock);
     }
 
     private static double cantileverLoweredConnectingMagnitude(BlockGetter world, BlockPos pos, BlockState state) {
@@ -1954,6 +2008,7 @@ public final class SlabSupport {
 
     private static double loweredSupportedConnectingMagnitude(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isBeta35FenceWallVariantContactObject(state)
+                || isNoSnapConnectorFlatLane(world, pos, state)
                 || isCantileverConnectingCandidate(world, pos, state)) {
             return Double.NaN;
         }
@@ -2094,9 +2149,6 @@ public final class SlabSupport {
         while (!queue.isEmpty() && explored < MAX_CHAIN_DEPTH) {
             BlockPos cursor = queue.removeFirst();
             explored++;
-            if (hasLoweredSolidSideSupport(world, cursor)) {
-                return true;
-            }
 
             BlockState cursorState = world.getBlockState(cursor);
             if (!(cursorState.getBlock() instanceof SlabBlock) || !cursorState.hasProperty(SlabBlock.TYPE)) {
@@ -2105,9 +2157,8 @@ public final class SlabSupport {
             if (hasVanillaFullBlockSupportBelow(world, cursor)) {
                 continue;
             }
-            if (!cursor.equals(slabPos)
-                    && isCompatibleLoweredSlabLane(slabState, cursorState)
-                    && isLoweredSlabLaneOwnerForSideInheritance(world, cursor, cursorState)) {
+            if (isCompatibleLoweredSlabLane(slabState, cursorState)
+                    && hasExplicitLoweredSlabLaneAuthority(world, cursor, cursorState)) {
                 return true;
             }
 
@@ -2148,6 +2199,14 @@ public final class SlabSupport {
             BlockPos pos,
             BlockState state
     ) {
+        return hasExplicitLoweredSlabLaneAuthority(world, pos, state);
+    }
+
+    private static boolean hasExplicitLoweredSlabLaneAuthority(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state
+    ) {
         return world != null
                 && pos != null
                 && state != null
@@ -2156,8 +2215,27 @@ public final class SlabSupport {
                 && state.getFluidState().isEmpty()
                 && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
-                        || hasLoweredSolidSideSupport(world, pos)
-                        || hasLoweredCarrierBelow(world, pos));
+                        || SlabAnchorAttachment.isAnchored(world, pos)
+                        || hasLoweredCarrierBelow(world, pos)
+                        || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
+                        || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)
+                        || SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state));
+    }
+
+    public static boolean hasLoweredSideLaneCarrierAuthoringSupport(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        return world != null
+                && pos != null
+                && state != null
+                && state.getBlock() instanceof SlabBlock
+                && state.hasProperty(SlabBlock.TYPE)
+                && state.getFluidState().isEmpty()
+                && !isCompoundVisibleOwnerTopSlab(world, pos, state)
+                && !hasVanillaFullBlockSupportBelow(world, pos)
+                && hasLoweredSolidSideSupport(world, pos);
     }
 
     private static boolean isAdjacentSideSlabLowered(BlockGetter world, BlockPos slabPos, BlockState slabState) {
@@ -2242,14 +2320,6 @@ public final class SlabSupport {
                 }
                 return -0.5;
             }
-            if (state.getFluidState().isEmpty()
-                    && world.getBlockState(pos.below()).isAir()
-                    && !isCompoundVisibleOwnerTopSlab(world, pos, state)) {
-                double sideMagnitude = adjacentLoweredSideMagnitude(world, pos);
-                if (!Double.isNaN(sideMagnitude)) {
-                    return sideMagnitude;
-                }
-            }
             BlockPos belowPos = pos.below();
             BlockState below = world.getBlockState(belowPos);
             Block belowBlock = below.getBlock();
@@ -2267,6 +2337,14 @@ public final class SlabSupport {
                     && isAdjacentSideSlabLowered(world, pos, state)) {
                 return -0.5;
             }
+        }
+
+        // WYSIWYG no-snap lane: a connector authored directly under a lowered slab,
+        // plus same-family connector descendants in that vertical lane, stay at the
+        // vanilla grid height even if stale anchors or old lowered connectors would
+        // otherwise pull them through the stacked-fence contact path.
+        if (isNoSnapConnectorFlatLane(world, pos, state)) {
+            return 0.0;
         }
 
         // Persistent slab-anchor: an ordinary FB placed directly on a bottom slab is
@@ -2366,9 +2444,11 @@ public final class SlabSupport {
             return -0.5;
         }
 
-        double connectingMagnitude = cantileverLoweredConnectingMagnitude(world, pos, state);
-        if (!Double.isNaN(connectingMagnitude)) {
-            return connectingMagnitude;
+        if (!isNoSnapConnectorFlatLane(world, pos, state)) {
+            double connectingMagnitude = cantileverLoweredConnectingMagnitude(world, pos, state);
+            if (!Double.isNaN(connectingMagnitude)) {
+                return connectingMagnitude;
+            }
         }
 
         if (isFloorTorch(state)) {

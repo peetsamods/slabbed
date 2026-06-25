@@ -1048,14 +1048,14 @@ public final class SlabAnchorAttachment {
         if (sourceState.getBlock() instanceof SlabBlock) {
             return SlabSupport.isCompoundVisibleSlabLaneOwner(world, sourcePos, sourceState);
         }
-        return isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
-                && isCompoundFullBlockAnchor(world, sourcePos);
+        return SlabSupport.isCompoundVisibleFullBlockSource(world, sourcePos, sourceState);
     }
 
     public static boolean qualifiesForPersistentLoweredSlabCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         return isPersistentLoweredSlabCarrierState(state)
                 && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && (SlabSupport.isLoweredSideLaneSlabCarrier(world, pos, state)
+                || SlabSupport.hasLoweredSideLaneCarrierAuthoringSupport(world, pos, state)
                 || qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(world, pos, state)
                 || qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(world, pos, state));
     }

@@ -15,8 +15,13 @@ public final class TerrainSlabsCompat {
     private TerrainSlabsCompat() {
     }
 
-    public static final String MOD_ID = "terrainslabs";
-    private static final boolean LOADED = ModList.get().isLoaded(MOD_ID);
+    public static final String MOD_ID = "terrain_slabs";
+    public static final String LEGACY_MOD_ID = "terrainslabs";
+    private static final boolean LOADED = isLoaded(MOD_ID) || isLoaded(LEGACY_MOD_ID);
+
+    public static boolean isLoaded() {
+        return LOADED;
+    }
 
     /** Returns true if slab offsets should be skipped for this state. */
     public static boolean shouldSkipOffset(BlockState state) {
@@ -26,7 +31,7 @@ public final class TerrainSlabsCompat {
 
         Block block = state.getBlock();
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
-        return id != null && MOD_ID.equals(id.getNamespace());
+        return isTerrainSlabsId(id);
     }
 
     /**
@@ -35,5 +40,14 @@ public final class TerrainSlabsCompat {
      */
     public static boolean shouldSkipSlabSupport(BlockState state) {
         return shouldSkipOffset(state);
+    }
+
+    private static boolean isTerrainSlabsId(ResourceLocation id) {
+        return id != null && (MOD_ID.equals(id.getNamespace()) || LEGACY_MOD_ID.equals(id.getNamespace()));
+    }
+
+    private static boolean isLoaded(String modId) {
+        ModList modList = ModList.get();
+        return modList != null && modList.isLoaded(modId);
     }
 }
