@@ -2,12 +2,14 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
-## 2026-06-24 - 0.4.2-beta.2+26.2 debug HUD correction candidate
+## 2026-06-24 - 0.4.2-beta.2+26.2 debug HUD correction complete
 
-- Current correction slice: player-facing builds must not start with the `[slabdy]` target-dy overlay visible.
+- Player-facing builds no longer start with the `[slabdy]` target-dy overlay visible.
 - Source fix: `SlabbedClientFlags.TARGET_DY_OVERLAY` now defaults off via `Boolean.getBoolean("slabbed.targetDyOverlay")`; `/slabdev debug on|off|toggle` explicitly controls the overlay in-game.
-- Version candidate: `0.4.2-beta.2+26.2`.
-- Proof pending in this slice: rebuild release jar, verify jar bytecode has no `"true"` default for `slabbed.targetDyOverlay`, stage only into the `SLABBED-MC 26.2` Modrinth profile, then commit/tag if proof is green.
+- Released version line in this root is now `0.4.2-beta.2+26.2`.
+- Proof passed: `./gradlew25 --no-daemon clean build -x runGameTest --console plain` built `build/libs/slabbed-0.4.2-beta.2+26.2.jar` (209343 bytes). Jar verification confirmed baked `fabric.mod.json` version `0.4.2-beta.2+26.2`, Minecraft target `26.2`, and bytecode with no `"true"` default for `slabbed.targetDyOverlay`.
+- Savepoint: HEAD `9cdf8b20` (`fix: gate debug HUD for 0.4.2 beta.2`) with tag `save/port-26-2-0-4-2-beta-2-debug-hud-off`.
+- Staging state: the verified jar SHA-256 `db8f9ff58a094576f355d68e02b600d34d321d8bb038d2f295dd7fc0888de9b5` is staged in the `SLABBED-MC 26.2` Modrinth profile, the previous `0.4.2-beta.1+26.2` jar is backed up under `mods/_codex-backups/debug-overlay-beta2-20260624-202915/`, and the same jar was copied to `/Users/joolmac/Desktop/Ready Jars/`.
 
 ## 2026-06-21 — source/docs re-aligned to rollback targeting baseline
 
