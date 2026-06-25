@@ -2,7 +2,11 @@ package com.slabbed.client;
 
 import com.slabbed.Slabbed;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.InvocationTargetException;
 
@@ -16,9 +20,32 @@ public final class SlabbedClient implements ClientModInitializer {
         initRuntimeDiagnostics("initBsFbLiveTraceClient", "BS/FB live trace client",
                 Boolean.getBoolean("slabbed.bsfb.live.trace"));
         initGapFillerOverlay();
-        // TargetDyOverlay renders via TargetDyHudMixin (Gui.extractRenderState); on by default.
+        initTargetDyCommand();
         initScreenshotCaptureService();
         initDyFingerprintDump();
+    }
+
+    private static void initTargetDyCommand() {
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+                dispatcher.register(ClientCommands.literal("slabdev")
+                        .then(ClientCommands.literal("debug")
+                                .executes(context -> setTargetDyOverlay(!TargetDyOverlay.isEnabled()))
+                                .then(ClientCommands.literal("on")
+                                        .executes(context -> setTargetDyOverlay(true)))
+                                .then(ClientCommands.literal("off")
+                                        .executes(context -> setTargetDyOverlay(false)))
+                                .then(ClientCommands.literal("toggle")
+                                        .executes(context -> setTargetDyOverlay(!TargetDyOverlay.isEnabled()))))));
+    }
+
+    private static int setTargetDyOverlay(boolean enabled) {
+        TargetDyOverlay.setEnabled(enabled);
+        Minecraft client = Minecraft.getInstance();
+        if (client.player != null) {
+            client.player.sendSystemMessage(Component.literal(
+                    "[slabdev] debug overlay: " + (enabled ? "on" : "off")));
+        }
+        return 1;
     }
 
     private static void initDyFingerprintDump() {

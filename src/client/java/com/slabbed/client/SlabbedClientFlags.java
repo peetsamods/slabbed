@@ -8,8 +8,9 @@ public final class SlabbedClientFlags {
 
     /**
      * Initial state of the /slabdy target-dy overlay; toggle in-game with /slabdy.
-     * Defaults ON (dev diagnostic); disable with -Dslabbed.targetDyOverlay=false.
+     * Defaults off for player-facing builds; enable with /slabdev debug on or
+     * -Dslabbed.targetDyOverlay=true.
      */
     public static final boolean TARGET_DY_OVERLAY =
-            Boolean.parseBoolean(System.getProperty("slabbed.targetDyOverlay", "true"));
+            Boolean.getBoolean("slabbed.targetDyOverlay");
 }
