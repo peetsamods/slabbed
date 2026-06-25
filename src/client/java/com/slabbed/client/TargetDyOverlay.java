@@ -25,8 +25,8 @@ import java.util.Locale;
  * set). 26.1.2 uses {@code GuiGraphicsExtractor} (the 26.x refactor of
  * {@code GuiGraphics}); text/fill are {@code text(...)} / {@code fill(...)}.
  *
- * <p>On by default (dev diagnostic); disable with
- * {@code -Dslabbed.targetDyOverlay=false}.
+ * <p>Off by default for player-facing builds; enable with
+ * {@code /slabdev debug on} or {@code -Dslabbed.targetDyOverlay=true}.
  */
 public final class TargetDyOverlay {
 
@@ -39,6 +39,10 @@ public final class TargetDyOverlay {
     public static boolean toggle() {
         enabled = !enabled;
         return enabled;
+    }
+
+    public static void setEnabled(boolean enabled) {
+        TargetDyOverlay.enabled = enabled;
     }
 
     public static boolean isEnabled() {
