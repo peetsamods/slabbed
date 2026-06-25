@@ -42,6 +42,18 @@ public class BlockModelDyTranslateMixin {
         return ClientDy.dyFor(world, pos, state);
     }
 
+    private static void slabbed$pushWrapperContext(BakedModel model, BlockAndTintGetter world, BlockPos pos, BlockState state) {
+        if (model instanceof OffsetBlockStateModel) {
+            OffsetBlockStateModel.pushRenderContextFallback(world, pos, state);
+        }
+    }
+
+    private static void slabbed$popWrapperContext(BakedModel model) {
+        if (model instanceof OffsetBlockStateModel) {
+            OffsetBlockStateModel.popRenderContextFallback();
+        }
+    }
+
     @Inject(method = "tesselateBlock(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
             at = @At("HEAD"))
     private void slabbed$pushDy(BlockAndTintGetter world,
@@ -55,6 +67,7 @@ public class BlockModelDyTranslateMixin {
                                 long seed,
                                 int overlay,
                                 CallbackInfo ci) {
+        slabbed$pushWrapperContext(model, world, pos, state);
         double dy = slabbed$modelDy(model, world, pos, state);
         slabbed$recordTrace("tesselateBlock", world, pos, state, dy);
         if (dy == 0.0) {
@@ -78,10 +91,10 @@ public class BlockModelDyTranslateMixin {
                                int overlay,
                                CallbackInfo ci) {
         double dy = slabbed$modelDy(model, world, pos, state);
-        if (dy == 0.0) {
-            return;
+        if (dy != 0.0) {
+            matrices.popPose();
         }
-        matrices.popPose();
+        slabbed$popWrapperContext(model);
     }
 
     @Inject(method = "tesselateWithAO(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
@@ -97,6 +110,7 @@ public class BlockModelDyTranslateMixin {
                                       long seed,
                                       int overlay,
                                       CallbackInfo ci) {
+        slabbed$pushWrapperContext(model, world, pos, state);
         double dy = slabbed$modelDy(model, world, pos, state);
         slabbed$recordTrace("tesselateWithAO", world, pos, state, dy);
         if (dy == 0.0) {
@@ -120,10 +134,10 @@ public class BlockModelDyTranslateMixin {
                                      int overlay,
                                      CallbackInfo ci) {
         double dy = slabbed$modelDy(model, world, pos, state);
-        if (dy == 0.0) {
-            return;
+        if (dy != 0.0) {
+            matrices.popPose();
         }
-        matrices.popPose();
+        slabbed$popWrapperContext(model);
     }
 
     @Inject(method = "tesselateWithoutAO(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
@@ -139,6 +153,7 @@ public class BlockModelDyTranslateMixin {
                                     long seed,
                                     int overlay,
                                     CallbackInfo ci) {
+        slabbed$pushWrapperContext(model, world, pos, state);
         double dy = slabbed$modelDy(model, world, pos, state);
         slabbed$recordTrace("tesselateWithoutAO", world, pos, state, dy);
         if (dy == 0.0) {
@@ -162,9 +177,9 @@ public class BlockModelDyTranslateMixin {
                                    int overlay,
                                    CallbackInfo ci) {
         double dy = slabbed$modelDy(model, world, pos, state);
-        if (dy == 0.0) {
-            return;
+        if (dy != 0.0) {
+            matrices.popPose();
         }
-        matrices.popPose();
+        slabbed$popWrapperContext(model);
     }
 }

@@ -1,10 +1,12 @@
 package com.slabbed.client;
 
 import com.slabbed.Slabbed;
+import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedOffsetRaycast;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
@@ -50,6 +52,7 @@ public final class NeoForgeFenceGateClientProof {
     private static final double EPSILON = 1.0e-6d;
     private static final int FRESH_WORLD_DELAY_TICKS = 1_200;
     private static final int CLIENT_SYNC_DELAY_TICKS = 60;
+    private static final int RENDER_SAMPLE_TIMEOUT_TICKS = 120;
     private static final int MAX_TICKS = 2_400;
 
     private static boolean initialized;
@@ -62,6 +65,11 @@ public final class NeoForgeFenceGateClientProof {
     private static volatile ServerRow[] serverRows;
     private static volatile Throwable serverFailure;
     private static String worldSource = "unknown";
+    private static boolean renderSampleRequested;
+    private static int renderSampleRequestedTick;
+    private static BlockPos renderSamplePos;
+    private static RenderRow[] renderRows;
+    private static int renderSampleIndex;
 
     private NeoForgeFenceGateClientProof() {
     }
@@ -114,22 +122,64 @@ public final class NeoForgeFenceGateClientProof {
             return;
         }
 
+        ClientRow[] clientRows = new ClientRow[measuredRows.length];
+        for (int i = 0; i < measuredRows.length; i++) {
+            clientRows[i] = measureClientRow(client, measuredRows[i]);
+        }
+
+        RenderRow[] rowRenders = measureAllOrRequestRender(client, measuredRows, clientRows);
+        if (rowRenders == null) {
+            return;
+        }
+
         int green = 0;
         int red = 0;
         String firstRed = "none";
-        for (ServerRow row : measuredRows) {
-            ClientRow clientRow = measureClientRow(client, row);
-            if (clientRow.green()) {
+        for (int i = 0; i < measuredRows.length; i++) {
+            ServerRow row = measuredRows[i];
+            ClientRow clientRow = clientRows[i];
+            RenderRow rowRender = rowRenders[i];
+            boolean rowGreen = clientRow.green() && rowRender.greenOrNotMeasured();
+            if (rowGreen) {
                 green++;
             } else {
                 red++;
                 if ("none".equals(firstRed)) {
-                    firstRed = clientRow.reason();
+                    firstRed = clientRow.green() ? rowRender.reason() : clientRow.reason();
                 }
             }
-            logRow(row, clientRow);
+            logRow(row, clientRow, rowRender, rowGreen);
         }
         logSummaryAndStop(client, red == 0 ? "GREEN" : "RED", red == 0 ? "fence_gate_client_triad_green" : firstRed, green, red);
+    }
+
+    private static RenderRow[] measureAllOrRequestRender(Minecraft client, ServerRow[] rows, ClientRow[] clientRows) {
+        if (renderRows == null || renderRows.length != rows.length) {
+            renderRows = new RenderRow[rows.length];
+            renderSampleIndex = 0;
+            renderSampleRequested = false;
+            renderSamplePos = null;
+        }
+
+        while (renderSampleIndex < rows.length) {
+            RenderRow cached = renderRows[renderSampleIndex];
+            if (cached != null && cached.ready()) {
+                renderSampleIndex++;
+                renderSampleRequested = false;
+                renderSamplePos = null;
+                continue;
+            }
+
+            RenderRow measured = measureOrRequestRender(client, rows[renderSampleIndex], clientRows[renderSampleIndex]);
+            if (!measured.ready()) {
+                return null;
+            }
+            renderRows[renderSampleIndex] = measured;
+            renderSampleIndex++;
+            renderSampleRequested = false;
+            renderSamplePos = null;
+        }
+        return renderRows;
     }
 
     private static void maybeCreateFreshWorld(Minecraft client) {
@@ -302,9 +352,83 @@ public final class NeoForgeFenceGateClientProof {
                 reason);
     }
 
-    private static void logRow(ServerRow row, ClientRow client) {
+    private static RenderRow measureOrRequestRender(Minecraft client, ServerRow row, ClientRow clientRow) {
+        BakedModel proofModel = client.getBlockRenderer().getBlockModel(clientRow.objectState());
+        String proofModelClass = proofModel == null ? "null" : proofModel.getClass().getName();
+        boolean proofModelWrapped = proofModel instanceof OffsetBlockStateModel;
+        if (!proofModelWrapped) {
+            return RenderRow.ready(false, "render_model_not_wrapped", proofModelClass, false, OffsetBlockStateModel.FullMeshBoundsSample.missing());
+        }
+
+        if (!renderSampleRequested || renderSamplePos == null || !renderSamplePos.equals(row.objectPos())) {
+            renderSampleRequested = true;
+            renderSampleRequestedTick = ticks;
+            renderSamplePos = row.objectPos().immutable();
+            OffsetBlockStateModel.resetFullMeshBoundsSample(row.objectPos());
+            markRenderDirty(client, row.objectPos());
+            return RenderRow.waiting("render_sample_requested", proofModelClass, true);
+        }
+
+        OffsetBlockStateModel.FullMeshBoundsSample sample = OffsetBlockStateModel.snapshotFullMeshBoundsSample();
+        if (!sample.seen() && ticks - renderSampleRequestedTick < RENDER_SAMPLE_TIMEOUT_TICKS) {
+            if ((ticks - renderSampleRequestedTick) % 20 == 0) {
+                markRenderDirty(client, row.objectPos());
+            }
+            return RenderRow.waiting("waiting_for_fence_render_sample", proofModelClass, true);
+        }
+
+        boolean green = sample.seen()
+                && dyMatches(sample.dy())
+                && sample.verticesVisited() > 0
+                && renderBoundsShiftedByExpectedDy(sample);
+        String reason;
+        if (green) {
+            reason = "fence_model_bounds_green";
+        } else if (!sample.seen()) {
+            reason = "fence_render_sample_missing";
+        } else if (!dyMatches(sample.dy())) {
+            reason = "fence_render_dy_not_lowered";
+        } else if (sample.verticesVisited() <= 0) {
+            reason = "fence_render_vertices_missing";
+        } else if (!renderBoundsShiftedByExpectedDy(sample)) {
+            reason = "fence_model_bounds_not_shifted_by_expected_dy";
+        } else {
+            reason = "fence_model_unknown_mismatch";
+        }
+        return RenderRow.ready(green, reason, proofModelClass, true, sample);
+    }
+
+    private static boolean renderBoundsShiftedByExpectedDy(OffsetBlockStateModel.FullMeshBoundsSample sample) {
+        return Double.isFinite(sample.minBeforeY())
+                && Double.isFinite(sample.maxBeforeY())
+                && Double.isFinite(sample.minAfterY())
+                && Double.isFinite(sample.maxAfterY())
+                && Math.abs((sample.minAfterY() - sample.minBeforeY()) - EXPECTED_DY) <= EPSILON
+                && Math.abs((sample.maxAfterY() - sample.maxBeforeY()) - EXPECTED_DY) <= EPSILON;
+    }
+
+    private static void markRenderDirty(Minecraft client, BlockPos objectPos) {
+        if (client.player != null) {
+            client.player.setPos(objectPos.getX() + 0.5d, objectPos.getY() + 0.5d, objectPos.getZ() + 4.0d);
+            client.player.setYRot(180.0f);
+            client.player.setXRot(0.0f);
+        }
+        if (client.levelRenderer == null) {
+            return;
+        }
+        client.levelRenderer.setBlocksDirty(
+                objectPos.getX() - 1,
+                objectPos.getY() - 1,
+                objectPos.getZ() - 1,
+                objectPos.getX() + 1,
+                objectPos.getY() + 2,
+                objectPos.getZ() + 1);
+    }
+
+    private static void logRow(ServerRow row, ClientRow client, RenderRow render, boolean rowGreen) {
+        OffsetBlockStateModel.FullMeshBoundsSample sample = render.sample();
         Slabbed.LOGGER.info(
-                "[NEOFORGE_FENCE_GATE_CLIENT_TRIAD_ROW] route={} row={} supportPos={} objectPos={} supportState={} objectState={} serverDy={} clientDy={} outlineMinY={} targetDy={} finalOwner={} finalHitType={} finalFace={} finalHitVec={} outlineBox={} supportSynced={} objectSynced={} result={} reason={} worldSource={} diagnosticsOnly=true semanticsChanged=false releaseReady=false",
+                "[NEOFORGE_FENCE_GATE_CLIENT_TRIAD_ROW] route={} row={} supportPos={} objectPos={} supportState={} objectState={} serverDy={} clientDy={} outlineMinY={} targetDy={} finalOwner={} finalHitType={} finalFace={} finalHitVec={} outlineBox={} supportSynced={} objectSynced={} renderMeasured={} renderModelClass={} renderModelWrapped={} renderSampleSeen={} renderDy={} renderMinAfterY={} renderMaxAfterY={} renderVertices={} renderReason={} result={} reason={} worldSource={} diagnosticsOnly=true semanticsChanged=false releaseReady=false",
                 ROUTE,
                 row.name(),
                 formatPos(row.supportPos()),
@@ -322,8 +446,17 @@ public final class NeoForgeFenceGateClientProof {
                 client.outlineBox(),
                 client.supportSynced(),
                 client.objectSynced(),
-                client.green() ? "GREEN" : "RED",
-                client.reason(),
+                render.measured(),
+                render.proofModelClass(),
+                render.proofModelWrapped(),
+                sample.seen(),
+                formatDouble(sample.dy()),
+                formatDouble(sample.minAfterY()),
+                formatDouble(sample.maxAfterY()),
+                sample.verticesVisited(),
+                render.reason(),
+                rowGreen ? "GREEN" : "RED",
+                rowGreen ? "green" : (client.green() ? render.reason() : client.reason()),
                 worldSource);
     }
 
@@ -411,5 +544,37 @@ public final class NeoForgeFenceGateClientProof {
             boolean green,
             String reason
     ) {
+    }
+
+    private record RenderRow(
+            boolean ready,
+            boolean measured,
+            boolean green,
+            String reason,
+            String proofModelClass,
+            boolean proofModelWrapped,
+            OffsetBlockStateModel.FullMeshBoundsSample sample
+    ) {
+        static RenderRow waiting(String reason, String proofModelClass, boolean proofModelWrapped) {
+            return new RenderRow(false, true, false, reason, proofModelClass, proofModelWrapped, OffsetBlockStateModel.FullMeshBoundsSample.missing());
+        }
+
+        static RenderRow ready(
+                boolean green,
+                String reason,
+                String proofModelClass,
+                boolean proofModelWrapped,
+                OffsetBlockStateModel.FullMeshBoundsSample sample
+        ) {
+            return new RenderRow(true, true, green, reason, proofModelClass, proofModelWrapped, sample);
+        }
+
+        static RenderRow notMeasured() {
+            return new RenderRow(true, false, true, "not_measured", "n/a", false, OffsetBlockStateModel.FullMeshBoundsSample.missing());
+        }
+
+        boolean greenOrNotMeasured() {
+            return !measured || green;
+        }
     }
 }

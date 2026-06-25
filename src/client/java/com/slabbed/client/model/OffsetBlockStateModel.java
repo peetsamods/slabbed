@@ -29,8 +29,10 @@ import net.neoforged.neoforge.client.model.IQuadTransformer;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import net.neoforged.neoforge.client.model.data.ModelProperty;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -46,6 +48,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
 public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
     private static final ModelProperty<RenderContextInfo> SLABBED_RENDER_CONTEXT = new ModelProperty<>();
+    private static final ThreadLocal<Deque<RenderContextInfo>> SLABBED_RENDER_CONTEXT_FALLBACK =
+            new ThreadLocal<>();
     private static volatile BlockPos slabbed$tracePos = null;
     private static volatile RenderOffsetSample slabbed$lastTrace = RenderOffsetSample.missing();
     private static volatile BlockPos slabbed$modelDyOwnerTracePos = null;
@@ -75,6 +79,28 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
     }
 
     private record RenderContextInfo(BlockAndTintGetter view, BlockPos pos, BlockState state) {
+    }
+
+    public static void pushRenderContextFallback(BlockAndTintGetter view, BlockPos pos, BlockState state) {
+        if (view == null || pos == null || state == null) {
+            return;
+        }
+        Deque<RenderContextInfo> stack = SLABBED_RENDER_CONTEXT_FALLBACK.get();
+        if (stack == null) {
+            stack = new ArrayDeque<>();
+            SLABBED_RENDER_CONTEXT_FALLBACK.set(stack);
+        }
+        stack.push(new RenderContextInfo(view, pos.immutable(), state));
+    }
+
+    public static void popRenderContextFallback() {
+        Deque<RenderContextInfo> stack = SLABBED_RENDER_CONTEXT_FALLBACK.get();
+        if (stack != null && !stack.isEmpty()) {
+            stack.pop();
+        }
+        if (stack == null || stack.isEmpty()) {
+            SLABBED_RENDER_CONTEXT_FALLBACK.remove();
+        }
     }
 
     public record RenderOffsetSample(
@@ -257,7 +283,7 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
             RenderType renderType
     ) {
         List<BakedQuad> baseQuads = super.getQuads(state, side, random, modelData, renderType);
-        RenderContextInfo renderContext = modelData == null ? null : modelData.get(SLABBED_RENDER_CONTEXT);
+        RenderContextInfo renderContext = slabbed$renderContext(modelData);
         if (renderContext == null || state == null) {
             return baseQuads;
         }
@@ -270,6 +296,15 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
                 modelData,
                 renderType,
                 baseQuads);
+    }
+
+    private static RenderContextInfo slabbed$renderContext(ModelData modelData) {
+        RenderContextInfo fromModelData = modelData == null ? null : modelData.get(SLABBED_RENDER_CONTEXT);
+        if (fromModelData != null) {
+            return fromModelData;
+        }
+        Deque<RenderContextInfo> stack = SLABBED_RENDER_CONTEXT_FALLBACK.get();
+        return stack == null || stack.isEmpty() ? null : stack.peek();
     }
 
     private List<BakedQuad> slabbed$neoForgeQuads(
