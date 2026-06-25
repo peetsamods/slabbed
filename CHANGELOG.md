@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.4.2-beta.2+26.1.2] - MC 26.1.2 debug HUD release correction
+
+- Fixed an unintended player-facing debug HUD: the `[slabdy]` target-dy overlay now defaults off in normal builds.
+- Added an explicit client command for diagnostics: `/slabdev debug on`, `/slabdev debug off`, and `/slabdev debug toggle`.
+- The JVM opt-in `-Dslabbed.targetDyOverlay=true` still enables the overlay for dev/test runs.
+
 ## [0.4.2-beta.1+26.1.2] — MC 26.1.2 port
 
 This is the first official 26.1.2 Slabbed candidate on the `0.4.x` line. The 26.1.2 port originally branched from

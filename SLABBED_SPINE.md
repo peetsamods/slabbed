@@ -2,6 +2,13 @@
 
 This is the active operating spine for the dedicated Slabbed MC 26.1.2 port checkout. It is local to this tree and is not the phase19 Slabbed spine.
 
+## 2026-06-24 - 0.4.2-beta.2+26.1.2 debug HUD correction candidate
+
+- Current correction slice: player-facing builds must not start with the `[slabdy]` target-dy overlay visible.
+- Source fix: `SlabbedClientFlags.TARGET_DY_OVERLAY` now defaults off via `Boolean.getBoolean("slabbed.targetDyOverlay")`; `/slabdev debug on|off|toggle` explicitly controls the overlay in-game.
+- Version candidate: `0.4.2-beta.2+26.1.2`.
+- Proof pending in this slice: rebuild release jar, verify jar bytecode has no `"true"` default for `slabbed.targetDyOverlay`, stage only into the `TEST_ SLABBED 26.1.2` and `Fabric 26.1.2` Modrinth profiles, then commit/tag if proof is green.
+
 ## 2026-06-20 — 0.4.1 beta.1 pre-release savepoint
 
 Julia confirmed **`0.4.1-beta.1+26.1.2-port`** is the right target for this port line. The proof-only
