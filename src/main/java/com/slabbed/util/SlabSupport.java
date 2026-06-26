@@ -21,6 +21,7 @@ import net.minecraft.block.HangingSignBlock;
 import net.minecraft.block.LeverBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.PaneBlock;
+import net.minecraft.block.PillarBlock;
 import net.minecraft.block.PointedDripstoneBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.PowderSnowBlock;
@@ -833,6 +834,16 @@ public final class SlabSupport {
             return -0.5;
         }
 
+        // Same-block vertical pillar stacks (logs/stems) should render as one connected pillar.
+        // If the bottom pillar block is lowered onto a slab surface, upper blocks in that same
+        // vertical pillar share its dy, even if they were placed earlier and frozen flat. This is
+        // intentionally narrower than generic full-block chaining so ordinary terrain cubes keep
+        // the freeze/opaque-cube protections that prevent world holes.
+        double verticalPillarDy = verticalPillarStackDy(world, pos, state);
+        if (!Double.isNaN(verticalPillarDy)) {
+            return verticalPillarDy;
+        }
+
         // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a slab or
         // lowered carrier added under/beside it later can no longer pull it down (Julia's law: a
         // placed block must not autonomously move). Read before any geometric lowering below.
@@ -840,6 +851,15 @@ public final class SlabSupport {
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isFrozenFlat(world, pos)) {
             return 0.0;
+        }
+
+        // Opaque full cubes directly on a lowered vertical pillar (log/stem) share that pillar's
+        // dy so command-authored grass-on-log stacks stay visually connected. This is intentionally
+        // direct-support and pillar-only: it does not walk through arbitrary opaque terrain cubes,
+        // preserving the world-hole/DODO guard for stone-over-stone and natural terrain columns.
+        double verticalPillarCarrierDy = loweredVerticalPillarCarrierDy(world, pos, state);
+        if (!Double.isNaN(verticalPillarCarrierDy)) {
+            return verticalPillarCarrierDy;
         }
 
         // Terrain Slabs combining / mixed-slab compound: an object (or vanilla slab) resting on a
@@ -1163,6 +1183,62 @@ public final class SlabSupport {
             return -0.5d;
         }
         return 0.0d;
+    }
+
+    private static double verticalPillarStackDy(BlockView world, BlockPos pos, BlockState state) {
+        if (!isVerticalPillar(state)) {
+            return Double.NaN;
+        }
+
+        BlockPos cursor = pos.down();
+        BlockState cursorState = getBlockStateOrNull(world, cursor);
+        if (!isSameVerticalPillar(state, cursorState)) {
+            return Double.NaN;
+        }
+
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockPos nextPos = cursor.down();
+            BlockState nextState = getBlockStateOrNull(world, nextPos);
+            if (!isSameVerticalPillar(state, nextState)) {
+                double dy = getYOffsetInner(world, cursor, cursorState);
+                return dy < -1.0e-6d ? dy : Double.NaN;
+            }
+            cursor = nextPos;
+            cursorState = nextState;
+        }
+        return Double.NaN;
+    }
+
+    private static boolean isSameVerticalPillar(BlockState state, BlockState candidate) {
+        return candidate != null
+                && candidate.getBlock() == state.getBlock()
+                && isVerticalPillar(candidate);
+    }
+
+    private static boolean isVerticalPillar(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof PillarBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y;
+    }
+
+    private static double loweredVerticalPillarCarrierDy(BlockView world, BlockPos pos, BlockState state) {
+        if (state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isOpaqueFullCube()) {
+            return Double.NaN;
+        }
+
+        BlockPos belowPos = pos.down();
+        BlockState below = getBlockStateOrNull(world, belowPos);
+        if (!isVerticalPillar(below)) {
+            return Double.NaN;
+        }
+
+        double supportDy = getYOffsetInner(world, belowPos, below);
+        return supportDy < -1.0e-6d ? supportDy : Double.NaN;
     }
 
     /**
