@@ -135,6 +135,55 @@ public final class TerrainSlabsCompoundDyTest {
         ctx.complete();
     }
 
+    // GH #22: if an oak log is lowered onto a Terrain Slabs bottom surface while another
+    // oak log is already above it, the vertical log stack must share one visual dy.
+    // Otherwise the lower log drops to -0.5 while the upper log stays at 0, leaving the
+    // visible slab-log DODO gap captured live as slab-log-dodo-log.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void verticalOakLogStackOnTsSurfaceSharesLoweredDy(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos slab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        BlockPos lowerLog = slab.up();
+        BlockPos upperLog = slab.up(2);
+
+        w.setBlockState(slab, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(upperLog, Blocks.OAK_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(lowerLog, Blocks.OAK_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double lowerDy = SlabSupport.getYOffset(w, lowerLog, w.getBlockState(lowerLog));
+        double upperDy = SlabSupport.getYOffset(w, upperLog, w.getBlockState(upperLog));
+        ctx.assertTrue(Math.abs(lowerDy + 0.5) <= EPS,
+                "setup: lower oak log on a Terrain Slabs slab should lower to -0.5, got " + lowerDy);
+        ctx.assertTrue(Math.abs(upperDy - lowerDy) <= EPS,
+                "slab-log-dodo-log: upper oak log must share lower log dy " + lowerDy
+                        + " to keep the vertical stack connected; got " + upperDy);
+        ctx.complete();
+    }
+
+    // GH #22: an ordinary full block on a lowered full-height carrier must share that carrier's
+    // visual dy. This covers the live command-created Terrain Slabs slab -> oak log -> grass block
+    // fixture; command-authored blocks do not get placement anchors.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void grassBlockOnTsLoweredOakLogSharesLoweredDy(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos slab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        BlockPos lowerLog = slab.up();
+        BlockPos grass = slab.up(2);
+
+        w.setBlockState(slab, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(lowerLog, Blocks.OAK_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(grass, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double lowerDy = SlabSupport.getYOffset(w, lowerLog, w.getBlockState(lowerLog));
+        double grassDy = SlabSupport.getYOffset(w, grass, w.getBlockState(grass));
+        ctx.assertTrue(Math.abs(lowerDy + 0.5) <= EPS,
+                "setup: lower oak log on a Terrain Slabs slab should lower to -0.5, got " + lowerDy);
+        ctx.assertTrue(Math.abs(grassDy - lowerDy) <= EPS,
+                "grass-on-lowered-log: grass block must share lower log dy " + lowerDy
+                        + " to keep the stack connected; got " + grassDy);
+        ctx.complete();
+    }
+
     // A vanilla slab placed beside a full block lowered by a Terrain Slabs surface inherits
     // that side-lane lowering; otherwise TS+block+VS leaves the vanilla slab floating at grid height.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
