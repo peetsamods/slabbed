@@ -18,6 +18,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CrossCollisionBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DripstoneThickness;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -53,6 +55,15 @@ public final class Slabbed2612UseOnPlacementTest {
 
     private static BlockState bottomSlab() {
         return Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+    }
+
+    /** Fires the real useOn path for an arbitrary block item. */
+    private static BlockPos placeBlockVia(Player player, Block block, BlockPos clickAbs, Direction face, Vec3 hit) {
+        ItemStack stack = new ItemStack(block);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        BlockHitResult bhr = new BlockHitResult(hit, face, clickAbs, false);
+        stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, bhr));
+        return clickAbs.relative(face);
     }
 
     /** Fires the real useOn path with the given hit; returns the placed ABSOLUTE pos (clickAbs.relative(face)). */
@@ -105,6 +116,11 @@ public final class Slabbed2612UseOnPlacementTest {
     /** Hit point on the UP face of a cell (centre, top plane). */
     private static Vec3 upHit(BlockPos abs) {
         return new Vec3(abs.getX() + 0.5, abs.getY() + 1.0, abs.getZ() + 0.5);
+    }
+
+    /** Hit point on the DOWN face of a cell (centre, bottom plane). */
+    private static Vec3 downHit(BlockPos abs) {
+        return new Vec3(abs.getX() + 0.5, abs.getY(), abs.getZ() + 0.5);
     }
 
     /** Hit point on the visible UP face of a lowered TOP slab (its model is shifted down by 0.5). */
@@ -169,6 +185,32 @@ public final class Slabbed2612UseOnPlacementTest {
         }
     }
 
+    private static void assertPointedDripstone(
+            GameTestHelper helper,
+            ServerLevel level,
+            BlockPos abs,
+            BlockPos relForErr,
+            Direction expectedDirection,
+            double expectedDy,
+            String what
+    ) {
+        BlockState s = level.getBlockState(abs);
+        if (!s.is(Blocks.POINTED_DRIPSTONE)) {
+            throw helper.assertionException(relForErr,
+                    what + ": no pointed dripstone placed (got " + s.getBlock() + ")");
+        }
+        Direction direction = s.getValue(BlockStateProperties.VERTICAL_DIRECTION);
+        if (direction != expectedDirection) {
+            throw helper.assertionException(relForErr,
+                    what + ": expected direction=" + expectedDirection + " got " + direction);
+        }
+        double dy = SlabSupport.getYOffset(level, abs, s);
+        if (Math.abs(dy - expectedDy) > EPS) {
+            throw helper.assertionException(relForErr,
+                    what + ": expected dy=" + expectedDy + " got " + dy);
+        }
+    }
+
     /** PROBE: a slab placed on TOP of a flush stone block via useOn lands flush (dy 0). */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void useOnPlacesSlabOnTopFlush(GameTestHelper helper) {
@@ -179,6 +221,83 @@ public final class Slabbed2612UseOnPlacementTest {
         BlockPos placed = placeSlabVia(player, support, Direction.UP, upHit(support));
         log("probe_slab_on_flush_top", level, placed);
         assertSlabDy(helper, level, placed, new BlockPos(2, 3, 2), 0.0, "PROBE slab on flush top");
+        helper.succeed();
+    }
+
+    /**
+     * Regression coverage for Maintainer's MC 26.1 live report: pointed dripstone on top of slabs did not
+     * combine/stack like the same 0.4.2-beta.2 jar does on MC 26.1.2. Drive the real item placement path
+     * so vanilla's getStateForPlacement + thickness update are covered, not just direct setBlock geometry.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnPointedDripstoneStacksOnBottomSlabLowered(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos supportRel = new BlockPos(2, 1, 2);
+        BlockPos lowerRel = new BlockPos(2, 2, 2);
+        BlockPos upperRel = new BlockPos(2, 3, 2);
+        helper.setBlock(supportRel, bottomSlab());
+
+        BlockPos support = helper.absolutePos(supportRel);
+        Player player = mockPlayerNear(helper, support.above());
+        player.setXRot(90.0F);
+
+        BlockPos lower = placeBlockVia(player, Blocks.POINTED_DRIPSTONE, support, Direction.UP, upHit(support));
+        assertPointedDripstone(helper, level, lower, lowerRel, Direction.UP, -0.5,
+                "useOn upward pointed dripstone on a bottom slab");
+
+        BlockPos upper = placeBlockVia(player, Blocks.POINTED_DRIPSTONE, lower, Direction.UP, upHit(lower));
+        assertPointedDripstone(helper, level, upper, upperRel, Direction.UP, -0.5,
+                "useOn upward pointed dripstone stacked on a slab-supported tip");
+
+        BlockState lowerState = level.getBlockState(lower);
+        BlockState upperState = level.getBlockState(upper);
+        if (lowerState.getValue(BlockStateProperties.DRIPSTONE_THICKNESS) == DripstoneThickness.TIP
+                || upperState.getValue(BlockStateProperties.DRIPSTONE_THICKNESS) != DripstoneThickness.TIP) {
+            throw helper.assertionException(lowerRel,
+                    "useOn upward pointed dripstone did not form a vanilla stack on a bottom slab "
+                            + "(lower=" + lowerState.getValue(BlockStateProperties.DRIPSTONE_THICKNESS)
+                            + " upper=" + upperState.getValue(BlockStateProperties.DRIPSTONE_THICKNESS) + ")");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Regression coverage for Maintainer's MC 26.1 live report: pointed dripstone did not combine/attach
+     * underneath lowered bottom slabs, while MC 26.1.2 beta.2 did. A lowered bottom slab's visible
+     * underside must be a legal ceiling support for downward pointed dripstone.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnDownwardPointedDripstoneUnderLoweredBottomSlab(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos carrierBaseRel = new BlockPos(2, 2, 2);
+        BlockPos carrierRel = new BlockPos(2, 3, 2);
+        BlockPos supportRel = new BlockPos(2, 4, 2);
+        BlockPos dripRel = new BlockPos(2, 3, 2);
+
+        helper.setBlock(carrierBaseRel, bottomSlab());
+        helper.setBlock(carrierRel, Blocks.STONE.defaultBlockState());
+        BlockPos carrier = helper.absolutePos(carrierRel);
+        SlabAnchorAttachment.addAnchor(level, carrier, level.getBlockState(carrier));
+        helper.setBlock(carrierBaseRel, Blocks.AIR.defaultBlockState());
+
+        Player slabPlayer = mockPlayerNear(helper, helper.absolutePos(new BlockPos(2, 5, 2)));
+        BlockPos support = placeSlabVia(slabPlayer, carrier, Direction.UP, upHit(carrier));
+        assertSlabDy(helper, level, support, supportRel, -0.5,
+                "SETUP lowered bottom slab ceiling support");
+        if (level.getBlockState(support).getValue(SlabBlock.TYPE) != SlabType.BOTTOM) {
+            throw helper.assertionException(supportRel,
+                    "SETUP: top placement on lowered carrier should create a lowered BOTTOM slab");
+        }
+        helper.setBlock(carrierRel, Blocks.AIR.defaultBlockState());
+        assertSlabDy(helper, level, support, supportRel, -0.5,
+                "SETUP lowered bottom slab should remain lowered after its temporary carrier is cleared");
+
+        Player player = mockPlayerNear(helper, support.below());
+        player.setXRot(-90.0F);
+
+        BlockPos placed = placeBlockVia(player, Blocks.POINTED_DRIPSTONE, support, Direction.DOWN, downHit(support));
+        assertPointedDripstone(helper, level, placed, dripRel, Direction.DOWN, -0.5,
+                "useOn downward pointed dripstone under a lowered bottom slab");
         helper.succeed();
     }
 
