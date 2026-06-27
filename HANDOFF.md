@@ -1,25 +1,26 @@
-# HANDOFF — NeoForge 1.21.1 port proof-boundary state (2026-06-23)
+# HANDOFF — NeoForge 1.21.1 release-readiness candidate (2026-06-26)
 
-> Current handoff for the dedicated NeoForge 1.21.1 port worktree. This section supersedes the older 2026-06-12 Fabric/release-line handoff below for any work in this checkout.
+> Current handoff for the dedicated NeoForge 1.21.1 port worktree. This section supersedes the older 2026-06-23 port-boundary handoff and the historical 2026-06-12 Fabric/release-line handoff below for any work in this checkout.
 
 ## Repo / branch / HEAD
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-neoforge-1.21.1-port`
 - Branch: `port/neoforge-1.21.1`
-- HEAD at port start: `3dcab83c`
+- Current HEAD: `b634da07`
+- Tag at HEAD: `save/neoforge-1-21-1-wysiwyg-parity-green`
 - Created from: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate` on `release/mc1.21.1-0.4.0-beta.3`
-- Tags at HEAD during preflight: none
-- Current tracked dirt is broad NeoForge WIP across `build.gradle`, `gradle.properties`, `settings.gradle`, `src/**`, plus repo-local truth docs. Staged changes are not expected.
+- Current tracked dirt is the release-readiness candidate: WYSIWYG/parity source changes, release jar hygiene in `build.gradle` and `SlabbedClient.java`, repo-local truth doc updates, and evidence logs under `tmp/`. Staged changes are not expected unless Julia explicitly authorizes a savepoint.
 - Do not touch the original 1.21.1 checkout (`/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`) or the canonical 1.21.11 Fabric source (`/Users/joolmac/CascadeProjects/Slabbed`).
 
 ## Current state
-- Functional NeoForge WIP now exists in this worktree. The tree is intentionally dirty, with no staged files, and remains unsaved.
-- Current-tree proof exists under `tmp/neoforge-port-20260623/`:
-  - `compile-p26-dripstone-chain-green2.log` → `BUILD SUCCESSFUL`
-  - `run-client-neoforge-offset-raycast-current-after-dripstone.log` → GREEN client triad/cull proof with `diagnosticsOnly=true` and `releaseReady=false`
-  - `run-server-gametest-final-current.log` and `run-server-gametest-final-current-cleanexit.log` → `All 71 required tests passed :)`
-- Server-proof caveat: the fresh rerun reproduced the earlier lingering-wrapper behavior. The green server footer is real, but the Gradle wrapper did not return naturally within the wait window and had to be interrupted after the footer.
-- Source-delta caveat: a file-path audit against source tag `slabbed-0.4.2-beta.1+26.2` / `8ba3414f` does not prove literal file-for-file parity in this worktree. Many `26.2` behaviors appear ported through consolidated or NeoForge-specific files, but full path parity is not the right current claim.
-- Repo-local truth was stale before this update. This handoff now records the real current proof boundary so later savepoint decisions do not rely on the old bootstrap-only story.
+- The WYSIWYG/parity savepoint is at `b634da07`, tagged `save/neoforge-1-21-1-wysiwyg-parity-green`.
+- Release-readiness hygiene has been applied locally after that savepoint:
+  - `SlabbedClient` no longer starts proof canaries, world/fence/chain proof hooks, target overlay, or runtime live-trace hooks.
+  - `build.gradle` excludes proof/debug/trace/manual-recorder classes from the public main source set.
+  - Public runtime jar and sources jar actual leak scans are zero-line clean for proof/debug/dev/test/trace tooling.
+- Candidate jar is staged in the Modrinth profile:
+  - `/Users/joolmac/Library/Application Support/ModrinthApp/profiles/SLABBED neoforge 1.21.1/mods/slabbed-0.4.2-beta.1+26.2.jar`
+  - SHA-256: `4afb4d8ae9c508498db07e954d351cbcf697151d3f93f25f769b0e1f39b7186c`
+- Public upload/release is not authorized by this handoff.
 
 ## Preflight for next chat
 Run before any mutation:
@@ -37,24 +38,36 @@ Expected:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-neoforge-1.21.1-port
 branch: port/neoforge-1.21.1
-HEAD: 3dcab83c, unless Julia later creates a savepoint from this WIP
-tracked dirt allowed at handoff start: the existing NeoForge WIP across build/src plus repo-local truth docs; no staged files
-tags at HEAD: none unless Julia creates one later
+HEAD: b634da07 unless Julia creates a newer release-readiness savepoint
+tracked dirt allowed at handoff start: the current release-readiness candidate files; no staged files
+tags at HEAD: save/neoforge-1-21-1-wysiwyg-parity-green unless Julia creates a newer savepoint
 ```
 
 Stop if the root is any of these: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`, `/Users/joolmac/CascadeProjects/Slabbed`, `/Users/joolmac/CascadeProjects/Slabbed-countered-compat-latest`, or any `.windsurf` worktree.
 
-## Port mandate
-Create a NeoForge 1.21.1 port of Slabbed from this branch only.
+## Release-readiness proof bundle
+- Compile: `tmp/neoforge-port-20260626/release-readiness/compile-release-hygiene-available.log` → `BUILD SUCCESSFUL`
+- Build: `tmp/neoforge-port-20260626/release-readiness/clean-build-release-hygiene.log` → `BUILD SUCCESSFUL`
+- Server GameTest: `tmp/neoforge-port-20260626/release-readiness/run-server-gametest-release-readiness.log` → `All 95 required tests passed :)`
+- Server caveat: the wrapper lingered after the green footer and was interrupted, so this is not a natural zero-exit proof.
+- Public jar actual leak scan: `tmp/neoforge-port-20260626/release-readiness/jar-actual-leak-scan-after-hygiene.txt` → zero lines
+- Sources jar actual leak scan: `tmp/neoforge-port-20260626/release-readiness/sources-jar-actual-leak-scan-after-hygiene.txt` → zero lines
+- Specific removed-class scan: `tmp/neoforge-port-20260626/release-readiness/specific-removed-classes-scan-after-hygiene.txt` → zero lines
+- Bytecode hard-reference scan: `tmp/neoforge-port-20260626/release-readiness/jdeps-suspicious-refs-after-hygiene.txt` → zero lines
+- `SlabbedClient` bytecode scan: `tmp/neoforge-port-20260626/release-readiness/javap-slabbedclient-suspicious-after-hygiene.txt` → zero lines
+- Fabric/Quilt scans: `tmp/neoforge-port-20260626/release-readiness/*fabric-scan-after-hygiene.txt` → zero lines
+- Style: `git diff --check` and `git diff --cached --check` → clean
+- Post-hygiene live smoke:
+  - `tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-first-window.png`
+  - `tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-dripstone-fixture.png`
+  - `tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-profile-log-markers.txt`
+  - `tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-proof-debug-log-scan.txt` → zero lines
+  - `tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-error-scan.txt` → zero lines
 
-Important architecture findings to preserve:
-- Use FFAPI as API support, not as the loader. Forgified Fabric Loader must not be treated as a NeoForge entrypoint bridge for Fabric `ModInitializer` / `ClientModInitializer`.
-- The safer direction is a NeoForge-native shell with `@Mod` plus NeoForge metadata, while keeping FFAPI-backed Fabric API internals only where compile proves they are supported.
-- Add native NeoForge metadata, probably `META-INF/neoforge.mods.toml`.
-- Wire mixin configs through the NeoForge metadata/build path; do not rely on `fabric.mod.json` for NeoForge mixin loading.
-- Treat gametest carryover as unproven. Existing gametest wiring is Fabric-specific.
-- Watch the stale tracked top-level `fabric.mod.json`: it says `0.1.2-alpha`, `MIT`, and `1.21.11`; it is not the port descriptor.
-- Rendering proof is mandatory later because Slabbed's ghost-window fix depends on the FRAPI render/model path and Sodium behavior.
+## Important caveats
+- This NeoForge Gradle task graph does not expose `runClientGameTest` or `runGameTest`; the available release proof route is `runServerGameTest`.
+- Post-hygiene live smoke confirms the cleaned staged jar launches and renders existing dripstone fixtures in the intended Modrinth world. This is smoke coverage, not a full replay of every prior manual scenario.
+- Do not claim public release complete until Julia authorizes the release/upload gate.
 
 ## Files inspected before stop
 - `build.gradle`
@@ -86,15 +99,15 @@ Important architecture findings to preserve:
   - `ClientChunkEvents`, `ClientTickEvents`, and `chunk.getAttached(...)`.
 - Dev commands depend on Fabric command registration and Fabric loader game-dir lookup.
 
-## Suggested next implementation slice
-1. Re-run preflight.
-2. Treat the current tree as a proof-backed candidate, not a bootstrap stub.
-3. Keep the claim bounded to current-tree compile/client/server proof plus the explicit server-wrapper caveat.
-4. If Julia wants savepoint closure, do a final savepoint-readiness pass on the exact dirty tree, then commit/tag only after the caveat language and file scope are accepted.
-5. If Julia wants stronger proof first, investigate the lingering `runServerGameTest` wrapper exit separately without broad gameplay edits.
+## Suggested next slice
+1. If Julia accepts this candidate, do a final diff-scope review.
+2. Commit only the intended release-readiness source/doc files.
+3. Create an annotated release-readiness/savepoint tag.
+4. Push branch and tag if Julia authorizes.
+5. Only after that, ask separately before any public Modrinth/GitHub release upload.
 
 ## Stop condition reached
-Yes. The bootstrap-only story is no longer current; the next gate is honest savepoint-boundary handling for the existing NeoForge WIP.
+Yes. Release-readiness candidate is staged and proven locally; public release/upload remains approval-gated.
 
 ---
 

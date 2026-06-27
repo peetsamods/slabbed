@@ -2845,7 +2845,7 @@ public final class SlabbedLabFixtureTest {
     }
 
     @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
-    public void p26DownwardPointedDripstoneUnderTopSlabKeepsDescendantsGridHeight(GameTestHelper ctx) {
+    public void p26DownwardPointedDripstoneUnderTopSlabKeepsDescendantsFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos upper = ctx.absolutePos(new BlockPos(2, 3, 2));
         BlockPos lower = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -2856,8 +2856,12 @@ public final class SlabbedLabFixtureTest {
 
         assertBlockDy(ctx, world, upper, Blocks.POINTED_DRIPSTONE, 0.5,
                 "P26 setup: direct downward pointed-dripstone segment under a top slab attaches upward");
-        assertBlockDy(ctx, world, lower, Blocks.POINTED_DRIPSTONE, 0.0,
-                "P26 chained pointed-dripstone descendant must stay grid-height, not merge into the raised segment");
+        assertBlockDy(ctx, world, lower, Blocks.POINTED_DRIPSTONE, 0.5,
+                "P26 direct top-slab dripstone descendant must stay in the raised visual lane");
+        assertPointedDripstoneColumnNoVerticalGap(ctx, world, upper, lower,
+                "P26 direct top-slab dripstone column must not render with an air gap between segments");
+        assertPointedDripstoneShiftedServerTarget(ctx, world, upper,
+                "P26 direct top-slab dripstone root must be eligible for raised hit validation");
         System.out.println("[NEOFORGE_P26_DRIPSTONE_CHAIN_ROW]"
                 + " case=direct_top_slab_descendant"
                 + " upperDy=" + text(SlabSupport.getYOffset(world, upper, world.getBlockState(upper)))
@@ -2865,6 +2869,75 @@ public final class SlabbedLabFixtureTest {
                 + " result=GREEN");
         System.out.println("[NEOFORGE_P26_DRIPSTONE_CHAIN_SUMMARY]"
                 + " rows=4 result=GREEN proofScope=server_pointed_dripstone_chain_dy_only");
+        ctx.succeed();
+    }
+
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void p26PointedDripstoneCombinesOnSlabSurfaces(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+
+        BlockPos floorSupport = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos upwardFirst = floorSupport.above();
+        BlockPos upwardSecond = upwardFirst.above();
+        world.setBlock(floorSupport, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(upwardFirst, pointedDripstoneUpTip(), Block.UPDATE_ALL);
+        assertBlockDy(ctx, world, upwardFirst, Blocks.POINTED_DRIPSTONE, -0.5d,
+                "P26 combine setup: upward pointed dripstone on a bottom slab must be lowered");
+        assertPointedDripstoneShiftedServerTarget(ctx, world, upwardFirst,
+                "P26 lowered upward pointed dripstone tip must be a shifted server hit target");
+
+        Player upwardPlayer = mockPlayerNear(ctx, upwardFirst);
+        BlockPos upwardPlaced = placeBlockViaAndFindChangedBlock(
+                ctx,
+                upwardPlayer,
+                upwardFirst,
+                Direction.EAST,
+                eastHitOffset(upwardFirst, -0.5d, 0.5d),
+                Blocks.POINTED_DRIPSTONE);
+        ctx.assertTrue(upwardPlaced.equals(upwardSecond),
+                "P26 lowered upward pointed dripstone side-face hit must extend upward from the visible tip; expected "
+                        + shortPos(upwardSecond) + " got " + shortPos(upwardPlaced));
+        ctx.assertTrue(world.getBlockState(upwardSecond).is(Blocks.POINTED_DRIPSTONE),
+                "P26 lowered upward pointed dripstone second segment must be authored");
+        assertBlockDy(ctx, world, upwardSecond, Blocks.POINTED_DRIPSTONE, -0.5d,
+                "P26 lowered upward pointed dripstone second segment must inherit the lowered column dy");
+        assertPointedDripstoneShiftedServerTarget(ctx, world, upwardSecond,
+                "P26 lowered upward pointed dripstone descendant must be a shifted server hit target");
+
+        BlockPos ceiling = ctx.absolutePos(new BlockPos(5, 5, 2));
+        BlockPos downwardFirst = ceiling.below();
+        BlockPos downwardSecond = downwardFirst.below();
+        world.setBlock(ceiling, slab(SlabType.TOP), Block.UPDATE_ALL);
+        world.setBlock(downwardFirst, pointedDripstoneDownTip(), Block.UPDATE_ALL);
+        assertBlockDy(ctx, world, downwardFirst, Blocks.POINTED_DRIPSTONE, 0.5d,
+                "P26 combine setup: downward pointed dripstone under a top slab must attach upward");
+        assertPointedDripstoneShiftedServerTarget(ctx, world, downwardFirst,
+                "P26 raised downward pointed dripstone tip must be a shifted server hit target");
+
+        Player downwardPlayer = mockPlayerNear(ctx, downwardFirst);
+        BlockPos downwardPlaced = placeBlockViaAndFindChangedBlock(
+                ctx,
+                downwardPlayer,
+                downwardFirst,
+                Direction.EAST,
+                eastHitOffset(downwardFirst, 0.5d, 0.5d),
+                Blocks.POINTED_DRIPSTONE);
+        ctx.assertTrue(downwardPlaced.equals(downwardSecond),
+                "P26 downward pointed dripstone side-face hit under a slab must extend downward from the visible tip; expected "
+                        + shortPos(downwardSecond) + " got " + shortPos(downwardPlaced));
+        ctx.assertTrue(world.getBlockState(downwardSecond).is(Blocks.POINTED_DRIPSTONE),
+                "P26 downward pointed dripstone second hanging segment must be authored");
+        assertBlockDy(ctx, world, downwardSecond, Blocks.POINTED_DRIPSTONE, 0.5d,
+                "P26 downward pointed dripstone descendant under a top slab must stay in the raised visual lane");
+        assertPointedDripstoneColumnNoVerticalGap(ctx, world, downwardFirst, downwardSecond,
+                "P26 side-combined top-slab dripstone column must not render with an air gap");
+
+        System.out.println("[NEOFORGE_P26_DRIPSTONE_COMBINE_SUMMARY]"
+                + " upwardFirstDy=" + text(SlabSupport.getYOffset(world, upwardFirst, world.getBlockState(upwardFirst)))
+                + " upwardSecondDy=" + text(SlabSupport.getYOffset(world, upwardSecond, world.getBlockState(upwardSecond)))
+                + " downwardFirstDy=" + text(SlabSupport.getYOffset(world, downwardFirst, world.getBlockState(downwardFirst)))
+                + " downwardSecondDy=" + text(SlabSupport.getYOffset(world, downwardSecond, world.getBlockState(downwardSecond)))
+                + " result=GREEN proofScope=server_pointed_dripstone_slab_surface_combine");
         ctx.succeed();
     }
 
@@ -3013,6 +3086,14 @@ public final class SlabbedLabFixtureTest {
         return new Vec3(abs.getX() + 0.5d, abs.getY() + 1.0d, abs.getZ() + 0.5d);
     }
 
+    private static Vec3 loweredUpHit(BlockPos abs) {
+        return new Vec3(abs.getX() + 0.5d, abs.getY() + 0.5d, abs.getZ() + 0.5d);
+    }
+
+    private static Vec3 raisedDownHit(BlockPos abs) {
+        return new Vec3(abs.getX() + 0.5d, abs.getY() + 0.5d, abs.getZ() + 0.5d);
+    }
+
     private static Vec3 loweredUndersideHit(BlockPos abs) {
         return new Vec3(abs.getX() + 0.5d, abs.getY() - 0.5d, abs.getZ() + 0.5d);
     }
@@ -3119,6 +3200,41 @@ public final class SlabbedLabFixtureTest {
         BlockState state = world.getBlockState(abs);
         ctx.assertTrue(SlabSupport.isBeta35SlabHeightVisibleOwnerObject(world, abs, state),
                 message + "; state=" + state + " dy=" + SlabSupport.getYOffset(world, abs, state));
+    }
+
+    private static void assertPointedDripstoneShiftedServerTarget(
+            GameTestHelper ctx,
+            ServerLevel world,
+            BlockPos abs,
+            String message
+    ) {
+        BlockState state = world.getBlockState(abs);
+        ctx.assertTrue(SlabSupport.isBeta35PointedDripstoneServerHitTarget(world, abs, state),
+                message + "; state=" + state
+                        + " dy=" + SlabSupport.getYOffset(world, abs, state)
+                        + " validationDy=" + SlabSupport.getBeta35ShiftedServerValidationYOffset(world, abs, state));
+    }
+
+    private static void assertPointedDripstoneColumnNoVerticalGap(
+            GameTestHelper ctx,
+            ServerLevel world,
+            BlockPos upper,
+            BlockPos lower,
+            String message
+    ) {
+        BlockState upperState = world.getBlockState(upper);
+        BlockState lowerState = world.getBlockState(lower);
+        VoxelShape upperShape = upperState.getShape(world, upper, CollisionContext.empty());
+        VoxelShape lowerShape = lowerState.getShape(world, lower, CollisionContext.empty());
+        ctx.assertTrue(!upperShape.isEmpty(), message + ": upper outline is empty");
+        ctx.assertTrue(!lowerShape.isEmpty(), message + ": lower outline is empty");
+        double upperBottom = upper.getY() + upperShape.min(Direction.Axis.Y);
+        double lowerTop = lower.getY() + lowerShape.max(Direction.Axis.Y);
+        ctx.assertTrue(lowerTop + MC1211_SERVER_STATE_EPSILON >= upperBottom,
+                message + "; lowerTop=" + text(lowerTop)
+                        + " upperBottom=" + text(upperBottom)
+                        + " upperDy=" + text(SlabSupport.getYOffset(world, upper, upperState))
+                        + " lowerDy=" + text(SlabSupport.getYOffset(world, lower, lowerState)));
     }
 
     private static void assertLoweredOutline(

@@ -29,81 +29,96 @@ port/neoforge-1.21.1
 Commit:
 
 ```text
-3dcab83c
+b634da07
 ```
 
 Tag:
 
 ```text
-none at port start
+save/neoforge-1-21-1-wysiwyg-parity-green
 ```
 
-Pushed branch: no port push authorized
-Pushed tag: no tag authorized
+Pushed branch: yes, `origin/port/neoforge-1.21.1` matches HEAD
+Pushed tag: local tag present at HEAD; verify remote tag before relying on remote savepoint
 
-Port baseline created from the 1.21.1 beta.3 behavior line. No NeoForge
-savepoint exists yet. Current NeoForge implementation proof is still unsaved WIP.
+This is the current NeoForge 1.21.1 proof-backed WYSIWYG parity savepoint. Later
+local release-readiness hygiene changes may be dirty until committed.
 
 ## Current proof-candidate state
 
 ```text
-Broad unstaged NeoForge WIP across build/src plus repo-local truth docs.
-No staged files. No tag at HEAD. No push authorized.
+Release-readiness candidate is dirty after the WYSIWYG savepoint:
+- gameplay/parity source changes from the WYSIWYG slice
+- release hygiene cleanup in build.gradle and SlabbedClient.java
+- repo-local truth doc updates
+- evidence logs under tmp/
+No staged files expected unless Julia explicitly asks for a commit/savepoint.
 ```
 
 ## Current objective
 
-Hold the current NeoForge 1.21.1 functional WIP at an honest proof boundary
-and decide savepoint readiness without overclaiming release readiness, source
-parity, or clean server exit proof.
+Reach honest NeoForge 1.21.1 release-readiness for Slabbed
+`0.4.2-beta.1+26.2`: clean public jar, correct Modrinth staged candidate, green
+available GameTest proof, and no public upload without Julia's explicit release
+authorization.
 
 ## Current blocker
 
 Visible symptom:
 
 ```text
-Repo-local truth and savepoint boundary lag the actual worktree.
+Standard Fabric-style `runClientGameTest` / `runGameTest` tasks do not exist in
+this NeoForge Gradle task graph; use the available `runServerGameTest` gate and
+report that deviation explicitly.
 ```
 
 Failing layer:
 
 ```text
-proof/reporting boundary, not a new gameplay red
+proof/release-boundary, not a new gameplay red
 ```
 
 Protected invariant:
 
 ```text
-Do not assume Fabric entrypoints work as NeoForge entrypoints. Use a
-NeoForge-native @Mod shell and prove every retained Fabric API surface through
-compile. Do not call this port file-for-file `26.2` complete or savepoint-final
-unless the evidence supports that exact claim. Rendering remains a mandatory
-later proof because the ghost-window fix depends on the FRAPI RenderContext/model
-path and Sodium behavior.
+Do not ship proof/debug/test tooling in the public jar. Release claims require
+clean jar contents, clean bytecode hard-reference scans, compile/build proof,
+available GameTest proof, and clear caveats for any unavailable or lingering
+proof route.
 ```
 
 Latest proof:
 
 ```text
-2026-06-22/23 current-tree proof bundle:
-- compile: tmp/neoforge-port-20260623/compile-p26-dripstone-chain-green2.log
+2026-06-26 release-readiness hygiene bundle:
+- compile: tmp/neoforge-port-20260626/release-readiness/compile-release-hygiene-available.log
   -> BUILD SUCCESSFUL
-- client: tmp/neoforge-port-20260623/run-client-neoforge-offset-raycast-current-after-dripstone.log
-  -> GREEN triad/cull proof with diagnosticsOnly=true and releaseReady=false
-- server: tmp/neoforge-port-20260623/run-server-gametest-final-current.log
-  and run-server-gametest-final-current-cleanexit.log
-  -> All 71 required tests passed :)
-- caveat: the fresh server rerun lingered after the green footer and was
-  interrupted manually, so there is still no natural zero-exit server proof log
-- path audit: source tag 8ba3414f touched many files not mirrored path-for-path
-  here; treat full file-path parity as false/unproven, not as the current claim
+- build: tmp/neoforge-port-20260626/release-readiness/clean-build-release-hygiene.log
+  -> BUILD SUCCESSFUL
+- server GameTest: tmp/neoforge-port-20260626/release-readiness/run-server-gametest-release-readiness.log
+  -> All 95 required tests passed :)
+- caveat: the server GameTest wrapper lingered after the green footer and had to
+  be interrupted, so this is not a natural zero-exit server proof.
+- jar/source/jdeps/javap leak scans under tmp/neoforge-port-20260626/release-readiness/
+  -> actual proof/debug/dev/test/trace leak scans are zero-line clean.
+- Modrinth candidate staged:
+  /Users/joolmac/Library/Application Support/ModrinthApp/profiles/SLABBED neoforge 1.21.1/mods/slabbed-0.4.2-beta.1+26.2.jar
+  SHA-256: 4afb4d8ae9c508498db07e954d351cbcf697151d3f93f25f769b0e1f39b7186c
+- post-hygiene live smoke:
+  tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-first-window.png
+  tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-dripstone-fixture.png
+  -> intended Modrinth profile/world launched, staged jar loaded, dripstone visual
+     smoke captured, proof/debug/error log scans clean.
 ```
 
 Live status:
 
 ```text
-No live NeoForge Minecraft proof has been run in this worktree. Existing proof
-is compile/client/server-log only.
+Latest local live/cruise proof before release hygiene confirmed the major
+reported WYSIWYG/dripstone/redstone-torch fixes in the Modrinth profile.
+Post-hygiene smoke also confirms the cleaned staged jar launches in the intended
+profile/world and renders existing dripstone fixtures without proof/debug/error
+log leakage. This is a smoke proof, not a full manual replay of every scenario.
 ```
 
 ## NeoForge port bootstrap notes (2026-06-15)
@@ -185,39 +200,39 @@ tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 Type:
 
 ```text
-neoforge-savepoint-readiness-closure
+neoforge-release-readiness-closure
 ```
 
 Allowed files:
 
 ```text
-HANDOFF.md, SLABBED_SPINE.md, proof logs under tmp/, and only the narrowest
-proof-boundary commands needed to classify the current WIP honestly
+Only the dirty release-readiness candidate files already in scope, proof logs
+under tmp/, and savepoint/release metadata if Julia explicitly authorizes the
+next gate.
 ```
 
 Forbidden files:
 
 ```text
-Original source checkout roots, release/version/changelog files, publishing
-metadata, tags, pushes, deletion of evidence, live Minecraft, and broad
-gameplay rewrites unless a fresh red proof reopens a concrete mechanism.
+Original source checkout roots, unrelated gameplay rewrites, deletion of
+evidence, public upload/release, and any tag/push/commit not explicitly
+authorized for the next savepoint.
 ```
 
 Required proof:
 
 ```text
-Use the existing compile/client proof bundle under tmp/neoforge-port-20260623/.
-If trying to strengthen the server lane, preserve the new full output under the
-same evidence folder and report whether the wrapper exits naturally or lingers
-after the green footer.
+Before savepoint or public release, rerun/confirm final preflight, diff scope,
+clean build, available GameTest, jar contents scan, jdeps scan, staged-jar SHA,
+and any Julia-requested live Modrinth smoke.
 ```
 
 Stop condition:
 
 ```text
-Wrong root/branch/HEAD, staged changes, a concrete uncovered functional gap in
-the current WIP, proof regression, a return to bootstrap-only claims, or any
-push/tag/publish action.
+Wrong root/branch/HEAD, staged changes, unexpected dirty files, proof
+regression, public-jar leak, profile jar SHA mismatch, or any public release
+action without Julia's explicit authorization.
 ```
 
 ## Do not touch boundaries

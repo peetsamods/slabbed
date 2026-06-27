@@ -273,6 +273,16 @@ public final class SlabSupport {
                 && state.getValue(BlockStateProperties.VERTICAL_DIRECTION) == Direction.UP;
     }
 
+    public static boolean isBeta35PointedDripstoneServerHitTarget(
+            BlockGetter world, BlockPos pos, BlockState state
+    ) {
+        if (world == null || pos == null || state == null || !(state.getBlock() instanceof PointedDripstoneBlock)) {
+            return false;
+        }
+        double targetDy = getBeta35ShiftedServerValidationYOffset(world, pos, state);
+        return Double.isFinite(targetDy) && Math.abs(targetDy) > 1.0e-6d;
+    }
+
     private static boolean isDownwardPointedDripstone(BlockState state) {
         return state != null
                 && state.getBlock() instanceof PointedDripstoneBlock
@@ -317,6 +327,27 @@ public final class SlabSupport {
             if (isTopSlab(cur)) {
                 return true;
             }
+            if (verticalChainColumnRootsAtTopSlab(world, cursor, cur)) {
+                return true;
+            }
+            if (!isDownwardPointedDripstone(cur)) {
+                return false;
+            }
+            cursor = cursor.above();
+            cur = world.getBlockState(cursor);
+        }
+        return false;
+    }
+
+    private static boolean downwardPointedDripstoneColumnRootsThroughTopSlabChain(
+            BlockGetter world, BlockPos supportPos, BlockState supportState
+    ) {
+        if (world == null || supportPos == null || !isDownwardPointedDripstone(supportState)) {
+            return false;
+        }
+        BlockPos cursor = supportPos;
+        BlockState cur = supportState;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             if (verticalChainColumnRootsAtTopSlab(world, cursor, cur)) {
                 return true;
             }
@@ -600,7 +631,7 @@ public final class SlabSupport {
             return 0.0d;
         }
         if (isDownwardPointedDripstone(state)
-                && downwardPointedDripstoneColumnRootsAtTopSlab(world, supportPos, above)) {
+                && downwardPointedDripstoneColumnRootsThroughTopSlabChain(world, supportPos, above)) {
             return 0.0d;
         }
         if (!above.isAir() && !isCeilingAttached(above) && !CompatHooks.shouldSkipOffset(above)) {
@@ -2611,7 +2642,7 @@ public final class SlabSupport {
 
         if (isDownwardPointedDripstone(state)) {
             if (verticalChainColumnRootsAtTopSlab(world, pos.above(), above)
-                    || downwardPointedDripstoneColumnRootsAtTopSlab(world, pos.above(), above)) {
+                    || downwardPointedDripstoneColumnRootsThroughTopSlabChain(world, pos.above(), above)) {
                 return 0.0d;
             }
             double supportDy = downwardPointedDripstoneLoweredCeilingSupportDy(world, pos.above(), above);
