@@ -175,7 +175,10 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         }
         BlockState state = world.getBlockState(pos);
         double targetDy = SlabSupport.getBeta35ShiftedServerValidationYOffset(world, pos, state);
-        if (!Double.isFinite(targetDy) || targetDy >= -EPSILON) {
+        if (!Double.isFinite(targetDy) || Math.abs(targetDy) <= EPSILON) {
+            return null;
+        }
+        if (targetDy > EPSILON && !SlabSupport.isBeta35PointedDripstoneServerHitTarget(world, pos, state)) {
             return null;
         }
         if (!slabbed$isBeta35ShiftedHitTarget(world, pos, packet)) {
@@ -197,6 +200,9 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (SlabSupport.isBeta35FenceWallVariantContactObject(targetState) || targetState.is(net.minecraft.world.level.block.Blocks.ANVIL)) {
             return true;
         }
+        if (SlabSupport.isBeta35PointedDripstoneServerHitTarget(world, pos, targetState)) {
+            return true;
+        }
         if (SlabSupport.isBeta35LoweredTrapdoorOrFloorButtonServerHitTarget(world, pos, targetState)) {
             return true;
         }
@@ -208,7 +214,9 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         }
         if (heldStack != null && heldStack.getItem() instanceof BlockItem blockItem) {
             BlockState heldState = blockItem.getBlock().defaultBlockState();
-            return SlabSupport.isBeta35FenceWallVariantContactObject(heldState) || heldState.is(net.minecraft.world.level.block.Blocks.ANVIL);
+            return SlabSupport.isBeta35FenceWallVariantContactObject(heldState)
+                    || SlabSupport.isBeta35PointedDripstoneServerHitTarget(world, pos, targetState)
+                    || heldState.is(net.minecraft.world.level.block.Blocks.ANVIL);
         }
         return false;
     }

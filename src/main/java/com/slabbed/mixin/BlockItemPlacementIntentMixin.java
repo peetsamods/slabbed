@@ -16,9 +16,11 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CraftingTableBlock;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -103,6 +105,37 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockHitResult remappedHit = new BlockHitResult(
                 remappedHitPos,
                 Direction.DOWN,
+                targetPos,
+                context.isInside());
+        return new UseOnContext(
+                context.getLevel(),
+                context.getPlayer(),
+                context.getHand(),
+                context.getItemInHand(),
+                remappedHit) {
+        };
+    }
+
+    private static UseOnContext slabbed$remapPointedDripstoneSideHitToColumnContinuation(UseOnContext context) {
+        if (context.getClickedFace().getAxis().isVertical()) {
+            return context;
+        }
+        BlockPos targetPos = context.getClickedPos();
+        BlockState targetState = context.getLevel().getBlockState(targetPos);
+        if (!(targetState.getBlock() instanceof PointedDripstoneBlock)
+                || !targetState.hasProperty(BlockStateProperties.VERTICAL_DIRECTION)) {
+            return context;
+        }
+        Direction continuationFace = targetState.getValue(BlockStateProperties.VERTICAL_DIRECTION);
+        double targetDy = SlabSupport.getYOffset(context.getLevel(), targetPos, targetState);
+        double continuationY = continuationFace == Direction.UP
+                ? targetPos.getY() + 1.0d + targetDy
+                : targetPos.getY() + targetDy;
+        Vec3 originalHit = context.getClickLocation();
+        Vec3 remappedHitPos = new Vec3(originalHit.x, continuationY, originalHit.z);
+        BlockHitResult remappedHit = new BlockHitResult(
+                remappedHitPos,
+                continuationFace,
                 targetPos,
                 context.isInside());
         return new UseOnContext(
@@ -543,8 +576,36 @@ public abstract class BlockItemPlacementIntentMixin {
         COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
         BlockItem self = (BlockItem) (Object) this;
         boolean itemIsSlab = self.getBlock() instanceof SlabBlock;
+        boolean itemIsPointedDripstone = self.getBlock() instanceof PointedDripstoneBlock;
         boolean itemIsConnector = SlabSupport.isBeta35FenceWallVariantContactObject(self.getBlock().defaultBlockState());
         if (!itemIsSlab) {
+            if (itemIsPointedDripstone) {
+                UseOnContext remappedDripstoneContext =
+                        slabbed$remapPointedDripstoneSideHitToColumnContinuation(context);
+                if (remappedDripstoneContext != context) {
+                    slabbed$recordRemapAttempt(
+                            context,
+                            false,
+                            true,
+                            false,
+                            false,
+                            false,
+                            SlabSupport.getYOffset(
+                                    context.getLevel(),
+                                    context.getClickedPos(),
+                                    context.getLevel().getBlockState(context.getClickedPos())),
+                            false,
+                            true,
+                            "pointed_dripstone_side_column_continuation",
+                            remappedDripstoneContext.getClickLocation(),
+                            remappedDripstoneContext.getClickedFace(),
+                            "pointed_dripstone_side_column_continuation");
+                    return slabbed$inspectReturn(
+                            context,
+                            remappedDripstoneContext,
+                            "pointed_dripstone_side_column_continuation");
+                }
+            }
             if (itemIsConnector) {
                 UseOnContext remappedConnectorContext =
                         slabbed$remapLoweredBottomSlabUnderside(context);
