@@ -225,3 +225,14 @@ freeze/anchor + compound-walk LOGIC is TS-independent, so vanilla analogues red-
 
 Active jar = `slabbed-1.21.1-0.4.0-beta.3-CLEAN5.jar` (CLEAN4 → `_ab-backup/`). Next: Julia live-validates
 CLEAN5; if green, push `c43b6a76..b5bd1fc9` + tag. See HANDOFF.md for the live-test script.
+
+## 2026-06-28 — TS object WYSIWYG LIVE-CONFIRMED (jar CLEAN7)
+Pushed `claude/lag-hotfix-perf` @ `d44f1d30` + tag `save/mc1211-ts-object-wysiwyg-live-confirmed`.
+All floor-standing objects (vertical chain, upward dripstone, floor torch, floor/wall bell·lever·button, standing
+lantern) now lower -0.5 flush on placed TS bottom slabs; genuinely-hung objects + chain ceiling geometry unchanged.
+Two fixes: `c6346af1` placement (OR `customSlabSurfaceKind==BOTTOM_LIKE` into the 3 UP-face support paths so vanilla
+`canPlaceAt` accepts a flat TS bottom slab) + `d44f1d30` lowering matrix (directCustom gates on new
+`isCeilingHungFromAbove` mirroring vanilla `shouldOffset` nuance, NOT blunt `isCeilingAttached`; chain ceiling geometry
+preserved via `isVerticalChainDirectlyUnderCeilingSupport` TOP|DOUBLE). Build + 39/39 headless gametests green.
+LESSON: principle over per-symptom — enumerate the full object matrix, mirror the vanilla path, lock parity with
+headless vanilla-slab gametests (TS itself not headless-testable). RED#4 (TS slab self-render) DEFERRED (TS-side).
