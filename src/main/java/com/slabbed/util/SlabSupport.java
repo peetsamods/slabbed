@@ -1106,6 +1106,16 @@ public final class SlabSupport {
         }
         IN_GET_Y_OFFSET.set(Boolean.TRUE);
         try {
+            // Terrain Slabs WYSIWYG (build-only): a PLACED opaque full cube resting directly on a
+            // player-placed TS BOTTOM half-slab lowers -0.5 to sit FLUSH. Restricted to type=BOTTOM +
+            // generated!=true so NATURAL terrain is NEVER lowered (the world-hole "DODO" guard).
+            // Evaluated INSIDE the recursion guard so the isFullCube -> getOutlineShape -> mixin ->
+            // getYOffset re-entry returns 0 (no recursion). Takes precedence over the anchor lanes in
+            // getYOffsetInner so already-frozen-flat builds also correct; the step-cull hides the seam.
+            double tsBottomFullCubeDy = placedTerrainSlabBottomFullCubeDy(world, pos, state);
+            if (!Double.isNaN(tsBottomFullCubeDy)) {
+                return tsBottomFullCubeDy;
+            }
             return getYOffsetInner(world, pos, state);
         } finally {
             IN_GET_Y_OFFSET.set(Boolean.FALSE);
@@ -2452,6 +2462,49 @@ public final class SlabSupport {
     }
 
     /**
+     * Terrain Slabs WYSIWYG (build-only): -0.5 when {@code state} is an opaque full cube resting
+     * directly on a player-placed Terrain Slabs BOTTOM half-slab, else NaN. Uses the view-independent
+     * full-cube test (never isSolidBlock(world,pos)) and {@link CompatHooks#isPlacedBottomHalfTerrainSlab}
+     * which restricts to type=BOTTOM + generated!=true, so natural terrain (generated doubles/slabs) is
+     * never lowered — keeping the world-hole DODO closed. Ceiling-attached blocks are excluded (they
+     * hang from above). Returns NaN fast for non-cubes / cubes not on a TS bottom slab.
+     */
+    private static double placedTerrainSlabBottomFullCubeDy(BlockView world, BlockPos pos, BlockState state) {
+        // Cheap gate first: zero cost when TS is absent (the common case), and skip the per-block
+        // down-lookup + the relatively expensive view-independent full-cube test unless the block is
+        // actually resting on a placed TS bottom slab.
+        if (!CompatHooks.isTerrainSlabsLoaded()
+                || world == null || pos == null || state == null
+                || isCeilingAttached(state)) {
+            return Double.NaN;
+        }
+        BlockState below = world.getBlockState(pos.down());
+        if (!CompatHooks.isPlacedBottomHalfTerrainSlab(below)) {
+            return Double.NaN;
+        }
+        return isOpaqueFullCubeViewIndependent(state) ? -0.5 : Double.NaN;
+    }
+
+    /**
+     * True when the full cube at {@code pos} is lowered by the Terrain Slabs full-cube lane
+     * ({@link #placedTerrainSlabBottomFullCubeDy}) — an opaque full cube resting directly on a
+     * placed TS bottom slab. Zero cost when TS is absent (the lane fast-returns NaN).
+     *
+     * <p>Lets the compound-inheritance walk ({@link #hasSlabInColumn} / {@link #slabColumnYOffset})
+     * treat such a cube as a LOWERING SUPPORT, so a block or object stacked on it inherits the
+     * -0.5 drop instead of gapping/floating above it. Needed because a TS-lowered cube is often
+     * NOT anchored: the lane runs in {@code getYOffset} ahead of {@code getYOffsetInner} and
+     * overrides a frozen-flat marker (so the cube can be frozen-flat or geometric yet render
+     * lowered), and {@code isAnchored}/{@code isBottomSlab} alone never recognised it. Recursion-safe:
+     * the lane only consults {@code isOpaqueFullCubeViewIndependent} (EmptyBlockView/ORIGIN probe)
+     * and the block below, never {@link #getYOffset}.
+     */
+    private static boolean isTerrainSlabLoweredFullCube(BlockView world, BlockPos pos, BlockState state) {
+        double dy = placedTerrainSlabBottomFullCubeDy(world, pos, state);
+        return Double.isFinite(dy) && dy < -1.0e-6;
+    }
+
+    /**
      * Curated full-cube "objects" that should sit on a slab even though they are
      * opaque full cubes (which are otherwise treated as terrain). Block entities
      * and the crafting table are already covered by {@link #isSlabSitCandidate};
@@ -2621,6 +2674,12 @@ public final class SlabSupport {
                     && isAdjacentSideSlabLowered(world, cursor, cur)) {
                 return true;
             }
+            // A full cube lowered by the Terrain Slabs full-cube lane is a lowering support even
+            // when it is frozen-flat / un-anchored, so blocks/objects stacked on it inherit the
+            // drop (no gap / no float). Checked before the full-block walk-down continues.
+            if (isTerrainSlabLoweredFullCube(world, cursor, cur)) {
+                return true;
+            }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return false;
             }
@@ -2638,6 +2697,11 @@ public final class SlabSupport {
                 return isBottomSlab(cur) ? -1.0 : -0.5;
             }
             if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
+                return -0.5;
+            }
+            // Terrain Slabs full-cube-lowered carrier (frozen-flat / un-anchored): the column above
+            // inherits its -0.5 so the stack stays flush (RED #1 stacking, RED #3 object-on-cube).
+            if (isTerrainSlabLoweredFullCube(world, cursor, cur)) {
                 return -0.5;
             }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
