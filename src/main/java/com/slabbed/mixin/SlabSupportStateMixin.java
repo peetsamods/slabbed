@@ -328,7 +328,17 @@ public abstract class SlabSupportStateMixin {
             } else if (slabbed$needsLoweredFullBlockRaycastBasis(world, pos, self, yOff, shape)) {
                 shape = VoxelShapes.fullCube();
             }
-            cir.setReturnValue(shape.offset(0.0, yOff, 0.0));
+            shape = shape.offset(0.0, yOff, 0.0);
+            if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+                shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
+            }
+            cir.setReturnValue(shape);
+            return;
+        }
+        // Not lowered, but a vertical chain bridged under a ceiling support still needs its
+        // elongated selection shape so the wireframe/raycast agrees with the alternate geometry.
+        if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+            cir.setReturnValue(SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape));
         }
     }
 
@@ -384,6 +394,13 @@ public abstract class SlabSupportStateMixin {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             }
             shape = shape.offset(0.0, yOff, 0.0);
+            changed = true;
+        }
+
+        // A vertical chain bridged under a ceiling support renders the elongated 0..1.5 geometry;
+        // its outline must span the same range so the visual triad (model/outline/raycast) agrees.
+        if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
+            shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
             changed = true;
         }
 
