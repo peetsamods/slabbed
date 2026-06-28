@@ -12,9 +12,12 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.CarpetBlock;
+import net.minecraft.block.ChainBlock;
+import net.minecraft.block.PointedDripstoneBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.state.property.Properties;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
@@ -685,6 +688,110 @@ public final class SlabbedLabFixtureTest {
         authorBlock(world, stonePos, Blocks.STONE.getDefaultState());
         ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, stonePos),
                 "structural full block lowered onto a bottom slab MUST still anchor (never-pop law)");
+
+        ctx.complete();
+    }
+
+    /**
+     * VANILLA-bottom-slab PARITY GROUND TRUTH for the shared ceiling-hung logic that the Terrain
+     * Slabs object-lowering ("directCustom") lane mirrors. Terrain Slabs is absent from the headless
+     * gametest env, so the TS path cannot be exercised directly — but a fix that lowers object X on a
+     * TS BOTTOM_LIKE slab MUST lower the SAME object X on a vanilla bottom slab. These assertions lock
+     * the {@code isCeilingHungFromAbove} nuance (used to gate the TS lane) against its parity twin.
+     *
+     * <p>Bug class fixed: a FLOOR-standing instance of a ceiling-CAPABLE block (vertical chain on a
+     * slab, upward pointed dripstone, floor torch) was wrongly excluded from -0.5 lowering by a blunt
+     * {@code isCeilingAttached} gate — so it floated 0.5 above the slab (WYSIWYG violation). Only
+     * GENUINELY-hung instances (HANGING lantern, downward dripstone) must stay flat.
+     *
+     * <ul>
+     *   <li>floor vertical chain (AXIS=Y, no top slab above) → -0.5 (lowers, was 0.0)</li>
+     *   <li>upward pointed dripstone (VERTICAL_DIRECTION=UP) → -0.5 (lowers, was 0.0)</li>
+     *   <li>floor torch → -0.5 (lowers)</li>
+     *   <li>hanging lantern (HANGING=true) over a bottom slab → 0.0 (genuinely hung, must NOT sink onto the slab)</li>
+     *   <li>downward pointed dripstone (VERTICAL_DIRECTION=DOWN) hanging UNDER a top slab → +0.5
+     *       (genuinely hung from the slab ABOVE, NOT lowered onto a floor) — the parity twin of the
+     *       TS gate excluding a downward dripstone from the directCustom floor-lowering lane.</li>
+     * </ul>
+     *
+     * <p>Note: a downward dripstone resting over a bottom slab with open air ABOVE genuinely lowers
+     * -0.5 on the vanilla path too (it is not hung from anything; {@code shouldOffset} falls to
+     * {@code hasSlabInColumn}). The "must-not-lower" parity case is therefore the genuinely-hung
+     * geometry: hung under a top slab.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void ceilingCapableFloorObjectsLowerOnVanillaBottomSlab(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = fixtureTestOrigin(ctx);
+
+        // --- floor vertical chain on a bottom slab → must LOWER -0.5 ---
+        BlockPos chainSlab = origin.add(0, 0, 0);
+        BlockPos chainPos = chainSlab.up();
+        world.setBlockState(chainSlab, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        // default chain state is AXIS=Y (vertical) — leave air above (no top slab / ceiling-chain).
+        world.setBlockState(chainPos, Blocks.CHAIN.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockState chain = world.getBlockState(chainPos);
+        ctx.assertTrue(chain.getBlock() instanceof ChainBlock, "chain not present at test position");
+        ctx.assertTrue(chain.get(Properties.AXIS) == Direction.Axis.Y,
+                "chain must be vertical (AXIS=Y) for this floor-standing case");
+        double chainDy = SlabSupport.getYOffset(world, chainPos, chain);
+        ctx.assertTrue(chainDy == -0.5,
+                "FLOAT BUG: a floor vertical chain on a bottom slab must lower -0.5 (WYSIWYG); got " + chainDy);
+
+        // --- upward pointed dripstone on a bottom slab → must LOWER -0.5 ---
+        BlockPos upDripSlab = origin.add(2, 0, 0);
+        BlockPos upDripPos = upDripSlab.up();
+        world.setBlockState(upDripSlab, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockState upDrip = Blocks.POINTED_DRIPSTONE.getDefaultState()
+                .with(Properties.VERTICAL_DIRECTION, Direction.UP);
+        world.setBlockState(upDripPos, upDrip, Block.NOTIFY_LISTENERS);
+        upDrip = world.getBlockState(upDripPos);
+        ctx.assertTrue(upDrip.getBlock() instanceof PointedDripstoneBlock, "upward dripstone not present");
+        ctx.assertTrue(upDrip.get(Properties.VERTICAL_DIRECTION) == Direction.UP, "dripstone must point UP");
+        double upDripDy = SlabSupport.getYOffset(world, upDripPos, upDrip);
+        ctx.assertTrue(upDripDy == -0.5,
+                "FLOAT BUG: an upward pointed dripstone on a bottom slab must lower -0.5 (WYSIWYG); got " + upDripDy);
+
+        // --- floor torch on a bottom slab → must LOWER -0.5 ---
+        BlockPos torchSlab = origin.add(4, 0, 0);
+        BlockPos torchPos = torchSlab.up();
+        world.setBlockState(torchSlab, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        world.setBlockState(torchPos, Blocks.TORCH.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockState torch = world.getBlockState(torchPos);
+        ctx.assertTrue(torch.isOf(Blocks.TORCH), "floor torch not present at test position");
+        double torchDy = SlabSupport.getYOffset(world, torchPos, torch);
+        ctx.assertTrue(torchDy == -0.5,
+                "FLOAT BUG: a floor torch on a bottom slab must lower -0.5 (WYSIWYG); got " + torchDy);
+
+        // --- hanging lantern on a bottom slab → must NOT lower (genuinely hung) ---
+        BlockPos hangLanternSlab = origin.add(0, 0, 2);
+        BlockPos hangLanternPos = hangLanternSlab.up();
+        world.setBlockState(hangLanternSlab, slab(SlabType.BOTTOM), Block.NOTIFY_LISTENERS);
+        BlockState hangLantern = Blocks.LANTERN.getDefaultState().with(Properties.HANGING, true);
+        world.setBlockState(hangLanternPos, hangLantern, Block.NOTIFY_LISTENERS);
+        hangLantern = world.getBlockState(hangLanternPos);
+        ctx.assertTrue(hangLantern.get(Properties.HANGING), "lantern must be HANGING=true");
+        double hangLanternDy = SlabSupport.getYOffset(world, hangLanternPos, hangLantern);
+        ctx.assertTrue(hangLanternDy == 0.0,
+                "a HANGING lantern is genuinely hung and must NOT lower onto the slab below; got " + hangLanternDy);
+
+        // --- downward pointed dripstone hanging UNDER a top slab → genuinely hung, must NOT lower
+        //     to the floor; it rides UP +0.5 with the top slab above (the parity twin of the TS gate
+        //     excluding a downward dripstone from the directCustom floor-lowering lane). ---
+        BlockPos downDripPos = origin.add(2, 1, 2);
+        BlockPos downDripTopSlab = downDripPos.up();
+        world.setBlockState(downDripTopSlab, slab(SlabType.TOP), Block.NOTIFY_LISTENERS);
+        BlockState downDrip = Blocks.POINTED_DRIPSTONE.getDefaultState()
+                .with(Properties.VERTICAL_DIRECTION, Direction.DOWN);
+        world.setBlockState(downDripPos, downDrip, Block.NOTIFY_LISTENERS);
+        downDrip = world.getBlockState(downDripPos);
+        ctx.assertTrue(downDrip.get(Properties.VERTICAL_DIRECTION) == Direction.DOWN, "dripstone must point DOWN");
+        ctx.assertTrue(SlabSupport.isTopSlab(world.getBlockState(downDripTopSlab)),
+                "top slab must be present directly above the downward dripstone");
+        double downDripDy = SlabSupport.getYOffset(world, downDripPos, downDrip);
+        ctx.assertTrue(downDripDy == 0.5,
+                "a DOWNWARD pointed dripstone hung under a top slab is genuinely hung from above and must"
+                + " ride +0.5 with it, NOT lower -0.5 onto a floor; got " + downDripDy);
 
         ctx.complete();
     }
