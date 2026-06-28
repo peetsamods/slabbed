@@ -34,6 +34,7 @@ import net.minecraft.block.WallBlock;
 import net.minecraft.block.WallHangingSignBlock;
 import net.minecraft.block.WallSignBlock;
 import net.minecraft.block.WallTorchBlock;
+import net.minecraft.block.enums.Attachment;
 import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.BlockFace;
 import net.minecraft.block.enums.DoubleBlockHalf;
@@ -948,6 +949,89 @@ public final class SlabSupport {
                 || block instanceof CaveVinesHeadBlock
                 || block instanceof CaveVinesBodyBlock) {
             return true;
+        }
+        return false;
+    }
+
+    /**
+     * Decorations that have NO floor variant — they ALWAYS hang from the ceiling
+     * regardless of any property — so they must NEVER be lowered onto a slab
+     * below by the directCustom (object-on-TS) lane. Identity-based, mirroring the
+     * NeoForge / 1.21.11-compat live-confirmed {@code isAlwaysCeilingHungDecoration}
+     * (HangingRoots / SporeBlossom / ceiling HangingSign). This closes the edge
+     * where such a block sits over a TS slab without a top slab directly above it,
+     * which the up-walk in {@link #isCeilingHungFromAbove} would otherwise miss.
+     */
+    private static boolean isAlwaysCeilingHungDecoration(BlockState state) {
+        Block block = state.getBlock();
+        return block instanceof HangingRootsBlock
+                || block instanceof SporeBlossomBlock
+                || block instanceof HangingSignBlock
+                || block instanceof CaveVinesHeadBlock
+                || block instanceof CaveVinesBodyBlock;
+    }
+
+    /**
+     * Narrow successor to a blunt {@code isCeilingAttached} check, used ONLY by the
+     * directCustom (object-resting-on-a-TS-slab) lowering gate. Returns true only for
+     * instances that are GENUINELY hung from above; a FLOOR-standing instance of a
+     * ceiling-CAPABLE block (a chain resting on a slab, an upward dripstone, a floor
+     * bell/lever/button) returns false so it lowers -0.5 to sit flush — mirroring the
+     * vanilla-bottom-slab {@link #shouldOffset} nuance (which lowers those via
+     * {@code hasSlabInColumn} and only excludes a block when a top slab / ceiling-chain
+     * is directly ABOVE or it is HANGING).
+     *
+     * <p>View-independent (no {@code isSolidBlock}); does NOT call {@code getYOffset}
+     * (safe inside the {@code IN_GET_Y_OFFSET} recursion guard).
+     */
+    private static boolean isCeilingHungFromAbove(BlockView world, BlockPos pos, BlockState state) {
+        // hanging lantern / hanging sign (HANGING=true)
+        if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
+            return true;
+        }
+        // identity hangers (no floor variant) — exclude regardless of what's above
+        if (isAlwaysCeilingHungDecoration(state)) {
+            return true;
+        }
+        // only ceiling-CAPABLE blocks can be hung; everything else is floor-standing
+        if (!isCeilingAttached(state)) {
+            return false;
+        }
+        // vertical chain directly under a ceiling support (TOP *or DOUBLE* slab) renders the
+        // elongated ChainCeilingGeometry model at dy=0; it must skip directCustom so the dy lane
+        // cannot double-offset against that geometry. The up-walk below catches a TOP slab via
+        // isTopSlab; this also catches a DOUBLE slab directly above, matching exactly the
+        // predicate that triggers the elongated model (isVerticalChainDirectlyUnderCeilingSupport).
+        if (isVerticalChainDirectlyUnderCeilingSupport(world, pos, state)) {
+            return true;
+        }
+        // dripstone: DOWN hangs, UP stands on the floor
+        if (state.getBlock() instanceof PointedDripstoneBlock) {
+            return state.contains(Properties.VERTICAL_DIRECTION)
+                    && state.get(Properties.VERTICAL_DIRECTION) == Direction.DOWN;
+        }
+        // lever / button: CEILING face hangs; FLOOR / WALL stand
+        if (state.contains(Properties.BLOCK_FACE) && state.get(Properties.BLOCK_FACE) == BlockFace.CEILING) {
+            return true;
+        }
+        // bell: CEILING attachment hangs; FLOOR / WALL stand
+        if (state.contains(Properties.ATTACHMENT) && state.get(Properties.ATTACHMENT) == Attachment.CEILING) {
+            return true;
+        }
+        // otherwise hung only when a top slab / ceiling-chain is directly ABOVE
+        // (mirrors shouldOffset's up-walk at lines ~998-1011). Covers Y-chains and
+        // top-half trapdoors that bridge up to a top slab (chain ceiling geometry).
+        BlockPos cursor = pos.up();
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState cur = world.getBlockState(cursor);
+            if (isTopSlab(cur)) {
+                return true;
+            }
+            if (isCeilingAttached(cur)) {
+                cursor = cursor.up();
+                continue;
+            }
+            break;
         }
         return false;
     }
@@ -2110,7 +2194,17 @@ public final class SlabSupport {
         // guard the downward column walk in isDirectCustomSlabSupportedObject would drag a hanger
         // beneath a flush TS slab down through it — the behavioural equivalent of COMPAT_REF's
         // head-of-getYOffsetInner ceiling-hung dispatch.
-        if (!isCeilingAttached(state)) {
+        //
+        // The exclusion uses isCeilingHungFromAbove (NOT the blunt isCeilingAttached): a
+        // FLOOR-standing instance of a ceiling-CAPABLE block (chain resting on a slab, upward
+        // dripstone, floor bell/lever/button) is NOT genuinely hung and MUST lower -0.5 to sit
+        // flush, exactly as it does on a vanilla bottom slab via shouldOffset. Only GENUINELY-hung
+        // instances (HANGING, identity hangers, downward dripstone, CEILING lever/button/bell, or a
+        // ceiling-chain/top-slab directly above) are excluded — matching shouldOffset's nuance and
+        // preserving the chain ceiling geometry (a vertical chain UNDER a ceiling support is
+        // hung-from-above ⇒ skips this lane). The old blunt isCeilingAttached gate wrongly excluded
+        // every floor-standing ceiling-CAPABLE block, which is why "only lanterns lowered".
+        if (!isCeilingHungFromAbove(world, pos, state)) {
             double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
             if (!Double.isNaN(directCustomSurfaceDy)) {
                 double dy = directCustomSurfaceDy;
