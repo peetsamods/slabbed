@@ -1,6 +1,26 @@
 ## [Unreleased]
 - Terrain Slabs named-surface compatibility (objects lowering onto Terrain Slabs surfaces, compound −1.0) is planned for a follow-up; this build keeps the existing gated compat (Terrain Slabs blocks are excluded from Slabbed's visual offsets).
 
+## [0.4.2-beta.2] - Minecraft 1.21.1 (NeoForge)
+
+Carries the 0.4.2 parity-candidate work for this port plus a render-path
+performance cleanup. Build metadata corrected from `+26.2` (inherited from the
+26.2 parity port it was derived from) to `+1.21.1`, the actual target Minecraft
+version; this is a relabel only and does not affect version precedence.
+
+### Performance
+- Removed always-on per-block work from the chunk-mesh render path: the
+  full-mesh-bounds diagnostic sampler no longer does a block-registry lookup,
+  ~6 string allocations, and an atomic increment per block before checking its
+  (production-off) trace flag — that work and its per-vertex bounds loop are now
+  skipped entirely unless the trace is armed. Render trace flags are read once at
+  class-load instead of per block; `render.offset.trace` (which client gametests
+  toggle at runtime) stays live but is gated cheap-first. Zero behavior change;
+  matters most under Sodium, which routes all block geometry through this path.
+  (This is the generalized form of the Fabric 1.21.1 per-block-trace lag; the
+  exact Fabric cause — per-block reflection on a release-excluded class — is
+  structurally absent on NeoForge.)
+
 ## [0.4.0-beta.3] - Slabbed 0.4.0 Beta 3 / Minecraft 1.21.1
 
 The Minecraft 1.21.1 port, with a rebuilt targeting path. Consolidates the
