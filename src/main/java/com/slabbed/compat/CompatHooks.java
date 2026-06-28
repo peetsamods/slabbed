@@ -45,4 +45,21 @@ public final class CompatHooks {
         }
         return CompatSlabSurfaceKind.NONE;
     }
+
+    /**
+     * True only for a PLAYER-PLACED Terrain Slabs BOTTOM half-slab (type=BOTTOM, not generated
+     * terrain). Used to lower a placed full cube flush onto it (build-only WYSIWYG) while NEVER
+     * lowering natural terrain — keeping the world-hole DODO closed.
+     */
+    public static boolean isPlacedBottomHalfTerrainSlab(BlockState state) {
+        if (TerrainSlabsCompat.isLoaded()) {
+            return TerrainSlabsCompat.isPlacedBottomHalfSlab(state);
+        }
+        return false;
+    }
+
+    /** Cheap precomputed gate so per-block hot paths can skip all compat work when TS is absent. */
+    public static boolean isTerrainSlabsLoaded() {
+        return TerrainSlabsCompat.isLoaded();
+    }
 }

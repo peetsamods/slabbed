@@ -82,6 +82,21 @@ public final class TerrainSlabsCompat {
         return CompatSlabSurfaceKind.NONE;
     }
 
+    /**
+     * True only for a PLAYER-PLACED Terrain Slabs BOTTOM half-slab: a recognised TS surface,
+     * {@code type=BOTTOM}, and NOT {@code generated} (i.e. not natural worldgen terrain). This is the
+     * strict gate for lowering a placed full cube flush onto it; natural terrain (generated bottom
+     * slabs and generated doubles) is deliberately excluded so full cubes there stay at grid height
+     * and never tear see-through world holes.
+     */
+    public static boolean isPlacedBottomHalfSlab(BlockState state) {
+        if (customSlabSurfaceKind(state) != CompatSlabSurfaceKind.BOTTOM_LIKE) {
+            return false;
+        }
+        return state.get(SlabBlock.TYPE) == SlabType.BOTTOM
+                && !propertyEquals(state, "generated", "true");
+    }
+
     private static boolean isNamedCustomSlabSurface(Identifier id) {
         if (!isTerrainSlabsId(id)) {
             return false;
