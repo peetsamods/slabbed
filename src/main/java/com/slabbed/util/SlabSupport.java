@@ -3,6 +3,7 @@ package com.slabbed.util;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import net.minecraft.block.BellBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
@@ -44,10 +45,12 @@ import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.WorldView;
 
@@ -208,6 +211,47 @@ public final class SlabSupport {
                 && state.get(Properties.AXIS) == Direction.Axis.Y;
     }
 
+    /**
+     * True when {@code state} is a vertical chain whose block immediately above is a top/double
+     * slab acting as a ceiling support. Such a chain renders an elongated 0..24 model at dy=0
+     * (see {@code ChainCeilingGeometry}) bridging the half-block gap; its outline/raycast still
+     * derives from the +0.5 ceiling-attach dy via {@link #ceilingBridgedVerticalChainSelectionShape}.
+     */
+    public static boolean isVerticalChainDirectlyUnderCeilingSupport(
+            BlockView world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && isBeta35VerticalChainVisibleOwnerObject(state)
+                && isCeilingSupportBottomSurface(world, pos.up());
+    }
+
+    /**
+     * Selection (outline/raycast) shape for a vertical chain bridged under a ceiling support.
+     * Keeps the provided {@code fallback} base and unions vertically-moved copies so the wire
+     * box spans the elongated chain (0..1.5 blocks) and agrees with the rendered geometry.
+     * Mirrors the live-confirmed NeoForge behaviour (tag lantern-chain-live-confirmed).
+     */
+    public static VoxelShape ceilingBridgedVerticalChainSelectionShape(
+            BlockView world, BlockPos pos, BlockState state, VoxelShape fallback) {
+        VoxelShape base = fallback == null ? VoxelShapes.empty() : fallback;
+        if (!isVerticalChainDirectlyUnderCeilingSupport(world, pos, state)) {
+            return base;
+        }
+        if (base.isEmpty()) {
+            return Block.createCuboidShape(6.5d, 0.0d, 6.5d, 9.5d, 24.0d, 9.5d);
+        }
+
+        VoxelShape selection = base;
+        Box bounds = base.getBoundingBox();
+        if (bounds.minY > 0.0d) {
+            selection = VoxelShapes.union(selection, base.offset(0.0d, -bounds.minY, 0.0d));
+        }
+        if (bounds.maxY < 1.5d) {
+            selection = VoxelShapes.union(selection, base.offset(0.0d, 1.5d - bounds.maxY, 0.0d));
+        }
+        return selection;
+    }
+
     public static boolean isBeta35RegularDoorVisibleOwnerObject(
             BlockView world, BlockPos pos, BlockState state
     ) {
@@ -328,6 +372,22 @@ public final class SlabSupport {
             }
         }
         return getYOffset(world, pos, state);
+    }
+
+    /**
+     * True when the block at {@code pos} is a pointed dripstone that Slabbed renders LOWERED.
+     * Its render/outline is offset down, but vanilla server hit-validation expects the un-offset
+     * cell, so a use-on (e.g. combining/extending the dripstone) is rejected except where the
+     * lowered tip still overlaps the vanilla cell. Whitelisting it lets the server shift validation
+     * to the lowered position so the whole rendered tip is interactable.
+     */
+    public static boolean isLoweredPointedDripstoneServerHitTarget(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || !(state.getBlock() instanceof PointedDripstoneBlock)) {
+            return false;
+        }
+        double dy = getBeta35ShiftedServerValidationYOffset(world, pos, state);
+        return Double.isFinite(dy) && dy < -1.0e-6d;
     }
 
     private static double beta35BottomTrapdoorVisibleOwnerDy(BlockView world, BlockPos pos, BlockState state) {
@@ -846,6 +906,9 @@ public final class SlabSupport {
     /** Recursion guard: prevents StackOverflow when isSolidBlock triggers getOutlineShape → getYOffset. */
     private static final ThreadLocal<Boolean> IN_GET_Y_OFFSET = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
+    /** Kill switch for the slab-height step-face cull relaxation ({@link #isSlabHeightStepFace}). */
+    private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
+
     /**
      * Returns true if the block state represents a ceiling-attached block —
      * one that hangs from the block above it by nature.
@@ -1047,6 +1110,60 @@ public final class SlabSupport {
         } finally {
             IN_GET_Y_OFFSET.set(Boolean.FALSE);
         }
+    }
+
+    /**
+     * Render cull-relaxation predicate: returns true when {@code direction}'s HORIZONTAL side
+     * face of the block at {@code pos} sits at a SLAB-HEIGHT STEP against its neighbour — i.e.
+     * the two blocks render at different heights ({@code |getYOffset(self) − getYOffset(neighbour)|
+     * > ε}). Vanilla / Indigo / Sodium all cull that shared side face (both are full cubes in
+     * their voxel cells), but the model offset drops one of them, exposing a strip that was never
+     * meshed → a see-through "ghost window". A client cull mixin is expected to force-draw the
+     * face when this returns true.
+     *
+     * <p><b>Contract:</b> only ever used to flip cull→draw (never draw→cull), so it cannot create
+     * new culling/z-fight artifacts: the two coplanar seam faces face opposite ways (GPU
+     * back-face-culls the far one) and the still-occluded portion hides behind the opaque
+     * neighbour body. Uses the SAME {@link #getYOffset} signal the offset model renders with
+     * (via {@code ClientDy.dyFor}), so the un-culled face matches the shifted geometry exactly.
+     *
+     * <p>Horizontal faces only (the common terrace/canopy window). Vertical steps (a frozen-flat
+     * block directly above a lowered one) are a documented follow-up; see
+     * {@code docs/CULL-WINDOW-FIX-DESIGN.md}. Disabled by {@code -Dslabbed.disableStepCull}.
+     *
+     * <p>No render wiring calls this yet — it is pure, recursion-guarded ({@link #getYOffset})
+     * logic, safe to call from the chunk-mesh BlockView context.
+     */
+    public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
+        if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
+                || !direction.getAxis().isHorizontal()) {
+            return false;
+        }
+        return slabHeightStepFaceAgainst(world, pos, state, direction, getYOffset(world, pos, state));
+    }
+
+    /**
+     * Variant that reuses an already-computed self dy (== {@code getYOffset(world,pos,state)}) so the
+     * per-block render path does not recompute the block's own offset once per horizontal direction
+     * (4x per block). The caller must pass exactly {@code getYOffset(world,pos,state)}; behaviour is
+     * otherwise identical to the 4-arg overload.
+     */
+    public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction, double selfDy) {
+        if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
+                || !direction.getAxis().isHorizontal()) {
+            return false;
+        }
+        return slabHeightStepFaceAgainst(world, pos, state, direction, selfDy);
+    }
+
+    private static boolean slabHeightStepFaceAgainst(BlockView world, BlockPos pos, BlockState state, Direction direction, double selfDy) {
+        BlockPos neighborPos = pos.offset(direction);
+        BlockState neighbor = world.getBlockState(neighborPos);
+        if (neighbor.isAir()) {
+            return false;
+        }
+        double neighborDy = getYOffset(world, neighborPos, neighbor);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
     }
 
     /**
@@ -1514,6 +1631,102 @@ public final class SlabSupport {
     }
 
     /**
+     * A solid, non-slab, non-block-entity full block with AIR directly below it —
+     * i.e. a block cantilevered out over empty space, the only case where merging a
+     * full block down to a lowered neighbour is wanted (a block resting on solid
+     * ground must NOT sink). Recursion-safe ({@code isSolidBlock} is guarded by
+     * {@link #IN_GET_Y_OFFSET}); never calls {@link #getYOffset}.
+     */
+    private static boolean isCantileverFullBlockCandidate(BlockView world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && state != null
+                && !state.isAir()
+                && !(state.getBlock() instanceof SlabBlock)
+                && !(state.getBlock() instanceof BlockEntityProvider)
+                && state.getFluidState().isEmpty()
+                && state.isSolidBlock(world, pos)
+                && world.getBlockState(pos.down()).isAir();
+    }
+
+    /**
+     * A full block that is GENUINELY lowered by its own support — a slab directly
+     * below, a direct/vertical anchor, or a lowered column reaching a slab beneath it
+     * (e.g. an upper log in a lowered trunk). This is the "anchor" a cantilever lane
+     * may hang off of; cantilever-lowered blocks themselves are deliberately excluded
+     * (they are lane members, reached by the walk, not sources) so lowering can never
+     * be self-sustaining without a real support. Recursion-safe: every predicate here
+     * is already invoked by {@link #getYOffsetInner} under the {@link #IN_GET_Y_OFFSET}
+     * guard and none call {@link #getYOffset}.
+     */
+    private static boolean isGenuinelyLoweredFullBlockSource(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isSolidBlock(world, pos)) {
+            return false;
+        }
+        return hasBottomSlabBelow(world, pos)
+                || SlabAnchorAttachment.isAnchored(world, pos)
+                || (shouldOffset(world, pos, state) && slabColumnYOffset(world, pos) < -1.0e-6);
+    }
+
+    /**
+     * Geometric, recursion-safe replacement for the (removed) stale side-adjacent
+     * full-block anchor: a full block cantilevered over air lowers {@code -0.5} to
+     * merge flush with a lowered tower it is connected to, computed live so it
+     * recomputes whenever the structure changes — it never goes stale and never
+     * "pops" out of sync with its neighbours.
+     *
+     * <p>Breadth-first walk through connected cantilever full blocks (each over air),
+     * bounded by {@link #MAX_CHAIN_DEPTH}, returning true as soon as the lane reaches
+     * a GENUINE lowered source: a full-block carrier lowered by a slab below it or a
+     * direct/vertical anchor ({@link #isLoweredFullBlockCarrier}), or a lowered slab
+     * ({@link #isAdjacentSideSlabLowered}) so mixed slab+block canopies settle at one
+     * consistent level. Mirrors the slab lane BFS ({@code hasLoweredSlabLaneSupport})
+     * and the proven 1.21.11 {@code isAdjacentToLoweredFullBlock} model. Calls neither
+     * {@link #getYOffset} nor itself with circular dependence, so it is safe inside the
+     * {@link #IN_GET_Y_OFFSET} guard.
+     */
+    private static boolean isCantileverLoweredFullBlock(BlockView world, BlockPos pos, BlockState state) {
+        if (!isCantileverFullBlockCandidate(world, pos, state)) {
+            return false;
+        }
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
+        queue.add(pos);
+        visited.add(pos.asLong());
+        while (!queue.isEmpty() && visited.size() <= MAX_CHAIN_DEPTH) {
+            BlockPos cursor = queue.removeFirst();
+            for (Direction dir : Direction.Type.HORIZONTAL) {
+                BlockPos neighborPos = cursor.offset(dir);
+                BlockState neighbor = world.getBlockState(neighborPos);
+                if (neighbor == null || neighbor.isAir()) {
+                    continue;
+                }
+                boolean neighborIsSlab = neighbor.getBlock() instanceof SlabBlock;
+                // Genuine lowered source: a full block lowered by its own support
+                // (slab-below / anchor / lowered column), or a lowered slab. Reaching
+                // one lowers the whole cantilever lane.
+                if (!neighborIsSlab && isGenuinelyLoweredFullBlockSource(world, neighborPos, neighbor)) {
+                    return true;
+                }
+                if (neighborIsSlab && isAdjacentSideSlabLowered(world, neighborPos, neighbor)) {
+                    return true;
+                }
+                // Propagate only through further cantilever full blocks (over air).
+                if (!neighborIsSlab
+                        && isCantileverFullBlockCandidate(world, neighborPos, neighbor)
+                        && visited.add(neighborPos.asLong())) {
+                    queue.addLast(neighborPos);
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns true when the non-slab solid block at {@code pos} carries compound dy=-1.0 —
      * i.e. the same conditions that cause {@link #getYOffsetInner} to return -1.0 for it.
      * Safe to call inside the IN_GET_Y_OFFSET recursion guard: does not delegate to getYOffset.
@@ -1657,6 +1870,17 @@ public final class SlabSupport {
             if (SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
                 return -1.0;
             }
+            // FREEZE-ON-PLACE: a slab locked lowered at placement (freezeLoweredOnPlace) reads
+            // its anchor and never recomputes — so breaking an adjacent source can no longer
+            // pop it back up, and its rendered mesh never drifts from the value.
+            if (SlabAnchorAttachment.isAnchored(world, pos)) {
+                return -0.5;
+            }
+            // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
+            // placed beside/under it later can no longer make it inherit a lowered position.
+            if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+                return 0.0;
+            }
             if (state.contains(SlabBlock.TYPE)
                     && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
                     && isBottomPersistentTracePos(pos)) {
@@ -1771,6 +1995,25 @@ public final class SlabSupport {
             return -0.5;
         }
 
+        // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a
+        // slab or lowered carrier added under/beside it later can no longer pull it down
+        // (Julia's law: a placed block must not autonomously move). Read before any of the
+        // geometric lowering below. Decorative followers are never frozen-flat, so they keep
+        // tracking their supports.
+        if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+            return 0.0;
+        }
+
+        // Cantilevered full block (air below, connected to a lowered tower): lower -0.5 to
+        // merge, computed GEOMETRICALLY — it recomputes whenever the structure changes, so it
+        // never goes stale and never pops out of sync (the replacement for the removed
+        // side-adjacent anchor). Air-gated, so a block resting on solid ground never sinks.
+        // Together with the isAdjacentSideSlabLowered slab branch above, mixed canopies of
+        // slabs and full blocks settle at one consistent lowered level off the same tower.
+        if (isCantileverLoweredFullBlock(world, pos, state)) {
+            return -0.5;
+        }
+
         if (isFloorTorch(state)) {
             BlockPos supportPos = pos.down();
             BlockState supportState = world.getBlockState(supportPos);
@@ -1843,6 +2086,38 @@ public final class SlabSupport {
         double ordinaryFullBlockContactDy = beta35OrdinaryFullBlockContactDy(world, pos, state);
         if (Double.isFinite(ordinaryFullBlockContactDy)) {
             return ordinaryFullBlockContactDy;
+        }
+
+        // Terrain Slabs direct object support: an object (or a VANILLA slab) resting directly on a
+        // Terrain Slabs BOTTOM_LIKE surface must lower -0.5 to sit FLUSH on it, exactly as it would
+        // on a vanilla bottom slab — the TS slab ITSELF stays subtractive (shouldSkipOffset), so this
+        // lane only ever lowers the OBJECT on top, never the TS slab. Ordered LATE — after the
+        // cantilever and every anchor/beta35 contact lane, immediately before the generic shouldOffset
+        // slab-column lane — so the real cantilever logic runs first and a vanilla slab cantilevered
+        // over a TS edge is NOT spuriously lowered by TS (faithful to COMPAT_REF, which dispatches the
+        // same lane right before shouldOffset). Ceiling-hung / HANGING decorations are excluded here
+        // (they hang from ABOVE and are handled by the ceiling-attached lanes below); without this
+        // guard the downward column walk in isDirectCustomSlabSupportedObject would drag a hanger
+        // beneath a flush TS slab down through it — the behavioural equivalent of COMPAT_REF's
+        // head-of-getYOffsetInner ceiling-hung dispatch.
+        if (!isCeilingAttached(state)) {
+            double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
+            if (!Double.isNaN(directCustomSurfaceDy)) {
+                double dy = directCustomSurfaceDy;
+                double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
+                if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
+                    dy += supportLoweredDy;
+                }
+                if (state.getBlock() instanceof SlabBlock
+                        && state.contains(SlabBlock.TYPE)
+                        && state.get(SlabBlock.TYPE) == SlabType.TOP) {
+                    dy += -0.5;
+                }
+                if (dy < -1.0) {
+                    dy = -1.0;
+                }
+                return dy;
+            }
         }
 
         if (shouldOffset(world, pos, state)) {
@@ -2144,7 +2419,173 @@ public final class SlabSupport {
         if (block instanceof CraftingTableBlock) {
             return true;
         }
+        if (SLAB_SIT_OBJECT_CUBES.contains(block)) {
+            return true;
+        }
+        // Opaque full cubes always stay flush: lowering an opaque cube -0.5 while the chunk mesher
+        // still culls at its grid voxel tears see-through holes across Terrain Slabs terrain (the
+        // pulled-hotfix world-hole DODO). Use the view-INDEPENDENT opaque-full-cube test — NOT
+        // isSolidBlock(world,pos), which is view-dependent: under a ChunkRendererRegion on the
+        // render thread it can report a plain stone cube as NOT solid, lowering natural terrain on
+        // the worker mesh while main-thread culling stays put → holes. Non-opaque / non-cube objects
+        // (fences, panes, torches, slabs-on-objects, …) are not opaque full cubes, so they still
+        // fall through to the !isSolidBlock candidate test and lower as before.
+        if (isOpaqueFullCubeViewIndependent(state)) {
+            return false;
+        }
         return !state.isSolidBlock(world, pos);
+    }
+
+    /**
+     * View-INDEPENDENT "opaque full cube" probe — the 1.21.1 equivalent of 1.21.11's precomputed
+     * no-arg {@code state.isOpaqueFullCube()}, which does not exist in Yarn 1.21.1+build.3 (only the
+     * view-DEPENDENT {@code isOpaqueFullCube(BlockView, BlockPos)} overload is mapped). Reads the
+     * precomputed {@code isOpaque()} flag and probes the collision shape against
+     * {@link EmptyBlockView#INSTANCE} at {@link BlockPos#ORIGIN} — exactly the idiom vanilla uses to
+     * precompute its own {@code isFullCube} shape cache (AbstractBlock.AbstractBlockState ctor) and
+     * its navigation full-cube checks. No real {@code world}/{@code pos} is consulted, so the result
+     * is deterministic across client / render-region views and cannot trigger the world-hole DODO.
+     */
+    private static boolean isOpaqueFullCubeViewIndependent(BlockState state) {
+        return state.isOpaque()
+                && state.isFullCube(net.minecraft.world.EmptyBlockView.INSTANCE, BlockPos.ORIGIN);
+    }
+
+    /**
+     * Curated full-cube "objects" that should sit on a slab even though they are
+     * opaque full cubes (which are otherwise treated as terrain). Block entities
+     * and the crafting table are already covered by {@link #isSlabSitCandidate};
+     * this set is for the remaining non-BE object cubes. Building/terrain cubes
+     * (wool, concrete, terracotta, planks, …) are intentionally NOT included to
+     * keep them at grid height and avoid see-through terrain.
+     */
+    private static final Set<Block> SLAB_SIT_OBJECT_CUBES = Set.of(
+            // functional full-cube workstations (consistent with the crafting table)
+            Blocks.SMITHING_TABLE, Blocks.FLETCHING_TABLE, Blocks.CARTOGRAPHY_TABLE, Blocks.LOOM,
+            // decorative full cubes commonly placed as objects
+            Blocks.PUMPKIN, Blocks.CARVED_PUMPKIN, Blocks.JACK_O_LANTERN, Blocks.MELON,
+            Blocks.BOOKSHELF, Blocks.HAY_BLOCK, Blocks.NOTE_BLOCK, Blocks.DRIED_KELP_BLOCK,
+            Blocks.SPONGE, Blocks.WET_SPONGE, Blocks.TARGET, Blocks.REDSTONE_LAMP);
+
+    /**
+     * True if the object/full-block/vanilla-slab at {@code pos} rests (directly, or through a
+     * column of already-lowered slab-sit objects) on a Terrain Slabs BOTTOM_LIKE surface. The
+     * walk stops at the first non-object (terrain cube / air), which keeps anything resting
+     * above natural ground at grid height. Mirrors COMPAT_REF's isDirectCustomSlabSupportedObject.
+     */
+    public static boolean isDirectCustomSlabSupportedObject(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
+            return false;
+        }
+
+        BlockPos supportPos = pos.down();
+        if (state.contains(Properties.DOUBLE_BLOCK_HALF)
+                && state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
+            BlockState lowerState = world.getBlockState(pos.down());
+            if (lowerState.getBlock() != state.getBlock()
+                    || !lowerState.contains(Properties.DOUBLE_BLOCK_HALF)
+                    || lowerState.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
+                return false;
+            }
+            supportPos = pos.down(2);
+        }
+
+        // Walk down the support column. A custom bottom-like Terrain Slabs surface
+        // lowers the object; a lowered "slab-sit" object below (a fence/torch/crafting
+        // table/... already lowered onto the slab) carries the same -0.5 up the stack,
+        // so stacked objects keep sitting correctly. The walk stops at the first
+        // non-object (terrain cube / air), keeping anything above that at grid height.
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState supportState = world.getBlockState(supportPos);
+            if (CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
+            if (isDirectCustomSlabSupportSubject(world, supportPos, supportState)) {
+                supportPos = supportPos.down();
+                continue;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    private static double directCustomSlabSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        if (!isDirectCustomSlabSupportedObject(world, pos, state)) {
+            return Double.NaN;
+        }
+        return -0.5;
+    }
+
+    /**
+     * Recursion-safe rendered dy of a VANILLA bottom-slab support directly beneath an object,
+     * used to compound a mixed-slab lowering (a vanilla bottom slab capping a Terrain Slabs
+     * surface). Returns -0.5 if that vanilla support is itself lowered (anchored or
+     * mixed-on-TS), 0.0 if it is a flush vanilla bottom slab, and NaN if the support is not a
+     * vanilla bottom slab. Never re-enters {@link #getYOffset}. Mirrors COMPAT_REF.
+     */
+    private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos) {
+        BlockState s = world.getBlockState(supportPos);
+        if (s == null
+                || !(s.getBlock() instanceof SlabBlock)
+                || !s.contains(SlabBlock.TYPE)
+                || s.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                || !s.getFluidState().isEmpty()) {
+            return Double.NaN;
+        }
+        double base;
+        if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
+            base = -0.5;
+        } else {
+            // A vanilla slab that itself sits on a Terrain Slabs surface (a MIXED slab) is
+            // lowered -0.5 by the directCustom lane; the object above it inherits that drop.
+            double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
+            if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
+                base = directCustomDy;
+            } else if (isAdjacentSideSlabLowered(world, supportPos, s)) {
+                base = -0.5;
+            } else {
+                base = 0.0;
+            }
+        }
+        // A lowered TOP slab support presents its top surface a full cell above its lowered base,
+        // so an object resting on it drops an extra -0.5 (mirrors the object-on-TOP-slab term in
+        // the directCustom lane). Bottom slabs unaffected; DOUBLE excluded above; caller clamps -1.0.
+        if (base < -1.0e-6 && s.get(SlabBlock.TYPE) == SlabType.TOP) {
+            base += -0.5;
+        }
+        return base;
+    }
+
+    /**
+     * True for a VANILLA (minecraft-namespace) slab — the only slab kind allowed to be a
+     * directCustom subject. This lets a vanilla slab placed on a Terrain Slabs surface lower
+     * onto it ("combine into a flush double"), while Terrain Slabs' own slabs are excluded so
+     * the existing skip-offset asymmetry is unchanged. Mirrors COMPAT_REF.
+     */
+    private static boolean isVanillaDirectCustomSlabSubject(BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock) || !state.contains(SlabBlock.TYPE)) {
+            return false;
+        }
+        Identifier id = Registries.BLOCK.getId(state.getBlock());
+        return id != null && "minecraft".equals(id.getNamespace());
+    }
+
+    private static boolean isDirectCustomSlabSupportSubject(BlockView world, BlockPos pos, BlockState state) {
+        if (state.isAir()
+                || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
+                || isThinTopLayer(state)
+                || !state.getFluidState().isEmpty()
+                || CompatHooks.shouldSkipOffset(state)) {
+            return false;
+        }
+
+        // Terrain Slabs compat: lower the same "objects" that sit on vanilla slabs — block
+        // entities, the crafting table, and every non-full-cube block. isSlabSitCandidate
+        // deliberately EXCLUDES plain opaque world cubes (dirt, grass, stone, …): lowering those
+        // would tear see-through holes (the half-height TS side faces are cullface-tagged), which
+        // is the world-hole DODO. Terrain-Slabs-only: vanilla slab behaviour and generic Slabbed
+        // support are untouched.
+        return isVanillaDirectCustomSlabSubject(state) || isSlabSitCandidate(world, pos, state);
     }
 
     /**
