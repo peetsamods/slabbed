@@ -50,6 +50,17 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
     private static final ModelProperty<RenderContextInfo> SLABBED_RENDER_CONTEXT = new ModelProperty<>();
     private static final ThreadLocal<Deque<RenderContextInfo>> SLABBED_RENDER_CONTEXT_FALLBACK =
             new ThreadLocal<>();
+    // Render-path trace flags read ONCE at class-load (not per block). Each gates a diagnostic that
+    // is OFF in production; reading Boolean.getBoolean per block on the chunk-mesh worker needlessly
+    // locks the system-properties table every block every frame — the generalized form of the Fabric
+    // 1.21.1 per-block-trace lag. These flags are set via -D at JVM launch (no runtime setProperty in
+    // tests, verified), so caching is exact. NOTE: slabbed.render.offset.trace is deliberately NOT
+    // cached here because client gametests toggle it at runtime; its guard is reordered cheap-first
+    // instead (see slabbed$recordLegacyRenderOffsetSample).
+    private static final boolean MC1211_FULL_MESH_BOUNDS_TRACE =
+            Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace");
+    private static final boolean MC1211_LIVE_MODEL_TRACE =
+            Boolean.getBoolean("slabbed.mc1211.liveModelTrace");
     private static volatile BlockPos slabbed$tracePos = null;
     private static volatile RenderOffsetSample slabbed$lastTrace = RenderOffsetSample.missing();
     private static volatile BlockPos slabbed$modelDyOwnerTracePos = null;
@@ -334,15 +345,17 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
             slabbed$recordLegacyRenderOffsetSample(view, pos, state, dy);
             slabbed$maybeLogAnchorTrace(view, pos, dy);
 
-            MeshBounds bounds = measureBounds(chainCeilingQuads, dy);
-            slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, originalModel, dy,
-                    chainCeilingQuads.size(),
-                    bounds.verticesVisited(),
-                    bounds.minBeforeY(),
-                    bounds.maxBeforeY(),
-                    bounds.minAfterY(),
-                    bounds.maxAfterY(),
-                    "chain_ceiling_alternate_geometry");
+            if (slabbed$fullMeshBoundsTraceArmed()) {
+                MeshBounds bounds = measureBounds(chainCeilingQuads, dy);
+                slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, originalModel, dy,
+                        chainCeilingQuads.size(),
+                        bounds.verticesVisited(),
+                        bounds.minBeforeY(),
+                        bounds.maxBeforeY(),
+                        bounds.minAfterY(),
+                        bounds.maxAfterY(),
+                        "chain_ceiling_alternate_geometry");
+            }
             if (slabbed$isStepCullTracePos(pos)) {
                 slabbed$recordStepCullSample(
                         view,
@@ -412,15 +425,17 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
             reason = "dy_zero_no_step_faces";
         }
 
-        MeshBounds bounds = measureBounds(quads, dy);
-        slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, originalModel, dy,
-                totalQuadsSeen,
-                bounds.verticesVisited(),
-                bounds.minBeforeY(),
-                bounds.maxBeforeY(),
-                bounds.minAfterY(),
-                bounds.maxAfterY(),
-                reason);
+        if (slabbed$fullMeshBoundsTraceArmed()) {
+            MeshBounds bounds = measureBounds(quads, dy);
+            slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, originalModel, dy,
+                    totalQuadsSeen,
+                    bounds.verticesVisited(),
+                    bounds.minBeforeY(),
+                    bounds.maxBeforeY(),
+                    bounds.minAfterY(),
+                    bounds.maxAfterY(),
+                    reason);
+        }
         if (observeStepCull) {
             slabbed$recordStepCullSample(
                     view,
@@ -474,9 +489,13 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
     }
 
     private static void slabbed$recordLegacyRenderOffsetSample(BlockAndTintGetter view, BlockPos pos, BlockState state, float dy) {
-        if (!Boolean.getBoolean("slabbed.render.offset.trace")
+        // Cheap checks FIRST so production (trace pos unset) short-circuits before the
+        // system-property read. slabbed.render.offset.trace is set at RUNTIME by client gametests,
+        // so it must stay a live Boolean.getBoolean (not a class-load cached static) — but it is now
+        // only read for the single armed trace position, never per block.
+        if (!pos.equals(slabbed$tracePos)
                 || !(state.getBlock() instanceof ChainBlock)
-                || !pos.equals(slabbed$tracePos)) {
+                || !Boolean.getBoolean("slabbed.render.offset.trace")) {
             return;
         }
         boolean excluded = state.getBlock() instanceof FenceBlock
@@ -680,7 +699,7 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
             float modelDyBeforeWrapper,
             float modelDyAfterWrapper
     ) {
-        if (!Boolean.getBoolean("slabbed.mc1211.liveModelTrace")) {
+        if (!MC1211_LIVE_MODEL_TRACE) {
             return;
         }
 
@@ -771,6 +790,16 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
         }
     }
 
+    /**
+     * True when the full-mesh-bounds diagnostic is armed — either a specific trace position is set
+     * (dev/test) or the launch flag is on. Callers gate {@link #measureBounds} + the sampler on this
+     * so the per-vertex bounds loop and the sampler's per-block registry/string allocation never run
+     * in production (where both are pure waste — the sampler returns without emitting).
+     */
+    private static boolean slabbed$fullMeshBoundsTraceArmed() {
+        return slabbed$fullMeshBoundsTracePos != null || MC1211_FULL_MESH_BOUNDS_TRACE;
+    }
+
     private static void slabbed$recordMc1211FullMeshBoundsSample(
             BlockAndTintGetter view,
             BlockPos pos,
@@ -785,6 +814,13 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
             double maxAfterY,
             String reason
     ) {
+        // Defensive: bail BEFORE the per-block registry lookup + string allocations below when the
+        // diagnostic is not armed (callers already gate on slabbed$fullMeshBoundsTraceArmed(), this
+        // guards any future caller). Previously this work ran every block then was discarded at the
+        // gate further down (gate-after-work).
+        if (!slabbed$fullMeshBoundsTraceArmed()) {
+            return;
+        }
         String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         String matrixKey = blockId + "@" + pos.toShortString();
         String matrixRow = slabbed$mc1211FamilyMatrixRow(blockId);
@@ -795,7 +831,7 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
         String meshTraceKey = matrixKey + "|pass=" + passSequence;
         BlockPos observedPos = slabbed$fullMeshBoundsTracePos;
         boolean observedProofRow = observedPos != null && observedPos.equals(pos);
-        boolean fullMeshBoundsTraceEnabled = Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace");
+        boolean fullMeshBoundsTraceEnabled = MC1211_FULL_MESH_BOUNDS_TRACE;
         boolean aggregateTraceCandidate = fullMeshBoundsTraceEnabled
                 && slabbed$shouldLogMc1211FullMeshBoundsSample(pos, blockId, dy);
         String renderOutlineBounds = observedProofRow || aggregateTraceCandidate
@@ -882,7 +918,7 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
             BlockState state,
             boolean finiteBounds
     ) {
-        if (!Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace")) {
+        if (!MC1211_FULL_MESH_BOUNDS_TRACE) {
             return;
         }
         Slabbed.LOGGER.info(
