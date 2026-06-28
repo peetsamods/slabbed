@@ -628,6 +628,68 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
+     * RED #2 proof — the Terrain Slabs "smooshed lantern on a TOP slab" mechanism, reproduced
+     * with vanilla blocks (headless, no TS mod needed).
+     *
+     * <p>A DECORATIVE FOLLOWER (standing lantern) lowered onto a slab at placement must NOT be
+     * frozen as a persistent anchor. The anchor system's documented scope is "ordinary full-block
+     * vertical slab chains ... No torch interaction" — followers TRACK their support geometrically
+     * and must never freeze. The bug: {@code freezeLoweredOnPlace}'s {@code dy<0} branch anchored
+     * EVERY lowered piece via {@code addAnchorUnchecked} (no structural gate, unlike the {@code dy≈0}
+     * branch). So a follower lowered -0.5 onto a TS/vanilla bottom slab was pinned by a stale
+     * anchor; when the support surface later became flush/full-height (a TOP slab), the anchor kept
+     * the follower smooshed at -0.5 instead of recomputing to flush. This is the exact live symptom
+     * (lantern on a TS top slab reported {@code dy=-0.5 src=ANCHORED}). The freeze/anchor mechanism
+     * is TS-independent, so a vanilla BOTTOM→TOP slab retype reproduces it deterministically.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void loweredFollowerStaysGeometricNotAnchored(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = fixtureTestOrigin(ctx);
+
+        BlockPos slabPos = origin.add(2, 2, 0);
+        BlockPos lanternPos = slabPos.up();
+        world.setBlockState(slabPos, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        world.setBlockState(lanternPos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+
+        // REAL placement: onPlaced → BlockOnPlacedAnchorMixin → freezeLoweredOnPlace.
+        BlockState lantern = authorBlock(world, lanternPos, Blocks.LANTERN.getDefaultState());
+        ctx.assertTrue(lantern.isOf(Blocks.LANTERN), "lantern not present at test position");
+
+        // Geometric lowering on a bottom slab is correct (-0.5).
+        double dyOnBottom = SlabSupport.getYOffset(world, lanternPos, lantern);
+        ctx.assertTrue(dyOnBottom == -0.5,
+                "standing lantern over a bottom slab should lower to -0.5; got " + dyOnBottom);
+
+        // SCOPE LAW (the RED): a decorative follower lowered onto a slab must NOT be anchored —
+        // anchors are for ordinary full-block slab chains only ("no torch interaction").
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, lanternPos),
+                "decorative follower lowered onto a slab must NOT be anchored (it must track its support)");
+
+        // Retype the support to a TOP slab (flush full-height top). NOTIFY_LISTENERS avoids
+        // neighbor-survival updates so the follower stays put; dy reads world state directly.
+        world.setBlockState(slabPos, slab(SlabType.TOP), Block.NOTIFY_LISTENERS);
+        BlockState lanternAfter = world.getBlockState(lanternPos);
+        ctx.assertTrue(lanternAfter.isOf(Blocks.LANTERN), "lantern unexpectedly removed by slab retype");
+        double dyOnTop = SlabSupport.getYOffset(world, lanternPos, lanternAfter);
+        ctx.assertTrue(dyOnTop == 0.0,
+                "follower on a TOP slab must recompute to flush (dy=0); got " + dyOnTop
+                + " — a stale anchor would pin it lowered (smooshed into the slab)");
+
+        // Regression guard: a STRUCTURAL full block lowered onto a bottom slab MUST still anchor
+        // (Julia's never-pop law for structural pieces is unchanged by the follower fix).
+        BlockPos structSlabPos = origin.add(4, 2, 0);
+        BlockPos stonePos = structSlabPos.up();
+        world.setBlockState(structSlabPos, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);
+        world.setBlockState(stonePos.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        authorBlock(world, stonePos, Blocks.STONE.getDefaultState());
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, stonePos),
+                "structural full block lowered onto a bottom slab MUST still anchor (never-pop law)");
+
+        ctx.complete();
+    }
+
+    /**
      * Truth table for {@link SlabSupport#isSlabHeightStepFace} — the renderer-agnostic predicate
      * a future cull mixin will use to force-draw the see-through "ghost window" seam (see
      * docs/CULL-WINDOW-FIX-DESIGN.md). Pure logic; no render wiring calls it yet.

@@ -289,23 +289,32 @@ public final class SlabAnchorAttachment {
             return;
         }
         double dy = SlabSupport.getYOffset(world, pos, state);
+        // Only STRUCTURAL pieces (ordinary full blocks and slabs) freeze. Decorative followers
+        // (lanterns, torches, hangers, signs, the crafting-table/BE "objects", …) must stay fully
+        // GEOMETRIC so they always track their support's current surface — exactly the anchor
+        // system's documented scope ("ordinary full-block vertical slab chains … No torch
+        // interaction"). Applies to BOTH the lowered (dy<0) and flat (dy≈0) cases: freezing a
+        // follower's lowered state pins it with a persistent anchor that goes STALE when the
+        // support surface later changes (e.g. a Terrain-Slabs / vanilla BOTTOM slab retyped to a
+        // flush TOP surface), leaving the follower smooshed -0.5 into it instead of recomputing
+        // to flush. Structural cantilevered full blocks and adjacent-side-merged slabs still
+        // freeze via this gate (both are full-height / SlabBlock candidates).
+        boolean structural = isOrdinaryFullBlockAnchorCandidate(world, pos, state)
+                || state.getBlock() instanceof SlabBlock;
+        if (!structural) {
+            return;
+        }
         if (dy < -1.0e-6) {
             // addAnchorUnchecked records ANCHOR_TYPE (read as -0.5) and adds the compound
             // sidecar (-1.0) when the piece qualifies, so both lowered lanes freeze.
             addAnchorUnchecked(world, pos);
             return;
         }
-        // dy ≈ 0: lock the FLAT height of a STRUCTURAL piece (ordinary full block or slab)
-        // so a slab / lowered carrier placed under or beside it later can no longer pull it
-        // down (Julia's "placed slab under a floating block must not lower it"). Gated to
-        // structural pieces so decorative followers (lanterns/torches/hangers/signs) keep
-        // tracking their supports. Non-structural and natural (terrain / setBlockState, which
-        // never call onPlaced) pieces stay fully geometric.
-        boolean structural = isOrdinaryFullBlockAnchorCandidate(world, pos, state)
-                || state.getBlock() instanceof SlabBlock;
-        if (structural) {
-            addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
-        }
+        // dy ≈ 0: lock the FLAT height of a structural piece so a slab / lowered carrier placed
+        // under or beside it later can no longer pull it down (Julia's "placed slab under a
+        // floating block must not lower it"). Natural (terrain / setBlockState, which never calls
+        // onPlaced) pieces stay fully geometric.
+        addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
     }
 
     /**
