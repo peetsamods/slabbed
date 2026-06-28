@@ -55,6 +55,11 @@ public final class SlabAnchorAttachment {
             Boolean.getBoolean("slabbed.anchor.trace");
     public static final String BETA4_COMPOUND_VISIBLE_RENDER_TRACE_PROPERTY =
             "slabbed.beta4CompoundVisibleRenderTrace";
+    // Read once at class-load: this flag is queried per block on the render path
+    // (OffsetBlockStateModel -> logCompoundVisibleRenderTraceModelDy). Launch -D flag, so caching is
+    // exact and removes a per-block Boolean.getBoolean (system-properties lock). Mirrors TRACE above.
+    private static final boolean BETA4_COMPOUND_VISIBLE_RENDER_TRACE =
+            Boolean.getBoolean(BETA4_COMPOUND_VISIBLE_RENDER_TRACE_PROPERTY);
 
     /**
      * Client-side fallback for anchor queries issued by chunk render paths that
@@ -566,7 +571,7 @@ public final class SlabAnchorAttachment {
     }
 
     public static boolean beta4CompoundVisibleRenderTraceEnabled() {
-        return Boolean.getBoolean(BETA4_COMPOUND_VISIBLE_RENDER_TRACE_PROPERTY);
+        return BETA4_COMPOUND_VISIBLE_RENDER_TRACE;
     }
 
     public static boolean isCompoundVisibleAttachmentType(AttachmentType<LongOpenHashSet> type) {
