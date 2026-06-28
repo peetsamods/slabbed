@@ -185,3 +185,43 @@ to call the port release-ready before the release gate.
 ## 2026-06-12 (Claude, autonomous adversarial + live Cruise)
 
 Branch `release/mc1.21.1-0.4.0-beta.3`, HEAD `1b71ccd9` (clean, NOT pushed). **1.21.1 LOGIC HARDENED:** hunted hard with 7 adversarial gametests (`b26c1007`, in SlabbedLabFixtureTest — compound-stack float, grounded-sink, cantilever 2-out consistency, stale-anchor, refill corruption, geometric recompute, adjacent-compound homogenization); ALL PASS (37/37). No real logic bugs. **CULL FIX LIVE-CONFIRMED under Sodium:** lowered-vs-flat step seam renders SOLID from every window-exposing angle → the model-path `cullFace`-clear engages under Sodium; ghost-window gone. Broad visual hunt = one clean varied structure (more structures + placement-disobedience still open). GOTCHA: this repo is a linked worktree sharing `Slabbed/.git`, so `isolation:'worktree'` agents branched off the SHARED HEAD (`6da1643e`, a 1.21.11 commit) not this branch — verify worktree HEAD or run gametests in-repo. CRUISE GOTCHA: do `request_access` FIRST so the user isn't stuck approving each action. Remaining to release-ready (next thread, opus ultracode): exhaustive visual sweep, placement live, gold-standard cull A/B, then 1.21.11 (see that repo). See HANDOFF.md Cruise update.
+
+## 2026-06-27 (Claude/Opus, lag crisis + clean rebuild)
+
+Branch **`claude/mc1211-clean-rebuild`** (worktree `Slabbed-laghotfix`). PUSHED `c43b6a76` + tag
+`save/mc1211-clean-rebuild-dripstone` to origin = LAG SPIKE FIXED (GH #27/#28/#29: per-block
+ClassNotFoundException render storm from hygiene commit `098769f8` — negative-cache + flag-gate the
+diagnostics) + chain gap/triad (elongated `ChainCeilingGeometry`) + dripstone combine (server hit-tolerance
+shift, Julia-confirmed) + TS subtractive dual-id + richer /slabdy (4 lines). Squashed onto origin `56a98575`
+because the `3dcab83c` lineage has >100MB tmp logs (`9ec27ca4`) GitHub rejects; tmp/ now gitignored.
+Discarded Codex's broken WIP (`codex/mc1211-042-beta1-release-update`). UNCOMMITTED on top = TS full-cube
+lowering WIP — STILL BROKEN per Julia (CLEAN4): (1) full-block stack on TS bottom gaps, (2) objects on TS
+TOP slabs wrongly lowered -0.5, (3) block on a lowered support doesn't inherit the drop, (4) TS cantilever
+renders full/odd; world-hole risk unconfirmed. NEXT: fix one RED at a time (top-slab over-lower first), then
+push. See HANDOFF.md for full per-RED detail + the live-rig notes (bare-java, screencapture only).
+
+---
+
+## 2026-06-27 (cont.) — TS REDs #1/#2/#3 fixed in code (CLEAN5), live-pending
+
+Branch `claude/lag-hotfix-perf` (HEAD lineage authoritative; the `claude/mc1211-clean-rebuild` name in older
+notes is stale). Two local commits on top of `c43b6a76` (NOT pushed — gated on Julia's live confirm):
+
+- `1c6da070` **RED#2** — the "smooshed lantern on a TS top slab". ROOT CAUSE was NOT the directCustom lane
+  (it correctly excludes TS TOP) but `freezeLoweredOnPlace` anchoring decorative followers (outside the anchor
+  scope, "no torch interaction"): a follower lowered onto a TS BOTTOM slab froze at -0.5, then went STALE when
+  the surface became a flush TOP. Fix: gate BOTH freeze branches on `structural` (ordinary full block || slab);
+  followers stay geometric and recompute to 0 on a flush/top surface. HEADLESS-PROVEN via
+  `loweredFollowerStaysGeometricNotAnchored` (vanilla BOTTOM→TOP retype — exact mechanism analogue).
+- `b5bd1fc9` **RED#1 + #3** — full-cube stacks gapped / objects floated above a TS-lowered cube. ROOT CAUSE:
+  the full-cube lane lowers a cube to -0.5 but leaves it frozen-flat/un-anchored, so the compound walk never
+  saw it as a lowering support. Fix: `isTerrainSlabLoweredFullCube` wired into `hasSlabInColumn` +
+  `slabColumnYOffset` → -0.5 carried up the column uniformly. Non-TS paths unchanged (38/38 headless).
+
+KEY LESSON: on 1.21.1 the TS surface path is NOT headless-testable (the working TS client-gametests in
+COMPAT_REF need the real TS mod + the 1.21.11 client-gametest harness, which is broken here). BUT the
+freeze/anchor + compound-walk LOGIC is TS-independent, so vanilla analogues red-proof the mechanism. RED#4
+(TS slab rendering as a full cube at dy=0) looks TS-side (Slabbed is subtractive there), DEFERRED.
+
+Active jar = `slabbed-1.21.1-0.4.0-beta.3-CLEAN5.jar` (CLEAN4 → `_ab-backup/`). Next: Julia live-validates
+CLEAN5; if green, push `c43b6a76..b5bd1fc9` + tag. See HANDOFF.md for the live-test script.

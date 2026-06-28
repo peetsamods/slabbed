@@ -1,48 +1,89 @@
-# HANDOFF — 1.21.1 adversarial bug-hunt (2026-06-12)
+# HANDOFF — Slabbed 1.21.1 Fabric clean rebuild (2026-06-27)
 
-> Running handoff for the autonomous adversarial session. Updated as commits land so context survives compaction. Companion to `SLABBED_SPINE.md`.
+## Where the work lives
+- **Worktree:** `~/CascadeProjects/Slabbed-laghotfix` — branch **`claude/lag-hotfix-perf`** (NOT `claude/mc1211-clean-rebuild`; that name in older docs is stale — the HEAD/commit lineage below is authoritative).
+- **Pushed:** commit `c43b6a76` + tag `save/mc1211-clean-rebuild-dripstone` are on origin (peetsamods/slabbed).
+  That commit = lag fix + chain + dripstone + richer /slabdy + TS subtractive (the "dripstone push").
+- **LOCAL commits on top of c43b6a76 (NOT pushed — gated on Julia's live confirmation):**
+  - `1c6da070` **RED#2** — decorative followers stay geometric, never freeze a stale anchor
+    (freezeLoweredOnPlace gates BOTH branches on `structural`; the "smooshed lantern on a TS top slab"
+    fix). HEADLESS-PROVEN: gametest `loweredFollowerStaysGeometricNotAnchored` (vanilla BOTTOM→TOP retype).
+  - `b5bd1fc9` **RED#1+#3** — TS full-cube lowering (`placedTerrainSlabBottomFullCubeDy`) + compound
+    inheritance (`isTerrainSlabLoweredFullCube` wired into `hasSlabInColumn`/`slabColumnYOffset`) so
+    stacked cubes don't gap and objects on a -0.5 cube don't float. Non-TS paths unchanged; TS surface
+    behavior is LIVE-PENDING (no headless TS harness on 1.21.1).
+- **Base:** branch is `56a98575` (origin/release/mc1.21.1-0.4.0-beta.3) + ONE squashed commit. The local
+  `3dcab83c` lineage has >100MB `tmp/` logs (commit `9ec27ca4`) GitHub rejects — that's why we squashed onto
+  `56a98575` and gitignored `tmp/`. NEVER push the 3dcab83c lineage directly.
+- **Reference (LIVE-CONFIRMED, read via `git show <tag>:` — working trees are dirty/wrong-version):**
+  NeoForge `~/CascadeProjects/Slabbed-neoforge-1.21.1-port` tags `save/neoforge-1-21-1-lantern-chain-live-confirmed`
+  + `save/neoforge-1-21-1-wysiwyg-parity-green`. 1.21.11 Fabric compat `~/CascadeProjects/Slabbed-countered-compat-latest`
+  (has WORKING TS client-gametests — but they need the real TS mod + the 1.21.11 client-gametest harness,
+  which is BROKEN on 1.21.1, so the TS path cannot be unit-tested here; the 1.21.1 freeze/anchor + compound
+  walk logic IS headless-testable via vanilla analogues, which is how RED#2 was red-proofed).
+- **Live-test jar:** profile `~/Library/Application Support/ModrinthApp/profiles/Slabbed 1.21.1/mods/` —
+  active = **`slabbed-1.21.1-0.4.0-beta.3-CLEAN5.jar`** (RED#2 + RED#1/#3). CLEAN4 and earlier in `mods/_ab-backup/`.
+- **Build/test:** `cd ~/CascadeProjects/Slabbed-laghotfix && ./gradlew --no-daemon runGameTest` →
+  "All 38 required tests passed". Jar: `./gradlew --no-daemon build -x runGameTest -x runClientGameTest`
+  → `build/libs/slabbed-0.4.0-beta.3.jar`. Codex's broken WIP is the OTHER worktree
+  `~/CascadeProjects/Slabbed-phase19-integrate` (branch `codex/mc1211-042-beta1-release-update`) — DISCARDED.
 
-## Repo / branch / HEAD
-- Root: `~/CascadeProjects/Slabbed-phase19-integrate`
-- Branch: `release/mc1.21.1-0.4.0-beta.3`
-- HEAD at session start: `9745adb8` (renderer-agnostic ghost-window cull fix)
-- **Nothing is pushed.** Local commits only.
+## DONE + live-confirmed
+1. **Lag spike (GH #27/#28/#29) FIXED** — per-block `Class.forName` on a release-EXCLUDED class
+   (`ModelDyTranslateTraceBridge`) in the render loop → ClassNotFoundException storm, added by "hygiene"
+   commit `098769f8`. Fix: `RuntimeDiagnostics` negative-cache + `BETA4_MODEL_DY_RECORDER` gate;
+   `OffsetBlockStateModel` cached trace flags + recordMc1211 early-return; `SlabAnchorAttachment` cached flag;
+   `SlabSupport.isSlabHeightStepFace` self-dy overload. Microbench 3048ns/call → gone.
+2. **Chain gap + visual triad FIXED** — elongated chain model at dy=0: `ChainCeilingGeometry.java` +
+   `assets/slabbed/models/block/chain_ceiling_support.json` + render hook in `OffsetBlockStateModel` +
+   `BlockModelDyTranslateMixin` bypass + `ceilingBridgedVerticalChainSelectionShape` outline union.
+   Fabric model API here = `ModelLoadingPlugin.Context.addModels(Identifier)` + `FabricBakedModelManager.getModel(Identifier)`.
+3. **Dripstone combine FIXED (Julia confirmed)** — `ServerInteractBlockHitToleranceMixin` shift gate includes
+   lowered pointed dripstone (`SlabSupport.isLoweredPointedDripstoneServerHitTarget`).
+4. **TS subtractive + dual mod-id** (`terrain_slabs` + legacy `terrainslabs`) — no world holes; TS slab itself dy=0.
+5. **Richer /slabdy** — `TargetDyOverlay` prints 4 lines: pos/name; source/dy/status/side/half;
+   src=(FROZEN-FLAT|ANCHORED|compound-side|geometric); below=<block> type=<slabtype> belowDy=<dy>.
 
-## Mandate (Julia, going to work, unavailable)
-Build the messy multi-combined structures players actually build — many slabs + blocks, mixed lowered + vanilla objects — and hunt for: **face-culls, popping, merging-glitches, placement disobedience.** We want BUGS, not validation. Then do the same to get 1.21.11 port-ready. Update this handoff per commit.
+## TS object/full-block lowering — RED#1/#2/#3 FIXED in code (CLEAN5), live-pending
+Architecture: `directCustom` lane in `getYOffsetInner` (LATE, after cantilever, before shouldOffset) lowers
+OBJECTS (non-full-cubes) onto TS BOTTOM_LIKE surfaces; `isSlabSitCandidate` uses VIEW-INDEPENDENT
+`isOpaqueFullCubeViewIndependent` (`isOpaque() && isFullCube(EmptyBlockView.INSTANCE, ORIGIN)`) — NEVER
+`isSolidBlock(world,pos)` (DODO anti-pattern). `customSlabSurfaceKind` → BOTTOM_LIKE for TS type=BOTTOM and
+DOUBLE+generated. `placedTerrainSlabBottomFullCubeDy` (in `getYOffset`, INSIDE the IN_GET_Y_OFFSET recursion
+guard) lowers a PLACED full cube -0.5 on a placed TS type=BOTTOM (generated!=true) slab.
 
-## Method
-1. Background worktree workflow `slabbed-1211-adversarial-hunt` (task w4d81ztnp): 4 adversarial agents author+run gametests trying to break dy/cull/freeze/merge invariants → skeptic verify → confirmed bugs.
-2. Live: Modrinth `Slabbed 1.21.1` profile (Sodium + terrain_slabs). `Use`→`r` rebind for real placement. `/slabdy` overlay. Build structures, screenshot, hunt visual bugs.
-3. Triage → write failing gametest (or live repro) → fix → re-verify → commit → update this handoff.
+### FIXED (committed; live-pending Julia's confirmation)
+- **RED#2 — object on TS TOP wrongly lowered (the "smooshed lantern")** — `1c6da070`. ROOT CAUSE: not the
+  directCustom lane (it correctly excludes TS TOP) but `freezeLoweredOnPlace` anchoring decorative followers
+  — outside the anchor scope ("no torch interaction"). A follower lowered onto a TS BOTTOM slab was frozen at
+  -0.5; when the TS surface later changed to a flush TOP, the STALE anchor kept it smooshed. Fix: gate BOTH
+  freeze branches on `structural` (ordinary full block || slab). Followers stay geometric → on a TOP/flush
+  surface they recompute to 0. HEADLESS-PROVEN (`loweredFollowerStaysGeometricNotAnchored`, vanilla BOTTOM→TOP).
+  NOTE: pre-existing stale follower anchors in an OLD world heal only on re-place (the gate stops NEW ones).
+- **RED#1 + RED#3 — full-cube stack gaps / object-on-lowered-cube floats** — `b5bd1fc9`. ROOT CAUSE: the
+  full-cube lane lowers a cube to -0.5 but leaves it frozen-flat / un-anchored, so the compound walk
+  (`hasSlabInColumn`/`slabColumnYOffset`) never recognised it as a lowering support. Fix: new recursion-safe
+  `isTerrainSlabLoweredFullCube` predicate wired into both walks → a TS-lowered cube carries its -0.5 up the
+  column uniformly (stacks stay flush; dripstone/object on a -0.5 cube inherits the drop). Non-TS paths
+  unchanged. NOT headless-testable (needs the real TS mod); LIVE-PENDING.
 
-## Live-test rig (see LIVE-DRIVE-GUIDE.md)
-- Modrinth Stop/Play; computer set to never sleep (live capture works).
-- `Use` is bound to `r` (revert to `key.mouse.right` in profile options.txt line 91 when done; MC must be stopped to edit).
-- Aim with `/tp @s x y z yaw pitch`; read `/slabdy` overlay; place with `r`; break with left-click.
+### STILL OPEN
+4. **TS prismarine cantilever renders FULL/odd** — img2: `34,-56,16 Terrain Prismarine Slab dy=0.000 flush
+   below=Air` renders as a full cube. Slabbed reports dy=0 (correct, subtractive), so this looks like a
+   TS-side model/cull issue (generated-double vs placed-bottom render), NOT a Slabbed dy bug. DEFERRED —
+   needs live diagnosis; may be out of Slabbed scope.
 
-## Bugs found (running log)
-- **LOGIC SIDE (headless): NO real 1.21.1 bugs found.** 7 adversarial scenarios (compound-stack float, grounded-sink, cantilever 2-out consistency, stale-anchor-after-air, refill-same-cell corruption, geometric recompute after source break, adjacent-compound-column homogenization) all PASS on 1.21.1 @ `062f771f`. The background worktree hunt's "bugs" were against a STALE commit (`6da1643e` = a 1.21.11 line @ `0.3.0-beta.1`, NOT my branch — the linked-worktree isolation branched off the shared repo's HEAD) and do not reproduce on 1.21.1. Notable property confirmed: adjacent compound columns HOMOGENIZE to the same dy (flush, no step) — so the "cull-miss on compound step" concern is moot on 1.21.1 (the dy-difference predicate is also correct regardless).
-- **VISUAL SIDE: NOT TESTED — live-blocked** (notifications, see above). Face-cull render / render-popping / merge-render / placement-disobedience / cull-fix visual confirm remain for a live session.
+WORLD-HOLE check (Julia accepted the risk for full cubes on placed TS bottom slabs): NOT yet confirmed clean —
+verify no see-through holes around TS builds AND natural terrain (generated) never lowered.
 
-## Commits this session
-- `062f771f` docs(1.21.1): handoff savepoint (live-blocker note)
-- `b26c1007` test(1.21.1): 7 adversarial regression guards (37/37) — 1.21.1 dy/cull/freeze/merge logic robust, no real bugs
+## NEXT (one RED at a time, red-proof first — Julia's law; do NOT bundle)
+LIVE-VALIDATE CLEAN5 (RED#1/#2/#3) with Julia, then push c43b6a76..b5bd1fc9 (+tag) if confirmed. Then:
+D) #4 TS-side cantilever render. Older notes:
+A) #2 (objects on TS TOP wrongly lowered — likely a regression, smallest). B) #3 (compound inheritance on
+lowered supports). C) #1 (full-block compound stack). D) world-hole confirm. Then commit + push the TS fix.
 
-## Session conclusion (1.21.1)
-- **Logic side: HARDENED + robust.** Hunted hard (7 adversarial scenarios); 1.21.1 held on all. No real logic bugs.
-- **Visual side: NOT done — live-blocked** (recurring macOS notifications stole focus all session). The cull-fix visual confirm + render-cull/pop/merge + placement-disobedience hunt need a live session (enable a Focus/DND mode first).
-- MC stopped; keybind reverted to `mouse.right`; hunt worktrees pruned.
-- Then moved to 1.21.11 (separate repo `Slabbed-countered-compat-latest`): found+fixed the vanilla/compound ghost-window cull gap (`3a3f57e7`); found+deferred the vanilla vertical-compound FLOAT (`13e42ae3`, characterized). See that repo's HANDOFF.
-
-## ✅ CRUISE UPDATE (2026-06-12 evening, LIVE — visual block resolved)
-The "live blocked" notifications were macOS asking Julia to approve each computer-use action (she was at work). Solved by `request_access` ONE-TIME grant up front (Minecraft/Modrinth/Finder, full tier) — then smooth solo driving, no per-action prompts. **LESSON: on every live "Cruise", do `request_access` FIRST thing so the user isn't stuck approving.**
-
-- **✅ 1.21.1 cull fix CONFIRMED working under Sodium.** Built a lowered-vs-flat step against open sky; the step seam renders SOLID stone from every window-exposing angle (SE + NW). Since Sodium *does* cull faces between adjacent opaque cubes, a solid seam proves the model-path `cullFace`-clearing IS honored by Sodium (the key uncertainty). Ghost-window gone. (Gold-standard kill-switch A/B not run — needs a rebuild/relaunch; evidence already strong.)
-- **✅ Broad visual hunt — clean SAMPLE (not exhaustive).** One varied mixed structure (lowered stone wall + lowered glass + lantern + flat wall behind, on slabs): glass shows solid interior (no sky-window), lantern seated, step seam solid, no gaps/floats/z-fighting. No bugs. NOTE: only one structure — "build many" sweep + placement-disobedience (needs `r`-keybind) still open.
-
-## State (end of session)
-- 1.21.1: HEAD `1b71ccd9`, clean, nothing pushed. Logic hardened (37/37) + cull fix live-confirmed.
-- MC: still RUNNING (New World scratch). Keybind reverted to `mouse.right`. Hunt worktrees pruned.
-- **Open for next thread:** exhaustive broad visual hunt (more player structures), placement-disobedience live (re-enable `r`), the gold-standard cull kill-switch A/B, and the 1.21.11 cull-gap live confirm (needs compat jar in a TS profile). 
-- **UPDATE 2026-06-12 (opus):** the deferred 1.21.11 vanilla-compound FLOAT fix is **DONE + LIVE-CONFIRMED** on the compat repo (`Slabbed-countered-compat-latest` @ `21af4243`, new `loweredBottomSlabSupportDyForCompound` porting 1.21.1's `floorTorchBottomSlabSupportDy`; headless 40/40 + 5-lens adversarial-clean + live `/slabdy dy=-1.000` via the Modrinth `Slabbed+Terrain Slabs` profile). NOT pushed. See that repo's HANDOFF. Live-test route that works = Modrinth jar swap, NOT `runClient` (bare `java`, ungrantable to computer-use).
+## Live rig (CRITICAL)
+Modrinth game = bare `java` (bundleID null) → computer-use CANNOT see/drive it; osascript keystrokes don't land.
+Read state via `screencapture` (downscale frames <=900px — image API many-image limit) + profile `logs/latest.log`.
+Movement/placement must be Julia; she reports /slabdy. Memory: [[slabbed-1211-parity-backport-diagnosis]],
+[[slabbed-1211-lag-cnfe-render-storm]].
