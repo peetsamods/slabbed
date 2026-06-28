@@ -19,6 +19,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockRenderView;
@@ -58,6 +59,12 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     private static volatile int slabbed$mc1211LiveModelTraceHigherThanOutlineCount = 0;
     private static volatile int slabbed$mc1211LiveModelTraceOutlineUnavailableCount = 0;
     private static volatile int slabbed$mc1211LiveModelTraceNotVideoEquivalentCount = 0;
+    // Per-block diagnostic flags read ONCE at class init, not via Boolean.getBoolean(...) on
+    // the hot render path (each of those is a synchronized System.getProperty lookup, run per
+    // block per chunk-mesh build). All default to false in release.
+    private static final boolean MC1211_LIVE_MODEL_TRACE = Boolean.getBoolean("slabbed.mc1211.liveModelTrace");
+    private static final boolean MC1211_FULL_MESH_BOUNDS_TRACE = Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace");
+    private static final boolean RENDER_OFFSET_TRACE = Boolean.getBoolean("slabbed.render.offset.trace");
 
     public OffsetBlockStateModel(BakedModel wrapped) {
         this.wrapped = wrapped;
@@ -184,6 +191,17 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     @Override
     public void emitBlockQuads(BlockRenderView view, BlockState state, BlockPos pos, Supplier<Random> randomSupplier,
                                RenderContext context) {
+        // A vertical chain hanging directly under a slab ceiling support renders the elongated
+        // 0..24 (1.5-block) chain model at dy=0 so render == outline/hitbox, physically bridging
+        // the half-block gap above a hanging lantern. Supersedes the standard dy=+0.5 chain branch.
+        if (ChainCeilingGeometry.usesAlternateGeometry(view, pos, state)) {
+            BakedModel alt = ChainCeilingGeometry.bakedOrNull();
+            if (alt != null) {
+                context.bakedModelConsumer().accept(alt, state);
+                return;
+            }
+        }
+
         float sourceDy;
         String dySourcePath;
         float dy;
@@ -225,7 +243,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     dy);
         }
 
-        if (Boolean.getBoolean("slabbed.render.offset.trace")
+        if (RENDER_OFFSET_TRACE
                 && state.getBlock() instanceof ChainBlock
                 && pos.equals(slabbed$tracePos)) {
             boolean excluded = state.getBlock() instanceof FenceBlock
@@ -256,7 +274,21 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             }
         }
 
-        if (dy == 0.0f) {
+        // Slab-height step-face cull relaxation (renderer-agnostic — works under Indigo AND
+        // Sodium because it edits the emitted quad's OWN cullFace, which every renderer
+        // honours, rather than a per-renderer cull gate). Clear cullFace on faces that sit at
+        // a lowered-vs-flat seam so the strip exposed by the model offset is drawn instead of
+        // culled into a see-through "ghost window". A FLAT block (dy=0) adjacent to a lowered
+        // one ALSO owns a step face, so the transform must run even when dy==0.
+        // Mirrors the 1.21.11 model-path fix; see docs/CULL-WINDOW-FIX-DESIGN.md.
+        // Reuse the self dy already computed above (sourceDy is getYOffset for non-carpet) so the
+        // step-cull check below does not recompute this block's own offset 4 more times per block.
+        final double selfStepDy = (state.getBlock() instanceof CarpetBlock)
+                ? SlabSupport.getYOffset(view, pos, state)
+                : sourceDy;
+        final boolean clearStepCullFaces = slabbed$hasLoweredStepFace(view, pos, state, selfStepDy);
+
+        if (dy == 0.0f && !clearStepCullFaces) {
             slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, wrapped, dy,
                     0, 0, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
                     "dy_zero_no_transform");
@@ -275,6 +307,17 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 Double.NEGATIVE_INFINITY};
         context.pushTransform(quad -> {
             totalQuadsSeen[0]++;
+            // Un-cull lowered-step seam faces so the strip exposed by the offset is drawn,
+            // not culled into a see-through window. Preserve nominalFace so lighting/orientation
+            // are unchanged. Only flips cull->draw, so it cannot remove geometry or z-fight
+            // (the opposite-facing coplanar seam face is GPU back-face-culled).
+            if (clearStepCullFaces) {
+                Direction cullFace = quad.cullFace();
+                if (cullFace != null && SlabSupport.isSlabHeightStepFace(view, pos, state, cullFace)) {
+                    quad.cullFace(null);
+                    quad.nominalFace(cullFace);
+                }
+            }
             for (int i = 0; i < 4; i++) {
                 verticesVisited[0]++;
                 float beforeY = quad.y(i);
@@ -300,6 +343,18 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         } finally {
             context.popTransform();
         }
+    }
+
+    /** True if any horizontal side face of {@code pos} sits at a slab-height step (see
+     * {@link SlabSupport#isSlabHeightStepFace}). Drives the cull relaxation for BOTH the
+     * lowered block and its flat neighbour, so neither side leaves a see-through seam. */
+    private static boolean slabbed$hasLoweredStepFace(BlockRenderView view, BlockPos pos, BlockState state, double selfDy) {
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            if (SlabSupport.isSlabHeightStepFace(view, pos, state, direction, selfDy)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void emitWrappedBlockQuads(BlockRenderView view, BlockState state, BlockPos pos,
@@ -361,7 +416,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             float modelDyBeforeWrapper,
             float modelDyAfterWrapper
     ) {
-        if (!Boolean.getBoolean("slabbed.mc1211.liveModelTrace")) {
+        if (!MC1211_LIVE_MODEL_TRACE) {
             return;
         }
 
@@ -466,6 +521,11 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             double maxAfterY,
             String reason
     ) {
+        // Hot path: every block emit calls this. Do nothing (and allocate nothing) unless a
+        // trace is actually armed — otherwise the id/string/atomic work below ran per block.
+        if (!MC1211_FULL_MESH_BOUNDS_TRACE && slabbed$fullMeshBoundsTracePos == null) {
+            return;
+        }
         String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
         String matrixKey = blockId + "@" + pos.toShortString();
         String matrixRow = slabbed$mc1211FamilyMatrixRow(blockId);

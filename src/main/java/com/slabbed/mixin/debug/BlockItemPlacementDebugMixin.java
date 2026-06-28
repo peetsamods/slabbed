@@ -47,7 +47,7 @@ public abstract class BlockItemPlacementDebugMixin {
         if (!slabbed$isTraceTarget(ctx)) return;
 
         var stack = ctx.getStack();
-        System.out.println("[slabbed][BlockItem.useOnBlock][HEAD] item=" + stack.getItem()
+        Slabbed.LOGGER.info("[slabbed][BlockItem.useOnBlock][HEAD] item=" + stack.getItem()
                 + " ctxSide=" + ctx.getSide()
                 + " ctxPos=" + ctx.getBlockPos()
         );
@@ -93,6 +93,6 @@ public abstract class BlockItemPlacementDebugMixin {
     private void slabbed$debug$useOnBlockReturn(ItemUsageContext ctx, CallbackInfoReturnable<ActionResult> cir) {
         if (!slabbed$isTraceTarget(ctx)) return;
 
-        System.out.println("[slabbed][BlockItem.useOnBlock][RETURN] result=" + cir.getReturnValue());
+        Slabbed.LOGGER.info("[slabbed][BlockItem.useOnBlock][RETURN] result=" + cir.getReturnValue());
     }
 }

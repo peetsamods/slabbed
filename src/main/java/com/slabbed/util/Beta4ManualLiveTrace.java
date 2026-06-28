@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -58,13 +59,13 @@ public final class Beta4ManualLiveTrace {
                 classification,
                 cellAt(world, hit.getBlockPos()),
                 snapshotAround(world, hit, expectedCandidate));
-        System.out.println("[JULIA_BETA4_MANUAL_LIVE_CLICK_START]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_CLICK_START]"
                 + baseFields(clickIndex, world, hit, heldStack)
                 + " crosshairTargetBefore=" + formatHit(world, crosshairTarget)
                 + " classification=" + classification
                 + " predictedCandidate=" + formatPos(expectedCandidate)
                 + " predictedReason=" + (decision == null ? "none" : decision.reason()));
-        System.out.println("[JULIA_BETA4_MANUAL_LIVE_TARGET]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_TARGET]"
                 + baseFields(clickIndex, world, hit, heldStack)
                 + " crosshairTargetBefore=" + formatHit(world, crosshairTarget)
                 + " classification=" + classification
@@ -82,14 +83,14 @@ public final class Beta4ManualLiveTrace {
             BlockPos expected = snapshot.expectedCandidate();
             BlockState expectedState = expected == null ? null : world.getBlockState(expected);
             boolean wrongDelta = delta.changedCount() > 0 && expected != null && !delta.changedPositions().contains(expected);
-            System.out.println("[JULIA_BETA4_MANUAL_LIVE_DELTA]"
+            Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_DELTA]"
                     + baseFields(snapshot.clickIndex(), world, snapshot.hit(), snapshot.heldItem())
                     + " expectedCandidate=" + formatPos(expected)
                     + " changedPos=" + delta.changedPositionsText()
                     + " changedCount=" + delta.changedCount()
                     + " wrongDelta=" + wrongDelta
                     + " changed=" + delta.changedCellsText());
-            System.out.println("[JULIA_BETA4_MANUAL_LIVE_FINAL]"
+            Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_FINAL]"
                     + baseFields(snapshot.clickIndex(), world, snapshot.hit(), snapshot.heldItem())
                     + " result=" + result
                     + " accepted=" + (result != null && result.isAccepted())
@@ -97,7 +98,7 @@ public final class Beta4ManualLiveTrace {
                     + " expectedFinalState=" + formatState(expectedState)
                     + " expectedFinalDy=" + formatDy(world, expected, expectedState)
                     + " changedPos=" + delta.changedPositionsText());
-            System.out.println("[JULIA_BETA4_MANUAL_LIVE_SUMMARY]"
+            Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_SUMMARY]"
                     + " clickIndex=" + snapshot.clickIndex()
                     + " heldItem=" + snapshot.heldItem()
                     + " classification=" + snapshot.classification()
@@ -149,7 +150,7 @@ public final class Beta4ManualLiveTrace {
         BlockPos outgoingPos = outgoing == null ? null : outgoing.getBlockPos();
         BlockState outgoingState = outgoingPos == null ? null : outgoing.getWorld().getBlockState(outgoingPos);
         SlabSupport.CompoundSlabRemapDecision predicted = predictedDecision(world, incomingHit);
-        System.out.println("[JULIA_BETA4_MANUAL_LIVE_PLACEMENT_INTENT]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_PLACEMENT_INTENT]"
                 + baseFields(clickIndex, world, incomingHit, incoming.getStack())
                 + " ran=true"
                 + " side=" + (world.isClient() ? "CLIENT" : "SERVER")
@@ -175,7 +176,7 @@ public final class Beta4ManualLiveTrace {
         if (!enabled() || world == null || hit == null || !heldIsSlab(heldStack)) {
             return;
         }
-        System.out.println("[JULIA_BETA4_MANUAL_LIVE_SERVER_TOLERANCE]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_SERVER_TOLERANCE]"
                 + baseFields(currentClickIndex(), world, hit, heldStack)
                 + " ran=true"
                 + " centerBefore=" + formatVec(centerBefore)
@@ -196,7 +197,7 @@ public final class Beta4ManualLiveTrace {
             return;
         }
         String side = world instanceof World realWorld ? (realWorld.isClient() ? "CLIENT" : "SERVER") : "BLOCK_VIEW";
-        System.out.println("[JULIA_BETA4_MANUAL_LIVE_SLAB_SUPPORT_DECISION]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_SLAB_SUPPORT_DECISION]"
                 + " clickIndex=" + currentClickIndex()
                 + " side=" + side
                 + " targetPos=" + formatPos(sourcePos)
@@ -523,7 +524,7 @@ public final class Beta4ManualLiveTrace {
         boolean durable = pending.immediateDelta.changedCount() > 0 && delayedMatchesExpected && ghostPersisted;
         boolean ghost = pending.immediateDelta.changedCount() > 0 && (!delayedMatchesExpected || ghostResolved);
         String reason = delayedReason(pending, delayedMatchesExpected, ghostResolved, ghostPersisted);
-        System.out.println("[JULIA_BETA4_MANUAL_LIVE_DELAYED_FINAL]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_DELAYED_FINAL]"
                 + " clickIndex=" + snapshot.clickIndex()
                 + " delayTicks=" + delayTicks
                 + " classification=" + snapshot.classification()
@@ -546,7 +547,7 @@ public final class Beta4ManualLiveTrace {
                 + " ghostPersisted=" + ghostPersisted
                 + " serverAcceptedKnown=unknown"
                 + " mismatchReason=" + reason);
-        System.out.println("[JULIA_BETA4_MANUAL_LIVE_DELAYED_SUMMARY]"
+        Slabbed.LOGGER.info("[JULIA_BETA4_MANUAL_LIVE_DELAYED_SUMMARY]"
                 + " clickIndex=" + snapshot.clickIndex()
                 + " delayTicks=" + delayTicks
                 + " classification=" + snapshot.classification()

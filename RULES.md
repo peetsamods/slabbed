@@ -70,6 +70,7 @@ For any slab-lowered or slab-shifted object, these three must agree:
 ## 10) Manual live verification outranks automated proof for feel bugs
 - Automated proof is necessary but not sufficient for interaction-feel bugs.
 - If headless tests, screenshots, or representative gametests say “pass” but live play still feels wrong, trust the live report.
+- If Julia says a behavior is still RED, immediately correct status docs before doing more patch/proof work.
 - This especially applies to:
   - lower-half interaction feel
   - rescue/crosshair targeting feel
@@ -168,3 +169,10 @@ Not done:
 - the behavior is “probably fine”
 
 Done means the behavior is actually correct. :contentReference[oaicite:25]{index=25} :contentReference[oaicite:26]{index=26}
+
+## 19) Standard release sanity checklist
+- `docs/process/RELEASE_SANITY_CHECKLIST.md` is the standardized repeatable regression matrix for this branch.
+- The maintained automated lane is `./gradlew runGameTest`, including the `SLABBED-FP` dy fingerprint.
+- Compare versions by diffing captured `SLABBED-FP` lines, not by memory.
+- A fingerprint baseline edit must travel with the matching in-code assertion change.
+- The checklist does not replace live visual/feel proof for targeting, render, collision-feel, or right-click behavior.

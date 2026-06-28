@@ -52,6 +52,9 @@ public final class SlabAnchorAttachment {
             Boolean.getBoolean("slabbed.anchor.trace");
     public static final String BETA4_COMPOUND_VISIBLE_RENDER_TRACE_PROPERTY =
             "slabbed.beta4CompoundVisibleRenderTrace";
+    // Read once: this is queried per block on the render path (OffsetBlockStateModel).
+    private static final boolean BETA4_COMPOUND_VISIBLE_RENDER_TRACE =
+            Boolean.getBoolean(BETA4_COMPOUND_VISIBLE_RENDER_TRACE_PROPERTY);
 
     /**
      * Client-side fallback for anchor queries issued by chunk render paths that
@@ -61,6 +64,7 @@ public final class SlabAnchorAttachment {
      * in common code.
      */
     public static Predicate<BlockPos> clientAnchorLookup = null;
+    public static Predicate<BlockPos> clientFrozenFlatLookup = null;
     public static Predicate<BlockPos> clientLoweredSlabCarrierLookup = null;
     public static Predicate<BlockPos> clientCompoundFullBlockAnchorLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleSideLowerSlabLookup = null;
@@ -69,6 +73,7 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
 
     private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
+    private static final Identifier FROZEN_FLAT_ID = Identifier.of(Slabbed.MOD_ID, "frozen_flat");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
             Identifier.of(Slabbed.MOD_ID, "lowered_slab_carriers");
     private static final Identifier COMPOUND_FULL_BLOCK_ANCHOR_ID =
@@ -115,6 +120,18 @@ public final class SlabAnchorAttachment {
 
     public static final AttachmentType<LongOpenHashSet> ANCHOR_TYPE =
             AttachmentRegistry.<LongOpenHashSet>create(ANCHOR_ID, builder -> builder
+                    .persistent(SET_CODEC)
+                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
+    /**
+     * FREEZE-ON-PLACE flat marker: a structural piece (full block / slab) placed at
+     * dy=0 is recorded here so its flat height locks — support placed under or beside
+     * it later can no longer pull it down. The "never autonomously moves" companion of
+     * {@link #ANCHOR_TYPE} (which locks the lowered case). Read as dy=0 by
+     * {@code getYOffsetInner}; cleared when the piece is broken.
+     */
+    public static final AttachmentType<LongOpenHashSet> FROZEN_FLAT_TYPE =
+            AttachmentRegistry.<LongOpenHashSet>create(FROZEN_FLAT_ID, builder -> builder
                     .persistent(SET_CODEC)
                     .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
             );
@@ -166,6 +183,7 @@ public final class SlabAnchorAttachment {
     public static void register() {
         // Touch the class so the static field initializes and registers with Fabric.
         if (ANCHOR_TYPE == null
+                || FROZEN_FLAT_TYPE == null
                 || LOWERED_SLAB_CARRIER_TYPE == null
                 || COMPOUND_FULL_BLOCK_ANCHOR_TYPE == null
                 || COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE == null
@@ -246,6 +264,68 @@ public final class SlabAnchorAttachment {
         if (qualifiesForCompoundFullBlockAnchor(world, pos, state)) {
             addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
         }
+    }
+
+    /**
+     * FREEZE-ON-PLACE: locks a piece's lowered height at the moment it is placed so it
+     * NEVER autonomously moves afterwards. Julia's law — "a placed block must stay in
+     * that spot and not autonomously pop." Once a piece is recorded here, the lowered
+     * dy is read from the persistent anchor and {@code getYOffsetInner} never recomputes
+     * it, so breaking a neighbour / source can no longer un-lower it (the pop) and the
+     * value can no longer drift from the rendered mesh (the render-lag).
+     *
+     * <p>Server-side only. No-op if the piece is not lowered (so a block placed on solid
+     * ground or in mid-air stays at 0) or is already anchored by the direct-support /
+     * compound paths (so this only fills the previously-unfrozen cases: cantilevered full
+     * blocks and adjacent-side-merged slabs). The live geometric paths still compute the
+     * value used here and act as the first-frame fallback before the anchor syncs.
+     */
+    public static void freezeLoweredOnPlace(World world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClient() || pos == null || state == null
+                || state.isAir() || !state.getFluidState().isEmpty()) {
+            return;
+        }
+        if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
+            return;
+        }
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (dy < -1.0e-6) {
+            // addAnchorUnchecked records ANCHOR_TYPE (read as -0.5) and adds the compound
+            // sidecar (-1.0) when the piece qualifies, so both lowered lanes freeze.
+            addAnchorUnchecked(world, pos);
+            return;
+        }
+        // dy ≈ 0: lock the FLAT height of a STRUCTURAL piece (ordinary full block or slab)
+        // so a slab / lowered carrier placed under or beside it later can no longer pull it
+        // down (Julia's "placed slab under a floating block must not lower it"). Gated to
+        // structural pieces so decorative followers (lanterns/torches/hangers/signs) keep
+        // tracking their supports. Non-structural and natural (terrain / setBlockState, which
+        // never call onPlaced) pieces stay fully geometric.
+        boolean structural = isOrdinaryFullBlockAnchorCandidate(world, pos, state)
+                || state.getBlock() instanceof SlabBlock;
+        if (structural) {
+            addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
+        }
+    }
+
+    /**
+     * Returns true if {@code pos} carries a freeze-on-place FLAT marker — a structural
+     * piece whose height was locked at 0 when placed. Safe on server and client (client
+     * mirror via {@link #clientFrozenFlatLookup}); false for non-{@link World} views.
+     */
+    public static boolean isFrozenFlat(BlockView world, BlockPos pos) {
+        if (pos == null) {
+            return false;
+        }
+        if (!(world instanceof World w)) {
+            return clientFrozenFlatLookup != null && clientFrozenFlatLookup.test(pos);
+        }
+        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return false;
+        }
+        LongOpenHashSet set = chunk.getAttached(FROZEN_FLAT_TYPE);
+        return set != null && set.contains(pos.asLong());
     }
 
     /**
@@ -411,6 +491,10 @@ public final class SlabAnchorAttachment {
             BlockPos supportPos = pos.down();
             RuntimeDiagnostics.captureBsFbLiveTrace(world, supportPos, pos, "ANCHOR_REMOVED");
         }
+        // Freeze-on-place flat marker clears when the piece itself is broken/replaced
+        // (onStateReplaced calls removeAnchor for every removal), so a fresh placement in
+        // the same spot re-evaluates from scratch.
+        removeFromAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
         // Beta4 sidecar travels with the ordinary anchor: when the compound block
         // itself is broken/replaced, clear the authored compound truth too.
         removeFromAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
@@ -469,7 +553,7 @@ public final class SlabAnchorAttachment {
     }
 
     public static boolean beta4CompoundVisibleRenderTraceEnabled() {
-        return Boolean.getBoolean(BETA4_COMPOUND_VISIBLE_RENDER_TRACE_PROPERTY);
+        return BETA4_COMPOUND_VISIBLE_RENDER_TRACE;
     }
 
     public static boolean isCompoundVisibleAttachmentType(AttachmentType<LongOpenHashSet> type) {
@@ -1224,6 +1308,18 @@ public final class SlabAnchorAttachment {
             BlockPos sourcePos,
             BlockState sourceState
     ) {
+        // A full block must NOT inherit lowering from a horizontal neighbour. Side-adjacent
+        // anchoring lowered a freestanding full block purely because the block beside it was
+        // lowered, with no slab/lowered support of its own — a persistent anchor that then
+        // (a) sank the block into the ground/air, (b) went stale (it stayed lowered after the
+        // source carrier was removed, since the anchor never recomputes), and (c) spread the
+        // lowering further to ITS neighbours. Live-confirmed 2026-06-11: this is the "blocks
+        // inheriting states from neighbours" / tree-canopy contagion. Lowering for full blocks
+        // now comes only from genuine support directly below (a slab, or a lowered full-block
+        // column down to a slab) via qualifiesForAnchor — never sideways.
+        if (true) {
+            return false;
+        }
         if (!isOrdinaryFullBlockAnchorCandidate(world, pos, state)
                 || !qualifiesAsSideAdjacentLoweredFullAnchorSource(world, sourcePos, sourceState)) {
             return false;

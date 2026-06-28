@@ -21,7 +21,8 @@ public abstract class SlabSupportBlockMixin {
     @Inject(method = "sideCoversSmallSquare", at = @At("HEAD"), cancellable = true)
     private static void slabbed$slabTopSupport(WorldView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
         net.minecraft.block.BlockState state = world.getBlockState(pos);
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(state)) {
+        if (direction == Direction.UP
+                && (SlabSupport.isBottomSlab(state) || SlabSupport.isDirectCustomBottomLikeSurface(state))) {
             cir.setReturnValue(true);
         }
         // Lowered-lane bottom slabs visually expose an underside support face

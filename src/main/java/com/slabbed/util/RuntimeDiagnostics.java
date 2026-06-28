@@ -1,6 +1,8 @@
 package com.slabbed.util;
 
 import java.lang.reflect.Method;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.minecraft.block.BlockState;
@@ -42,6 +44,14 @@ public final class RuntimeDiagnostics {
     private static final String MODEL_DY_TRACE_BRIDGE_CLASS_NAME =
             "com.slabbed.client.runtime.ModelDyTranslateTraceBridge";
     private static final boolean ENABLED = Boolean.getBoolean("slabbed.debug.sbsb");
+    // Off-by-default in release. Gates the per-block model-dy recorder so the hot render
+    // path never builds reflection args or dispatches a call when tracing is disabled.
+    private static final boolean BETA4_MODEL_DY_RECORDER = Boolean.getBoolean("slabbed.beta4ModelDyRecorder");
+    // Several diagnostic sidecar classes are intentionally stripped from the release jar,
+    // so Class.forName(...) on them throws ClassNotFoundException. Without this cache the
+    // throw happened on EVERY per-block invoke() call — a render-thread exception storm that
+    // was the 0.4.0-beta.3 lag regression. Record the miss once and short-circuit thereafter.
+    private static final Set<String> ABSENT_CLASSES = ConcurrentHashMap.newKeySet();
 
     private RuntimeDiagnostics() {
     }
@@ -543,6 +553,9 @@ public final class RuntimeDiagnostics {
             BlockState state,
             double dy
     ) {
+        if (!BETA4_MODEL_DY_RECORDER) {
+            return;
+        }
         invoke(
                 MODEL_DY_TRACE_BRIDGE_CLASS_NAME,
                 "recordBeta4ModelDy",
@@ -555,10 +568,17 @@ public final class RuntimeDiagnostics {
     }
 
     private static Object invoke(String className, String methodName, Class<?>[] paramTypes, Object... args) {
+        if (ABSENT_CLASSES.contains(className)) {
+            return null;
+        }
         try {
             Class<?> targetClass = Class.forName(className);
             Method method = targetClass.getMethod(methodName, paramTypes);
             return method.invoke(null, args);
+        } catch (ClassNotFoundException notFound) {
+            // Class is excluded from this jar; remember so we never pay the throw again.
+            ABSENT_CLASSES.add(className);
+            return null;
         } catch (ReflectiveOperationException | IllegalArgumentException | LinkageError ignored) {
             return null;
         }
