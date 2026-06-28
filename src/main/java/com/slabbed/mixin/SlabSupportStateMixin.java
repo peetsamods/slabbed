@@ -1,6 +1,8 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
@@ -244,7 +246,12 @@ public abstract class SlabSupportStateMixin {
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolid(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
+        if (direction == Direction.UP
+                && (SlabSupport.isBottomSlab(self)
+                    || CompatHooks.customSlabSurfaceKind(self) == CompatSlabSurfaceKind.BOTTOM_LIKE)) {
+            // Player-placed TS BOTTOM_LIKE top face: solid UP support for blocks that
+            // consult isSideSolid(UP) rather than sideCoversSmallSquare. View-independent
+            // (TYPE/properties only); reports support, lowers nothing. UP only.
             cir.setReturnValue(true);
         }
     }
@@ -268,7 +275,11 @@ public abstract class SlabSupportStateMixin {
     @Inject(method = "isSideSolidFullSquare", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolidFullSquare(BlockView world, BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
         BlockState self = (BlockState) (Object) this;
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
+        if (direction == Direction.UP
+                && (SlabSupport.isBottomSlab(self)
+                    || CompatHooks.customSlabSurfaceKind(self) == CompatSlabSurfaceKind.BOTTOM_LIKE)) {
+            // Player-placed TS BOTTOM_LIKE top face: solid full-square UP support.
+            // View-independent (TYPE/properties only); reports support, lowers nothing. UP only.
             cir.setReturnValue(true);
         }
     }
