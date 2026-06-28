@@ -247,3 +247,24 @@ action without Julia's explicit authorization.
 ## 2026-06-12 (Claude, autonomous adversarial + live Cruise)
 
 Branch `release/mc1.21.1-0.4.0-beta.3`, HEAD `1b71ccd9` (clean, NOT pushed). **1.21.1 LOGIC HARDENED:** hunted hard with 7 adversarial gametests (`b26c1007`, in SlabbedLabFixtureTest — compound-stack float, grounded-sink, cantilever 2-out consistency, stale-anchor, refill corruption, geometric recompute, adjacent-compound homogenization); ALL PASS (37/37). No real logic bugs. **CULL FIX LIVE-CONFIRMED under Sodium:** lowered-vs-flat step seam renders SOLID from every window-exposing angle → the model-path `cullFace`-clear engages under Sodium; ghost-window gone. Broad visual hunt = one clean varied structure (more structures + placement-disobedience still open). GOTCHA: this repo is a linked worktree sharing `Slabbed/.git`, so `isolation:'worktree'` agents branched off the SHARED HEAD (`6da1643e`, a 1.21.11 commit) not this branch — verify worktree HEAD or run gametests in-repo. CRUISE GOTCHA: do `request_access` FIRST so the user isn't stuck approving each action. Remaining to release-ready (next thread, opus ultracode): exhaustive visual sweep, placement live, gold-standard cull A/B, then 1.21.11 (see that repo). See HANDOFF.md Cruise update.
+
+## 2026-06-28 (Claude) — NeoForge lag investigation + beta.2 render-perf cleanup
+
+CurseForge reporter hit "similar lag to Fabric 1.21.1." Fanned out a hunt: the EXACT Fabric bug
+(per-block `Class.forName` on a release-excluded class → CNFE storm) is **structurally absent** on
+NeoForge (`RuntimeDiagnostics` no-op stub, no render-path reflection, excluded bridge has zero callers).
+Found the generalized cousin and fixed it (`24aea038`): always-on per-block work in
+`OffsetBlockStateModel.getQuads` gated AFTER it ran — `recordMc1211FullMeshBoundsSample`
+(registry lookup + ~6 string allocs + atomic) + the `measureBounds` per-vertex loop + 3–4 uncached
+`Boolean.getBoolean`. Now flags are class-load cached and the sampler/measureBounds gate on
+`slabbed$fullMeshBoundsTraceArmed()`; `render.offset.trace` stays a live read (client gametests
+setProperty it) but reordered cheap-first. Zero behavior change, build green, biggest win under Sodium.
+
+Two Spark profiles (decoded straight from bytebin protobuf): Server thread mostly idle; Slabbed
+self-time 0.02% (superflat) / 2.2% (normal), the 2.2% almost all the collision→getYOffset path
+(`BlockCollisionsLoweredAboveMixin` → `withHangingLoweredCollisionFromAbove` → `getYOffset`). Not a
+spike cause. Julia couldn't reproduce the spikes afterward → transient worldgen/chunk-load hitches, not
+Slabbed. A cheap inline gate for that collision path is UNSOUND (geometric column-lowering needs the
+column scan); sound option is memoizing getYOffset (deferred). Bumped `0.4.2-beta.1+26.2` →
+`0.4.2-beta.2+1.21.1` (`8f1819b0`; build metadata corrected to the target MC version). Jar staged in
+the `SLABBED neoforge 1.21.1` profile. Push + release tag pending Julia's go.

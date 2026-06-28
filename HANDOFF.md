@@ -5,22 +5,39 @@
 ## Repo / branch / HEAD
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-neoforge-1.21.1-port`
 - Branch: `port/neoforge-1.21.1`
-- Current HEAD: `b634da07`
-- Tag at HEAD: `save/neoforge-1-21-1-wysiwyg-parity-green`
+- Current HEAD: `8f1819b0` (2026-06-28: version bump beta.2). Lineage on top of the
+  `255f9c84` 0.4.2 parity candidate: `24aea038` render-trace hygiene fix → `8f1819b0` version bump.
+- Version: `0.4.2-beta.2+1.21.1` (was `0.4.2-beta.1+26.2`; build metadata corrected to the target MC version).
+- Tag at HEAD: none yet (push + release tag pending Julia's go).
 - Created from: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate` on `release/mc1.21.1-0.4.0-beta.3`
 - Current tracked dirt is the release-readiness candidate: WYSIWYG/parity source changes, release jar hygiene in `build.gradle` and `SlabbedClient.java`, repo-local truth doc updates, and evidence logs under `tmp/`. Staged changes are not expected unless Julia explicitly authorizes a savepoint.
 - Do not touch the original 1.21.1 checkout (`/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`) or the canonical 1.21.11 Fabric source (`/Users/joolmac/CascadeProjects/Slabbed`).
 
-## Current state
-- The WYSIWYG/parity savepoint is at `b634da07`, tagged `save/neoforge-1-21-1-wysiwyg-parity-green`.
-- Release-readiness hygiene has been applied locally after that savepoint:
-  - `SlabbedClient` no longer starts proof canaries, world/fence/chain proof hooks, target overlay, or runtime live-trace hooks.
-  - `build.gradle` excludes proof/debug/trace/manual-recorder classes from the public main source set.
-  - Public runtime jar and sources jar actual leak scans are zero-line clean for proof/debug/dev/test/trace tooling.
-- Candidate jar is staged in the Modrinth profile:
-  - `/Users/joolmac/Library/Application Support/ModrinthApp/profiles/SLABBED neoforge 1.21.1/mods/slabbed-0.4.2-beta.1+26.2.jar`
-  - SHA-256: `4afb4d8ae9c508498db07e954d351cbcf697151d3f93f25f769b0e1f39b7186c`
-- Public upload/release is not authorized by this handoff.
+## Current state (2026-06-28 — beta.2 render-perf cleanup)
+- Builds on the WYSIWYG/parity work (`save/neoforge-1-21-1-wysiwyg-parity-green`) + the `255f9c84`
+  0.4.2 parity candidate. Two new commits on top: `24aea038` (render-trace hygiene) + `8f1819b0` (version bump).
+- **Lag investigation (CurseForge report "similar lag to Fabric 1.21.1"):** the exact Fabric bug
+  (per-block `Class.forName` on a release-excluded class → CNFE storm) is **structurally absent** on
+  NeoForge — `RuntimeDiagnostics` is a no-op stub, the render path does zero reflection, the excluded
+  `ModelDyTranslateTraceBridge` has zero callers. Found + fixed the generalized cousin: always-on
+  per-block work in `OffsetBlockStateModel.getQuads` gated AFTER it ran (`recordMc1211FullMeshBoundsSample`
+  registry lookup + ~6 string allocs + atomic; the `measureBounds` per-vertex loop; 3–4 uncached
+  `Boolean.getBoolean`). Fixed in `24aea038` (cache flags at class-load, gate `measureBounds`+sampler on
+  `slabbed$fullMeshBoundsTraceArmed()`; `render.offset.trace` left live but reordered cheap-first because
+  client gametests setProperty it). Zero behavior change; build green. Matters most under Sodium (bypasses
+  the mixin path → `getQuads` is the sole per-block cost).
+- **Tick spikes:** two Spark profiles (superflat + normal, decoded from bytebin protobuf) showed the
+  **Server thread mostly idle/parked**; Slabbed self-time **0.02% superflat / 2.2% normal**, the 2.2%
+  almost entirely the collision→getYOffset path (`BlockCollisionsLoweredAboveMixin` →
+  `withHangingLoweredCollisionFromAbove` → `getYOffset`, fired per collision-block while moving). NOT a
+  spike cause. Julia then couldn't reproduce the spikes → concluded transient worldgen/chunk-load hitches,
+  not Slabbed. A cheap inline gate for the collision path is UNSOUND (geometric column-lowering means the
+  answer needs the column scan); the only sound optimization is memoizing `getYOffset` (deferred — modest
+  2.2%, not justified yet). If spikes recur: `/spark profiler --timeout 60 --only-ticks-over 50` during it.
+- Active jar in the Modrinth profile (`SLABBED neoforge 1.21.1/mods/`): `slabbed-0.4.2-beta.2+1.21.1.jar`
+  (render fix verified present). BEFORE/AFTER + original jars in `mods/_ab-backup/`.
+- **PENDING (Julia's go):** push `port/neoforge-1.21.1` + tag the release (proposed
+  `release/neoforge-1.21.1-0.4.2-beta.2`), then upload to Modrinth/CurseForge.
 
 ## Preflight for next chat
 Run before any mutation:
