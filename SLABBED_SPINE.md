@@ -236,3 +236,8 @@ Two fixes: `c6346af1` placement (OR `customSlabSurfaceKind==BOTTOM_LIKE` into th
 preserved via `isVerticalChainDirectlyUnderCeilingSupport` TOP|DOUBLE). Build + 39/39 headless gametests green.
 LESSON: principle over per-symptom — enumerate the full object matrix, mirror the vanilla path, lock parity with
 headless vanilla-slab gametests (TS itself not headless-testable). RED#4 (TS slab self-render) DEFERRED (TS-side).
+
+## 2026-06-28 — RED#4 struck (stale)
+Julia confirmed the "TS slab renders as a full cube" note was a stale pre-fix screenshot artifact, NOT a live bug.
+No open TS REDs remain. Outstanding item is non-code: published Modrinth/CF 0.4.0-beta.3 is still the OLD laggy build;
+this branch (`claude/lag-hotfix-perf`) is the fix but has not been cut as a release.
