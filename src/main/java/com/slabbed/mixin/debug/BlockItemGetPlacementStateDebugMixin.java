@@ -37,7 +37,7 @@ public abstract class BlockItemGetPlacementStateDebugMixin {
             var ctxState = world.getBlockState(ctxPos);
             var hitState = world.getBlockState(hitPos);
             var belowHitState = world.getBlockState(hitPos.down());
-            System.out.println("[slabbed][BlockItem.getPlacementState][HEAD] item=chain ctxPos=" + ctxPos + " ctxSide=" + ctxSide
+            Slabbed.LOGGER.info("[slabbed][BlockItem.getPlacementState][HEAD] item=chain ctxPos=" + ctxPos + " ctxSide=" + ctxSide
                     + " hitPos=" + hitPos + " hitSide=" + hitSide + " hitVec=" + hit.getPos()
                     + " ctxState=" + ctxState + " hitState=" + hitState + " belowHitState=" + belowHitState);
         } catch (Throwable t) {
@@ -55,10 +55,10 @@ public abstract class BlockItemGetPlacementStateDebugMixin {
         if (!(ctx.getStack().getItem() instanceof BlockItem bi && bi.getBlock() instanceof ChainBlock)) return;
         BlockState state = cir.getReturnValue();
         if (state == null) {
-            System.out.println("[slabbed][BlockItem.getPlacementState][RETURN] item=chain state=null");
+            Slabbed.LOGGER.info("[slabbed][BlockItem.getPlacementState][RETURN] item=chain state=null");
             return;
         }
-        System.out.println("[slabbed][BlockItem.getPlacementState][RETURN] item=chain state=" + state.getBlock()
+        Slabbed.LOGGER.info("[slabbed][BlockItem.getPlacementState][RETURN] item=chain state=" + state.getBlock()
                 + " props=" + state.getEntries());
     }
 }

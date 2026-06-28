@@ -1,5 +1,6 @@
 package com.slabbed.mixin.debug;
 
+import com.slabbed.Slabbed;
 import net.minecraft.block.ChainBlock;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
@@ -16,7 +17,7 @@ public abstract class BlockItemPlaceDebugMixin {
     private void slabbed$debug$placeHead(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
         if (ctx == null) return;
         if (!(ctx.getStack().getItem() instanceof BlockItem bi && bi.getBlock() instanceof ChainBlock)) return;
-        System.out.println("[slabbed][BlockItem.place][HEAD] item=chain ctxPos=" + ctx.getBlockPos()
+        Slabbed.LOGGER.info("[slabbed][BlockItem.place][HEAD] item=chain ctxPos=" + ctx.getBlockPos()
                 + " ctxSide=" + ctx.getSide());
     }
 
@@ -24,6 +25,6 @@ public abstract class BlockItemPlaceDebugMixin {
     private void slabbed$debug$placeReturn(ItemPlacementContext ctx, CallbackInfoReturnable<ActionResult> cir) {
         if (ctx == null) return;
         if (!(ctx.getStack().getItem() instanceof BlockItem bi && bi.getBlock() instanceof ChainBlock)) return;
-        System.out.println("[slabbed][BlockItem.place][RETURN] item=chain result=" + cir.getReturnValue());
+        Slabbed.LOGGER.info("[slabbed][BlockItem.place][RETURN] item=chain result=" + cir.getReturnValue());
     }
 }

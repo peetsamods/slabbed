@@ -1,6 +1,7 @@
 package com.slabbed.mixin.client;
 
 import com.slabbed.client.ClientDy;
+import com.slabbed.client.model.ChainCeilingGeometry;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
@@ -30,6 +31,19 @@ public class BlockModelDyTranslateMixin {
         RuntimeDiagnostics.recordModelDyTrace(method, world, pos, state, dy);
     }
 
+    /**
+     * Model dy applied on the vanilla translate path. Returns 0 (no translate) when the block
+     * uses chain-ceiling alternate geometry, which is emitted elongated at dy=0 by
+     * {@link com.slabbed.client.model.OffsetBlockStateModel}; without this bypass the vanilla
+     * path would double-shift it by +0.5.
+     */
+    private static double slabbed$modelDy(BlockRenderView world, BlockPos pos, BlockState state) {
+        if (ChainCeilingGeometry.usesAlternateGeometry(world, pos, state)) {
+            return 0.0;
+        }
+        return ClientDy.dyFor(world, pos, state);
+    }
+
     @Inject(method = "render(Lnet/minecraft/world/BlockRenderView;Lnet/minecraft/client/render/model/BakedModel;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZLnet/minecraft/util/math/random/Random;JI)V",
             at = @At("HEAD"))
     private void slabbed$pushDy(BlockRenderView world,
@@ -43,7 +57,7 @@ public class BlockModelDyTranslateMixin {
                                 long seed,
                                 int overlay,
                                 CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(world, pos, state);
         slabbed$recordTrace("render", world, pos, state, dy);
         if (dy == 0.0) {
             return;
@@ -65,7 +79,7 @@ public class BlockModelDyTranslateMixin {
                                long seed,
                                int overlay,
                                CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(world, pos, state);
         if (dy == 0.0) {
             return;
         }
@@ -85,7 +99,7 @@ public class BlockModelDyTranslateMixin {
                                       long seed,
                                       int overlay,
                                       CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(world, pos, state);
         slabbed$recordTrace("renderSmooth", world, pos, state, dy);
         if (dy == 0.0) {
             return;
@@ -107,7 +121,7 @@ public class BlockModelDyTranslateMixin {
                                      long seed,
                                      int overlay,
                                      CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(world, pos, state);
         if (dy == 0.0) {
             return;
         }
@@ -127,7 +141,7 @@ public class BlockModelDyTranslateMixin {
                                     long seed,
                                     int overlay,
                                     CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(world, pos, state);
         slabbed$recordTrace("renderFlat", world, pos, state, dy);
         if (dy == 0.0) {
             return;
@@ -149,7 +163,7 @@ public class BlockModelDyTranslateMixin {
                                    long seed,
                                    int overlay,
                                    CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
+        double dy = slabbed$modelDy(world, pos, state);
         if (dy == 0.0) {
             return;
         }

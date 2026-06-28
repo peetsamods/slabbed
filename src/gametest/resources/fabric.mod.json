@@ -11,7 +11,9 @@
     "fabric-gametest": [
       "com.slabbed.test.Mc1211GoblinRouteCanaryGameTest",
       "com.slabbed.test.SlabbedLabFixtureTest",
-      "com.slabbed.test.ChainSurvivalReproTest"
+      "com.slabbed.test.ChainSurvivalReproTest",
+      "com.slabbed.test.Slabbed1211DyFingerprintTest",
+      "com.slabbed.test.Slabbed1211StandardChecklistHeadlessTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",

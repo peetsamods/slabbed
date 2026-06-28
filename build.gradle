@@ -27,6 +27,8 @@ sourceSets {
             setIncludes([
                     "com/slabbed/test/ChainSurvivalReproTest.java",
                     "com/slabbed/test/SlabbedLabFixtureTest.java",
+                    "com/slabbed/test/Slabbed1211DyFingerprintTest.java",
+                    "com/slabbed/test/Slabbed1211StandardChecklistHeadlessTest.java",
                     "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
                     "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java"
             ])

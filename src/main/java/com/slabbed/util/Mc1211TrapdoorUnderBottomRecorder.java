@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.Slabbed;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -52,7 +53,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
                 hit.getPos(),
                 expectedTrapdoorPos(hit),
                 heldItem(heldStack));
-        System.out.println("[MC1211_TRAPDOOR_PLACEMENT_CLICK_START]"
+        Slabbed.LOGGER.info("[MC1211_TRAPDOOR_PLACEMENT_CLICK_START]"
                 + " clickIndex=" + clickIndex
                 + commonClickFields(world, snapshot)
                 + " crosshairTargetBefore=" + formatHit(world, crosshairTarget)
@@ -66,7 +67,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
             return;
         }
         BlockState expectedState = world.getBlockState(snapshot.expectedTrapdoorPos());
-        System.out.println("[MC1211_TRAPDOOR_PLACEMENT_CLICK_RETURN]"
+        Slabbed.LOGGER.info("[MC1211_TRAPDOOR_PLACEMENT_CLICK_RETURN]"
                 + " clickIndex=" + snapshot.clickIndex()
                 + commonClickFields(world, snapshot)
                 + " interactionResult=" + result
@@ -85,7 +86,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
         }
         World world = context.getWorld();
         BlockPos expected = context.getBlockPos().offset(context.getSide());
-        System.out.println("[MC1211_TRAPDOOR_PLACEMENT_USE_HEAD]"
+        Slabbed.LOGGER.info("[MC1211_TRAPDOOR_PLACEMENT_USE_HEAD]"
                 + useFields("useOnBlock-head", world, itemId, context.getBlockPos(), context.getSide(),
                 context.getHitPos(), expected)
                 + " gameplayPatch=false");
@@ -104,7 +105,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
         World world = context.getWorld();
         BlockPos expected = context.getBlockPos().offset(context.getSide());
         BlockState expectedState = world.getBlockState(expected);
-        System.out.println("[MC1211_TRAPDOOR_PLACEMENT_USE_RETURN]"
+        Slabbed.LOGGER.info("[MC1211_TRAPDOOR_PLACEMENT_USE_RETURN]"
                 + useFields("useOnBlock-return", world, itemId, context.getBlockPos(), context.getSide(),
                 context.getHitPos(), expected)
                 + " useOnBlockResult=" + result
@@ -124,7 +125,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
         Direction face = context.getSide();
         BlockPos placePos = context.getBlockPos();
         BlockPos clickedPos = placePos.offset(face.getOpposite());
-        System.out.println("[MC1211_TRAPDOOR_PLACEMENT_PLACE_HEAD]"
+        Slabbed.LOGGER.info("[MC1211_TRAPDOOR_PLACEMENT_PLACE_HEAD]"
                 + placeFields("place-head", world, itemId, clickedPos, face, context.getHitPos(), placePos)
                 + " gameplayPatch=false");
         return true;
@@ -163,7 +164,7 @@ public final class Mc1211TrapdoorUnderBottomRecorder {
             ActionResult result
     ) {
         BlockState finalState = world.getBlockState(placePos);
-        System.out.println("[MC1211_TRAPDOOR_PLACEMENT_PLACE_RETURN]"
+        Slabbed.LOGGER.info("[MC1211_TRAPDOOR_PLACEMENT_PLACE_RETURN]"
                 + placeFields(phase, world, itemId, clickedPos, face, hit, placePos)
                 + " placementResult=" + result
                 + " placementAccepted=" + (result != null && result.isAccepted())

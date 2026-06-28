@@ -26,5 +26,8 @@ public abstract class BlockOnPlacedAnchorMixin {
                                           LivingEntity placer, ItemStack stack,
                                           CallbackInfo ci) {
         SlabAnchorAttachment.addAnchor(world, pos, state);
+        // Freeze any other lowered placement (cantilevered full blocks, adjacent-side-merged
+        // slabs) so it locks at placement and never autonomously pops/moves afterwards.
+        SlabAnchorAttachment.freezeLoweredOnPlace(world, pos, state);
     }
 }
