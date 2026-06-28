@@ -168,3 +168,33 @@ Not done:
 - the behavior is “probably fine”
 
 Done means the behavior is actually correct. :contentReference[oaicite:25]{index=25} :contentReference[oaicite:26]{index=26}
+## 19) Performance hygiene gate (per-block / per-frame cost)
+
+Companion to Rule 18 (definition of done) and triggered by Rule 14 (document a failure that
+happens twice). The SAME lag bug class has now shipped twice — Fabric 1.21.1 (per-block
+`Class.forName` on a release-EXCLUDED class → ClassNotFoundException storm) and NeoForge
+(`OffsetBlockStateModel.getQuads` did a block-registry lookup + ~6 string allocs + an atomic
+per block *before* checking its trace flag — "gate-after-work"). It is invisible to logging
+hygiene and to dev testing, and it is WORST under Sodium/Embeddium (they bypass the mixin
+path, so `getQuads` is the sole per-block cost).
+
+Rule: **hot-path code allocates nothing, reads no `System` property, and does no reflection
+when diagnostics are off.** On `OffsetBlockStateModel.getQuads`/`emitBlockQuads`,
+`SlabSupport.getYOffset*`, and every per-block mixin:
+- Trace/diagnostic flags are class-load `static final` booleans, checked BEFORE any work — never
+  gate-after-work. EXCEPTION: a flag a gametest toggles at runtime via `System.setProperty`
+  (e.g. `slabbed.render.offset.trace`) must stay a live read — reorder its guard cheap-first.
+- No `Class.forName`/reflection on the render/dy path; never reflect on a class the release jar
+  `exclude(...)`s.
+- No allocation / registry lookup / `.toString()` / string concat / `LOGGER.` before the trace
+  early-return. Route diagnostics through the no-op `RuntimeDiagnostics` facade (gated by a
+  cached flag); do not inline trace logic in the hot path.
+
+Enforce by automation, not vigilance:
+1. **Allocation-regression gametest** (would have caught both incidents): call `getYOffset` (and a
+   wrapped `getQuads`) ~10k times on a plain stone block with all trace flags off; assert ~0
+   `ThreadMXBean.getThreadAllocatedBytes`/call, plus a ns budget for the reflection-storm case.
+2. **Hot-path lint**: grep the files above for ungated `Boolean.getBoolean`/`System.getProperty`,
+   any `Class.forName`, and any pre-gate alloc/registry/`toString`/concat/`LOGGER.`.
+3. **Profile the RELEASE jar under Sodium** (not dev) before publish: `/spark profiler` while
+   forcing chunk remesh; no Slabbed frame may appear in hot self-time.
