@@ -63,7 +63,7 @@ Proven on this Forge branch:
 
 Not proven on this Forge branch:
 
-- client chunk mirror or networking sync
+- proof-clean client chunk mirror or networking sync
 - non-`Level` render-view anchor lookup
 - model loading/render hooks
 - mixins

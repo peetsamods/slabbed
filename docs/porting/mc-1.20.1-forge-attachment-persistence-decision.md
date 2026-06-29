@@ -257,6 +257,20 @@ Not proven:
 - save/reload behavior
 - live behavior
 
+In-progress Book III implementation:
+
+```text
+forge-1.20.1-client-anchor-mirror-sync
+```
+
+Scope:
+
+- server `LevelChunk` capability remains authoritative
+- Forge network sync mirrors complete marker buckets to clients
+- client `Level` queries may read the mirror
+- non-`Level` render-view bridge lookup remains a later slice
+- model hooks, mixins, gametests, behavior parity, save/reload proof, and live proof remain untouched
+
 ## View Truth Order Decision
 
 Decision record:

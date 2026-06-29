@@ -333,10 +333,12 @@ Book III next loader API migration slice:
    `save/forge-1-20-1-storage-facade`.
 2. View-truth order decision is recorded in
    `docs/porting/mc-1.20.1-forge-view-truth-order-decision.md`.
-3. Next implementation order is networking/client mirror sync before the
+3. View-truth order decision savepoint is complete at `39d523cb` with tag
+   `save/forge-1-20-1-view-truth-order-decision`.
+4. Active implementation order is networking/client mirror sync before the
    non-`Level` render-view bridge lookup.
-4. Keep model loading, mixins, gametests, and behavior parity out of scope until
+5. Keep model loading, mixins, gametests, and behavior parity out of scope until
    persistence truth is available on every view that needs it.
-5. Preserve legal state grammar and gameplay behavior.
-6. Prove each next slice with `./gradlew --no-daemon compileJava` and
+6. Preserve legal state grammar and gameplay behavior.
+7. Prove each next slice with `./gradlew --no-daemon compileJava` and
    `git diff --check`, plus the narrow proof required by the risk checklist.

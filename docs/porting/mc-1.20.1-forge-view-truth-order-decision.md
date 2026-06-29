@@ -129,6 +129,12 @@ Recommended next implementation slice:
 forge-1.20.1-client-anchor-mirror-sync
 ```
 
+Active implementation route:
+
+```text
+forge-1.20.1-client-anchor-mirror-sync
+```
+
 Boundaries for that slice:
 
 - implement only the client mirror/network sync contract for the eight marker

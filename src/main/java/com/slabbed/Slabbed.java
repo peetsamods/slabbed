@@ -1,6 +1,7 @@
 package com.slabbed;
 
 import com.slabbed.anchor.SlabAnchorCapabilities;
+import com.slabbed.anchor.SlabAnchorNetwork;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
@@ -16,6 +17,7 @@ public class Slabbed {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         SlabAnchorCapabilities.register(modEventBus);
+        SlabAnchorNetwork.register();
 
         LOGGER.info("Slabbed Forge 1.20.1 scaffold initialized");
     }
