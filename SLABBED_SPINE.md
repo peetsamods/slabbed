@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-70e90d94
+23251ced
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-post-render-view-proof-roadmap-alignment
+save/forge-1-20-1-rendered-model-culling-triad-decision
 ```
 
-Pushed branch: yes, through the Forge post-render-view-proof roadmap alignment savepoint.
-Pushed tag: yes, `save/forge-1-20-1-post-render-view-proof-roadmap-alignment`.
+Pushed branch: yes, through the Forge rendered-model/culling/triad decision savepoint.
+Pushed tag: yes, `save/forge-1-20-1-rendered-model-culling-triad-decision`.
 
 Donor release tag at parent foundation base:
 
@@ -68,7 +68,7 @@ Forge model-wrapper registration scaffold is compile-proven and savepointed. The
 post-model-wrapper roadmap alignment is docs-proven and savepointed. The
 model-wrapper registration proof gate is source-backed `registration-proven` and
 savepointed. The post-registration-proof roadmap alignment is docs-proven and
-savepointed. The model-wrapper render-view proof is now source-backed `render-view-proven` and savepointed at `a3f5bed4` / `save/forge-1-20-1-model-wrapper-render-view-proof`. The active Book III lane is the docs/audit rendered-model, culling, and Visual Triad decision gate before any culling, rendered-model, or Visual Triad implementation/proof execution. The Forge
+savepointed. The model-wrapper render-view proof is now source-backed `render-view-proven` and savepointed at `a3f5bed4` / `save/forge-1-20-1-model-wrapper-render-view-proof`. The active Book III lane is the concrete rendered block-model evidence proof gate before any culling change, Visual Triad proof, behavior parity, live proof, or release work. The Forge
 regression-risk checklist remains required before render-view proof, culling,
 mixin, gametest, behavior parity, live, or release slices. Mixins, gametest,
 runtime behavior, release, and live-profile work remain out of scope until
@@ -82,8 +82,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III rendered-model/culling/Visual Triad decision gate
-- implementation status: persistence truth, model-render path decision, model-wrapper scaffold, source-backed registration proof, post-registration roadmap alignment, source-backed render-view proof, and post-render-view roadmap alignment savepointed; rendered behavior, culling, and Visual Triad are not yet proven
+- current work type: Book III rendered block-model evidence proof gate
+- implementation status: persistence truth, model-render path decision, model-wrapper scaffold, source-backed registration proof, source-backed render-view proof, post-render-view roadmap alignment, and rendered-model/culling/triad decision savepointed; rendered block-model evidence is being source/bytecode-proven; culling and full Visual Triad are not yet proven
 
 ## Current blocker
 
@@ -94,7 +94,7 @@ Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
 server-side anchor store capability, gameplay-facing storage facade, and client
 mirror sync. The non-Level render-view anchor lookup bridge is now savepointed.
 The Forge model-wrapper registration scaffold is now savepointed. The
-source-backed registration proof gate is also savepointed. The active docs-only lane classifies rendered-model, culling, and Visual Triad proof order before any culling change, rendered-model proof execution, Visual Triad proof execution, mixin, gametest, or behavior parity work.
+source-backed registration proof gate is also savepointed. The active proof lane asks whether the Forge wrapper affects rendered block-model output for a named lowered fixture before any culling change, Visual Triad proof execution, mixin, gametest, or behavior parity work.
 ```
 
 Failing layer:
@@ -163,7 +163,9 @@ Book III attachment/persistence decision:
   savepointed at a3f5bed4
 - post-render-view-proof roadmap alignment: docs-proven and savepointed at
   70e90d94
-- active docs slice: forge-1.20.1-rendered-model-culling-triad-decision
+- rendered-model/culling/triad decision: docs-proven and savepointed at
+  23251ced
+- active proof slice: forge-1.20.1-rendered-block-model-evidence-proof-gate
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
@@ -269,13 +271,13 @@ tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 Type:
 
 ```text
-forge-1.20.1-rendered-model-culling-triad-decision
+forge-1.20.1-rendered-block-model-evidence-proof-gate
 ```
 
 Allowed files:
 
 ```text
-Docs/audit decision record plus narrow front-door status notes only. Do not start culling, rendered-model proof execution, Visual Triad proof execution, gametest, live, or behavior parity proof.
+Source-backed proof note plus narrow front-door status notes only, unless source evidence is insufficient and a default-off diagnostic is required. Do not start culling changes, Visual Triad proof execution, gametest, live, or behavior parity proof.
 ```
 
 Forbidden files:
@@ -291,7 +293,7 @@ edits unless a later route explicitly authorizes that scope.
 Required proof:
 
 ```text
-git diff --check. This decision may name the next legal proof route, but it must not claim rendered-model, culling, Visual Triad, behavior, live, or release proof.
+git diff --check for docs/proof-only work; compileJava plus git diff --check if source/diagnostic code is touched. This gate may claim only rendered-block-model-evidence-proven if the evidence supports it.
 ```
 
 Stop condition:

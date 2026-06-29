@@ -209,3 +209,19 @@ Stop partial if:
   gametests, live proof, behavior parity, release, or source/build/resource/test
   files
 - front-door docs disagree on the next route
+
+## Follow-Up Proof Gate Status
+
+The decision savepoint is complete at `23251ced` /
+`save/forge-1-20-1-rendered-model-culling-triad-decision`.
+
+Current concrete route:
+
+```text
+forge-1.20.1-rendered-block-model-evidence-proof-gate
+```
+
+That route may claim only `rendered-block-model-evidence-proven` if it ties the
+Forge wrapper to renderer-consumed baked quad output for a named lowered fixture.
+It may not claim culling, full Visual Triad, live behavior, behavior parity, or
+release readiness.

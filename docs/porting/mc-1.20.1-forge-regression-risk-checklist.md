@@ -78,11 +78,13 @@ Proven on this Forge branch:
   `a3f5bed4` / `save/forge-1-20-1-model-wrapper-render-view-proof`
 - post-render-view-proof roadmap alignment, docs-proven and savepointed at
   `70e90d94` / `save/forge-1-20-1-post-render-view-proof-roadmap-alignment`
+- rendered-model/culling/triad decision, docs-proven and savepointed at
+  `23251ced` / `save/forge-1-20-1-rendered-model-culling-triad-decision`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
 
-- rendered model behavior
+- rendered block-model evidence until `forge-1.20.1-rendered-block-model-evidence-proof-gate` is savepointed
 - culling/render-path behavior
 - full Visual Triad agreement
 - mixins
@@ -142,6 +144,7 @@ Use these labels instead of overclaiming:
 - `server-persistence-proven`: server storage compiles or passes save/load proof, no client mirror implied.
 - `client-mirror-proven`: client mirror receives the same truth as the server for the named route.
 - `render-view-proven`: non-`Level` render views can read the needed truth.
+- `rendered-block-model-evidence-proven`: the Forge block-model wrapper participates in the renderer-consumed `BakedModel#getQuads` path and returns translated baked quads for a named lowered fixture.
 - `triad-proven`: model, outline, and raycast agree for the named state and fixture.
 - `behavior-proven`: placement, survival, neighbor update, reload, and triad proof passed for the named family.
 - `live-proven`: exact real profile, jar, world, action, and evidence were captured.
