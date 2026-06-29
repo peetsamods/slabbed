@@ -83,6 +83,15 @@ Proven on this Forge branch:
 - rendered block-model evidence proof, source/bytecode-backed
   `rendered-block-model-evidence-proven` and savepointed at `d435fcbc` /
   `save/forge-1-20-1-rendered-block-model-evidence-proof`
+- Book IV first proof route selection, docs-proven and savepointed at
+  `496d967d` / `save/forge-1-20-1-book-iv-first-proof-route`
+- ordinary full-block proof harness audit, docs-proven and savepointed at
+  `59baef9c` /
+  `save/forge-1-20-1-ordinary-full-block-proof-harness-audit`
+- exact Forge server fixture for `minecraft:stone` over
+  `minecraft:stone_slab[type=bottom]`, server gametest green and savepointed
+  at `6f05c9e8` /
+  `save/forge-1-20-1-ordinary-full-block-anchor-behavior`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
@@ -90,8 +99,10 @@ Not proven on this Forge branch:
 - culling/render-path behavior
 - full Visual Triad agreement
 - mixins
-- gametest/proof harness migration
+- client/runtime Visual Triad proof harness
+- broad gametest/proof harness migration
 - placement, survival, collision, outline, raycast, rescue, or behavior parity
+  beyond the exact saved server fixture
 - live Minecraft/Modrinth profile behavior
 - release jar hygiene
 

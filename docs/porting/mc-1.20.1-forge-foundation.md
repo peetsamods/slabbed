@@ -371,5 +371,20 @@ Book III next loader API migration slice:
 20. First selected Book IV behavior route is
     `forge-1.20.1-ordinary-full-block-on-bottom-slab-triad-and-behavior-proof`,
     starting as a proof-gap/harness audit before Java behavior patching.
-21. Preserve legal state grammar and gameplay behavior.
-22. Prove each next slice with the narrow proof required by the risk checklist.
+21. Book IV first proof route selection is savepointed at `496d967d` with tag
+    `save/forge-1-20-1-book-iv-first-proof-route`.
+22. The ordinary full-block proof harness audit is savepointed at `59baef9c`
+    with tag
+    `save/forge-1-20-1-ordinary-full-block-proof-harness-audit`.
+23. The exact Forge server fixture for `minecraft:stone` over
+    `minecraft:stone_slab[type=bottom]` is green and
+    savepointed at `6f05c9e8` with tag
+    `save/forge-1-20-1-ordinary-full-block-anchor-behavior`.
+24. Current legal route is docs/audit
+    `forge-1.20.1-ordinary-full-block-client-runtime-triad-harness-audit`,
+    before any client harness implementation, culling, mixin migration, live
+    proof, or behavior parity claim.
+25. Next executable route, if this audit remains clean, is
+    `forge-1.20.1-ordinary-full-block-client-runtime-triad-harness-scaffold`.
+26. Preserve legal state grammar and gameplay behavior.
+27. Prove each next slice with the narrow proof required by the risk checklist.

@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-d435fcbc
+6f05c9e8
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-rendered-block-model-evidence-proof
+save/forge-1-20-1-ordinary-full-block-anchor-behavior
 ```
 
-Pushed branch: yes, through the Forge rendered block-model evidence proof savepoint.
-Pushed tag: yes, `save/forge-1-20-1-rendered-block-model-evidence-proof`.
+Pushed branch: yes, through the Forge ordinary full-block anchor behavior savepoint.
+Pushed tag: yes, `save/forge-1-20-1-ordinary-full-block-anchor-behavior`.
 
 Donor release tag at parent foundation base:
 
@@ -74,12 +74,18 @@ savepointed. The model-wrapper render-view proof is source-backed
 rendered-model/culling/triad decision is savepointed at `23251ced`, and the
 rendered block-model evidence proof is source/bytecode-backed
 `rendered-block-model-evidence-proven` at `d435fcbc` /
-`save/forge-1-20-1-rendered-block-model-evidence-proof`. The active Book IV lane
-is proof selection for the first ordinary full-block behavior/triad route. The
-Forge regression-risk checklist remains required before culling, mixin,
-gametest, behavior parity, live, or release slices. Mixins, gametest, runtime
-behavior, release, and live-profile work remain out of scope until separately
-authorized.
+`save/forge-1-20-1-rendered-block-model-evidence-proof`. The first Book IV
+proof route and server harness audit are savepointed. The exact Forge server
+fixture for `minecraft:stone` over `minecraft:stone_slab[type=bottom]` is exact
+server fixture-green at `6f05c9e8` /
+`save/forge-1-20-1-ordinary-full-block-anchor-behavior`: Forge item placement
+creates real server anchor truth with `anchored=true`, `dy=-0.500000`,
+`supportDy=0.000000`, and `overlap=0.000000`. The active Book IV lane is a
+client/runtime Visual Triad proof-harness audit for that same fixture. The Forge
+regression-risk checklist remains required before culling, mixin, broader
+gametest, behavior parity, live, or release slices. Full Visual Triad, outline,
+raycast, culling, live behavior, broad behavior parity, release, and
+live-profile work remain out of scope until separately authorized.
 ```
 
 ## Current objective
@@ -91,8 +97,9 @@ Set the first Forge project lane for Slabbed:
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
 - current work type: Book IV first behavior/proof route selection
 - implementation status: Book III loader/API migration appears complete through
-  the rendered block-model evidence proof savepoint; culling, full Visual Triad,
-  gametest/proof harness migration, live behavior, behavior parity, and release
+  the rendered block-model evidence proof savepoint; the exact server fixture is
+  green at `6f05c9e8`; culling, full Visual Triad, client
+  runtime triad harness, live behavior, broad behavior parity, and release
   readiness are not proven
 
 ## Current blocker
@@ -100,11 +107,11 @@ Set the first Forge project lane for Slabbed:
 Visible symptom:
 
 ```text
-Forge 1.20.1 Book III loader/API proof is savepointed through rendered
-block-model evidence. The active Book IV question is the first safe behavior
-proof route for a named legal state, before any culling change, Visual Triad
-proof execution, mixin migration, gametest/proof harness migration, live proof,
-or behavior parity claim.
+Forge 1.20.1 Book IV has an exact server-side ordinary full-block-on-bottom-slab
+fixture green at `6f05c9e8`. The active question is whether a Forge-compatible
+client/runtime Visual Triad proof harness already exists for the same named
+legal state, before any culling change, client harness implementation, mixin
+migration, live proof, or behavior parity claim.
 ```
 
 Failing layer:
@@ -129,6 +136,8 @@ Current preflight/savepoint:
 - branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
 - HEAD: d435fcbc
 - tag at HEAD: save/forge-1-20-1-rendered-block-model-evidence-proof
+- current HEAD after server behavior savepoint: 6f05c9e8
+- current tag at HEAD: save/forge-1-20-1-ordinary-full-block-anchor-behavior
 
 Donor build truth at parent foundation base:
 - Minecraft 1.21.1
@@ -177,10 +186,16 @@ Book III attachment/persistence decision:
   23251ced
 - rendered block-model evidence proof: source/bytecode-backed
   rendered-block-model-evidence-proven and savepointed at d435fcbc
-- active proof-selection slice:
-  forge-1.20.1-book-iv-ordinary-full-block-anchor-proof-selection
+- Book IV first route selection: savepointed at 496d967d
+- ordinary full-block proof harness audit: savepointed at 59baef9c
+- ordinary full-block server fixture proof: exact fixture green and savepointed
+  at 6f05c9e8
+- active proof-gap audit slice:
+  forge-1.20.1-ordinary-full-block-client-runtime-triad-harness-audit
 - route doc:
   docs/porting/mc-1.20.1-forge-book-iv-first-proof-route.md
+- client triad harness audit doc:
+  docs/porting/mc-1.20.1-forge-client-runtime-triad-harness-audit.md
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 

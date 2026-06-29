@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 Book IV first proof route (2026-06-29)
+# HANDOFF - Forge 1.20.1 client/runtime triad harness audit (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `d435fcbc`
-- Tag at HEAD: `save/forge-1-20-1-rendered-block-model-evidence-proof`
+- HEAD: `6f05c9e8`
+- Tag at HEAD: `save/forge-1-20-1-ordinary-full-block-anchor-behavior`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: none; docs/proof-selection only
+- Code changes this slice: none; docs/proof-harness audit only
 
 ## Current state
 
@@ -38,10 +38,17 @@ proof is savepointed at `a3f5bed4`, the post-render-view-proof roadmap alignment
 is savepointed at `70e90d94`, the rendered-model/culling/triad decision is
 savepointed at `23251ced`, and the rendered block-model evidence proof is
 savepointed at `d435fcbc` /
-`save/forge-1-20-1-rendered-block-model-evidence-proof`. The active lane is
-Book IV proof selection for the first ordinary full-block behavior/triad route,
-before any culling, Visual Triad execution, gametest/proof harness migration,
-live, release, or behavior claim. The branch is
+`save/forge-1-20-1-rendered-block-model-evidence-proof`. The Book IV first route
+selection is savepointed at `496d967d`; the ordinary full-block proof harness
+audit is savepointed at `59baef9c`; and the exact Forge server fixture is green
+and savepointed at `6f05c9e8` /
+`save/forge-1-20-1-ordinary-full-block-anchor-behavior`. That server fixture
+proves only `minecraft:stone` placed through Forge item placement over
+`minecraft:stone_slab[type=bottom]`, with `anchored=true`, `dy=-0.500000`,
+`supportDy=0.000000`, and `overlap=0.000000`. The active lane is the
+client/runtime Visual Triad proof-harness audit for the same fixture, before
+any client harness implementation, culling, mixin migration, live, release,
+broad gametest, behavior parity, or full Visual Triad claim. The branch is
 intentionally based at the NeoForge beta.2 release tag because Julia requested
 the Forge 1.20.1 backport use the latest NeoForge
 `0.4.2-beta.2+1.21.1` work as the donor.
@@ -114,23 +121,31 @@ evidence only.
 - Started docs-only Book IV proof-route selection and chose the ordinary
   full-block-on-bottom-slab triad/behavior route as the first behavior proof
   lane, with execution blocked until a later proof-gap/harness slice.
-- Mixins, gametest/proof harness migration, behavior parity, full Visual Triad
-  proof, release, and live-profile work remain untouched.
+- Closed the Book IV first route docs savepoint at `496d967d`.
+- Recorded the ordinary full-block proof harness audit and closed its savepoint
+  at `59baef9c`.
+- Added the minimal Forge server gametest harness and exact server fixture
+  behavior proof, savepointed at `6f05c9e8`.
+- Started this docs-only client/runtime triad harness audit. It found no active
+  Forge-compatible client/runtime Visual Triad proof harness for the saved
+  `minecraft:stone` over bottom stone slab fixture.
+- Mixins, client runtime harness implementation, behavior parity, full Visual
+  Triad proof, culling, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Close a separate docs savepoint for the Book IV proof-route selection if
-   `git diff --check` remains clean.
-2. Next worker should start `forge-1.20.1-ordinary-full-block-on-bottom-slab-triad-and-behavior-proof`
-   as a proof-gap/harness audit before Java behavior patching.
-3. Do not start culling, Visual Triad execution, block-entity, entity-renderer,
-   gametest/proof harness migration, live, behavior, or release work from this
-   planning gate.
+1. Close a separate docs savepoint for this client/runtime triad harness audit
+   if `git diff --check` remains clean.
+2. Next worker should start
+   `forge-1.20.1-ordinary-full-block-client-runtime-triad-harness-scaffold`.
+3. Do not start culling, cull-face relocation, mixin migration, behavior parity,
+   live proof, release work, broad gametest migration, or extra fixtures from
+   this audit gate.
 
 ## Do not start yet
 
-- Do not port Java behavior beyond the temporary Forge entrypoint, server anchor store scaffold, and storage facade.
-- Do not claim model loading, mixins, gametests, behavior parity, Visual Triad proof, or live proof are migrated yet.
+- Do not port Java behavior beyond the already savepointed exact server fixture path.
+- Do not claim mixins, client runtime triad harness, broad gametests, behavior parity, Visual Triad proof, or live proof are migrated yet.
 - Do not start later model loading, mixin, gametest, behavior parity, live-proof, or release slices without applying the Forge risk checklist.
 - Do not migrate model loading, mixins, or gametests in this slice.
 - Do not run release gates or stage jars.
@@ -145,8 +160,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: d435fcbc
-tag at HEAD: save/forge-1-20-1-rendered-block-model-evidence-proof
+HEAD: 6f05c9e8
+tag at HEAD: save/forge-1-20-1-ordinary-full-block-anchor-behavior
 ```
 
 Branch donor evidence:
