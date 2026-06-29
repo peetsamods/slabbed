@@ -74,8 +74,8 @@ Proven on this Forge branch:
 - post-registration-proof roadmap alignment, docs-proven and savepointed at
   `022320b8` /
   `save/forge-1-20-1-post-registration-proof-roadmap-alignment`
-- model-wrapper render-view proof gate, source-backed `render-view-proven`;
-  savepoint pending
+- model-wrapper render-view proof gate, source-backed `render-view-proven`, savepointed at
+  `a3f5bed4` / `save/forge-1-20-1-model-wrapper-render-view-proof`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:

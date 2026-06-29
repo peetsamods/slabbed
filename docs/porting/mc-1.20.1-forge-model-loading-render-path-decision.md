@@ -313,7 +313,7 @@ forge-1.20.1-model-wrapper-render-view-proof-gate
 Status:
 
 ```text
-source-backed render-view-proven; savepoint pending
+source-backed render-view-proven; savepoint complete at a3f5bed4 / save/forge-1-20-1-model-wrapper-render-view-proof
 ```
 
 Proof record:

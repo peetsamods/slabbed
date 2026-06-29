@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 model-wrapper render-view proof gate (2026-06-29)
+# HANDOFF - Forge 1.20.1 post-render-view-proof roadmap alignment (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,8 +7,8 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `022320b8`
-- Tag at HEAD: `save/forge-1-20-1-post-registration-proof-roadmap-alignment`
+- HEAD: `a3f5bed4`
+- Tag at HEAD: `save/forge-1-20-1-model-wrapper-render-view-proof`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
@@ -99,13 +99,13 @@ evidence only.
 - Closed the model-wrapper registration proof savepoint at `d029de0c` and pushed branch/tag.
 - Started docs-only `forge-1.20.1-post-registration-proof-roadmap-alignment`.
 - Closed the post-registration-proof roadmap alignment savepoint at `022320b8` and pushed branch/tag.
-- Started proof gate `forge-1.20.1-model-wrapper-render-view-proof-gate`.
-- Recorded source-backed `render-view-proven` evidence in `docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md`.
+- Completed proof gate `forge-1.20.1-post-render-view-proof-roadmap-alignment` and savepointed it at `a3f5bed4` / `save/forge-1-20-1-model-wrapper-render-view-proof`.
+- Recorded source-backed `render-view-proven` evidence in `docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md`; rendered model behavior, culling, Visual Triad, live proof, and behavior parity remain unproven.
 - Model loading, mixins, gametest, behavior parity, Visual Triad proof, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Close a separate savepoint for `forge-1.20.1-model-wrapper-render-view-proof-gate` if `git diff --check` remains clean.
+1. Close a separate savepoint for `forge-1.20.1-post-render-view-proof-roadmap-alignment` if `git diff --check` remains clean.
 2. After that savepoint, route any culling/rendered-model/Visual Triad decision separately.
 3. Do not start culling, Visual Triad, block-entity, entity-renderer, gametest, live, behavior, or release work from this proof gate.
 
@@ -127,8 +127,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: 022320b8
-tag at HEAD: save/forge-1-20-1-post-registration-proof-roadmap-alignment
+HEAD: a3f5bed4
+tag at HEAD: save/forge-1-20-1-model-wrapper-render-view-proof
 ```
 
 Branch donor evidence:
@@ -317,13 +317,13 @@ source-backed registration-proven and savepointed at
 d029de0c / save/forge-1-20-1-model-wrapper-registration-proof
 
 Next legal route after docs alignment is savepointed:
-forge-1.20.1-model-wrapper-render-view-proof-gate
+forge-1.20.1-post-render-view-proof-roadmap-alignment
 
 Registration proof doc:
 docs/porting/mc-1.20.1-forge-model-wrapper-registration-proof.md
 
 Render-view proof:
-source-backed render-view-proven, savepoint pending
+source-backed render-view-proven; savepoint complete at a3f5bed4 / save/forge-1-20-1-model-wrapper-render-view-proof
 
 Render-view proof doc:
 docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md
@@ -331,7 +331,7 @@ docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md
 
 ## Stop condition reached
 
-Reached for the render-view proof route, scoped only to source-backed
+Reached for the post-render-view-proof roadmap alignment route, scoped only to docs and front-door status after source-backed
 model-wrapper render-view context and non-`Level` client-mirror lookup truth. The
 dirty docs must stop for a separate savepoint closure after `git diff --check`;
 culling, Visual Triad, rendered-model, gametest, live, behavior, and release

@@ -41,7 +41,7 @@ save/forge-1-20-1-post-registration-proof-roadmap-alignment
 ```
 
 Pushed branch: yes, through the Forge post-registration-proof roadmap alignment savepoint.
-Pushed tag: yes, `save/forge-1-20-1-post-registration-proof-roadmap-alignment`.
+Pushed tag: yes, `save/forge-1-20-1-model-wrapper-render-view-proof`.
 
 Donor release tag at parent foundation base:
 
@@ -68,8 +68,7 @@ Forge model-wrapper registration scaffold is compile-proven and savepointed. The
 post-model-wrapper roadmap alignment is docs-proven and savepointed. The
 model-wrapper registration proof gate is source-backed `registration-proven` and
 savepointed. The post-registration-proof roadmap alignment is docs-proven and
-savepointed. The active Book III lane is the model-wrapper render-view proof
-gate, now source-backed `render-view-proven` and savepoint pending. The Forge
+savepointed. The model-wrapper render-view proof is now source-backed `render-view-proven` and savepointed at `a3f5bed4` / `save/forge-1-20-1-model-wrapper-render-view-proof`. The active Book III lane is post-render-view-proof roadmap alignment before any culling, rendered-model, or Visual Triad route. The Forge
 regression-risk checklist remains required before render-view proof, culling,
 mixin, gametest, behavior parity, live, or release slices. Mixins, gametest,
 runtime behavior, release, and live-profile work remain out of scope until
@@ -83,8 +82,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III model-wrapper render-view proof gate
-- implementation status: persistence truth, model-render path decision, model-wrapper scaffold, source-backed registration proof, and post-registration roadmap alignment savepointed; source-backed render-view proof recorded; rendered behavior not yet proven
+- current work type: Book III post-render-view-proof roadmap alignment
+- implementation status: persistence truth, model-render path decision, model-wrapper scaffold, source-backed registration proof, post-registration roadmap alignment, and source-backed render-view proof savepointed; rendered behavior, culling, and Visual Triad are not yet proven
 
 ## Current blocker
 
@@ -161,10 +160,10 @@ Book III attachment/persistence decision:
 - model-wrapper registration proof: source-backed registration-proven and
   savepointed at d029de0c
 - post-registration-proof roadmap alignment: docs-proven and savepointed at
-  022320b8
-- active proof slice: forge-1.20.1-model-wrapper-render-view-proof-gate
-- model-wrapper render-view proof: source-backed render-view-proven, savepoint
-  pending
+  a3f5bed4
+- completed proof savepoint: save/forge-1-20-1-model-wrapper-render-view-proof
+- active docs slice: forge-1.20.1-post-render-view-proof-roadmap-alignment
+- model-wrapper render-view proof: source-backed render-view-proven, savepoint complete
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
@@ -270,7 +269,7 @@ tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 Type:
 
 ```text
-forge-1.20.1-model-wrapper-render-view-proof-savepoint
+forge-1.20.1-rendered-model-culling-triad-decision
 ```
 
 Allowed files:

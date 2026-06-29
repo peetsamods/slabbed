@@ -16,7 +16,7 @@ live proof, behavior parity, release work, commit, tag, or push.
 Savepoint status:
 
 ```text
-proof-clean candidate pending separate savepoint closure
+complete at a3f5bed4 / save/forge-1-20-1-model-wrapper-render-view-proof
 ```
 
 ## Inputs Inspected
@@ -165,9 +165,9 @@ This proof does not prove:
 Immediate next route:
 
 ```text
-forge-1.20.1-model-wrapper-render-view-proof-savepoint
+forge-1.20.1-rendered-model-culling-triad-decision
 ```
 
-After that savepoint, culling, rendered-model/Visual Triad proof, block-entity
+After the post-render-view-proof roadmap alignment is savepointed, a docs/audit decision gate must classify rendered-model, culling, and Visual Triad proof order before any implementation. Culling, rendered-model/Visual Triad proof, block-entity
 renderer coverage, gametest migration, live proof, and release work remain
 separate routes requiring fresh authorization.
