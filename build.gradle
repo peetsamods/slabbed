@@ -19,9 +19,9 @@ java {
 sourceSets {
     main {
         java {
-            setSrcDirs(["src/main/java"])
-            // Book III scaffold gate: compile only the Forge entrypoint until
-            // later slices port attachments, model loading, networking, and mixins.
+            setSrcDirs(["src/main/java", "src/client/java"])
+            // Book III scaffold gate: compile only the Forge surfaces that have
+            // been deliberately ported. Do not widen this include list casually.
             include "com/slabbed/Slabbed.java"
             include "com/slabbed/anchor/SlabAnchorCapabilities.java"
             include "com/slabbed/anchor/SlabAnchorCapabilityProvider.java"
@@ -33,6 +33,10 @@ sourceSets {
             include "com/slabbed/anchor/SlabAnchorNetwork.java"
             include "com/slabbed/compat/CompatHooks.java"
             include "com/slabbed/compat/terrainslabs/TerrainSlabsCompat.java"
+            include "com/slabbed/client/ClientDy.java"
+            include "com/slabbed/client/SlabbedClient.java"
+            include "com/slabbed/client/SlabbedModelLoadingPlugin.java"
+            include "com/slabbed/client/model/OffsetBlockStateModel.java"
             include "com/slabbed/util/RuntimeDiagnostics.java"
             include "com/slabbed/util/SlabSupport.java"
         }

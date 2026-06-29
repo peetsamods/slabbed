@@ -2,7 +2,9 @@ package com.slabbed;
 
 import com.slabbed.anchor.SlabAnchorCapabilities;
 import com.slabbed.anchor.SlabAnchorNetwork;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import org.slf4j.Logger;
@@ -18,6 +20,7 @@ public class Slabbed {
 
         SlabAnchorCapabilities.register(modEventBus);
         SlabAnchorNetwork.register();
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> com.slabbed.client.SlabbedClient.init(modEventBus));
 
         LOGGER.info("Slabbed Forge 1.20.1 scaffold initialized");
     }

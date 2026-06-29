@@ -1,7 +1,6 @@
 package com.slabbed.client;
 
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.common.NeoForge;
+import net.minecraftforge.eventbus.api.IEventBus;
 
 public final class SlabbedClient {
     private SlabbedClient() {
@@ -9,6 +8,5 @@ public final class SlabbedClient {
 
     public static void init(IEventBus modEventBus) {
         SlabbedModelLoadingPlugin.init(modEventBus);
-        SlabAnchorClientSync.init(NeoForge.EVENT_BUS);
     }
 }
