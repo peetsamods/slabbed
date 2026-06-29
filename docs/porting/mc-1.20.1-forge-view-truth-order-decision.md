@@ -158,6 +158,20 @@ That later slice should wire the non-`Level` fallback predicates to the proven
 client mirror and prove render-view lookup separately before model loading or
 Visual Triad claims.
 
+Active implementation route after client mirror savepoint:
+
+```text
+forge-1.20.1-non-level-render-view-anchor-lookup
+```
+
+Boundary:
+
+- wire existing fallback predicates to the client mirror
+- do not add model loading hooks
+- do not add baked/model wrappers
+- do not migrate mixins
+- do not claim Visual Triad proof
+
 ## Proof Status
 
 Proven in this decision slice:

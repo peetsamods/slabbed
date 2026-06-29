@@ -61,11 +61,12 @@ LevelChunk anchor store capability scaffold is compile-proven. The
 gameplay-facing SlabAnchorAttachment storage facade is compile-proven and
 savepointed. The view-truth order decision is docs-proven: networking/client
 mirror sync must come before the non-Level render-view bridge. The Forge
-client anchor mirror/network sync slice is now active. The Forge
-regression-risk checklist remains required before later non-Level render-view,
-model loading, mixin, gametest, behavior parity, live, or release slices.
-Non-Level render-view lookup, model loading, mixins, gametest, runtime behavior,
-release, and live-profile work remain out of scope until separately authorized.
+client anchor mirror/network sync slice is compile-proven and savepointed. The
+non-Level render-view anchor lookup slice is now active. The Forge
+regression-risk checklist remains required before model loading, mixin,
+gametest, behavior parity, live, or release slices. Model loading, mixins,
+gametest, runtime behavior, release, and live-profile work remain out of scope
+until separately authorized.
 ```
 
 ## Current objective
@@ -75,8 +76,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III client anchor mirror/network sync implementation
-- implementation status: client mirror/network sync active; non-Level render-view bridge remains next/later
+- current work type: Book III non-Level render-view anchor lookup implementation
+- implementation status: client mirror/network sync savepointed; non-Level lookup bridge active
 
 ## Current blocker
 
@@ -84,10 +85,10 @@ Visible symptom:
 
 ```text
 Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
-server-side anchor store capability and gameplay-facing storage facade. The next
-implementation must establish client mirror/network sync before wiring non-Level
-render-view lookup, and must not broaden into model, mixin, gametest, or behavior
-parity migration.
+server-side anchor store capability, gameplay-facing storage facade, and client
+mirror sync. The active implementation may only wire existing non-Level anchor
+fallback predicates to the client mirror, and must not broaden into model,
+mixin, gametest, Visual Triad proof, or behavior parity migration.
 ```
 
 Failing layer:
@@ -141,10 +142,11 @@ Book III attachment/persistence decision:
 - client sync: separate later slice, not part of server persistence decision
 - server capability scaffold: one SlabAnchorStore per LevelChunk capability, eight long-set marker buckets
 - gameplay-facing SlabAnchorAttachment storage facade: compile-proven and savepointed at c7a57620
-- not yet migrated: client mirror, non-Level render fallback
+- client mirror/network sync: compile-proven and savepointed at 07776aad
+- not yet migrated: non-Level render fallback
 - view-truth order decision: client mirror/network sync before non-Level render-view bridge
 - decision doc: docs/porting/mc-1.20.1-forge-view-truth-order-decision.md
-- active implementation slice: forge-1.20.1-client-anchor-mirror-sync
+- active implementation slice: forge-1.20.1-non-level-render-view-anchor-lookup
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 

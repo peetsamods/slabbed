@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 client anchor mirror sync implementation (2026-06-28)
+# HANDOFF - Forge 1.20.1 non-Level render-view anchor lookup implementation (2026-06-28)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `39d523cb`
-- Tag at HEAD: `save/forge-1-20-1-view-truth-order-decision`
+- HEAD: `07776aad`
+- Tag at HEAD: `save/forge-1-20-1-client-anchor-mirror-sync`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: client anchor mirror/network sync implementation
+- Code changes this slice: non-Level render-view anchor lookup implementation
 
 ## Current state
 
@@ -22,14 +22,13 @@ facade now uses the Forge chunk capability store and is compile-proven at the
 storage-facade savepoint. The current docs-only decision chooses
 networking/client mirror sync before the non-`Level` render-view bridge, because
 the render-view fallback has no truthful mirror to read until client sync exists.
-The active implementation slice is the smallest Forge client mirror/network sync
-contract for the eight anchor marker buckets. It keeps server capability storage
-authoritative and leaves non-`Level` render-view bridge lookup for the next slice.
-The Forge regression-risk checklist is required before later networking/client
-sync, model loading, mixin, gametest, behavior parity, live-proof, or release
-slices. The branch is intentionally based at the NeoForge beta.2 release tag
-because Julia requested the Forge 1.20.1 backport use the latest NeoForge
-`0.4.2-beta.2+1.21.1` work as the donor.
+The client mirror/network sync slice is compile-proven and savepointed. The
+active implementation slice wires the existing non-`Level` fallback predicates
+to the client mirror. It keeps server capability storage authoritative and does
+not add model hooks, baked/model wrappers, mixins, gametests, behavior parity,
+Visual Triad proof, live proof, or release work. The branch is intentionally
+based at the NeoForge beta.2 release tag because Julia requested the Forge
+1.20.1 backport use the latest NeoForge `0.4.2-beta.2+1.21.1` work as the donor.
 
 Existing untracked `tmp/` evidence folders are present in the worktree. Treat
 them as pre-existing evidence noise and do not delete, stage, or rely on them
@@ -73,21 +72,24 @@ evidence only.
 - Added a dimension/chunk/marker-keyed client anchor mirror.
 - Synced marker buckets on server mutation and chunk watch/unwatch.
 - Routed client `Level` anchor reads through the client mirror while keeping non-`Level` fallback predicates unwired for the next slice.
-- Networking/client sync, model loading, mixins, gametest, behavior parity, release, and live-profile work remain untouched.
+- Closed the client anchor mirror sync savepoint at `07776aad` and pushed branch/tag.
+- Started `forge-1.20.1-non-level-render-view-anchor-lookup`.
+- Wired the existing non-`Level` anchor fallback predicates to the client mirror through the client-only mirror event bridge.
+- Model loading, mixins, gametest, behavior parity, Visual Triad proof, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Finish the `forge-1.20.1-client-anchor-mirror-sync` proof gate in this implementation route.
+1. Finish the `forge-1.20.1-non-level-render-view-anchor-lookup` proof gate in this implementation route.
 2. Re-run `./gradlew --no-daemon compileJava` and `git diff --check`.
 3. If proof-clean, open a separate savepoint closure for this implementation slice.
-4. After that savepoint, route `forge-1.20.1-non-level-render-view-anchor-lookup`.
+4. After that savepoint, route the next Book III surface separately; do not jump straight to Visual Triad claims.
 
 ## Do not start yet
 
 - Do not port Java behavior beyond the temporary Forge entrypoint, server anchor store scaffold, and storage facade.
-- Do not claim render-view bridge, model loading, mixins, gametests, behavior parity, or live proof are migrated yet.
-- Do not start later non-Level render-view bridge, model loading, mixin, gametest, behavior parity, live-proof, or release slices without applying the Forge risk checklist.
-- Do not migrate render-view bridge, model loading, mixins, or gametests in this slice.
+- Do not claim model loading, mixins, gametests, behavior parity, Visual Triad proof, or live proof are migrated yet.
+- Do not start later model loading, mixin, gametest, behavior parity, live-proof, or release slices without applying the Forge risk checklist.
+- Do not migrate model loading, mixins, or gametests in this slice.
 - Do not run release gates or stage jars.
 - Do not claim NeoForge proof as Forge proof.
 - Do not claim auto/dev runs as live proof.
@@ -100,8 +102,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: 39d523cb
-tag at HEAD: save/forge-1-20-1-view-truth-order-decision
+HEAD: 07776aad
+tag at HEAD: save/forge-1-20-1-client-anchor-mirror-sync
 ```
 
 Branch donor evidence:
@@ -242,12 +244,26 @@ Shape:
 - non-Level render-view predicates remain unwired until the next slice
 ```
 
+Non-Level render-view lookup contract:
+
+```text
+Active slice:
+forge-1.20.1-non-level-render-view-anchor-lookup
+
+Shape:
+- SlabAnchorAttachment keeps the existing non-Level fallback predicate fields
+- SlabAnchorClientMirrorEvents installs those predicates on client login
+- each predicate reads the savepointed SlabAnchorClientMirror for the current client dimension
+- predicates are cleared on client logout
+- no SlabSupport, dy, model loading, baked/model wrapper, mixin, gametest, behavior, or live-proof claim is made
+```
+
 ## Stop condition reached
 
 Not yet for this implementation route until the final compile/diff proof runs.
-Stop before non-Level render-view bridge code, model hooks, behavior parity,
-commit/tag/push, or release work; if proof-clean, this dirty implementation
-slice needs a separate savepoint closure.
+Stop before model hooks, behavior parity, Visual Triad proof, commit/tag/push,
+or release work; if proof-clean, this dirty implementation slice needs a
+separate savepoint closure.
 
 ---
 

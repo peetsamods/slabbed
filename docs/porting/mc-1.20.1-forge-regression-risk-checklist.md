@@ -59,12 +59,12 @@ Proven on this Forge branch:
 - server-side `LevelChunk` anchor store capability scaffold
 - gameplay-facing `SlabAnchorAttachment` storage facade
 - view-truth order decision: client mirror/network sync before non-`Level` render-view bridge lookup
+- client chunk mirror and networking sync
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
 
-- proof-clean client chunk mirror or networking sync
-- non-`Level` render-view anchor lookup
+- proof-clean non-`Level` render-view anchor lookup
 - model loading/render hooks
 - mixins
 - gametest/proof harness migration
