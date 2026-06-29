@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-68c2c330
+721e589f
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-model-render-path-decision
+save/forge-1-20-1-model-wrapper-scaffold
 ```
 
-Pushed branch: yes, through the Forge model render path decision savepoint.
-Pushed tag: yes, `save/forge-1-20-1-model-render-path-decision`.
+Pushed branch: yes, through the Forge model-wrapper scaffold savepoint.
+Pushed tag: yes, `save/forge-1-20-1-model-wrapper-scaffold`.
 
 Donor release tag at parent foundation base:
 
@@ -64,11 +64,12 @@ mirror sync must come before the non-Level render-view bridge. The Forge
 client anchor mirror/network sync slice is compile-proven and savepointed. The
 non-Level render-view anchor lookup slice is compile-proven and savepointed. The
 Forge model-loading/render-path decision is docs-proven and savepointed. The
-active Book III slice is the Forge model-wrapper registration scaffold. The
-Forge regression-risk checklist remains required before culling, mixin,
-gametest, behavior parity, live, or release slices. Model loading, mixins,
-gametest, runtime behavior, release, and live-profile work remain out of scope
-until separately authorized.
+Forge model-wrapper registration scaffold is compile-proven and savepointed. The
+active Book III lane is post-model-wrapper roadmap alignment before any next
+implementation. The Forge regression-risk checklist remains required before
+registration proof, culling, mixin, gametest, behavior parity, live, or release
+slices. Mixins, gametest, runtime behavior, release, and live-profile work remain
+out of scope until separately authorized.
 ```
 
 ## Current objective
@@ -78,8 +79,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III model-wrapper registration scaffold
-- implementation status: persistence truth and model-render path decision savepointed; model wrapper not yet compile-proven
+- current work type: Book III post-model-wrapper roadmap alignment
+- implementation status: persistence truth, model-render path decision, and model-wrapper scaffold savepointed; model registration/render behavior not yet proven
 
 ## Current blocker
 
@@ -89,9 +90,9 @@ Visible symptom:
 Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
 server-side anchor store capability, gameplay-facing storage facade, and client
 mirror sync. The non-Level render-view anchor lookup bridge is now savepointed.
-The active implementation lane ports only the Forge model-wrapper registration
-scaffold before any culling change, mixin, gametest, Visual Triad proof, or
-behavior parity work.
+The Forge model-wrapper registration scaffold is now savepointed. The active
+docs-only lane aligns the roadmap before any registration proof, culling change,
+mixin, gametest, Visual Triad proof, or behavior parity work.
 ```
 
 Failing layer:
@@ -150,7 +151,8 @@ Book III attachment/persistence decision:
 - view-truth order decision: client mirror/network sync before non-Level render-view bridge
 - decision doc: docs/porting/mc-1.20.1-forge-view-truth-order-decision.md
 - model-loading/render-path decision: docs-proven and savepointed at 68c2c330
-- active implementation slice: forge-1.20.1-model-wrapper-registration-scaffold
+- model-wrapper registration scaffold: compile-proven and savepointed at 721e589f
+- active docs slice: forge-1.20.1-post-model-wrapper-scaffold-roadmap-alignment
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
@@ -256,26 +258,27 @@ tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 Type:
 
 ```text
-forge-1.20.1-model-wrapper-registration-scaffold
+forge-1.20.1-model-wrapper-registration-proof-gate
 ```
 
 Allowed files:
 
 ```text
-Minimum Forge client model registration and block-model wrapper compile
-scaffold. Register ModelEvent.ModifyBakingResult on the Forge mod event bus,
-port the minimum OffsetBlockStateModel wrapper surface to Forge
-BakedModelWrapper/ModelData APIs, and preserve ClientDy/SlabSupport authority.
+Docs/audit or proof-only gate that verifies the savepointed Forge model wrapper
+registers on the Forge mod event bus and wraps the intended baked block models
+without double wrapping. Use source-backed or default-off diagnostic evidence
+only, and do not claim rendered-model, culling, Visual Triad, gametest, live, or
+behavior parity proof.
 ```
 
 Forbidden files:
 
 ```text
-Culling behavior changes, ChainCeilingGeometry/custom geometry unless compile
-proves unavoidable, mixin migration, gametest migration, block-entity/entity
-renderer migration, behavior parity, Visual Triad proof claims, live proof,
-release metadata, Modrinth/GitHub publishing, commits/tags/pushes, and unrelated
-docs polish unless a later route explicitly authorizes that scope.
+Culling behavior changes, ChainCeilingGeometry/custom geometry, mixin migration,
+gametest migration, block-entity/entity renderer migration, behavior parity,
+Visual Triad proof claims, live proof, release metadata, Modrinth/GitHub
+publishing, commits/tags/pushes, and unrelated docs/source/build/resource/test
+edits unless a later route explicitly authorizes that scope.
 ```
 
 Required proof:

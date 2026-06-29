@@ -340,14 +340,16 @@ Book III next loader API migration slice:
 5. Non-`Level` render-view anchor lookup savepoint is complete at `c69d8665`
    with tag `save/forge-1-20-1-non-level-render-view-anchor-lookup`.
 6. Persistence truth is now available through the server capability, client
-   mirror, and non-`Level` lookup plumbing, but no model loading, mixin,
-   gametest, behavior parity, Visual Triad proof, live proof, or release gate is
-   proven.
+   mirror, and non-`Level` lookup plumbing, but no mixin, gametest, behavior
+   parity, Visual Triad proof, live proof, or release gate is proven.
 7. Post-render-lookup roadmap alignment savepoint is complete at `709a50bd`
    with tag `save/forge-1-20-1-post-render-lookup-roadmap-alignment`.
 8. Model-loading/render-path decision is recorded in
    `docs/porting/mc-1.20.1-forge-model-loading-render-path-decision.md`.
-9. Next legal implementation route after this decision savepoint:
-   `forge-1.20.1-model-wrapper-registration-scaffold`.
-10. Preserve legal state grammar and gameplay behavior.
-11. Prove each next slice with the narrow proof required by the risk checklist.
+9. Model-loading/render-path decision savepoint is complete at `68c2c330` with
+   tag `save/forge-1-20-1-model-render-path-decision`.
+10. Model-wrapper registration scaffold savepoint is complete at `721e589f`
+   with tag `save/forge-1-20-1-model-wrapper-scaffold`.
+11. Next legal route is `forge-1.20.1-model-wrapper-registration-proof-gate`.
+12. Preserve legal state grammar and gameplay behavior.
+13. Prove each next slice with the narrow proof required by the risk checklist.

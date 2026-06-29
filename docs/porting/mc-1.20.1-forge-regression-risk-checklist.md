@@ -63,11 +63,14 @@ Proven on this Forge branch:
 - non-`Level` render-view anchor lookup plumbing, compile-proven and savepointed
 - model-loading/render-path decision: Forge `ModelEvent.ModifyBakingResult` plus
   Forge `BakedModelWrapper` chosen for the next scaffold route
+- model-wrapper registration scaffold, compile-proven and savepointed at
+  `721e589f` / `save/forge-1-20-1-model-wrapper-scaffold`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
 
-- model loading/render hooks
+- model-wrapper registration at runtime
+- rendered model behavior
 - mixins
 - gametest/proof harness migration
 - placement, survival, collision, outline, raycast, rescue, or behavior parity

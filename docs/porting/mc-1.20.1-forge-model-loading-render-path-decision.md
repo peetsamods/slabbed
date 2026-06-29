@@ -223,12 +223,18 @@ Required proof ladder before stronger claims:
 Block-entity and entity-renderer parity are separate proof families because they
 do not pass through the block-model wrapper.
 
-## Next Legal Slice
+## Completed Implementation Slice
 
 Recommended next implementation slice:
 
 ```text
 forge-1.20.1-model-wrapper-registration-scaffold
+```
+
+Status:
+
+```text
+complete at 721e589f / save/forge-1-20-1-model-wrapper-scaffold
 ```
 
 Scope:
@@ -263,6 +269,27 @@ git diff --check
 Plus a report that explicitly says what remains unproven: rendered model dy,
 culling, outline, raycast, block entities, entity renderers, gametests, live
 behavior, and release readiness.
+
+## Next Legal Route After Scaffold
+
+Recommended next route:
+
+```text
+forge-1.20.1-model-wrapper-registration-proof-gate
+```
+
+Scope:
+
+- prove the savepointed Forge `ModelEvent.ModifyBakingResult` listener registers
+  on the Forge mod event bus
+- prove the wrapper touches the intended baked block models without double
+  wrapping
+- use source-backed evidence or a default-off diagnostic route only
+- keep culling, custom geometry, mixins, gametests, Visual Triad proof, live
+  proof, behavior parity, and release work out of scope
+
+This route may claim only `registration-proven` if its evidence is strong enough.
+It may not claim rendered-model, culling, triad, live, behavior, or release proof.
 
 ## Stop Conditions for Later Implementation
 
