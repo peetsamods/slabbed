@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 storage facade compile proof (2026-06-28)
+# HANDOFF - Forge 1.20.1 view-truth order decision (2026-06-28)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,23 +7,26 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `a32cfa66`
-- Tag at HEAD: `save/forge-1-20-1-canon-regression-risk-map`
+- HEAD: `c7a57620`
+- Tag at HEAD: `save/forge-1-20-1-storage-facade`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: gameplay-facing SlabAnchorAttachment storage facade only
+- Code changes this slice: none; docs-only view-truth order decision
 
 ## Current state
 
 Book III entrypoint/lifecycle scaffold and server-side anchor store capability
 scaffold are compile-proven. The gameplay-facing `SlabAnchorAttachment` storage
-facade now uses the Forge chunk capability store and is compile-proven locally;
-it is not savepointed yet. The Forge regression-risk checklist is required
-before later networking/client sync, model loading, mixin, gametest, behavior
-parity, live-proof, or release slices. The branch is intentionally based at the
-NeoForge beta.2 release tag because Julia requested the Forge 1.20.1 backport
-use the latest NeoForge `0.4.2-beta.2+1.21.1` work as the donor.
+facade now uses the Forge chunk capability store and is compile-proven at the
+storage-facade savepoint. The current docs-only decision chooses
+networking/client mirror sync before the non-`Level` render-view bridge, because
+the render-view fallback has no truthful mirror to read until client sync exists.
+The Forge regression-risk checklist is required before later networking/client
+sync, model loading, mixin, gametest, behavior parity, live-proof, or release
+slices. The branch is intentionally based at the NeoForge beta.2 release tag
+because Julia requested the Forge 1.20.1 backport use the latest NeoForge
+`0.4.2-beta.2+1.21.1` work as the donor.
 
 Existing untracked `tmp/` evidence folders are present in the worktree. Treat
 them as pre-existing evidence noise and do not delete, stage, or rely on them
@@ -58,22 +61,25 @@ evidence only.
 - Kept the existing `SlabSupport` semantics unchanged and only brought its unchanged dependency chain into the temporary compile gate.
 - Updated Terrain Slabs compat from NeoForge `ModList` to Forge `ModList` without broadening compat law.
 - Proved the storage facade with `./gradlew --no-daemon compileJava`.
+- Closed the storage-facade savepoint at `c7a57620` and pushed branch/tag.
+- Decided the next Book III view-truth order: networking/client mirror sync before non-`Level` render-view bridge lookup.
+- Added `docs/porting/mc-1.20.1-forge-view-truth-order-decision.md` as the decision record.
 - Networking/client sync, model loading, mixins, gametest, behavior parity, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Open a separate savepoint closure for `forge-1.20.1-slab-anchor-attachment-storage-facade`.
-2. Re-run `./gradlew --no-daemon compileJava` and `git diff --check`.
-3. Stage only the storage-facade slice files.
+1. Open a separate savepoint closure for `forge-1.20.1-view-truth-order-decision`.
+2. Re-run `git diff --check`.
+3. Stage only the docs changed by the decision slice.
 4. Commit/tag/push only from that separate savepoint route.
-5. After savepoint, the next Book III decision should be networking/client sync versus non-`Level` render-view bridge ordering.
+5. After savepoint, route the next implementation slice as `forge-1.20.1-client-anchor-mirror-sync`.
 
 ## Do not start yet
 
 - Do not port Java behavior beyond the temporary Forge entrypoint, server anchor store scaffold, and storage facade.
 - Do not claim client sync, render-view bridge, model loading, mixins, gametests, behavior parity, or live proof are migrated yet.
-- Do not start later networking/client sync, model loading, mixin, gametest, behavior parity, live-proof, or release slices without applying the Forge risk checklist.
-- Do not migrate model loading, networking, mixins, or gametests in this slice.
+- Do not start later networking/client sync, render-view bridge, model loading, mixin, gametest, behavior parity, live-proof, or release slices without applying the Forge risk checklist.
+- Do not migrate networking, render-view bridge, model loading, mixins, or gametests in this slice.
 - Do not run release gates or stage jars.
 - Do not claim NeoForge proof as Forge proof.
 - Do not claim auto/dev runs as live proof.
@@ -86,8 +92,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: a32cfa66
-tag at HEAD: save/forge-1-20-1-canon-regression-risk-map
+HEAD: c7a57620
+tag at HEAD: save/forge-1-20-1-storage-facade
 ```
 
 Branch donor evidence:
@@ -192,13 +198,33 @@ sync/networking is a later explicit Book III slice, not part of server-side
 persistence.
 ```
 
+View-truth order decision:
+
+```text
+Decision doc:
+docs/porting/mc-1.20.1-forge-view-truth-order-decision.md
+
+Chosen order:
+1. networking/client mirror sync
+2. non-Level render-view bridge lookup
+
+Why:
+SlabAnchorAttachment already has non-Level fallback predicate readers for chunk
+render views, but this Forge branch has no client mirror writer/sync surface
+feeding those predicates. A render-view bridge before client sync would either
+read no truth, duplicate server logic, or reach for unsafe client Level state
+from a render-view context.
+```
+
 ## Stop condition reached
 
-Yes for this implementation route after final diff proof. The Forge
+Yes for this docs-only route after final diff proof. The Forge
 entrypoint/lifecycle scaffold, server-side anchor store capability scaffold, and
-gameplay-facing storage facade are compile-proven. Stop before networking/client
-sync, model hooks, behavior parity, commit/tag/push, or release work; the dirty
-storage-facade slice needs a separate savepoint closure.
+gameplay-facing storage facade are compile-proven and savepointed. The next
+implementation order is decided but not implemented: client mirror/network sync
+comes before non-Level render-view bridge lookup. Stop before networking/client
+sync, render-view bridge code, model hooks, behavior parity, commit/tag/push, or
+release work; the dirty decision docs need a separate savepoint closure.
 
 ---
 

@@ -329,12 +329,14 @@ Before any Java gameplay port starts, the next worker must have:
 
 Book III next loader API migration slice:
 
-1. Savepoint the proof-clean `forge-1.20.1-slab-anchor-attachment-storage-facade`
-   slice in a separate closure route.
-2. After that savepoint, choose the next Book III order between networking/client
-   sync and non-`Level` render-view bridge design.
-3. Keep model loading, mixins, gametests, and behavior parity out of scope until
+1. Storage-facade savepoint is complete at `c7a57620` with tag
+   `save/forge-1-20-1-storage-facade`.
+2. View-truth order decision is recorded in
+   `docs/porting/mc-1.20.1-forge-view-truth-order-decision.md`.
+3. Next implementation order is networking/client mirror sync before the
+   non-`Level` render-view bridge lookup.
+4. Keep model loading, mixins, gametests, and behavior parity out of scope until
    persistence truth is available on every view that needs it.
-4. Preserve legal state grammar and gameplay behavior.
-5. Prove each next slice with `./gradlew --no-daemon compileJava` and
+5. Preserve legal state grammar and gameplay behavior.
+6. Prove each next slice with `./gradlew --no-daemon compileJava` and
    `git diff --check`, plus the narrow proof required by the risk checklist.

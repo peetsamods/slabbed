@@ -247,6 +247,8 @@ Proven:
 - SavedData is a less direct fit for the current chunk-owned anchor model
 - isolated server-side Forge `LevelChunk` capability storage scaffold compiles
 - gameplay-facing `SlabAnchorAttachment` storage facade compiles against the Forge capability store
+- storage-facade savepoint is closed at `c7a57620` with tag `save/forge-1-20-1-storage-facade`
+- the next persistence/view-truth order is decided: networking/client mirror sync before non-`Level` render-view bridge lookup
 
 Not proven:
 
@@ -254,3 +256,25 @@ Not proven:
 - non-`Level` render fallback
 - save/reload behavior
 - live behavior
+
+## View Truth Order Decision
+
+Decision record:
+
+```text
+docs/porting/mc-1.20.1-forge-view-truth-order-decision.md
+```
+
+Chosen order:
+
+```text
+1. networking/client mirror sync
+2. non-Level render-view bridge lookup
+```
+
+Reason:
+
+`SlabAnchorAttachment` already contains non-`Level` fallback predicate readers
+for chunk render views, but this Forge branch has no client mirror writer/sync
+surface feeding those predicates. Build the mirror/network sync path first, then
+wire render-view lookup to that mirror in a separate slice.

@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-a32cfa66
+c7a57620
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-canon-regression-risk-map
+save/forge-1-20-1-storage-facade
 ```
 
-Pushed branch: yes, through the Forge foundation risk-map savepoint.
-Pushed tag: yes, `save/forge-1-20-1-canon-regression-risk-map`.
+Pushed branch: yes, through the Forge storage-facade savepoint.
+Pushed tag: yes, `save/forge-1-20-1-storage-facade`.
 
 Donor release tag at parent foundation base:
 
@@ -58,11 +58,13 @@ because Julia requested the Forge 1.20.1 backport begin from the latest
 ```text
 Book III entrypoint/lifecycle scaffold is compile-proven. The server-side Forge
 LevelChunk anchor store capability scaffold is compile-proven. The
-gameplay-facing SlabAnchorAttachment storage facade is compile-proven locally
-and savepoint-pending. The Forge regression-risk checklist remains required
-before later networking/client sync, model loading, mixin, gametest, behavior
-parity, live, or release slices. Networking/client sync, model loading, mixins,
-gametest, runtime behavior, release, and live-profile work remain out of scope.
+gameplay-facing SlabAnchorAttachment storage facade is compile-proven and
+savepointed. The view-truth order decision is docs-proven: networking/client
+mirror sync must come before the non-Level render-view bridge. The Forge
+regression-risk checklist remains required before later networking/client sync,
+model loading, mixin, gametest, behavior parity, live, or release slices.
+Networking/client sync, model loading, mixins, gametest, runtime behavior,
+release, and live-profile work remain out of scope until separately authorized.
 ```
 
 ## Current objective
@@ -72,8 +74,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III gameplay-facing SlabAnchorAttachment storage facade savepoint next
-- implementation status: storage facade compile-proven locally; savepoint pending
+- current work type: Book III view-truth order decision savepoint next
+- implementation status: client mirror/network sync chosen before non-Level render-view bridge; docs-only decision proof pending savepoint
 
 ## Current blocker
 
@@ -81,9 +83,10 @@ Visible symptom:
 
 ```text
 Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
-server-side anchor store capability and gameplay-facing storage facade. Do not
-broaden the next savepoint or compile failures into networking, model, mixin,
-gametest, or behavior parity migration.
+server-side anchor store capability and gameplay-facing storage facade. The next
+implementation must establish client mirror/network sync before wiring non-Level
+render-view lookup, and must not broaden into model, mixin, gametest, or behavior
+parity migration.
 ```
 
 Failing layer:
@@ -136,8 +139,10 @@ Book III attachment/persistence decision:
 - not chosen as primary store: SavedData
 - client sync: separate later slice, not part of server persistence decision
 - server capability scaffold: one SlabAnchorStore per LevelChunk capability, eight long-set marker buckets
-- gameplay-facing SlabAnchorAttachment storage facade: compile-proven locally, savepoint pending
+- gameplay-facing SlabAnchorAttachment storage facade: compile-proven and savepointed at c7a57620
 - not yet migrated: client mirror, non-Level render fallback
+- view-truth order decision: client mirror/network sync before non-Level render-view bridge
+- decision doc: docs/porting/mc-1.20.1-forge-view-truth-order-decision.md
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 

@@ -57,11 +57,12 @@ Proven on this Forge branch:
 - Forge 1.20.1 toolchain truth
 - entrypoint/lifecycle compile scaffold
 - server-side `LevelChunk` anchor store capability scaffold
+- gameplay-facing `SlabAnchorAttachment` storage facade
+- view-truth order decision: client mirror/network sync before non-`Level` render-view bridge lookup
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
 
-- gameplay-facing `SlabAnchorAttachment` facade
 - client chunk mirror or networking sync
 - non-`Level` render-view anchor lookup
 - model loading/render hooks
