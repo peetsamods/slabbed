@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-139a15d2
+d029de0c
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-post-model-wrapper-scaffold-roadmap-alignment
+save/forge-1-20-1-model-wrapper-registration-proof
 ```
 
-Pushed branch: yes, through the Forge post-model-wrapper roadmap alignment savepoint.
-Pushed tag: yes, `save/forge-1-20-1-post-model-wrapper-scaffold-roadmap-alignment`.
+Pushed branch: yes, through the Forge model-wrapper registration proof savepoint.
+Pushed tag: yes, `save/forge-1-20-1-model-wrapper-registration-proof`.
 
 Donor release tag at parent foundation base:
 
@@ -65,8 +65,10 @@ client anchor mirror/network sync slice is compile-proven and savepointed. The
 non-Level render-view anchor lookup slice is compile-proven and savepointed. The
 Forge model-loading/render-path decision is docs-proven and savepointed. The
 Forge model-wrapper registration scaffold is compile-proven and savepointed. The
-post-model-wrapper roadmap alignment is docs-proven and savepointed. The active
-Book III lane is the model-wrapper registration proof gate. The Forge
+post-model-wrapper roadmap alignment is docs-proven and savepointed. The
+model-wrapper registration proof gate is source-backed `registration-proven` and
+savepointed. The active Book III lane is post-registration-proof roadmap
+alignment before the render-view/model-data proof gate. The Forge
 regression-risk checklist remains required before render-view proof, culling,
 mixin, gametest, behavior parity, live, or release slices. Mixins, gametest,
 runtime behavior, release, and live-profile work remain out of scope until
@@ -80,8 +82,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III model-wrapper registration proof gate
-- implementation status: persistence truth, model-render path decision, and model-wrapper scaffold savepointed; registration proof in progress; rendered behavior not yet proven
+- current work type: Book III post-registration-proof roadmap alignment
+- implementation status: persistence truth, model-render path decision, model-wrapper scaffold, and source-backed registration proof savepointed; rendered behavior not yet proven
 
 ## Current blocker
 
@@ -91,10 +93,10 @@ Visible symptom:
 Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
 server-side anchor store capability, gameplay-facing storage facade, and client
 mirror sync. The non-Level render-view anchor lookup bridge is now savepointed.
-The Forge model-wrapper registration scaffold is now savepointed. The active
-proof lane verifies only source-backed listener registration, wrapper coverage,
-and double-wrap prevention before any render-view proof, culling change, mixin,
-gametest, Visual Triad proof, or behavior parity work.
+The Forge model-wrapper registration scaffold is now savepointed. The
+source-backed registration proof gate is also savepointed. The active docs-only
+lane aligns front-door roadmap wording before any render-view proof, culling
+change, mixin, gametest, Visual Triad proof, or behavior parity work.
 ```
 
 Failing layer:
@@ -155,7 +157,11 @@ Book III attachment/persistence decision:
 - model-loading/render-path decision: docs-proven and savepointed at 68c2c330
 - model-wrapper registration scaffold: compile-proven and savepointed at 721e589f
 - post-model-wrapper roadmap alignment: docs-proven and savepointed at 139a15d2
-- active proof slice: forge-1.20.1-model-wrapper-registration-proof-gate
+- model-wrapper registration proof: source-backed registration-proven and
+  savepointed at d029de0c
+- active docs slice: forge-1.20.1-post-registration-proof-roadmap-alignment
+- next legal route after this alignment savepoint:
+  forge-1.20.1-model-wrapper-render-view-proof-gate
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 

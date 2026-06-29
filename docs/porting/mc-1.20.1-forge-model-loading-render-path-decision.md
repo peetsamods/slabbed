@@ -294,7 +294,8 @@ It may not claim rendered-model, culling, triad, live, behavior, or release proo
 Status:
 
 ```text
-source-backed registration-proven; savepoint pending
+source-backed registration-proven; savepointed at d029de0c /
+save/forge-1-20-1-model-wrapper-registration-proof
 ```
 
 Proof record:
@@ -303,7 +304,7 @@ Proof record:
 docs/porting/mc-1.20.1-forge-model-wrapper-registration-proof.md
 ```
 
-Next route after this proof is savepointed:
+Next route after post-registration-proof roadmap alignment is savepointed:
 
 ```text
 forge-1.20.1-model-wrapper-render-view-proof-gate

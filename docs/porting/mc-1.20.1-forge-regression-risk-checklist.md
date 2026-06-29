@@ -68,7 +68,9 @@ Proven on this Forge branch:
 - post-model-wrapper roadmap alignment, docs-proven and savepointed at
   `139a15d2` /
   `save/forge-1-20-1-post-model-wrapper-scaffold-roadmap-alignment`
-- model-wrapper registration proof gate, source-backed `registration-proven`
+- model-wrapper registration proof gate, source-backed `registration-proven` and
+  savepointed at `d029de0c` /
+  `save/forge-1-20-1-model-wrapper-registration-proof`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:

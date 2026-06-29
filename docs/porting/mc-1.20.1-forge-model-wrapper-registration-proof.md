@@ -13,6 +13,12 @@ implementation, culling changes, custom geometry, mixins, gametests, Visual
 Triad proof, rendered-model proof, live proof, behavior parity, release work,
 commit, tag, or push.
 
+Savepoint status:
+
+```text
+complete at d029de0c / save/forge-1-20-1-model-wrapper-registration-proof
+```
+
 ## Inputs Inspected
 
 Roadmap and canon:
@@ -129,7 +135,8 @@ This proof does not prove:
 
 ## Next Smallest Route
 
-Recommended next route after this proof is savepointed:
+Recommended next route after post-registration-proof roadmap alignment is
+savepointed:
 
 ```text
 forge-1.20.1-model-wrapper-render-view-proof-gate
