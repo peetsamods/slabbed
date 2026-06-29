@@ -175,6 +175,7 @@ Boundary:
 Post-lookup next legal route:
 
 ```text
+complete or active decision:
 forge-1.20.1-model-loading-render-path-decision
 ```
 
@@ -182,6 +183,12 @@ This is a docs/audit decision gate, not Java implementation. It should classify
 the Forge model-loading/render path, culling risk, and Visual Triad proof
 boundary before any model hooks, baked/model wrappers, mixins, gametest
 migration, behavior parity, or live-proof claims.
+
+Decision record:
+
+```text
+docs/porting/mc-1.20.1-forge-model-loading-render-path-decision.md
+```
 
 ## Proof Status
 

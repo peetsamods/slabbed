@@ -61,6 +61,8 @@ Proven on this Forge branch:
 - view-truth order decision: client mirror/network sync before non-`Level` render-view bridge lookup
 - client chunk mirror and networking sync
 - non-`Level` render-view anchor lookup plumbing, compile-proven and savepointed
+- model-loading/render-path decision: Forge `ModelEvent.ModifyBakingResult` plus
+  Forge `BakedModelWrapper` chosen for the next scaffold route
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:

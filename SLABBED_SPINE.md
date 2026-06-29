@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-c69d8665
+709a50bd
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-non-level-render-view-anchor-lookup
+save/forge-1-20-1-post-render-lookup-roadmap-alignment
 ```
 
-Pushed branch: yes, through the Forge non-Level render-view anchor lookup savepoint.
-Pushed tag: yes, `save/forge-1-20-1-non-level-render-view-anchor-lookup`.
+Pushed branch: yes, through the Forge post-render-lookup roadmap alignment savepoint.
+Pushed tag: yes, `save/forge-1-20-1-post-render-lookup-roadmap-alignment`.
 
 Donor release tag at parent foundation base:
 
@@ -63,6 +63,7 @@ savepointed. The view-truth order decision is docs-proven: networking/client
 mirror sync must come before the non-Level render-view bridge. The Forge
 client anchor mirror/network sync slice is compile-proven and savepointed. The
 non-Level render-view anchor lookup slice is compile-proven and savepointed. The Forge
+model-loading/render-path decision is the active docs/audit gate. The Forge
 regression-risk checklist remains required before model loading, mixin,
 gametest, behavior parity, live, or release slices. Model loading, mixins,
 gametest, runtime behavior, release, and live-profile work remain out of scope
@@ -76,8 +77,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III post-render-lookup roadmap alignment
-- implementation status: client mirror/network sync and non-Level lookup bridge savepointed
+- current work type: Book III model-loading/render-path decision
+- implementation status: persistence truth savepointed; model wrapper not yet migrated
 
 ## Current blocker
 
@@ -87,8 +88,9 @@ Visible symptom:
 Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
 server-side anchor store capability, gameplay-facing storage facade, and client
 mirror sync. The non-Level render-view anchor lookup bridge is now savepointed.
-The active docs-only lane is aligning stale front-door roadmap wording before
-any model loading, mixin, gametest, Visual Triad proof, or behavior parity work.
+The active docs-only lane classifies the Forge model-loading/render path and
+proof ladder before any model hook, mixin, gametest, Visual Triad proof, or
+behavior parity work.
 ```
 
 Failing layer:
@@ -146,7 +148,7 @@ Book III attachment/persistence decision:
 - non-Level render fallback lookup: compile-proven and savepointed at c69d8665
 - view-truth order decision: client mirror/network sync before non-Level render-view bridge
 - decision doc: docs/porting/mc-1.20.1-forge-view-truth-order-decision.md
-- active docs slice: forge-1.20.1-post-render-lookup-roadmap-alignment
+- active docs slice: forge-1.20.1-model-loading-render-path-decision
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
@@ -252,35 +254,36 @@ tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 Type:
 
 ```text
-forge-1.20.1-model-loading-render-path-decision
+forge-1.20.1-model-wrapper-registration-scaffold
 ```
 
 Allowed files:
 
 ```text
-Docs/audit-only unless a later route explicitly authorizes implementation.
-Classify the Forge model-loading/render path, culling risk, and Visual Triad
-proof boundary now that server capability, client mirror, and non-Level lookup
-truth are savepointed.
+Minimum Forge client model registration and block-model wrapper compile
+scaffold. Register ModelEvent.ModifyBakingResult on the Forge mod event bus,
+port the minimum OffsetBlockStateModel wrapper surface to Forge
+BakedModelWrapper/ModelData APIs, and preserve ClientDy/SlabSupport authority.
 ```
 
 Forbidden files:
 
 ```text
-Java/source/resource implementation, baked/model wrappers, mixins, gametest
-migration, behavior parity, Visual Triad proof claims, live proof, release
-metadata, Modrinth/GitHub publishing, commits/tags/pushes, and unrelated docs
-polish unless a later route explicitly authorizes that scope.
+Culling behavior changes, ChainCeilingGeometry/custom geometry unless compile
+proves unavoidable, mixin migration, gametest migration, block-entity/entity
+renderer migration, behavior parity, Visual Triad proof claims, live proof,
+release metadata, Modrinth/GitHub publishing, commits/tags/pushes, and unrelated
+docs polish unless a later route explicitly authorizes that scope.
 ```
 
 Required proof:
 
 ```text
-For the next docs/audit slice, prove with git diff --check and exact
-source/canon citations. If it becomes an implementation slice later, use
-./gradlew --no-daemon compileJava plus the model/render proof required by the
-Forge regression-risk checklist. Do not claim Visual Triad, behavior, or live
-proof from compile evidence.
+For the next implementation slice, prove with ./gradlew --no-daemon compileJava
+and git diff --check. The report may claim only model-wrapper-scaffold-proven
+unless a separate proof captures render-view, model dy, outline, and raycast
+agreement. Do not claim culling, Visual Triad, behavior, or live proof from
+compile evidence.
 ```
 
 Stop condition:

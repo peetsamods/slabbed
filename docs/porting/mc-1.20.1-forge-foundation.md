@@ -343,7 +343,11 @@ Book III next loader API migration slice:
    mirror, and non-`Level` lookup plumbing, but no model loading, mixin,
    gametest, behavior parity, Visual Triad proof, live proof, or release gate is
    proven.
-7. Next legal roadmap route is a docs/audit decision gate:
-   `forge-1.20.1-model-loading-render-path-decision`.
-8. Preserve legal state grammar and gameplay behavior.
-9. Prove each next slice with the narrow proof required by the risk checklist.
+7. Post-render-lookup roadmap alignment savepoint is complete at `709a50bd`
+   with tag `save/forge-1-20-1-post-render-lookup-roadmap-alignment`.
+8. Model-loading/render-path decision is recorded in
+   `docs/porting/mc-1.20.1-forge-model-loading-render-path-decision.md`.
+9. Next legal implementation route after this decision savepoint:
+   `forge-1.20.1-model-wrapper-registration-scaffold`.
+10. Preserve legal state grammar and gameplay behavior.
+11. Prove each next slice with the narrow proof required by the risk checklist.

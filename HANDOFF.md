@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 post-render-lookup roadmap alignment (2026-06-28)
+# HANDOFF - Forge 1.20.1 model-loading render-path decision (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `c69d8665`
-- Tag at HEAD: `save/forge-1-20-1-non-level-render-view-anchor-lookup`
+- HEAD: `709a50bd`
+- Tag at HEAD: `save/forge-1-20-1-post-render-lookup-roadmap-alignment`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: none; docs-only roadmap/front-door alignment
+- Code changes this slice: none; docs-only model-loading/render-path decision
 
 ## Current state
 
@@ -27,8 +27,9 @@ active implementation slice wires the existing non-`Level` fallback predicates
 to the client mirror. It keeps server capability storage authoritative and does
 not add model hooks, baked/model wrappers, mixins, gametests, behavior parity,
 Visual Triad proof, live proof, or release work, and it is savepointed at
-`c69d8665`. The active lane is docs-only front-door alignment before any model
-loading/render-path decision or implementation. The branch is intentionally
+`c69d8665`. The post-render-lookup roadmap alignment is savepointed at
+`709a50bd`. The active lane is docs-only model-loading/render-path decision
+before any model wrapper implementation. The branch is intentionally
 based at the NeoForge beta.2 release tag because Julia requested the Forge
 1.20.1 backport use the latest NeoForge `0.4.2-beta.2+1.21.1` work as the donor.
 
@@ -80,14 +81,16 @@ evidence only.
 - Proved the non-`Level` lookup bridge with `./gradlew --no-daemon compileJava` and `git diff --check`.
 - Closed the non-`Level` render-view anchor lookup savepoint at `c69d8665` and pushed branch/tag.
 - Started docs-only `forge-1.20.1-post-render-lookup-roadmap-alignment` to remove stale active-slice pointers.
+- Closed the post-render-lookup roadmap alignment savepoint at `709a50bd` and pushed branch/tag.
+- Started docs-only `forge-1.20.1-model-loading-render-path-decision`.
 - Model loading, mixins, gametest, behavior parity, Visual Triad proof, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Finish this docs-only roadmap alignment proof gate with `git diff --check`.
-2. If proof-clean and dirty, open a separate savepoint closure for the docs alignment.
-3. After that savepoint, route the next Book III surface separately.
-4. Recommended next route is a docs/audit model-loading/render-path decision gate, not Java implementation.
+1. Finish this docs-only model-loading/render-path decision proof gate with `git diff --check`.
+2. If proof-clean and dirty, open a separate savepoint closure for the docs decision.
+3. After that savepoint, route `forge-1.20.1-model-wrapper-registration-scaffold` separately.
+4. Do not jump from compile scaffolding to Visual Triad, culling, block-entity, entity-renderer, gametest, live, or release claims.
 
 ## Do not start yet
 
@@ -107,8 +110,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: c69d8665
-tag at HEAD: save/forge-1-20-1-non-level-render-view-anchor-lookup
+HEAD: 709a50bd
+tag at HEAD: save/forge-1-20-1-post-render-lookup-roadmap-alignment
 ```
 
 Branch donor evidence:
@@ -263,12 +266,39 @@ Shape:
 - no SlabSupport, dy, model loading, baked/model wrapper, mixin, gametest, behavior, or live-proof claim is made
 ```
 
+Model-loading/render-path decision:
+
+```text
+Decision doc:
+docs/porting/mc-1.20.1-forge-model-loading-render-path-decision.md
+
+Chosen model-loading hook:
+Forge ModelEvent.ModifyBakingResult on the mod event bus.
+
+Chosen wrapper base:
+net.minecraftforge.client.model.BakedModelWrapper<BakedModel>.
+
+Chosen render context:
+Forge ModelData / IForgeBakedModel path, where getModelData receives
+BlockAndTintGetter + BlockPos and getQuads receives ModelData + RenderType.
+
+Rejected for the first implementation:
+- RegisterGeometryLoaders / IGeometryLoader as the primary route
+- BakingCompleted as the mutation hook
+- culling changes or cull-face relocation
+- block-entity/entity-renderer parity claims
+- Visual Triad or live-proof claims
+
+Next legal implementation slice:
+forge-1.20.1-model-wrapper-registration-scaffold
+```
+
 ## Stop condition reached
 
 Yes for the implementation route. The non-Level render-view lookup is
-compile-proven and savepointed. The current docs alignment stops before model
+compile-proven and savepointed. The current docs decision stops before model
 hooks, behavior parity, Visual Triad proof, Java implementation, commit/tag/push,
-or release work; if proof-clean, this dirty docs slice needs a separate
+or release work; if proof-clean, this dirty docs decision needs a separate
 savepoint closure.
 
 ---
