@@ -17,8 +17,8 @@ import net.minecraft.world.level.BlockGetter;
  *
  * <p><b>Why this exists.</b> Slabbed renders some blocks at a visual Y offset
  * ({@link SlabSupport#getYOffset} returns one of {@code -1.0, -0.5, 0.0, +0.5}) and
- * offsets their outline/raycast {@link VoxelShape}s to match
- * ({@code SlabSupportStateMixin}). Vanilla {@code BlockGetter.raycast} uses a voxel DDA
+ * offsets their outline/raycast {@link VoxelShape}s to match the shared dy
+ * authority. Vanilla {@code BlockGetter.raycast} uses a voxel DDA
  * that returns the <em>first cell</em> along the ray that yields a hit — not the
  * globally nearest hit. A shape offset out of its own voxel cell (a lowered block's
  * lower half poking down into {@code pos.below()}, or a near-horizontal ray that crosses
@@ -172,6 +172,10 @@ public final class SlabbedOffsetRaycast {
             if (outline.isEmpty()) {
                 return;
             }
+            double dy = dyFor(pos, state);
+            if (dy != 0.0d) {
+                outline = outline.move(0.0d, dy, 0.0d);
+            }
             BlockHitResult hit = world.clipWithInteractionOverride(start, end, pos, outline, state);
             if (hit == null) {
                 return;
@@ -184,6 +188,16 @@ public final class SlabbedOffsetRaycast {
                 bestDistSq = distSq;
                 best = hit;
             }
+        }
+
+        private double dyFor(BlockPos pos, BlockState state) {
+            long key = pos.asLong();
+            double dy = dyMemo.get(key);
+            if (Double.isNaN(dy)) {
+                dy = SlabSupport.getYOffset(world, pos, state);
+                dyMemo.put(key, dy);
+            }
+            return dy;
         }
     }
 }

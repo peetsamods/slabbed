@@ -3,6 +3,126 @@
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
 
+## Current dirty continuation - `/slabdy` Forge 1.20.1 wiring
+
+- Current local HEAD: `bd23a736` /
+  `save/forge-1-20-1-post-live-client-triad-route-alignment`.
+- Active dirty source/build slice: `/slabdy` target-dy overlay ported onto
+  Forge 1.20.1 client events and deliberately added to the compile allowlist.
+- `/slabdy` remains default-off via `slabbed.targetDyOverlay=false`; it can be
+  toggled in-game with `/slabdy` after a rebuilt/reobfuscated jar is staged.
+- Current overlay fields: target registry id, target dy, lowered/raised/flush
+  status, hit side, target half, dy source, hit Y, and immediate below block
+  registry id/dy/source.
+- Proof so far: `./gradlew --no-daemon compileJava compileGametestJava jar
+  reobfJar` is green for the dirty slice; the reobfuscated jar was staged into
+  the Modrinth `SLABBED FORGE 1.20.1` profile and loaded into
+  `Minecraft* Forge 1.20.1 - Singleplayer`.
+- `/slabdy` live status: the command toggles on and renders target rows in the
+  Forge profile after `TargetDyOverlay` registration moved to
+  `MinecraftForge.EVENT_BUS`. The current staged jar was loaded through the
+  Modrinth profile's Worlds tab into
+  `ServerLevel[Test Slabbed 1.20.1 Forge]`, avoiding unreliable Minecraft title
+  menu navigation.
+- Continuation evidence: direct slash/type/return command control is proven
+  against the real profile log, and
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-exact-fixture-topface-before-click.png`
+  captures the exact support slab top-face target (`side=up`) while holding
+  stone. Two bounded automated right-click attempts did not place the stone
+  object, so this is a live-control/capture blocker, not a Slabbed behavior RED.
+- Follow-up capture attempt at fresh coordinate `40 -60 40` also captured the
+  support slab top-face target after a safe air-click focus-grab sequence, but
+  the automated right-click still did not place the stone object. Treat this as
+  repeated live input/capture blockage until a manual click or stronger input
+  route is authorized.
+- Input-control continuation: `/slabdy use` was added as a proof-helper
+  subcommand that invokes Minecraft's normal client `useItemOn` path against
+  the current block hit result and main hand. It compile/reobf-proves and the
+  jar staged into the Modrinth profile hashes to
+  `1b781b0a3afc803e1f92c10e4593269aa77538cde715e26894d6577a48818e35`.
+- Latest exact fixture attempt after Worlds-tab relaunch:
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-slabdy-use-topface-before.png`
+  captures the top face of `70 -60 70 minecraft:stone_slab`, `dy=0.000`,
+  `side=up`, while holding `minecraft:stone`; `/slabdy use` then reports
+  `Slabbed target dy use: FAIL`, but the world does place
+  `70 -59 70 minecraft:stone`.
+- Latest live `/slabdy` row:
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-slabdy-use-after-fail.png`
+  shows target `70 -59 70 minecraft:stone`, `dy=-0.500`, `LOWERED`,
+  `src=ANCHORED`, with below `70 -60 70 minecraft:stone_slab`, `dy=0.000`.
+  Vanilla command proof also confirms
+  `SLABDY_USE_PLACED_STONE` for block `70 -59 70 minecraft:stone`.
+- Live `/slabdy row` classification after the row instrumentation was extended:
+  top-down aim on the same existing fixture produced target owner
+  `70 -59 70 minecraft:stone`, `dy=-0.500`, `src=ANCHORED`, while side-view
+  lower aim produced target owner `70 -60 70 minecraft:stone_slab`, `dy=0.000`,
+  and corrected side-center aim visually on the rendered stone produced
+  `Slabbed target dy row: target is not a block`. Evidence screenshots:
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-ordinary-stone70-pre-row.png`,
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-ordinary-stone70-side-pre-row.png`,
+  and
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-ordinary-stone70-side-center-pre-row.png`.
+  This is a narrow ordinary full-block side-raycast/targeting RED candidate,
+  not a full Visual Triad proof or behavior parity claim.
+- Dirty side-raycast fix status:
+  `OffsetTargetingEvents` now refreshes the client `hitResult` through
+  `SlabbedOffsetRaycast` on Forge client events, with entity-target protection
+  and the existing `slabbed.offsetRaycast=false` A/B escape hatch. The offset
+  helper now applies `SlabSupport` dy directly to tested shapes instead of
+  depending on an inactive shape mixin. Proof jar staged to the Modrinth profile
+  has SHA-256
+  `d9acb29011750bad115a16db24e00fa9a3750d600a07c9a6804a017635d1f6ea`.
+  After Worlds-tab relaunch, the corrected side-center row now targets
+  `70 -59 70 minecraft:stone`, `dy=-0.500`, `src=ANCHORED`, face `south`, hit
+  `70.500,-59.095,71.000`. This proves the narrow side-raycast owner RED green
+  for the exact fixture only. The same row still reports outline bounds
+  `[0.000,0.000,0.000 -> 1.000,1.000,1.000]`, so full Visual Triad and outline
+  alignment remain unproven.
+- Dirty outline alignment status:
+  `OffsetOutlineEvents` now handles Forge `RenderHighlightEvent.Block` for
+  nonzero-dy targets, shifts the selected block shape through `ClientDy`, and
+  redraws it with `LevelRenderer.renderVoxelShape`. `TargetDyOverlay` now
+  reports dy-shifted outline bounds in `/slabdy row`. Compile/server proof
+  `./gradlew --no-daemon compileJava compileGametestJava runGameTestServer --console plain`
+  is green; `./gradlew --no-daemon jar reobfJar` is green; staged profile jar
+  SHA-256 is
+  `b820c6b99a065faaedc1179ade667851528509ff701f68173b6281f742bcdfae`. After
+  Worlds-tab relaunch, the corrected side-center row targets
+  `70 -59 70 minecraft:stone`, `dy=-0.500`, `src=ANCHORED`, face `south`, and
+  reports outline bounds
+  `[0.000,-0.500,0.000 -> 1.000,0.500,1.000]` with
+  `outlineMinY=-0.500`, `outlineMaxY=0.500`. Evidence screenshot:
+  `/Users/joolmac/.codex/tmp/minecraft-live-control/mc-chat-after-20260629-124022-pid23867.png`.
+  Clean context screenshot:
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-outline-clean-after-row-2.png`.
+  Follow-up model trace row: `/slabdy row` now reads
+  `OffsetBlockStateModel.ModelDyOwnerSample`, arms the current target, and
+  requests a one-block renderer rebuild so the next row can prove live rendered
+  model participation for the same target. After another Worlds-tab relaunch,
+  the staged jar SHA-256 is
+  `cf851d11456ef7d1d76192948a2aa8be26b8186cd27c5b05d9af431f8f5441fa`, compile
+  and exact server fixture proof remain green, and the live row screenshot
+  `/Users/joolmac/.codex/tmp/minecraft-live-control/mc-chat-after-20260629-130329-pid65939.png`
+  reports `modelTrace=seen`, `view=net.minecraft.client.renderer.chunk.RenderChunkRegion`,
+  `appliedCalls=7`, `totalAppliedDy=-3.500`, `lastDy=-0.500`, with the same
+  `target=70, -59, 70`, `dy=-0.500`, face `south`, and outline bounds
+  `[0.000,-0.500,0.000 -> 1.000,0.500,1.000]`. This is exact-fixture live
+  client triad evidence for model/outline/raycast agreement only; it is not
+  culling proof, fence proof, lag root cause, survival/reload proof, broad
+  behavior parity, release readiness, or Book IV completion.
+- Current caveat: the helper return label is misleading (`FAIL` despite the
+  state-changing placement and anchored row). Treat this as a proof-helper
+  result-reporting mismatch, not as evidence that the exact fixture rejected
+  placement. It still does not prove full Visual Triad agreement.
+- Evidence note:
+  `tmp/book-iv-slabdy-live-fixture-setup-partial.md`.
+- Preserve existing untracked `tmp/` evidence and the untracked
+  `src/main/resources/pack.mcmeta` live-profile resource-pack metadata fix.
+- This is not a behavior fix, fence/raycast fix, lag root cause, culling proof,
+  release proof, broad behavior parity proof, or Book IV completion. Its Visual
+  Triad claim is limited to the exact live `minecraft:stone` over bottom slab
+  fixture row described above.
+
 ## Repo / branch / HEAD
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
@@ -151,7 +271,7 @@ to drive the next route.
 ## Next owner actions
 
 1. Next worker should start
-   `forge-1.20.1-ordinary-full-block-live-client-triad-red-capture`.
+   `forge-1.20.1-ordinary-full-block-outline-alignment-red`.
 2. Do not start culling, cull-face relocation, mixin migration, behavior parity,
    live proof, release work, broad gametest migration, or extra fixtures from
    this route gate.
@@ -587,3 +707,245 @@ fixture.
 Next legal route after this docs slice is savepointed:
 `forge-1.20.1-ordinary-full-block-on-bottom-slab-triad-and-behavior-proof`,
 starting as a proof-gap/harness audit before Java behavior patching.
+
+## Book IV live `/slabdy` continuation update (2026-06-29)
+
+Current Forge 1.20.1 savepoint baseline remains:
+
+```text
+root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
+branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
+HEAD: bd23a736
+tag: save/forge-1-20-1-post-live-client-triad-route-alignment
+```
+
+Dirty local Book IV proof-helper work exists and is not savepoint-ready:
+
+- `build.gradle`
+- `src/client/java/com/slabbed/client/SlabbedClient.java`
+- `src/client/java/com/slabbed/client/TargetDyOverlay.java`
+- `src/main/resources/pack.mcmeta` (untracked)
+- `tmp/book-iv-slabdy-live-fixture-setup-partial.md` (untracked evidence)
+- `tmp/current-red.md` (untracked fence-raycast live RED classification)
+
+`/slabdy` remains useful as a live target/dy overlay, but `/slabdy use` is not
+an accepted proof route. Three helper variants were tried against the exact
+ordinary full-block fixture:
+
+1. direct `gameMode.useItemOn`
+2. tick-delayed direct `gameMode.useItemOn`
+3. queued `KeyMapping.click(client.options.keyUse.getKey())`
+
+The latest staged profile jar after the queued key-use helper has SHA-256:
+
+```text
+0021dfef5856e327f1bce85749293f2ee7c6c541f62d4bb6510f42c22fff91b4
+```
+
+Latest exact fixture:
+
+```text
+support: 100 -60 100 minecraft:stone_slab[type=bottom]
+object position: 100 -59 100
+held item: minecraft:stone
+expected dy if placed: -0.5
+profile: SLABBED FORGE 1.20.1
+world launch route: Modrinth profile Worlds tab -> Test Slabbed 1.20.1 Forge
+window: Minecraft* Forge 1.20.1 - Singleplayer
+```
+
+Latest live chat evidence:
+
+```text
+Slabbed target dy use: queued keyUse target=100, -60, 100 face=up expectedPlace=100, -59, 100 before=minecraft:air
+Slabbed target dy use: keyUse observed target=100, -60, 100 face=up expectedPlace=100, -59, 100 before=minecraft:air after=minecraft:air
+```
+
+Latest screenshots:
+
+- `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-slabdy-use-keyuse-before.png`
+- `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-slabdy-use-keyuse-after.png`
+
+Interpretation:
+
+- The helper now reports honestly, including `after=minecraft:air`.
+- The direct, delayed-direct, and queued key-use helper routes did not
+  reproduce placement in the current live setup.
+- This is a proof-helper/live-control blocker, not evidence that Slabbed's
+  legal placement path rejected ordinary `minecraft:stone` over a bottom slab.
+- Do not savepoint the current `/slabdy use` scaffold as a Book IV proof win.
+- Next ordinary-full-block live route should use Julia/manual right-click
+  placement or a separately routed input-control audit before another helper
+  patch.
+- Julia's process lesson for this profile: when available, use the Modrinth
+  profile `Worlds` tab to launch `Test Slabbed 1.20.1 Forge` directly instead
+  of navigating from Minecraft's title screen.
+
+Still unproven:
+
+- full Visual Triad agreement
+- outline dy
+- raycast/target owner dy
+- fence raycast behavior
+- lag root cause
+- culling/cull-face relocation
+- broad behavior parity
+- release readiness
+
+## Book IV `/slabdy row` diagnostic update (2026-06-29)
+
+After the failed `/slabdy use` helper attempts, the active safe progress was to
+make `/slabdy` a better live classification tool. This is diagnostics only, not
+a behavior fix.
+
+New command:
+
+```text
+/slabdy row
+```
+
+The row reports:
+
+```text
+target owner, block id, dy, dy source, face, hit half, world hit vector,
+local hit vector, outline box, outline min/max Y, held item, expected placement
+cell, below block id, below dy, and below dy source
+```
+
+Proof:
+
+```text
+./gradlew --no-daemon compileJava compileGametestJava -> BUILD SUCCESSFUL
+./gradlew --no-daemon jar reobfJar -> BUILD SUCCESSFUL
+```
+
+Profile jar staged for the next live capture:
+
+```text
+/Users/joolmac/Library/Application Support/ModrinthApp/profiles/SLABBED FORGE 1.20.1/mods/slabbed-0.4.2-beta.2+1.20.1-forge.jar
+sha256: 704d7f1d2173ac88b6dd674c4e22e480fb488285f6dcb571f695ced3fcede345
+```
+
+Important:
+
+- The currently running game must be relaunched before `/slabdy row` is
+  available.
+- Use the Modrinth profile `Worlds` tab and launch
+  `Test Slabbed 1.20.1 Forge` directly when available.
+- For the fence raycast RED, capture `/slabdy row` while aiming at the suspect
+  fence target and preserve a screenshot with the overlay visible.
+- This row is classification evidence only. It does not prove a fence raycast
+  fix, full Visual Triad, lag root cause, culling, broad parity, or release
+  readiness.
+
+## Book IV fence raycast live row (2026-06-29)
+
+The next live classification step was completed after relaunching through the
+Modrinth profile `Worlds` tab.
+
+Profile/world:
+
+```text
+profile: SLABBED FORGE 1.20.1
+world: Test Slabbed 1.20.1 Forge
+launch: Modrinth Worlds tab quick-play
+window: Minecraft* Forge 1.20.1 - Singleplayer
+staged jar sha256: 704d7f1d2173ac88b6dd674c4e22e480fb488285f6dcb571f695ced3fcede345
+```
+
+Evidence:
+
+- relaunch screenshot:
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-row-relaunch-first-window.png`
+- `/slabdy row` availability proof:
+  `/Users/joolmac/.codex/tmp/minecraft-live-control/mc-chat-after-20260629-115327-pid1831.png`
+- fence pre-row screenshot:
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-fence-topdown-pre-row.png`
+- fence row screenshot:
+  `/Users/joolmac/.codex/tmp/minecraft-live-control/mc-chat-after-20260629-115734-pid6475.png`
+
+Fence fixture:
+
+```text
+support: 120 -60 120 minecraft:oak_slab[type=bottom]
+target/object: 120 -59 120 minecraft:oak_fence
+held item: minecraft:oak_fence
+```
+
+Captured row:
+
+```text
+Slabbed target dy row: [slabdy] target=120, -59, 120 minecraft:oak_fence |
+  owner=120, -59, 120 * VANILLA * dy=-0.500 LOWERED * src=geometric |
+  face=up * half=UPPER * hit=120.500,-58.000,120.500 * local=0.500,1.000,0.500 |
+  outline=[0.375,0.000,0.375 -> 0.625,1.000,0.625] * outlineMinY=0.000 * outlineMaxY=1.000 |
+  held=minecraft:oak_fence * expectedPlace=120, -58, 120 minecraft:air |
+  below=120, -60, 120 minecraft:oak_slab * dy=0.000 * src=-
+```
+
+Classification:
+
+- The live raycast owner is the fence at `120 -59 120`.
+- `ClientDy` reports `dy=-0.500 LOWERED` from the `geometric` fallback.
+- The outline remains vanilla-relative, `outlineMinY=0.000` and
+  `outlineMaxY=1.000`.
+- This is a Visual Triad mismatch/classification for the fence-family partial
+  block, not ordinary full-block proof.
+- Fences are outside the current authorized ordinary full-block family. Do not
+  silently expand fence support while finishing the ordinary full-block Book IV
+  lane.
+
+Next route choice:
+
+- `forge-1.20.1-fence-on-slab-raycast-category-decision` if Julia wants the
+  fence RED handled now.
+- Otherwise resume the ordinary full-block Book IV route with a manual/right-
+  click live placement proof and use `/slabdy row` for the target row.
+
+## Book IV ordinary full-block live row (2026-06-29)
+
+The ordinary full-block route was resumed after the fence classification was
+parked as a separate category decision.
+
+Evidence:
+
+- existing object proof:
+  `ORDINARY_STONE_70_EXISTS` emitted for
+  `70 -59 70 minecraft:stone`
+- pre-row screenshot:
+  `/Users/joolmac/.codex/tmp/slabbed-forge-1.20.1-ordinary-stone70-pre-row.png`
+- row screenshot:
+  `/Users/joolmac/.codex/tmp/minecraft-live-control/mc-chat-after-20260629-120311-pid21192.png`
+
+Captured row:
+
+```text
+Slabbed target dy row: [slabdy] target=70, -59, 70 minecraft:stone |
+  owner=70, -59, 70 * VANILLA * dy=-0.500 LOWERED * src=ANCHORED |
+  face=up * half=UPPER * hit=70.500,-58.000,70.500 * local=0.500,1.000,0.500 |
+  outline=[0.000,0.000,0.000 -> 1.000,1.000,1.000] * outlineMinY=0.000 * outlineMaxY=1.000 |
+  held=minecraft:oak_fence * expectedPlace=70, -58, 70 minecraft:air |
+  below=70, -60, 70 minecraft:stone_slab * dy=0.000 * src=-
+```
+
+Classification:
+
+- The live raycast owner is the ordinary full block at `70 -59 70`.
+- Client dy reports `dy=-0.500 LOWERED` from `src=ANCHORED`.
+- The support below is `70 -60 70 minecraft:stone_slab`, `dy=0.000`.
+- This is useful first-family Book IV live classification evidence.
+
+Limitations:
+
+- The object was already present from the earlier proof-helper route; this is
+  not a fresh manual right-click placement proof.
+- This row does not by itself prove rendered-model alignment, actual drawn
+  outline alignment, culling, full Visual Triad, broad parity, or release
+  readiness.
+
+Next ordinary full-block proof route:
+
+- Capture side-view live evidence for the same anchored `minecraft:stone`
+  fixture with `/slabdy row`, visible rendered model, and selection outline in
+  one view.
+- Classify the next layer from that evidence: model, outline, or raycast.
