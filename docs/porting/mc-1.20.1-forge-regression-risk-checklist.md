@@ -65,11 +65,15 @@ Proven on this Forge branch:
   Forge `BakedModelWrapper` chosen for the next scaffold route
 - model-wrapper registration scaffold, compile-proven and savepointed at
   `721e589f` / `save/forge-1-20-1-model-wrapper-scaffold`
+- post-model-wrapper roadmap alignment, docs-proven and savepointed at
+  `139a15d2` /
+  `save/forge-1-20-1-post-model-wrapper-scaffold-roadmap-alignment`
+- model-wrapper registration proof gate, source-backed `registration-proven`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
 
-- model-wrapper registration at runtime
+- model wrapper render-view/model-data proof
 - rendered model behavior
 - mixins
 - gametest/proof harness migration

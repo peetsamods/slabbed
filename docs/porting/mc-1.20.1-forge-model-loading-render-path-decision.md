@@ -291,6 +291,24 @@ Scope:
 This route may claim only `registration-proven` if its evidence is strong enough.
 It may not claim rendered-model, culling, triad, live, behavior, or release proof.
 
+Status:
+
+```text
+source-backed registration-proven; savepoint pending
+```
+
+Proof record:
+
+```text
+docs/porting/mc-1.20.1-forge-model-wrapper-registration-proof.md
+```
+
+Next route after this proof is savepointed:
+
+```text
+forge-1.20.1-model-wrapper-render-view-proof-gate
+```
+
 ## Stop Conditions for Later Implementation
 
 Stop partial if:
