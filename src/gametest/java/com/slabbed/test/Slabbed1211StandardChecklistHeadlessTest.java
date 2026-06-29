@@ -2,19 +2,25 @@ package com.slabbed.test;
 
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
+import net.fabricmc.api.ModInitializer;
+import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.SideShapeType;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.block.enums.Thickness;
 import net.minecraft.block.enums.WallShape;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.Properties;
 import net.minecraft.test.GameTest;
 import net.minecraft.test.TestContext;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
@@ -28,6 +34,17 @@ import net.minecraft.util.shape.VoxelShape;
  */
 public final class Slabbed1211StandardChecklistHeadlessTest {
     private static final double EPS = 1.0e-6;
+    private static final Identifier TEST_TERRAIN_SLAB_ID = Identifier.of("terrain_slabs", "slabbed_test_slab");
+    private static final Block TEST_TERRAIN_SLAB = new SlabBlock(AbstractBlock.Settings.copy(Blocks.STONE_SLAB));
+
+    public static final class TerrainSlabsCompatTestEntrypoint implements ModInitializer {
+        @Override
+        public void onInitialize() {
+            if (!Registries.BLOCK.containsId(TEST_TERRAIN_SLAB_ID)) {
+                Registry.register(Registries.BLOCK, TEST_TERRAIN_SLAB_ID, TEST_TERRAIN_SLAB);
+            }
+        }
+    }
 
     private static BlockState slab(SlabType type) {
         return Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, type);
@@ -114,6 +131,37 @@ public final class Slabbed1211StandardChecklistHeadlessTest {
             expectDy(ctx, obj, -0.5, "floor_" + state.getBlock().getTranslationKey() + "_bottom_slab");
             clear(ctx, obj, slab);
         }
+        ctx.complete();
+    }
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void terrainSlabsBottomLikeSurfaceExposesPlacementTopFace(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos support = new BlockPos(2, 1, 2);
+        BlockPos supportAbs = ctx.getAbsolutePos(support);
+        BlockState supportState = TEST_TERRAIN_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+
+        ctx.setBlockState(support, supportState);
+        BlockState actualSupport = world.getBlockState(supportAbs);
+
+        ctx.assertTrue(SlabSupport.isDirectCustomBottomLikeSurface(actualSupport),
+                "test terrain slab must classify as a direct bottom-like compat surface: " + actualSupport);
+        ctx.assertFalse(SlabSupport.isSupportingSlab(actualSupport),
+                "test terrain slab must stay out of generic Slabbed support: " + actualSupport);
+        ctx.assertTrue(SlabSupport.canTreatAsSolidTopFace(world, supportAbs),
+                "test terrain slab top face must be accepted by Slabbed direct support law");
+        ctx.assertTrue(actualSupport.isSideSolid(world, supportAbs, Direction.UP, SideShapeType.CENTER),
+                "bottom-like terrain slab top face must be solid for vanilla center placement checks");
+        ctx.assertTrue(actualSupport.isSideSolidFullSquare(world, supportAbs, Direction.UP),
+                "bottom-like terrain slab top face must be a full square for vanilla placement checks");
+
+        Slabbed.LOGGER.info("[MC1211_TERRAIN_SLAB_OBJECT_PLACEMENT_ROW] customState={} surfaceKind=bottom_like"
+                        + " genericSupport={} canTreatTop={} sideSolidCenter={} sideSolidFullSquare={} result=GREEN",
+                Registries.BLOCK.getId(actualSupport.getBlock()),
+                SlabSupport.isSupportingSlab(actualSupport),
+                SlabSupport.canTreatAsSolidTopFace(world, supportAbs),
+                actualSupport.isSideSolid(world, supportAbs, Direction.UP, SideShapeType.CENTER),
+                actualSupport.isSideSolidFullSquare(world, supportAbs, Direction.UP));
         ctx.complete();
     }
 
