@@ -360,7 +360,8 @@ Book III next loader API migration slice:
    `022320b8` with tag
    `save/forge-1-20-1-post-registration-proof-roadmap-alignment`.
 14. Model-wrapper render-view proof is source-backed `render-view-proven` and savepointed at `a3f5bed4` with tag `save/forge-1-20-1-model-wrapper-render-view-proof`.
-15. Current legal route is docs-only `forge-1.20.1-post-render-view-proof-roadmap-alignment`.
-16. Next legal route after this alignment is savepointed is docs/audit `forge-1.20.1-rendered-model-culling-triad-decision`, before any culling, rendered-model, or Visual Triad implementation/proof execution.
-16. Preserve legal state grammar and gameplay behavior.
-17. Prove each next slice with the narrow proof required by the risk checklist.
+15. Post-render-view-proof roadmap alignment savepoint is complete at `70e90d94` with tag `save/forge-1-20-1-post-render-view-proof-roadmap-alignment`.
+16. Current legal route is docs/audit `forge-1.20.1-rendered-model-culling-triad-decision`, before any culling, rendered-model, or Visual Triad implementation/proof execution.
+17. Next legal route after this decision is savepointed is `forge-1.20.1-rendered-block-model-evidence-proof-gate`.
+18. Preserve legal state grammar and gameplay behavior.
+19. Prove each next slice with the narrow proof required by the risk checklist.

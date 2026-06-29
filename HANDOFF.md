@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 post-render-view-proof roadmap alignment (2026-06-29)
+# HANDOFF - Forge 1.20.1 rendered-model culling triad decision (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `a3f5bed4`
-- Tag at HEAD: `save/forge-1-20-1-model-wrapper-render-view-proof`
+- HEAD: `70e90d94`
+- Tag at HEAD: `save/forge-1-20-1-post-render-view-proof-roadmap-alignment`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: none; source-backed proof docs only
+- Code changes this slice: none; docs/audit decision only
 
 ## Current state
 
@@ -33,9 +33,7 @@ Visual Triad proof, live proof, or release work, and it is savepointed at
 savepointed at `721e589f`. The post-model-wrapper roadmap alignment is
 savepointed at `139a15d2`. The source-backed model-wrapper registration proof is
 `registration-proven` and savepointed at `d029de0c`. The post-registration-proof
-roadmap alignment is savepointed at `022320b8`. The active lane is the
-source-backed model-wrapper render-view proof gate before any culling, Visual
-Triad, gametest, live, release, or next implementation claim. The branch is
+roadmap alignment is savepointed at `022320b8`. The model-wrapper render-view proof is savepointed at `a3f5bed4`, and the post-render-view-proof roadmap alignment is savepointed at `70e90d94`. The active lane is docs/audit `forge-1.20.1-rendered-model-culling-triad-decision` before any culling, rendered-model, Visual Triad, gametest, live, release, or implementation claim. The branch is
 intentionally based at the NeoForge beta.2 release tag because Julia requested
 the Forge 1.20.1 backport use the latest NeoForge
 `0.4.2-beta.2+1.21.1` work as the donor.
@@ -316,8 +314,8 @@ Registration proof:
 source-backed registration-proven and savepointed at
 d029de0c / save/forge-1-20-1-model-wrapper-registration-proof
 
-Next legal route after docs alignment is savepointed:
-forge-1.20.1-post-render-view-proof-roadmap-alignment
+Next legal route after post-render-view roadmap alignment is savepointed:
+forge-1.20.1-rendered-model-culling-triad-decision
 
 Registration proof doc:
 docs/porting/mc-1.20.1-forge-model-wrapper-registration-proof.md
@@ -331,11 +329,7 @@ docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md
 
 ## Stop condition reached
 
-Reached for the post-render-view-proof roadmap alignment route, scoped only to docs and front-door status after source-backed
-model-wrapper render-view context and non-`Level` client-mirror lookup truth. The
-dirty docs must stop for a separate savepoint closure after `git diff --check`;
-culling, Visual Triad, rendered-model, gametest, live, behavior, and release
-proof remain separate routes.
+Reached for the rendered-model/culling/Visual Triad decision route, scoped only to docs/audit proof ordering after source-backed model-wrapper render-view context and non-`Level` client-mirror lookup truth. The dirty docs must stop for a separate savepoint closure after `git diff --check`; culling, Visual Triad, rendered-model, gametest, live, behavior, and release proof remain separate routes.
 
 ---
 
@@ -517,3 +511,14 @@ The "live blocked" notifications were macOS asking Julia to approve each compute
 - MC: still RUNNING (New World scratch). Keybind reverted to `mouse.right`. Hunt worktrees pruned.
 - **Open for next thread:** exhaustive broad visual hunt (more player structures), placement-disobedience live (re-enable `r`), the gold-standard cull kill-switch A/B, and the 1.21.11 cull-gap live confirm (needs compat jar in a TS profile). 
 - **UPDATE 2026-06-12 (opus):** the deferred 1.21.11 vanilla-compound FLOAT fix is **DONE + LIVE-CONFIRMED** on the compat repo (`Slabbed-countered-compat-latest` @ `21af4243`, new `loweredBottomSlabSupportDyForCompound` porting 1.21.1's `floorTorchBottomSlabSupportDy`; headless 40/40 + 5-lens adversarial-clean + live `/slabdy dy=-1.000` via the Modrinth `Slabbed+Terrain Slabs` profile). NOT pushed. See that repo's HANDOFF. Live-test route that works = Modrinth jar swap, NOT `runClient` (bare `java`, ungrantable to computer-use).
+
+## Current decision update (2026-06-29)
+
+The active docs/audit slice is `forge-1.20.1-rendered-model-culling-triad-decision`.
+It records that `registration-proven` and `render-view-proven` remain limited
+source-backed claims. The next proof order is rendered block-model evidence
+first, then culling/render-path classification only with a fresh culling RED or
+named render-path failure, then full Visual Triad proof as a separate route.
+
+Next legal route after this decision is savepointed:
+`forge-1.20.1-rendered-block-model-evidence-proof-gate`.

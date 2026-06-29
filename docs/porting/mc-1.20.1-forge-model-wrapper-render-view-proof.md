@@ -168,6 +168,6 @@ Immediate next route:
 forge-1.20.1-rendered-model-culling-triad-decision
 ```
 
-After the post-render-view-proof roadmap alignment is savepointed, a docs/audit decision gate must classify rendered-model, culling, and Visual Triad proof order before any implementation. Culling, rendered-model/Visual Triad proof, block-entity
+Post-render-view-proof roadmap alignment is savepointed at `70e90d94` / `save/forge-1-20-1-post-render-view-proof-roadmap-alignment`. The current docs/audit decision gate classifies rendered-model, culling, and Visual Triad proof order before any implementation. Culling, rendered-model/Visual Triad proof, block-entity
 renderer coverage, gametest migration, live proof, and release work remain
 separate routes requiring fresh authorization.

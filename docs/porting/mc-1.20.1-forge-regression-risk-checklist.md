@@ -76,11 +76,15 @@ Proven on this Forge branch:
   `save/forge-1-20-1-post-registration-proof-roadmap-alignment`
 - model-wrapper render-view proof gate, source-backed `render-view-proven`, savepointed at
   `a3f5bed4` / `save/forge-1-20-1-model-wrapper-render-view-proof`
+- post-render-view-proof roadmap alignment, docs-proven and savepointed at
+  `70e90d94` / `save/forge-1-20-1-post-render-view-proof-roadmap-alignment`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
 
 - rendered model behavior
+- culling/render-path behavior
+- full Visual Triad agreement
 - mixins
 - gametest/proof harness migration
 - placement, survival, collision, outline, raycast, rescue, or behavior parity

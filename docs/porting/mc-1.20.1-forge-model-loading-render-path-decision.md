@@ -335,3 +335,26 @@ Stop partial if:
   render view
 - proof would require mixins, gametests, live proof, behavior parity, or product
   judgment
+
+## Rendered Model, Culling, and Visual Triad Decision Gate
+
+Post-render-view-proof roadmap alignment is savepointed at `70e90d94` /
+`save/forge-1-20-1-post-render-view-proof-roadmap-alignment`.
+
+Current docs/audit route:
+
+```text
+forge-1.20.1-rendered-model-culling-triad-decision
+```
+
+Decision record:
+
+```text
+docs/porting/mc-1.20.1-forge-rendered-model-culling-triad-decision.md
+```
+
+This gate preserves the completed `registration-proven` and
+`render-view-proven` limits. It requires rendered block-model evidence before
+any rendered-model claim, a fresh culling RED or render-path classification
+before any culling/cull-face change, and a separate full Visual Triad route
+before model/outline/raycast agreement can be claimed.
