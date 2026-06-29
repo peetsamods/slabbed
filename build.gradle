@@ -25,8 +25,13 @@ sourceSets {
             include "com/slabbed/Slabbed.java"
             include "com/slabbed/anchor/SlabAnchorCapabilities.java"
             include "com/slabbed/anchor/SlabAnchorCapabilityProvider.java"
+            include "com/slabbed/anchor/SlabAnchorAttachment.java"
             include "com/slabbed/anchor/SlabAnchorMarker.java"
             include "com/slabbed/anchor/SlabAnchorStore.java"
+            include "com/slabbed/compat/CompatHooks.java"
+            include "com/slabbed/compat/terrainslabs/TerrainSlabsCompat.java"
+            include "com/slabbed/util/RuntimeDiagnostics.java"
+            include "com/slabbed/util/SlabSupport.java"
         }
         resources {
             srcDir "src/main/resources"

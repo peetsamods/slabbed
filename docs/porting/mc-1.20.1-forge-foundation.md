@@ -329,11 +329,12 @@ Before any Java gameplay port starts, the next worker must have:
 
 Book III next loader API migration slice:
 
-1. Apply `docs/porting/mc-1.20.1-forge-regression-risk-checklist.md`.
-2. Migrate only the gameplay-facing `SlabAnchorAttachment` storage facade to the
-   compile-proven server-side Forge `LevelChunk` capability store.
-3. Keep networking/client sync, model loading, mixins, gametests, and behavior
-   parity out of scope.
+1. Savepoint the proof-clean `forge-1.20.1-slab-anchor-attachment-storage-facade`
+   slice in a separate closure route.
+2. After that savepoint, choose the next Book III order between networking/client
+   sync and non-`Level` render-view bridge design.
+3. Keep model loading, mixins, gametests, and behavior parity out of scope until
+   persistence truth is available on every view that needs it.
 4. Preserve legal state grammar and gameplay behavior.
-5. Prove the next slice with `./gradlew --no-daemon compileJava` and
-   `git diff --check`.
+5. Prove each next slice with `./gradlew --no-daemon compileJava` and
+   `git diff --check`, plus the narrow proof required by the risk checklist.

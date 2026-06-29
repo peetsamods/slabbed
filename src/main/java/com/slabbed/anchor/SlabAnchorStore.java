@@ -58,6 +58,18 @@ public final class SlabAnchorStore {
         return changed;
     }
 
+    public void replace(SlabAnchorMarker marker, LongOpenHashSet positions) {
+        LongOpenHashSet set = positions == null ? new LongOpenHashSet() : new LongOpenHashSet(positions);
+        putOrRemove(marker, set);
+        markUnsaved();
+    }
+
+    public void clear(SlabAnchorMarker marker) {
+        if (buckets.remove(marker) != null) {
+            markUnsaved();
+        }
+    }
+
     public boolean contains(SlabAnchorMarker marker, BlockPos pos) {
         return contains(marker, pos.asLong());
     }

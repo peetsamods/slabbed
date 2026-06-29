@@ -1,8 +1,6 @@
 package com.slabbed.anchor;
 
 import java.util.function.Predicate;
-import java.util.function.Supplier;
-import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
@@ -10,8 +8,6 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -26,11 +22,6 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.attachment.AttachmentType;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
 /**
  * Persistent slab-anchor registry.
@@ -41,8 +32,8 @@ import net.neoforged.neoforge.registries.NeoForgeRegistries;
  * support below is later removed. Anchors are cleared when the anchored block itself is
  * broken/replaced.
  *
- * <p>Storage: per-{@link LevelChunk} {@link LongOpenHashSet} of packed {@link BlockPos}
- * longs. Persisted via NeoForge data attachment, synced to all watching clients.
+ * <p>Storage: per-{@link LevelChunk} Forge capability store of packed
+ * {@link BlockPos} longs. Client sync is intentionally a later Forge slice.
  *
  * <p>Scope: ordinary full-block vertical slab chains and accepted lowered slab
  * lane states only. No retroactive anchoring and no torch interaction.
@@ -77,42 +68,7 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
 
-    private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES =
-            DeferredRegister.create(NeoForgeRegistries.Keys.ATTACHMENT_TYPES, Slabbed.MOD_ID);
-
-    /**
-     * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
-     * a {@code LongArrayTag}, the most compact form available.
-     */
-    private static final Codec<LongOpenHashSet> SET_CODEC = Codec.LONG_STREAM.xmap(
-            stream -> new LongOpenHashSet(stream.toArray()),
-            set -> java.util.stream.LongStream.of(set.toLongArray())
-    );
-
-    /**
-     * Stream codec for client sync. NeoForge syncs to all players that receive the
-     * holding chunk, so anchors travel with the chunk packet automatically.
-     */
-    private static final StreamCodec<RegistryFriendlyByteBuf, LongOpenHashSet> STREAM_CODEC = StreamCodec.of(
-            (buf, set) -> {
-                long[] arr = set.toLongArray();
-                buf.writeVarInt(arr.length);
-                for (long v : arr) {
-                    buf.writeLong(v);
-                }
-            },
-            buf -> {
-                int n = buf.readVarInt();
-                LongOpenHashSet s = new LongOpenHashSet(n);
-                for (int i = 0; i < n; i++) {
-                    s.add(buf.readLong());
-                }
-                return s;
-            }
-    );
-
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> ANCHOR_TYPE =
-            registerSetAttachment("slab_anchors");
+    public static final SlabAnchorMarker ANCHOR_TYPE = SlabAnchorMarker.ANCHOR;
     /**
      * FREEZE-ON-PLACE flat marker: a structural piece (full block / slab) placed at
      * dy=0 is recorded here so its flat height locks — support placed under or beside
@@ -120,10 +76,8 @@ public final class SlabAnchorAttachment {
      * {@link #ANCHOR_TYPE} (which locks the lowered case). Read as dy=0 by
      * {@code getYOffsetInner}; cleared when the piece is broken.
      */
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> FROZEN_FLAT_TYPE =
-            registerSetAttachment("frozen_flat");
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> LOWERED_SLAB_CARRIER_TYPE =
-            registerSetAttachment("lowered_slab_carriers");
+    public static final SlabAnchorMarker FROZEN_FLAT_TYPE = SlabAnchorMarker.FROZEN_FLAT;
+    public static final SlabAnchorMarker LOWERED_SLAB_CARRIER_TYPE = SlabAnchorMarker.LOWERED_SLAB_CARRIER;
     /**
      * Beta4 sidecar attachment that records authored compound ordinary full-block
      * anchors at lane {@code dy=-1.0}. Additive to {@link #ANCHOR_TYPE}: a position
@@ -134,53 +88,55 @@ public final class SlabAnchorAttachment {
      * <p>Beta4-narrow: compound only, no slab lane grammar, no recursion below
      * {@code -1.0}. See {@code docs/beta4-compound-source-mode-design.md}.
      */
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> COMPOUND_FULL_BLOCK_ANCHOR_TYPE =
-            registerSetAttachment("compound_full_block_anchors");
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE =
-            registerSetAttachment("compound_visible_side_lower_slabs");
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE =
-            registerSetAttachment("compound_visible_side_upper_slabs");
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE =
-            registerSetAttachment("compound_visible_side_double_slabs");
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE =
-            registerSetAttachment("compound_visible_owner_top_slabs");
+    public static final SlabAnchorMarker COMPOUND_FULL_BLOCK_ANCHOR_TYPE =
+            SlabAnchorMarker.COMPOUND_FULL_BLOCK_ANCHOR;
+    public static final SlabAnchorMarker COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE =
+            SlabAnchorMarker.COMPOUND_VISIBLE_SIDE_LOWER_SLAB;
+    public static final SlabAnchorMarker COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE =
+            SlabAnchorMarker.COMPOUND_VISIBLE_SIDE_UPPER_SLAB;
+    public static final SlabAnchorMarker COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE =
+            SlabAnchorMarker.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB;
+    public static final SlabAnchorMarker COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE =
+            SlabAnchorMarker.COMPOUND_VISIBLE_OWNER_TOP_SLAB;
 
     /**
-     * Registers the NeoForge attachment types before any chunk loads.
+     * Registers the Forge anchor store capability before any chunk loads.
      */
-    public static void register(IEventBus modEventBus) {
-        ATTACHMENT_TYPES.register(modEventBus);
+    public static void register(net.minecraftforge.eventbus.api.IEventBus modEventBus) {
+        SlabAnchorCapabilities.register(modEventBus);
     }
 
-    private static DeferredHolder<AttachmentType<?>, AttachmentType<LongOpenHashSet>> registerSetAttachment(
-            String name
-    ) {
-        return ATTACHMENT_TYPES.register(name, () -> AttachmentType.builder(() -> new LongOpenHashSet())
-                .serialize(SET_CODEC, set -> !set.isEmpty())
-                .sync(STREAM_CODEC)
-                .build());
+    private static SlabAnchorStore getAnchorStore(LevelChunk chunk) {
+        return chunk.getCapability(SlabAnchorCapabilities.SLAB_ANCHOR_STORE).resolve().orElse(null);
     }
 
     private static LongOpenHashSet getAttachment(
             LevelChunk chunk,
-            Supplier<AttachmentType<LongOpenHashSet>> type
+            SlabAnchorMarker type
     ) {
-        return chunk.getExistingDataOrNull(type.get());
+        SlabAnchorStore store = getAnchorStore(chunk);
+        return store == null ? null : store.copy(type);
     }
 
     private static void setAttachment(
             LevelChunk chunk,
-            Supplier<AttachmentType<LongOpenHashSet>> type,
+            SlabAnchorMarker type,
             LongOpenHashSet set
     ) {
-        chunk.setData(type.get(), set);
+        SlabAnchorStore store = getAnchorStore(chunk);
+        if (store != null) {
+            store.replace(type, set);
+        }
     }
 
     private static void removeAttachment(
             LevelChunk chunk,
-            Supplier<AttachmentType<LongOpenHashSet>> type
+            SlabAnchorMarker type
     ) {
-        chunk.removeData(type.get());
+        SlabAnchorStore store = getAnchorStore(chunk);
+        if (store != null) {
+            store.clear(type);
+        }
     }
 
     private static String shortPos(BlockPos pos) {
@@ -469,7 +425,7 @@ public final class SlabAnchorAttachment {
     private static boolean addToAttachment(
             Level world,
             BlockPos pos,
-            Supplier<AttachmentType<LongOpenHashSet>> type,
+            SlabAnchorMarker type,
             String label
     ) {
         LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
@@ -533,7 +489,7 @@ public final class SlabAnchorAttachment {
     private static boolean removeFromAttachment(
             Level world,
             BlockPos pos,
-            Supplier<AttachmentType<LongOpenHashSet>> type,
+            SlabAnchorMarker type,
             String label
     ) {
         if (world == null || world.isClientSide()) {
@@ -574,50 +530,42 @@ public final class SlabAnchorAttachment {
         return BETA4_COMPOUND_VISIBLE_RENDER_TRACE;
     }
 
-    public static boolean isCompoundVisibleAttachmentType(AttachmentType<LongOpenHashSet> type) {
-        return type == COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE.get()
-                || type == COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE.get()
-                || type == COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE.get()
-                || type == COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE.get();
+    public static boolean isCompoundVisibleAttachmentType(SlabAnchorMarker type) {
+        return type == COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE
+                || type == COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE
+                || type == COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE
+                || type == COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE;
     }
 
-    private static boolean isCompoundVisibleAttachmentType(Supplier<AttachmentType<LongOpenHashSet>> type) {
-        return isCompoundVisibleAttachmentType(type.get());
-    }
-
-    public static String compoundVisibleAttachmentLabel(AttachmentType<LongOpenHashSet> type) {
-        if (type == COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE.get()) {
+    public static String compoundVisibleAttachmentLabel(SlabAnchorMarker type) {
+        if (type == COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE) {
             return "lower";
         }
-        if (type == COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE.get()) {
+        if (type == COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE) {
             return "upper";
         }
-        if (type == COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE.get()) {
+        if (type == COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE) {
             return "double";
         }
-        if (type == COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE.get()) {
+        if (type == COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE) {
             return "top";
         }
-        if (type == LOWERED_SLAB_CARRIER_TYPE.get()) {
+        if (type == LOWERED_SLAB_CARRIER_TYPE) {
             return "lowered_slab_carrier";
         }
-        if (type == COMPOUND_FULL_BLOCK_ANCHOR_TYPE.get()) {
+        if (type == COMPOUND_FULL_BLOCK_ANCHOR_TYPE) {
             return "compound_full_block_anchor";
         }
-        if (type == ANCHOR_TYPE.get()) {
+        if (type == ANCHOR_TYPE) {
             return "anchor";
         }
         return "unknown";
     }
 
-    private static String compoundVisibleAttachmentLabel(Supplier<AttachmentType<LongOpenHashSet>> type) {
-        return compoundVisibleAttachmentLabel(type.get());
-    }
-
     private static void logCompoundVisibleRenderTraceMarkerSet(
             Level world,
             BlockPos pos,
-            Supplier<AttachmentType<LongOpenHashSet>> type,
+            SlabAnchorMarker type,
             String label,
             String action,
             boolean serverMarker

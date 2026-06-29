@@ -204,6 +204,39 @@ Proof:
 -> BUILD SUCCESSFUL
 ```
 
+## Storage Facade Slice Result
+
+Implemented slice:
+
+```text
+forge-1.20.1-slab-anchor-attachment-storage-facade
+```
+
+Implemented:
+
+1. Replaced NeoForge attachment registration/type tokens in `SlabAnchorAttachment.java` with `SlabAnchorMarker` values.
+2. Routed internal get/set/remove storage helpers through the Forge `LevelChunk` `SlabAnchorStore` capability.
+3. Added `replace` and `clear` operations to `SlabAnchorStore` for the facade's copy-on-write storage pattern.
+4. Updated the no-op runtime diagnostics anchor-event signature to accept `SlabAnchorMarker`.
+5. Updated Terrain Slabs compat from NeoForge `ModList` to Forge `ModList` as an unchanged named-compat dependency needed by `SlabSupport`.
+
+Still intentionally untouched:
+
+- networking/client sync
+- non-`Level` render fallback
+- model hooks
+- mixins
+- gametests
+- behavior parity
+- live proof
+
+Proof:
+
+```text
+./gradlew --no-daemon compileJava
+-> BUILD SUCCESSFUL
+```
+
 ## Proof Status
 
 Proven:
@@ -213,10 +246,10 @@ Proven:
 - Forge 1.20.1 chunk data can be marked unsaved
 - SavedData is a less direct fit for the current chunk-owned anchor model
 - isolated server-side Forge `LevelChunk` capability storage scaffold compiles
+- gameplay-facing `SlabAnchorAttachment` storage facade compiles against the Forge capability store
 
 Not proven:
 
-- gameplay-facing `SlabAnchorAttachment` migration to the Forge store
 - client chunk mirror
 - non-`Level` render fallback
 - save/reload behavior

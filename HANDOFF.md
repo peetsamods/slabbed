@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 server anchor capability scaffold (2026-06-28)
+# HANDOFF - Forge 1.20.1 storage facade compile proof (2026-06-28)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,17 +7,19 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `2a3be274`
-- Tag at HEAD: `release/neoforge-1.21.1-0.4.2-beta.2`
+- HEAD: `a32cfa66`
+- Tag at HEAD: `save/forge-1-20-1-canon-regression-risk-map`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
-- Pushed branch: no
-- Code changes this slice: server-side chunk anchor capability scaffold only
+- Pushed branch: yes
+- Code changes this slice: gameplay-facing SlabAnchorAttachment storage facade only
 
 ## Current state
 
 Book III entrypoint/lifecycle scaffold and server-side anchor store capability
-scaffold are compile-proven. The Forge regression-risk checklist is now required
+scaffold are compile-proven. The gameplay-facing `SlabAnchorAttachment` storage
+facade now uses the Forge chunk capability store and is compile-proven locally;
+it is not savepointed yet. The Forge regression-risk checklist is required
 before later networking/client sync, model loading, mixin, gametest, behavior
 parity, live-proof, or release slices. The branch is intentionally based at the
 NeoForge beta.2 release tag because Julia requested the Forge 1.20.1 backport
@@ -51,21 +53,25 @@ evidence only.
 - Wired capability type registration on the Forge mod event bus and `LevelChunk` capability attachment on the Forge event bus.
 - Proved the server capability scaffold with `./gradlew --no-daemon compileJava`.
 - Added `docs/porting/mc-1.20.1-forge-regression-risk-checklist.md` as the canon regression-risk/proof gate before later risky Forge slices.
+- Closed the Forge foundation/risk-map savepoint at `a32cfa66` and pushed branch/tag.
+- Migrated the gameplay-facing `SlabAnchorAttachment` storage facade from NeoForge attachment tokens to the Forge `LevelChunk` capability store.
+- Kept the existing `SlabSupport` semantics unchanged and only brought its unchanged dependency chain into the temporary compile gate.
+- Updated Terrain Slabs compat from NeoForge `ModList` to Forge `ModList` without broadening compat law.
+- Proved the storage facade with `./gradlew --no-daemon compileJava`.
 - Networking/client sync, model loading, mixins, gametest, behavior parity, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Open `forge-1.20.1-slab-anchor-attachment-storage-facade` as the next explicit Book III implementation slice.
-2. Read and apply `docs/porting/mc-1.20.1-forge-regression-risk-checklist.md` before patching.
-3. Replace only the internal NeoForge attachment get/set/remove plumbing in `SlabAnchorAttachment.java` with the new Forge server capability store.
-4. Keep networking/client sync, model loading, mixins, gametests, and behavior parity separate.
-5. Stop if compiling `SlabAnchorAttachment.java` pulls in broad gameplay, mixin, client sync, or 1.21.1-only API surfaces.
-6. Prove with `./gradlew --no-daemon compileJava` and `git diff --check`.
+1. Open a separate savepoint closure for `forge-1.20.1-slab-anchor-attachment-storage-facade`.
+2. Re-run `./gradlew --no-daemon compileJava` and `git diff --check`.
+3. Stage only the storage-facade slice files.
+4. Commit/tag/push only from that separate savepoint route.
+5. After savepoint, the next Book III decision should be networking/client sync versus non-`Level` render-view bridge ordering.
 
 ## Do not start yet
 
-- Do not port Java behavior beyond the temporary Forge entrypoint and server anchor store scaffold.
-- Do not claim the gameplay-facing `SlabAnchorAttachment` facade is migrated yet.
+- Do not port Java behavior beyond the temporary Forge entrypoint, server anchor store scaffold, and storage facade.
+- Do not claim client sync, render-view bridge, model loading, mixins, gametests, behavior parity, or live proof are migrated yet.
 - Do not start later networking/client sync, model loading, mixin, gametest, behavior parity, live-proof, or release slices without applying the Forge risk checklist.
 - Do not migrate model loading, networking, mixins, or gametests in this slice.
 - Do not run release gates or stage jars.
@@ -80,8 +86,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: 2a3be274
-tag at HEAD: release/neoforge-1.21.1-0.4.2-beta.2
+HEAD: a32cfa66
+tag at HEAD: save/forge-1-20-1-canon-regression-risk-map
 ```
 
 Branch donor evidence:
@@ -155,6 +161,16 @@ gameplay-facing SlabAnchorAttachment facade, Slabbed behavior, client sync,
 model loading, mixins, networking, gametests, or live behavior.
 ```
 
+Book III storage facade proof:
+
+```text
+./gradlew --no-daemon compileJava
+-> BUILD SUCCESSFUL
+
+git diff --check
+-> pending final rerun after this handoff update
+```
+
 Attachment/persistence decision:
 
 ```text
@@ -178,10 +194,11 @@ persistence.
 
 ## Stop condition reached
 
-Yes. The Forge entrypoint/lifecycle scaffold and server-side anchor store
-capability scaffold are compile-proven. Stop before gameplay-facing
-`SlabAnchorAttachment` migration, networking/client sync, model hooks, behavior
-parity, commit/tag/push, or release work.
+Yes for this implementation route after final diff proof. The Forge
+entrypoint/lifecycle scaffold, server-side anchor store capability scaffold, and
+gameplay-facing storage facade are compile-proven. Stop before networking/client
+sync, model hooks, behavior parity, commit/tag/push, or release work; the dirty
+storage-facade slice needs a separate savepoint closure.
 
 ---
 

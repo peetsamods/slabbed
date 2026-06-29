@@ -31,17 +31,23 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-2a3be274
+a32cfa66
 ```
 
 Tag:
 
 ```text
-release/neoforge-1.21.1-0.4.2-beta.2
+save/forge-1-20-1-canon-regression-risk-map
 ```
 
-Pushed branch: no, this Forge branch is local foundation work.
-Pushed tag: donor release tag exists at HEAD.
+Pushed branch: yes, through the Forge foundation risk-map savepoint.
+Pushed tag: yes, `save/forge-1-20-1-canon-regression-risk-map`.
+
+Donor release tag at parent foundation base:
+
+```text
+release/neoforge-1.21.1-0.4.2-beta.2
+```
 
 This branch intentionally starts from the NeoForge 1.21.1 beta.2 release tag,
 because Julia requested the Forge 1.20.1 backport begin from the latest
@@ -51,11 +57,12 @@ because Julia requested the Forge 1.20.1 backport begin from the latest
 
 ```text
 Book III entrypoint/lifecycle scaffold is compile-proven. The server-side Forge
-LevelChunk anchor store capability scaffold is compile-proven. The Forge
-regression-risk checklist is now the required canon gate before later
-networking/client sync, model loading, mixin, gametest, behavior parity, live,
-or release slices. Networking/client sync, model loading, mixins, gametest,
-runtime behavior, release, and live-profile work remain out of scope.
+LevelChunk anchor store capability scaffold is compile-proven. The
+gameplay-facing SlabAnchorAttachment storage facade is compile-proven locally
+and savepoint-pending. The Forge regression-risk checklist remains required
+before later networking/client sync, model loading, mixin, gametest, behavior
+parity, live, or release slices. Networking/client sync, model loading, mixins,
+gametest, runtime behavior, release, and live-profile work remain out of scope.
 ```
 
 ## Current objective
@@ -65,8 +72,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III gameplay-facing SlabAnchorAttachment storage facade next
-- implementation status: server-side anchor store capability scaffold compile-proven; risk checklist required before risky migration slices
+- current work type: Book III gameplay-facing SlabAnchorAttachment storage facade savepoint next
+- implementation status: storage facade compile-proven locally; savepoint pending
 
 ## Current blocker
 
@@ -74,8 +81,9 @@ Visible symptom:
 
 ```text
 Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
-server-side anchor store capability. Do not broaden the next compile failures
-into networking, model, mixin, gametest, or behavior parity migration.
+server-side anchor store capability and gameplay-facing storage facade. Do not
+broaden the next savepoint or compile failures into networking, model, mixin,
+gametest, or behavior parity migration.
 ```
 
 Failing layer:
@@ -119,6 +127,7 @@ Forge 1.20.1 toolchain truth:
 - mod loader: javafml, loader range [47,)
 - Book III scaffold proof: ./gradlew --no-daemon compileJava -> BUILD SUCCESSFUL
 - Book III server anchor capability proof: ./gradlew --no-daemon compileJava -> BUILD SUCCESSFUL
+- Book III storage facade proof: ./gradlew --no-daemon compileJava -> BUILD SUCCESSFUL
 - style proof: git diff --check -> clean
 
 Book III attachment/persistence decision:
@@ -127,7 +136,8 @@ Book III attachment/persistence decision:
 - not chosen as primary store: SavedData
 - client sync: separate later slice, not part of server persistence decision
 - server capability scaffold: one SlabAnchorStore per LevelChunk capability, eight long-set marker buckets
-- not yet migrated: gameplay-facing SlabAnchorAttachment public facade, client mirror, non-Level render fallback
+- gameplay-facing SlabAnchorAttachment storage facade: compile-proven locally, savepoint pending
+- not yet migrated: client mirror, non-Level render fallback
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
