@@ -92,11 +92,22 @@ Therefore the next executable Book IV worker should start as an audit/proof-gap
 slice that identifies or migrates the narrow Forge-compatible proof harness for
 the exact fixture above before patching behavior.
 
+Superseding route correction after the client-runtime audit savepoint:
+
+```text
+save/forge-1-20-1-client-runtime-triad-harness-audit at 192b0098 found no
+acceptable client/runtime Visual Triad proof route. Julia rejected the later
+automatic/dev-client runClient scaffold approach for this Book IV lane. The next
+worker must not use runClient, automatic dev-client output, or similar automatic
+dev runs as useful proof. The next executable route is a real client/live-
+authority triad RED/proof capture for the same exact fixture.
+```
+
 ## Required Header For Next Worker
 
 ```text
-Slice: forge-1.20.1-ordinary-full-block-on-bottom-slab-triad-and-behavior-proof
-Primary layer: proof gap until the Forge proof harness is named
+Slice: forge-1.20.1-ordinary-full-block-live-client-triad-red-capture
+Primary layer: proof gap until the real client/live triad RED is captured
 Legal state being protected: ordinary full block anchored on a bottom slab with dy=-0.5
 SlabSupport or dy authority touched: no by default
 Persistence path touched: server capability, client mirror, and non-Level render-view only as evidence surfaces
@@ -105,10 +116,10 @@ Placement/survival/reload touched: placement / survival / neighbor / reload evid
 Rescue/targeting touched: evidence only unless a targeting RED names rescue as the failing layer
 Compat family touched: none
 Proof family scope: minecraft:stone ordinary full block fixture only
-Live proof required: later, if targeting feel, ghosting, moving-up behavior, or player-visible contradiction appears
+Live proof required: yes, for this next RED/proof capture
 Release-facing risk: no
 Savepoint plan: separate savepoint only after proof-clean route or proven implementation
-Stop condition: stop if proof harness migration, mixin migration, culling, live, or behavior patching broadens beyond the named fixture
+Stop condition: stop if exact real profile/jar/world identity, rendered-model evidence, outline evidence, or raycast/target evidence cannot be captured without broadening beyond the named fixture
 ```
 
 ## Allowed Dirt For This Planning Gate

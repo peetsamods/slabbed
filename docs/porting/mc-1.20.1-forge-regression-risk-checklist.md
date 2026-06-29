@@ -92,6 +92,12 @@ Proven on this Forge branch:
   `minecraft:stone_slab[type=bottom]`, server gametest green and savepointed
   at `6f05c9e8` /
   `save/forge-1-20-1-ordinary-full-block-anchor-behavior`
+- client-runtime triad harness audit, docs-proven and savepointed at
+  `192b0098` /
+  `save/forge-1-20-1-client-runtime-triad-harness-audit`
+- superseding route correction: automatic/dev-client `runClient` scaffolds are
+  abandoned for this Book IV Visual Triad lane and must not be used as useful
+  proof
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:

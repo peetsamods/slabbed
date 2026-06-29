@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-6f05c9e8
+192b0098
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-ordinary-full-block-anchor-behavior
+save/forge-1-20-1-client-runtime-triad-harness-audit
 ```
 
-Pushed branch: yes, through the Forge ordinary full-block anchor behavior savepoint.
-Pushed tag: yes, `save/forge-1-20-1-ordinary-full-block-anchor-behavior`.
+Pushed branch: yes, through the Forge client-runtime triad harness audit savepoint.
+Pushed tag: yes, `save/forge-1-20-1-client-runtime-triad-harness-audit`.
 
 Donor release tag at parent foundation base:
 
@@ -80,12 +80,17 @@ fixture for `minecraft:stone` over `minecraft:stone_slab[type=bottom]` is exact
 server fixture-green at `6f05c9e8` /
 `save/forge-1-20-1-ordinary-full-block-anchor-behavior`: Forge item placement
 creates real server anchor truth with `anchored=true`, `dy=-0.500000`,
-`supportDy=0.000000`, and `overlap=0.000000`. The active Book IV lane is a
-client/runtime Visual Triad proof-harness audit for that same fixture. The Forge
-regression-risk checklist remains required before culling, mixin, broader
-gametest, behavior parity, live, or release slices. Full Visual Triad, outline,
-raycast, culling, live behavior, broad behavior parity, release, and
-live-profile work remain out of scope until separately authorized.
+`supportDy=0.000000`, and `overlap=0.000000`. The client/runtime Visual Triad
+proof-harness audit is savepointed at `192b0098` /
+`save/forge-1-20-1-client-runtime-triad-harness-audit`. Julia rejected the
+later automatic `runClient` scaffold route; automatic/dev-client runs are not
+useful proof for this Book IV Visual Triad lane. The active Book IV lane must
+next capture a real client/live-authority Visual Triad RED or proof for that
+same fixture before implementation. The Forge regression-risk checklist remains
+required before culling, mixin, broader gametest, behavior parity, live, or
+release slices. Full Visual Triad, outline, raycast, culling, live behavior,
+broad behavior parity, release, and live-profile work remain out of scope until
+separately authorized.
 ```
 
 ## Current objective
@@ -98,8 +103,9 @@ Set the first Forge project lane for Slabbed:
 - current work type: Book IV first behavior/proof route selection
 - implementation status: Book III loader/API migration appears complete through
   the rendered block-model evidence proof savepoint; the exact server fixture is
-  green at `6f05c9e8`; culling, full Visual Triad, client
-  runtime triad harness, live behavior, broad behavior parity, and release
+  green at `6f05c9e8`; the client-runtime triad harness audit is savepointed at
+  `192b0098`; the rejected automatic `runClient` scaffold must not be revived;
+  culling, full Visual Triad, live behavior, broad behavior parity, and release
   readiness are not proven
 
 ## Current blocker
@@ -108,10 +114,12 @@ Visible symptom:
 
 ```text
 Forge 1.20.1 Book IV has an exact server-side ordinary full-block-on-bottom-slab
-fixture green at `6f05c9e8`. The active question is whether a Forge-compatible
-client/runtime Visual Triad proof harness already exists for the same named
-legal state, before any culling change, client harness implementation, mixin
-migration, live proof, or behavior parity claim.
+fixture green at `6f05c9e8`. The audit savepoint at `192b0098` found no useful
+Forge-compatible client/runtime Visual Triad proof harness for the same named
+legal state. Julia rejected the automatic/dev-client `runClient` approach for
+this lane, so the next route must capture a real client/live-authority triad
+RED or proof before any culling change, client harness implementation, mixin
+migration, or behavior parity claim.
 ```
 
 Failing layer:
@@ -138,6 +146,8 @@ Current preflight/savepoint:
 - tag at HEAD: save/forge-1-20-1-rendered-block-model-evidence-proof
 - current HEAD after server behavior savepoint: 6f05c9e8
 - current tag at HEAD: save/forge-1-20-1-ordinary-full-block-anchor-behavior
+- current HEAD after client-runtime triad harness audit savepoint: 192b0098
+- current tag at HEAD: save/forge-1-20-1-client-runtime-triad-harness-audit
 
 Donor build truth at parent foundation base:
 - Minecraft 1.21.1
@@ -190,8 +200,12 @@ Book III attachment/persistence decision:
 - ordinary full-block proof harness audit: savepointed at 59baef9c
 - ordinary full-block server fixture proof: exact fixture green and savepointed
   at 6f05c9e8
-- active proof-gap audit slice:
-  forge-1.20.1-ordinary-full-block-client-runtime-triad-harness-audit
+- client-runtime triad harness audit: savepointed at 192b0098
+- superseding correction: automatic/dev-client `runClient` scaffolds are
+  abandoned for this Book IV Visual Triad lane and must not be used as useful
+  proof
+- active proof-gap route:
+  forge-1.20.1-ordinary-full-block-live-client-triad-red-capture
 - route doc:
   docs/porting/mc-1.20.1-forge-book-iv-first-proof-route.md
 - client triad harness audit doc:

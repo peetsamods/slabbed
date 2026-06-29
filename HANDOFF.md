@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 client/runtime triad harness audit (2026-06-29)
+# HANDOFF - Forge 1.20.1 Book IV live/client triad route correction (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `6f05c9e8`
-- Tag at HEAD: `save/forge-1-20-1-ordinary-full-block-anchor-behavior`
+- HEAD: `192b0098`
+- Tag at HEAD: `save/forge-1-20-1-client-runtime-triad-harness-audit`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: none; docs/proof-harness audit only
+- Code changes this slice: none; route/status docs only
 
 ## Current state
 
@@ -45,12 +45,16 @@ and savepointed at `6f05c9e8` /
 `save/forge-1-20-1-ordinary-full-block-anchor-behavior`. That server fixture
 proves only `minecraft:stone` placed through Forge item placement over
 `minecraft:stone_slab[type=bottom]`, with `anchored=true`, `dy=-0.500000`,
-`supportDy=0.000000`, and `overlap=0.000000`. The active lane is the
-client/runtime Visual Triad proof-harness audit for the same fixture, before
-any client harness implementation, culling, mixin migration, live, release,
-broad gametest, behavior parity, or full Visual Triad claim. The branch is
-intentionally based at the NeoForge beta.2 release tag because Julia requested
-the Forge 1.20.1 backport use the latest NeoForge
+`supportDy=0.000000`, and `overlap=0.000000`. The client/runtime Visual Triad
+proof-harness audit is savepointed at `192b0098` /
+`save/forge-1-20-1-client-runtime-triad-harness-audit`. Julia later rejected
+the automatic/dev-client `runClient` scaffold route for this Book IV Visual
+Triad lane; it must not be savepointed, revived, or treated as useful proof.
+The active lane is now a real client/live-authority triad RED/proof capture for
+the same fixture, before any client harness implementation, culling, mixin
+migration, release, broad gametest, behavior parity, or full Visual Triad
+claim. The branch is intentionally based at the NeoForge beta.2 release tag
+because Julia requested the Forge 1.20.1 backport use the latest NeoForge
 `0.4.2-beta.2+1.21.1` work as the donor.
 
 Existing untracked `tmp/` evidence folders are present in the worktree. Treat
@@ -61,9 +65,10 @@ Live-proof rule:
 Julia is going to bed and cannot provide manual live runs. When this port later
 needs live validation, Codex must cruise-control the real Minecraft/Modrinth
 profile/world and preserve exact jar/profile/window evidence. Auto/dev runs do
-not count as live proof; `runClient`, `runServer`, `runGameTest`,
-`runServerGameTest`, `runClientGameTest`, and similar paths are technical support
-evidence only.
+not count as live proof. For this Book IV Visual Triad lane, `runClient`,
+`runServer`, `runGameTest`, `runServerGameTest`, `runClientGameTest`, and
+similar automatic/dev-client paths must not be treated as useful proof or used
+to drive the next route.
 
 ## What changed this slice
 
@@ -129,15 +134,22 @@ evidence only.
 - Started this docs-only client/runtime triad harness audit. It found no active
   Forge-compatible client/runtime Visual Triad proof harness for the saved
   `minecraft:stone` over bottom stone slab fixture.
+- Closed the client-runtime triad harness audit savepoint at `192b0098` /
+  `save/forge-1-20-1-client-runtime-triad-harness-audit`.
+- Abandoned the later automatic/dev-client `runClient` scaffold route by Julia
+  correction. The dirty scaffold was removed without savepoint; preserved
+  `tmp/` evidence remains untracked evidence noise.
+- Updated route/status docs so Book IV proceeds through a real client/live-
+  authority Visual Triad RED/proof capture, not another automatic harness.
 - Mixins, client runtime harness implementation, behavior parity, full Visual
   Triad proof, culling, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Close a separate docs savepoint for this client/runtime triad harness audit
-   if `git diff --check` remains clean.
+1. Close a separate docs savepoint for this route correction if
+   `git diff --check` remains clean.
 2. Next worker should start
-   `forge-1.20.1-ordinary-full-block-client-runtime-triad-harness-scaffold`.
+   `forge-1.20.1-ordinary-full-block-live-client-triad-red-capture`.
 3. Do not start culling, cull-face relocation, mixin migration, behavior parity,
    live proof, release work, broad gametest migration, or extra fixtures from
    this audit gate.
@@ -146,6 +158,8 @@ evidence only.
 
 - Do not port Java behavior beyond the already savepointed exact server fixture path.
 - Do not claim mixins, client runtime triad harness, broad gametests, behavior parity, Visual Triad proof, or live proof are migrated yet.
+- Do not revive or savepoint the abandoned automatic/dev-client `runClient`
+  scaffold route for this Book IV Visual Triad lane.
 - Do not start later model loading, mixin, gametest, behavior parity, live-proof, or release slices without applying the Forge risk checklist.
 - Do not migrate model loading, mixins, or gametests in this slice.
 - Do not run release gates or stage jars.
@@ -160,8 +174,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: 6f05c9e8
-tag at HEAD: save/forge-1-20-1-ordinary-full-block-anchor-behavior
+HEAD: 192b0098
+tag at HEAD: save/forge-1-20-1-client-runtime-triad-harness-audit
 ```
 
 Branch donor evidence:
@@ -556,7 +570,7 @@ The "live blocked" notifications were macOS asking Julia to approve each compute
 ## State (end of session)
 - 1.21.1: HEAD `1b71ccd9`, clean, nothing pushed. Logic hardened (37/37) + cull fix live-confirmed.
 - MC: still RUNNING (New World scratch). Keybind reverted to `mouse.right`. Hunt worktrees pruned.
-- **Open for next thread:** exhaustive broad visual hunt (more player structures), placement-disobedience live (re-enable `r`), the gold-standard cull kill-switch A/B, and the 1.21.11 cull-gap live confirm (needs compat jar in a TS profile). 
+- **Open for next thread:** exhaustive broad visual hunt (more player structures), placement-disobedience live (re-enable `r`), the gold-standard cull kill-switch A/B, and the 1.21.11 cull-gap live confirm (needs compat jar in a TS profile).
 - **UPDATE 2026-06-12 (opus):** the deferred 1.21.11 vanilla-compound FLOAT fix is **DONE + LIVE-CONFIRMED** on the compat repo (`Slabbed-countered-compat-latest` @ `21af4243`, new `loweredBottomSlabSupportDyForCompound` porting 1.21.1's `floorTorchBottomSlabSupportDy`; headless 40/40 + 5-lens adversarial-clean + live `/slabdy dy=-1.000` via the Modrinth `Slabbed+Terrain Slabs` profile). NOT pushed. See that repo's HANDOFF. Live-test route that works = Modrinth jar swap, NOT `runClient` (bare `java`, ungrantable to computer-use).
 
 ## Current decision update (2026-06-29)

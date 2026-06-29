@@ -1,6 +1,6 @@
 # Forge Client Runtime Triad Harness Audit
 
-Status: audit/proof-route note only
+Status: audit/proof-route note only, superseded for route execution
 
 Baseline:
 
@@ -62,6 +62,24 @@ That savepoint does not prove client/runtime Visual Triad, outline, raycast,
 live behavior, culling, broad gametest coverage, behavior parity, or release
 readiness.
 
+## Superseding Route Correction
+
+Julia rejected the automatic/dev-client route after the audit savepoint. For
+this Book IV Visual Triad/client-runtime lane:
+
+```text
+Do not use runClient, automatic dev-client output, or similar automatic/dev
+runs as useful proof.
+Do not savepoint or revive the abandoned automatic scaffold dirt.
+Preserve any tmp evidence as abandoned/obsolete evidence until an explicit
+cleanup or replacement route says otherwise.
+```
+
+The audit finding remains useful only as a negative finding: no acceptable
+Forge-compatible proof route already exists. The first executable route must be
+a real client/live-authority RED or proof capture for the same exact fixture,
+not another automatic client scaffold.
+
 ## Read-Only Harness Findings
 
 - `build.gradle` now has a Forge `gametest` source set and `gameTestServer`
@@ -94,84 +112,81 @@ readiness.
 Conclusion:
 
 ```text
-A Forge-compatible client/runtime Visual Triad proof harness does not already
-exist for the saved minecraft:stone over bottom stone slab fixture. The next
-executable route must scaffold or port that narrow client runtime harness
-before any client triad proof can be run.
+A Forge-compatible and accepted client/runtime Visual Triad proof route does
+not already exist for the saved minecraft:stone over bottom stone slab fixture.
+The automatic/dev-client scaffold path is abandoned and must not be used as
+Book IV proof. The next executable route must capture the real client/live
+authority triad RED or proof for the exact fixture before any triad patching.
 ```
 
-## First Executable Client Route
+## First Executable Client Route After Correction
 
 Route name:
 
 ```text
-forge-1.20.1-ordinary-full-block-client-runtime-triad-harness-scaffold
+forge-1.20.1-ordinary-full-block-live-client-triad-red-capture
 ```
 
 Route type:
 
 ```text
-client/runtime proof-harness scaffold, not behavior patching
+real client/live-authority triad RED/proof capture, not behavior patching
 ```
 
 Allowed purpose for that follow-up route:
 
 ```text
-Create the smallest default-off Forge 1.20.1 client runtime proof route that
-can reuse the savepointed server placement path for minecraft:stone over
-minecraft:stone_slab[type=bottom], observe the synced client anchor truth, and
-emit one row tying model/rendered dy, outline dy, raycast/target dy, and target
-owner to the same anchored fixture.
+Use the exact real Minecraft/Modrinth Forge 1.20.1 profile, jar, world, and
+fixture action to capture the Visual Triad evidence row for minecraft:stone over
+minecraft:stone_slab[type=bottom]: rendered model dy, outline dy, raycast/target
+dy, vanilla target, final target, held item, face, hit vector, expected owner,
+and actual owner. The route may produce a RED; that RED names the next single
+triad layer.
 ```
 
-Minimum source donors to inspect in that follow-up:
+Minimum local inputs to inspect in that follow-up:
 
 ```text
-build.gradle
-src/main/java/com/slabbed/Slabbed.java
-src/client/java/com/slabbed/client/SlabbedClient.java
-src/client/java/com/slabbed/client/NeoForgeClientWorldProof.java
-src/client/java/com/slabbed/client/model/OffsetBlockStateModel.java
-src/main/java/com/slabbed/util/SlabbedOffsetRaycast.java
-src/gametest/java/com/slabbed/test/ForgeOrdinaryFullBlockAnchorGameTest.java
+AGENTS.md
+RULES.md
+SLABBED_SPINE.md
+HANDOFF.md
+docs/codex/03-visual-triad.md
+docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
+docs/porting/mc-1.20.1-forge-client-runtime-triad-harness-audit.md
+the exact staged/installed Forge 1.20.1 jar/profile/world evidence for the
+live-client route
 ```
 
-Expected harness scaffold work for the follow-up:
+Expected live/client capture work for the follow-up:
 
-- Add a Forge client-runtime proof entrypoint or proof helper behind an explicit
-  default-off system property.
-- Port only the needed client event wiring from the donor to Forge 1.20.1 APIs.
 - Keep the fixture scope to `minecraft:stone` over
   `minecraft:stone_slab[type=bottom]`.
 - Reuse real server/client anchor truth from the savepointed placement path.
-- Capture rendered-model evidence from the `OffsetBlockStateModel` route for
-  the exact object position, not only a `ClientDy` proxy.
+- Capture or extract rendered-model evidence from the visible/runtime renderer,
+  not only a `ClientDy` proxy.
 - Capture outline dy and raycast/target owner from the same client position,
-  state, support source, and expected dy.
-- Split or defer donor culling checks; culling and cull-face relocation are not
-  part of the first client triad harness scaffold.
+  state, support source, held item, face, and hit vector.
+- Split or defer culling checks; culling and cull-face relocation are not part
+  of the first client triad RED capture.
 
-Expected first proof command family after the harness exists:
+Forbidden proof substitutions:
 
 ```text
-./gradlew --no-daemon compileJava compileGametestJava
 ./gradlew --no-daemon runClient --console plain
+automatic dev-client proof flags
+runServer / runGameTest / runServerGameTest / runClientGameTest as live proof
 ```
-
-The `runClient` invocation must include the new default-off proof flag and must
-be reported as automated dev-client support evidence only, not live Minecraft
-proof.
 
 Stop conditions for the follow-up route:
 
-- Stop if the route requires broad mixin migration before the harness can be
-  scaffolded.
-- Stop if model evidence can only be proxy `ClientDy` rather than an observed
-  `OffsetBlockStateModel` render sample.
-- Stop if outline or raycast proof requires behavior patching rather than
+- Stop if exact real profile/jar/world identity cannot be established.
+- Stop if model evidence can only be proxy `ClientDy` rather than real rendered
+  evidence.
+- Stop if outline or raycast proof requires behavior patching rather than first
   exposing a RED.
 - Stop if the route drifts into culling, cull-face relocation, live profile
-  driving, behavior parity, release work, or extra fixture families.
+  staging/release, behavior parity, release work, or extra fixture families.
 
 ## What This Does Not Prove
 
