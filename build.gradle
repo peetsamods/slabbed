@@ -1,7 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.141'
+    id 'net.minecraftforge.gradle' version '6.0.54'
 }
 
 version = project.mod_version
@@ -12,143 +12,91 @@ base {
 }
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
     withSourcesJar()
 }
 
 sourceSets {
     main {
         java {
-            srcDir "src/client/java"
-            // NeoForge bootstrap: keep dev/debug/manual recorder implementations out
-            // of main compile until that optional tooling lane is ported deliberately.
-            exclude "com/slabbed/debug/**"
-            exclude "com/slabbed/dev/**"
-            exclude "com/slabbed/client/debug/**"
-            exclude "com/slabbed/client/CaptureProfile.java"
-            exclude "com/slabbed/client/GapFillerOverlay.java"
-            exclude "com/slabbed/client/NeoForgeChainCeilingClientProof.java"
-            exclude "com/slabbed/client/NeoForgeClientProofCanary.java"
-            exclude "com/slabbed/client/NeoForgeClientWorldProof.java"
-            exclude "com/slabbed/client/NeoForgeFenceGateClientProof.java"
-            exclude "com/slabbed/client/ScreenshotCaptureContext.java"
-            exclude "com/slabbed/client/ScreenshotCaptureService.java"
-            exclude "com/slabbed/client/ScreenshotFlightLock.java"
-            exclude "com/slabbed/client/TargetDyOverlay.java"
-            exclude "com/slabbed/client/runtime/ModelDyTranslateTraceBridge.java"
-            exclude "com/slabbed/mixin/BlockItemPlaceTraceMixin.java"
-            exclude "com/slabbed/mixin/client/Beta*.java"
-            exclude "com/slabbed/mixin/debug/**"
-            exclude "com/slabbed/util/Beta4ManualLiveTrace.java"
-            exclude "com/slabbed/util/Beta4PlacementAuthorRecorder.java"
-            exclude "com/slabbed/util/Beta35FenceWallLiveInspectRecorder.java"
-            exclude "com/slabbed/util/Beta35LiveTorchCaptureRecorder.java"
-            exclude "com/slabbed/util/Beta35SlabHeightHitAcceptanceRecorder.java"
-            exclude "com/slabbed/util/Beta35SlabJumpSourceTruthRecorder.java"
-            exclude "com/slabbed/util/DebugTraceContext.java"
-            exclude "com/slabbed/util/Mc1211TrapdoorUnderBottomRecorder.java"
-            exclude "com/slabbed/util/SlabbedAuditBridge.java"
-            exclude "com/slabbed/util/SlabbedDebug.java"
+            setSrcDirs(["src/main/java"])
+            // Book III scaffold gate: compile only the Forge entrypoint until
+            // later slices port attachments, model loading, networking, and mixins.
+            include "com/slabbed/Slabbed.java"
+            include "com/slabbed/anchor/SlabAnchorCapabilities.java"
+            include "com/slabbed/anchor/SlabAnchorCapabilityProvider.java"
+            include "com/slabbed/anchor/SlabAnchorMarker.java"
+            include "com/slabbed/anchor/SlabAnchorStore.java"
         }
         resources {
-            srcDir "src/client/resources"
+            srcDir "src/main/resources"
             exclude "fabric.mod.json"
+            exclude "META-INF/neoforge.mods.toml"
+            exclude "slabbed.mixins.json"
             exclude "slabbed.debug.mixins.json"
         }
-    }
-    gametest {
-        java {
-            setSrcDirs(["src/gametest/java", "src/main/java"])
-            setIncludes([
-                    "com/slabbed/test/ChainSurvivalReproTest.java",
-                    "com/slabbed/test/SlabbedLabFixtureTest.java",
-                    "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
-                    "com/slabbed/dev/SlabbedLabFixtures.java"
-            ])
-        }
-        resources {
-            setSrcDirs([])
-        }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
     }
 }
 
 repositories {
-    maven {
-        name = "Sinytra"
-        url = "https://maven.su5ed.dev/releases"
-    }
 }
 
-neoForge {
-    version = project.neo_version
+minecraft {
+    mappings channel: project.mapping_channel, version: project.mapping_version
+    copyIdeResources = true
 
     runs {
         client {
-            client()
+            workingDirectory project.file("run")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
         }
         server {
-            server()
-            programArgument "--nogui"
-        }
-        serverGameTest {
-            server()
-            programArgument "--nogui"
-            systemProperty "neoforge.gameTestServer", "true"
-            systemProperty "neoforge.enabledGameTestNamespaces", "fabric-gametest-api-v1"
-            taskBefore tasks.named("gametestClasses")
-        }
-        configureEach {
-            logLevel = org.slf4j.event.Level.DEBUG
+            workingDirectory project.file("run")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            args "--nogui"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
         }
     }
-
-    mods {
-        "${mod_id}" {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.gametest
-        }
-    }
-}
-
-configurations {
-    gametestImplementation.extendsFrom implementation
 }
 
 dependencies {
-    gametestImplementation "org.sinytra.forgified-fabric-api:forgified-fabric-api:${project.ffapi_version}"
-}
-
-tasks.register("syncGameTestStructures", Sync) {
-    from("gameteststructures")
-    into(layout.projectDirectory.dir("run/gameteststructures"))
-}
-
-tasks.named("runServerGameTest").configure {
-    dependsOn(tasks.named("syncGameTestStructures"))
+    minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
 }
 
 tasks.named("processResources", ProcessResources).configure {
     def replaceProperties = [
             minecraft_version      : project.minecraft_version,
             minecraft_version_range: project.minecraft_version_range,
-            neo_version            : project.neo_version,
+            forge_version          : project.forge_version,
+            forge_version_range    : project.forge_version_range,
             loader_version_range   : project.loader_version_range,
             mod_id                 : project.mod_id,
             mod_name               : project.mod_name,
             mod_license            : project.mod_license,
-            mod_version            : project.mod_version
+            mod_version            : project.mod_version,
+            mod_authors            : project.mod_authors,
+            mod_description        : project.mod_description
     ]
     inputs.properties replaceProperties
-    filesMatching("META-INF/neoforge.mods.toml") {
+    filesMatching("META-INF/mods.toml") {
         expand replaceProperties
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
-    options.release = 21
+    options.release = 17
 }
 
 jar {

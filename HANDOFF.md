@@ -1,4 +1,191 @@
-# HANDOFF — NeoForge 1.21.1 release-readiness candidate (2026-06-26)
+# HANDOFF - Forge 1.20.1 server anchor capability scaffold (2026-06-28)
+
+This is the current handoff for the first Slabbed Forge project foundation.
+The older NeoForge handoff below is donor context only on this branch.
+
+## Repo / branch / HEAD
+
+- Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
+- Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
+- HEAD: `2a3be274`
+- Tag at HEAD: `release/neoforge-1.21.1-0.4.2-beta.2`
+- Target: Minecraft `1.20.1`, Forge
+- Donor version: NeoForge `0.4.2-beta.2+1.21.1`
+- Pushed branch: no
+- Code changes this slice: server-side chunk anchor capability scaffold only
+
+## Current state
+
+Book III entrypoint/lifecycle scaffold and server-side anchor store capability
+scaffold are compile-proven. The Forge regression-risk checklist is now required
+before later networking/client sync, model loading, mixin, gametest, behavior
+parity, live-proof, or release slices. The branch is intentionally based at the
+NeoForge beta.2 release tag because Julia requested the Forge 1.20.1 backport
+use the latest NeoForge `0.4.2-beta.2+1.21.1` work as the donor.
+
+Existing untracked `tmp/` evidence folders are present in the worktree. Treat
+them as pre-existing evidence noise and do not delete, stage, or rely on them
+for Forge proof.
+
+Live-proof rule:
+Julia is going to bed and cannot provide manual live runs. When this port later
+needs live validation, Codex must cruise-control the real Minecraft/Modrinth
+profile/world and preserve exact jar/profile/window evidence. Auto/dev runs do
+not count as live proof; `runClient`, `runServer`, `runGameTest`,
+`runServerGameTest`, `runClientGameTest`, and similar paths are technical support
+evidence only.
+
+## What changed this slice
+
+- Started the correct Forge foundation branch from `release/neoforge-1.21.1-0.4.2-beta.2`.
+- Re-pointed `SLABBED_SPINE.md` at the Forge 1.20.1 foundation lane.
+- Added `docs/porting/mc-1.20.1-forge-foundation.md` as the compact Project Canon/toolchain/contract map for this existing Slabbed repo.
+- Locked Forge 1.20.1 toolchain truth from primary Forge Maven/MDK evidence.
+- Deferred scaffold file patching because compile proof would require Book III Java loader API migration.
+- Started the first Book III scaffold slice by converting build metadata and the minimal mod entrypoint only.
+- Proved the first Forge scaffold with `./gradlew --no-daemon compileJava`.
+- Ran `git diff --check` clean.
+- Documented the attachment/persistence decision: replace NeoForge chunk data attachments with a Forge `LevelChunk` capability, not primary `SavedData`.
+- Added the server-side Forge `LevelChunk` anchor store capability scaffold.
+- Mirrored the donor's eight anchor marker buckets inside one per-chunk `SlabAnchorStore`.
+- Wired capability type registration on the Forge mod event bus and `LevelChunk` capability attachment on the Forge event bus.
+- Proved the server capability scaffold with `./gradlew --no-daemon compileJava`.
+- Added `docs/porting/mc-1.20.1-forge-regression-risk-checklist.md` as the canon regression-risk/proof gate before later risky Forge slices.
+- Networking/client sync, model loading, mixins, gametest, behavior parity, release, and live-profile work remain untouched.
+
+## Next owner actions
+
+1. Open `forge-1.20.1-slab-anchor-attachment-storage-facade` as the next explicit Book III implementation slice.
+2. Read and apply `docs/porting/mc-1.20.1-forge-regression-risk-checklist.md` before patching.
+3. Replace only the internal NeoForge attachment get/set/remove plumbing in `SlabAnchorAttachment.java` with the new Forge server capability store.
+4. Keep networking/client sync, model loading, mixins, gametests, and behavior parity separate.
+5. Stop if compiling `SlabAnchorAttachment.java` pulls in broad gameplay, mixin, client sync, or 1.21.1-only API surfaces.
+6. Prove with `./gradlew --no-daemon compileJava` and `git diff --check`.
+
+## Do not start yet
+
+- Do not port Java behavior beyond the temporary Forge entrypoint and server anchor store scaffold.
+- Do not claim the gameplay-facing `SlabAnchorAttachment` facade is migrated yet.
+- Do not start later networking/client sync, model loading, mixin, gametest, behavior parity, live-proof, or release slices without applying the Forge risk checklist.
+- Do not migrate model loading, networking, mixins, or gametests in this slice.
+- Do not run release gates or stage jars.
+- Do not claim NeoForge proof as Forge proof.
+- Do not claim auto/dev runs as live proof.
+- Do not touch other Slabbed roots.
+
+## Proof references
+
+Preflight foundation state:
+
+```text
+root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
+branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
+HEAD: 2a3be274
+tag at HEAD: release/neoforge-1.21.1-0.4.2-beta.2
+```
+
+Branch donor evidence:
+
+```text
+gradle.properties:
+- minecraft_version=1.21.1
+- neo_version=21.1.233
+- mod_version=0.4.2-beta.2+1.21.1
+- ffapi_version=0.116.7+2.2.4+1.21.1
+
+build.gradle:
+- net.neoforged.moddev 2.0.141
+- JavaLanguageVersion.of(21)
+- runServerGameTest exists as the NeoForge proof task
+```
+
+Forge 1.20.1 Book II evidence:
+
+```text
+Primary sources checked:
+- https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml
+- https://maven.minecraftforge.net/net/minecraftforge/gradle/ForgeGradle/maven-metadata.xml
+- https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.20/forge-1.20.1-47.4.20-mdk.zip
+
+Decisions:
+- Forge: 1.20.1-47.4.20
+- ForgeGradle: 6.0.54 exact pin; official MDK uses [6.0,6.2)
+- Gradle wrapper: 8.8
+- Java: 17
+- mappings: official / 1.20.1
+- descriptor: src/main/resources/META-INF/mods.toml
+- mod loader: javafml
+- loader range: [47,)
+- Forge dependency range: [47,)
+- Minecraft dependency range: [1.20.1,1.21)
+- compile proof command: ./gradlew --no-daemon compileJava
+```
+
+Book III scaffold proof:
+
+```text
+./gradlew --no-daemon compileJava
+-> BUILD SUCCESSFUL
+
+git diff --check
+-> clean
+```
+
+Book III server anchor capability proof:
+
+```text
+./gradlew --no-daemon compileJava
+-> BUILD SUCCESSFUL
+
+Warnings only:
+- FMLJavaModLoadingContext.get() is deprecated/marked for removal in Forge 1.20.1 APIs.
+- ResourceLocation(String,String) is deprecated/marked for removal in the mapped Minecraft API.
+```
+
+Current scaffold boundary:
+
+```text
+build.gradle intentionally compiles only src/main/java/com/slabbed/Slabbed.java
+plus the new server-side anchor capability scaffold classes under
+src/main/java/com/slabbed/anchor/.
+
+This proves the Forge 1.20.1 entrypoint/lifecycle scaffold and the isolated
+server-side chunk capability storage scaffold only. It does not prove the
+gameplay-facing SlabAnchorAttachment facade, Slabbed behavior, client sync,
+model loading, mixins, networking, gametests, or live behavior.
+```
+
+Attachment/persistence decision:
+
+```text
+Decision doc:
+docs/porting/mc-1.20.1-forge-attachment-persistence-decision.md
+
+Chosen path:
+Forge LevelChunk capability, one Slabbed anchor store per chunk.
+
+Why:
+The donor stores eight LongOpenHashSet marker sets per LevelChunk. Forge chunk
+capabilities preserve chunk ownership, chunk save locality, and a direct future
+port of SlabAnchorAttachment's internal storage plumbing better than a global
+Dimension SavedData map.
+
+Important caveat:
+Forge capabilities do not replace NeoForge's synced data attachments. Client
+sync/networking is a later explicit Book III slice, not part of server-side
+persistence.
+```
+
+## Stop condition reached
+
+Yes. The Forge entrypoint/lifecycle scaffold and server-side anchor store
+capability scaffold are compile-proven. Stop before gameplay-facing
+`SlabAnchorAttachment` migration, networking/client sync, model hooks, behavior
+parity, commit/tag/push, or release work.
+
+---
+
+# Historical donor handoff - NeoForge 1.21.1 release-readiness candidate (2026-06-26)
 
 > Current handoff for the dedicated NeoForge 1.21.1 port worktree. This section supersedes the older 2026-06-23 port-boundary handoff and the historical 2026-06-12 Fabric/release-line handoff below for any work in this checkout.
 

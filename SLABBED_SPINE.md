@@ -5,15 +5,17 @@ This file is the current repo-local truth for Codex. Keep it short. Update it af
 ## Current active root
 
 ```text
-/Users/joolmac/CascadeProjects/Slabbed-neoforge-1.21.1-port
+/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 ```
 
-This is a dedicated NeoForge 1.21.1 port worktree. Do not mutate these older Slabbed roots from this checkout:
+This checkout is now being used as the Forge 1.20.1 backport foundation branch.
+Do not mutate these other Slabbed roots from this checkout unless Julia explicitly
+opens that lane:
 
 ```text
-/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 /Users/joolmac/CascadeProjects/Slabbed
 /Users/joolmac/CascadeProjects/Slabbed-countered-compat-latest
+/Users/joolmac/CascadeProjects/Slabbed-neoforge-1.21.1-port
 ```
 
 Stop if the actual root does not match the intended current root.
@@ -21,7 +23,7 @@ Stop if the actual root does not match the intended current root.
 ## Current branch
 
 ```text
-port/neoforge-1.21.1
+codex/forge-1.20.1-backport-from-neoforge-042-beta2
 ```
 
 ## Current known-good savepoint
@@ -29,108 +31,133 @@ port/neoforge-1.21.1
 Commit:
 
 ```text
-b634da07
+2a3be274
 ```
 
 Tag:
 
 ```text
-save/neoforge-1-21-1-wysiwyg-parity-green
+release/neoforge-1.21.1-0.4.2-beta.2
 ```
 
-Pushed branch: yes, `origin/port/neoforge-1.21.1` matches HEAD
-Pushed tag: local tag present at HEAD; verify remote tag before relying on remote savepoint
+Pushed branch: no, this Forge branch is local foundation work.
+Pushed tag: donor release tag exists at HEAD.
 
-This is the current NeoForge 1.21.1 proof-backed WYSIWYG parity savepoint. Later
-local release-readiness hygiene changes may be dirty until committed.
+This branch intentionally starts from the NeoForge 1.21.1 beta.2 release tag,
+because Julia requested the Forge 1.20.1 backport begin from the latest
+`0.4.2-beta.2+1.21.1` NeoForge work.
 
-## Current proof-candidate state
+## Current foundation state
 
 ```text
-Release-readiness candidate is dirty after the WYSIWYG savepoint:
-- gameplay/parity source changes from the WYSIWYG slice
-- release hygiene cleanup in build.gradle and SlabbedClient.java
-- repo-local truth doc updates
-- evidence logs under tmp/
-No staged files expected unless Julia explicitly asks for a commit/savepoint.
+Book III entrypoint/lifecycle scaffold is compile-proven. The server-side Forge
+LevelChunk anchor store capability scaffold is compile-proven. The Forge
+regression-risk checklist is now the required canon gate before later
+networking/client sync, model loading, mixin, gametest, behavior parity, live,
+or release slices. Networking/client sync, model loading, mixins, gametest,
+runtime behavior, release, and live-profile work remain out of scope.
 ```
 
 ## Current objective
 
-Reach honest NeoForge 1.21.1 release-readiness for Slabbed
-`0.4.2-beta.1+26.2`: clean public jar, correct Modrinth staged candidate, green
-available GameTest proof, and no public upload without Julia's explicit release
-authorization.
+Set the first Forge project lane for Slabbed:
+
+- target Minecraft: 1.20.1
+- target loader: Forge
+- donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
+- current work type: Book III gameplay-facing SlabAnchorAttachment storage facade next
+- implementation status: server-side anchor store capability scaffold compile-proven; risk checklist required before risky migration slices
 
 ## Current blocker
 
 Visible symptom:
 
 ```text
-Standard Fabric-style `runClientGameTest` / `runGameTest` tasks do not exist in
-this NeoForge Gradle task graph; use the available `runServerGameTest` gate and
-report that deviation explicitly.
+Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
+server-side anchor store capability. Do not broaden the next compile failures
+into networking, model, mixin, gametest, or behavior parity migration.
 ```
 
 Failing layer:
 
 ```text
-proof/release-boundary, not a new gameplay red
+proof/scaffold boundary, not a gameplay red
 ```
 
 Protected invariant:
 
 ```text
-Do not ship proof/debug/test tooling in the public jar. Release claims require
-clean jar contents, clean bytecode hard-reference scans, compile/build proof,
-available GameTest proof, and clear caveats for any unavailable or lingering
-proof route.
+The Forge backport must preserve Slabbed's named legal state grammar, Visual
+Triad law, survival/placement/collision agreement, and release hygiene. Loader
+porting is not permission to change product behavior.
 ```
 
-Latest proof:
+Latest proof/foundation evidence:
 
 ```text
-2026-06-26 release-readiness hygiene bundle:
-- compile: tmp/neoforge-port-20260626/release-readiness/compile-release-hygiene-available.log
-  -> BUILD SUCCESSFUL
-- build: tmp/neoforge-port-20260626/release-readiness/clean-build-release-hygiene.log
-  -> BUILD SUCCESSFUL
-- server GameTest: tmp/neoforge-port-20260626/release-readiness/run-server-gametest-release-readiness.log
-  -> All 95 required tests passed :)
-- caveat: the server GameTest wrapper lingered after the green footer and had to
-  be interrupted, so this is not a natural zero-exit server proof.
-- jar/source/jdeps/javap leak scans under tmp/neoforge-port-20260626/release-readiness/
-  -> actual proof/debug/dev/test/trace leak scans are zero-line clean.
-- Modrinth candidate staged:
-  /Users/joolmac/Library/Application Support/ModrinthApp/profiles/SLABBED neoforge 1.21.1/mods/slabbed-0.4.2-beta.1+26.2.jar
-  SHA-256: 4afb4d8ae9c508498db07e954d351cbcf697151d3f93f25f769b0e1f39b7186c
-- post-hygiene live smoke:
-  tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-first-window.png
-  tmp/neoforge-port-20260626/release-readiness/live-post-hygiene-dripstone-fixture.png
-  -> intended Modrinth profile/world launched, staged jar loaded, dripstone visual
-     smoke captured, proof/debug/error log scans clean.
+Preflight on this branch:
+- root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
+- branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
+- HEAD: 2a3be274
+- tag at HEAD: release/neoforge-1.21.1-0.4.2-beta.2
+
+Donor build truth at HEAD:
+- Minecraft 1.21.1
+- NeoForge ModDev plugin 2.0.141
+- NeoForge 21.1.233
+- Java toolchain/release 21
+- Forgified Fabric API 0.116.7+2.2.4+1.21.1
+- mod_version 0.4.2-beta.2+1.21.1
+
+Forge 1.20.1 toolchain truth:
+- Forge 1.20.1-47.4.20
+- ForgeGradle 6.0.54 exact pin; official MDK allows [6.0,6.2)
+- Gradle wrapper 8.8
+- Java 17
+- Mojang official mappings 1.20.1
+- descriptor: META-INF/mods.toml
+- mod loader: javafml, loader range [47,)
+- Book III scaffold proof: ./gradlew --no-daemon compileJava -> BUILD SUCCESSFUL
+- Book III server anchor capability proof: ./gradlew --no-daemon compileJava -> BUILD SUCCESSFUL
+- style proof: git diff --check -> clean
+
+Book III attachment/persistence decision:
+- decision doc: docs/porting/mc-1.20.1-forge-attachment-persistence-decision.md
+- chosen path: Forge LevelChunk capability
+- not chosen as primary store: SavedData
+- client sync: separate later slice, not part of server persistence decision
+- server capability scaffold: one SlabAnchorStore per LevelChunk capability, eight long-set marker buckets
+- not yet migrated: gameplay-facing SlabAnchorAttachment public facade, client mirror, non-Level render fallback
+- required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
 Live status:
 
 ```text
-Latest local live/cruise proof before release hygiene confirmed the major
-reported WYSIWYG/dripstone/redstone-torch fixes in the Modrinth profile.
-Post-hygiene smoke also confirms the cleaned staged jar launches in the intended
-profile/world and renders existing dripstone fixtures without proof/debug/error
-log leakage. This is a smoke proof, not a full manual replay of every scenario.
+No Forge 1.20.1 live proof exists yet. NeoForge 1.21.1 proof does not prove the
+Forge 1.20.1 backport. It is donor evidence only.
+
+Julia cannot be the live runner while asleep. When a later slice reaches a live
+gate, Codex must use cruise-control style live driving against the exact real
+Minecraft/Modrinth profile, jar, and world. Auto/dev runs do not count as live
+proof: runClient, runServer, runGameTest, runServerGameTest, runClientGameTest,
+or other automated dev-client paths are technical support evidence only.
 ```
 
-## NeoForge port bootstrap notes (2026-06-15)
+## Forge 1.20.1 bootstrap notes (2026-06-28)
 
 Read first:
 
 ```text
 HANDOFF.md
+docs/porting/mc-1.20.1-forge-foundation.md
+AGENTS.md
+SLABBED_SPINE.md
 build.gradle
 settings.gradle
 gradle.properties
-src/main/resources/fabric.mod.json
+src/main/resources/META-INF/neoforge.mods.toml
+src/main/resources/META-INF/mods.toml
 src/main/java/com/slabbed/Slabbed.java
 src/client/java/com/slabbed/client/SlabbedClient.java
 src/client/java/com/slabbed/client/SlabbedModelLoadingPlugin.java
@@ -141,18 +168,24 @@ src/client/java/com/slabbed/client/SlabAnchorClientSync.java
 Known starting facts:
 
 ```text
-The worktree is still Fabric Loom/Yarn/Fabric-loader based. Main/client
-entrypoints are Fabric ModInitializer/ClientModInitializer. The model hook uses
-Fabric ModelLoadingPlugin. Anchor storage and client sync use Fabric attachment
-and client-event APIs. Existing gametest wiring is Fabric-specific and must be
-treated as unproven for NeoForge.
+The donor release tag is NeoForge 1.21.1, not Forge 1.20.1. It uses ModDev,
+Java 21, NeoForge metadata, and FFAPI as a compatibility bridge. Every loader,
+mapping, entrypoint, model hook, attachment/capability, networking, and proof
+harness decision must be re-verified for Forge 1.20.1 before code moves.
+The current Forge scaffold intentionally compiles only com/slabbed/Slabbed.java
+and the isolated server anchor capability classes until later slices port each
+loader API surface deliberately.
+
+Before any later networking/client sync, model loading, mixin, gametest,
+behavior parity, live-proof, or release slice, read and apply:
+docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
-Stale descriptor warning:
+Descriptor warning:
 
 ```text
-Top-level fabric.mod.json says 0.1.2-alpha, MIT, and minecraft 1.21.11. Do not
-use it as the NeoForge port descriptor.
+Do not use the NeoForge descriptor, FFAPI dependency, or Java 21 toolchain as
+Forge 1.20.1 truth. They are donor facts only.
 ```
 
 ## Deferred visual/culling REDs
@@ -200,39 +233,40 @@ tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 Type:
 
 ```text
-neoforge-release-readiness-closure
+forge-1.20.1-anchor-store-capability-server
 ```
 
 Allowed files:
 
 ```text
-Only the dirty release-readiness candidate files already in scope, proof logs
-under tmp/, and savepoint/release metadata if Julia explicitly authorizes the
-next gate.
+Only the minimum server-side attachment/persistence source/build files needed to
+compile a Forge LevelChunk capability anchor store. Start by preserving
+SlabAnchorAttachment public methods and legal-state behavior.
 ```
 
 Forbidden files:
 
 ```text
-Original source checkout roots, unrelated gameplay rewrites, deletion of
-evidence, public upload/release, and any tag/push/commit not explicitly
-authorized for the next savepoint.
+Networking/client sync migration, model loading migration, mixin/gameplay
+behavior migration, gametest migration, release metadata, Modrinth/GitHub
+publishing, commits/tags/pushes, and any behavioral porting beyond the named
+server-side anchor-store slice.
 ```
 
 Required proof:
 
 ```text
-Before savepoint or public release, rerun/confirm final preflight, diff scope,
-clean build, available GameTest, jar contents scan, jdeps scan, staged-jar SHA,
-and any Julia-requested live Modrinth smoke.
+For the next slice, prove server-side anchor store migration with
+./gradlew --no-daemon compileJava plus git diff --check. Do not claim client
+mirror, render fallback, save/reload, or live behavior until later proof.
 ```
 
 Stop condition:
 
 ```text
-Wrong root/branch/HEAD, staged changes, unexpected dirty files, proof
-regression, public-jar leak, profile jar SHA mismatch, or any public release
-action without Julia's explicit authorization.
+Wrong root/branch/HEAD, staged changes, unexpected tracked dirty files, missing
+Forge version truth, code edit before scaffold plan, or any attempt to claim
+Forge runtime proof from NeoForge evidence or auto/dev runs.
 ```
 
 ## Do not touch boundaries
