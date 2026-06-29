@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 post-registration-proof roadmap alignment (2026-06-29)
+# HANDOFF - Forge 1.20.1 model-wrapper render-view proof gate (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `d029de0c`
-- Tag at HEAD: `save/forge-1-20-1-model-wrapper-registration-proof`
+- HEAD: `022320b8`
+- Tag at HEAD: `save/forge-1-20-1-post-registration-proof-roadmap-alignment`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: none; docs/front-door alignment only
+- Code changes this slice: none; source-backed proof docs only
 
 ## Current state
 
@@ -32,11 +32,12 @@ Visual Triad proof, live proof, or release work, and it is savepointed at
 `68c2c330`. The model-wrapper registration scaffold is compile-proven and
 savepointed at `721e589f`. The post-model-wrapper roadmap alignment is
 savepointed at `139a15d2`. The source-backed model-wrapper registration proof is
-`registration-proven` and savepointed at `d029de0c`. The active lane is
-docs-only post-registration-proof roadmap alignment before any render-view proof,
-culling, Visual Triad, gametest, live, release, or next implementation claim. The
-branch is intentionally based at the NeoForge beta.2 release tag because Julia
-requested the Forge 1.20.1 backport use the latest NeoForge
+`registration-proven` and savepointed at `d029de0c`. The post-registration-proof
+roadmap alignment is savepointed at `022320b8`. The active lane is the
+source-backed model-wrapper render-view proof gate before any culling, Visual
+Triad, gametest, live, release, or next implementation claim. The branch is
+intentionally based at the NeoForge beta.2 release tag because Julia requested
+the Forge 1.20.1 backport use the latest NeoForge
 `0.4.2-beta.2+1.21.1` work as the donor.
 
 Existing untracked `tmp/` evidence folders are present in the worktree. Treat
@@ -97,13 +98,16 @@ evidence only.
 - Started proof gate `forge-1.20.1-model-wrapper-registration-proof-gate`.
 - Closed the model-wrapper registration proof savepoint at `d029de0c` and pushed branch/tag.
 - Started docs-only `forge-1.20.1-post-registration-proof-roadmap-alignment`.
+- Closed the post-registration-proof roadmap alignment savepoint at `022320b8` and pushed branch/tag.
+- Started proof gate `forge-1.20.1-model-wrapper-render-view-proof-gate`.
+- Recorded source-backed `render-view-proven` evidence in `docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md`.
 - Model loading, mixins, gametest, behavior parity, Visual Triad proof, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Finish docs-only `forge-1.20.1-post-registration-proof-roadmap-alignment` with `git diff --check`.
-2. If proof-clean and dirty, open a separate savepoint closure for the alignment docs.
-3. After that savepoint, route `forge-1.20.1-model-wrapper-render-view-proof-gate` before any culling, Visual Triad, block-entity, entity-renderer, gametest, live, or release claims.
+1. Close a separate savepoint for `forge-1.20.1-model-wrapper-render-view-proof-gate` if `git diff --check` remains clean.
+2. After that savepoint, route any culling/rendered-model/Visual Triad decision separately.
+3. Do not start culling, Visual Triad, block-entity, entity-renderer, gametest, live, behavior, or release work from this proof gate.
 
 ## Do not start yet
 
@@ -123,8 +127,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: d029de0c
-tag at HEAD: save/forge-1-20-1-model-wrapper-registration-proof
+HEAD: 022320b8
+tag at HEAD: save/forge-1-20-1-post-registration-proof-roadmap-alignment
 ```
 
 Branch donor evidence:
@@ -317,14 +321,21 @@ forge-1.20.1-model-wrapper-render-view-proof-gate
 
 Registration proof doc:
 docs/porting/mc-1.20.1-forge-model-wrapper-registration-proof.md
+
+Render-view proof:
+source-backed render-view-proven, savepoint pending
+
+Render-view proof doc:
+docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md
 ```
 
 ## Stop condition reached
 
-Reached for the registration proof route. The model-wrapper registration
-scaffold is compile-proven and savepointed, and the source-backed registration
-proof is savepointed. This alignment slice must stop after front-door docs and
-`git diff --check`; render-view/model-data proof is a separate route.
+Reached for the render-view proof route, scoped only to source-backed
+model-wrapper render-view context and non-`Level` client-mirror lookup truth. The
+dirty docs must stop for a separate savepoint closure after `git diff --check`;
+culling, Visual Triad, rendered-model, gametest, live, behavior, and release
+proof remain separate routes.
 
 ---
 

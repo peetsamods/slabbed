@@ -356,9 +356,12 @@ Book III next loader API migration slice:
 12. Model-wrapper registration proof is source-backed `registration-proven` and
    savepointed at `d029de0c` with tag
    `save/forge-1-20-1-model-wrapper-registration-proof`.
-13. Current docs-only route is
-   `forge-1.20.1-post-registration-proof-roadmap-alignment`.
-14. Next legal route after this alignment is savepointed is
-   `forge-1.20.1-model-wrapper-render-view-proof-gate`.
-15. Preserve legal state grammar and gameplay behavior.
-16. Prove each next slice with the narrow proof required by the risk checklist.
+13. Post-registration-proof roadmap alignment is docs-proven and savepointed at
+   `022320b8` with tag
+   `save/forge-1-20-1-post-registration-proof-roadmap-alignment`.
+14. Model-wrapper render-view proof is source-backed `render-view-proven`;
+   savepoint pending.
+15. Current legal route is
+   `forge-1.20.1-model-wrapper-render-view-proof-savepoint`.
+16. Preserve legal state grammar and gameplay behavior.
+17. Prove each next slice with the narrow proof required by the risk checklist.

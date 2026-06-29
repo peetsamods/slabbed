@@ -71,11 +71,15 @@ Proven on this Forge branch:
 - model-wrapper registration proof gate, source-backed `registration-proven` and
   savepointed at `d029de0c` /
   `save/forge-1-20-1-model-wrapper-registration-proof`
+- post-registration-proof roadmap alignment, docs-proven and savepointed at
+  `022320b8` /
+  `save/forge-1-20-1-post-registration-proof-roadmap-alignment`
+- model-wrapper render-view proof gate, source-backed `render-view-proven`;
+  savepoint pending
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
 
-- model wrapper render-view/model-data proof
 - rendered model behavior
 - mixins
 - gametest/proof harness migration

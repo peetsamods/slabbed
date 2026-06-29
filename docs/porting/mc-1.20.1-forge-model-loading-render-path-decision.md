@@ -310,6 +310,18 @@ Next route after post-registration-proof roadmap alignment is savepointed:
 forge-1.20.1-model-wrapper-render-view-proof-gate
 ```
 
+Status:
+
+```text
+source-backed render-view-proven; savepoint pending
+```
+
+Proof record:
+
+```text
+docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md
+```
+
 ## Stop Conditions for Later Implementation
 
 Stop partial if:
