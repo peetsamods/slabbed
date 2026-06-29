@@ -56,9 +56,9 @@ public final class SlabAnchorAttachment {
     /**
      * Client-side fallback for anchor queries issued by chunk render paths that
      * receive a non-{@link Level} {@link BlockGetter}
-     * (e.g. {@code ChunkRendererRegion}).  Set by the client entrypoint; always
-     * null on a dedicated server.  No {@code MinecraftClient} reference needed
-     * in common code.
+     * (e.g. {@code ChunkRendererRegion}). Set by the client-only mirror event
+     * bridge; always null on a dedicated server. No {@code Minecraft} reference
+     * needed in common code.
      */
     public static Predicate<BlockPos> clientAnchorLookup = null;
     public static Predicate<BlockPos> clientFrozenFlatLookup = null;

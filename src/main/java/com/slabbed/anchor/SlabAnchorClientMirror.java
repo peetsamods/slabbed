@@ -11,8 +11,8 @@ import net.minecraft.resources.ResourceLocation;
  *
  * <p>The server {@link SlabAnchorStore} remains authoritative. This mirror is a
  * compact client read model keyed by dimension, chunk, and marker so client
- * {@code Level} queries can see the same anchor truth after Forge network sync.
- * Non-Level render-view predicates are intentionally not wired in this slice.</p>
+ * {@code Level} queries and client non-Level render-view predicates can see the
+ * same anchor truth after Forge network sync. It does not own dy or support law.</p>
  */
 public final class SlabAnchorClientMirror {
     private static final ConcurrentMap<BucketKey, LongOpenHashSet> BUCKETS =
