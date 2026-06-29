@@ -35,10 +35,15 @@ sourceSets {
             include "com/slabbed/compat/terrainslabs/TerrainSlabsCompat.java"
             include "com/slabbed/placement/SlabbedPlacementEvents.java"
             include "com/slabbed/client/ClientDy.java"
+            include "com/slabbed/client/SlabbedClientFlags.java"
             include "com/slabbed/client/SlabbedClient.java"
             include "com/slabbed/client/SlabbedModelLoadingPlugin.java"
+            include "com/slabbed/client/OffsetOutlineEvents.java"
+            include "com/slabbed/client/OffsetTargetingEvents.java"
+            include "com/slabbed/client/TargetDyOverlay.java"
             include "com/slabbed/client/model/OffsetBlockStateModel.java"
             include "com/slabbed/util/RuntimeDiagnostics.java"
+            include "com/slabbed/util/SlabbedOffsetRaycast.java"
             include "com/slabbed/util/SlabSupport.java"
         }
         resources {
