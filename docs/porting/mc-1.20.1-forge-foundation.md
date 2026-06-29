@@ -363,7 +363,13 @@ Book III next loader API migration slice:
 15. Post-render-view-proof roadmap alignment savepoint is complete at `70e90d94` with tag `save/forge-1-20-1-post-render-view-proof-roadmap-alignment`.
 16. Current legal route is docs/audit `forge-1.20.1-rendered-model-culling-triad-decision`, before any culling, rendered-model, or Visual Triad implementation/proof execution.
 17. Rendered-model/culling/triad decision savepoint is complete at `23251ced` with tag `save/forge-1-20-1-rendered-model-culling-triad-decision`.
-18. Current legal route is concrete proof gate `forge-1.20.1-rendered-block-model-evidence-proof-gate`.
-19. After this proof is savepointed, remaining culling, full Visual Triad, live, and behavior work should be treated as Book IV behavior/proof gates unless a later concrete slice finds a loader/API gap.
-20. Preserve legal state grammar and gameplay behavior.
-21. Prove each next slice with the narrow proof required by the risk checklist.
+18. Rendered block-model evidence proof is source/bytecode-backed
+    `rendered-block-model-evidence-proven` and savepointed at `d435fcbc` with
+    tag `save/forge-1-20-1-rendered-block-model-evidence-proof`.
+19. Current legal route is Book IV proof-selection gate
+    `forge-1.20.1-book-iv-ordinary-full-block-anchor-proof-selection`.
+20. First selected Book IV behavior route is
+    `forge-1.20.1-ordinary-full-block-on-bottom-slab-triad-and-behavior-proof`,
+    starting as a proof-gap/harness audit before Java behavior patching.
+21. Preserve legal state grammar and gameplay behavior.
+22. Prove each next slice with the narrow proof required by the risk checklist.

@@ -80,11 +80,13 @@ Proven on this Forge branch:
   `70e90d94` / `save/forge-1-20-1-post-render-view-proof-roadmap-alignment`
 - rendered-model/culling/triad decision, docs-proven and savepointed at
   `23251ced` / `save/forge-1-20-1-rendered-model-culling-triad-decision`
+- rendered block-model evidence proof, source/bytecode-backed
+  `rendered-block-model-evidence-proven` and savepointed at `d435fcbc` /
+  `save/forge-1-20-1-rendered-block-model-evidence-proof`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:
 
-- rendered block-model evidence until `forge-1.20.1-rendered-block-model-evidence-proof-gate` is savepointed
 - culling/render-path behavior
 - full Visual Triad agreement
 - mixins

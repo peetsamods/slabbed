@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 rendered block-model evidence proof (2026-06-29)
+# HANDOFF - Forge 1.20.1 Book IV first proof route (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `23251ced`
-- Tag at HEAD: `save/forge-1-20-1-rendered-model-culling-triad-decision`
+- HEAD: `d435fcbc`
+- Tag at HEAD: `save/forge-1-20-1-rendered-block-model-evidence-proof`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: none; source/bytecode-backed proof docs only
+- Code changes this slice: none; docs/proof-selection only
 
 ## Current state
 
@@ -33,7 +33,15 @@ Visual Triad proof, live proof, or release work, and it is savepointed at
 savepointed at `721e589f`. The post-model-wrapper roadmap alignment is
 savepointed at `139a15d2`. The source-backed model-wrapper registration proof is
 `registration-proven` and savepointed at `d029de0c`. The post-registration-proof
-roadmap alignment is savepointed at `022320b8`. The model-wrapper render-view proof is savepointed at `a3f5bed4`, the post-render-view-proof roadmap alignment is savepointed at `70e90d94`, and the rendered-model/culling/triad decision is savepointed at `23251ced`. The active lane is concrete proof gate `forge-1.20.1-rendered-block-model-evidence-proof-gate` before any culling, Visual Triad, gametest, live, release, or behavior claim. The branch is
+roadmap alignment is savepointed at `022320b8`. The model-wrapper render-view
+proof is savepointed at `a3f5bed4`, the post-render-view-proof roadmap alignment
+is savepointed at `70e90d94`, the rendered-model/culling/triad decision is
+savepointed at `23251ced`, and the rendered block-model evidence proof is
+savepointed at `d435fcbc` /
+`save/forge-1-20-1-rendered-block-model-evidence-proof`. The active lane is
+Book IV proof selection for the first ordinary full-block behavior/triad route,
+before any culling, Visual Triad execution, gametest/proof harness migration,
+live, release, or behavior claim. The branch is
 intentionally based at the NeoForge beta.2 release tag because Julia requested
 the Forge 1.20.1 backport use the latest NeoForge
 `0.4.2-beta.2+1.21.1` work as the donor.
@@ -99,13 +107,25 @@ evidence only.
 - Closed the post-registration-proof roadmap alignment savepoint at `022320b8` and pushed branch/tag.
 - Completed proof gate `forge-1.20.1-post-render-view-proof-roadmap-alignment` and savepointed it at `a3f5bed4` / `save/forge-1-20-1-model-wrapper-render-view-proof`.
 - Recorded source-backed `render-view-proven` evidence in `docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md`; rendered model behavior, culling, Visual Triad, live proof, and behavior parity remain unproven.
-- Model loading, mixins, gametest, behavior parity, Visual Triad proof, release, and live-profile work remain untouched.
+- Closed the rendered-model/culling/triad decision savepoint at `23251ced` and pushed branch/tag.
+- Recorded `rendered-block-model-evidence-proven` for the named
+  `minecraft:stone` ordinary full block anchored on a bottom slab fixture at
+  `d435fcbc` / `save/forge-1-20-1-rendered-block-model-evidence-proof`.
+- Started docs-only Book IV proof-route selection and chose the ordinary
+  full-block-on-bottom-slab triad/behavior route as the first behavior proof
+  lane, with execution blocked until a later proof-gap/harness slice.
+- Mixins, gametest/proof harness migration, behavior parity, full Visual Triad
+  proof, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Close a separate savepoint for `forge-1.20.1-post-render-view-proof-roadmap-alignment` if `git diff --check` remains clean.
-2. After that savepoint, route any culling/rendered-model/Visual Triad decision separately.
-3. Do not start culling, Visual Triad, block-entity, entity-renderer, gametest, live, behavior, or release work from this proof gate.
+1. Close a separate docs savepoint for the Book IV proof-route selection if
+   `git diff --check` remains clean.
+2. Next worker should start `forge-1.20.1-ordinary-full-block-on-bottom-slab-triad-and-behavior-proof`
+   as a proof-gap/harness audit before Java behavior patching.
+3. Do not start culling, Visual Triad execution, block-entity, entity-renderer,
+   gametest/proof harness migration, live, behavior, or release work from this
+   planning gate.
 
 ## Do not start yet
 
@@ -125,8 +145,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: a3f5bed4
-tag at HEAD: save/forge-1-20-1-model-wrapper-render-view-proof
+HEAD: d435fcbc
+tag at HEAD: save/forge-1-20-1-rendered-block-model-evidence-proof
 ```
 
 Branch donor evidence:
@@ -314,8 +334,15 @@ Registration proof:
 source-backed registration-proven and savepointed at
 d029de0c / save/forge-1-20-1-model-wrapper-registration-proof
 
-Next legal route after rendered-model/culling/triad decision is savepointed:
-forge-1.20.1-rendered-block-model-evidence-proof-gate
+Rendered block-model evidence proof:
+source/bytecode-backed rendered-block-model-evidence-proven and savepointed at
+d435fcbc / save/forge-1-20-1-rendered-block-model-evidence-proof
+
+Next legal route after rendered block-model evidence proof is savepointed:
+forge-1.20.1-book-iv-ordinary-full-block-anchor-proof-selection
+
+Book IV route doc:
+docs/porting/mc-1.20.1-forge-book-iv-first-proof-route.md
 
 Registration proof doc:
 docs/porting/mc-1.20.1-forge-model-wrapper-registration-proof.md
@@ -329,7 +356,12 @@ docs/porting/mc-1.20.1-forge-model-wrapper-render-view-proof.md
 
 ## Stop condition reached
 
-Reached for the rendered block-model evidence proof route, scoped to source/bytecode proof that the Forge wrapper can affect returned rendered block-model quads for a named lowered fixture. Dirty proof docs must be savepointed after `git diff --check`; culling, full Visual Triad, gametest, live, behavior, and release proof remain separate routes.
+Reached for the Book IV first proof-route selection, scoped to choosing the
+ordinary full-block-on-bottom-slab triad/behavior route from the clean Book III
+loader/API savepoint. Dirty proof-route docs must be savepointed after
+`git diff --check`; Java, Gradle, mixin, gametest/proof harness migration,
+culling, full Visual Triad execution, live, behavior, and release work remain
+separate routes.
 
 ---
 
@@ -514,7 +546,13 @@ The "live blocked" notifications were macOS asking Julia to approve each compute
 
 ## Current decision update (2026-06-29)
 
-The active concrete proof slice is `forge-1.20.1-rendered-block-model-evidence-proof-gate`.
-It preserves `registration-proven` and `render-view-proven` as limited source-backed claims and proves whether the Forge wrapper returns translated rendered block-model quads for a named lowered fixture.
+The active concrete proof-selection slice is
+`forge-1.20.1-book-iv-ordinary-full-block-anchor-proof-selection`.
+It preserves `registration-proven`, `render-view-proven`, and
+`rendered-block-model-evidence-proven` as limited source-backed claims and
+chooses the first Book IV behavior route for the same named ordinary full-block
+fixture.
 
-Next legal route after this proof is savepointed: Book IV behavior/proof planning or the first narrow behavior proof gate, unless a concrete loader/API gap appears.
+Next legal route after this docs slice is savepointed:
+`forge-1.20.1-ordinary-full-block-on-bottom-slab-triad-and-behavior-proof`,
+starting as a proof-gap/harness audit before Java behavior patching.

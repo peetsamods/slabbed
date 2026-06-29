@@ -184,10 +184,10 @@ Rows intentionally not touched:
 - exact live profile, jar, and world proof
 - release jar and bytecode hygiene
 
-## Next Legal Route
+## Historical Next Legal Route
 
-If this decision slice is proof-clean and later savepointed, the next legal route
-is:
+When this decision slice was proof-clean and later savepointed, the next legal
+route was:
 
 ```text
 forge-1.20.1-rendered-block-model-evidence-proof-gate
@@ -215,13 +215,22 @@ Stop partial if:
 The decision savepoint is complete at `23251ced` /
 `save/forge-1-20-1-rendered-model-culling-triad-decision`.
 
+The rendered block-model evidence proof is complete at `d435fcbc` /
+`save/forge-1-20-1-rendered-block-model-evidence-proof` with the limited label:
+
+```text
+rendered-block-model-evidence-proven
+```
+
+It does not claim culling, full Visual Triad, live behavior, behavior parity, or
+release readiness.
+
 Current concrete route:
 
 ```text
-forge-1.20.1-rendered-block-model-evidence-proof-gate
+forge-1.20.1-book-iv-ordinary-full-block-anchor-proof-selection
 ```
 
-That route may claim only `rendered-block-model-evidence-proven` if it ties the
-Forge wrapper to renderer-consumed baked quad output for a named lowered fixture.
-It may not claim culling, full Visual Triad, live behavior, behavior parity, or
-release readiness.
+That route is a docs/proof-selection gate for the first Book IV behavior proof.
+It may not execute Java, Gradle, mixin, gametest, live, culling, release, or
+behavior work.
