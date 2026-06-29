@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 Book IV live/client triad route correction (2026-06-29)
+# HANDOFF - Forge 1.20.1 Book IV live/client triad RED capture setup (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `192b0098`
-- Tag at HEAD: `save/forge-1-20-1-client-runtime-triad-harness-audit`
+- HEAD: `613ff98e`
+- Tag at HEAD: `save/forge-1-20-1-book-iv-live-client-triad-route`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: none; route/status docs only
+- Code changes this slice: none; route/status docs savepointed
 
 ## Current state
 
@@ -50,12 +50,14 @@ proof-harness audit is savepointed at `192b0098` /
 `save/forge-1-20-1-client-runtime-triad-harness-audit`. Julia later rejected
 the automatic/dev-client `runClient` scaffold route for this Book IV Visual
 Triad lane; it must not be savepointed, revived, or treated as useful proof.
-The active lane is now a real client/live-authority triad RED/proof capture for
-the same fixture, before any client harness implementation, culling, mixin
-migration, release, broad gametest, behavior parity, or full Visual Triad
-claim. The branch is intentionally based at the NeoForge beta.2 release tag
-because Julia requested the Forge 1.20.1 backport use the latest NeoForge
-`0.4.2-beta.2+1.21.1` work as the donor.
+The live-client triad route correction is savepointed at `613ff98e` /
+`save/forge-1-20-1-book-iv-live-client-triad-route`. The active lane is now a
+real client/live-authority triad RED/proof capture for the same fixture, before
+any client harness implementation, culling, mixin migration, release, broad
+gametest, behavior parity, or full Visual Triad claim. The branch is
+intentionally based at the NeoForge beta.2 release tag because Julia requested
+the Forge 1.20.1 backport use the latest NeoForge `0.4.2-beta.2+1.21.1` work as
+the donor.
 
 Existing untracked `tmp/` evidence folders are present in the worktree. Treat
 them as pre-existing evidence noise and do not delete, stage, or rely on them
@@ -141,18 +143,18 @@ to drive the next route.
   `tmp/` evidence remains untracked evidence noise.
 - Updated route/status docs so Book IV proceeds through a real client/live-
   authority Visual Triad RED/proof capture, not another automatic harness.
+- Closed the live-client triad route correction savepoint at `613ff98e` /
+  `save/forge-1-20-1-book-iv-live-client-triad-route`.
 - Mixins, client runtime harness implementation, behavior parity, full Visual
   Triad proof, culling, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Close a separate docs savepoint for this route correction if
-   `git diff --check` remains clean.
-2. Next worker should start
+1. Next worker should start
    `forge-1.20.1-ordinary-full-block-live-client-triad-red-capture`.
-3. Do not start culling, cull-face relocation, mixin migration, behavior parity,
+2. Do not start culling, cull-face relocation, mixin migration, behavior parity,
    live proof, release work, broad gametest migration, or extra fixtures from
-   this audit gate.
+   this route gate.
 
 ## Do not start yet
 
@@ -174,8 +176,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: 192b0098
-tag at HEAD: save/forge-1-20-1-client-runtime-triad-harness-audit
+HEAD: 613ff98e
+tag at HEAD: save/forge-1-20-1-book-iv-live-client-triad-route
 ```
 
 Branch donor evidence:

@@ -98,6 +98,9 @@ Proven on this Forge branch:
 - superseding route correction: automatic/dev-client `runClient` scaffolds are
   abandoned for this Book IV Visual Triad lane and must not be used as useful
   proof
+- Book IV live-client triad route correction, docs-proven and savepointed at
+  `613ff98e` /
+  `save/forge-1-20-1-book-iv-live-client-triad-route`
 - `git diff --check` for completed scaffold/docs slices
 
 Not proven on this Forge branch:

@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-192b0098
+613ff98e
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-client-runtime-triad-harness-audit
+save/forge-1-20-1-book-iv-live-client-triad-route
 ```
 
-Pushed branch: yes, through the Forge client-runtime triad harness audit savepoint.
-Pushed tag: yes, `save/forge-1-20-1-client-runtime-triad-harness-audit`.
+Pushed branch: yes, through the Forge Book IV live-client triad route savepoint.
+Pushed tag: yes, `save/forge-1-20-1-book-iv-live-client-triad-route`.
 
 Donor release tag at parent foundation base:
 
@@ -84,11 +84,13 @@ creates real server anchor truth with `anchored=true`, `dy=-0.500000`,
 proof-harness audit is savepointed at `192b0098` /
 `save/forge-1-20-1-client-runtime-triad-harness-audit`. Julia rejected the
 later automatic `runClient` scaffold route; automatic/dev-client runs are not
-useful proof for this Book IV Visual Triad lane. The active Book IV lane must
-next capture a real client/live-authority Visual Triad RED or proof for that
-same fixture before implementation. The Forge regression-risk checklist remains
-required before culling, mixin, broader gametest, behavior parity, live, or
-release slices. Full Visual Triad, outline, raycast, culling, live behavior,
+useful proof for this Book IV Visual Triad lane. The live-client triad route
+correction is savepointed at `613ff98e` /
+`save/forge-1-20-1-book-iv-live-client-triad-route`. The active Book IV lane
+must next capture a real client/live-authority Visual Triad RED or proof for
+that same fixture before implementation. The Forge regression-risk checklist
+remains required before culling, mixin, broader gametest, behavior parity, live,
+or release slices. Full Visual Triad, outline, raycast, culling, live behavior,
 broad behavior parity, release, and live-profile work remain out of scope until
 separately authorized.
 ```
@@ -105,8 +107,9 @@ Set the first Forge project lane for Slabbed:
   the rendered block-model evidence proof savepoint; the exact server fixture is
   green at `6f05c9e8`; the client-runtime triad harness audit is savepointed at
   `192b0098`; the rejected automatic `runClient` scaffold must not be revived;
-  culling, full Visual Triad, live behavior, broad behavior parity, and release
-  readiness are not proven
+  the live-client route correction is savepointed at `613ff98e`; culling, full
+  Visual Triad, live behavior, broad behavior parity, and release readiness are
+  not proven
 
 ## Current blocker
 
@@ -148,6 +151,8 @@ Current preflight/savepoint:
 - current tag at HEAD: save/forge-1-20-1-ordinary-full-block-anchor-behavior
 - current HEAD after client-runtime triad harness audit savepoint: 192b0098
 - current tag at HEAD: save/forge-1-20-1-client-runtime-triad-harness-audit
+- current HEAD after live-client triad route savepoint: 613ff98e
+- current tag at HEAD: save/forge-1-20-1-book-iv-live-client-triad-route
 
 Donor build truth at parent foundation base:
 - Minecraft 1.21.1
@@ -204,6 +209,7 @@ Book III attachment/persistence decision:
 - superseding correction: automatic/dev-client `runClient` scaffolds are
   abandoned for this Book IV Visual Triad lane and must not be used as useful
   proof
+- live-client triad route correction: savepointed at 613ff98e
 - active proof-gap route:
   forge-1.20.1-ordinary-full-block-live-client-triad-red-capture
 - route doc:
