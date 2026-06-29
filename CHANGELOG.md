@@ -1,8 +1,35 @@
-## [Unreleased]
+# Changelog
 
-### Docs
-- Added external findings log: `tools/terrain-slabs-window-claude-findings-2026-06-01.md` summarizing Claude's latest terrain-slab "window" investigation timeline, claimed commits/proofs, and unresolved live-status endpoint.
-- Added recorder infra slice thread record (`019e9531-58e5-7013-a1d1-9dabe9e215d7`): recorder mixins optionalized, contract artifacts hardened (`manifest.json`, `summary.json`, `summary.md`, `session.jsonl`, `actions.tsv`, `mismatches.tsv`), action ledger/backfill stabilized, and non-recorder gameplay logic kept untouched.
+All notable, player-facing changes are listed here. Slabbed ships a separate file per
+Minecraft version; entries note which versions/loaders a change applies to. For the exact
+latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
+
+## [0.4.2] — Ports: 1.21.1 + Minecraft 26.x
+
+### Added
+- **Minecraft 1.21.1 port** — full Slabbed and Terrain Slabs compatibility, on **Fabric** and **NeoForge**.
+- **Minecraft 26.1 / 26.1.2 / 26.2 ports.**
+
+### Fixed
+- **Performance:** removed a per-block diagnostic code path that could cause frame-time spikes on some setups (notably under Sodium).
+
+## [0.4.0] — Terrain Slabs polish & the first port
+
+### Added
+- The cross-version release line begins here; the first **1.21.1** build ships alongside **1.21.11**.
+
+### Fixed
+- **Fences, walls, and panes** on a vanilla slab now render flush ([#21](https://github.com/peetsamods/slabbed/issues/21)).
+- **See-through "world holes"** with Terrain Slabs installed are fixed; opaque full cubes no longer lower onto Terrain Slabs surfaces incorrectly.
+- **Terrain Slabs vegetation** no longer double-offsets (sunk / invisible grass).
+- **Hanging lanterns** sit flush under a flush Terrain Slabs slab (no half-block gap).
+- **Ceiling-hung decorations** take their offset from the support *above* only.
+- **Vertical combined-slab stacks** lower fully (−1.0) instead of floating.
+
+### Changed
+- Placed blocks **lock their height** on placement (a "never-pop" rule) so they don't auto-adjust after the fact.
+- Dropped the Indium recommendation on 1.21.11 (Sodium 0.6+ ships FRAPI).
 
 ## [0.3.0-beta.1] — Terrain Slabs Compatibility
 
