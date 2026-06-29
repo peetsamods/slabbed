@@ -4,7 +4,13 @@
   "version": "1.0.0",
   "name": "Slabbed GameTest",
   "environment": "*",
+  "provides": [
+    "terrain_slabs"
+  ],
   "entrypoints": {
+    "main": [
+      "com.slabbed.test.Slabbed1211StandardChecklistHeadlessTest$TerrainSlabsCompatTestEntrypoint"
+    ],
     "client": [
       "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint"
     ],
