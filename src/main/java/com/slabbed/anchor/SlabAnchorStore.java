@@ -35,6 +35,7 @@ public final class SlabAnchorStore {
         if (changed) {
             putOrRemove(marker, set);
             markUnsaved();
+            SlabAnchorNetwork.syncBucket(owner, marker, set);
         }
         return changed;
     }
@@ -54,6 +55,7 @@ public final class SlabAnchorStore {
         if (changed) {
             putOrRemove(marker, set);
             markUnsaved();
+            SlabAnchorNetwork.syncBucket(owner, marker, set);
         }
         return changed;
     }
@@ -62,11 +64,13 @@ public final class SlabAnchorStore {
         LongOpenHashSet set = positions == null ? new LongOpenHashSet() : new LongOpenHashSet(positions);
         putOrRemove(marker, set);
         markUnsaved();
+        SlabAnchorNetwork.syncBucket(owner, marker, set);
     }
 
     public void clear(SlabAnchorMarker marker) {
         if (buckets.remove(marker) != null) {
             markUnsaved();
+            SlabAnchorNetwork.syncBucket(owner, marker, new LongOpenHashSet());
         }
     }
 

@@ -33,7 +33,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * broken/replaced.
  *
  * <p>Storage: per-{@link LevelChunk} Forge capability store of packed
- * {@link BlockPos} longs. Client sync is intentionally a later Forge slice.
+ * {@link BlockPos} longs. Client {@link Level} mirrors are populated by the
+ * Forge anchor network; non-Level render-view lookup remains a later slice.
  *
  * <p>Scope: ordinary full-block vertical slab chains and accepted lowered slab
  * lane states only. No retroactive anchoring and no torch interaction.
@@ -114,6 +115,13 @@ public final class SlabAnchorAttachment {
             LevelChunk chunk,
             SlabAnchorMarker type
     ) {
+        if (chunk.getLevel().isClientSide()) {
+            return SlabAnchorClientMirror.copy(
+                    chunk.getLevel().dimension().location(),
+                    chunk.getPos().x,
+                    chunk.getPos().z,
+                    type);
+        }
         SlabAnchorStore store = getAnchorStore(chunk);
         return store == null ? null : store.copy(type);
     }
@@ -440,7 +448,7 @@ public final class SlabAnchorAttachment {
         BlockState stateBefore = RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()
                 ? world.getBlockState(pos) : null;
         if (set.add(pos.asLong())) {
-            // setData marks the chunk unsaved and triggers auto-sync for synced attachments.
+            // Forge capabilities mark the chunk unsaved; SlabAnchorNetwork mirrors this bucket to clients.
             setAttachment(chunk, type, set);
             if (TRACE) {
                 Slabbed.LOGGER.info("[ANCHOR] {} add success pos={} chunk={} setSize={}",
