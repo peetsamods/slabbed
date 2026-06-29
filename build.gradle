@@ -33,6 +33,7 @@ sourceSets {
             include "com/slabbed/anchor/SlabAnchorNetwork.java"
             include "com/slabbed/compat/CompatHooks.java"
             include "com/slabbed/compat/terrainslabs/TerrainSlabsCompat.java"
+            include "com/slabbed/placement/SlabbedPlacementEvents.java"
             include "com/slabbed/client/ClientDy.java"
             include "com/slabbed/client/SlabbedClient.java"
             include "com/slabbed/client/SlabbedModelLoadingPlugin.java"
@@ -41,12 +42,23 @@ sourceSets {
             include "com/slabbed/util/SlabSupport.java"
         }
         resources {
-            srcDir "src/main/resources"
+            setSrcDirs(["src/main/resources"])
             exclude "fabric.mod.json"
             exclude "META-INF/neoforge.mods.toml"
             exclude "slabbed.mixins.json"
             exclude "slabbed.debug.mixins.json"
         }
+    }
+    gametest {
+        java {
+            setSrcDirs(["src/gametest/java"])
+            include "com/slabbed/test/ForgeOrdinaryFullBlockAnchorGameTest.java"
+        }
+        resources {
+            setSrcDirs([])
+        }
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += output + compileClasspath
     }
 }
 
@@ -79,11 +91,35 @@ minecraft {
                 }
             }
         }
+        gameTestServer {
+            workingDirectory project.file("run")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            property "forge.gameTestServer", "true"
+            property "forge.enabledGameTestNamespaces", project.mod_id
+            args "--nogui"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                    source sourceSets.gametest
+                }
+            }
+        }
     }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
+}
+
+tasks.register("syncGameTestStructures", Sync) {
+    from("gameteststructures")
+    into(layout.projectDirectory.dir("run/gameteststructures"))
+}
+
+tasks.matching { it.name == "runGameTestServer" }.configureEach {
+    dependsOn(tasks.named("gametestClasses"))
+    dependsOn(tasks.named("syncGameTestStructures"))
 }
 
 tasks.named("processResources", ProcessResources).configure {
