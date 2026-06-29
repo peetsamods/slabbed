@@ -337,10 +337,13 @@ Book III next loader API migration slice:
    `save/forge-1-20-1-view-truth-order-decision`.
 4. Client anchor mirror sync savepoint is complete at `07776aad` with tag
    `save/forge-1-20-1-client-anchor-mirror-sync`.
-5. Active implementation is the non-`Level` render-view anchor lookup bridge
-   that wires existing fallback predicates to the client mirror.
-6. Keep model loading, mixins, gametests, and behavior parity out of scope until
-   persistence truth is available on every view that needs it.
-7. Preserve legal state grammar and gameplay behavior.
-8. Prove each next slice with `./gradlew --no-daemon compileJava` and
-   `git diff --check`, plus the narrow proof required by the risk checklist.
+5. Non-`Level` render-view anchor lookup savepoint is complete at `c69d8665`
+   with tag `save/forge-1-20-1-non-level-render-view-anchor-lookup`.
+6. Persistence truth is now available through the server capability, client
+   mirror, and non-`Level` lookup plumbing, but no model loading, mixin,
+   gametest, behavior parity, Visual Triad proof, live proof, or release gate is
+   proven.
+7. Next legal roadmap route is a docs/audit decision gate:
+   `forge-1.20.1-model-loading-render-path-decision`.
+8. Preserve legal state grammar and gameplay behavior.
+9. Prove each next slice with the narrow proof required by the risk checklist.

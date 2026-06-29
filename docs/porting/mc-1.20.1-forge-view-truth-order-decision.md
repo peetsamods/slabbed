@@ -126,13 +126,13 @@ views can read the same anchor/carrier truth as client `Level` queries.
 Recommended next implementation slice:
 
 ```text
-forge-1.20.1-client-anchor-mirror-sync
+complete: forge-1.20.1-client-anchor-mirror-sync
 ```
 
 Active implementation route:
 
 ```text
-forge-1.20.1-client-anchor-mirror-sync
+complete at 07776aad / save/forge-1-20-1-client-anchor-mirror-sync
 ```
 
 Boundaries for that slice:
@@ -151,7 +151,7 @@ Boundaries for that slice:
 Next slice after that:
 
 ```text
-forge-1.20.1-non-level-render-view-anchor-lookup
+complete: forge-1.20.1-non-level-render-view-anchor-lookup
 ```
 
 That later slice should wire the non-`Level` fallback predicates to the proven
@@ -161,7 +161,7 @@ Visual Triad claims.
 Active implementation route after client mirror savepoint:
 
 ```text
-forge-1.20.1-non-level-render-view-anchor-lookup
+complete at c69d8665 / save/forge-1-20-1-non-level-render-view-anchor-lookup
 ```
 
 Boundary:
@@ -171,6 +171,17 @@ Boundary:
 - do not add baked/model wrappers
 - do not migrate mixins
 - do not claim Visual Triad proof
+
+Post-lookup next legal route:
+
+```text
+forge-1.20.1-model-loading-render-path-decision
+```
+
+This is a docs/audit decision gate, not Java implementation. It should classify
+the Forge model-loading/render path, culling risk, and Visual Triad proof
+boundary before any model hooks, baked/model wrappers, mixins, gametest
+migration, behavior parity, or live-proof claims.
 
 ## Proof Status
 
@@ -185,9 +196,6 @@ Proven in this decision slice:
 
 Not proven:
 
-- client mirror implementation
-- networking packet shape
-- render-view bridge implementation
 - model loading/render hooks
 - Visual Triad agreement
 - save/reload behavior

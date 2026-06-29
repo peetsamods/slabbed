@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-39d523cb
+c69d8665
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-view-truth-order-decision
+save/forge-1-20-1-non-level-render-view-anchor-lookup
 ```
 
-Pushed branch: yes, through the Forge view-truth order decision savepoint.
-Pushed tag: yes, `save/forge-1-20-1-view-truth-order-decision`.
+Pushed branch: yes, through the Forge non-Level render-view anchor lookup savepoint.
+Pushed tag: yes, `save/forge-1-20-1-non-level-render-view-anchor-lookup`.
 
 Donor release tag at parent foundation base:
 
@@ -62,7 +62,7 @@ gameplay-facing SlabAnchorAttachment storage facade is compile-proven and
 savepointed. The view-truth order decision is docs-proven: networking/client
 mirror sync must come before the non-Level render-view bridge. The Forge
 client anchor mirror/network sync slice is compile-proven and savepointed. The
-non-Level render-view anchor lookup slice is now active. The Forge
+non-Level render-view anchor lookup slice is compile-proven and savepointed. The Forge
 regression-risk checklist remains required before model loading, mixin,
 gametest, behavior parity, live, or release slices. Model loading, mixins,
 gametest, runtime behavior, release, and live-profile work remain out of scope
@@ -76,8 +76,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III non-Level render-view anchor lookup implementation
-- implementation status: client mirror/network sync savepointed; non-Level lookup bridge active
+- current work type: Book III post-render-lookup roadmap alignment
+- implementation status: client mirror/network sync and non-Level lookup bridge savepointed
 
 ## Current blocker
 
@@ -86,9 +86,9 @@ Visible symptom:
 ```text
 Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
 server-side anchor store capability, gameplay-facing storage facade, and client
-mirror sync. The active implementation may only wire existing non-Level anchor
-fallback predicates to the client mirror, and must not broaden into model,
-mixin, gametest, Visual Triad proof, or behavior parity migration.
+mirror sync. The non-Level render-view anchor lookup bridge is now savepointed.
+The active docs-only lane is aligning stale front-door roadmap wording before
+any model loading, mixin, gametest, Visual Triad proof, or behavior parity work.
 ```
 
 Failing layer:
@@ -143,10 +143,10 @@ Book III attachment/persistence decision:
 - server capability scaffold: one SlabAnchorStore per LevelChunk capability, eight long-set marker buckets
 - gameplay-facing SlabAnchorAttachment storage facade: compile-proven and savepointed at c7a57620
 - client mirror/network sync: compile-proven and savepointed at 07776aad
-- not yet migrated: non-Level render fallback
+- non-Level render fallback lookup: compile-proven and savepointed at c69d8665
 - view-truth order decision: client mirror/network sync before non-Level render-view bridge
 - decision doc: docs/porting/mc-1.20.1-forge-view-truth-order-decision.md
-- active implementation slice: forge-1.20.1-non-level-render-view-anchor-lookup
+- active docs slice: forge-1.20.1-post-render-lookup-roadmap-alignment
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
@@ -252,32 +252,35 @@ tmp/mc1211-vbvs-vsvb-merge-red-20260610-matrix-red/
 Type:
 
 ```text
-forge-1.20.1-anchor-store-capability-server
+forge-1.20.1-model-loading-render-path-decision
 ```
 
 Allowed files:
 
 ```text
-Only the minimum server-side attachment/persistence source/build files needed to
-compile a Forge LevelChunk capability anchor store. Start by preserving
-SlabAnchorAttachment public methods and legal-state behavior.
+Docs/audit-only unless a later route explicitly authorizes implementation.
+Classify the Forge model-loading/render path, culling risk, and Visual Triad
+proof boundary now that server capability, client mirror, and non-Level lookup
+truth are savepointed.
 ```
 
 Forbidden files:
 
 ```text
-Networking/client sync migration, model loading migration, mixin/gameplay
-behavior migration, gametest migration, release metadata, Modrinth/GitHub
-publishing, commits/tags/pushes, and any behavioral porting beyond the named
-server-side anchor-store slice.
+Java/source/resource implementation, baked/model wrappers, mixins, gametest
+migration, behavior parity, Visual Triad proof claims, live proof, release
+metadata, Modrinth/GitHub publishing, commits/tags/pushes, and unrelated docs
+polish unless a later route explicitly authorizes that scope.
 ```
 
 Required proof:
 
 ```text
-For the next slice, prove server-side anchor store migration with
-./gradlew --no-daemon compileJava plus git diff --check. Do not claim client
-mirror, render fallback, save/reload, or live behavior until later proof.
+For the next docs/audit slice, prove with git diff --check and exact
+source/canon citations. If it becomes an implementation slice later, use
+./gradlew --no-daemon compileJava plus the model/render proof required by the
+Forge regression-risk checklist. Do not claim Visual Triad, behavior, or live
+proof from compile evidence.
 ```
 
 Stop condition:

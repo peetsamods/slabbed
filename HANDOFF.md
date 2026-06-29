@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 non-Level render-view anchor lookup implementation (2026-06-28)
+# HANDOFF - Forge 1.20.1 post-render-lookup roadmap alignment (2026-06-28)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `07776aad`
-- Tag at HEAD: `save/forge-1-20-1-client-anchor-mirror-sync`
+- HEAD: `c69d8665`
+- Tag at HEAD: `save/forge-1-20-1-non-level-render-view-anchor-lookup`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: non-Level render-view anchor lookup implementation
+- Code changes this slice: none; docs-only roadmap/front-door alignment
 
 ## Current state
 
@@ -26,7 +26,9 @@ The client mirror/network sync slice is compile-proven and savepointed. The
 active implementation slice wires the existing non-`Level` fallback predicates
 to the client mirror. It keeps server capability storage authoritative and does
 not add model hooks, baked/model wrappers, mixins, gametests, behavior parity,
-Visual Triad proof, live proof, or release work. The branch is intentionally
+Visual Triad proof, live proof, or release work, and it is savepointed at
+`c69d8665`. The active lane is docs-only front-door alignment before any model
+loading/render-path decision or implementation. The branch is intentionally
 based at the NeoForge beta.2 release tag because Julia requested the Forge
 1.20.1 backport use the latest NeoForge `0.4.2-beta.2+1.21.1` work as the donor.
 
@@ -75,14 +77,17 @@ evidence only.
 - Closed the client anchor mirror sync savepoint at `07776aad` and pushed branch/tag.
 - Started `forge-1.20.1-non-level-render-view-anchor-lookup`.
 - Wired the existing non-`Level` anchor fallback predicates to the client mirror through the client-only mirror event bridge.
+- Proved the non-`Level` lookup bridge with `./gradlew --no-daemon compileJava` and `git diff --check`.
+- Closed the non-`Level` render-view anchor lookup savepoint at `c69d8665` and pushed branch/tag.
+- Started docs-only `forge-1.20.1-post-render-lookup-roadmap-alignment` to remove stale active-slice pointers.
 - Model loading, mixins, gametest, behavior parity, Visual Triad proof, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Finish the `forge-1.20.1-non-level-render-view-anchor-lookup` proof gate in this implementation route.
-2. Re-run `./gradlew --no-daemon compileJava` and `git diff --check`.
-3. If proof-clean, open a separate savepoint closure for this implementation slice.
-4. After that savepoint, route the next Book III surface separately; do not jump straight to Visual Triad claims.
+1. Finish this docs-only roadmap alignment proof gate with `git diff --check`.
+2. If proof-clean and dirty, open a separate savepoint closure for the docs alignment.
+3. After that savepoint, route the next Book III surface separately.
+4. Recommended next route is a docs/audit model-loading/render-path decision gate, not Java implementation.
 
 ## Do not start yet
 
@@ -102,8 +107,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: 07776aad
-tag at HEAD: save/forge-1-20-1-client-anchor-mirror-sync
+HEAD: c69d8665
+tag at HEAD: save/forge-1-20-1-non-level-render-view-anchor-lookup
 ```
 
 Branch donor evidence:
@@ -230,7 +235,7 @@ Client mirror/network sync contract:
 
 ```text
 Active slice:
-forge-1.20.1-client-anchor-mirror-sync
+forge-1.20.1-client-anchor-mirror-sync, complete at 07776aad
 
 Shape:
 - server LevelChunk capability remains authoritative
@@ -248,7 +253,7 @@ Non-Level render-view lookup contract:
 
 ```text
 Active slice:
-forge-1.20.1-non-level-render-view-anchor-lookup
+forge-1.20.1-non-level-render-view-anchor-lookup, complete at c69d8665
 
 Shape:
 - SlabAnchorAttachment keeps the existing non-Level fallback predicate fields
@@ -260,10 +265,11 @@ Shape:
 
 ## Stop condition reached
 
-Not yet for this implementation route until the final compile/diff proof runs.
-Stop before model hooks, behavior parity, Visual Triad proof, commit/tag/push,
-or release work; if proof-clean, this dirty implementation slice needs a
-separate savepoint closure.
+Yes for the implementation route. The non-Level render-view lookup is
+compile-proven and savepointed. The current docs alignment stops before model
+hooks, behavior parity, Visual Triad proof, Java implementation, commit/tag/push,
+or release work; if proof-clean, this dirty docs slice needs a separate
+savepoint closure.
 
 ---
 
