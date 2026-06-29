@@ -1,4 +1,4 @@
-# HANDOFF - Forge 1.20.1 model-loading render-path decision (2026-06-29)
+# HANDOFF - Forge 1.20.1 model-wrapper registration scaffold (2026-06-29)
 
 This is the current handoff for the first Slabbed Forge project foundation.
 The older NeoForge handoff below is donor context only on this branch.
@@ -7,12 +7,12 @@ The older NeoForge handoff below is donor context only on this branch.
 
 - Root: `/Users/joolmac/CascadeProjects/Slabbed-phase19-integrate`
 - Branch: `codex/forge-1.20.1-backport-from-neoforge-042-beta2`
-- HEAD: `709a50bd`
-- Tag at HEAD: `save/forge-1-20-1-post-render-lookup-roadmap-alignment`
+- HEAD: `68c2c330`
+- Tag at HEAD: `save/forge-1-20-1-model-render-path-decision`
 - Target: Minecraft `1.20.1`, Forge
 - Donor version: NeoForge `0.4.2-beta.2+1.21.1`
 - Pushed branch: yes
-- Code changes this slice: none; docs-only model-loading/render-path decision
+- Code changes this slice: model-wrapper registration scaffold pending proof
 
 ## Current state
 
@@ -28,8 +28,9 @@ to the client mirror. It keeps server capability storage authoritative and does
 not add model hooks, baked/model wrappers, mixins, gametests, behavior parity,
 Visual Triad proof, live proof, or release work, and it is savepointed at
 `c69d8665`. The post-render-lookup roadmap alignment is savepointed at
-`709a50bd`. The active lane is docs-only model-loading/render-path decision
-before any model wrapper implementation. The branch is intentionally
+`709a50bd`. The model-loading/render-path decision is savepointed at
+`68c2c330`. The active lane is the bounded model-wrapper registration scaffold
+before any culling, Visual Triad, gametest, live, or release claim. The branch is intentionally
 based at the NeoForge beta.2 release tag because Julia requested the Forge
 1.20.1 backport use the latest NeoForge `0.4.2-beta.2+1.21.1` work as the donor.
 
@@ -83,14 +84,15 @@ evidence only.
 - Started docs-only `forge-1.20.1-post-render-lookup-roadmap-alignment` to remove stale active-slice pointers.
 - Closed the post-render-lookup roadmap alignment savepoint at `709a50bd` and pushed branch/tag.
 - Started docs-only `forge-1.20.1-model-loading-render-path-decision`.
+- Closed the model-loading/render-path decision savepoint at `68c2c330` and pushed branch/tag.
+- Started bounded implementation slice `forge-1.20.1-model-wrapper-registration-scaffold`.
 - Model loading, mixins, gametest, behavior parity, Visual Triad proof, release, and live-profile work remain untouched.
 
 ## Next owner actions
 
-1. Finish this docs-only model-loading/render-path decision proof gate with `git diff --check`.
-2. If proof-clean and dirty, open a separate savepoint closure for the docs decision.
-3. After that savepoint, route `forge-1.20.1-model-wrapper-registration-scaffold` separately.
-4. Do not jump from compile scaffolding to Visual Triad, culling, block-entity, entity-renderer, gametest, live, or release claims.
+1. Finish `forge-1.20.1-model-wrapper-registration-scaffold` with `./gradlew --no-daemon compileJava` and `git diff --check`.
+2. If proof-clean and dirty, open a separate savepoint closure for the scaffold.
+3. Do not jump from compile scaffolding to Visual Triad, culling, block-entity, entity-renderer, gametest, live, or release claims.
 
 ## Do not start yet
 
@@ -110,8 +112,8 @@ Preflight foundation state:
 ```text
 root: /Users/joolmac/CascadeProjects/Slabbed-phase19-integrate
 branch: codex/forge-1.20.1-backport-from-neoforge-042-beta2
-HEAD: 709a50bd
-tag at HEAD: save/forge-1-20-1-post-render-lookup-roadmap-alignment
+HEAD: 68c2c330
+tag at HEAD: save/forge-1-20-1-model-render-path-decision
 ```
 
 Branch donor evidence:
@@ -295,11 +297,9 @@ forge-1.20.1-model-wrapper-registration-scaffold
 
 ## Stop condition reached
 
-Yes for the implementation route. The non-Level render-view lookup is
-compile-proven and savepointed. The current docs decision stops before model
-hooks, behavior parity, Visual Triad proof, Java implementation, commit/tag/push,
-or release work; if proof-clean, this dirty docs decision needs a separate
-savepoint closure.
+Not yet for the active implementation route. The model-wrapper registration
+scaffold must still prove with `./gradlew --no-daemon compileJava` and
+`git diff --check`, then stop for a separate savepoint closure if proof-clean.
 
 ---
 

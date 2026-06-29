@@ -24,14 +24,13 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import net.neoforged.neoforge.client.model.BakedModelWrapper;
-import net.neoforged.neoforge.client.model.IQuadTransformer;
-import net.neoforged.neoforge.client.model.data.ModelData;
-import net.neoforged.neoforge.client.model.data.ModelProperty;
+import net.minecraftforge.client.model.BakedModelWrapper;
+import net.minecraftforge.client.model.IQuadTransformer;
+import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.ModelProperty;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
@@ -40,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Wraps a BakedModel with NeoForge-native diagnostics and slab-height cull handling.
+ * Wraps a BakedModel with Forge-native diagnostics and slab model translation.
  *
  * <p>Actual model lowering is applied to the returned baked quads so renderer replacements
  * still see the same dy that outline and raycast use.
@@ -282,8 +281,8 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
     }
 
     /**
-     * NeoForge baked-model path. This wrapper applies dy to baked quad vertices and moves
-     * slab-step cull faces into the unculled pass so lowered-vs-flat seams can draw.
+     * Forge baked-model path. This scaffold applies dy to baked quad vertices only.
+     * Slab-step cull handling remains intentionally deferred to a later culling slice.
      */
     @Override
     public List<BakedQuad> getQuads(
@@ -298,7 +297,7 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
         if (renderContext == null || state == null) {
             return baseQuads;
         }
-        return slabbed$neoForgeQuads(
+        return slabbed$forgeQuads(
                 renderContext.view(),
                 renderContext.pos(),
                 state,
@@ -318,7 +317,7 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
         return stack == null || stack.isEmpty() ? null : stack.peek();
     }
 
-    private List<BakedQuad> slabbed$neoForgeQuads(
+    private List<BakedQuad> slabbed$forgeQuads(
             BlockAndTintGetter view,
             BlockPos pos,
             BlockState state,
@@ -328,105 +327,20 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
             RenderType renderType,
             List<BakedQuad> baseQuads
     ) {
-        List<BakedQuad> chainCeilingQuads = ChainCeilingGeometry.quadsIfPresent(
-                view,
-                pos,
-                state,
-                side,
-                random,
-                renderType);
-        if (chainCeilingQuads != null) {
-            float dy = 0.0f;
-            String dySourcePath = "neoForgeGetQuads:ChainCeilingGeometry";
-            RuntimeDiagnostics.recordBeta4ModelDyTrace("neoForgeGetQuads", view, pos, state, dy);
-            slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
-            slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, dy, (float) ClientDy.dyFor(view, pos, state));
-            slabbed$recordModelDyOwnerSample(view, pos, state, dy);
-            slabbed$recordLegacyRenderOffsetSample(view, pos, state, dy);
-            slabbed$maybeLogAnchorTrace(view, pos, dy);
-
-            if (slabbed$fullMeshBoundsTraceArmed()) {
-                MeshBounds bounds = measureBounds(chainCeilingQuads, dy);
-                slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, originalModel, dy,
-                        chainCeilingQuads.size(),
-                        bounds.verticesVisited(),
-                        bounds.minBeforeY(),
-                        bounds.maxBeforeY(),
-                        bounds.minAfterY(),
-                        bounds.maxAfterY(),
-                        "chain_ceiling_alternate_geometry");
-            }
-            if (slabbed$isStepCullTracePos(pos)) {
-                slabbed$recordStepCullSample(
-                        view,
-                        pos,
-                        state,
-                        dy,
-                        false,
-                        chainCeilingQuads.size(),
-                        side == null ? 0 : chainCeilingQuads.size(),
-                        0,
-                        0,
-                        "none",
-                        "chain_ceiling_alternate_geometry");
-            }
-            return chainCeilingQuads;
-        }
-
         float dy = (float) ClientDy.dyFor(view, pos, state);
-        String dySourcePath = "neoForgeGetQuads:ClientDy";
-        RuntimeDiagnostics.recordBeta4ModelDyTrace("neoForgeGetQuads", view, pos, state, dy);
+        String dySourcePath = "forgeGetQuads:ClientDy";
+        RuntimeDiagnostics.recordBeta4ModelDyTrace("forgeGetQuads", view, pos, state, dy);
         slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
         slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, dy, dy);
         slabbed$recordModelDyOwnerSample(view, pos, state, dy);
         slabbed$recordLegacyRenderOffsetSample(view, pos, state, dy);
         slabbed$maybeLogAnchorTrace(view, pos, dy);
 
-        boolean clearStepCullFaces = slabbed$hasLoweredStepFace(view, pos, state);
-        boolean observeStepCull = slabbed$isStepCullTracePos(pos);
-        boolean stepSide = side != null && SlabSupport.isSlabHeightStepFace(view, pos, state, side);
-
-        List<BakedQuad> quads = baseQuads;
         int totalQuadsSeen = baseQuads.size();
-        int cullFacesSeen = side == null ? 0 : baseQuads.size();
-        int stepFacesSeen = 0;
-        int stepCullFacesCleared = 0;
-        StringBuilder clearedFaces = new StringBuilder();
-        String reason = "quad_translate";
-
-        if (clearStepCullFaces && stepSide) {
-            stepFacesSeen = baseQuads.size();
-            stepCullFacesCleared = baseQuads.size();
-            appendFace(clearedFaces, side);
-            quads = Collections.emptyList();
-            reason = "side_quads_relocated_to_unculled_pass";
-        } else if (clearStepCullFaces && side == null) {
-            ArrayList<BakedQuad> unculled = new ArrayList<>(baseQuads);
-            for (Direction direction : Direction.Plane.HORIZONTAL) {
-                if (!SlabSupport.isSlabHeightStepFace(view, pos, state, direction)) {
-                    continue;
-                }
-                List<BakedQuad> stepQuads = super.getQuads(state, direction, random, modelData, renderType);
-                if (stepQuads.isEmpty()) {
-                    continue;
-                }
-                stepFacesSeen += stepQuads.size();
-                stepCullFacesCleared += stepQuads.size();
-                cullFacesSeen += stepQuads.size();
-                totalQuadsSeen += stepQuads.size();
-                appendFace(clearedFaces, direction);
-                for (BakedQuad quad : stepQuads) {
-                    unculled.add(copyQuad(quad));
-                }
-            }
-            quads = unculled;
-            reason = "step_quads_added_to_unculled_pass";
-        } else if (dy == 0.0f) {
-            reason = "dy_zero_no_step_faces";
-        }
+        String reason = dy == 0.0f ? "dy_zero_no_culling_slice" : "quad_translate_no_culling_slice";
 
         if (slabbed$fullMeshBoundsTraceArmed()) {
-            MeshBounds bounds = measureBounds(quads, dy);
+            MeshBounds bounds = measureBounds(baseQuads, dy);
             slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, originalModel, dy,
                     totalQuadsSeen,
                     bounds.verticesVisited(),
@@ -436,21 +350,7 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
                     bounds.maxAfterY(),
                     reason);
         }
-        if (observeStepCull) {
-            slabbed$recordStepCullSample(
-                    view,
-                    pos,
-                    state,
-                    dy,
-                    clearStepCullFaces,
-                    totalQuadsSeen,
-                    cullFacesSeen,
-                    stepFacesSeen,
-                    stepCullFacesCleared,
-                    clearedFaces.length() == 0 ? "none" : clearedFaces.toString(),
-                    reason);
-        }
-        return dy == 0.0f || quads.isEmpty() ? quads : translateQuads(quads, dy);
+        return dy == 0.0f || baseQuads.isEmpty() ? baseQuads : translateQuads(baseQuads, dy);
     }
 
     /** True if any horizontal side face of {@code pos} sits at a slab-height step (see

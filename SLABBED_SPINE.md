@@ -31,17 +31,17 @@ codex/forge-1.20.1-backport-from-neoforge-042-beta2
 Commit:
 
 ```text
-709a50bd
+68c2c330
 ```
 
 Tag:
 
 ```text
-save/forge-1-20-1-post-render-lookup-roadmap-alignment
+save/forge-1-20-1-model-render-path-decision
 ```
 
-Pushed branch: yes, through the Forge post-render-lookup roadmap alignment savepoint.
-Pushed tag: yes, `save/forge-1-20-1-post-render-lookup-roadmap-alignment`.
+Pushed branch: yes, through the Forge model render path decision savepoint.
+Pushed tag: yes, `save/forge-1-20-1-model-render-path-decision`.
 
 Donor release tag at parent foundation base:
 
@@ -62,9 +62,10 @@ gameplay-facing SlabAnchorAttachment storage facade is compile-proven and
 savepointed. The view-truth order decision is docs-proven: networking/client
 mirror sync must come before the non-Level render-view bridge. The Forge
 client anchor mirror/network sync slice is compile-proven and savepointed. The
-non-Level render-view anchor lookup slice is compile-proven and savepointed. The Forge
-model-loading/render-path decision is the active docs/audit gate. The Forge
-regression-risk checklist remains required before model loading, mixin,
+non-Level render-view anchor lookup slice is compile-proven and savepointed. The
+Forge model-loading/render-path decision is docs-proven and savepointed. The
+active Book III slice is the Forge model-wrapper registration scaffold. The
+Forge regression-risk checklist remains required before culling, mixin,
 gametest, behavior parity, live, or release slices. Model loading, mixins,
 gametest, runtime behavior, release, and live-profile work remain out of scope
 until separately authorized.
@@ -77,8 +78,8 @@ Set the first Forge project lane for Slabbed:
 - target Minecraft: 1.20.1
 - target loader: Forge
 - donor source: NeoForge 1.21.1 `0.4.2-beta.2+1.21.1` release tag
-- current work type: Book III model-loading/render-path decision
-- implementation status: persistence truth savepointed; model wrapper not yet migrated
+- current work type: Book III model-wrapper registration scaffold
+- implementation status: persistence truth and model-render path decision savepointed; model wrapper not yet compile-proven
 
 ## Current blocker
 
@@ -88,8 +89,8 @@ Visible symptom:
 Forge 1.20.1 scaffold is being isolated to entrypoint/lifecycle plus the
 server-side anchor store capability, gameplay-facing storage facade, and client
 mirror sync. The non-Level render-view anchor lookup bridge is now savepointed.
-The active docs-only lane classifies the Forge model-loading/render path and
-proof ladder before any model hook, mixin, gametest, Visual Triad proof, or
+The active implementation lane ports only the Forge model-wrapper registration
+scaffold before any culling change, mixin, gametest, Visual Triad proof, or
 behavior parity work.
 ```
 
@@ -148,7 +149,8 @@ Book III attachment/persistence decision:
 - non-Level render fallback lookup: compile-proven and savepointed at c69d8665
 - view-truth order decision: client mirror/network sync before non-Level render-view bridge
 - decision doc: docs/porting/mc-1.20.1-forge-view-truth-order-decision.md
-- active docs slice: forge-1.20.1-model-loading-render-path-decision
+- model-loading/render-path decision: docs-proven and savepointed at 68c2c330
+- active implementation slice: forge-1.20.1-model-wrapper-registration-scaffold
 - required risk gate: docs/porting/mc-1.20.1-forge-regression-risk-checklist.md
 ```
 
