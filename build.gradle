@@ -63,6 +63,10 @@ sourceSets {
             // Anchor/freeze CLEAR on actual block removal (never-pop law). onRemove is
             // cancellation-immune and covers every removal path. No shape offset -> safe.
             include "com/slabbed/mixin/BlockOnStateReplacedAnchorMixin.java"
+            // WYSIWYG slab-type-on-placement: pick TOP/BOTTOM from the visible half of a
+            // lowered support on horizontal faces. Server-side getStateForPlacement only,
+            // no shape offset -> safe.
+            include "com/slabbed/mixin/SlabBlockPlacementFixMixin.java"
         }
         resources {
             setSrcDirs(["src/main/resources", "src/client/resources"])
