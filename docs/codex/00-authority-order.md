@@ -23,6 +23,8 @@ These override old chats, old Notion notes, and stale source files.
 - `docs/codex/10-troubleshooting-when-stuck.md`
 - `docs/codex/11-model-thread-policy.md`
 - `docs/codex/12-goal-mode.md`
+- `docs/codex/13-mixin-layer-wiring-audit.md`
+- `docs/codex/14-zoom-out-discipline.md`
 
 Read only the narrow relevant file. Avoid broad rereads.
 
@@ -49,3 +51,6 @@ Treat these as stale unless a current doc explicitly revives them:
 - placement success as survival proof
 - jar purity as contents-only scan
 - proof-pending Bug Blasters as fixed
+- a 2nd+ narrow patch slice against the same unresolved symptom family,
+  taken without first running the zoomed-out audit in
+  `docs/codex/14-zoom-out-discipline.md`

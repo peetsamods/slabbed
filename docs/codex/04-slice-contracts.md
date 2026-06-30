@@ -2,6 +2,20 @@
 
 Use these contracts to keep work bounded. One slice, one layer, one proof goal.
 
+## Before any slice: symptom-family check
+
+Before choosing a slice type below, name the symptom family the work belongs
+to (e.g. "crosshair targeting disagrees with visible geometry," "placed
+block changes height after unrelated edit") and check whether 2+ prior
+slices already targeted that family without closing it — proven-green
+slices count too, not just failed ones. If so, the contract for THIS slice
+is the zoomed-out audit in `docs/codex/14-zoom-out-discipline.md`, not the
+implementation patch slice below, regardless of how small or well-evidenced
+the next individual fix looks. Skipping this check is how a single disabled
+subsystem turns into a dozen separately-savepointed narrow patches that
+never close the family — see `docs/codex/13-mixin-layer-wiring-audit.md`
+for the concrete incident this rule exists to prevent.
+
 ## Audit-only slice
 
 Use when root cause or failing layer is unclear.

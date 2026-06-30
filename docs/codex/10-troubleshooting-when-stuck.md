@@ -16,7 +16,11 @@ Audit checklist:
 - correct branch
 - correct HEAD/tag
 - fix actually exists in current branch
-- intended mixin JSON registered
+- intended mixin JSON registered — if the symptom is a violated universal law
+  (WYSIWYG, visual triad, never-pop) rather than a missing per-block case,
+  run the FULL procedure in `docs/codex/13-mixin-layer-wiring-audit.md`
+  first, not just this one line. A whole disabled mixin layer reads as a
+  long series of unrelated narrow REDs until you check this directly.
 - `fabric.mod.json` source-set wiring correct
 - produced jar contains expected resources/classes
 - dev/debug/test/proof classes excluded from release jar
