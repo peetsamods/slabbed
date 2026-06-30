@@ -1,8 +1,20 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7.38'
+    }
+}
+
 plugins {
     id 'java-library'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '6.0.54'
 }
+
+apply plugin: 'org.spongepowered.mixin'
 
 version = project.mod_version
 group = project.mod_group_id
@@ -39,15 +51,21 @@ sourceSets {
             include "com/slabbed/client/SlabbedClient.java"
             include "com/slabbed/client/SlabbedModelLoadingPlugin.java"
             include "com/slabbed/client/OffsetOutlineEvents.java"
-            include "com/slabbed/client/OffsetTargetingEvents.java"
             include "com/slabbed/client/TargetDyOverlay.java"
             include "com/slabbed/client/model/OffsetBlockStateModel.java"
             include "com/slabbed/util/RuntimeDiagnostics.java"
             include "com/slabbed/util/SlabbedOffsetRaycast.java"
             include "com/slabbed/util/SlabSupport.java"
+            // Single crosshair-pick authority mixin (offset-aware nearest-hit raycast).
+            // The outline/model offset stays in the active event/model path, so enabling
+            // shape mixins (e.g. SlabSupportStateMixin) here would double-offset.
+            include "com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.java"
+            // Anchor/freeze CLEAR on actual block removal (never-pop law). onRemove is
+            // cancellation-immune and covers every removal path. No shape offset -> safe.
+            include "com/slabbed/mixin/BlockOnStateReplacedAnchorMixin.java"
         }
         resources {
-            setSrcDirs(["src/main/resources"])
+            setSrcDirs(["src/main/resources", "src/client/resources"])
             exclude "fabric.mod.json"
             exclude "META-INF/neoforge.mods.toml"
             exclude "slabbed.mixins.json"
@@ -68,6 +86,7 @@ sourceSets {
 }
 
 repositories {
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
 }
 
 minecraft {
@@ -113,8 +132,15 @@ minecraft {
     }
 }
 
+mixin {
+    add sourceSets.main, "slabbed.refmap.json"
+    config "slabbed.client.mixins.json"
+    config "slabbed.anchor.mixins.json"
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
 tasks.register("syncGameTestStructures", Sync) {
