@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.client.ClientDy;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.world.level.block.state.BlockState;
@@ -115,6 +116,7 @@ public final class SlabbedOffsetRaycast {
 
         private BlockHitResult best = null;
         private double bestDistSq = Double.POSITIVE_INFINITY;
+        private double bestDy = 0.0d;
 
         NearestCollector(BlockGetter world, Vec3 start, Vec3 end, CollisionContext shapeContext) {
             this.world = world;
@@ -150,7 +152,7 @@ public final class SlabbedOffsetRaycast {
             }
             double dy = dyMemo.get(key);
             if (Double.isNaN(dy)) {
-                dy = SlabSupport.getYOffset(world, pos, state);
+                dy = ClientDy.dyFor(world, pos, state);
                 dyMemo.put(key, dy);
             }
             if (dy == 0.0 && !SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, state)) {
@@ -184,17 +186,28 @@ public final class SlabbedOffsetRaycast {
                 return;
             }
             double distSq = hit.getLocation().distanceToSqr(start);
-            if (distSq < bestDistSq) {
+            if (isBetterHit(distSq, dy)) {
                 bestDistSq = distSq;
+                bestDy = dy;
                 best = hit;
             }
+        }
+
+        private boolean isBetterHit(double distSq, double dy) {
+            double epsilon = 1.0e-6d;
+            if (distSq < bestDistSq - epsilon) {
+                return true;
+            }
+            return Math.abs(distSq - bestDistSq) <= epsilon
+                    && dy != 0.0d
+                    && bestDy == 0.0d;
         }
 
         private double dyFor(BlockPos pos, BlockState state) {
             long key = pos.asLong();
             double dy = dyMemo.get(key);
             if (Double.isNaN(dy)) {
-                dy = SlabSupport.getYOffset(world, pos, state);
+                dy = ClientDy.dyFor(world, pos, state);
                 dyMemo.put(key, dy);
             }
             return dy;

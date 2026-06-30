@@ -1,11 +1,11 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.slabbed.mixin.client",
+  "package": "com.slabbed.mixin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "slabbed.refmap.json",
-  "client": [
-    "GameRendererPickOffsetRaycastMixin"
+  "mixins": [
+    "BlockOnStateReplacedAnchorMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

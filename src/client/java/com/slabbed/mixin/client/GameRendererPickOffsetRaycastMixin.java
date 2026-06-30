@@ -22,7 +22,7 @@ public abstract class GameRendererPickOffsetRaycastMixin {
     private static long slabbed$lastTraceNanos;
 
     @Redirect(
-            method = "pick(Lnet/minecraft/world/entity/Entity;DDF)Lnet/minecraft/world/phys/HitResult;",
+            method = "pick(F)V",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/world/entity/Entity;pick(DFZ)Lnet/minecraft/world/phys/HitResult;"
