@@ -82,6 +82,90 @@ public final class ForgeOrdinaryFullBlockAnchorGameTest {
         ctx.succeed();
     }
 
+    /**
+     * RED-before/GREEN-after: clicking the OUTER half of a lowered/cantilevered TOP
+     * slab's side face must extend a new slab into the adjacent cell, not merge the
+     * existing cantilever into a DOUBLE at the same cell. Vanilla SlabBlock.canBeReplaced
+     * decides combine-vs-extend from a RAW (dy-uncorrected) Y fraction against the
+     * block's integer grid Y; for a lowered TOP slab (dy=-0.5) the entire visible band
+     * sits below the raw 0.5 threshold, so every horizontal click satisfies vanilla's
+     * combine condition regardless of which half is visually aimed at -- a cantilever
+     * can never be extended sideways with a single click, only merged in place. This is
+     * the "second cantilevered slab places underneath instead of perpendicular" bug.
+     */
+    @GameTest(template = "empty")
+    public void cantileveredTopSlabExtendsSidewaysInsteadOfCombining(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos supportPos = ctx.absolutePos(new BlockPos(1, 1, 1));
+        BlockPos stonePos = supportPos.above();
+        BlockPos cantileverPos = stonePos.west();
+        BlockPos extendPos = cantileverPos.west();
+
+        BlockState bottomSlab = Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+        world.setBlock(supportPos, bottomSlab, Block.UPDATE_ALL);
+
+        BlockState stoneState = placeStoneItem(world, supportPos, stonePos);
+        ctx.assertTrue(stoneState.is(Blocks.STONE), "fixture stone must be minecraft:stone at " + shortPos(stonePos));
+        double stoneDy = SlabSupport.getYOffset(world, stonePos, stoneState);
+        ctx.assertTrue(near(stoneDy, -0.5d), "fixture stone must be lowered dy=-0.5, got " + text(stoneDy));
+
+        // First placement: cantilever an oak_slab off the stone's west face, aiming at the
+        // visually UPPER portion of the stone's actual lowered span [1.5,2.5] so the already-
+        // proven SlabBlockPlacementFixMixin selects TYPE=TOP.
+        BlockState cantileverState = placeSlabAgainstFace(
+                world, stonePos, cantileverPos, Direction.WEST, stonePos.getY() + 0.8d);
+        ctx.assertTrue(cantileverState.getBlock() instanceof SlabBlock,
+                "fixture cantilever must be a slab at " + shortPos(cantileverPos));
+        ctx.assertTrue(cantileverState.getValue(SlabBlock.TYPE) == SlabType.TOP,
+                "fixture cantilever must be TYPE=TOP, got " + cantileverState.getValue(SlabBlock.TYPE));
+        double cantileverDy = SlabSupport.getYOffset(world, cantileverPos, cantileverState);
+        ctx.assertTrue(near(cantileverDy, -0.5d),
+                "fixture cantilever must be lowered dy=-0.5, got " + text(cantileverDy));
+
+        // Second click: aim at the cantilever's OWN west face at cantileverPos.y+0.4 --
+        // this sits within its actual visible span [+0.0,+0.5] (TOP shifted by dy=-0.5) and
+        // is the exact RED/GREEN discriminator: raw fraction 0.4 (<=0.5) says COMBINE
+        // (the bug); dy-corrected fraction 0.4-(-0.5)=0.9 (>0.5) says EXTEND (fixed).
+        placeSlabAgainstFace(world, cantileverPos, extendPos, Direction.WEST, cantileverPos.getY() + 0.4d);
+
+        BlockState cantileverAfter = world.getBlockState(cantileverPos);
+        BlockState extendedState = world.getBlockState(extendPos);
+
+        System.out.println("[FORGE_CANTILEVER_EXTEND_ROW]"
+                + " cantileverPos=" + shortPos(cantileverPos)
+                + " cantileverTypeAfter=" + (cantileverAfter.hasProperty(SlabBlock.TYPE) ? cantileverAfter.getValue(SlabBlock.TYPE) : "?")
+                + " extendPos=" + shortPos(extendPos)
+                + " extendedBlock=" + extendedState.getBlock()
+                + " proofScope=forge_server_gametest_cantilever_extend_vs_combine");
+
+        ctx.assertTrue(cantileverAfter.hasProperty(SlabBlock.TYPE) && cantileverAfter.getValue(SlabBlock.TYPE) == SlabType.TOP,
+                "cantilevered slab must stay TYPE=TOP (not merge to DOUBLE) when the outer half is clicked, got "
+                        + (cantileverAfter.hasProperty(SlabBlock.TYPE) ? cantileverAfter.getValue(SlabBlock.TYPE) : cantileverAfter));
+        ctx.assertTrue(extendedState.getBlock() instanceof SlabBlock,
+                "clicking the outer half of a cantilevered slab must extend into the adjacent cell, got "
+                        + extendedState + " at " + shortPos(extendPos));
+
+        ctx.succeed();
+    }
+
+    private static BlockState placeSlabAgainstFace(
+            ServerLevel world, BlockPos targetPos, BlockPos newPos, Direction face, double clickY) {
+        Player player = FakePlayerFactory.getMinecraft(world);
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Blocks.OAK_SLAB));
+        Vec3 hitLoc = new Vec3(
+                targetPos.getX() + 0.5d + face.getStepX() * 0.5d,
+                clickY,
+                targetPos.getZ() + 0.5d + face.getStepZ() * 0.5d);
+        BlockHitResult hit = new BlockHitResult(hitLoc, face, targetPos, false);
+        InteractionResult result = ForgeHooks.onPlaceItemIntoWorld(
+                new UseOnContext(player, InteractionHand.MAIN_HAND, hit));
+        if (!result.consumesAction()) {
+            throw new AssertionError("slab placement did not consume action, result=" + result
+                    + " target=" + targetPos + " face=" + face);
+        }
+        return world.getBlockState(newPos);
+    }
+
     private static BlockState placeStoneItem(ServerLevel world, BlockPos supportPos, BlockPos objectPos) {
         Player player = FakePlayerFactory.getMinecraft(world);
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Blocks.STONE));

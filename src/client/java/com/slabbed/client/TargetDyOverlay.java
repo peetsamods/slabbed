@@ -2,6 +2,7 @@ package com.slabbed.client;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.model.OffsetBlockStateModel;
+import com.slabbed.util.SlabbedRecorder;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -70,7 +71,9 @@ public final class TargetDyOverlay {
                 .then(Commands.literal("row")
                         .executes(context -> reportRow(context.getSource())))
                 .then(Commands.literal("use")
-                        .executes(context -> useTarget(context.getSource()))));
+                        .executes(context -> useTarget(context.getSource())))
+                .then(Commands.literal("record")
+                        .executes(context -> toggleRecord(context.getSource()))));
     }
 
     private static int reportRow(CommandSourceStack source) {
@@ -87,6 +90,14 @@ public final class TargetDyOverlay {
         source.sendSuccess(
                 () -> Component.literal("Slabbed target dy row: "
                         + String.join(" | ", targetLines(client, blockHit, true))),
+                false);
+        return 1;
+    }
+
+    private static int toggleRecord(CommandSourceStack source) {
+        boolean nowOn = SlabbedRecorder.toggle();
+        source.sendSuccess(
+                () -> Component.literal("Slabbed recorder: " + (nowOn ? "on -> " + SlabbedRecorder.currentLogPath() : "off")),
                 false);
         return 1;
     }
@@ -123,8 +134,14 @@ public final class TargetDyOverlay {
         return 1;
     }
 
+    private static String lastLoggedSignature;
+
     private static void clientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || pendingUseTarget == null) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
+        maybeLogTargetChange();
+        if (pendingUseTarget == null) {
             return;
         }
         Minecraft client = Minecraft.getInstance();
@@ -158,6 +175,44 @@ public final class TargetDyOverlay {
                         + " before=" + beforePlaceBlock
                         + " after=" + afterPlaceBlock),
                 false);
+    }
+
+    /**
+     * Logs a target row whenever the crosshair's target block/dy/half/face changes,
+     * regardless of whether the on-screen /slabdy overlay is toggled. Dedupes on a
+     * compact signature (not raw hit coordinates) so continuous look-direction drift
+     * does not spam the log; only meaningful target changes are written.
+     */
+    private static void maybeLogTargetChange() {
+        if (!SlabbedRecorder.isEnabled()) {
+            return;
+        }
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null || client.player == null) {
+            return;
+        }
+        HitResult target = client.hitResult;
+        if (!(target instanceof BlockHitResult blockHit) || target.getType() != HitResult.Type.BLOCK) {
+            if (!"none".equals(lastLoggedSignature)) {
+                lastLoggedSignature = "none";
+                SlabbedRecorder.log("target", "none");
+            }
+            return;
+        }
+        BlockPos pos = blockHit.getBlockPos();
+        BlockState state = client.level.getBlockState(pos);
+        double dy = ClientDy.dyFor(client.level, pos, state);
+        String half = targetHalf(client, pos, state, dy, blockHit);
+        String signature = pos.toShortString() + "|" + state + "|" + format(dy) + "|" + half
+                + "|" + blockHit.getDirection().getName();
+        if (signature.equals(lastLoggedSignature)) {
+            return;
+        }
+        lastLoggedSignature = signature;
+        BlockPos placePos = pos.relative(blockHit.getDirection());
+        SlabbedRecorder.log("target", String.join(" ", targetLines(client, blockHit, false))
+                + " | fullState=" + state);
+        SlabbedRecorder.noteTarget(pos, placePos, blockHit.getDirection(), half);
     }
 
     private static void render(RenderGuiEvent.Post event) {

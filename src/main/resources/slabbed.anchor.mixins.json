@@ -6,7 +6,8 @@
   "refmap": "slabbed.refmap.json",
   "mixins": [
     "BlockOnStateReplacedAnchorMixin",
-    "SlabBlockPlacementFixMixin"
+    "SlabBlockPlacementFixMixin",
+    "SlabCanBeReplacedDyMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

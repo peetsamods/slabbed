@@ -56,6 +56,10 @@ sourceSets {
             include "com/slabbed/util/RuntimeDiagnostics.java"
             include "com/slabbed/util/SlabbedOffsetRaycast.java"
             include "com/slabbed/util/SlabSupport.java"
+            // Dev-only live-recorder: replaces manual screen recording with a plain,
+            // greppable log of target changes + place/remove actions, toggled via
+            // /slabdy record. No client imports; safe on both sides.
+            include "com/slabbed/util/SlabbedRecorder.java"
             // Single crosshair-pick authority mixin (offset-aware nearest-hit raycast).
             // The outline/model offset stays in the active event/model path, so enabling
             // shape mixins (e.g. SlabSupportStateMixin) here would double-offset.
@@ -67,6 +71,10 @@ sourceSets {
             // lowered support on horizontal faces. Server-side getStateForPlacement only,
             // no shape offset -> safe.
             include "com/slabbed/mixin/SlabBlockPlacementFixMixin.java"
+            // WYSIWYG slab-combine-vs-extend: dy-correct vanilla's raw Y-fraction combine
+            // check so a lowered/cantilevered slab can be extended sideways instead of
+            // always merging to a double at the same cell. No-ops when dy=0 -> safe.
+            include "com/slabbed/mixin/SlabCanBeReplacedDyMixin.java"
         }
         resources {
             setSrcDirs(["src/main/resources", "src/client/resources"])
