@@ -23,13 +23,32 @@ public final class SlabAnchorClientMirrorEvents {
     @SubscribeEvent
     public static void onClientLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
         SlabAnchorClientMirror.clearAll();
+        SlabAnchorClientMirror.renderInvalidationSink = SlabAnchorClientMirrorEvents::invalidateRender;
         installClientMirrorLookups();
     }
 
     @SubscribeEvent
     public static void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         clearClientMirrorLookups();
+        SlabAnchorClientMirror.renderInvalidationSink = null;
         SlabAnchorClientMirror.clearAll();
+    }
+
+    /**
+     * Forces the offset model at {@code packedPos} (and its immediate neighbours,
+     * since Slabbed dy depends on adjacent blocks) to re-mesh, so a model baked
+     * before its anchor/marker synced re-bakes with the correct dy. Runs on the
+     * client main thread (the anchor sync packet is handled there).
+     */
+    private static void invalidateRender(long packedPos) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.levelRenderer == null) {
+            return;
+        }
+        BlockPos pos = BlockPos.of(packedPos);
+        minecraft.levelRenderer.setBlocksDirty(
+                pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
+                pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1);
     }
 
     private static void installClientMirrorLookups() {
