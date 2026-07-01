@@ -1264,6 +1264,18 @@ public final class SlabSupport {
             return 0.0;
         }
 
+        // Terrain Slabs compat — DO NOT double-offset. TS lowers its OWN decoration blocks
+        // (lanterns, flowers, mushrooms, grass, …) onto its slabs through its own "offset=ontop"
+        // blockstate + ontop model (a -0.5 visual drop it renders itself). If Slabbed also drops
+        // them -0.5 the object buries a full block into the slab (the "smoosh"). When TS is
+        // already offsetting the object, defer entirely so TS's ontop model is the single source
+        // of the drop. Objects TS does NOT wrap (full blocks, signs, vanilla slabs — no offset
+        // property) are unaffected and still lower via the normal path below. See the
+        // "TS already wraps veg; don't double-wrap" compat lesson.
+        if (CompatHooks.terrainSlabsHandlesObjectOffset(state)) {
+            return 0.0;
+        }
+
         // Powder snow is a FULL CUBE, so unlike snow layers it matches the "full block on a slab"
         // lowering branch and Slabbed was dropping it -0.5 onto a slab while neighbouring powder
         // snow on full ground stayed flush — leaving a half-block step / DODO across snowy terrain.
