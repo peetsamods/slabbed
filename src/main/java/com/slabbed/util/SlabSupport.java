@@ -2337,14 +2337,14 @@ public final class SlabSupport {
             // its anchor and never recomputes — so breaking an adjacent source can no longer
             // pop it back up, and its rendered mesh never drifts from the value.
             if (SlabAnchorAttachment.isAnchored(world, pos)) {
-                if (state.getFluidState().isEmpty()
-                        && world.getBlockState(pos.below()).isAir()
-                        && !isCompoundVisibleOwnerTopSlab(world, pos, state)) {
-                    double anchoredSideMagnitude = adjacentLoweredSideMagnitude(world, pos);
-                    if (anchoredSideMagnitude < -0.5d - 1.0e-6d) {
-                        return anchoredSideMagnitude;
-                    }
-                }
+                // NEVER-POP: a slab frozen lowered at placement reads exactly its anchored -0.5 and
+                // never recomputes. The old adjacent-side "alignment" sub-check here re-inherited a
+                // deeper (-1.0) magnitude from a neighbouring lowered full block AFTER placement,
+                // which (a) violated the freeze-on-place law (the slab autonomously dropped from its
+                // placed -0.5 to -1.0 — see [place] dy=-0.5 then read dy=-1.0 in the recorder) and
+                // (b) opened a half-block gap under a slab stacked on top, i.e. the floating-slab
+                // "DODO" the player reported. A genuine -1.0 compound slab is still handled above by
+                // the compound-visible-side markers; honour the freeze here and stay at -0.5.
                 return -0.5;
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
