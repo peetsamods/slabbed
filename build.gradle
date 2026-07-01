@@ -80,6 +80,12 @@ sourceSets {
             // check so a lowered/cantilevered slab can be extended sideways instead of
             // always merging to a double at the same cell. No-ops when dy=0 -> safe.
             include "com/slabbed/mixin/SlabCanBeReplacedDyMixin.java"
+            // Placement/survival SUPPORT ONLY (canSurvive/isFaceSturdy + canSupportCenter):
+            // makes slab visible faces report sturdy so objects can be placed ON / hung UNDER
+            // slabs. Split out of SlabSupportStateMixin so the shape-offset injectors stay OFF
+            // (they would double-offset). Boolean-only, no shape move -> safe.
+            include "com/slabbed/mixin/SlabSupportPlacementMixin.java"
+            include "com/slabbed/mixin/SlabSupportBlockMixin.java"
         }
         resources {
             setSrcDirs(["src/main/resources", "src/client/resources"])
