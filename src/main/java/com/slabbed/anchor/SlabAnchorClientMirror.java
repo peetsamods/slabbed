@@ -3,6 +3,7 @@ package com.slabbed.anchor;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.LongConsumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 
@@ -18,6 +19,19 @@ public final class SlabAnchorClientMirror {
     private static final ConcurrentMap<BucketKey, LongOpenHashSet> BUCKETS =
             new ConcurrentHashMap<>();
 
+    /**
+     * Client-only render-invalidation sink. Installed by the physical client
+     * ({@link SlabAnchorClientMirrorEvents}) and left {@code null} on dedicated
+     * servers so this common class stays server-safe. Invoked with every packed
+     * {@link BlockPos} whose marker membership changed on a bucket sync, so the
+     * offset models at those positions re-bake with the freshly-synced anchor
+     * truth. Without this, a block placed before its anchor/marker syncs bakes
+     * its model at the stale (pre-anchor) dy and never re-meshes until an
+     * unrelated block change forces it — the "correct raycast, wrong model until
+     * break+replace" bug.
+     */
+    public static volatile LongConsumer renderInvalidationSink;
+
     private SlabAnchorClientMirror() {
     }
 
@@ -32,11 +46,32 @@ public final class SlabAnchorClientMirror {
             return;
         }
         BucketKey key = new BucketKey(dimension, chunkX, chunkZ, marker);
-        LongOpenHashSet set = positions == null ? new LongOpenHashSet() : new LongOpenHashSet(positions);
-        if (set.isEmpty()) {
-            BUCKETS.remove(key);
-        } else {
-            BUCKETS.put(key, set);
+        LongOpenHashSet incoming = positions == null ? new LongOpenHashSet() : new LongOpenHashSet(positions);
+        LongOpenHashSet previous = incoming.isEmpty() ? BUCKETS.remove(key) : BUCKETS.put(key, incoming);
+        invalidateChangedRenders(previous, incoming);
+    }
+
+    /**
+     * Marks every position whose marker membership was added or removed for a
+     * client render refresh, so its offset model re-bakes with the new truth.
+     * No-op on servers (sink null) or when nothing changed.
+     */
+    private static void invalidateChangedRenders(LongOpenHashSet previous, LongOpenHashSet incoming) {
+        LongConsumer sink = renderInvalidationSink;
+        if (sink == null) {
+            return;
+        }
+        if (previous != null) {
+            for (long pos : previous) {
+                if (!incoming.contains(pos)) {
+                    sink.accept(pos);
+                }
+            }
+        }
+        for (long pos : incoming) {
+            if (previous == null || !previous.contains(pos)) {
+                sink.accept(pos);
+            }
         }
     }
 
