@@ -44,4 +44,16 @@ public final class CompatHooks {
         }
         return CompatSlabSurfaceKind.NONE;
     }
+
+    /**
+     * Returns true when a compat mod is ALREADY applying its own vertical offset to this object
+     * (so Slabbed must not add a second offset and double-lower it). False when no compat mod is
+     * loaded or the object is not compat-offset.
+     */
+    public static boolean terrainSlabsHandlesObjectOffset(BlockState state) {
+        if (TerrainSlabsCompat.isLoaded()) {
+            return TerrainSlabsCompat.handlesObjectOffset(state);
+        }
+        return false;
+    }
 }
