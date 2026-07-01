@@ -3,6 +3,7 @@ package com.slabbed.util;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import net.minecraft.world.level.block.BellBlock;
 import net.minecraft.world.level.block.BaseRailBlock;
 import net.minecraft.world.level.block.Block;
@@ -169,15 +170,29 @@ public final class SlabSupport {
     }
 
     /**
-     * Primary query: should this slab top face count as solid support.
+     * Primary query: should this slab top face count as solid support. Also recognizes a
+     * named Terrain Slabs BOTTOM_LIKE surface as valid top support (a separate, narrow
+     * opt-in -- see {@link #isDirectObjectSupportSurface}), not a change to the blanket
+     * shouldSkipSlabSupport exclusion.
      */
     public static boolean canTreatAsSolidTopFace(LevelReader world, BlockPos pos) {
-        return isSupportingSlab(world, pos);
+        BlockState state = world.getBlockState(pos);
+        return isSupportingSlab(state) || isDirectObjectSupportSurface(state);
     }
 
     /** Overload for shape/world views. */
     public static boolean canTreatAsSolidTopFace(BlockGetter world, BlockPos pos) {
-        return isSupportingSlab(world, pos);
+        BlockState state = world.getBlockState(pos);
+        return isSupportingSlab(state) || isDirectObjectSupportSurface(state);
+    }
+
+    /**
+     * True when {@code state} is a named Terrain Slabs BOTTOM_LIKE surface -- a proven,
+     * named custom slab surface (not every TS block) that may carry a directly-placed
+     * object/full-block the same way a vanilla bottom slab does.
+     */
+    public static boolean isDirectObjectSupportSurface(BlockState state) {
+        return CompatHooks.customSlabSurfaceKind(state) == CompatSlabSurfaceKind.BOTTOM_LIKE;
     }
 
     public static boolean isFloorTorch(BlockState state) {
@@ -2556,6 +2571,25 @@ public final class SlabSupport {
             return ordinaryFullBlockContactDy;
         }
 
+        // Direct Terrain Slabs custom support: an ordinary object/full block/vanilla slab
+        // sitting directly on a named TS BOTTOM_LIKE surface lowers -0.5, matching how it
+        // already lowers onto a vanilla bottom slab. Deliberately separate from the generic
+        // shouldOffset/hasSlabInColumn path below (which never recognizes TS -- that blanket
+        // exclusion stays unchanged) -- see isDirectCustomSlabSupportSubject's javadoc for why.
+        double directCustomSurfaceDy = directCustomSlabSupportDy(world, pos, state);
+        if (!Double.isNaN(directCustomSurfaceDy)) {
+            double dy = directCustomSurfaceDy;
+            // A vanilla TOP slab caps from the UPPER half of its own block, so it needs an
+            // extra -0.5 to sit flush on a BOTTOM_LIKE surface (else a half-block gap shows
+            // underneath). BOTTOM/DOUBLE slabs and non-slab objects are unaffected.
+            if (state.getBlock() instanceof SlabBlock
+                    && state.hasProperty(SlabBlock.TYPE)
+                    && state.getValue(SlabBlock.TYPE) == SlabType.TOP) {
+                dy -= 0.5d;
+            }
+            return Math.max(dy, -1.0d);
+        }
+
         if (shouldOffset(world, pos, state)) {
             // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
             // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
@@ -2670,6 +2704,43 @@ public final class SlabSupport {
         if (isBeta35VerticalChainVisibleOwnerObject(state)
                 && isCeilingBridgedVerticalChainColumnMember(world, pos, state)) {
             return 0.0d;
+        }
+
+        // A Y-axis chain column hanging beneath a LOWERED eave follows the eave DOWN so the
+        // whole column renders flush: the top link's top meets the eave underside and each
+        // lower link stacks against the one above with no inter-link gap (the reported "gap
+        // between chains"). Walk up through same-column chains to the first non-chain support;
+        // if that support renders lowered, inherit its dy for THIS segment. Every segment
+        // resolves to the SAME support dy, so the column renders as one flush unit.
+        // Ordering matters: this runs AFTER the +0.5 top-slab branch and the ceiling-bridged
+        // branch, so a column reaching UP toward a slab ceiling keeps its +0.5/0.0 semantics.
+        // Top slabs are excluded here (kept on the existing +0.5 raise path so every segment
+        // stays consistent); only a lowered BOTTOM/DOUBLE slab or a lowered full-block eave
+        // pulls the column down. The helpers return NaN / a non-negative dy for non-lowered
+        // supports, so a flush eave leaves the column at grid height (no change). This branch
+        // can only ever return a NEGATIVE dy — it never raises. Recursion-safe: the helpers
+        // never call getYOffset (see their javadoc).
+        if (isBeta35VerticalChainVisibleOwnerObject(state)) {
+            BlockPos supportCursor = pos.above();
+            for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+                BlockState cur = world.getBlockState(supportCursor);
+                if (isBeta35VerticalChainVisibleOwnerObject(cur)) {
+                    supportCursor = supportCursor.above();
+                    continue;
+                }
+                if (cur.getBlock() instanceof SlabBlock && cur.hasProperty(SlabBlock.TYPE)
+                        && cur.getValue(SlabBlock.TYPE) != SlabType.TOP) {
+                    double slabDy = loweredSlabUndersideSupportDy(world, supportCursor, cur);
+                    if (Double.isFinite(slabDy) && slabDy < -1.0e-6d) {
+                        return slabDy;
+                    }
+                }
+                double fullBlockDy = loweredFullBlockUndersideSupportDy(world, supportCursor, cur);
+                if (Double.isFinite(fullBlockDy) && fullBlockDy < -1.0e-6d) {
+                    return fullBlockDy;
+                }
+                break;
+            }
         }
 
         // cascading: ceiling-attached block below other ceiling-attached blocks
@@ -2853,36 +2924,92 @@ public final class SlabSupport {
     }
 
     /**
-     * Category predicate for the generic slab-column lowering fallback in
-     * {@link #shouldOffset}.
+     * True if {@code state} at {@code pos} may sit on a Terrain Slabs BOTTOM_LIKE surface
+     * (directly, or via a column of other qualifying blocks) and inherit its -0.5 lowering.
      *
-     * <p>Returns {@code true} for blocks that should visually sit on slabs
-     * when a bottom slab exists somewhere in their column:
-     * <ul>
-     *   <li>Every {@link EntityBlock} block — chests, hoppers,
-     *       furnaces, jukeboxes, spawners, end portal frames, beacons,
-     *       banners, signs (standing), etc. This matches the
-     *       {@link #isLoweredBlockEntityVisual} contract and ensures
-     *       full-cube BE blocks (jukebox, spawner, …) lower alongside
-     *       non-full-cube BE blocks (chest, hopper, …).</li>
-     *   <li>Any block that is not a full solid cube — fences, walls, panes,
-     *       torches, buttons, pressure plates, wall signs, etc.
-     *       ({@code !state.isSolidBlock}).</li>
-     * </ul>
-     *
-     * <p>Explicitly excludes plain solid world cubes (stone, dirt, planks,
-     * cobblestone, sand, gravel, terracotta, …) so natural terrain does not
-     * visually drop when a slab happens to sit below it.
+     * <p>Deliberately narrow and additive: this does NOT change
+     * {@link CompatHooks#shouldSkipSlabSupport}/{@link CompatHooks#shouldSkipOffset} (those
+     * stay a blanket exclusion, so TS blocks are never treated as generic vanilla-style slab
+     * support -- unrelated logic like the chain-ceiling/cull/isSolidBlock paths that already
+     * depend on that blanket exclusion staying blanket is untouched). This is a separate,
+     * opt-in query, consulted only from the direct-object-support dy path below and from
+     * {@link #canTreatAsSolidTopFace}. A previous attempt on a different Slabbed port blurred
+     * this line (made TS both a generic support AND a dy source) and broke TS object-placement
+     * plus a chain-ceiling case -- see repo-local lesson memory before broadening this.
+     */
+    private static boolean isDirectCustomSlabSupportSubject(BlockGetter world, BlockPos pos, BlockState state) {
+        if (state == null
+                || state.isAir()
+                || (state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state))
+                || isThinTopLayer(state)
+                || !state.getFluidState().isEmpty()
+                || CompatHooks.shouldSkipOffset(state)) {
+            return false;
+        }
+        return isVanillaDirectCustomSlabSubject(state) || isSlabSitCandidate(world, pos, state);
+    }
+
+    private static boolean isVanillaDirectCustomSlabSubject(BlockState state) {
+        if (!(state.getBlock() instanceof SlabBlock) || !state.hasProperty(SlabBlock.TYPE)) {
+            return false;
+        }
+        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        return id != null && "minecraft".equals(id.getNamespace());
+    }
+
+    /**
+     * Walks down from {@code supportPos} through qualifying direct-custom-slab-support
+     * subjects looking for a named TS BOTTOM_LIKE surface. Returns true as soon as one is
+     * found; bounded by {@link #MAX_CHAIN_DEPTH}.
+     */
+    private static boolean hasDirectCustomBottomLikeSupportColumn(BlockGetter world, BlockPos supportPos) {
+        BlockPos cursor = supportPos;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState supportState = world.getBlockState(cursor);
+            if (CompatHooks.customSlabSurfaceKind(supportState) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
+                return true;
+            }
+            if (isDirectCustomSlabSupportSubject(world, cursor, supportState)) {
+                cursor = cursor.below();
+                continue;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    /**
+     * True if {@code state} at {@code pos} directly (or via a column of qualifying blocks)
+     * sits on a named Terrain Slabs BOTTOM_LIKE surface and should inherit its -0.5 lowering.
+     */
+    public static boolean isDirectCustomSlabSupportedObject(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
+            return false;
+        }
+        return hasDirectCustomBottomLikeSupportColumn(world, pos.below());
+    }
+
+    /**
+     * Returns -0.5 when {@code state} qualifies as {@link #isDirectCustomSlabSupportedObject},
+     * else {@link Double#NaN} (not a qualifying direct-custom-slab-support case; caller falls
+     * through to the generic vanilla-slab column check).
+     */
+    private static double directCustomSlabSupportDy(BlockGetter world, BlockPos pos, BlockState state) {
+        if (!isDirectCustomSlabSupportedObject(world, pos, state)) {
+            return Double.NaN;
+        }
+        return -0.5d;
+    }
+
+    /**
+     * Which subjects may sit directly on a custom (TS) slab support: any block that already
+     * passed {@link #isDirectCustomSlabSupportSubject}'s exclusion guards (not air, not a
+     * non-vanilla slab, not a thin top layer, not fluid-filled, not itself a TS block)
+     * qualifies -- matching how ordinary full blocks (stone, dirt, grass, ...) already sit on
+     * and lower onto a vanilla bottom slab via {@link #hasSlabInColumn}.
      */
     private static boolean isSlabSitCandidate(BlockGetter world, BlockPos pos, BlockState state) {
-        Block block = state.getBlock();
-        if (block instanceof EntityBlock) {
-            return true;
-        }
-        if (block instanceof CraftingTableBlock) {
-            return true;
-        }
-        return !state.isSolidRender(world, pos);
+        return true;
     }
 
     /**

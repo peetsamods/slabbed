@@ -69,6 +69,20 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
 
+    /**
+     * When true (client only, scoped to a single predicted-placement pass), marker
+     * writes are routed into the client render mirror instead of the useless client
+     * chunk store. This lets the client optimistically apply, at placement time, the
+     * exact markers the server will set — so the offset model bakes at the correct dy
+     * on the FIRST frame instead of baking un-lowered and snapping down when the
+     * authoritative sync arrives a few ticks later. Server code never sets this.
+     */
+    private static final ThreadLocal<Boolean> CLIENT_PREDICT = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    private static boolean isClientPredicting() {
+        return Boolean.TRUE.equals(CLIENT_PREDICT.get());
+    }
+
     public static final SlabAnchorMarker ANCHOR_TYPE = SlabAnchorMarker.ANCHOR;
     /**
      * FREEZE-ON-PLACE flat marker: a structural piece (full block / slab) placed at
@@ -131,6 +145,20 @@ public final class SlabAnchorAttachment {
             SlabAnchorMarker type,
             LongOpenHashSet set
     ) {
+        if (chunk.getLevel().isClientSide()) {
+            // Client: reads come from the render mirror (see getAttachment), so the chunk
+            // store is dead weight. Only during a predicted-placement pass do we mirror the
+            // write so the freshly-placed model bakes lowered on the first frame.
+            if (isClientPredicting()) {
+                SlabAnchorClientMirror.applyBucket(
+                        chunk.getLevel().dimension().location(),
+                        chunk.getPos().x,
+                        chunk.getPos().z,
+                        type,
+                        set == null ? new long[0] : set.toLongArray());
+            }
+            return;
+        }
         SlabAnchorStore store = getAnchorStore(chunk);
         if (store != null) {
             store.replace(type, set);
@@ -158,7 +186,7 @@ public final class SlabAnchorAttachment {
      * if {@code pos} does not qualify under {@link #qualifiesForAnchor}.
      */
     public static void addAnchor(Level world, BlockPos pos, BlockState state) {
-        if (world == null || world.isClientSide()) {
+        if (world == null || (world.isClientSide() && !isClientPredicting())) {
             return;
         }
         boolean qualifies = qualifiesForAnchor(world, pos, state);
@@ -257,7 +285,7 @@ public final class SlabAnchorAttachment {
     }
 
     public static void freezeLoweredOnPlace(Level world, BlockPos pos, BlockState state) {
-        if (world == null || world.isClientSide() || pos == null || state == null
+        if (world == null || (world.isClientSide() && !isClientPredicting()) || pos == null || state == null
                 || state.isAir() || !state.getFluidState().isEmpty()) {
             return;
         }
@@ -413,8 +441,32 @@ public final class SlabAnchorAttachment {
         }
     }
 
+    /**
+     * Client-only: optimistically apply, into the render mirror, the exact markers the
+     * server will set for a block the local player just placed, so the offset model bakes
+     * at the correct dy on the first frame (no place-high-then-snap-down). Mirrors the
+     * server placement sequence in SlabbedPlacementEvents, run under the CLIENT_PREDICT
+     * scope so marker writes land in the mirror; the authoritative server sync later
+     * confirms the same buckets. No-op off-client. Best-effort: if the prediction differs
+     * from the server it is corrected (and re-meshed) when the real sync arrives, i.e. the
+     * pre-fix behaviour at worst.
+     */
+    public static void predictClientPlacement(Level world, BlockPos pos, BlockState state) {
+        if (world == null || !world.isClientSide() || pos == null || state == null || state.isAir()) {
+            return;
+        }
+        CLIENT_PREDICT.set(Boolean.TRUE);
+        try {
+            addAnchor(world, pos, state);
+            updatePersistentLoweredSlabCarrier(world, pos, state);
+            freezeLoweredOnPlace(world, pos, state);
+        } finally {
+            CLIENT_PREDICT.set(Boolean.FALSE);
+        }
+    }
+
     public static void updatePersistentLoweredSlabCarrier(Level world, BlockPos pos, BlockState state) {
-        if (world == null || world.isClientSide()) {
+        if (world == null || (world.isClientSide() && !isClientPredicting())) {
             return;
         }
         boolean qualifies = qualifiesForPersistentLoweredSlabCarrier(world, pos, state);

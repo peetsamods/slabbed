@@ -1,7 +1,11 @@
 package com.slabbed.compat.terrainslabs;
 
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.fml.ModList;
@@ -10,6 +14,12 @@ import net.minecraftforge.fml.ModList;
  * Countered Terrain Slabs compatibility: subtractive-only. When the mod is present,
  * skip slab offsets for its blocks to avoid terrain/shape artifacts. Absent the mod,
  * this class is unreachable.
+ *
+ * <p>Generic Terrain Slabs offsets/support stay subtractive; named direct-support
+ * surfaces ({@link #customSlabSurfaceKind}) are a separate, narrow opt-in used only by
+ * the direct-object-support path in {@code SlabSupport} -- never by
+ * {@link #shouldSkipSlabSupport}/{@link #shouldSkipOffset}, which remain a blanket
+ * exclusion so TS blocks are never treated as generic vanilla-style slab support.
  */
 public final class TerrainSlabsCompat {
     private TerrainSlabsCompat() {
@@ -49,5 +59,55 @@ public final class TerrainSlabsCompat {
     private static boolean isLoaded(String modId) {
         ModList modList = ModList.get();
         return modList != null && modList.isLoaded(modId);
+    }
+
+    /**
+     * Returns the narrow direct-only custom slab surface role for proven named TS states.
+     * Only a TS block whose registry path ends {@code _slab}/{@code _slab_bottom} (a named,
+     * proven slab-shaped surface -- not every TS block) qualifies, and only when it is not
+     * waterlogged/fluid-filled and not a snowy variant.
+     */
+    public static CompatSlabSurfaceKind customSlabSurfaceKind(BlockState state) {
+        if (!LOADED || state == null || !state.hasProperty(SlabBlock.TYPE)) {
+            return CompatSlabSurfaceKind.NONE;
+        }
+
+        Block block = state.getBlock();
+        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
+        if (!isNamedCustomSlabSurface(id)
+                || !state.getFluidState().isEmpty()
+                || propertyEquals(state, "snowy", "true")) {
+            return CompatSlabSurfaceKind.NONE;
+        }
+
+        SlabType type = state.getValue(SlabBlock.TYPE);
+        if (type == SlabType.BOTTOM) {
+            return CompatSlabSurfaceKind.BOTTOM_LIKE;
+        }
+        if (type == SlabType.DOUBLE && propertyEquals(state, "generated", "true")) {
+            return CompatSlabSurfaceKind.BOTTOM_LIKE;
+        }
+        return CompatSlabSurfaceKind.NONE;
+    }
+
+    private static boolean isNamedCustomSlabSurface(ResourceLocation id) {
+        if (!isTerrainSlabsId(id)) {
+            return false;
+        }
+        String path = id.getPath();
+        return path.endsWith("_slab") || path.endsWith("_slab_bottom");
+    }
+
+    private static boolean propertyEquals(BlockState state, String propertyName, String expectedValue) {
+        for (Property<?> property : state.getProperties()) {
+            if (propertyName.equals(property.getName())) {
+                return expectedValue.equals(propertyValueName(state, property));
+            }
+        }
+        return false;
+    }
+
+    private static <T extends Comparable<T>> String propertyValueName(BlockState state, Property<T> property) {
+        return property.getName(state.getValue(property));
     }
 }
