@@ -44,6 +44,7 @@ sourceSets {
             include "com/slabbed/anchor/SlabAnchorClientMirrorEvents.java"
             include "com/slabbed/anchor/SlabAnchorNetwork.java"
             include "com/slabbed/compat/CompatHooks.java"
+            include "com/slabbed/compat/CompatSlabSurfaceKind.java"
             include "com/slabbed/compat/terrainslabs/TerrainSlabsCompat.java"
             include "com/slabbed/placement/SlabbedPlacementEvents.java"
             include "com/slabbed/client/ClientDy.java"
@@ -64,6 +65,10 @@ sourceSets {
             // The outline/model offset stays in the active event/model path, so enabling
             // shape mixins (e.g. SlabSupportStateMixin) here would double-offset.
             include "com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.java"
+            // Client-side placement prediction: apply the server's placement markers to the
+            // render mirror at placement time so the model bakes lowered on the first frame
+            // (no place-high-then-snap-down). Client-only, no shape offset -> safe.
+            include "com/slabbed/mixin/client/BlockItemClientPredictMixin.java"
             // Anchor/freeze CLEAR on actual block removal (never-pop law). onRemove is
             // cancellation-immune and covers every removal path. No shape offset -> safe.
             include "com/slabbed/mixin/BlockOnStateReplacedAnchorMixin.java"

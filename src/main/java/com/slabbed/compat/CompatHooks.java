@@ -31,4 +31,17 @@ public final class CompatHooks {
         }
         return false;
     }
+
+    /**
+     * Returns the narrow direct-only custom slab surface role for this state (NONE when no
+     * compat mod is loaded or the state does not qualify). Separate from
+     * {@link #shouldSkipSlabSupport}: this is an additive opt-in for named/proven surfaces,
+     * never a change to the blanket generic-support exclusion.
+     */
+    public static CompatSlabSurfaceKind customSlabSurfaceKind(BlockState state) {
+        if (TerrainSlabsCompat.isLoaded()) {
+            return TerrainSlabsCompat.customSlabSurfaceKind(state);
+        }
+        return CompatSlabSurfaceKind.NONE;
+    }
 }
