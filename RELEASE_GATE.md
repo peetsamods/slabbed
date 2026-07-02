@@ -1,4 +1,8 @@
-# RELEASE GATE — Slabbed (1.21.11 Terrain Slabs compat)
+# RELEASE GATE — Slabbed (fix/1211-slab-log-dodo-log, 1.21.11 TS-compat lineage)
+
+> ⚠️ 2026-07-02 SHIP HAZARD: do not build/stage ANY jar from this branch until Maintainer rules the
+> version bump — `mod_version` is still `0.4.0-beta.4`, the name of a jar live-verified WITHOUT
+> this branch's session fixes. See HANDOFF.md "CURRENT STATE".
 
 **Authoritative pre-release checklist for this branch. Read this BEFORE gating, blocking, or
 publishing a release. Applies to humans AND to automated pre-release checks (e.g. Codex).**
@@ -10,8 +14,9 @@ that is not a gate** (see below). Gate on the list under "✅ The gate" instead.
 
 ## ✅ The gate — ALL of these must pass
 
-1. **Headless gametests:** `./gradlew runGameTest` → `BUILD SUCCESSFUL` (46/46). This is the
-   maintained automated suite.
+1. **Headless gametests:** `./gradlew runGameTest` → `BUILD SUCCESSFUL`, ALL required tests passing
+   (66/66 as of `7cd8a348`, 2026-07-02 — the count grows with the suite; gate on the fresh run's
+   "All N required tests passed", not on this pinned number). This is the maintained automated suite.
 2. **Clean release jar** (`build/libs/slabbed-<version>.jar`):
    - No `debug/` / `dev/` package classes.
    - No diagnostic classes by role word —
