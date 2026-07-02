@@ -2,6 +2,7 @@ package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockEntityProvider;
@@ -167,16 +168,50 @@ public abstract class BlockItemPlacementIntentMixin {
         return intent != null && placePos.equals(intent.candidatePos());
     }
 
+    /**
+     * Placed-kind role for the compound-visible SIDE slab lane: any slab Slabbed itself
+     * offsets (was hardcoded to {@code Blocks.STONE_SLAB}, which kept every other slab
+     * material out of the lane — the perpendicular-cantilever side-slab RED). Compat-owned
+     * slabs opt out through the central CompatHooks capability skip, not a namespace list.
+     */
+    private static boolean slabbed$isCompoundVisibleSideLaneSlabKind(BlockState state) {
+        return state.getBlock() instanceof SlabBlock
+                && state.contains(SlabBlock.TYPE)
+                && state.getFluidState().isEmpty()
+                && !CompatHooks.shouldSkipOffset(state);
+    }
+
+    /**
+     * Source role for the compound-visible SIDE slab lane, matching the disjunction
+     * {@link SlabSupport#findLegalCompoundSlabRemap} itself accepts: a compound full-block
+     * anchor at dy=-1.0 (the original lane) OR a compound-visible slab lane owner at dy=-1.0
+     * (e.g. the owner-top slab of an SBSBS stack — the perpendicular-cantilever case, where
+     * the side slab is placed against the SLAB's visual side, not a full block's).
+     */
+    private static boolean slabbed$isCompoundVisibleSideLaneSource(
+            World world,
+            BlockPos sourcePos,
+            BlockState sourceState
+    ) {
+        if (Math.abs(SlabSupport.getYOffset(world, sourcePos, sourceState) + 1.0d)
+                > LOWERED_VISUAL_BOUNDARY_EPSILON) {
+            return false;
+        }
+        if (sourceState.getBlock() instanceof SlabBlock) {
+            return SlabSupport.isCompoundVisibleSlabLaneOwner(world, sourcePos, sourceState);
+        }
+        return SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, sourcePos, sourceState)
+                && SlabAnchorAttachment.isCompoundFullBlockAnchor(world, sourcePos);
+    }
+
     private static boolean slabbed$isCompoundVisibleSideLowerSlabResult(
             ItemPlacementContext context,
             BlockPos placePos,
             BlockState placedState
     ) {
         if (context.getSide().getAxis().isVertical()
-                || !placedState.isOf(Blocks.STONE_SLAB)
-                || !placedState.contains(SlabBlock.TYPE)
-                || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM
-                || !placedState.getFluidState().isEmpty()) {
+                || !slabbed$isCompoundVisibleSideLaneSlabKind(placedState)
+                || placedState.get(SlabBlock.TYPE) != SlabType.BOTTOM) {
             return false;
         }
         BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
@@ -185,10 +220,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getWorld(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getWorld(), sourcePos, sourceState) + 1.0d)
-                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+                && slabbed$isCompoundVisibleSideLaneSource(context.getWorld(), sourcePos, sourceState);
     }
 
     private static boolean slabbed$isCompoundVisibleSideUpperSlabResult(
@@ -197,10 +229,8 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockState placedState
     ) {
         if (context.getSide().getAxis().isVertical()
-                || !placedState.isOf(Blocks.STONE_SLAB)
-                || !placedState.contains(SlabBlock.TYPE)
-                || placedState.get(SlabBlock.TYPE) != SlabType.TOP
-                || !placedState.getFluidState().isEmpty()) {
+                || !slabbed$isCompoundVisibleSideLaneSlabKind(placedState)
+                || placedState.get(SlabBlock.TYPE) != SlabType.TOP) {
             return false;
         }
         BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
@@ -209,10 +239,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getWorld(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getWorld(), sourcePos, sourceState) + 1.0d)
-                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+                && slabbed$isCompoundVisibleSideLaneSource(context.getWorld(), sourcePos, sourceState);
     }
 
     private static boolean slabbed$isCompoundVisibleSideDoubleSlabResult(
@@ -221,10 +248,8 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockState placedState
     ) {
         if (context.getSide().getAxis().isVertical()
-                || !placedState.isOf(Blocks.STONE_SLAB)
-                || !placedState.contains(SlabBlock.TYPE)
-                || placedState.get(SlabBlock.TYPE) != SlabType.DOUBLE
-                || !placedState.getFluidState().isEmpty()) {
+                || !slabbed$isCompoundVisibleSideLaneSlabKind(placedState)
+                || placedState.get(SlabBlock.TYPE) != SlabType.DOUBLE) {
             return false;
         }
         BlockPos sourcePos = placePos.offset(context.getSide().getOpposite());
@@ -233,10 +258,7 @@ public abstract class BlockItemPlacementIntentMixin {
         return intent != null
                 && sourcePos.equals(intent.sourcePos())
                 && placePos.equals(intent.candidatePos())
-                && SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(context.getWorld(), sourcePos, sourceState)
-                && SlabAnchorAttachment.isCompoundFullBlockAnchor(context.getWorld(), sourcePos)
-                && Math.abs(SlabSupport.getYOffset(context.getWorld(), sourcePos, sourceState) + 1.0d)
-                <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+                && slabbed$isCompoundVisibleSideLaneSource(context.getWorld(), sourcePos, sourceState);
     }
 
 

@@ -3,6 +3,7 @@ package com.slabbed.anchor;
 import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
+import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -1089,28 +1090,36 @@ public final class SlabAnchorAttachment {
                 && state.getFluidState().isEmpty();
     }
 
-    private static boolean isCompoundVisibleSideLowerSlabState(BlockState state) {
+    /**
+     * Role check for the compound-visible SIDE slab lane: any slab Slabbed itself offsets, of
+     * any material. The lane was originally proven with stone slabs and keyed on
+     * {@code Blocks.STONE_SLAB}, which silently excluded every other slab material — an oak
+     * side slab placed against a compound dy=-1.0 owner could never carry the side marker nor
+     * reach the -1.0 lane (the perpendicular-cantilever side-slab RED,
+     * SBSBS_PERP_SIDE_TARGET_FROM_OWNER_TOP_RED). Exclusion is by capability (compat-owned
+     * slabs opt out through the central CompatHooks skip), not by material or namespace list.
+     */
+    private static boolean isCompoundVisibleSideLaneSlabState(BlockState state) {
         return state != null
-                && state.isOf(Blocks.STONE_SLAB)
+                && state.getBlock() instanceof SlabBlock
                 && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM
-                && state.getFluidState().isEmpty();
+                && state.getFluidState().isEmpty()
+                && !CompatHooks.shouldSkipOffset(state);
+    }
+
+    private static boolean isCompoundVisibleSideLowerSlabState(BlockState state) {
+        return isCompoundVisibleSideLaneSlabState(state)
+                && state.get(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 
     private static boolean isCompoundVisibleSideUpperSlabState(BlockState state) {
-        return state != null
-                && state.isOf(Blocks.STONE_SLAB)
-                && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.TOP
-                && state.getFluidState().isEmpty();
+        return isCompoundVisibleSideLaneSlabState(state)
+                && state.get(SlabBlock.TYPE) == SlabType.TOP;
     }
 
     private static boolean isCompoundVisibleSideDoubleSlabState(BlockState state) {
-        return state != null
-                && state.isOf(Blocks.STONE_SLAB)
-                && state.contains(SlabBlock.TYPE)
-                && state.get(SlabBlock.TYPE) == SlabType.DOUBLE
-                && state.getFluidState().isEmpty();
+        return isCompoundVisibleSideLaneSlabState(state)
+                && state.get(SlabBlock.TYPE) == SlabType.DOUBLE;
     }
 
     private static boolean isCompoundVisibleOwnerTopSlabState(BlockState state) {

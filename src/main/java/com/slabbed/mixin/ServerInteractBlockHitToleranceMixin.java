@@ -106,9 +106,11 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         Vec3d center = Vec3d.ofCenter(blockPos);
         Vec3d loweredSameCellSlabMergeCenter = null;
         Vec3d beta35ShiftedCenter = null;
+        Vec3d loweredSlabVisualCenter = null;
         if (blockPos instanceof BlockPos pos && player != null && packet != null) {
             loweredSameCellSlabMergeCenter = slabbed$loweredSameCellSlabMergeValidationCenter(pos, packet);
             beta35ShiftedCenter = slabbed$beta35ShiftedValidationCenter(pos, packet, center);
+            loweredSlabVisualCenter = slabbed$loweredSlabVisualValidationCenter(pos, packet, center);
             RuntimeDiagnostics.logFenceWallServerTolerance(
                     player.getEntityWorld(),
                     player,
@@ -138,6 +140,16 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (beta35ShiftedCenter != null) {
             return beta35ShiftedCenter;
         }
+        if (loweredSlabVisualCenter != null) {
+            RuntimeDiagnostics.logManualServerTolerance(
+                    player.getEntityWorld(),
+                    packet.getBlockHitResult(),
+                    player.getStackInHand(packet.getHand()),
+                    center,
+                    loweredSlabVisualCenter,
+                    "lowered_slab_visual_hit");
+            return loweredSlabVisualCenter;
+        }
         if (!(blockPos instanceof BlockPos pos)
                 || player == null
                 || packet == null
@@ -161,6 +173,43 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                 center.add(0.0d, COMPOUND_DY, 0.0d),
                 "compound_full_block_visual_hit");
         return center.add(0.0d, COMPOUND_DY, 0.0d);
+    }
+
+    /**
+     * WYSIWYG server hit validation for lowered SLAB targets. A slab in a Slabbed lowered lane
+     * (side lane -0.5, compound lane -1.0) renders, outlines and raycasts at its dy-shifted
+     * visual box, so an honest client aims at coordinates up to |dy| BELOW the vanilla block
+     * center — vanilla's fixed ±1.0000001 window around the UNSHIFTED center then rejects the
+     * packet ("too far away from hit block") and the interaction silently never happens on the
+     * server (the perpendicular-cantilever side-slab RED,
+     * SBSBS_PERP_SIDE_TARGET_FROM_OWNER_TOP_RED: client predicts the side slab, server drops
+     * it). Validate against the dy-shifted center with the SAME vanilla component tolerance:
+     * nothing widens for flat slabs (non-negative dy returns null) and the shift source is the
+     * server's own dy authority, never packet data.
+     */
+    private Vec3d slabbed$loweredSlabVisualValidationCenter(
+            BlockPos pos,
+            PlayerInteractBlockC2SPacket packet,
+            Vec3d center
+    ) {
+        World world = player.getEntityWorld();
+        BlockHitResult hit = packet.getBlockHitResult();
+        if (world == null || hit == null || center == null || !pos.equals(hit.getBlockPos())) {
+            return null;
+        }
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof SlabBlock)
+                || !state.contains(SlabBlock.TYPE)
+                || !state.getFluidState().isEmpty()) {
+            return null;
+        }
+        double targetDy = SlabSupport.getYOffset(world, pos, state);
+        if (!Double.isFinite(targetDy) || targetDy >= -EPSILON) {
+            return null;
+        }
+        Vec3d shiftedCenter = center.add(0.0d, targetDy, 0.0d);
+        Vec3d delta = hit.getPos().subtract(shiftedCenter);
+        return slabbed$isWithinVanillaComponentTolerance(delta) ? shiftedCenter : null;
     }
 
     private Vec3d slabbed$beta35ShiftedValidationCenter(
