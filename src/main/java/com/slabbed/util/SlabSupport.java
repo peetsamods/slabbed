@@ -66,6 +66,19 @@ import java.util.Set;
 public final class SlabSupport {
     private static final String BOTTOM_PERSISTENT_TRACE_OPT_IN = "slabbed.bottomPersistentTrace";
 
+    // Rule 19 (RULES.md §19): read ONCE at class-load, not per call. isBottomPersistentTracePos
+    // sits on the dy hot path (getYOffset early-guard + two getYOffsetInner sites), so a live
+    // Boolean.getBoolean locked the system-properties table on every BOTTOM-slab dy query.
+    // Caching is exact because nothing setPropertys this flag at runtime (verified: the only
+    // runtime setProperty calls in the tree target slabbed.render.offset.trace /
+    // slabbed.target.trace, both in client-gametest sources that are NOT in the compiled
+    // gametest include list). RE-INCLUSION TRAP: if a test that setPropertys
+    // "slabbed.bottomPersistentTrace" is ever added to sourceSets.gametest in build.gradle,
+    // this cache goes stale-false and the trace silently dies — re-audit cache-vs-live per
+    // RULES.md §19 before adding such a test. Enable via -D at JVM launch only.
+    private static final boolean BOTTOM_PERSISTENT_TRACE =
+            Boolean.getBoolean(BOTTOM_PERSISTENT_TRACE_OPT_IN);
+
     private SlabSupport() {
     }
 
@@ -2721,7 +2734,7 @@ public final class SlabSupport {
     }
 
     private static boolean isBottomPersistentTracePos(BlockPos pos) {
-        return Boolean.getBoolean(BOTTOM_PERSISTENT_TRACE_OPT_IN)
+        return BOTTOM_PERSISTENT_TRACE
                 && pos != null && pos.getX() == 0 && pos.getY() == 202 && pos.getZ() == 0;
     }
 
