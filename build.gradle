@@ -87,8 +87,10 @@ jar {
         rename { "${it}_${project.base.archivesName.get()}"}
     }
 
-    // Exclude dev-only and debug-only content from public release jar
-    exclude("com/slabbed/dev/**")
+    // Exclude dev-only and debug-only content from public release jar.
+    // com/slabbed/dev/** is intentionally NOT excluded: /slabdy and /slabdev must always
+    // ship (default-off, player-toggleable via slash command) — see SlabbedDevCommands
+    // and SlabdyClientCommands.
     exclude("com/slabbed/debug/**")
     exclude("com/slabbed/client/debug/**")
     exclude("com/slabbed/mixin/debug/**")

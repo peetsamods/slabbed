@@ -19,7 +19,8 @@
       "com.slabbed.test.CombinedSlabChainingMatrixTest",
       "com.slabbed.test.TerrainSlabsHotfixTest",
       "com.slabbed.test.UseOnCombineVsExtendPlacementTest",
-      "com.slabbed.test.SlabConnectionSteppedTest"
+      "com.slabbed.test.SlabConnectionSteppedTest",
+      "com.slabbed.test.SlabdyRowFormatterTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",
