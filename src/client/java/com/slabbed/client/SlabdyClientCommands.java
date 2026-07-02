@@ -35,7 +35,9 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
  * when explicitly invoked.
  *
  * <ul>
- *   <li>{@code /slabdy} — toggle the on-screen target-dy overlay.</li>
+ *   <li>passive: the on-screen target-dy overlay renders in the UL corner by default
+ *       (no command needed), updating live as the crosshair moves.</li>
+ *   <li>{@code /slabdy} — toggle that overlay off/on.</li>
  *   <li>{@code /slabdy row} — print the current target's full diagnostic dump to chat.</li>
  *   <li>{@code /slabdy use} — perform a real use/place against the current target and
  *       report the block before/after at the expected placement position.</li>
@@ -48,7 +50,13 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
  */
 public final class SlabdyClientCommands {
 
-    private static boolean overlayEnabled = false;
+    // Defaults ON so the passive target-dy reading shows in the UL corner WITHOUT the
+    // player having to invoke anything (Maintainer's request: "a passive reading at the UL
+    // corner ... I should not have to invoke the command"). Bare `/slabdy` toggles it
+    // off. The initial state can be forced with -Dslabbed.targetDyOverlay=false for a
+    // clean release cut; on these debug/test builds the passive reading is the point.
+    private static boolean overlayEnabled =
+            Boolean.parseBoolean(System.getProperty("slabbed.targetDyOverlay", "true"));
 
     private SlabdyClientCommands() {
     }
