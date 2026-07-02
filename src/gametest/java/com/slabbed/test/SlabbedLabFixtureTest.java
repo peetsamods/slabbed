@@ -414,6 +414,98 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
+     * COMPOUND SIDECAR (port of the 1.21.1 {@code isCompoundFullBlockAnchor} lane): a full block
+     * right-click-PLACED on a LOWERED bottom slab is geometrically at -1.0 the instant it is placed,
+     * but the flat anchor read froze it at -0.5 — popping it up 0.5 on the next read (the HANDOFF
+     * "compound -1.0 on right-click placement" gap; setBlockState twins already read -1.0 via
+     * {@code advVanillaCompoundStackTopMustBeFlush}). The sidecar records the authored -1.0 truth at
+     * placement, and — per the freeze law — it must SURVIVE removal of the source slab below.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void placedCompoundStackTopFreezesAtMinusOne(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        BlockState bs = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        world.setBlockState(base, bs, Block.NOTIFY_LISTENERS);                                     // L0 slab (0)
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);   // L1 stone (-0.5)
+        world.setBlockState(base.up(2), bs, Block.NOTIFY_LISTENERS);                               // L2 slab (-0.5, LOWERED)
+
+        // REAL placement path (onPlaced → addAnchor + freezeLoweredOnPlace): the compound stack top.
+        BlockPos topPos = base.up(3);
+        BlockState top = authorBlock(world, topPos, Blocks.STONE.getDefaultState());
+        ctx.assertTrue(top.isOf(Blocks.STONE), "authored stone not present at stack top");
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, topPos),
+                "placed stone on a bottom slab must be anchored");
+        ctx.assertTrue(SlabAnchorAttachment.isCompoundFullBlockAnchor(world, topPos),
+                "placed stone on a LOWERED bottom slab must carry the compound sidecar");
+
+        double dy = SlabSupport.getYOffset(world, topPos, top);
+        ctx.assertTrue(dy == -1.0,
+                "PLACED compound stack top must freeze at the -1.0 it was placed at (WYSIWYG), not the "
+                + "flat -0.5 anchor read; got dy=" + dy);
+
+        // NEVER-POP: breaking the source slab below must not move the placed piece (sidecar survives).
+        world.setBlockState(base.up(2), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        double dyAfter = SlabSupport.getYOffset(world, topPos, world.getBlockState(topPos));
+        ctx.assertTrue(dyAfter == -1.0,
+                "LAW: compound-frozen top must stay at -1.0 after its source slab is broken; got dy=" + dyAfter);
+        ctx.complete();
+    }
+
+    /**
+     * Negative control for the compound sidecar: a full block placed on a FLUSH bottom slab is the
+     * ordinary -0.5 anchor lane — it must NOT pick up the sidecar (over-broad authoring would sink
+     * every placed block on a plain slab to -1.0).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void placedFullBlockOnFlushSlabStillFreezesAtMinusHalf(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 2, 2);
+        world.setBlockState(slabPos, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);                                                           // flush slab (0)
+        BlockPos stonePos = slabPos.up();
+        BlockState stone = authorBlock(world, stonePos, Blocks.STONE.getDefaultState());
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, stonePos),
+                "placed stone on a flush bottom slab must be anchored");
+        ctx.assertTrue(!SlabAnchorAttachment.isCompoundFullBlockAnchor(world, stonePos),
+                "flush-slab anchor must NOT carry the compound sidecar");
+        double dy = SlabSupport.getYOffset(world, stonePos, stone);
+        ctx.assertTrue(dy == -0.5,
+                "control: placed stone on a flush bottom slab stays at -0.5; got dy=" + dy);
+        ctx.complete();
+    }
+
+    /**
+     * Follower parity on the compound top: an object resting ON a compound-frozen full block must
+     * track its authored -1.0 surface (visual triad — the follower and its support may not disagree).
+     * Before the sidecar the pair sat flush at the WRONG height (-0.5/-0.5); with it they sit flush
+     * at the placed height (-1.0/-1.0). A 0.5 float here means the column walk missed the sidecar.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void torchOnPlacedCompoundTopSitsFlush(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        BlockState bs = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        world.setBlockState(base, bs, Block.NOTIFY_LISTENERS);                                     // L0 slab (0)
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);   // L1 stone (-0.5)
+        world.setBlockState(base.up(2), bs, Block.NOTIFY_LISTENERS);                               // L2 slab (-0.5)
+        BlockPos topPos = base.up(3);
+        authorBlock(world, topPos, Blocks.STONE.getDefaultState());                                // L3 compound top (-1.0)
+        ctx.assertTrue(SlabAnchorAttachment.isCompoundFullBlockAnchor(world, topPos),
+                "precondition: stack top must carry the compound sidecar");
+
+        BlockPos torchPos = topPos.up();
+        world.setBlockState(torchPos, Blocks.TORCH.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double topDy = SlabSupport.getYOffset(world, topPos, world.getBlockState(topPos));
+        double torchDy = SlabSupport.getYOffset(world, torchPos, world.getBlockState(torchPos));
+        ctx.assertTrue(topDy == -1.0, "precondition: compound top reads -1.0; got " + topDy);
+        ctx.assertTrue(torchDy == -1.0,
+                "torch on a compound-frozen top must follow its -1.0 surface (flush); got dy=" + torchDy
+                + " (float gap=" + (torchDy - topDy) + ")");
+        ctx.complete();
+    }
+
+    /**
      * DODO guard: powder snow (a full cube, NOT a SnowBlock) must stay FLUSH on a slab — it's natural
      * terrain fill, never offset. Lowering it -0.5 stepped it below neighbouring powder snow on full
      * ground (the pulled-hotfix snowy-terrain DODO). PowderSnowBlock isn't a SnowBlock, so isThinTopLayer

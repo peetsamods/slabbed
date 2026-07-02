@@ -825,12 +825,19 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            // Compound sidecar: authored truth for the -1.0 lane. A right-click-PLACED compound
+            // stack top (FB on a LOWERED bottom slab) froze at the flat -0.5 anchor read even
+            // though it was placed at the geometric -1.0 — popping it up 0.5 on the next read.
+            // The sidecar, recorded once at placement, reproduces the exact placement height and
+            // survives source-slab removal. Deliberately NO live below-slab fallback here: the
+            // frozen dy must never drift when neighbours change later (freeze law).
+            boolean compound = com.slabbed.anchor.SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos);
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
-                Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
-                        side, pos.toShortString(), state);
+                Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy={}",
+                        side, pos.toShortString(), state, compound ? "-1.0" : "-0.5");
             }
-            return -0.5;
+            return compound ? -1.0 : -0.5;
         }
 
         // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a slab or
@@ -1166,6 +1173,22 @@ public final class SlabSupport {
     }
 
     /**
+     * Compound-source predicate: the position is a bottom slab that is ITSELF lowered, so an
+     * ordinary full block placed directly above it belongs to the compound lane {@code dy=-1.0}.
+     * Delegates to {@link #loweredBottomSlabSupportDyForCompound} — the exact reader the geometric
+     * compound branch of {@link #getYOffsetInner} uses — so the authored sidecar
+     * ({@link com.slabbed.anchor.SlabAnchorAttachment#qualifiesForCompoundFullBlockAnchor}) can
+     * never disagree with the geometric dy the piece was placed at.
+     */
+    public static boolean isLoweredCompoundSourceSlab(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null || !isBottomSlab(state)) {
+            return false;
+        }
+        double dy = loweredBottomSlabSupportDyForCompound(world, pos);
+        return Double.isFinite(dy) && dy < -1.0e-6d;
+    }
+
+    /**
      * True for a VANILLA (minecraft-namespace) slab — the only slab kind allowed to be a
      * directCustom subject. This lets a vanilla slab placed on a Terrain Slabs surface lower
      * onto it ("combine into a flush double"), while Terrain Slabs' own slabs are excluded so
@@ -1271,8 +1294,15 @@ public final class SlabSupport {
             if (CompatHooks.customSlabSurfaceKind(cur) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
                 return -0.5;
             }
-            if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
+            if (isBottomSlab(cur)) {
                 return -0.5;
+            }
+            if (SlabAnchorAttachment.isAnchored(world, cursor)) {
+                // A compound-anchored FB (authored -1.0 lane) presents its visible top a full
+                // cell down, so a follower resting on it must drop -1.0 to stay flush — the
+                // follower tracks the same authored truth its support reads (visual triad).
+                // (Slabs never carry the sidecar, so the bottom-slab return above is unaffected.)
+                return SlabAnchorAttachment.isCompoundFullBlockAnchor(world, cursor) ? -1.0 : -0.5;
             }
             // Natural-terrain stop (see hasSlabInColumn): never walk through a solid opaque full cube
             // to a slab deeper in the column — that lowered natural terrain over Terrain Slabs → holes.

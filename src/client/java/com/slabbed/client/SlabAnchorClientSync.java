@@ -63,6 +63,21 @@ public final class SlabAnchorClientSync {
             return set != null && set.contains(pos.asLong());
         };
 
+        // Same client-world fallback for the compound full-block sidecar, so the model render path
+        // sees the authored -1.0 lane for a placed compound stack top (not the flat -0.5).
+        SlabAnchorAttachment.clientCompoundFullBlockAnchorLookup = pos -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc == null || mc.world == null) {
+                return false;
+            }
+            WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk == null) {
+                return false;
+            }
+            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
+
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
 
@@ -104,6 +119,26 @@ public final class SlabAnchorClientSync {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.worldRenderer != null) {
                 scheduleRerendersForSet(mc, initialFrozenFlat);
+            }
+        }
+
+        // COMPOUND sidecar: same live-sync + initial-population rerender handling, so a placed
+        // compound stack top renders at its authored -1.0 as soon as the sidecar sync arrives
+        // (the anchor packet alone would briefly render it at -0.5).
+        chunk.<LongOpenHashSet>onAttachedSet(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE)
+                .register((oldSet, newSet) -> {
+                    MinecraftClient mc = MinecraftClient.getInstance();
+                    if (mc.worldRenderer == null) {
+                        return;
+                    }
+                    scheduleRerendersForSet(mc, oldSet);
+                    scheduleRerendersForSet(mc, newSet);
+                });
+        LongOpenHashSet initialCompound = chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+        if (initialCompound != null && !initialCompound.isEmpty()) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc.worldRenderer != null) {
+                scheduleRerendersForSet(mc, initialCompound);
             }
         }
     }
