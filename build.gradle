@@ -106,6 +106,10 @@ sourceSets {
         java {
             setSrcDirs(["src/gametest/java"])
             include "com/slabbed/test/ForgeOrdinaryFullBlockAnchorGameTest.java"
+            // Combined-slab chaining diagnostic matrix (port of the main-branch
+            // CombinedSlabChainingMatrixTest discipline; vanilla-only — the Forge
+            // gametest run loads no Terrain Slabs jar, so TS orderings stay live-gated).
+            include "com/slabbed/test/ForgeCombinedSlabChainingMatrixGameTest.java"
         }
         resources {
             setSrcDirs([])
