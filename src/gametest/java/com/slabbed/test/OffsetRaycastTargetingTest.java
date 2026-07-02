@@ -242,12 +242,18 @@ public final class OffsetRaycastTargetingTest {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 6. BLOCKER GUARD: a fence on a bottom slab renders un-lowered, so its outline
-    //    must NOT be offset (else the authoritative raycast targets a phantom 0.5
-    //    below the rendered fence).
+    // 6. WYSIWYG TRIAD: a fence on a bottom slab now renders LOWERED (GH #21 model
+    //    fix), so its outline/raycast MUST follow the same dy — otherwise the
+    //    authoritative nearest-hit raycast targets a phantom half a block above the
+    //    visually-lowered fence.
+    //
+    //    NOTE: this test previously asserted the OPPOSITE ("outline must NOT be
+    //    offset"), codifying the pre-GH#21 un-lowered model. That assertion was a
+    //    false-green pin for the exact "vanilla slabs fence raycast broken" bug; it is
+    //    corrected here to assert the outline TRACKS the lowered model.
     // ──────────────────────────────────────────────────────────────────────────
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void connectionBlockOutlineNotOffset(TestContext ctx) {
+    public void connectionBlockOutlineFollowsLoweredModel(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
         BlockPos slab = origin.add(3, 2, 3);
@@ -257,12 +263,15 @@ public final class OffsetRaycastTargetingTest {
         BlockPos fence = slab.up();
         world.setBlockState(fence, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
 
+        double dy = SlabSupport.getVisualYOffset(world, fence, world.getBlockState(fence));
+        ctx.assertTrue(dy < -1.0e-6, "fence on a bottom slab must resolve a lowered dy, got " + dy);
+
         VoxelShape outline = world.getBlockState(fence).getOutlineShape(world, fence, ShapeContext.absent());
         ctx.assertFalse(outline.isEmpty(), "fence outline should be non-empty");
         double minY = outline.getBoundingBox().minY;
-        ctx.assertTrue(minY >= -1.0e-6,
-                "fence-on-slab outline must NOT be offset below 0 (got minY=" + minY
-                        + "); it renders un-lowered, so the raycast must match");
+        ctx.assertTrue(Math.abs(minY - dy) < 1.0e-6,
+                "fence-on-slab outline minY must follow the lowered dy (" + dy + "), got minY=" + minY
+                        + " — the outline/raycast must match the visually-lowered model (GH #21)");
         ctx.complete();
     }
 

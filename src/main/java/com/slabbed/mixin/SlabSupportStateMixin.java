@@ -4,13 +4,9 @@ import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
-import net.minecraft.block.FenceBlock;
-import net.minecraft.block.PaneBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
-import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TorchBlock;
-import net.minecraft.block.WallBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -123,31 +119,17 @@ public abstract class SlabSupportStateMixin {
         }
     }
 
-    /**
-     * Connection blocks (fences, walls, panes) have their render dy forced to 0 by
-     * {@code OffsetBlockStateModel} unless they are a direct Terrain Slabs custom-support
-     * object. The outline/raycast shape must follow the same rule, otherwise the now
-     * authoritative nearest-hit raycast would target a phantom offset outline half a block
-     * below the rendered block.
-     */
-    private static boolean slabbed$isRenderZeroedConnectionBlock(BlockView world, BlockPos pos, BlockState state) {
-        Block block = state.getBlock();
-        boolean connection = block instanceof FenceBlock
-                || block instanceof WallBlock
-                || block instanceof PaneBlock;
-        return connection && !SlabSupport.isDirectCustomSlabSupportedObject(world, pos, state);
-    }
-
     @Inject(method = "getRaycastShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/shape/VoxelShape;",
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetRaycast(BlockView world, BlockPos pos,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
 
-        if (slabbed$isRenderZeroedConnectionBlock(world, pos, self)) {
-            return;
-        }
-
+        // Fences/walls/panes now render lowered on a vanilla slab too (GH #21 model fix
+        // in OffsetBlockStateModel.emitQuads), so their outline AND raycast shape MUST
+        // follow getVisualYOffset — the old connection-block bail-out here was the mirror
+        // of the model dy=0 suppression that fix removed, and leaving it made the fence
+        // raycast/outline a phantom half a block above the visually-lowered post.
         double yOff = SlabSupport.getVisualYOffset(world, pos, self);
         if (yOff != 0.0) {
             VoxelShape shape = cir.getReturnValue();
@@ -169,12 +151,6 @@ public abstract class SlabSupportStateMixin {
         // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
         Block block = self.getBlock();
         if (block instanceof net.minecraft.block.CarpetBlock || block instanceof net.minecraft.block.PaleMossCarpetBlock) {
-            return;
-        }
-
-        // Connection blocks render un-lowered (OffsetBlockStateModel zeroes their dy);
-        // keep the outline aligned so the nearest-hit raycast cannot target a phantom.
-        if (slabbed$isRenderZeroedConnectionBlock(world, pos, self)) {
             return;
         }
 
