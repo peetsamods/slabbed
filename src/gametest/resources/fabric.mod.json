@@ -22,7 +22,8 @@
       "com.slabbed.test.SlabConnectionSteppedTest",
       "com.slabbed.test.SlabdyRowFormatterTest",
       "com.slabbed.test.SlabdyRecorderToggleTest",
-      "com.slabbed.test.SlabbedDiagnosticsTest"
+      "com.slabbed.test.SlabbedDiagnosticsTest",
+      "com.slabbed.test.AnchoredSlabTriadTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",

@@ -150,19 +150,31 @@ public final class SlabbedDiagnostics {
         return Math.abs(outlineMinY - visualDy) > EPS;
     }
 
-    /** True for blocks whose un-offset outline minY is 0, so outlineMinY == dy when offset. */
+    /**
+     * True for blocks whose un-offset outline minY is exactly 0, so outlineMinY == dy once
+     * the mixin offsets it. This EXCLUDES blocks with a variable base:
+     * <ul>
+     *   <li>TOP slabs (outline base 0.5 — a lowered top slab correctly reads outlineMinY 0.0,
+     *       which a base-0 assumption misreads as a mismatch; verified in gametest against a
+     *       stale-anchored top slab, and this exact false positive was in the recorder data);</li>
+     *   <li>stairs (base varies with half/shape).</li>
+     * </ul>
+     * DOUBLE slabs are full cubes and are caught by the isOpaqueFullCube branch.
+     */
     public static boolean hasGridBasedOutline(BlockState state) {
         if (state.isOpaqueFullCube()) {
             return true;
         }
         Block b = state.getBlock();
-        return b instanceof SlabBlock
-                || b instanceof net.minecraft.block.FenceBlock
+        if (b instanceof SlabBlock) {
+            return state.contains(SlabBlock.TYPE)
+                    && state.get(SlabBlock.TYPE) == net.minecraft.block.enums.SlabType.BOTTOM;
+        }
+        return b instanceof net.minecraft.block.FenceBlock
                 || b instanceof net.minecraft.block.WallBlock
                 || b instanceof net.minecraft.block.PaneBlock
                 || b instanceof net.minecraft.block.FenceGateBlock
-                || b instanceof net.minecraft.block.BedBlock
-                || b instanceof net.minecraft.block.StairsBlock;
+                || b instanceof net.minecraft.block.BedBlock;
     }
 
     /** Opaque full cube rendered at a nonzero dy → face-cull-vs-render see-through hole. */
