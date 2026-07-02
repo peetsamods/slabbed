@@ -50,7 +50,11 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class LiveCursorIntentRecorder {
 
-    private static final boolean ENABLED = Boolean.getBoolean("slabbed.liveCursorIntentRecorder");
+    // Runtime-toggleable (see toggle()/isEnabled()) — the JVM property only sets the
+    // INITIAL value, so a dev/CI launch can still start already-enabled, but a player
+    // reaches this the same way as everything else in Slabbed's debug surface: a slash
+    // command (/slabdy record), never a JVM flag they'd have to know about in advance.
+    private static volatile boolean enabled = Boolean.getBoolean("slabbed.liveCursorIntentRecorder");
     private static final String DIR_PROPERTY = "slabbed.liveCursorIntentRecorderDir";
     private static final String SCHEMA_VERSION = "5";
     private static final String RECORDER_VERSION = "5-target-reason-full-block-predicates-slab-top-dy";
@@ -127,11 +131,45 @@ public final class LiveCursorIntentRecorder {
     private LiveCursorIntentRecorder() {
     }
 
+    public static boolean isEnabled() {
+        return enabled;
+    }
+
+    /**
+     * Flip the recorder on/off at runtime (the {@code /slabdy record} slash command).
+     * Turning ON calls {@link #bootstrap()} so a session that never set the JVM
+     * property still gets a real output directory instead of silently no-oping;
+     * turning OFF calls {@link #recordShutdown()} so the summary/manifest are flushed
+     * immediately rather than waiting for the JVM shutdown hook.
+     */
+    public static boolean toggle() {
+        if (enabled) {
+            // recordShutdown()/bootstrap() both early-return on !enabled, so the
+            // flush must happen BEFORE flipping the flag off, and bootstrap AFTER
+            // flipping it on — not the other way around.
+            recordShutdown();
+            enabled = false;
+        } else {
+            enabled = true;
+            bootstrap();
+        }
+        return enabled;
+    }
+
+    /** Display string of the recorder's current output directory ("not started" before the first enable). */
+    public static String currentLogPathDisplay() {
+        return outputDir == null ? "not started" : outputDir.toAbsolutePath().toString();
+    }
+
     public static void bootstrap() {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
+            // Allow a fresh session_start/run_end pair each time toggle() re-enables
+            // after a prior recordShutdown() — without this, a second toggle-off in
+            // the same JVM run would hit runEnded==true and silently skip its flush.
+            runEnded = false;
             ensureInitialized();
             registerShutdownHook();
             writeManifest();
@@ -146,7 +184,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordShutdown() {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -176,7 +214,7 @@ public final class LiveCursorIntentRecorder {
             ItemStack held,
             float tickProgress
     ) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -209,7 +247,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordClientInteract(PlayerEntity player, Hand hand, BlockHitResult hit) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -238,7 +276,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordClientInteractResult(ActionResult result) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -260,7 +298,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordPacketSequence(Hand hand, BlockHitResult hit, int sequence) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -294,7 +332,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordServerInteract(PlayerEntity player, Hand hand, BlockHitResult hit, int sequence) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -323,7 +361,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordServerInteractResult(int sequence) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -353,7 +391,7 @@ public final class LiveCursorIntentRecorder {
             Direction effectiveSide,
             String hitDescriptor
     ) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -391,7 +429,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordPlacementContext(ItemPlacementContext ctx) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -466,7 +504,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordSlabPlacementState(ItemPlacementContext ctx, BlockState state) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -495,7 +533,7 @@ public final class LiveCursorIntentRecorder {
     }
 
     public static void recordPlacementResult(ItemPlacementContext ctx, ActionResult result) {
-        if (!ENABLED) {
+        if (!enabled) {
             return;
         }
         synchronized (LiveCursorIntentRecorder.class) {
@@ -875,7 +913,7 @@ public final class LiveCursorIntentRecorder {
                 + jsonPair("runId", RUN_ID) + ","
                 + jsonPair("recorder", "LiveCursorIntentRecorder") + ","
                 + jsonPair("recorderVersion", RECORDER_VERSION) + ","
-                + jsonPair("enabled", Boolean.toString(ENABLED)) + ","
+                + jsonPair("enabled", Boolean.toString(enabled)) + ","
                 + jsonPair("createdAt", Instant.now().toString()) + ","
                 + jsonPair("dir", outputDir.toAbsolutePath().toString()) + ","
                 + jsonPair("gameDir", FabricLoader.getInstance().getGameDir().toAbsolutePath().toString()) + ","

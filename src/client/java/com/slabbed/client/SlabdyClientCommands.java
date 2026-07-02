@@ -3,6 +3,7 @@ package com.slabbed.client;
 import com.mojang.brigadier.context.CommandContext;
 import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.dev.SlabdyRowFormatter;
+import com.slabbed.dev.audit.LiveCursorIntentRecorder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -38,6 +39,11 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
  *   <li>{@code /slabdy row} — print the current target's full diagnostic dump to chat.</li>
  *   <li>{@code /slabdy use} — perform a real use/place against the current target and
  *       report the block before/after at the expected placement position.</li>
+ *   <li>{@code /slabdy record} — toggle {@link LiveCursorIntentRecorder} (the existing,
+ *       far more capable append-only placement/targeting recorder already on this
+ *       branch — re-derived from Forge's simpler {@code SlabbedRecorder} was NOT
+ *       needed here; this just wires the existing tool to a slash-command toggle
+ *       instead of a JVM-flag-only, class-init-cached one).</li>
  * </ul>
  */
 public final class SlabdyClientCommands {
@@ -53,7 +59,8 @@ public final class SlabdyClientCommands {
                         literal("slabdy")
                                 .executes(SlabdyClientCommands::toggleOverlay)
                                 .then(literal("row").executes(SlabdyClientCommands::runRow))
-                                .then(literal("use").executes(SlabdyClientCommands::runUse))));
+                                .then(literal("use").executes(SlabdyClientCommands::runUse))
+                                .then(literal("record").executes(SlabdyClientCommands::runRecord))));
         HudRenderCallback.EVENT.register(SlabdyClientCommands::renderOverlay);
     }
 
@@ -107,6 +114,13 @@ public final class SlabdyClientCommands {
                 + " before=" + before
                 + " after=" + after
                 + " result=" + result));
+        return 1;
+    }
+
+    private static int runRecord(CommandContext<FabricClientCommandSource> ctx) {
+        boolean nowOn = LiveCursorIntentRecorder.toggle();
+        ctx.getSource().sendFeedback(Text.literal("Slabbed recorder: "
+                + (nowOn ? "on -> " + LiveCursorIntentRecorder.currentLogPathDisplay() : "off")));
         return 1;
     }
 

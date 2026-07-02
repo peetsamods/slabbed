@@ -2,18 +2,20 @@ package com.slabbed.util;
 
 import java.lang.reflect.Method;
 
+import com.slabbed.dev.audit.LiveCursorIntentRecorder;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 /**
  * Reflection bridge to the dev-only audit class
- * {@code com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit}.
- *
- * <p>The audit class is excluded from the public release jar. To keep
- * production mixins free of direct hard-link references, callers route
- * through this bridge. The bridge is gated by the {@code slabbed.debug.sbsb}
- * system property so production/default invocations are no-ops with no
- * class loading attempted.
+ * {@code com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit}, plus (historically)
+ * a reflective path to the recorder — kept generic/reflective for the audit class and
+ * {@code BsFbLiveTrace} (both {@code com/slabbed/debug/**}, still excluded from the
+ * release jar), but {@link #invokeRecorder} now hard-references
+ * {@link LiveCursorIntentRecorder} directly: {@code com/slabbed/dev/**} always ships
+ * (see build.gradle), so there is no longer a "class might be absent" case to guard
+ * against for the recorder specifically, and gating on a stale JVM-property snapshot
+ * would have made {@code /slabdy record}'s runtime toggle silently do nothing.
  *
  * <p>If the audit class is missing (release jar) or any reflective failure
  * occurs, the call is silently dropped.
@@ -22,14 +24,11 @@ public final class SlabbedAuditBridge {
 
     private static final String AUDIT_CLASS_NAME =
             "com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit";
-    private static final String LIVE_RECORDER_CLASS_NAME =
-            "com.slabbed.dev.audit.LiveCursorIntentRecorder";
     private static final String LIVE_TRACE_CLASS_NAME =
             "com.slabbed.debug.BsFbLiveTrace";
 
     /** Enable with JVM arg: {@code -Dslabbed.debug.sbsb=true}. */
     private static final boolean ENABLED = Boolean.getBoolean("slabbed.debug.sbsb");
-    private static final boolean LIVE_RECORDER_ENABLED = Boolean.getBoolean("slabbed.liveCursorIntentRecorder");
     private static final boolean LIVE_TRACE_ENABLED = Boolean.getBoolean("slabbed.bsfb.live.trace");
 
     private SlabbedAuditBridge() {
@@ -40,7 +39,7 @@ public final class SlabbedAuditBridge {
     }
 
     public static boolean isRecorderEnabled() {
-        return LIVE_RECORDER_ENABLED;
+        return LiveCursorIntentRecorder.isEnabled();
     }
 
     public static boolean isLiveTraceEnabled() {
@@ -48,7 +47,7 @@ public final class SlabbedAuditBridge {
     }
 
     public static void bootstrapLiveRecorder() {
-        invokeRecorder("bootstrap", new Class<?>[]{});
+        LiveCursorIntentRecorder.bootstrap();
     }
 
     public static void invoke(String methodName, Class<?>[] paramTypes, Object... args) {
@@ -65,15 +64,15 @@ public final class SlabbedAuditBridge {
     }
 
     public static void invokeRecorder(String methodName, Class<?>[] paramTypes, Object... args) {
-        if (!LIVE_RECORDER_ENABLED) {
+        if (!LiveCursorIntentRecorder.isEnabled()) {
             return;
         }
         try {
-            Class<?> recorderClass = Class.forName(LIVE_RECORDER_CLASS_NAME);
-            Method method = recorderClass.getMethod(methodName, paramTypes);
+            Method method = LiveCursorIntentRecorder.class.getMethod(methodName, paramTypes);
             method.invoke(null, args);
         } catch (ReflectiveOperationException | LinkageError ignored) {
-            // Recorder class is dev-only and excluded from the release jar.
+            // Should not happen now that the class is a hard reference above, but a
+            // recording-tool failure must never take gameplay down either way.
         }
     }
 
