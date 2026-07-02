@@ -494,4 +494,409 @@ public final class SlabbedLabFixtureTest {
 
         ctx.complete();
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Offset-aware nearest-hit raycast (targeting overhaul port from 1.21.11 main,
+    // origin 39a345e7). These tests call SlabbedOffsetRaycast.raycast directly on
+    // the test ServerWorld (whose outline shapes are dy-offset by the common
+    // SlabSupportStateMixin), so the targeting geometry is verified with no rendered
+    // client and no rescue heuristics. Tests that assert the fix also assert the
+    // matching VANILLA world.raycast result to document the exact divergence the
+    // offset-aware raycast corrects.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private static final double RAY_EPS = 1.0e-6;
+
+    /** Offset-aware nearest-hit raycast (the system under test). */
+    private static net.minecraft.util.hit.BlockHitResult slabbedRay(
+            ServerWorld world, net.minecraft.util.math.Vec3d eye, net.minecraft.util.math.Vec3d end) {
+        return com.slabbed.util.SlabbedOffsetRaycast.raycast(world, eye, end, ShapeContext.absent());
+    }
+
+    /** Stock vanilla outline raycast (no fluids), exactly as the pick path would do it. */
+    private static net.minecraft.util.hit.HitResult vanillaRay(
+            ServerWorld world, net.minecraft.util.math.Vec3d eye, net.minecraft.util.math.Vec3d end) {
+        return world.raycast(new net.minecraft.world.RaycastContext(
+                eye, end,
+                net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
+                net.minecraft.world.RaycastContext.FluidHandling.NONE,
+                ShapeContext.absent()));
+    }
+
+    private static net.minecraft.util.math.Vec3d rayV(BlockPos origin, double dx, double dy, double dz) {
+        return new net.minecraft.util.math.Vec3d(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+    }
+
+    /**
+     * Build a lowered full block: a bottom slab with a solid full block directly on top.
+     * The full block resolves to dy=-0.5 via live {@link SlabSupport#getYOffset}
+     * (FB-on-bottom-slab), so its outline spans world Y [F.y-0.5, F.y+0.5].
+     * Returns the full-block position.
+     */
+    private static BlockPos buildLoweredFullBlock(ServerWorld world, BlockPos slabPos) {
+        world.setBlockState(slabPos,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        BlockPos fullPos = slabPos.up();
+        world.setBlockState(fullPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        return fullPos;
+    }
+
+    // 1. Sanity: aiming straight down at a lowered block's visual top hits it.
+    //    (Vanilla already gets this right — the visual top lies inside the logical
+    //    cell — so it doubles as a parity check.)
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastLoweredFullBlockTopFaceTargetsBlock(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos full = buildLoweredFullBlock(world, origin.add(3, 2, 3));
+
+        ctx.assertTrue(SlabSupport.getYOffset(world, full, world.getBlockState(full)) == -0.5,
+                "fixture invalid: full block should be lowered -0.5");
+
+        // Aim straight down at the visual top centre (world Y = full.y + 0.5).
+        net.minecraft.util.math.Vec3d eye = rayV(origin, 3.5, 6.0, 3.5);
+        net.minecraft.util.math.Vec3d end = rayV(origin, 3.5, 0.0, 3.5);
+        net.minecraft.util.hit.BlockHitResult hit = slabbedRay(world, eye, end);
+
+        ctx.assertTrue(hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK, "expected a block hit");
+        ctx.assertTrue(hit.getBlockPos().equals(full),
+                "expected hit on lowered full block " + full + ", got " + hit.getBlockPos());
+        ctx.assertTrue(hit.getSide() == Direction.UP, "expected UP face, got " + hit.getSide());
+        ctx.assertTrue(Math.abs(hit.getPos().y - (full.getY() + 0.5)) < 1.0e-4,
+                "expected hit Y at visual top " + (full.getY() + 0.5) + ", got " + hit.getPos().y);
+        ctx.complete();
+    }
+
+    // 2. THE BUG, FIXED: a near-horizontal ray at the lowered block's visual
+    //    mid-height never enters the block's logical cell, so vanilla's voxel DDA
+    //    cannot see it (returns MISS / the slab). The offset-aware raycast tests the
+    //    up-neighbour and hits the block the player is actually looking at.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastLoweredFullBlockMidHeightHorizontalRay(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos full = buildLoweredFullBlock(world, origin.add(3, 2, 3));
+
+        // Horizontal ray at world Y = full.y - 0.25 (inside the lowered outline
+        // [full.y-0.5, full.y+0.5], but in the cell layer of the slab BELOW).
+        double y = full.getY() - 0.25;
+        net.minecraft.util.math.Vec3d eye = rayV(origin, 3.5, y - origin.getY(), 0.5);
+        net.minecraft.util.math.Vec3d end = rayV(origin, 3.5, y - origin.getY(), 7.5);
+
+        net.minecraft.util.hit.BlockHitResult hit = slabbedRay(world, eye, end);
+        ctx.assertTrue(hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK,
+                "offset-aware raycast should hit the lowered block, got " + hit.getType());
+        ctx.assertTrue(hit.getBlockPos().equals(full),
+                "offset-aware raycast should target the lowered full block " + full
+                        + ", got " + hit.getBlockPos());
+        ctx.assertTrue(hit.getSide() == Direction.NORTH,
+                "expected NORTH face (player-facing), got " + hit.getSide());
+
+        // Negative control: stock vanilla cannot see the block at this aim.
+        net.minecraft.util.hit.HitResult van = vanillaRay(world, eye, end);
+        boolean vanillaSawBlock = van.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                && ((net.minecraft.util.hit.BlockHitResult) van).getBlockPos().equals(full);
+        ctx.assertFalse(vanillaSawBlock,
+                "control failed: vanilla DDA unexpectedly hit the lowered block — bug geometry invalid");
+        ctx.complete();
+    }
+
+    // 3. NO REGRESSION: for ordinary (non-offset) blocks the offset-aware raycast
+    //    returns exactly what vanilla returns, across several aim directions.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastNonOffsetBlockMatchesVanilla(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos p = origin.add(4, 3, 4); // isolated, air all around -> dy = 0
+        world.setBlockState(p, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(SlabSupport.getYOffset(world, p, world.getBlockState(p)) == 0.0,
+                "fixture invalid: isolated block must have dy 0");
+
+        net.minecraft.util.math.Vec3d centre = rayV(origin, 4.5, 3.5, 4.5);
+        net.minecraft.util.math.Vec3d[] eyes = {
+                rayV(origin, 4.5, 6.5, 4.5),   // straight down -> UP face
+                rayV(origin, 4.5, 3.5, 1.0),   // horizontal -> NORTH face
+                rayV(origin, 1.0, 3.5, 4.5),   // horizontal -> WEST face
+                rayV(origin, 1.0, 6.0, 1.0),   // diagonal from above
+                rayV(origin, 7.5, 3.5, 7.5),   // horizontal from +X+Z corner
+        };
+        for (int i = 0; i < eyes.length; i++) {
+            net.minecraft.util.math.Vec3d eye = eyes[i];
+            net.minecraft.util.math.Vec3d end = centre.add(centre.subtract(eye).normalize().multiply(0.5));
+            net.minecraft.util.hit.BlockHitResult mine = slabbedRay(world, eye, end);
+            net.minecraft.util.hit.HitResult van = vanillaRay(world, eye, end);
+            ctx.assertTrue(van.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK,
+                    "ray " + i + " control: vanilla should hit the block");
+            ctx.assertTrue(mine.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK,
+                    "ray " + i + ": offset raycast should hit the block");
+            net.minecraft.util.hit.BlockHitResult vanBlock = (net.minecraft.util.hit.BlockHitResult) van;
+            ctx.assertTrue(mine.getBlockPos().equals(vanBlock.getBlockPos()),
+                    "ray " + i + ": pos mismatch mine=" + mine.getBlockPos() + " vanilla=" + vanBlock.getBlockPos());
+            ctx.assertTrue(mine.getSide() == vanBlock.getSide(),
+                    "ray " + i + ": side mismatch mine=" + mine.getSide() + " vanilla=" + vanBlock.getSide());
+            ctx.assertTrue(mine.getPos().squaredDistanceTo(vanBlock.getPos()) < RAY_EPS,
+                    "ray " + i + ": hit point mismatch mine=" + mine.getPos() + " vanilla=" + vanBlock.getPos());
+        }
+        ctx.complete();
+    }
+
+    // 4. NEAREST WINS: a plain block in front of a lowered block must be selected —
+    //    the offset-aware raycast must not over-eagerly grab the offset block.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastNearestVisualSurfaceWins(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos full = buildLoweredFullBlock(world, origin.add(3, 2, 5));   // lowered block, far (+Z)
+        BlockPos near = origin.add(3, 2, 2);                                  // plain block, near (-Z), dy 0
+        world.setBlockState(near, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        // Same mid-height horizontal ray as test 2; the near block intersects first.
+        double y = full.getY() - 0.25; // 0.75 within the near block's [y,y+1]
+        net.minecraft.util.math.Vec3d eye = rayV(origin, 3.5, y - origin.getY(), 0.5);
+        net.minecraft.util.math.Vec3d end = rayV(origin, 3.5, y - origin.getY(), 7.5);
+
+        net.minecraft.util.hit.BlockHitResult hit = slabbedRay(world, eye, end);
+        ctx.assertTrue(hit.getBlockPos().equals(near),
+                "nearest block should win: expected " + near + ", got " + hit.getBlockPos());
+        ctx.complete();
+    }
+
+    // 5. LOWERED SIDE SLAB: a bottom slab beside a lowered full block inherits
+    //    dy=-0.5; aiming at its visual body targets it, where vanilla again cannot
+    //    at mid-height.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastLoweredSideSlabTargeted(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos full = buildLoweredFullBlock(world, origin.add(3, 2, 3));
+        BlockPos sideSlab = full.east(); // (4, full.y, 3)
+        world.setBlockState(sideSlab,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+
+        double slabDy = SlabSupport.getYOffset(world, sideSlab, world.getBlockState(sideSlab));
+        ctx.assertTrue(slabDy == -0.5,
+                "fixture invalid: side slab beside lowered FB should inherit dy=-0.5, got " + slabDy);
+
+        // Lowered bottom slab outline spans world Y [slab.y-0.5, slab.y]; aim at its
+        // east face at mid-height (slab.y - 0.25), a layer vanilla DDA skips.
+        double y = sideSlab.getY() - 0.25;
+        net.minecraft.util.math.Vec3d eye = rayV(origin, 7.5, y - origin.getY(), 3.5);
+        net.minecraft.util.math.Vec3d end = rayV(origin, 4.0, y - origin.getY(), 3.5);
+
+        net.minecraft.util.hit.BlockHitResult hit = slabbedRay(world, eye, end);
+        ctx.assertTrue(hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                        && hit.getBlockPos().equals(sideSlab),
+                "offset-aware raycast should target the lowered side slab " + sideSlab
+                        + ", got " + hit.getType() + " " + hit.getBlockPos());
+        ctx.assertTrue(hit.getSide() == Direction.EAST,
+                "expected EAST face, got " + hit.getSide());
+
+        net.minecraft.util.hit.HitResult van = vanillaRay(world, eye, end);
+        boolean vanillaSawSlab = van.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                && ((net.minecraft.util.hit.BlockHitResult) van).getBlockPos().equals(sideSlab);
+        ctx.assertFalse(vanillaSawSlab,
+                "control failed: vanilla unexpectedly hit the lowered side slab at mid-height");
+        ctx.complete();
+    }
+
+    // 6. COMPAT-BRANCH TRIAD (deliberate divergence from the 1.21.11 main donor):
+    //    on this branch a fence on a VANILLA slab RENDERS lowered (GH #21, 92516668 —
+    //    OffsetBlockStateModel dy always tracks getYOffset for connecting blocks), so
+    //    its outline IS offset and the nearest-hit raycast must target the fence at
+    //    its lowered position. Main instead zeroes connecting-block render dy and
+    //    gates the outline to match; porting that gate here would break the triad.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastLoweredFenceOutlineOffsetAndTargeted(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos slab = origin.add(3, 2, 3);
+        world.setBlockState(slab,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        BlockPos fence = slab.up();
+        world.setBlockState(fence, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double dy = SlabSupport.getYOffset(world, fence, world.getBlockState(fence));
+        ctx.assertTrue(dy == -0.5,
+                "fixture: fence on a vanilla bottom slab must be lowered -0.5 on this branch (GH #21), got " + dy);
+
+        VoxelShape outline = world.getBlockState(fence).getOutlineShape(world, fence, ShapeContext.absent());
+        ctx.assertFalse(outline.isEmpty(), "fence outline should be non-empty");
+        double minY = outline.getBoundingBox().minY;
+        ctx.assertTrue(Math.abs(minY - (-0.5)) < RAY_EPS,
+                "fence-on-slab outline must be offset -0.5 to match its lowered render (GH #21), got minY=" + minY);
+
+        // Aim horizontally at the fence post at the lowered mid-height (fence.y - 0.25),
+        // a layer inside the slab-below's cell that vanilla DDA never resolves to the fence.
+        double y = fence.getY() - 0.25;
+        net.minecraft.util.math.Vec3d eye = rayV(origin, 3.5, y - origin.getY(), 0.5);
+        net.minecraft.util.math.Vec3d end = rayV(origin, 3.5, y - origin.getY(), 7.5);
+        net.minecraft.util.hit.BlockHitResult hit = slabbedRay(world, eye, end);
+        ctx.assertTrue(hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                        && hit.getBlockPos().equals(fence),
+                "offset-aware raycast should target the lowered fence " + fence
+                        + ", got " + hit.getType() + " " + hit.getBlockPos());
+
+        net.minecraft.util.hit.HitResult van = vanillaRay(world, eye, end);
+        boolean vanillaSawFence = van.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                && ((net.minecraft.util.hit.BlockHitResult) van).getBlockPos().equals(fence);
+        ctx.assertFalse(vanillaSawFence,
+                "control failed: vanilla unexpectedly resolved the lowered fence at mid-height");
+        ctx.complete();
+    }
+
+    // 7. TORCH via its OWN offset shape (proves the slab-side comfort union is not
+    //    needed once the nearest-hit raycast is authoritative).
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastLoweredFloorTorchTargetedViaOwnShape(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos slab = origin.add(3, 2, 3);
+        world.setBlockState(slab,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        BlockPos torch = slab.up();
+        world.setBlockState(torch, Blocks.TORCH.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(world.getBlockState(torch).isOf(Blocks.TORCH), "fixture: torch must survive on slab top");
+
+        double dy = SlabSupport.getYOffset(world, torch, world.getBlockState(torch));
+        ctx.assertTrue(dy == -0.5, "fixture: floor torch on slab should be lowered -0.5, got " + dy);
+
+        // Aim horizontally at the torch column at the lowered comfort-post mid-height.
+        double y = torch.getY() - 0.25;
+        net.minecraft.util.math.Vec3d eye = rayV(origin, 3.5, y - origin.getY(), 0.5);
+        net.minecraft.util.math.Vec3d end = rayV(origin, 3.5, y - origin.getY(), 7.5);
+        net.minecraft.util.hit.BlockHitResult hit = slabbedRay(world, eye, end);
+        ctx.assertTrue(hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                        && hit.getBlockPos().equals(torch),
+                "offset-aware raycast should target the lowered floor torch " + torch
+                        + ", got " + hit.getType() + " " + hit.getBlockPos());
+        ctx.complete();
+    }
+
+    // 8. -1.0 COMPOUND owner (±1 window lower extreme): a full block on a lowered
+    //    side slab renders at [P.y-1.0, P.y], entirely in the cell below; the window
+    //    must still find it.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastCompoundMinusOneOwnerTargeted(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos baseSlab = origin.add(3, 2, 3);
+        BlockPos loweredFull = buildLoweredFullBlock(world, baseSlab); // dy -0.5 at baseSlab.up()
+        BlockPos sideSlab = loweredFull.east();                       // adjacent -> dy -0.5
+        world.setBlockState(sideSlab,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        BlockPos compound = sideSlab.up();                            // full block above lowered side slab
+        world.setBlockState(compound, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double dy = SlabSupport.getYOffset(world, compound, world.getBlockState(compound));
+        ctx.assertTrue(dy == -1.0,
+                "fixture: full block above lowered side slab should be compound dy=-1.0, got " + dy);
+
+        // Compound outline spans [compound.y-1.0, compound.y]; aim at its upper region
+        // (compound.y-0.25), which lies in the cell BELOW compound's logical cell.
+        double y = compound.getY() - 0.25;
+        net.minecraft.util.math.Vec3d eye = rayV(origin, 7.5, y - origin.getY(), sideSlab.getZ() + 0.5 - origin.getZ());
+        net.minecraft.util.math.Vec3d end = rayV(origin, sideSlab.getX() + 0.0 - origin.getX(), y - origin.getY(),
+                sideSlab.getZ() + 0.5 - origin.getZ());
+        net.minecraft.util.hit.BlockHitResult hit = slabbedRay(world, eye, end);
+        ctx.assertTrue(hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                        && hit.getBlockPos().equals(compound),
+                "±1 window should find the -1.0 compound owner " + compound
+                        + " from the cell below, got " + hit.getType() + " " + hit.getBlockPos());
+
+        net.minecraft.util.hit.HitResult van = vanillaRay(world, eye, end);
+        boolean vanillaSawCompound = van.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                && ((net.minecraft.util.hit.BlockHitResult) van).getBlockPos().equals(compound);
+        ctx.assertFalse(vanillaSawCompound,
+                "control: vanilla should not see the compound owner at this sub-cell aim");
+        ctx.complete();
+    }
+
+    // 9. +0.5 CEILING owner (±1 window upper extreme): a hanging lantern under a top
+    //    slab floats up +0.5; aim derived from its actual offset outline so the test
+    //    is robust to the lantern's exact shape.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastCeilingPlusHalfOwnerTargeted(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos topSlab = origin.add(3, 4, 3);
+        world.setBlockState(topSlab,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_LISTENERS);
+        BlockPos lantern = topSlab.down();
+        world.setBlockState(lantern,
+                Blocks.LANTERN.getDefaultState().with(net.minecraft.state.property.Properties.HANGING, true),
+                Block.NOTIFY_LISTENERS);
+
+        double dy = SlabSupport.getYOffset(world, lantern, world.getBlockState(lantern));
+        ctx.assertTrue(dy == 0.5,
+                "fixture: hanging lantern under top slab should be +0.5, got " + dy);
+
+        // Aim horizontally at the centre of the lantern's actual offset outline.
+        VoxelShape outline = world.getBlockState(lantern).getOutlineShape(world, lantern, ShapeContext.absent());
+        ctx.assertFalse(outline.isEmpty(), "lantern outline non-empty");
+        double midY = lantern.getY() + (outline.getBoundingBox().minY + outline.getBoundingBox().maxY) / 2.0;
+        net.minecraft.util.math.Vec3d eye = rayV(origin, 3.5, midY - origin.getY(), 0.5);
+        net.minecraft.util.math.Vec3d end = rayV(origin, 3.5, midY - origin.getY(), 7.5);
+        net.minecraft.util.hit.BlockHitResult hit = slabbedRay(world, eye, end);
+        ctx.assertTrue(hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                        && hit.getBlockPos().equals(lantern),
+                "offset-aware raycast should target the +0.5 hanging lantern " + lantern
+                        + ", got " + hit.getType() + " " + hit.getBlockPos());
+        ctx.complete();
+    }
+
+    // 10. PARITY on more non-offset geometry: double slab (full cube) and stairs
+    //     (non-empty getRaycastShape) must match vanilla field-by-field.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void offsetRaycastDoubleSlabAndStairsMatchVanilla(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+        BlockPos dbl = origin.add(2, 3, 2);
+        world.setBlockState(dbl,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE),
+                Block.NOTIFY_LISTENERS);
+        BlockPos stair = origin.add(5, 3, 5);
+        world.setBlockState(stair, Blocks.STONE_STAIRS.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        BlockPos[] targets = { dbl, stair };
+        for (BlockPos t : targets) {
+            ctx.assertTrue(SlabSupport.getYOffset(world, t, world.getBlockState(t)) == 0.0,
+                    "fixture: " + t + " must be non-offset");
+            net.minecraft.util.math.Vec3d centre = rayV(origin,
+                    t.getX() + 0.5 - origin.getX(), t.getY() + 0.5 - origin.getY(), t.getZ() + 0.5 - origin.getZ());
+            net.minecraft.util.math.Vec3d[] eyes = {
+                    centre.add(0, 3.0, 0),
+                    centre.add(0, 0, -3.0),
+                    centre.add(-3.0, 0, 0),
+                    centre.add(2.5, 1.5, 2.5),
+            };
+            for (int i = 0; i < eyes.length; i++) {
+                net.minecraft.util.math.Vec3d eye = eyes[i];
+                net.minecraft.util.math.Vec3d end = centre.add(centre.subtract(eye).normalize().multiply(0.5));
+                net.minecraft.util.hit.BlockHitResult mine = slabbedRay(world, eye, end);
+                net.minecraft.util.hit.HitResult van = vanillaRay(world, eye, end);
+                if (van.getType() != net.minecraft.util.hit.HitResult.Type.BLOCK) {
+                    // If vanilla misses (grazing past a non-cube shape), only require the
+                    // offset raycaster to also not invent a different block.
+                    ctx.assertTrue(mine.getType() != net.minecraft.util.hit.HitResult.Type.BLOCK
+                                    || mine.getBlockPos().equals(t),
+                            t + " ray " + i + ": unexpected hit " + mine.getBlockPos());
+                    continue;
+                }
+                net.minecraft.util.hit.BlockHitResult vanBlock = (net.minecraft.util.hit.BlockHitResult) van;
+                ctx.assertTrue(mine.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK
+                                && mine.getBlockPos().equals(vanBlock.getBlockPos())
+                                && mine.getSide() == vanBlock.getSide()
+                                && mine.getPos().squaredDistanceTo(vanBlock.getPos()) < RAY_EPS,
+                        t + " ray " + i + ": parity mismatch mine=(" + mine.getBlockPos() + "," + mine.getSide()
+                                + ") vanilla=(" + vanBlock.getBlockPos() + "," + vanBlock.getSide() + ")");
+            }
+        }
+        ctx.complete();
+    }
 }
