@@ -64,6 +64,7 @@ sourceSets {
                     "com/slabbed/test/SlabbedLabFixtureTest.java",
                     "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
                     "com/slabbed/test/SlabbedHotPathAllocationRegressionTest.java",
+                    "com/slabbed/test/CombinedSlabChainingMatrixTest.java",
                     "com/slabbed/dev/SlabbedLabFixtures.java"
             ])
         }
