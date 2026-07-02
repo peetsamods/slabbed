@@ -7,7 +7,10 @@ loom {
     splitEnvironmentSourceSets()
     runs {
         client {
-            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true", "-Dslabbed.debug.sbsb=true"
+            // Mixin toolchain debug only. Slabbed's own debug lanes (e.g. slabbed.debug.sbsb)
+            // must NOT be hardcoded here: debug tooling needs a deliberate enable path
+            // (guardrail 9) — pass -Dslabbed.debug.sbsb=true explicitly when you need it.
+            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true"
         }
     }
 }
