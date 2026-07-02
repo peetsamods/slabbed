@@ -7,10 +7,7 @@ import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.FenceBlock;
-import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
-import net.minecraft.block.WallBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.model.BlockModelPart;
 import net.minecraft.client.render.model.BlockStateModel;
@@ -101,9 +98,11 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
 
         if (Boolean.getBoolean("slabbed.render.offset.trace")
                 && pos.equals(slabbed$tracePos)) {
-            boolean excluded = state.getBlock() instanceof FenceBlock
-                    || state.getBlock() instanceof WallBlock
-                    || state.getBlock() instanceof PaneBlock;
+            // Nothing is dy-excluded by the wrapper any more — fences/walls/panes now
+            // track getVisualYOffset like every other block (GH #21). Keep the field so
+            // the RenderOffsetTrace record shape and the /slabdy readout stay stable, but
+            // report the truth (false) rather than the stale connection-block guess.
+            boolean excluded = false;
             slabbed$lastTrace = new RenderOffsetTrace(
                     true,
                     view.getClass().getName(),
