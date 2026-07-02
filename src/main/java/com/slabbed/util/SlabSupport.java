@@ -66,6 +66,15 @@ import java.util.Set;
  */
 public final class SlabSupport {
     private static final String BOTTOM_PERSISTENT_TRACE_OPT_IN = "slabbed.bottomPersistentTrace";
+    /**
+     * Cached at class-init. Safe ONLY because nothing setPropertys this flag at runtime
+     * (verified 2026-07-02: the property name appears nowhere else in the tree, and no
+     * compiled or dead test class touches it). If a test/tool ever needs to flip it
+     * mid-run, revert to a live {@code Boolean.getBoolean} read AFTER the cheap pos
+     * filter in {@link #isBottomPersistentTracePos} — do not cache a flag a test mutates
+     * (the render.offset.trace lesson).
+     */
+    private static final boolean BOTTOM_PERSISTENT_TRACE = Boolean.getBoolean(BOTTOM_PERSISTENT_TRACE_OPT_IN);
 
     private SlabSupport() {
     }
@@ -2804,8 +2813,10 @@ public final class SlabSupport {
     }
 
     private static boolean isBottomPersistentTracePos(BlockPos pos) {
-        return Boolean.getBoolean(BOTTOM_PERSISTENT_TRACE_OPT_IN)
-                && pos != null && pos.getX() == 0 && pos.getY() == 202 && pos.getZ() == 0;
+        // Free pos filter first; the opt-in flag is a class-init-cached constant (see
+        // BOTTOM_PERSISTENT_TRACE) so the disabled path costs nothing on hot dy walks.
+        return pos != null && pos.getX() == 0 && pos.getY() == 202 && pos.getZ() == 0
+                && BOTTOM_PERSISTENT_TRACE;
     }
 
     /**
