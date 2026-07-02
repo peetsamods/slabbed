@@ -6,13 +6,11 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
-import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TorchBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -48,19 +46,14 @@ public abstract class SlabSupportStateMixin {
      * when the ray enters that voxel, so rays aimed at the visible torch from natural
      * side angles either (a) miss entirely, or (b) hit the slab below.
      *
-     * <p>The fix is two-sided:
-     * <ul>
-     *   <li><b>Torch outline/raycast</b>: replaced with this 4-pixel-wide post that
-     *       fills the entire native voxel (Y 0–16). After the negative dy offset is
-     *       applied, the comfort shape spans world Y=torchPos.y+dy to torchPos.y.
-     *       This is what the wireframe renderer draws after the rescue retarget.</li>
-     *   <li><b>Slab overlay</b>: when a slab has a lowered floor torch directly above,
-     *       this same shape is unioned into the slab's outline (in the slab's voxel
-     *       frame, translated by 1+torchDy) so vanilla DDA produces a slab hit at the
-     *       comfort area. The existing rescue mixin then retargets that slab hit to
-     *       the torch above. Without this overlay DDA never enters the torch voxel
-     *       and rescue cannot fire.</li>
-     * </ul>
+     * <p>The fix: the torch's outline/raycast shape is replaced with this 4-pixel-wide
+     * post that fills the entire native voxel (Y 0–16). After the negative dy offset is
+     * applied, the comfort shape spans world Y=torchPos.y+dy to torchPos.y — and the
+     * offset-aware nearest-hit raycast ({@code SlabbedOffsetRaycast}) tests that offset
+     * shape directly, so no slab-side overlay or rescue retarget is needed. (The old
+     * slab-outline comfort union was deleted with the legacy
+     * {@code GameRendererCrosshairRetargetMixin}: under nearest-hit ownership it would
+     * make the slab win hits inside the torch's own comfort column.)
      *
      * <p>The comfort area is contained within the same 4-pixel X/Z post column as
      * vanilla's torch SHAPE — the visual triad (model, outline, raycast) all stay
@@ -83,31 +76,6 @@ public abstract class SlabSupportStateMixin {
         }
         Block block = state.getBlock();
         return block instanceof TorchBlock && !(block instanceof WallTorchBlock);
-    }
-
-    /**
-     * Builds the torch comfort overlay in {@code slabPos}'s voxel frame, or returns
-     * {@code null} if the block above {@code slabPos} is not a lowered floor torch.
-     *
-     * <p>Torch comfort shape is voxel-relative Y=0–1 in the torch's frame. Translated
-     * to the slab's frame the comfort shape sits at Y=(1+torchDy) to (2+torchDy),
-     * so we offset {@link #SLABBED$COMFORT_TORCH_SHAPE} by {@code 1.0 + torchDy}.
-     */
-    private static VoxelShape slabbed$slabTorchComfortOverlay(BlockView world, BlockPos slabPos) {
-        if (world == null || slabPos == null) {
-            return null;
-        }
-        BlockPos abovePos = slabPos.up();
-        BlockState above = world.getBlockState(abovePos);
-        Block aboveBlock = above.getBlock();
-        if (!(aboveBlock instanceof TorchBlock) || aboveBlock instanceof WallTorchBlock) {
-            return null;
-        }
-        double torchDy = SlabSupport.getYOffset(world, abovePos, above);
-        if (torchDy >= 0.0) {
-            return null;
-        }
-        return SLABBED$COMFORT_TORCH_SHAPE.offset(0.0, 1.0 + torchDy, 0.0);
     }
 
     // ── placement / survival support ──────────────────────────────────
@@ -183,31 +151,13 @@ public abstract class SlabSupportStateMixin {
             return;
         }
 
-        VoxelShape shape = cir.getReturnValue();
-        boolean changed = false;
-
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff != 0.0) {
+            VoxelShape shape = cir.getReturnValue();
             if (slabbed$isLoweredFloorTorch(self, yOff)) {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             }
-            shape = shape.offset(0.0, yOff, 0.0);
-            changed = true;
-        }
-
-        // Slab + lowered floor torch comfort overlay: union the torch comfort column
-        // into the slab's outline so vanilla DDA produces a slab hit; the existing
-        // rescue mixin then retargets that hit to the torch above.
-        if (block instanceof SlabBlock) {
-            VoxelShape overlay = slabbed$slabTorchComfortOverlay(world, pos);
-            if (overlay != null) {
-                shape = VoxelShapes.union(shape, overlay);
-                changed = true;
-            }
-        }
-
-        if (changed) {
-            cir.setReturnValue(shape);
+            cir.setReturnValue(shape.offset(0.0, yOff, 0.0));
         }
     }
 }

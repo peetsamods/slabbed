@@ -8,10 +8,12 @@
     "fabric-gametest": [
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest",
+      "com.slabbed.test.OffsetRaycastTargetingTest",
       "com.slabbed.test.TerrainSlabsCompoundDyTest",
       "com.slabbed.test.TerrainSlabsSteppedConnectionTest"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.OffsetRaycastClientGameTest",
       "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest",
       "com.slabbed.test.SlabbedLabLoweredSideSlabPlacementClientGameTest",
       "com.slabbed.test.SlabbedLabSbMixedStackBreakClientGameTest",

@@ -7,7 +7,7 @@
     "BlockModelDyTranslateMixin",
     "BlockRenderInfoCullMixin",
     "CarpetDyShapeMixin",
-    "GameRendererCrosshairRetargetMixin",
+    "ClientPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin"
   ],
