@@ -23,15 +23,22 @@ public final class SlabbedDiagnosticsTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void triadMismatchDetectorFiresOnTheBugValues(TestContext ctx) {
-        // Consistent triad: outline offset -0.5, collision at 0, visual -0.5 → applied -0.5 == visual.
-        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(-0.5, -0.5, 0.0),
+        // Consistent: outline followed the dy (outlineMinY == visualDy) → no flag.
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(-0.5, -0.5),
                 "a consistent triad (outline followed the dy) must NOT flag a mismatch");
-        // The bug: outline stayed at grid (0.0) while visual lowered -0.5 → applied 0 != -0.5.
-        ctx.assertTrue(SlabbedDiagnostics.triadMismatch(-0.5, 0.0, 0.0),
-                "outline pinned at grid while visual lowered MUST flag a triad mismatch (the fence bug)");
-        // Not decidable when collision is empty (torch/lantern) → never a false positive.
-        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(-0.5, Double.NaN, Double.NaN),
-                "empty shapes must not produce a spurious mismatch");
+        // The bug: outline stayed at grid (0.0) while visual lowered -0.5 → 0.5 off → flag.
+        ctx.assertTrue(SlabbedDiagnostics.triadMismatch(-0.5, 0.0),
+                "outline pinned at grid while visual lowered MUST flag a triad mismatch (the fence/slab bug)");
+        // Empty outline → not decidable, no spurious flag.
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(-0.5, Double.NaN),
+                "an empty outline must not produce a spurious mismatch");
+        // REGRESSION (recorder 2026-07-02): a hanging lantern's outline base sits ~0.063 above
+        // the floor, so outlineMinY 0.563 with visualDy 0.500 is a CONSISTENT offset, not a bug.
+        // The old collision-baseline heuristic false-positived on this and on beds/chains.
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(0.5, 0.563),
+                "a small base-shape offset (hanging lantern) must NOT flag as a triad mismatch");
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(-0.5, -0.5),
+                "a bed whose outline AND collision both track the dy must NOT flag");
         ctx.complete();
     }
 
