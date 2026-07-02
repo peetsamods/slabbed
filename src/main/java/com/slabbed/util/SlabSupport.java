@@ -983,6 +983,19 @@ public final class SlabSupport {
             }
         }
 
+        // GH #22 (slab-log DODO): an ordinary opaque full cube (e.g. a worldgen leaf-less log's
+        // grass/dirt cap, or any command-authored block) sitting directly on a lowered log-family
+        // carrier must share that carrier's dy, or it stays flush while the log beneath it dropped
+        // -0.5 — a visible half-block gap between the log and the block on top ("tries to connect
+        // with the log half a block above it"). Checked BEFORE the generic opaque-full-cube-stays-
+        // flush guard below so it isn't shadowed by it; narrow to log-family supports ONLY (not
+        // arbitrary opaque terrain) so ordinary stone-on-stone/terrain still stays flush and the
+        // world-hole guard is untouched.
+        double loweredLogCarrierDy = loweredLogFamilyCarrierDy(world, pos, state);
+        if (Double.isFinite(loweredLogCarrierDy) && loweredLogCarrierDy < -1.0e-6) {
+            return loweredLogCarrierDy;
+        }
+
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
         // Only explicit ceiling-mounted cases may float into the slab space.
         // Note: isSolidBlock is safe here because getYOffset has a recursion guard.
@@ -1323,6 +1336,37 @@ public final class SlabSupport {
             }
             throw e;
         }
+    }
+
+    /**
+     * Recursion-safe rendered dy of a lowered log-family (a {@link BlockTags#LOGS} member that is
+     * itself a {@link #isSlabSitCandidate} lowered onto a Terrain Slabs / bottom-slab surface)
+     * carrier directly beneath {@code pos}, used so an ordinary opaque full cube resting on that
+     * log shares its drop instead of staying flush (GH #22 slab-log DODO). Deliberately narrow:
+     * ONLY a direct log-family support qualifies — walking through arbitrary opaque terrain would
+     * reopen the world-hole guard this same method sits beside. Mirrors
+     * {@link #loweredFullBlockUndersideSupportDy} in shape but for a below-support (not an
+     * underside-hanger) query, and never calls {@link #getYOffset} so it is safe to call from
+     * inside the {@code IN_GET_Y_OFFSET} recursion guard.
+     */
+    private static double loweredLogFamilyCarrierDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isOpaqueFullCube()) {
+            return Double.NaN;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = getBlockStateOrNull(world, belowPos);
+        if (below == null || !isLogFamilySlabSitCandidate(below)) {
+            return Double.NaN;
+        }
+        double directCustomDy = directCustomSlabSupportDy(world, belowPos, below);
+        if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
+            return directCustomDy;
+        }
+        return Double.NaN;
     }
 
     private static boolean isTopLikeCeilingSurface(BlockState state) {
