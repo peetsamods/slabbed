@@ -206,4 +206,52 @@ public final class TerrainSlabsCompoundDyTest {
                 "lantern on a plain vanilla bottom slab should lower only -0.5, got " + dy);
         ctx.complete();
     }
+
+    // GH #22 extension (this TS-compat branch, real terrainslabs mod, not a shim): control case —
+    // an oak log lowered directly onto a real Terrain Slabs bottom surface must lower to -0.5. This
+    // is the pre-existing generic hasSlabInColumn column-walk fallback, unrelated to the fix below;
+    // proven here so the fix test's "lowerDy == -0.5" setup assertion is not the only place this is
+    // checked.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void oakLogOnTsSurfaceLowers(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos slab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        BlockPos log = slab.up();
+
+        w.setBlockState(slab, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(log, Blocks.OAK_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double logDy = SlabSupport.getYOffset(w, log, w.getBlockState(log));
+        ctx.assertTrue(Math.abs(logDy + 0.5) <= EPS,
+                "oak log on a real Terrain Slabs bottom surface should lower to -0.5, got " + logDy);
+        ctx.complete();
+    }
+
+    // GH #22 extension (this TS-compat branch): an ordinary full block (a worldgen leaf-less log's
+    // grass/dirt cap, or any command-authored block) resting on a lowered log-family carrier must
+    // share that carrier's dy instead of staying flush. RED before the fix: the log lowers via the
+    // generic hasSlabInColumn fallback, but that same walk halts at the log's own opaque-full-cube
+    // "natural terrain stop" when queried FROM the grass block above, so the grass block never sees
+    // the TS surface and getYOffsetInner's opaque-full-cube-stays-flush return fired first, leaving
+    // it at dy=0 — a visible half-block gap between the log and the block on top.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void grassBlockOnTsLoweredOakLogSharesLoweredDy(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos slab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        BlockPos log = slab.up();
+        BlockPos grass = slab.up(2);
+
+        w.setBlockState(slab, tsBottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(log, Blocks.OAK_LOG.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(grass, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double logDy = SlabSupport.getYOffset(w, log, w.getBlockState(log));
+        double grassDy = SlabSupport.getYOffset(w, grass, w.getBlockState(grass));
+        ctx.assertTrue(Math.abs(logDy + 0.5) <= EPS,
+                "setup: oak log on a real Terrain Slabs bottom surface should lower to -0.5, got " + logDy);
+        ctx.assertTrue(Math.abs(grassDy - logDy) <= EPS,
+                "grass-on-lowered-log: grass block must share lower log dy " + logDy
+                        + " to keep the stack connected; got " + grassDy);
+        ctx.complete();
+    }
 }

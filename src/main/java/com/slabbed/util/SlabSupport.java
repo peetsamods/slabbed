@@ -38,6 +38,7 @@ import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
@@ -895,6 +896,25 @@ public final class SlabSupport {
             }
             return -0.5;
         }
+
+        // GH #22 (slab-log DODO, ported/re-derived for this TS-compat branch): an ordinary opaque
+        // full cube (e.g. a worldgen leaf-less log's grass/dirt cap, or any command-authored block)
+        // resting directly on a lowered log-family carrier must share that carrier's dy, or it stays
+        // flush while the log beneath it dropped -0.5 — a visible half-block gap between the log and
+        // the block on top. On this branch the log's own lowering comes from the generic
+        // hasSlabInColumn column-walk fallback (shouldOffset), NOT from directCustomSlabSupportDy
+        // (isSlabSitCandidate excludes opaque full cubes like logs, and there is no
+        // isLogFamilySlabSitCandidate lane here) — so hasSlabInColumn's "natural-terrain stop"
+        // (an opaque full cube in the column halts the walk, treating it as solid ground) makes
+        // shouldOffset(grassPos) false for the block on top, and it falls through to the generic
+        // opaque-full-cube-stays-flush return below. Checked BEFORE that return so it is not
+        // shadowed by it; narrow to log-family supports ONLY (BlockTags#LOGS) so ordinary
+        // stone-on-stone/terrain still stays flush and the world-hole guard stays untouched.
+        double loweredLogCarrierDy = loweredLogFamilyCarrierDy(world, pos, state);
+        if (Double.isFinite(loweredLogCarrierDy) && loweredLogCarrierDy < -1.0e-6) {
+            return loweredLogCarrierDy;
+        }
+
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
         // Only explicit ceiling-mounted cases may float into the slab space.
         // Note: isSolidBlock is safe here because getYOffset has a recursion guard.
@@ -1186,6 +1206,53 @@ public final class SlabSupport {
         }
         double dy = loweredBottomSlabSupportDyForCompound(world, pos);
         return Double.isFinite(dy) && dy < -1.0e-6d;
+    }
+
+    /**
+     * True for a {@link BlockTags#LOGS} member (logs, wood, stripped variants, nether stems) — the
+     * carrier family GH #22 covers. This branch has no curated log-family slab-sit lane (unlike
+     * main's {@code isLogFamilySlabSitCandidate}); a log here lowers purely through the generic
+     * {@link #hasSlabInColumn} column-walk fallback in {@link #shouldOffset}, so this predicate is
+     * used only to scope {@link #loweredLogFamilyCarrierDy}'s direct-support check, never to decide
+     * the log's own dy.
+     */
+    private static boolean isLogFamily(BlockState state) {
+        try {
+            return state.isIn(BlockTags.LOGS);
+        } catch (IllegalStateException e) {
+            if ("Tags not bound".equals(e.getMessage())) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Recursion-safe rendered dy of a lowered log-family carrier directly beneath {@code pos}, used
+     * so an ordinary opaque full cube resting on that log shares its drop instead of staying flush
+     * (GH #22 slab-log DODO, extended to this TS-compat branch). Deliberately narrow: ONLY a direct
+     * log-family (BlockTags#LOGS) support qualifies — walking through arbitrary opaque terrain would
+     * reopen the world-hole guard {@link #isSlabSitCandidate} sits beside. The log's own dy is read
+     * via {@link #getYOffsetInner} (recursion-safe: the {@code IN_GET_Y_OFFSET} guard is already set
+     * by the caller), NOT {@link #directCustomSlabSupportDy} — on this branch a log's lowering comes
+     * from the generic column-walk fallback (hasSlabInColumn sees the real TS BOTTOM_LIKE surface or
+     * a vanilla bottom slab directly beneath the log), not from the curated direct-support lane.
+     */
+    private static double loweredLogFamilyCarrierDy(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || state.isAir()
+                || state.getBlock() instanceof SlabBlock
+                || !state.getFluidState().isEmpty()
+                || !state.isOpaqueFullCube()) {
+            return Double.NaN;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = getBlockStateOrNull(world, belowPos);
+        if (below == null || !isLogFamily(below)) {
+            return Double.NaN;
+        }
+        double logDy = getYOffsetInner(world, belowPos, below);
+        return logDy < -1.0e-6d ? logDy : Double.NaN;
     }
 
     /**
