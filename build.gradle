@@ -110,6 +110,10 @@ sourceSets {
             // CombinedSlabChainingMatrixTest discipline; vanilla-only — the Forge
             // gametest run loads no Terrain Slabs jar, so TS orderings stay live-gated).
             include "com/slabbed/test/ForgeCombinedSlabChainingMatrixGameTest.java"
+            // Book IV blocker headless re-repro: occupied lowered-slab-lane target hijack
+            // (raycast owner-identity sweep + honest-hit useOn placement; fixture from
+            // HANDOFF.md 2026-06-29. Server-side halves only — client pipeline stays live).
+            include "com/slabbed/test/ForgeOccupiedLoweredLaneTargetHijackGameTest.java"
         }
         resources {
             setSrcDirs([])
