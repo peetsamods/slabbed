@@ -653,6 +653,57 @@ public final class SlabSupport {
         return isLoweredCarrier(world, belowPos, world.getBlockState(belowPos), MAX_CHAIN_DEPTH);
     }
 
+    /**
+     * Recursion-safe live check (port of main1211 8eab572c behavior): does {@code pos} have a
+     * horizontal neighbour that is an ordinary full block lowered by exactly {@code -0.5}?
+     * Mirrors the anchor path's {@code qualifiesForSideAdjacentLoweredFullAnchor} gate
+     * (carrier + dy == -0.5) but determines the neighbour's lowering from its SOURCES
+     * (anchor sets / flush bottom slab directly below) instead of {@code getYOffset}, so it
+     * is safe to call inside the {@code IN_GET_Y_OFFSET} guard. Used to lower a cantilevered
+     * side-placed block live, before its own side-adjacent anchor syncs (killing the
+     * one-frame placement snap), and to let objects follow a cantilevered lowered support.
+     */
+    private static boolean isAdjacentToLoweredFullBlock(BlockView world, BlockPos pos) {
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos neighborPos = pos.offset(direction);
+            BlockState neighbor = getBlockStateOrNull(world, neighborPos);
+            if (neighbor == null || neighbor.isAir()) {
+                continue;
+            }
+            Block block = neighbor.getBlock();
+            if (block instanceof SlabBlock || block instanceof BlockEntityProvider) {
+                continue;
+            }
+            if (!neighbor.isSolidBlock(world, neighborPos)) {
+                continue;
+            }
+            if (isLoweredHalfFullBlockSource(world, neighborPos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Recursion-safe "reads exactly -0.5" source check for {@link #isAdjacentToLoweredFullBlock}:
+     * an anchored full block WITHOUT the compound sidecar (the anchor lane returns -0.5 for it),
+     * or an ordinary full block directly on a FLUSH vanilla bottom slab (the shouldOffset lane
+     * returns -0.5 for it). A -1.0 compound neighbour (sidecar, or FB over a LOWERED slab) is
+     * deliberately NOT a cantilever source — the side-adjacent anchor path's
+     * {@code getYOffset(source) == -0.5} gate rejects it too, so live and anchored reads agree.
+     */
+    private static boolean isLoweredHalfFullBlockSource(BlockView world, BlockPos pos) {
+        if (SlabAnchorAttachment.isAnchored(world, pos)) {
+            return !SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos);
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = getBlockStateOrNull(world, belowPos);
+        if (below == null || !isBottomSlab(below)) {
+            return false;
+        }
+        return loweredBottomSlabSupportDyForCompound(world, belowPos) == 0.0d;
+    }
+
     private static boolean hasLoweredSlabLaneSupport(BlockView world, BlockPos slabPos, BlockState slabState) {
         if (!(slabState.getBlock() instanceof SlabBlock) || !slabState.contains(SlabBlock.TYPE)) {
             return false;
@@ -868,6 +919,22 @@ public final class SlabSupport {
             return 0.0;
         }
 
+        // Cantilevered perpendicular side placement (port of main1211 8eab572c): a block placed
+        // beside a lowered full block with AIR below it lowers only via its (server-side,
+        // one-tick-late) side-adjacent anchor — so it rendered at full height for one frame and
+        // then dropped (the perpendicular "snap"). Detecting the lowered -0.5 neighbour live and
+        // recursion-safely makes the first client mesh already -0.5 and gives setBlockState
+        // cantilevers the same geometry as placed ones. Guarded to air-below so a
+        // ground-supported block can never sink, and placed AFTER the frozen-flat read so a
+        // flat-frozen placed block is never pulled down (Maintainer's law).
+        if (!(state.getBlock() instanceof SlabBlock)
+                && !(state.getBlock() instanceof BlockEntityProvider)
+                && state.isSolidBlock(world, pos)
+                && world.getBlockState(pos.down()).isAir()
+                && isAdjacentToLoweredFullBlock(world, pos)) {
+            return -0.5;
+        }
+
         // Opaque full cubes directly on a lowered vertical pillar (log/stem) share that pillar's
         // dy so command-authored grass-on-log stacks stay visually connected. This is intentionally
         // direct-support and pillar-only: it does not walk through arbitrary opaque terrain cubes,
@@ -937,6 +1004,26 @@ public final class SlabSupport {
                 || !state.getFluidState().isEmpty()
                 || state.isSolidBlock(world, pos)) {
             return 0.0;
+        }
+
+        // A non-solid object (lantern, torch, flower, …) sitting on a CANTILEVERED lowered
+        // support floats (port of main1211 462c8bb2): the support-column walks above stop at
+        // the air gap under the cantilever and never see the support's adjacency-based
+        // lowering. Match the support's live lowering so the object sits flush. Reached only
+        // by non-solid objects (solid blocks returned 0.0 just above), so the common render
+        // path pays nothing. Deliberate divergence from the donor: additionally guarded to a
+        // support with AIR below it (the support must itself be live-lowered by the cantilever
+        // lane), so an object on a GROUNDED support beside a lowered block is never smooshed
+        // -0.5 into its un-lowered support. Anchored cantilever supports are already followed
+        // via the shouldOffset/slabColumnYOffset anchor walk.
+        BlockPos sitSupportPos = pos.down();
+        BlockState sitSupport = world.getBlockState(sitSupportPos);
+        if (!(sitSupport.getBlock() instanceof SlabBlock)
+                && !(sitSupport.getBlock() instanceof BlockEntityProvider)
+                && sitSupport.isSolidBlock(world, sitSupportPos)
+                && world.getBlockState(sitSupportPos.down()).isAir()
+                && isAdjacentToLoweredFullBlock(world, sitSupportPos)) {
+            return -0.5;
         }
 
         BlockState above = world.getBlockState(pos.up());

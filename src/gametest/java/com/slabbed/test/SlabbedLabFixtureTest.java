@@ -317,6 +317,110 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
+     * Cantilever snap-kill (port of main1211 8eab572c): a full block beside a lowered full block
+     * with AIR below it must read -0.5 LIVE (geometric), not only via its one-tick-late
+     * side-adjacent anchor — so the first client mesh is already lowered (no placement snap) and
+     * setBlockState cantilevers match placed ones.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cantileveredBlockBesideLoweredLowersLive(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        world.setBlockState(base, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS); // lowered -0.5
+        BlockPos cantilever = base.up(1).south(); // beside the lowered FB, AIR below
+        world.setBlockState(cantilever, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double supportDy = SlabSupport.getYOffset(world, base.up(1), world.getBlockState(base.up(1)));
+        ctx.assertTrue(supportDy == -0.5, "fixture: stone on bottom slab should be -0.5; got " + supportDy);
+        double dy = SlabSupport.getYOffset(world, cantilever, world.getBlockState(cantilever));
+        ctx.assertTrue(dy == -0.5,
+                "SNAP: cantilevered block beside a lowered full block (air below) must read -0.5 live "
+                + "(no anchor present); got " + dy);
+        ctx.complete();
+    }
+
+    /**
+     * Object-on-cantilever follow (port of main1211 462c8bb2): a non-solid object (lantern) on a
+     * cantilevered lowered support must lower to match — the support-column walk stops at the air
+     * gap under the cantilever, so without this lane the lantern floated 0.5 above its support.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lanternOnCantileveredSupportLowers(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        world.setBlockState(base, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos cantilever = base.up(1).south();
+        world.setBlockState(cantilever, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos lantern = cantilever.up();
+        world.setBlockState(lantern, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double supportDy = SlabSupport.getYOffset(world, cantilever, world.getBlockState(cantilever));
+        ctx.assertTrue(supportDy == -0.5, "fixture: cantilevered support should be lowered -0.5; got " + supportDy);
+        double lDy = SlabSupport.getYOffset(world, lantern, world.getBlockState(lantern));
+        ctx.assertTrue(lDy == -0.5,
+                "FLOAT: lantern on a cantilevered lowered support must lower to match; got " + lDy);
+        ctx.complete();
+    }
+
+    /**
+     * Guard (deliberate divergence from donor 462c8bb2): an object on a GROUNDED support beside a
+     * lowered block must stay flush — the support itself does not lower (solid below, no
+     * cantilever), so lowering the object would smoosh it -0.5 INTO its un-lowered support.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lanternOnGroundedSupportBesideLoweredStaysFlush(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        world.setBlockState(base, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS); // lowered -0.5
+        BlockPos ground = base.up(1).south();         // same height as the lowered FB…
+        world.setBlockState(ground.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS); // …but grounded
+        world.setBlockState(ground, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos lantern = ground.up();
+        world.setBlockState(lantern, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double supportDy = SlabSupport.getYOffset(world, ground, world.getBlockState(ground));
+        ctx.assertTrue(supportDy == 0.0,
+                "grounded support beside a lowered block must stay dy=0; got " + supportDy);
+        double lDy = SlabSupport.getYOffset(world, lantern, world.getBlockState(lantern));
+        ctx.assertTrue(lDy == 0.0,
+                "SMOOSH: lantern on a GROUNDED support beside a lowered block must stay flush; got " + lDy);
+        ctx.complete();
+    }
+
+    /**
+     * Magnitude gate: the live cantilever lane fires only beside a neighbour that reads exactly
+     * -0.5 — mirroring the side-adjacent anchor path's {@code getYOffset(source) == -0.5} gate. A
+     * -1.0 compound top is NOT a cantilever source, so live and anchored placements agree (neither
+     * lowers the block).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cantileveredBesideCompoundMinusOneStaysFlush(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        BlockState bs = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        world.setBlockState(base, bs, Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.up(1), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.up(2), bs, Block.NOTIFY_LISTENERS);
+        world.setBlockState(base.up(3), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS); // -1.0 compound
+        BlockPos cantilever = base.up(3).south(); // beside the -1.0 top, air below
+        world.setBlockState(cantilever, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        double topDy = SlabSupport.getYOffset(world, base.up(3), world.getBlockState(base.up(3)));
+        ctx.assertTrue(topDy == -1.0, "fixture: compound top should be -1.0; got " + topDy);
+        double dy = SlabSupport.getYOffset(world, cantilever, world.getBlockState(cantilever));
+        ctx.assertTrue(dy == 0.0,
+                "MAGNITUDE: a block beside a -1.0 compound top must NOT take the -0.5 cantilever lane "
+                + "(anchor path rejects it too); got " + dy);
+        ctx.complete();
+    }
+
+    /**
      * Ceiling-hung decoration (hanging roots) under a FLUSH slab must stay flush (dy=0) and must NOT
      * be dragged down by a carrier lower in the column. Reproduces the live bug: a block lower in the
      * column bridged the downward walk to a slab below, lowering the roots -0.5 (a visible gap under
