@@ -62,9 +62,11 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     // Per-block diagnostic flags read ONCE at class init, not via Boolean.getBoolean(...) on
     // the hot render path (each of those is a synchronized System.getProperty lookup, run per
     // block per chunk-mesh build). All default to false in release.
+    // NOTE: slabbed.render.offset.trace is deliberately NOT cached here — gametests arm it at
+    // runtime via System.setProperty (goblin route + SlabbedLabClientGameTest), so it is read
+    // live at its single use site, ordered AFTER the cheap per-block prefix checks.
     private static final boolean MC1211_LIVE_MODEL_TRACE = Boolean.getBoolean("slabbed.mc1211.liveModelTrace");
     private static final boolean MC1211_FULL_MESH_BOUNDS_TRACE = Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace");
-    private static final boolean RENDER_OFFSET_TRACE = Boolean.getBoolean("slabbed.render.offset.trace");
 
     public OffsetBlockStateModel(BakedModel wrapped) {
         this.wrapped = wrapped;
@@ -243,9 +245,14 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     dy);
         }
 
-        if (RENDER_OFFSET_TRACE
-                && state.getBlock() instanceof ChainBlock
-                && pos.equals(slabbed$tracePos)) {
+        // Cheap prefix first (instanceof + armed-pos equality — tracePos is null in normal
+        // play), THEN the live property read, so the synchronized System.getProperty lookup
+        // only runs for the one armed position. Live read is required: the goblin gametest
+        // flips slabbed.render.offset.trace via System.setProperty at runtime, which a
+        // class-init cached flag silently no-ops.
+        if (state.getBlock() instanceof ChainBlock
+                && pos.equals(slabbed$tracePos)
+                && Boolean.getBoolean("slabbed.render.offset.trace")) {
             boolean excluded = state.getBlock() instanceof FenceBlock
                     || state.getBlock() instanceof WallBlock
                     || state.getBlock() instanceof PaneBlock;
