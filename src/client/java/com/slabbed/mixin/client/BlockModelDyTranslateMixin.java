@@ -28,7 +28,11 @@ public class BlockModelDyTranslateMixin {
             BlockState state,
             double dy
     ) {
-        RuntimeDiagnostics.recordModelDyTrace(method, world, pos, state, dy);
+        // Wrapped call site (perf-hygiene convention): the recorder dispatch — and every
+        // argument it would box/array up — only runs when the trace flag is armed.
+        if (RuntimeDiagnostics.isModelDyTraceEnabled()) {
+            RuntimeDiagnostics.recordModelDyTrace(method, world, pos, state, dy);
+        }
     }
 
     /**

@@ -528,6 +528,16 @@ public final class RuntimeDiagnostics {
         }
     }
 
+    /**
+     * Cheap cached gate for the per-block-render model-dy trace. Callers on the render
+     * path must check this before calling {@link #recordModelDyTrace} so the disabled
+     * path never builds reflection args. Safe to cache at class init: no gametest or
+     * tool mutates {@code slabbed.beta4ModelDyRecorder} via {@code System.setProperty}.
+     */
+    public static boolean isModelDyTraceEnabled() {
+        return BETA4_MODEL_DY_RECORDER;
+    }
+
     public static void recordModelDyTrace(
             String method,
             BlockRenderView world,
@@ -535,6 +545,12 @@ public final class RuntimeDiagnostics {
             BlockState state,
             double dy
     ) {
+        if (!BETA4_MODEL_DY_RECORDER) {
+            // Hot render path (three BlockModelRenderer HEAD injections): without this gate
+            // every block render call built a Class[5] + Object[5] + boxed the dy double
+            // just to reach the ABSENT_CLASSES short-circuit inside invoke().
+            return;
+        }
         invoke(
                 MODEL_DY_TRACE_BRIDGE_CLASS_NAME,
                 "record",
