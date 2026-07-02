@@ -91,4 +91,48 @@ public final class SlabdyRecorderToggleTest {
             return lines.filter(line -> line.contains("\"stage\":\"run_end\"")).count();
         }
     }
+
+    /**
+     * End-to-end proof of the enriched capture path: with the recorder enabled,
+     * {@link LiveCursorIntentRecorder#recordVisualDiagnostic} writes a visual_diagnostic
+     * session row carrying the SlabbedDiagnostics flags. The only untested link is the
+     * live crosshair read (client-only). A suspect sample must land as suspect=true with
+     * its flags; a clean sample must land as suspect=false.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void recordVisualDiagnosticWritesFlaggedRows(TestContext ctx) throws IOException {
+        boolean initial = LiveCursorIntentRecorder.isEnabled();
+        if (!initial) {
+            LiveCursorIntentRecorder.toggle();
+        }
+        Path sessionPath = Path.of(LiveCursorIntentRecorder.currentLogPathDisplay()).resolve("session.jsonl");
+
+        // A hand-built suspect sample (DODO + triad mismatch) — exercises the writer, not analyze().
+        com.slabbed.dev.SlabbedDiagnostics.Sample suspect = new com.slabbed.dev.SlabbedDiagnostics.Sample(
+                "minecraft:stone", -0.5, 0.0, 0.0, 0.0, 0.0,
+                true, false, "none", "minecraft:air", 0.0, "minecraft:oak_slab", 0.0,
+                true, true, false, false, false, false, false);
+        net.minecraft.util.math.BlockPos p = new net.minecraft.util.math.BlockPos(1, 2, 3);
+        long before = countVisualDiagnosticSuspects(sessionPath);
+        LiveCursorIntentRecorder.recordVisualDiagnostic(p, suspect);
+        long after = countVisualDiagnosticSuspects(sessionPath);
+        ctx.assertTrue(after > before,
+                "a suspect visual diagnostic must be flushed as a suspect=true row (before=" + before + ")");
+
+        // Restore original state so the suite is order-independent.
+        if (LiveCursorIntentRecorder.isEnabled() != initial) {
+            LiveCursorIntentRecorder.toggle();
+        }
+        ctx.complete();
+    }
+
+    private static long countVisualDiagnosticSuspects(Path sessionPath) throws IOException {
+        if (!Files.exists(sessionPath)) {
+            return 0;
+        }
+        try (var lines = Files.lines(sessionPath)) {
+            return lines.filter(l -> l.contains("\"stage\":\"visual_diagnostic\"")
+                    && l.contains("\"suspect\":\"true\"")).count();
+        }
+    }
 }

@@ -2,11 +2,14 @@ package com.slabbed.client;
 
 import com.mojang.brigadier.context.CommandContext;
 import com.slabbed.client.model.OffsetBlockStateModel;
+import com.slabbed.dev.SlabbedDiagnostics;
 import com.slabbed.dev.SlabdyRowFormatter;
 import com.slabbed.dev.audit.LiveCursorIntentRecorder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -70,6 +73,48 @@ public final class SlabdyClientCommands {
                                 .then(literal("use").executes(SlabdyClientCommands::runUse))
                                 .then(literal("record").executes(SlabdyClientCommands::runRecord))));
         HudRenderCallback.EVENT.register(SlabdyClientCommands::renderOverlay);
+        // While the recorder is enabled, capture a full SlabbedDiagnostics sample every time
+        // the crosshair target changes — deduped so look-drift doesn't spam the log. This is
+        // the enriched capture (visual triad + DODO/smoosh/gap/triad-mismatch flags), and it
+        // fires independently of whether the overlay is drawn.
+        ClientTickEvents.END_CLIENT_TICK.register(SlabdyClientCommands::maybeRecordTargetDiagnostic);
+    }
+
+    private static String lastRecordedSignature = "";
+
+    private static void maybeRecordTargetDiagnostic(MinecraftClient client) {
+        if (!LiveCursorIntentRecorder.isEnabled()) {
+            return;
+        }
+        if (client == null || client.world == null) {
+            return;
+        }
+        BlockHitResult blockHit = currentBlockTarget(client);
+        if (blockHit == null) {
+            if (!"none".equals(lastRecordedSignature)) {
+                lastRecordedSignature = "none";
+            }
+            return;
+        }
+        BlockPos pos = blockHit.getBlockPos();
+        BlockState state = client.world.getBlockState(pos);
+        double modelDy = modelDyFor(pos);
+        String sig = pos.toShortString() + "|" + state + "|" + SlabbedDiagnostics.format(modelDy);
+        if (sig.equals(lastRecordedSignature)) {
+            return;
+        }
+        lastRecordedSignature = sig;
+        SlabbedDiagnostics.Sample sample = SlabbedDiagnostics.analyze(client.world, pos, state, modelDy);
+        LiveCursorIntentRecorder.recordVisualDiagnostic(pos, sample);
+    }
+
+    /** The render-thread model dy for pos if the trace happens to hold it, else NaN. */
+    private static double modelDyFor(BlockPos pos) {
+        OffsetBlockStateModel.RenderOffsetTrace trace = OffsetBlockStateModel.snapshotRenderOffsetTrace();
+        if (trace != null && trace.seen() && pos.toShortString().equals(trace.pos())) {
+            return trace.modelDy();
+        }
+        return Double.NaN;
     }
 
     private static int toggleOverlay(CommandContext<FabricClientCommandSource> ctx) {
@@ -146,11 +191,18 @@ public final class SlabdyClientCommands {
             return;
         }
         List<String> lines = buildRow(client, blockHit, false);
-        double dy = com.slabbed.util.SlabSupport.getVisualYOffset(
-                client.world, blockHit.getBlockPos(), client.world.getBlockState(blockHit.getBlockPos()));
+        BlockPos pos = blockHit.getBlockPos();
+        BlockState state = client.world.getBlockState(pos);
+        double dy = com.slabbed.util.SlabSupport.getVisualYOffset(client.world, pos, state);
         int color = dy == 0.0d ? 0xffd7d7d7 : (dy < 0.0d ? 0xffffd166 : 0xffff8866);
         for (int i = 0; i < lines.size(); i++) {
             drawLine(context, client, lines.get(i), 8, 8 + (i * 12), color);
+        }
+        // Surface the SlabbedDiagnostics red flags live: a bright warning line under the row
+        // whenever the current target trips a DODO / smoosh / gap / triad-mismatch check.
+        SlabbedDiagnostics.Sample s = SlabbedDiagnostics.analyze(client.world, pos, state, modelDyFor(pos));
+        if (s.anySuspect()) {
+            drawLine(context, client, "[slabdy] FLAGS: " + s.flagSummary(), 8, 8 + (lines.size() * 12), 0xffff4d4d);
         }
     }
 

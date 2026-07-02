@@ -203,6 +203,40 @@ public final class LiveCursorIntentRecorder {
         }
     }
 
+    /**
+     * Enriched per-target visual capture: the full {@link com.slabbed.dev.SlabbedDiagnostics.Sample}
+     * (visual triad, DODO/smoosh/gap/triad-mismatch flags, anchor state, above/below dy). Fired
+     * from the client on crosshair-target CHANGE (deduped) so a manual play session leaves a
+     * scannable trail of every block looked at and which ones tripped a red flag. Safe to call
+     * every candidate change — no-ops fast when disabled.
+     */
+    public static void recordVisualDiagnostic(BlockPos pos, com.slabbed.dev.SlabbedDiagnostics.Sample s) {
+        if (!enabled || pos == null || s == null) {
+            return;
+        }
+        synchronized (LiveCursorIntentRecorder.class) {
+            ensureInitialized();
+            writeSession("visual_diagnostic", null, "CLIENT", fields(
+                    "pos", pos.toShortString(),
+                    "block", s.blockId(),
+                    "visualDy", com.slabbed.dev.SlabbedDiagnostics.format(s.visualDy()),
+                    "modelDy", com.slabbed.dev.SlabbedDiagnostics.format(s.modelDy()),
+                    "outlineMinY", com.slabbed.dev.SlabbedDiagnostics.format(s.outlineMinY()),
+                    "raycastMinY", com.slabbed.dev.SlabbedDiagnostics.format(s.raycastMinY()),
+                    "collisionMinY", com.slabbed.dev.SlabbedDiagnostics.format(s.collisionMinY()),
+                    "opaqueFullCube", Boolean.toString(s.opaqueFullCube()),
+                    "slab", Boolean.toString(s.slab()),
+                    "anchor", s.anchorState(),
+                    "above", s.aboveId(),
+                    "aboveDy", com.slabbed.dev.SlabbedDiagnostics.format(s.aboveDy()),
+                    "below", s.belowId(),
+                    "belowDy", com.slabbed.dev.SlabbedDiagnostics.format(s.belowDy()),
+                    "collisionFollowsVisual", Boolean.toString(s.collisionFollowsVisual()),
+                    "flags", s.flagSummary(),
+                    "suspect", Boolean.toString(s.anySuspect())));
+        }
+    }
+
     public static void recordCrosshairTarget(
             HitResult initialTarget,
             HitResult finalTarget,
