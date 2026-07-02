@@ -69,6 +69,28 @@ public final class TerrainSlabsCompat {
         return CompatSlabSurfaceKind.NONE;
     }
 
+    /**
+     * True when Terrain Slabs is already lowering this object itself via its own {@code offset}
+     * blockstate property set to a non-{@code none} value (e.g. a lantern/flower/mushroom/grass
+     * sitting {@code offset=ontop} on a TS slab, which TS renders lowered through its own "ontop"
+     * model). Slabbed must NOT add a second offset to these — doing so double-lowers the object a
+     * full block into the slab (the "smoosh"). {@code offset} is a Terrain-Slabs-owned property
+     * carried by the wrapped object's own state (a capability probe on the state, not a
+     * namespace/id check); objects TS does not wrap (full blocks, signs, vanilla slabs) simply do
+     * not carry it, and no vanilla block has a blockstate property named {@code offset}.
+     */
+    public static boolean handlesObjectOffset(BlockState state) {
+        if (!LOADED || state == null) {
+            return false;
+        }
+        for (Property<?> property : state.getProperties()) {
+            if ("offset".equals(property.getName())) {
+                return !"none".equals(String.valueOf(state.get(property)));
+            }
+        }
+        return false;
+    }
+
     private static boolean isNamedCustomSlabSurface(Identifier id) {
         if (!isTerrainSlabsId(id)) {
             return false;
