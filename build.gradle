@@ -59,8 +59,15 @@ sourceSets {
             include "com/slabbed/util/SlabSupport.java"
             // Dev-only live-recorder: replaces manual screen recording with a plain,
             // greppable log of target changes + place/remove actions, toggled via
-            // /slabdy record. No client imports; safe on both sides.
+            // /slabdy record. No client imports; safe on both sides. Compiled for dev
+            // runs only — EXCLUDED from the shipped jar (see the jar block below);
+            // shipping code must reach it exclusively through SlabbedRecorderBridge.
             include "com/slabbed/util/SlabbedRecorder.java"
+            // Model-A reflective probe for the recorder above: ships in the jar, resolves
+            // SlabbedRecorder once at class-init (dev environment only), hard no-op when
+            // the class is absent — so the release jar carries no recorder class and no
+            // /slabdy record command literal.
+            include "com/slabbed/util/SlabbedRecorderBridge.java"
             // Single crosshair-pick authority mixin (offset-aware nearest-hit raycast).
             // The outline/model offset stays in the active event/model path, so enabling
             // shape mixins (e.g. SlabSupportStateMixin) here would double-offset.
@@ -205,6 +212,13 @@ jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
+    // Model-A dev-tooling hygiene: the recorder must be ABSENT from the release jar,
+    // not present-but-inert. reobfJar reobfuscates THIS task's output, so excluding
+    // here keeps the class out of the published artifact too. All shipping call sites
+    // go through SlabbedRecorderBridge, which probes reflectively and no-ops when the
+    // class is missing. Verify with: unzip -l build/libs/slabbed-*.jar | grep -i recorder
+    exclude "com/slabbed/util/SlabbedRecorder.class"
+    exclude "com/slabbed/util/SlabbedRecorder\$*.class"
 }
 
 publishing {

@@ -1,8 +1,9 @@
 package com.slabbed.client;
 
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.model.OffsetBlockStateModel;
-import com.slabbed.util.SlabbedRecorder;
+import com.slabbed.util.SlabbedRecorderBridge;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -59,7 +60,7 @@ public final class TargetDyOverlay {
     }
 
     private static void registerCommand(RegisterClientCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal("slabdy")
+        LiteralArgumentBuilder<CommandSourceStack> slabdy = Commands.literal("slabdy")
                 .executes(context -> {
                     boolean overlayEnabled = toggle();
                     context.getSource().sendSuccess(
@@ -71,9 +72,16 @@ public final class TargetDyOverlay {
                 .then(Commands.literal("row")
                         .executes(context -> reportRow(context.getSource())))
                 .then(Commands.literal("use")
-                        .executes(context -> useTarget(context.getSource())))
-                .then(Commands.literal("record")
-                        .executes(context -> toggleRecord(context.getSource()))));
+                        .executes(context -> useTarget(context.getSource())));
+        // Model-A dev tooling: the record literal is only registered when the dev-only
+        // SlabbedRecorder class actually resolved (dev environment; the class is excluded
+        // from the release jar). On release builds the subcommand must NOT exist at all —
+        // absent, not present-but-inert.
+        if (SlabbedRecorderBridge.isAvailable()) {
+            slabdy.then(Commands.literal("record")
+                    .executes(context -> toggleRecord(context.getSource())));
+        }
+        event.getDispatcher().register(slabdy);
     }
 
     private static int reportRow(CommandSourceStack source) {
@@ -95,9 +103,9 @@ public final class TargetDyOverlay {
     }
 
     private static int toggleRecord(CommandSourceStack source) {
-        boolean nowOn = SlabbedRecorder.toggle();
+        boolean nowOn = SlabbedRecorderBridge.toggle();
         source.sendSuccess(
-                () -> Component.literal("Slabbed recorder: " + (nowOn ? "on -> " + SlabbedRecorder.currentLogPath() : "off")),
+                () -> Component.literal("Slabbed recorder: " + (nowOn ? "on -> " + SlabbedRecorderBridge.currentLogPath() : "off")),
                 false);
         return 1;
     }
@@ -184,7 +192,7 @@ public final class TargetDyOverlay {
      * does not spam the log; only meaningful target changes are written.
      */
     private static void maybeLogTargetChange() {
-        if (!SlabbedRecorder.isEnabled()) {
+        if (!SlabbedRecorderBridge.isEnabled()) {
             return;
         }
         Minecraft client = Minecraft.getInstance();
@@ -195,7 +203,7 @@ public final class TargetDyOverlay {
         if (!(target instanceof BlockHitResult blockHit) || target.getType() != HitResult.Type.BLOCK) {
             if (!"none".equals(lastLoggedSignature)) {
                 lastLoggedSignature = "none";
-                SlabbedRecorder.log("target", "none");
+                SlabbedRecorderBridge.log("target", "none");
             }
             return;
         }
@@ -210,9 +218,9 @@ public final class TargetDyOverlay {
         }
         lastLoggedSignature = signature;
         BlockPos placePos = pos.relative(blockHit.getDirection());
-        SlabbedRecorder.log("target", String.join(" ", targetLines(client, blockHit, false))
+        SlabbedRecorderBridge.log("target", String.join(" ", targetLines(client, blockHit, false))
                 + " | fullState=" + state);
-        SlabbedRecorder.noteTarget(pos, placePos, blockHit.getDirection(), half);
+        SlabbedRecorderBridge.noteTarget(pos, placePos, blockHit.getDirection(), half);
     }
 
     private static void render(RenderGuiEvent.Post event) {

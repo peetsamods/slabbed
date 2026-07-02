@@ -2,7 +2,7 @@ package com.slabbed.placement;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedRecorder;
+import com.slabbed.util.SlabbedRecorderBridge;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.level.BlockEvent;
@@ -25,13 +25,13 @@ public final class SlabbedPlacementEvents {
             // Block.setPlacedBy anchor write, here driven by the Forge place event (which,
             // like setPlacedBy, fires only for entity placement — natural/terrain pieces
             // stay geometric by design).
-            if (SlabbedRecorder.isEnabled()) {
+            if (SlabbedRecorderBridge.isEnabled()) {
                 double dy = SlabSupport.getYOffset(level, event.getPos(), event.getPlacedBlock());
-                SlabbedRecorder.log("place", "pos=" + event.getPos().toShortString()
+                SlabbedRecorderBridge.log("place", "pos=" + event.getPos().toShortString()
                         + " state=" + event.getPlacedBlock()
                         + " dy=" + dy
                         + " anchored=" + SlabAnchorAttachment.isAnchored(level, event.getPos()));
-                SlabbedRecorder.checkPlacement(event.getPos(), event.getPlacedBlock());
+                SlabbedRecorderBridge.checkPlacement(event.getPos(), event.getPlacedBlock());
             }
         }
     }
