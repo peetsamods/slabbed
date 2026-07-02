@@ -487,6 +487,35 @@ public final class SlabSupport {
         return getYOffset(world, pos, state);
     }
 
+    /**
+     * The real (uncollapsed) visual dy of a fence/wall/pane for connection-arm purposes.
+     * Unlike the old model-render guard, this always reports {@link #getYOffset} — a fence
+     * lowered on a vanilla slab is not treated differently from one on a Terrain Slabs
+     * surface. See {@link #isSteppedConnectingNeighbor}: it is what prevents lowering the
+     * model from drawing an illegal connector arm across the resulting height step.
+     */
+    public static double connectingBlockVisualDy(BlockView world, BlockPos pos, BlockState state) {
+        return getYOffset(world, pos, state);
+    }
+
+    /**
+     * True if {@code neighborState} is a fence/wall/pane sitting at a different visual
+     * height than {@code state} — i.e. one was lowered onto a slab and the other was not.
+     * Such a pair must stay as single posts instead of drawing a connector arm across the
+     * height step. Cross-family joins (fence↔wall, pane↔glass, fence↔solid, …) are left
+     * alone because the neighbour is not a connecting block here.
+     */
+    public static boolean isSteppedConnectingNeighbor(BlockView world, BlockPos pos, BlockState state,
+                                                       BlockPos neighborPos, BlockState neighborState) {
+        Block neighbor = neighborState.getBlock();
+        if (!(neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof PaneBlock)) {
+            return false;
+        }
+        double selfDy = connectingBlockVisualDy(world, pos, state);
+        double neighborDy = connectingBlockVisualDy(world, neighborPos, neighborState);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
+    }
+
     public static void refreshVisualYOffsetRegion(BlockView world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         if (!isClientWorld(world)) {
             return;

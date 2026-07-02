@@ -91,16 +91,12 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
             dy = (float) ClientDy.dyFor(view, pos, state);
         } else {
             dy = (float) SlabSupport.getVisualYOffset(view, pos, state);
-            if (dy != 0.0f) {
-                // Preserve the old connection-block exclusion except for the proven
-                // direct custom Terrain Slabs support case.
-                boolean connectionBlock = state.getBlock() instanceof FenceBlock
-                        || state.getBlock() instanceof WallBlock
-                        || state.getBlock() instanceof PaneBlock;
-                if (connectionBlock && !SlabSupport.isDirectCustomSlabSupportedObject(view, pos, state)) {
-                    dy = 0.0f;
-                }
-            }
+            // Model dy always tracks getVisualYOffset now, matching the outline/raycast —
+            // including fences/walls/panes on a VANILLA slab (previously forced to dy=0 here,
+            // which floated the model above an already-correctly-lowered outline: GH #21).
+            // The resulting height-step connector arm is a separate concern, broken by
+            // FencePaneSlabConnectionMixin / WallSlabConnectionMixin via
+            // SlabSupport.isSteppedConnectingNeighbor — not by suppressing the model dy.
         }
 
         if (Boolean.getBoolean("slabbed.render.offset.trace")
