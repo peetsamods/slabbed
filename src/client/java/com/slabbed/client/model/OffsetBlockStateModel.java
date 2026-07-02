@@ -305,15 +305,25 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
 
         final float yOffset = dy;
         final BakedModel traceModel = wrapped;
-        final int[] totalQuadsSeen = {0};
-        final int[] verticesVisited = {0};
-        final double[] meshBounds = {
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY,
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY};
+        // Mesh-bounds cells are DIAGNOSTIC ONLY: gate them BEFORE allocating, or every
+        // offset-block emit pays two int[1] + one double[4] plus per-vertex min/max
+        // bookkeeping just so slabbed$recordMc1211FullMeshBoundsSample can early-return
+        // on the same condition. Armed = the cached flag OR an observed trace pos.
+        final boolean meshTraceArmed =
+                MC1211_FULL_MESH_BOUNDS_TRACE || slabbed$fullMeshBoundsTracePos != null;
+        final int[] totalQuadsSeen = meshTraceArmed ? new int[]{0} : null;
+        final int[] verticesVisited = meshTraceArmed ? new int[]{0} : null;
+        final double[] meshBounds = meshTraceArmed
+                ? new double[]{
+                        Double.POSITIVE_INFINITY,
+                        Double.NEGATIVE_INFINITY,
+                        Double.POSITIVE_INFINITY,
+                        Double.NEGATIVE_INFINITY}
+                : null;
         context.pushTransform(quad -> {
-            totalQuadsSeen[0]++;
+            if (meshTraceArmed) {
+                totalQuadsSeen[0]++;
+            }
             // Un-cull lowered-step seam faces so the strip exposed by the offset is drawn,
             // not culled into a see-through window. Preserve nominalFace so lighting/orientation
             // are unchanged. Only flips cull->draw, so it cannot remove geometry or z-fight
@@ -326,27 +336,31 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 }
             }
             for (int i = 0; i < 4; i++) {
-                verticesVisited[0]++;
                 float beforeY = quad.y(i);
                 float afterY = beforeY + yOffset;
-                meshBounds[0] = Math.min(meshBounds[0], beforeY);
-                meshBounds[1] = Math.max(meshBounds[1], beforeY);
-                meshBounds[2] = Math.min(meshBounds[2], afterY);
-                meshBounds[3] = Math.max(meshBounds[3], afterY);
+                if (meshTraceArmed) {
+                    verticesVisited[0]++;
+                    meshBounds[0] = Math.min(meshBounds[0], beforeY);
+                    meshBounds[1] = Math.max(meshBounds[1], beforeY);
+                    meshBounds[2] = Math.min(meshBounds[2], afterY);
+                    meshBounds[3] = Math.max(meshBounds[3], afterY);
+                }
                 quad.pos(i, quad.x(i), afterY, quad.z(i));
             }
             return true;
         });
         try {
             emitWrappedBlockQuads(view, state, pos, randomSupplier, context);
-            slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, traceModel, dy,
-                    totalQuadsSeen[0],
-                    verticesVisited[0],
-                    meshBounds[0],
-                    meshBounds[1],
-                    meshBounds[2],
-                    meshBounds[3],
-                    "quad_transform_aggregate");
+            if (meshTraceArmed) {
+                slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, traceModel, dy,
+                        totalQuadsSeen[0],
+                        verticesVisited[0],
+                        meshBounds[0],
+                        meshBounds[1],
+                        meshBounds[2],
+                        meshBounds[3],
+                        "quad_transform_aggregate");
+            }
         } finally {
             context.popTransform();
         }
