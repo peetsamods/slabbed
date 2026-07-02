@@ -367,6 +367,17 @@ public final class SlabSupport {
             return false;
         }
 
+        // Always-ceiling-hung decorations (hanging roots, spore blossom, hanging signs, pale
+        // hanging moss) attach to the block ABOVE; a slab BELOW them must NOT lower them. They
+        // lack the HANGING property, so the guard above misses them, and under a FLUSH (non
+        // top-like) ceiling the ceiling-chain exclusions above don't fire either — so they fell
+        // through to hasSlabInColumn (a carrier placed beneath bridged the downward column-walk
+        // to a slab, wrongly lowering them -0.5). Their real dy is computed by
+        // ceilingHungDecorationDy in getYOffsetInner.
+        if (isAlwaysCeilingHungDecoration(state)) {
+            return false;
+        }
+
         // ── bed: either half has a slab ───────────────────────────────
         if (state.contains(Properties.BED_PART)) {
             Direction facing = state.get(Properties.HORIZONTAL_FACING);
@@ -729,7 +740,82 @@ public final class SlabSupport {
         return isAdjacentSideSlabLowered(world, slabPos, slabState);
     }
 
+    /**
+     * True for an always-ceiling-hung decoration — hanging roots, spore blossom, hanging signs,
+     * pale hanging moss. These attach to the block ABOVE and have no floor variant, so their dy
+     * must be a pure function of that support and must never be lowered by a block below them in
+     * the column. Chains and pointed dripstone are deliberately NOT here: chains extend to reach
+     * their support (Maintainer's ruling), and the speleothem family keeps its own merge grammar.
+     * Lanterns are NOT here either: a standing lantern legitimately rests on a support, so it
+     * keeps the normal path (HANGING lanterns are already excluded from the below-walk).
+     */
+    private static boolean isAlwaysCeilingHungDecoration(BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return block instanceof HangingRootsBlock
+                || block instanceof SporeBlossomBlock
+                || block instanceof HangingSignBlock
+                || isPaleHangingMossBlock(state);
+    }
+
+    /**
+     * Rendered dy for an always-ceiling-hung decoration, decided SOLELY by the support directly
+     * ABOVE — never by any block below — so it cannot be dragged down by a carrier lower in the
+     * column. Under a LOWERED non-skip-offset support (vanilla slab or full block) it follows that
+     * support's lowered dy (a TOP slab adds the +0.5 raised-attach baseline so it sits flush, not
+     * 0.5 too low). A Terrain Slabs slab renders FLUSH, so it is never treated as a lowered
+     * support (the {@code shouldSkipOffset} guard) — a hanger beneath a flush TS slab stays flush
+     * even with a carrier lower in the column (e.g. a lantern placed beneath bridging the downward
+     * walk to a slab below). Under a normal top-like ceiling (directly or via a chain of
+     * ceiling-attached blocks) it floats +0.5, mirroring the pre-existing tail ceiling lanes;
+     * otherwise flush. Uses only the recursion-safe lowered-support mirrors (never re-enters
+     * {@link #getYOffset}), so it is safe inside the {@code IN_GET_Y_OFFSET} guard.
+     */
+    private static double ceilingHungDecorationDy(BlockView world, BlockPos pos, BlockState state) {
+        BlockPos supportPos = pos.up();
+        BlockState above = world.getBlockState(supportPos);
+        if (!CompatHooks.shouldSkipOffset(above)) {
+            double slabSupportDy = loweredSlabUndersideSupportDy(world, supportPos, above);
+            if (Double.isFinite(slabSupportDy) && slabSupportDy < -1.0e-6) {
+                // A TOP slab's underside sits half a block higher than a hanger's natural
+                // attach (support.y+1.5 vs hanger.y+1), so the hanger keeps its +0.5
+                // raised-attach baseline on top of the slab's lowering.
+                return isTopSlab(above) ? slabSupportDy + 0.5 : slabSupportDy;
+            }
+            double fullBlockSupportDy = loweredFullBlockUndersideSupportDy(world, supportPos, above);
+            if (Double.isFinite(fullBlockSupportDy) && fullBlockSupportDy < -1.0e-6) {
+                return fullBlockSupportDy;
+            }
+        }
+        BlockPos cursor = supportPos;
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState cur = world.getBlockState(cursor);
+            if (isTopLikeCeilingSurface(cur)) {
+                return 0.5;
+            }
+            if (isCeilingAttached(cur)) {
+                cursor = cursor.up();
+                continue;
+            }
+            break;
+        }
+        return 0.0;
+    }
+
     private static double getYOffsetInner(BlockView world, BlockPos pos, BlockState state) {
+        // Always-ceiling-hung decoration (hanging roots, spore blossom, hanging sign, pale hanging
+        // moss) hangs from the block ABOVE and has no floor variant, so its dy is a pure function
+        // of that support. Dispatch it here, BEFORE every "object resting on a support below"
+        // branch (anchors, gap-fill, directCustomSlabSupportDy, shouldOffset/slab-column) — those
+        // wrongly lower it when a carrier sits lower in the column (e.g. a placed lantern bridges
+        // the downward walk to a slab below, dragging the hanger down through a flush support).
+        // Lanterns are NOT here: a standing lantern legitimately rests on a support, so it keeps
+        // the normal path (its hanging form follows lowered supports via the hanger-owner lane).
+        if (isAlwaysCeilingHungDecoration(state)) {
+            return ceilingHungDecorationDy(world, pos, state);
+        }
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
