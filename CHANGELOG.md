@@ -113,6 +113,15 @@ live-confirmed cleanup work below. It is now finalized as `0.4.2-beta.1+26.1.2` 
 - Redstone torch particles align with the lowered torch head.
 - Double-tall vegetation is flush on Terrain Slabs.
 
+### Known issues (deferred to a future version)
+- **On-top placement flicker.** A slab placed on top of a deeply-lowered (−1.0) stack briefly renders one
+  step lower before settling at its final (server-authoritative) height — a one-tick client-prediction
+  flicker. The final placement is correct and consistent; only the placement instant flickers. Inherited
+  with the 26.2 `0.4.2-beta.1` backport (client prediction cannot see the WYSIWYG placement marker).
+- **Gaps on deep mixed-offset stacks.** Per-block lowering can leave half-/full-cell gaps where pieces at
+  different offsets (−0.5 vs −1.0) meet, since the model doesn't yet tile mixed offsets into a seamless
+  surface. Same family as the deferred **slab-combining** feature.
+
 ### Deferred by design — not pre-release blockers
 - **Full VS+TS slab combining:** vanilla-slab-on-TS already works, but TS-slab-on-vanilla, TS+TS, and deep TS
   chains are post-release work because the current TS skip guard is protecting terrain rendering.
