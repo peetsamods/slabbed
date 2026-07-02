@@ -11,9 +11,14 @@ import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Block;
 import net.minecraft.block.CarpetBlock;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
+import net.minecraft.block.PaneBlock;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.state.property.Properties;
@@ -459,9 +464,27 @@ public final class SlabAnchorAttachment {
         if (state.contains(Properties.DOUBLE_BLOCK_HALF)) {
             return false;
         }
+        // Connecting blocks (fences, walls, glass panes / iron bars, fence gates) are
+        // STRUCTURAL for the never-pop law even though they are not full solid cubes: a
+        // placed one must be height-locked so it can't pop between -0.5 and 0.0 when a
+        // neighbour changes (WYSIWYG — recorder session bb138275). They fail the
+        // isSolidBlock gate below, so admit them explicitly here. Decorative followers
+        // (lanterns, torches, hangers, signs) are NOT connecting blocks and stay geometric.
+        if (isConnectingStructural(state)) {
+            return true;
+        }
         if (!state.isSolidBlock(world, pos)) {
             return false;
         }
         return true;
+    }
+
+    /** Fence / wall / pane / gate — connecting blocks that must be height-locked like solids. */
+    public static boolean isConnectingStructural(BlockState state) {
+        Block b = state.getBlock();
+        return b instanceof FenceBlock
+                || b instanceof WallBlock
+                || b instanceof PaneBlock
+                || b instanceof FenceGateBlock;
     }
 }
