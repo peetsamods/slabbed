@@ -6,9 +6,14 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.VegetationBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.block.state.properties.SlabType;
+
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 
 /**
  * Countered Terrain Slabs compatibility (26.1.2, Mojang-mapped port of the shipped 1.21.1/1.21.11
@@ -35,6 +40,67 @@ public final class TerrainSlabsCompat {
 
     public static boolean isLoaded() {
         return LOADED;
+    }
+
+    /**
+     * Terrain Slabs' OWN "on-top" capability predicate, resolved ONCE at class init (never per
+     * block — the per-block-reflection lag class). Fabric TS 3.x positions a set of blocks on
+     * slab surfaces itself (its "ontop" system shifts model + outline shape + raycast −0.5 when
+     * the support below is a BOTTOM slab); that set is
+     * {@code OnTopHelper.terrain_slabs$isStateValidOnTop} = the runtime-extensible
+     * {@code ModOnTopBlocksRegistry} (snow layers by default; other mods can add blocks)
+     * ∪ {@code instanceof VegetationBlock}. Verified against terrain_slabs-fabric-3.3.1 bytecode.
+     * {@code null} when TS is absent or its internals moved (→ VegetationBlock-role fallback).
+     */
+    private static final MethodHandle TS_IS_STATE_VALID_ON_TOP = resolveOnTopProbe();
+
+    private static MethodHandle resolveOnTopProbe() {
+        if (!LOADED) {
+            return null;
+        }
+        try {
+            Class<?> helper = Class.forName("net.countered.terrainslabs.util.OnTopHelper");
+            return MethodHandles.publicLookup().findStatic(
+                    helper,
+                    "terrain_slabs$isStateValidOnTop",
+                    MethodType.methodType(boolean.class, BlockState.class));
+        } catch (Throwable t) {
+            // TS build without this internal (e.g. legacy terrainslabs 2.x) — fall back to the
+            // VegetationBlock role below; never crash compat resolution.
+            return null;
+        }
+    }
+
+    /**
+     * True when Terrain Slabs itself positions this state on top of a slab surface (its "ontop"
+     * system already renders it −0.5, outline + raycast included). Slabbed must NOT add its own
+     * dy to these states — a second −0.5 sinks the object a full block into the slab (the
+     * double-offset "smoosh" family; same law as the shipped Forge 1.20.1
+     * {@code handlesObjectOffset} deferral, re-derived for Fabric TS 3.x internals).
+     *
+     * <p>Role/capability gate, not a class list: beyond the {@link VegetationBlock} base role
+     * (cheap instanceof fast-path, no invoke) it asks TS's OWN predicate, so blocks that other
+     * mods register into TS's on-top registry at runtime are covered too. No-op when TS is not
+     * loaded.
+     */
+    public static boolean handlesObjectOffset(BlockState state) {
+        if (!LOADED || state == null) {
+            return false;
+        }
+        if (state.getBlock() instanceof VegetationBlock) {
+            // TS's own predicate includes this instanceof — short-circuit the common family
+            // without touching the MethodHandle.
+            return true;
+        }
+        MethodHandle probe = TS_IS_STATE_VALID_ON_TOP;
+        if (probe == null) {
+            return false;
+        }
+        try {
+            return (boolean) probe.invokeExact(state);
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     /** Returns true if slab offsets should be skipped for this state (a TS-owned block). */

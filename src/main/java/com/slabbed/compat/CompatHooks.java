@@ -41,4 +41,16 @@ public final class CompatHooks {
         }
         return CompatSlabSurfaceKind.NONE;
     }
+
+    /**
+     * True when the compat mod itself positions this state on top of slab surfaces (model,
+     * outline and raycast), so Slabbed must NOT add its own dy — adding both is the
+     * double-offset "smoosh" family. False whenever the compat mod is absent.
+     */
+    public static boolean terrainSlabsHandlesObjectOffset(BlockState state) {
+        if (TerrainSlabsCompat.isLoaded()) {
+            return TerrainSlabsCompat.handlesObjectOffset(state);
+        }
+        return false;
+    }
 }
