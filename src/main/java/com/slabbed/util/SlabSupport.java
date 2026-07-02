@@ -40,7 +40,6 @@ import net.minecraft.world.level.block.SpeleothemBlock;
 import net.minecraft.world.level.block.SporeBlossomBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.TorchBlock;
-import net.minecraft.world.level.block.VegetationBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.WallBlock;
@@ -875,17 +874,19 @@ public final class SlabSupport {
             DoubleBlockHalf half = state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF);
             if (half == DoubleBlockHalf.UPPER) {
                 BlockState belowTwo = world.getBlockState(pos.below(2));
-                // Vegetation on a Terrain Slabs surface must sit FLUSH (TS positions vegetation via its
-                // own model; Slabbed must not also lower it). The LOWER half is already TS-gated by
-                // hasBottomSlabBelow → shouldSkipSlabSupport, so it reads 0.0 on a TS slab. The UPPER half
-                // checked pos.below(2) with a BARE isBottomSlab, which returns true for a TS slab (it
-                // extends SlabBlock) → shouldOffset(UPPER)=true → the geometric lane returns -0.5 (live:
-                // "Sunflower/Tall Grass dy=-0.500 on TS"), splitting the plant (lower 0.0 / upper -0.5).
-                // Gate the UPPER half the SAME way for vegetation only. NON-vegetation double-blocks
-                // (doors) intentionally keep lowering on TS via the P0.4 directCustom path, so do NOT
-                // gate them here — both their halves stay -0.5. No-op without TS loaded
-                // (shouldSkipSlabSupport is always false → bare isBottomSlab path unchanged on vanilla).
-                if (state.getBlock() instanceof VegetationBlock
+                // Anything TS positions "on top" itself on a Terrain Slabs surface must sit FLUSH (TS
+                // shifts model + outline + raycast via its ontop system; Slabbed must not also lower
+                // it). The LOWER half is already TS-gated by hasBottomSlabBelow → shouldSkipSlabSupport,
+                // so it reads 0.0 on a TS slab. The UPPER half checked pos.below(2) with a BARE
+                // isBottomSlab, which returns true for a TS slab (it extends SlabBlock) →
+                // shouldOffset(UPPER)=true → the geometric lane returns -0.5 (live: "Sunflower/Tall
+                // Grass dy=-0.500 on TS"), splitting the plant (lower 0.0 / upper -0.5). Gate the UPPER
+                // half the SAME way — by TS's own on-top ROLE (VegetationBlock family + TS's runtime
+                // registry), not a bare class check (powder-snow lesson). NON-on-top double-blocks
+                // (doors) intentionally keep lowering on TS via the P0.4 directCustom path, so they are
+                // NOT gated here — both their halves stay -0.5. No-op without TS loaded (both hooks are
+                // always false → bare isBottomSlab path unchanged on vanilla).
+                if (CompatHooks.terrainSlabsHandlesObjectOffset(state)
                         && CompatHooks.shouldSkipSlabSupport(belowTwo)) {
                     return false;
                 }
@@ -2702,13 +2703,16 @@ public final class SlabSupport {
         if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
             return false;
         }
-        // Vegetation (flowers, grass, tall plants, saplings — all VegetationBlock) on a Terrain Slabs
-        // surface must sit FLUSH on top: TS already positions vegetation via its own SlabOffsetModel, so
-        // Slabbed must NOT also lower it -0.5 here (the double-offset sinks it; Maintainer 2026-06-19).
-        // Excluding it lets getYOffset fall through to the column walk, which terminates flush at the TS
-        // block → dy 0, so TS's offset is the only one applied. No-op without TS (this path needs a TS
-        // BOTTOM_LIKE surface to fire at all).
-        if (state.getBlock() instanceof VegetationBlock) {
+        // Any block Terrain Slabs positions "on top" itself (its ontop system: VegetationBlock family
+        // + TS's runtime-extensible on-top registry — snow layers by default, other mods can add) must
+        // sit FLUSH here: TS already shifts model + outline + raycast −0.5 via SlabOffsetModel and its
+        // ontop mixins, so Slabbed must NOT also lower it -0.5 (the double-offset sinks it; Maintainer
+        // 2026-06-19 for the vegetation case). ROLE gate, not a class list (powder-snow lesson): asks
+        // TS's own on-top predicate through CompatHooks. Excluding it lets getYOffset fall through to
+        // the column walk, which terminates flush at the TS block → dy 0, so TS's offset is the only
+        // one applied. No-op without TS (this path needs a TS BOTTOM_LIKE surface to fire at all, and
+        // the probe itself returns false when TS is absent).
+        if (CompatHooks.terrainSlabsHandlesObjectOffset(state)) {
             return false;
         }
         BlockPos supportPos = pos.below();
