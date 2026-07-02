@@ -826,6 +826,21 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            // COMPOUND sidecar (1.21.1 behavior port): an FB PLACED on a lowered compound-source
+            // bottom slab (or continuing a placed tower above a -1.0 compound anchor) was authored
+            // at the compound lane and must read -1.0 (flush), not the generic anchor -0.5 — the
+            // exact "placed compound stack top freezes at -0.5" float. Sidecar truth survives
+            // source slab removal (never-pop), and it is authored ONLY at placement time, so
+            // pre-sidecar anchors in existing worlds keep reading -0.5 exactly as before (the
+            // registry's documented "no retroactive anchoring" scope).
+            if (com.slabbed.anchor.SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)) {
+                if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
+                    String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
+                    Slabbed.LOGGER.info("[ANCHOR] compound sidecar dy applied side={} pos={} state={} dy=-1.0",
+                            side, pos.toShortString(), state);
+                }
+                return -1.0;
+            }
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",
@@ -1183,6 +1198,26 @@ public final class SlabSupport {
             return -0.5d;
         }
         return 0.0d;
+    }
+
+    /**
+     * Compound-source predicate (public form of the 1.21.1 {@code isLoweredCompoundSourceSlab}
+     * behavior, re-derived on this branch's own lanes): the position is a bottom slab that is
+     * itself LOWERED — by anchor, mixed vanilla-on-Terrain-Slabs surface, lowered double-slab
+     * carrier, lowered full-block carrier (vertical compound), or side-adjacency — so an
+     * ordinary full block placed directly above it is authored at compound lane {@code dy=-1.0}.
+     * Exactly the set {@link #loweredBottomSlabSupportDyForCompound} reads as lowered, keeping
+     * the authored sidecar in lockstep with the geometric compound lane (WYSIWYG at placement).
+     * Exposed for {@link com.slabbed.anchor.SlabAnchorAttachment#qualifiesForCompoundFullBlockAnchor}.
+     */
+    public static boolean isLoweredCompoundSourceSlab(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || !isBottomSlab(state)
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        double dy = loweredBottomSlabSupportDyForCompound(world, pos);
+        return Double.isFinite(dy) && dy < -1.0e-6d;
     }
 
     private static double verticalPillarStackDy(BlockView world, BlockPos pos, BlockState state) {
