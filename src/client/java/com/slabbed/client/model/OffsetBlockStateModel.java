@@ -61,10 +61,12 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
     private static volatile int slabbed$mc1211LiveModelTraceNotVideoEquivalentCount = 0;
     // Per-block diagnostic flags read ONCE at class init, not via Boolean.getBoolean(...) on
     // the hot render path (each of those is a synchronized System.getProperty lookup, run per
-    // block per chunk-mesh build). All default to false in release.
+    // block per chunk-mesh build). All default to false in release. Deliberately NOT cached:
+    // slabbed.render.offset.trace — the compiled goblin-route entrypoint arms it via
+    // System.setProperty at runtime, so it is read live behind the cheap tracePos filter at
+    // its single use site in emitBlockQuads.
     private static final boolean MC1211_LIVE_MODEL_TRACE = Boolean.getBoolean("slabbed.mc1211.liveModelTrace");
     private static final boolean MC1211_FULL_MESH_BOUNDS_TRACE = Boolean.getBoolean("slabbed.mc1211.fullMeshBoundsTrace");
-    private static final boolean RENDER_OFFSET_TRACE = Boolean.getBoolean("slabbed.render.offset.trace");
 
     public OffsetBlockStateModel(BakedModel wrapped) {
         this.wrapped = wrapped;
@@ -243,9 +245,13 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     dy);
         }
 
-        if (RENDER_OFFSET_TRACE
-                && state.getBlock() instanceof ChainBlock
-                && pos.equals(slabbed$tracePos)) {
+        // slabbed.render.offset.trace is read LIVE (not a class-init static final) because the
+        // goblin-route client entrypoint arms it via System.setProperty at runtime; a cached
+        // read would silently kill that lane. The two cheap per-block filters run first, so
+        // normal play (tracePos == null) never pays the property lookup.
+        if (state.getBlock() instanceof ChainBlock
+                && pos.equals(slabbed$tracePos)
+                && Boolean.getBoolean("slabbed.render.offset.trace")) {
             boolean excluded = state.getBlock() instanceof FenceBlock
                     || state.getBlock() instanceof WallBlock
                     || state.getBlock() instanceof PaneBlock;
