@@ -47,6 +47,14 @@ public final class RuntimeDiagnostics {
     // Off-by-default in release. Gates the per-block model-dy recorder so the hot render
     // path never builds reflection args or dispatches a call when tracing is disabled.
     private static final boolean BETA4_MODEL_DY_RECORDER = Boolean.getBoolean("slabbed.beta4ModelDyRecorder");
+    // Off-by-default in release. Gates recordModelDyTrace (called once per BlockModelRenderer
+    // render call by BlockModelDyTranslateMixin) so the hot render path never builds the
+    // reflective Class[]/varargs arrays when no trace lane is armed. Cached at class init:
+    // nothing in the compiled gametest include list setPropertys either gate flag at runtime
+    // (cache-vs-live audit 2026-07-02). Re-audit before re-including any SlabbedLab* client
+    // test that drives ModelDyTranslateTraceBridge.reset/snapshot — that lane needs
+    // -Dslabbed.modelDyTrace=true at JVM start once this gate is in place.
+    private static final boolean MODEL_DY_TRACE = Boolean.getBoolean("slabbed.modelDyTrace");
     // Several diagnostic sidecar classes are intentionally stripped from the release jar,
     // so Class.forName(...) on them throws ClassNotFoundException. Without this cache the
     // throw happened on EVERY per-block invoke() call — a render-thread exception storm that
@@ -544,6 +552,12 @@ public final class RuntimeDiagnostics {
             BlockState state,
             double dy
     ) {
+        // The bridge's record() feeds two lanes: the beta4 model-dy recorder and the
+        // tracePos snapshot lane. Bail before building the reflective arg arrays unless
+        // one of them is armed — this runs once per block render call.
+        if (!MODEL_DY_TRACE && !BETA4_MODEL_DY_RECORDER) {
+            return;
+        }
         invoke(
                 MODEL_DY_TRACE_BRIDGE_CLASS_NAME,
                 "record",
