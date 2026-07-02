@@ -23,22 +23,36 @@ public final class SlabbedDiagnosticsTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void triadMismatchDetectorFiresOnTheBugValues(TestContext ctx) {
-        // Consistent: outline followed the dy (outlineMinY == visualDy) → no flag.
-        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(-0.5, -0.5),
-                "a consistent triad (outline followed the dy) must NOT flag a mismatch");
-        // The bug: outline stayed at grid (0.0) while visual lowered -0.5 → 0.5 off → flag.
-        ctx.assertTrue(SlabbedDiagnostics.triadMismatch(-0.5, 0.0),
-                "outline pinned at grid while visual lowered MUST flag a triad mismatch (the fence/slab bug)");
-        // Empty outline → not decidable, no spurious flag.
-        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(-0.5, Double.NaN),
+        BlockState fence = Blocks.OAK_FENCE.getDefaultState();
+        BlockState slab = Blocks.OAK_SLAB.getDefaultState();
+        BlockState bed = Blocks.WHITE_BED.getDefaultState();
+        BlockState chain = Blocks.IRON_CHAIN.getDefaultState();
+        BlockState lantern = Blocks.LANTERN.getDefaultState();
+
+        // Grid-based block, outline followed the dy → no flag.
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(fence, -0.5, -0.5),
+                "a fence whose outline followed the dy must NOT flag");
+        // Grid-based block, outline pinned at grid while visual lowered → real bug.
+        ctx.assertTrue(SlabbedDiagnostics.triadMismatch(fence, -0.5, 0.0),
+                "a fence outline pinned at grid while visual lowered MUST flag (the raycast bug)");
+        ctx.assertTrue(SlabbedDiagnostics.triadMismatch(slab, -0.5, 0.0),
+                "an anchored slab rendering lowered with outline at grid MUST flag");
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(bed, -0.5, -0.5),
+                "a bed whose outline tracks the dy must NOT flag");
+        // Empty outline → not decidable.
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(fence, -0.5, Double.NaN),
                 "an empty outline must not produce a spurious mismatch");
-        // REGRESSION (recorder 2026-07-02): a hanging lantern's outline base sits ~0.063 above
-        // the floor, so outlineMinY 0.563 with visualDy 0.500 is a CONSISTENT offset, not a bug.
-        // The old collision-baseline heuristic false-positived on this and on beds/chains.
-        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(0.5, 0.563),
-                "a small base-shape offset (hanging lantern) must NOT flag as a triad mismatch");
-        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(-0.5, -0.5),
-                "a bed whose outline AND collision both track the dy must NOT flag");
+
+        // REGRESSION (recorder session c5ab15ce, 2026-07-02): centered/hanging decorations have
+        // a nonzero outline base (chain ~0.41, hanging lantern ~0.06) that is indistinguishable
+        // from a dy failure via minY, so they are EXCLUDED — must never flag even at values that
+        // would look like a mismatch for a grid-based block.
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(chain, -0.5, -0.094),
+                "a chain (nonzero outline base) must NOT flag — this was the false positive");
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(lantern, 0.5, 0.563),
+                "a hanging lantern (nonzero base) must NOT flag");
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(chain, -0.5, 0.0),
+                "even an extreme chain value must not flag — chains are not decidable here");
         ctx.complete();
     }
 

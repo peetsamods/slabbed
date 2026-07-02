@@ -119,7 +119,7 @@ public final class SlabbedDiagnostics {
                 opaque, slab, anchor,
                 blockId(above), aboveDy,
                 blockId(below), belowDy,
-                triadMismatch(visualDy, outlineMinY),
+                triadMismatch(state, visualDy, outlineMinY),
                 dodoRisk(opaque, visualDy),
                 smooshRisk(state, visualDy),
                 dyDiscontinuity(state, above, visualDy, aboveDy),
@@ -131,26 +131,38 @@ public final class SlabbedDiagnostics {
     // ── pure predicates (unit-testable) ───────────────────────────────
 
     /**
-     * The outline shape did not follow the visual dy. A block whose base outline starts at
-     * localY 0 (cubes, slabs, fences, walls, beds, stairs, trapdoors) has outlineMinY == dy
-     * once the mixin offsets it; a block whose outline is pinned at grid while the model
-     * lowered (the fence-raycast bug class) has outlineMinY ≈ 0 != dy.
+     * The outline shape did not follow the visual dy — the fence-raycast bug class.
      *
-     * <p>Robustness: Slabbed dy is ALWAYS a multiple of 0.5, so a failed offset is off by
-     * >= 0.5. Base shape offsets for hangers (a hanging lantern's outline starts ~0.06 above
-     * the block floor) are < 0.25. A 0.25 tolerance therefore separates "outline didn't
-     * follow the dy" (real) from a small base offset (fine) without needing the collision
-     * baseline — collision is NOT a reliable un-offset reference (beds/lanterns/chains have
-     * their collision offset too, which made the old outline-minus-collision heuristic
-     * false-positive on every one of them).
+     * <p>Only decidable for blocks whose base outline starts at localY 0: full cubes, slabs,
+     * fences, walls, panes, fence gates, beds, stairs. For those, {@code outlineMinY == dy}
+     * once the mixin offsets it, and a failure (outline pinned at grid while the model
+     * lowered) reads {@code outlineMinY ≈ 0 != dy}. Blocks with a nonzero base outline —
+     * hanging lanterns (~0.06), chains (~0.41), signs — are NOT checked here: their base
+     * offset is indistinguishable from a dy failure using minY alone (a chain's 0.41 base is
+     * within one 0.5 dy step), so a minY-vs-dy test false-positives on every one of them.
+     * That exact false positive is what the first recorder pass over beds/lanterns/chains
+     * exposed; the gap/DODO/smoosh checks cover those block families instead.
      */
-    public static final double TRIAD_TOLERANCE = 0.25;
-
-    public static boolean triadMismatch(double visualDy, double outlineMinY) {
-        if (Double.isNaN(outlineMinY)) {
-            return false; // empty outline — not decidable
+    public static boolean triadMismatch(BlockState state, double visualDy, double outlineMinY) {
+        if (Double.isNaN(outlineMinY) || !hasGridBasedOutline(state)) {
+            return false;
         }
-        return Math.abs(outlineMinY - visualDy) > TRIAD_TOLERANCE;
+        return Math.abs(outlineMinY - visualDy) > EPS;
+    }
+
+    /** True for blocks whose un-offset outline minY is 0, so outlineMinY == dy when offset. */
+    public static boolean hasGridBasedOutline(BlockState state) {
+        if (state.isOpaqueFullCube()) {
+            return true;
+        }
+        Block b = state.getBlock();
+        return b instanceof SlabBlock
+                || b instanceof net.minecraft.block.FenceBlock
+                || b instanceof net.minecraft.block.WallBlock
+                || b instanceof net.minecraft.block.PaneBlock
+                || b instanceof net.minecraft.block.FenceGateBlock
+                || b instanceof net.minecraft.block.BedBlock
+                || b instanceof net.minecraft.block.StairsBlock;
     }
 
     /** Opaque full cube rendered at a nonzero dy → face-cull-vs-render see-through hole. */
