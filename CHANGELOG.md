@@ -27,6 +27,10 @@ other versions have not yet received. The opposite-side compound placement fix i
 - **Opposite-side slab placement on −1.0 compounds.** Clicking the side face of a compound column no longer
   places the slab on the *opposite* side; the legacy "visible-lane" guard that flipped placement (a workaround
   for the old broken targeting) is now confined to the legacy regime.
+- **Slab-friendly stairs.** Stairs sitting on lowered slab-supported surfaces keep their step collision
+  aligned with the lowered visual body (was colliding at the vanilla grid height).
+- **Slab-friendly scaffolding.** Lowered scaffolding can be climbed and passed through at the slab-adjusted
+  visual height.
 
 ### Known issues (deferred to a future version)
 - **On-top placement flicker.** A slab placed on top of a deeply-lowered (−1.0) stack briefly renders one
