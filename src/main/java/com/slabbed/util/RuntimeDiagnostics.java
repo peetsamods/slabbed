@@ -509,6 +509,12 @@ public final class RuntimeDiagnostics {
             BlockState oldState,
             BlockState newState
     ) {
+        // Same negative-cache rule as invoke(): the recorder is excluded from the release
+        // jar, so without this check EVERY anchor add/remove event paid a fresh
+        // ClassNotFoundException throw — the exact 0.4.0-beta.3 exception-storm shape.
+        if (ABSENT_CLASSES.contains(BETA35_SLAB_JUMP_RECORDER_CLASS_NAME)) {
+            return;
+        }
         try {
             Class<?> targetClass = Class.forName(BETA35_SLAB_JUMP_RECORDER_CLASS_NAME);
             @SuppressWarnings({"rawtypes", "unchecked"})
@@ -523,6 +529,9 @@ public final class RuntimeDiagnostics {
                     BlockState.class,
                     BlockState.class);
             method.invoke(null, world, eventAction, type, pos, oldState, newState);
+        } catch (ClassNotFoundException notFound) {
+            // Class is excluded from this jar; remember so we never pay the throw again.
+            ABSENT_CLASSES.add(BETA35_SLAB_JUMP_RECORDER_CLASS_NAME);
         } catch (ReflectiveOperationException | IllegalArgumentException | LinkageError ignored) {
             // Recorder class is excluded from the release jar.
         }

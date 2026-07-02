@@ -544,10 +544,14 @@ public final class SlabAnchorAttachment {
                 chunk.setAttached(type, set);
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "remove", false);
+            // Only look up the trace-arg state when the recorder lane is actually armed,
+            // matching the wrapped shape addToAttachment already uses.
+            BlockState stateNow = RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()
+                    ? world.getBlockState(pos) : null;
             RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
                     world,
                     "REMOVE",
-                    type, pos, world.getBlockState(pos), world.getBlockState(pos));
+                    type, pos, stateNow, stateNow);
         }
         return removed;
     }
