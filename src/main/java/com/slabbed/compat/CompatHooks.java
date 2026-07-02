@@ -41,4 +41,16 @@ public final class CompatHooks {
         }
         return CompatSlabSurfaceKind.NONE;
     }
+
+    /**
+     * Returns true if Terrain Slabs itself positions this object on its surfaces (its "ontop"
+     * system), so Slabbed must defer — adding Slabbed's own -0.5 on top of TS's offset would
+     * double-lower the object (the "smoosh"/sink). No-op (false) when TS is not loaded.
+     */
+    public static boolean terrainSlabsHandlesObjectOffset(BlockState state) {
+        if (TerrainSlabsCompat.isLoaded()) {
+            return TerrainSlabsCompat.handlesObjectOffset(state);
+        }
+        return false;
+    }
 }

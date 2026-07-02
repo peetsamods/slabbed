@@ -1,11 +1,15 @@
 package com.slabbed.compat.terrainslabs;
 
 import com.slabbed.compat.CompatSlabSurfaceKind;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.VegetationBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.block.state.properties.SlabType;
@@ -32,6 +36,15 @@ public final class TerrainSlabsCompat {
     public static final String LEGACY_MOD_ID = "terrainslabs";
     private static final boolean LOADED = FabricLoader.getInstance().isModLoaded(MOD_ID)
             || FabricLoader.getInstance().isModLoaded(LEGACY_MOD_ID);
+
+    /**
+     * TS's own "does TS position this state on top of its slabs?" predicate
+     * ({@code OnTopHelper.terrain_slabs$isStateValidOnTop}), resolved ONCE at class init (never
+     * per-block — the CNFE-storm lesson) and only when TS is loaded. {@code null} when TS is absent
+     * or a TS build without the helper is installed; callers then fall back to the verified 3.3.1
+     * wrap-family mirror in {@link #handlesObjectOffset}.
+     */
+    private static final MethodHandle ON_TOP_PROBE = resolveOnTopProbe();
 
     public static boolean isLoaded() {
         return LOADED;
@@ -74,6 +87,63 @@ public final class TerrainSlabsCompat {
             return CompatSlabSurfaceKind.BOTTOM_LIKE;
         }
         return CompatSlabSurfaceKind.NONE;
+    }
+
+    /**
+     * True when Terrain Slabs itself positions this object on a TS surface, so Slabbed must NOT
+     * add its own -0.5 (the double-offset "smoosh"/sink). Role/capability probe, not a per-family
+     * class list (donor concept: the Forge 1.20.1 {@code handlesObjectOffset}):
+     *
+     * <ol>
+     *   <li><b>{@code offset} blockstate property probe</b> (Forge-style TS): TS adds an
+     *       {@code offset} property to wrapped objects; any non-{@code none} value means TS renders
+     *       the object lowered through its own model. Loader-agnostic and per-state; Fabric TS 3.3.1
+     *       does not carry the property, so this lane is inert there (verified from the live-rig jar).</li>
+     *   <li><b>TS's own on-top predicate</b> (Fabric TS 3.x): delegate to
+     *       {@code OnTopHelper.terrain_slabs$isStateValidOnTop} — the exact predicate TS's
+     *       {@code SlabOffsetModel}/placement mixins use (ON_TOP_BLOCKS registry + VegetationBlock).
+     *       Tracks runtime registry additions ({@code addOnTopBlock} is public API) automatically.</li>
+     *   <li><b>Fallback mirror</b> when the helper cannot be resolved (future TS internals change):
+     *       {@code VegetationBlock} — the verified 3.3.1 wrap family, preserving the live-confirmed
+     *       vegetation-flush behaviour (Maintainer 2026-06-19).</li>
+     * </ol>
+     *
+     * <p>No-op ({@code false}) when TS is not loaded.
+     */
+    public static boolean handlesObjectOffset(BlockState state) {
+        if (!LOADED || state == null) {
+            return false;
+        }
+        for (Property<?> property : state.getProperties()) {
+            if ("offset".equals(property.getName())) {
+                String value = propertyValueName(state, property);
+                return value != null && !"none".equals(value);
+            }
+        }
+        MethodHandle probe = ON_TOP_PROBE;
+        if (probe != null) {
+            try {
+                return (boolean) probe.invokeExact(state);
+            } catch (Throwable ignored) {
+                // fall through to the verified wrap-family mirror
+            }
+        }
+        return state.getBlock() instanceof VegetationBlock;
+    }
+
+    private static MethodHandle resolveOnTopProbe() {
+        if (!LOADED) {
+            return null;
+        }
+        try {
+            Class<?> helper = Class.forName("net.countered.terrainslabs.util.OnTopHelper");
+            return MethodHandles.publicLookup().findStatic(
+                    helper,
+                    "terrain_slabs$isStateValidOnTop",
+                    MethodType.methodType(boolean.class, BlockState.class));
+        } catch (ReflectiveOperationException | LinkageError e) {
+            return null;
+        }
     }
 
     private static boolean isNamedCustomSlabSurface(Identifier id) {

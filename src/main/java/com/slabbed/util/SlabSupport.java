@@ -2701,13 +2701,15 @@ public final class SlabSupport {
         if (world == null || pos == null || !isDirectCustomSlabSupportSubject(world, pos, state)) {
             return false;
         }
-        // Vegetation (flowers, grass, tall plants, saplings — all VegetationBlock) on a Terrain Slabs
-        // surface must sit FLUSH on top: TS already positions vegetation via its own SlabOffsetModel, so
-        // Slabbed must NOT also lower it -0.5 here (the double-offset sinks it; Maintainer 2026-06-19).
-        // Excluding it lets getYOffset fall through to the column walk, which terminates flush at the TS
-        // block → dy 0, so TS's offset is the only one applied. No-op without TS (this path needs a TS
-        // BOTTOM_LIKE surface to fire at all).
-        if (state.getBlock() instanceof VegetationBlock) {
+        // Any object Terrain Slabs positions ITSELF (its "ontop" system — vegetation via
+        // SlabOffsetModel, snow layers, plus whatever its ON_TOP_BLOCKS registry holds at runtime)
+        // must sit FLUSH on top: Slabbed must NOT also lower it -0.5 here (the double-offset sinks
+        // it; Maintainer 2026-06-19, originally hit as the vegetation smoosh). Deferring lets getYOffset
+        // fall through to the column walk, which terminates flush at the TS block → dy 0, so TS's
+        // offset is the only one applied. Role/capability probe (not a per-family class check —
+        // the powder-snow lesson): CompatHooks asks TS's own wrap predicate / offset property.
+        // No-op without TS (this path needs a TS BOTTOM_LIKE surface to fire at all).
+        if (CompatHooks.terrainSlabsHandlesObjectOffset(state)) {
             return false;
         }
         BlockPos supportPos = pos.below();
