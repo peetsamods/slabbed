@@ -736,6 +736,13 @@ public final class SlabSupport {
             if (SlabAnchorAttachment.isAnchored(world, pos)) {
                 return -0.5;
             }
+            // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
+            // placed beside/under it later can no longer make it inherit a lowered position
+            // (Maintainer's law: a placed block must not autonomously move / type-inherit on
+            // neighbor change). Read before every geometric inheritance walk below.
+            if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+                return 0.0;
+            }
             BlockPos belowPos = pos.down();
             BlockState below = world.getBlockState(belowPos);
             if (hasLoweredNonSlabTopSupport(world, belowPos, below)
@@ -779,6 +786,16 @@ public final class SlabSupport {
                         side, pos.toShortString(), state, anchorDy);
             }
             return anchorDy;
+        }
+
+        // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a slab
+        // or lowered carrier added under/beside it later can no longer pull it down (Maintainer's law:
+        // a placed block must not autonomously move). Read before every geometric lowering lane
+        // below (gap-fill, cantilever-adjacency, Terrain-Slabs combining, column walk).
+        // Decorative followers are never frozen-flat, so they keep tracking their supports.
+        if (!(state.getBlock() instanceof SlabBlock)
+                && com.slabbed.anchor.SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+            return 0.0;
         }
 
         // Gap-fill (live + recursion-safe): an ordinary solid block sitting directly below

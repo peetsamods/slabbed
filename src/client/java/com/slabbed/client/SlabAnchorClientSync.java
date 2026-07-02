@@ -48,6 +48,21 @@ public final class SlabAnchorClientSync {
             return set != null && set.contains(pos.asLong());
         };
 
+        // Same client-world fallback for the freeze-on-place FLAT marker, so the model render path
+        // sees the frozen-flat state and keeps the piece at dy=0 (no autonomous lowering).
+        SlabAnchorAttachment.clientFrozenFlatLookup = pos -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc == null || mc.world == null) {
+                return false;
+            }
+            WorldChunk chunk = mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk == null) {
+                return false;
+            }
+            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.FROZEN_FLAT_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
+
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
 
@@ -71,6 +86,24 @@ public final class SlabAnchorClientSync {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.worldRenderer != null) {
                 scheduleRerendersForSet(mc, initial);
+            }
+        }
+
+        // FROZEN_FLAT marker: same live-sync + initial-population rerender handling as ANCHOR_TYPE,
+        // so on reload a flat-frozen piece renders at dy=0 even when a slab/carrier sits below it.
+        chunk.<LongOpenHashSet>onAttachedSet(SlabAnchorAttachment.FROZEN_FLAT_TYPE).register((oldSet, newSet) -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc.worldRenderer == null) {
+                return;
+            }
+            scheduleRerendersForSet(mc, oldSet);
+            scheduleRerendersForSet(mc, newSet);
+        });
+        LongOpenHashSet initialFrozenFlat = chunk.getAttached(SlabAnchorAttachment.FROZEN_FLAT_TYPE);
+        if (initialFrozenFlat != null && !initialFrozenFlat.isEmpty()) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc.worldRenderer != null) {
+                scheduleRerendersForSet(mc, initialFrozenFlat);
             }
         }
     }
