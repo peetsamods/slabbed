@@ -321,6 +321,73 @@ public final class ForgeCombinedSlabChainingMatrixGameTest {
         ctx.succeed();
     }
 
+    // ── column 7: EXACT 462c8bb2 donor fixture — object on a cantilever-lowered
+    //    full block with air under the ENTIRE support column ─────────────────────
+    /**
+     * Pins the exact main-branch (1.21.11) {@code 462c8bb2} bug fixture on this port:
+     * a standing lantern on a full block that is lowered ONLY by the geometric
+     * cantilever lane ({@code SlabSupport.isCantileverLoweredFullBlock} — adjacency
+     * to a lowered tower, AIR under the whole support column, no anchor of its own).
+     * The donor bug: the object's support-column walks ({@code hasSlabInColumn})
+     * stop at the air gap under the cantilever and never see the support's
+     * adjacency-based lowering, so the object floats at 0 above a -0.5 support.
+     *
+     * <p>Nearby cells (F1 lantern on lowered-FB-with-slab-below, F2 L4, F6 rig B)
+     * all give the object a slab/anchor in its own column; only THIS fixture
+     * exercises the object-follow across the air gap.
+     *
+     * <p>GROUND TRUTH ON THIS BRANCH (2026-07-02 run): the support lane is green
+     * (cantilever planks -0.5, unanchored) but the lantern reads 0.0 — the donor
+     * bug IS present here; the donor's fix lane (462c8bb2's non-solid-object
+     * branch in getYOffsetInner) was never ported to this getYOffsetInner. Per
+     * this class's discipline the support preconditions are HARD-ASSERTED and the
+     * object-follow is recorded as a bare [MATRIX] MISMATCH candidate (suite stays
+     * green) until the fix behavior is ported.
+     */
+    @GameTest(template = "empty")
+    public void lanternOnCantileveredSupportLowers(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        String cfg = "F7.objectOnCantileverFullBlock";
+
+        BlockPos stone = buildSlabStoneRig(ctx, world, cfg, new BlockPos(2, 1, 1));
+        // Cantilever a full block west of the lowered stone through the REAL item path.
+        BlockPos planks = stone.west();
+        BlockState planksState = placeBlockItemAgainstFace(
+                world, stone, planks, Direction.WEST, stone.getY() + 0.2d, Blocks.OAK_PLANKS);
+        ctx.assertTrue(planksState.is(Blocks.OAK_PLANKS),
+                cfg + " cantilever planks must place at " + shortPos(planks));
+        // Fixture-shape honesty guards: the ENTIRE in-template support column below the
+        // cantilever is air, and the cantilever carries NO anchor — placement authoring
+        // does not qualify it (air below), so this cell covers the GEOMETRIC lane, the
+        // same lane the donor fixture exercised via setBlockState. If a future authoring
+        // change anchors side placements, this assert flags that the cell silently
+        // changed lanes instead of letting it false-green.
+        ctx.assertTrue(world.getBlockState(planks.below()).isAir()
+                        && world.getBlockState(planks.below(2)).isAir(),
+                cfg + " support column below the cantilever must be air");
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, planks),
+                cfg + " cantilever must NOT be anchored (geometric lane only)");
+        double planksDy = record(cfg, "cantileverFullBlock", world, planks, -0.5d, Kind.STRICT);
+        ctx.assertTrue(near(planksDy, -0.5d),
+                cfg + " cantilevered full block must lower -0.5 (isCantileverLoweredFullBlock lane), got "
+                        + text(planksDy));
+
+        // The 462c8bb2 bug case: a standing lantern on that support should follow to
+        // -0.5 instead of floating at 0 above its lowered support. KNOWN CANDIDATE
+        // (recorded bare, not asserted — RED-cell discipline): actual today is 0.0.
+        // hasSlabInColumn / the object walks stop at the air gap under the cantilever
+        // and no lane reads the support's adjacency-based lowering for a non-solid
+        // object; the donor fix (462c8bb2 getYOffsetInner non-solid-object branch on
+        // 1.21.11) has no counterpart here. Flip this row to a hard assert when the
+        // object-follow behavior is ported.
+        BlockState lantern = placeBlockItemOnTop(world, planks, Blocks.LANTERN);
+        ctx.assertTrue(lantern.is(Blocks.LANTERN),
+                cfg + " lantern must place at " + shortPos(planks.above()));
+        record(cfg, "cap=lanternOnCantilever", world, planks.above(), -0.5d, Kind.STRICT);
+
+        ctx.succeed();
+    }
+
     // ── shared rig builders ───────────────────────────────────────────────────
 
     /**
@@ -385,8 +452,14 @@ public final class ForgeCombinedSlabChainingMatrixGameTest {
 
     private static BlockState placeSlabAgainstFace(
             ServerLevel world, BlockPos targetPos, BlockPos newPos, Direction face, double clickY) {
+        return placeBlockItemAgainstFace(world, targetPos, newPos, face, clickY, Blocks.OAK_SLAB);
+    }
+
+    private static BlockState placeBlockItemAgainstFace(
+            ServerLevel world, BlockPos targetPos, BlockPos newPos, Direction face, double clickY,
+            Block itemBlock) {
         Player player = FakePlayerFactory.getMinecraft(world);
-        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Blocks.OAK_SLAB));
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(itemBlock));
         Vec3 hitLoc = new Vec3(
                 targetPos.getX() + 0.5d + face.getStepX() * 0.5d,
                 clickY,
@@ -395,8 +468,8 @@ public final class ForgeCombinedSlabChainingMatrixGameTest {
         InteractionResult result = ForgeHooks.onPlaceItemIntoWorld(
                 new UseOnContext(player, InteractionHand.MAIN_HAND, hit));
         if (!result.consumesAction()) {
-            throw new AssertionError("slab placement did not consume action, result=" + result
-                    + " target=" + targetPos + " face=" + face);
+            throw new AssertionError("item placement did not consume action, item=" + itemBlock
+                    + " result=" + result + " target=" + targetPos + " face=" + face);
         }
         return world.getBlockState(newPos);
     }
