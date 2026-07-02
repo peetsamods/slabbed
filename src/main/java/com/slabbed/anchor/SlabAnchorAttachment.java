@@ -472,8 +472,11 @@ public final class SlabAnchorAttachment {
         }
         LongOpenHashSet existing = chunk.getAttached(type);
         LongOpenHashSet set = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
-        BlockState stateBefore = RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()
-                ? world.getBlockState(pos) : null;
+        // Read the recorder gate once per event; it also wraps the record call below so the
+        // disabled path never dispatches (the recorder itself early-returns when disabled,
+        // so gating at the call site is behavior-identical).
+        boolean slabJumpTruthEnabled = RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled();
+        BlockState stateBefore = slabJumpTruthEnabled ? world.getBlockState(pos) : null;
         if (set.add(pos.asLong())) {
             // setAttached triggers persistence + auto-sync for synced attachments.
             chunk.setAttached(type, set);
@@ -482,10 +485,12 @@ public final class SlabAnchorAttachment {
                         label, pos.toShortString(), chunk.getPos(), set.size());
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "add", true);
-            RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
-                    world,
-                    "ADD",
-                    type, pos, stateBefore, stateBefore);
+            if (slabJumpTruthEnabled) {
+                RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
+                        world,
+                        "ADD",
+                        type, pos, stateBefore, stateBefore);
+            }
             return true;
         }
         return false;
@@ -553,10 +558,14 @@ public final class SlabAnchorAttachment {
                 chunk.setAttached(type, set);
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "remove", false);
-            RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
-                    world,
-                    "REMOVE",
-                    type, pos, world.getBlockState(pos), world.getBlockState(pos));
+            // Wrapped call site: the two world.getBlockState trace args were built on every
+            // anchor removal even with the recorder disabled/stripped from the jar.
+            if (RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()) {
+                RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
+                        world,
+                        "REMOVE",
+                        type, pos, world.getBlockState(pos), world.getBlockState(pos));
+            }
         }
         return removed;
     }

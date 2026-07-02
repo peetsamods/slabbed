@@ -509,6 +509,12 @@ public final class RuntimeDiagnostics {
             BlockState oldState,
             BlockState newState
     ) {
+        // This path bypasses invoke(), so it must consult the same ABSENT_CLASSES miss-cache:
+        // without it, every anchor add/remove on a release jar paid a raw Class.forName
+        // ClassNotFoundException throw — the exact shape of the 0.4.0-beta.3 lag storm.
+        if (ABSENT_CLASSES.contains(BETA35_SLAB_JUMP_RECORDER_CLASS_NAME)) {
+            return;
+        }
         try {
             Class<?> targetClass = Class.forName(BETA35_SLAB_JUMP_RECORDER_CLASS_NAME);
             @SuppressWarnings({"rawtypes", "unchecked"})
@@ -523,6 +529,10 @@ public final class RuntimeDiagnostics {
                     BlockState.class,
                     BlockState.class);
             method.invoke(null, world, eventAction, type, pos, oldState, newState);
+        } catch (ClassNotFoundException notFound) {
+            // Recorder class is excluded from the release jar; remember the miss so we
+            // never pay the throw again.
+            ABSENT_CLASSES.add(BETA35_SLAB_JUMP_RECORDER_CLASS_NAME);
         } catch (ReflectiveOperationException | IllegalArgumentException | LinkageError ignored) {
             // Recorder class is excluded from the release jar.
         }
