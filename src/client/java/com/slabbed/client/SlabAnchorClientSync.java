@@ -324,22 +324,34 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet oldSet,
             LongOpenHashSet newSet
     ) {
-        String type = labelForAttachment(attachmentType);
-        logCompoundVisibleClientSync(event, type, chunk, attachmentType, oldSet, newSet);
-        if (!reloadJumpRecorderEnabled()) {
-            logModelDyRerenderEvent(event, type, chunk, oldSet, newSet);
+        // Hoist each per-call Boolean.getBoolean gate to ONE read per event, and bail before
+        // building the attachment label or dispatching any lane when nothing is armed
+        // (release default). The three lanes stay independent: compound-visible has its own
+        // cached flag and must not be hidden behind the reload-jump gate.
+        boolean reloadJumpEnabled = reloadJumpRecorderEnabled();
+        boolean modelDyEnabled = modelDyRecorderEnabled();
+        boolean compoundVisibleEnabled = SlabAnchorAttachment.beta4CompoundVisibleRenderTraceEnabled();
+        if (!reloadJumpEnabled && !modelDyEnabled && !compoundVisibleEnabled) {
             return;
         }
 
-        Slabbed.LOGGER.info(
-                "[BETA4_RELOAD_JUMP_SYNC] event={} type={} chunk={} oldCount={} newCount={} rerenderTriggered={}",
-                event,
-                type,
-                chunk.getPos(),
-                oldSet == null ? 0 : oldSet.size(),
-                newSet == null ? 0 : newSet.size(),
-                newSet != null && !newSet.isEmpty());
-        logModelDyRerenderEvent(event, type, chunk, oldSet, newSet);
+        String type = labelForAttachment(attachmentType);
+        if (compoundVisibleEnabled) {
+            logCompoundVisibleClientSync(event, type, chunk, attachmentType, oldSet, newSet);
+        }
+        if (reloadJumpEnabled) {
+            Slabbed.LOGGER.info(
+                    "[BETA4_RELOAD_JUMP_SYNC] event={} type={} chunk={} oldCount={} newCount={} rerenderTriggered={}",
+                    event,
+                    type,
+                    chunk.getPos(),
+                    oldSet == null ? 0 : oldSet.size(),
+                    newSet == null ? 0 : newSet.size(),
+                    newSet != null && !newSet.isEmpty());
+        }
+        if (modelDyEnabled) {
+            logModelDyRerenderEvent(event, type, chunk, oldSet, newSet);
+        }
     }
 
     private static void logReloadJumpSyncRerender(BlockPos pos, BlockState state) {
