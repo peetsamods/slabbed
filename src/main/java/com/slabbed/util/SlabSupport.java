@@ -1644,7 +1644,11 @@ public final class SlabSupport {
             Vec3 hitPos,
             CompoundSlabRemapDecision decision
     ) {
-        RuntimeDiagnostics.logSlabSupportDecision(world, sourcePos, sourceState, intendedDirection, hitPos, decision);
+        // Spec 4.1 wrap: gate the diagnostic call so a dev-flavor RuntimeDiagnostics swap
+        // never adds ungated work on the placement-decision path.
+        if (RuntimeDiagnostics.isEnabled()) {
+            RuntimeDiagnostics.logSlabSupportDecision(world, sourcePos, sourceState, intendedDirection, hitPos, decision);
+        }
         return decision;
     }
 

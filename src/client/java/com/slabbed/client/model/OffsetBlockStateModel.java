@@ -329,7 +329,11 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
     ) {
         float dy = (float) ClientDy.dyFor(view, pos, state);
         String dySourcePath = "forgeGetQuads:ClientDy";
-        RuntimeDiagnostics.recordBeta4ModelDyTrace("forgeGetQuads", view, pos, state, dy);
+        // Spec 4.1 wrap: the stub is a no-op today, but the call site must still be gated
+        // so a dev-flavor RuntimeDiagnostics swap never adds ungated per-render-call work.
+        if (RuntimeDiagnostics.isEnabled()) {
+            RuntimeDiagnostics.recordBeta4ModelDyTrace("forgeGetQuads", view, pos, state, dy);
+        }
         slabbed$logCompoundVisibleRenderTraceModelDy(view, pos, state, dy);
         slabbed$logMc1211LiveModelTrace(view, pos, state, dySourcePath, dy, dy);
         slabbed$recordModelDyOwnerSample(view, pos, state, dy);

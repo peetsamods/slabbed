@@ -507,10 +507,13 @@ public final class SlabAnchorAttachment {
                         label, shortPos(pos), chunk.getPos(), set.size());
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "add", true);
-            RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
-                    world,
-                    "ADD",
-                    type, pos, stateBefore, stateBefore);
+            // Spec 4.1 wrap: same gate that guarded the stateBefore read above.
+            if (RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()) {
+                RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
+                        world,
+                        "ADD",
+                        type, pos, stateBefore, stateBefore);
+            }
             return true;
         }
         return false;
@@ -578,10 +581,16 @@ public final class SlabAnchorAttachment {
                 setAttachment(chunk, type, set);
             }
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "remove", false);
-            RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
-                    world,
-                    "REMOVE",
-                    type, pos, world.getBlockState(pos), world.getBlockState(pos));
+            // Spec 4.1 wrap: the two world.getBlockState reads are argument CONSTRUCTION
+            // for a no-op stub -- real chunk lookups burned per removal. Hoist them (and
+            // dedupe to one read) behind the facility gate the ADD site already uses.
+            if (RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()) {
+                BlockState current = world.getBlockState(pos);
+                RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
+                        world,
+                        "REMOVE",
+                        type, pos, current, current);
+            }
         }
         return removed;
     }
