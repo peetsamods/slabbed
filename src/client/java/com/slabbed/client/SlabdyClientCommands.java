@@ -8,15 +8,17 @@ import com.slabbed.dev.audit.LiveCursorIntentRecorder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -72,7 +74,12 @@ public final class SlabdyClientCommands {
                                 .then(literal("row").executes(SlabdyClientCommands::runRow))
                                 .then(literal("use").executes(SlabdyClientCommands::runUse))
                                 .then(literal("record").executes(SlabdyClientCommands::runRecord))));
-        HudRenderCallback.EVENT.register(SlabdyClientCommands::renderOverlay);
+        // HudRenderCallback is @Deprecated (and dead) in fabric-rendering-v1 16.x — the reason
+        // the overlay never showed. Register through the current HudElementRegistry instead;
+        // addLast draws our element after all vanilla HUD elements (on top), every frame.
+        HudElementRegistry.addLast(
+                Identifier.of("slabbed", "target_dy_overlay"),
+                SlabdyClientCommands::renderOverlay);
         // While the recorder is enabled, capture a full SlabbedDiagnostics sample every time
         // the crosshair target changes — deduped so look-drift doesn't spam the log. This is
         // the enriched capture (visual triad + DODO/smoosh/gap/triad-mismatch flags), and it
@@ -177,7 +184,7 @@ public final class SlabdyClientCommands {
         return 1;
     }
 
-    private static void renderOverlay(DrawContext context, net.minecraft.client.render.RenderTickCounter tickCounter) {
+    private static void renderOverlay(DrawContext context, RenderTickCounter tickCounter) {
         if (!overlayEnabled) {
             return;
         }
