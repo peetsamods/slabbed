@@ -25,7 +25,8 @@
       "com.slabbed.test.SlabbedDiagnosticsTest",
       "com.slabbed.test.AnchoredSlabTriadTest",
       "com.slabbed.test.FenceNeverPopTest",
-      "com.slabbed.test.StateChangeAnchorTest"
+      "com.slabbed.test.StateChangeAnchorTest",
+      "com.slabbed.test.NeverPopMatrixTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",
