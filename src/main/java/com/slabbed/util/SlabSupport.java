@@ -668,14 +668,20 @@ public final class SlabSupport {
     }
 
     /**
-     * Recursion-safe live check: does {@code pos} have a horizontal neighbour that is a
-     * lowered ordinary full block? Mirrors {@code qualifiesForAdjacentLoweredFullBlockAnchor}
-     * but determines the neighbour's lowering from its sources (anchor / column source
-     * below) instead of {@code getYOffset}, so it is safe to call inside the
-     * {@code IN_GET_Y_OFFSET} guard. Used to lower a cantilevered side-placed block live,
-     * before its own anchor syncs (eliminating the placement snap).
+     * Recursion-safe live check: does {@code pos} have a horizontal neighbour that is itself
+     * lowered (by anchor or column-source) and is EITHER a solid full block OR a
+     * connecting-structural block (fence/wall/pane/gate — see
+     * {@link SlabAnchorAttachment#isConnectingStructural})? Determines the neighbour's lowering
+     * from its sources instead of {@code getYOffset}, so it is safe to call inside the
+     * {@code IN_GET_Y_OFFSET} guard. Used to lower a cantilevered side-placed block live, before
+     * its own anchor syncs.
+     *
+     * <p>Renamed from {@code isAdjacentToLoweredFullBlock}: a live WYSIWYG bug (a fence/pane
+     * placed beside an EXISTING lowered fence/pane, air below, froze FLAT/detached instead of
+     * inheriting the neighbour's dy) traced to this filter excluding non-solid connecting-block
+     * neighbours entirely — only full-cube neighbours were ever recognised as a lowering source.
      */
-    private static boolean isAdjacentToLoweredFullBlock(BlockView world, BlockPos pos) {
+    private static boolean isAdjacentToLoweredSupport(BlockView world, BlockPos pos) {
         for (Direction direction : Direction.Type.HORIZONTAL) {
             BlockPos neighborPos = pos.offset(direction);
             BlockState neighbor = getBlockStateOrNull(world, neighborPos);
@@ -686,7 +692,9 @@ public final class SlabSupport {
             if (block instanceof SlabBlock || block instanceof BlockEntityProvider) {
                 continue;
             }
-            if (!neighbor.isSolidBlock(world, neighborPos)) {
+            boolean solidNeighbor = neighbor.isSolidBlock(world, neighborPos);
+            boolean connectingNeighbor = SlabAnchorAttachment.isConnectingStructural(neighbor);
+            if (!solidNeighbor && !connectingNeighbor) {
                 continue;
             }
             if (SlabAnchorAttachment.isAnchored(world, neighborPos)
@@ -718,7 +726,7 @@ public final class SlabSupport {
         if (Double.isFinite(ownDy) && ownDy < -1.0e-6) {
             return true;
         }
-        return world.getBlockState(pos.down()).isAir() && isAdjacentToLoweredFullBlock(world, pos);
+        return world.getBlockState(pos.down()).isAir() && isAdjacentToLoweredSupport(world, pos);
     }
 
     private static boolean isVerticallyLoweredSlabSource(BlockView world, BlockPos pos, BlockState state) {
@@ -938,19 +946,27 @@ public final class SlabSupport {
         // of un-lowering and z-fighting the anchored block above until its own anchor syncs.
         if (!(state.getBlock() instanceof SlabBlock)
                 && !(state.getBlock() instanceof BlockEntityProvider)
-                && state.isSolidBlock(world, pos)
                 && world.getBlockState(pos.down()).isAir()) {
-            BlockPos abovePos = pos.up();
-            BlockState above = world.getBlockState(abovePos);
-            if (!(above.getBlock() instanceof SlabBlock)
-                    && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, abovePos)) {
-                return -0.5;
+            boolean solidSubject = state.isSolidBlock(world, pos);
+            if (solidSubject) {
+                BlockPos abovePos = pos.up();
+                BlockState above = world.getBlockState(abovePos);
+                if (!(above.getBlock() instanceof SlabBlock)
+                        && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, abovePos)) {
+                    return -0.5;
+                }
             }
             // Cantilevered perpendicular side placement: a block placed beside a lowered
-            // full block with air below it lowers only via its (server-side, one-tick-late)
-            // adjacent anchor. Detecting the lowered neighbour live makes the first client
-            // mesh already -0.5, so it never renders at full height first (the snap).
-            if (isAdjacentToLoweredFullBlock(world, pos)) {
+            // full block (or, for a connecting block — fence/wall/pane/gate — beside a
+            // lowered connecting block of its own family, the live "pane placed beside a
+            // lowered pane froze flat/detached" bug) with air below it lowers only via its
+            // (server-side, one-tick-late) adjacent anchor. Detecting the lowered neighbour
+            // live makes the first client mesh already -0.5, so it never renders full height
+            // first (the snap) and a connecting block no longer freezes flat before its
+            // anchor would have synced. The "gap-fill from above" lane just above stays
+            // solid-only — that is a different (unverified for connecting blocks) case.
+            if ((solidSubject || SlabAnchorAttachment.isConnectingStructural(state))
+                    && isAdjacentToLoweredSupport(world, pos)) {
                 return -0.5;
             }
         }
@@ -1095,7 +1111,7 @@ public final class SlabSupport {
         if (!(sitSupport.getBlock() instanceof SlabBlock)
                 && !(sitSupport.getBlock() instanceof BlockEntityProvider)
                 && sitSupport.isSolidBlock(world, sitSupportPos)
-                && isAdjacentToLoweredFullBlock(world, sitSupportPos)) {
+                && isAdjacentToLoweredSupport(world, sitSupportPos)) {
             return -0.5;
         }
 

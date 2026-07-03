@@ -31,7 +31,8 @@
       "com.slabbed.test.SmooshUnderTerrainSlabsTest",
       "com.slabbed.test.DySpecificationTest",
       "com.slabbed.test.AuditFixesTest",
-      "com.slabbed.test.CantileverProbeTest"
+      "com.slabbed.test.CantileverProbeTest",
+      "com.slabbed.test.ConnectingBlockCantileverTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",
