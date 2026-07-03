@@ -821,12 +821,9 @@ public final class SlabSupport {
         BlockPos cursor = supportPos;
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = world.getBlockState(cursor);
-            // A Terrain Slabs support owns its own vertical offset (shouldSkipOffset), so it must
-            // NEVER be treated as a top-like ceiling surface — doing so returns +0.5 and pushes the
-            // hanger UP into the TS block (the "smoosh"). This enforces the invariant this method's
-            // own javadoc already states ("a Terrain Slabs slab ... is never treated as a lowered
-            // support"), which the first-block guard applied but this walk previously did not.
-            if (!CompatHooks.shouldSkipOffset(cur) && isTopLikeCeilingSurface(cur)) {
+            // L4: a TS support is never a lowering top-like ceiling (else +0.5 smooshes the hanger
+            // up into the flush TS block). Same invariant as the getYOffsetInner walks below.
+            if (isLoweringTopLikeCeiling(cur)) {
                 return 0.5;
             }
             if (isCeilingAttached(cur)) {
@@ -1101,8 +1098,12 @@ public final class SlabSupport {
 
         BlockState above = world.getBlockState(pos.up());
 
-        // direct: ceiling-attached blocks directly under a top slab
-        if (isCeilingAttached(state) && isTopLikeCeilingSurface(above)) {
+        // direct: ceiling-attached blocks (lantern, chain, dripstone, cave vine, top trapdoor,
+        // bell/lever/button) directly under a top slab. A TS surface is EXCLUDED via
+        // isLoweringTopLikeCeiling — otherwise it smooshes the hanger +0.5 up into the flush TS
+        // block (L4). This is the sibling of the ceilingHungDecorationDy walk fixed for the
+        // always-hung family; both must share the guard or lanterns/chains/dripstone regress.
+        if (isCeilingAttached(state) && isLoweringTopLikeCeiling(above)) {
             return 0.5;
         }
 
@@ -1112,7 +1113,7 @@ public final class SlabSupport {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
-                if (isTopLikeCeilingSurface(cur)) {
+                if (isLoweringTopLikeCeiling(cur)) {
                     return 0.5;
                 }
                 if (isCeilingAttached(cur)) {
@@ -1401,6 +1402,22 @@ public final class SlabSupport {
             return directCustomDy;
         }
         return Double.NaN;
+    }
+
+    /**
+     * A top-like ceiling surface that <em>Slabbed itself lowers</em> — i.e. one that a
+     * ceiling-attached block below should follow UP by +0.5 (raised-attach). A Terrain Slabs
+     * surface is EXCLUDED: TS owns its own vertical offset ({@link CompatHooks#shouldSkipOffset}),
+     * so treating it as a lowering top-like ceiling pushes the hanger UP into the flush TS block
+     * (the "smoosh"). This is the L4 invariant in ONE place, for EVERY dy-computing ceiling walk
+     * (both the {@code ceilingHungDecorationDy} walk and the two {@code getYOffsetInner} walks) —
+     * so the guard can never again be applied to one walk and forgotten on the others.
+     *
+     * <p>NOTE: placement/attachment callers use {@link #isTopLikeCeilingSurface} directly — a
+     * lantern may still ATTACH to a TS underside; only its rendered dy must stay flush.
+     */
+    private static boolean isLoweringTopLikeCeiling(BlockState state) {
+        return !CompatHooks.shouldSkipOffset(state) && isTopLikeCeilingSurface(state);
     }
 
     private static boolean isTopLikeCeilingSurface(BlockState state) {
