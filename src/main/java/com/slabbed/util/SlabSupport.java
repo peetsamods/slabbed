@@ -434,8 +434,20 @@ public final class SlabSupport {
         if (world == null || pos == null) {
             return 0.0;
         }
+        // A TS-owned (shouldSkipOffset) SLAB's lowered dy is normally decided PURELY LIVE by
+        // isAdjacentCustomSideSlabLowered — a BFS through the connected slab chain, recomputed
+        // on every call. That BFS never consults this position's own PERSISTED anchor, so once
+        // this early-return fires, the anchor lane deeper in getYOffsetInner is never reached at
+        // all. The live "breaking the middle slab pops the far one up" bug: slab B is anchored
+        // (qualifiesForLoweredSideSlabAnchor recorded the chain reaching slab A at PLACEMENT
+        // time), then A is broken — the BFS can no longer reach a source, so this gate returns
+        // 0.0 unconditionally, silently overriding B's own recorded anchor and defeating the
+        // exact "survive a later neighbor change" guarantee anchors exist to provide. Scoped to
+        // SLABS only (not every shouldSkipOffset block) — this is specifically the slab-chain
+        // cantilever law, not a blanket exemption from "TS owns this block's offset".
         if (CompatHooks.shouldSkipOffset(state)
-                && !isAdjacentCustomSideSlabLowered(world, pos, state)) {
+                && !isAdjacentCustomSideSlabLowered(world, pos, state)
+                && !(state.getBlock() instanceof SlabBlock && SlabAnchorAttachment.isAnchored(world, pos))) {
             return 0.0;
         }
 
