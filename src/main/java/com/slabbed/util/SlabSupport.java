@@ -704,9 +704,21 @@ public final class SlabSupport {
         if (!state.isSolidBlock(world, pos)) {
             return false;
         }
-        return hasBottomSlabBelow(world, pos)
+        if (hasBottomSlabBelow(world, pos)
                 || SlabAnchorAttachment.isAnchored(world, pos)
-                || isDirectCustomSlabSupportedObject(world, pos, state);
+                || isDirectCustomSlabSupportedObject(world, pos, state)) {
+            return true;
+        }
+        // A support full block can also be lowered by its own COLUMN (a slab lower in the stack)
+        // or by ADJACENCY (air below, beside another lowered full block — the getYOffsetInner:941
+        // cantilever path, which renders -0.5 with anchor=none). A slab cantilevered off such a
+        // support must follow it down too, or it reads 0.0 and freezeLoweredOnPlace locks it flat
+        // (the live "cantilever placed 0.5 too high" bug). Both mirrors are recursion-safe.
+        double ownDy = loweredFullBlockUndersideSupportDy(world, pos, state);
+        if (Double.isFinite(ownDy) && ownDy < -1.0e-6) {
+            return true;
+        }
+        return world.getBlockState(pos.down()).isAir() && isAdjacentToLoweredFullBlock(world, pos);
     }
 
     private static boolean isVerticallyLoweredSlabSource(BlockView world, BlockPos pos, BlockState state) {

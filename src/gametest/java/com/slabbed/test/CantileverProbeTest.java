@@ -78,11 +78,29 @@ public final class CantileverProbeTest {
         ctx.complete();
     }
 
-    // NOTE: the live cantilever bug (slab beside a dirt lowered via a COLUMN/terrain stack, not
-    // directly on a slab, freezes flat) could NOT be reproduced headlessly — a full block on a
-    // lowered full block renders 0.0 in a clean world (both with and without the reach-up
-    // deprecation), yet the recorder shows the user's dirt at -0.5. The exact terrain-lowering
-    // mechanism is unknown; tracked in KNOWN_INCOMPLETE.md L4 pending the live repro steps.
+    // THE LIVE REPRO: a support full block lowered via ADJACENCY (air below, next to a lowered
+    // neighbor — SlabSupport.java:941, "anchor=none but -0.5", matches the recorder). A slab
+    // cantilevered off ITS side must be -0.5, but isLoweredSideSlabSource does not detect an
+    // adjacency-lowered support → slab reads 0.0 → freezeLoweredOnPlace locks it flat.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cantileverOffAdjacencyLoweredFullBlock(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 3);
+        w.setBlockState(base.down(), vanillaBottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(base, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);   // dirt on slab -0.5
+        com.slabbed.anchor.SlabAnchorAttachment.addAnchor(w, base, w.getBlockState(base)); // anchored (a lowered neighbor source)
+        BlockPos support = base.east();                                                 // dirt, AIR below, beside anchored dirt
+        w.setBlockState(support, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double supDy = SlabSupport.getYOffset(w, support, w.getBlockState(support));
+        ctx.assertTrue(Math.abs(supDy + 0.5) <= EPS,
+                "setup: adjacency-lowered dirt (air below, beside anchored dirt) should render -0.5, got " + supDy);
+        BlockPos cant = support.east();                                                 // slab cantilevered off the adjacency-lowered dirt
+        w.setBlockState(cant, vanillaBottomSlab(), Block.NOTIFY_LISTENERS);
+        double dy = SlabSupport.getYOffset(w, cant, w.getBlockState(cant));
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "slab cantilevered off an ADJACENCY-lowered full block must be -0.5 (live bug); got " + dy);
+        ctx.complete();
+    }
 
     // Chained cantilever: slab2 cantilevers off slab1 (which is itself a lowered cantilever). Both
     // should be -0.5. This is the row-of-slabs the recorder showed.
