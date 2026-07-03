@@ -28,7 +28,8 @@
       "com.slabbed.test.StateChangeAnchorTest",
       "com.slabbed.test.NeverPopMatrixTest",
       "com.slabbed.test.BlockEntityNeverPopTest",
-      "com.slabbed.test.SmooshUnderTerrainSlabsTest"
+      "com.slabbed.test.SmooshUnderTerrainSlabsTest",
+      "com.slabbed.test.DySpecificationTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",
