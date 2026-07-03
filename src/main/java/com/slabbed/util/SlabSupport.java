@@ -821,7 +821,12 @@ public final class SlabSupport {
         BlockPos cursor = supportPos;
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = world.getBlockState(cursor);
-            if (isTopLikeCeilingSurface(cur)) {
+            // A Terrain Slabs support owns its own vertical offset (shouldSkipOffset), so it must
+            // NEVER be treated as a top-like ceiling surface — doing so returns +0.5 and pushes the
+            // hanger UP into the TS block (the "smoosh"). This enforces the invariant this method's
+            // own javadoc already states ("a Terrain Slabs slab ... is never treated as a lowered
+            // support"), which the first-block guard applied but this walk previously did not.
+            if (!CompatHooks.shouldSkipOffset(cur) && isTopLikeCeilingSurface(cur)) {
                 return 0.5;
             }
             if (isCeilingAttached(cur)) {
