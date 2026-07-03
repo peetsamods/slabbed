@@ -507,8 +507,11 @@ public final class SlabSupport {
      */
     public static boolean isSteppedConnectingNeighbor(BlockView world, BlockPos pos, BlockState state,
                                                        BlockPos neighborPos, BlockState neighborState) {
-        Block neighbor = neighborState.getBlock();
-        if (!(neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof PaneBlock)) {
+        // The connecting family (fence/wall/pane/GATE) is defined ONCE in
+        // SlabAnchorAttachment.isConnectingStructural — do not re-enumerate a subset here (an
+        // adversarial audit found fence GATE silently dropped from this walk, so a fence/wall arm
+        // was never broken across a height step toward a lowered gate).
+        if (!SlabAnchorAttachment.isConnectingStructural(neighborState)) {
             return false;
         }
         double selfDy = connectingBlockVisualDy(world, pos, state);
@@ -1022,9 +1025,9 @@ public final class SlabSupport {
         // flush guard below so it isn't shadowed by it; narrow to log-family supports ONLY (not
         // arbitrary opaque terrain) so ordinary stone-on-stone/terrain still stays flush and the
         // world-hole guard is untouched.
-        double loweredLogCarrierDy = loweredLogFamilyCarrierDy(world, pos, state);
-        if (Double.isFinite(loweredLogCarrierDy) && loweredLogCarrierDy < -1.0e-6) {
-            return loweredLogCarrierDy;
+        double loweredCarrierDy = loweredCuratedCarrierDy(world, pos, state);
+        if (Double.isFinite(loweredCarrierDy) && loweredCarrierDy < -1.0e-6) {
+            return loweredCarrierDy;
         }
 
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
@@ -1037,6 +1040,11 @@ public final class SlabSupport {
         // "non-solid object follows a lowered support down" branch below -> -0.5 model shift while
         // face-culling stays at the grid voxel -> see-through world holes. isOpaqueFullCube() is a
         // precomputed, view-independent flag, so it pins terrain flush on every thread.
+        // NOTE (audit KNOWN_INCOMPLETE): fence GATE is intentionally NOT folded into this flush
+        // guard yet. The fix is designed (use SlabAnchorAttachment.isConnectingStructural here, as
+        // isSteppedConnectingNeighbor now does) but could NOT be RED-proven headlessly this pass —
+        // the anchor-lowered-support-with-no-slab-in-column fixture did not reproduce — so per
+        // VERIFICATION_PROTOCOL.md G3 it is not shipped. Tracked in KNOWN_INCOMPLETE.md.
         if (blk instanceof SlabBlock
                 || blk instanceof StairsBlock
                 || blk instanceof FenceBlock
@@ -1384,7 +1392,7 @@ public final class SlabSupport {
      * underside-hanger) query, and never calls {@link #getYOffset} so it is safe to call from
      * inside the {@code IN_GET_Y_OFFSET} recursion guard.
      */
-    private static double loweredLogFamilyCarrierDy(BlockView world, BlockPos pos, BlockState state) {
+    private static double loweredCuratedCarrierDy(BlockView world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock
@@ -1394,7 +1402,16 @@ public final class SlabSupport {
         }
         BlockPos belowPos = pos.down();
         BlockState below = getBlockStateOrNull(world, belowPos);
-        if (below == null || !isLogFamilySlabSitCandidate(below)) {
+        // The carrier may be ANY curated slab-sit candidate (log family, jukebox and other block
+        // entities, crafting table, bookshelf, dried kelp, chiseled bookshelf), not just logs —
+        // GH #22 applies verbatim to a full cube on any of them (adversarial audit: jukebox
+        // carrier left a gap). isSlabSitCandidate is view-independent for the opaque-cube world-
+        // hole guard, so natural terrain (stone/dirt) stays excluded exactly as before; the
+        // directCustomSlabSupportDy < 0 guard below fires ONLY for a carrier actually lowered onto
+        // a TS/bottom-slab surface, so a plain carrier on solid ground still returns NaN (flush).
+        // KNOWN-PARTIAL: this shares the carrier's DIRECT -0.5; a carrier itself lowered -1.0 on a
+        // compound (mixed) slab is NOT yet followed to -1.0 (tracked in KNOWN_INCOMPLETE.md).
+        if (below == null || !isSlabSitCandidate(world, belowPos, below)) {
             return Double.NaN;
         }
         double directCustomDy = directCustomSlabSupportDy(world, belowPos, below);
