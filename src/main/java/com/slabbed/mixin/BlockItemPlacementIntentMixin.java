@@ -295,6 +295,38 @@ public abstract class BlockItemPlacementIntentMixin {
             return context;
         }
 
+        // An up-face-edge INFERENCE (not a literal horizontal click — see
+        // slabbed$inferLoweredSideFromUpFaceHit / commit 80ac7737) that lands on an
+        // EXISTING slab of the SAME material unconditionally COMBINES to a DOUBLE in
+        // vanilla's own SlabBlock.getPlacementState, regardless of click Y (confirmed via
+        // the real 1.21.11 bytecode: once ItemPlacementContext.getBlockPos() routes to
+        // that neighbour cell — because canReplace on the ORIGINAL target failed —
+        // getPlacementState's `blockState.isOf(this)` branch combines unconditionally,
+        // with no half/Y check at all). The up-face-edge heuristic exists so a player can
+        // place a NEW slab beside a lowered one when an ambiguous top-face click is
+        // clicked near its edge; it was never meant to silently merge into an unrelated
+        // pre-existing slab a few cells over (the live "gap + ghost-face DODO" bug —
+        // same_cell_double_combine, already flagged by the recorder). Only suppress the
+        // INFERRED case here: a literal, deliberate horizontal click against an occupied
+        // neighbour keeps vanilla's normal combine behaviour untouched.
+        if (itemIsSlab && "up_face_edge".equals(hitDescriptor) && sidePlaceState.isOf(self.getBlock())) {
+            slabbed$recordRemapAttempt(
+                    context,
+                    itemEligible,
+                    true,
+                    targetIsSolid,
+                    targetHasBlockEntity,
+                    targetIsCraftingTable,
+                    yOffset,
+                    ordinaryLoweredFullBlockGuard,
+                    false,
+                    "up_face_edge_would_combine_existing_slab",
+                    null,
+                    effectiveSide,
+                    hitDescriptor);
+            return context;
+        }
+
         // Decide BOTTOM vs TOP from the *original* hit Y relative to the lowered
         // FB visual half-split. Lowered FB visual spans world Y ∈
         // [targetPos.y - 0.5, targetPos.y + 0.5], so targetPos.y is the half-line.

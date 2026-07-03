@@ -33,7 +33,8 @@
       "com.slabbed.test.AuditFixesTest",
       "com.slabbed.test.CantileverProbeTest",
       "com.slabbed.test.ConnectingBlockCantileverTest",
-      "com.slabbed.test.BlockEntityCantileverTest"
+      "com.slabbed.test.BlockEntityCantileverTest",
+      "com.slabbed.test.UpFaceEdgeCombineGuardTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",
