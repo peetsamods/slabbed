@@ -42,7 +42,10 @@ public final class StateChangeAnchorTest {
         double before = SlabSupport.getYOffset(w, block, w.getBlockState(block));
 
         // Grass -> dirt: a block-KIND change at the SAME position (the tower conversion).
-        w.setBlockState(block, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        // MUST use NOTIFY_ALL so vanilla actually fires AbstractBlock.onStateReplaced (the
+        // path the anchor-clear mixin hooks) — NOTIFY_LISTENERS does not, which false-greened
+        // an earlier version of this test.
+        w.setBlockState(block, Blocks.DIRT.getDefaultState(), Block.NOTIFY_ALL);
 
         ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, block),
                 "the anchor MUST survive an in-place grass->dirt transform (WYSIWYG, no jitter)");
@@ -85,6 +88,25 @@ public final class StateChangeAnchorTest {
         w.setBlockState(block, bottomSlab(), Block.NOTIFY_LISTENERS);
         ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, block),
                 "after a break the anchor must be gone (no stale anchor under the new slab)");
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void inPlaceReplaceToNonLockBlockClearsTheAnchor(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos slab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 2, 3);
+        BlockPos block = slab.up();
+        w.setBlockState(slab, bottomSlab(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(block, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_LISTENERS);
+        onPlaced(w, block, w.getBlockState(block));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, block), "precondition: grass anchored");
+
+        // Directly replace grass with a SLAB in place (NOTIFY_ALL fires onStateReplaced). A slab
+        // is NOT a lock-eligible block, so the gate must CLEAR the stale grass anchor rather than
+        // preserve it — the new slab must re-evaluate its own dy from scratch.
+        w.setBlockState(block, bottomSlab(), Block.NOTIFY_ALL);
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, block),
+                "replacing the anchored full block with a slab (non-lock) MUST clear the anchor");
         ctx.complete();
     }
 }

@@ -479,6 +479,21 @@ public final class SlabAnchorAttachment {
         return true;
     }
 
+    /**
+     * True if replacing the block at {@code pos} with {@code newState} should PRESERVE the
+     * height-lock rather than clear it: an in-place block-KIND transform (grass→dirt,
+     * log→stripped_log) to another lock-eligible block keeps the placed height so the block
+     * does not un-lower/jitter (WYSIWYG). A genuine break (→air), fluid, or replacement with a
+     * non-lock block (slab / carpet / thin-top / block-entity / non-solid non-connecting)
+     * returns false so the cell is freed and re-evaluated.
+     */
+    public static boolean replacementPreservesAnchor(BlockView world, BlockPos pos, BlockState newState) {
+        if (newState == null || newState.isAir() || !newState.getFluidState().isEmpty()) {
+            return false;
+        }
+        return isOrdinaryAnchorCandidate(world, pos, newState) || isConnectingStructural(newState);
+    }
+
     /** Fence / wall / pane / gate — connecting blocks that must be height-locked like solids. */
     public static boolean isConnectingStructural(BlockState state) {
         Block b = state.getBlock();
