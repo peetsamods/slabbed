@@ -399,6 +399,17 @@ public final class SlabAnchorAttachment {
         return SlabSupport.hasLoweringSourceInColumnBelow(world, pos);
     }
 
+    /**
+     * Placement-time twin of {@code SlabSupport.isAdjacentToLoweredSupport} (the live render-time
+     * check) — decides whether the PERSISTED anchor should be recorded for an ordinary/connecting
+     * subject placed beside a lowered neighbour. Must accept the SAME neighbour categories as the
+     * live check (solid full block, connecting-structural, or block entity) or the anchor and the
+     * render can disagree: the render stays correct on every call (recomputed live), but the
+     * subject would never-pop-protect only against neighbours the live check would recognise —
+     * without a persisted anchor it can still un-lower if a DIFFERENT, unrecognised change occurs
+     * later. Widened together with the live check for the same live bugs (fence/pane and hopper/
+     * chest chained beside a lowered neighbour of a different structural family).
+     */
     private static boolean qualifiesForAdjacentLoweredFullBlockAnchor(BlockView world, BlockPos pos, BlockState state) {
         if (!isOrdinaryAnchorCandidate(world, pos, state)) {
             return false;
@@ -409,10 +420,10 @@ public final class SlabAnchorAttachment {
             if (neighbor.getBlock() instanceof SlabBlock) {
                 continue;
             }
-            if (!neighbor.isSolidBlock(world, neighborPos)) {
-                continue;
-            }
-            if (neighbor.getBlock() instanceof BlockEntityProvider) {
+            boolean solidNeighbor = neighbor.isSolidBlock(world, neighborPos);
+            boolean connectingNeighbor = isConnectingStructural(neighbor);
+            boolean blockEntityNeighbor = neighbor.getBlock() instanceof BlockEntityProvider;
+            if (!solidNeighbor && !connectingNeighbor && !blockEntityNeighbor) {
                 continue;
             }
             if (SlabSupport.getYOffset(world, neighborPos, neighbor) == -0.5d) {
