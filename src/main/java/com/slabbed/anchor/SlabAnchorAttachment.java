@@ -154,7 +154,14 @@ public final class SlabAnchorAttachment {
                 && !columnAnchor
                 && !sideSlabAnchor
                 && qualifiesForBelowAnchoredBlockAnchor(world, pos, state);
-        boolean qualifies = directAnchor || adjacentAnchor || columnAnchor || sideSlabAnchor || belowAnchoredAnchor;
+        boolean blockEntityAnchor = !directAnchor
+                && !adjacentAnchor
+                && !columnAnchor
+                && !sideSlabAnchor
+                && !belowAnchoredAnchor
+                && qualifiesForBlockEntityLoweredAnchor(world, pos, state);
+        boolean qualifies = directAnchor || adjacentAnchor || columnAnchor || sideSlabAnchor
+                || belowAnchoredAnchor || blockEntityAnchor;
         if (TRACE) {
             Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={} direct={} adjacent={} column={} sideSlab={} belowAnchored={}",
                     pos.toShortString(), state, qualifies, directAnchor, adjacentAnchor, columnAnchor, sideSlabAnchor, belowAnchoredAnchor);
@@ -224,7 +231,12 @@ public final class SlabAnchorAttachment {
         // dy ≈ 0: lock the FLAT height of a STRUCTURAL piece (ordinary full block or slab) so a
         // slab / lowered carrier placed under or beside it later can no longer pull it down.
         boolean structural = isOrdinaryAnchorCandidate(world, pos, state)
-                || state.getBlock() instanceof SlabBlock;
+                || state.getBlock() instanceof SlabBlock
+                // A flat-placed block entity (hopper/chest/furnace resting on the ground) must
+                // also freeze-flat so a slab shoved under it later cannot pull it down. Ceiling-
+                // hung block entities (hanging signs) are excluded — they follow their support.
+                || (state.getBlock() instanceof BlockEntityProvider
+                        && !SlabSupport.isAlwaysCeilingHungDecoration(state));
         if (!structural) {
             return;
         }
@@ -439,6 +451,30 @@ public final class SlabAnchorAttachment {
             return false;
         }
         return SlabSupport.isLoweredSideSlabVisual(world, pos, state);
+    }
+
+    /**
+     * Anchors a lowered BLOCK-ENTITY block (hopper, chest, furnace, barrel, dispenser, ...) at
+     * placement so it stops re-deriving its dy from the live column below — the reported "hopper
+     * places too high, then snaps down when a block is placed underneath". Block entities are
+     * rejected by {@link #isOrdinaryAnchorCandidate} (the ordinary lanes) yet DO lower onto slabs
+     * ({@code isSlabSitCandidate} accepts every {@code BlockEntityProvider}), so their -0.5 came
+     * ONLY from a live column walk that toggled whenever the cell below changed. Ceiling-hung
+     * block entities (hanging signs) are excluded: they hang from ABOVE and must keep following
+     * their support (getYOffsetInner also dispatches them before the anchor branch).
+     */
+    private static boolean qualifiesForBlockEntityLoweredAnchor(World world, BlockPos pos, BlockState state) {
+        if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        if (!(state.getBlock() instanceof BlockEntityProvider)) {
+            return false;
+        }
+        if (SlabSupport.isAlwaysCeilingHungDecoration(state)) {
+            return false;
+        }
+        // Only lock a genuinely-lowered placement; a flat BE is covered by freezeLoweredOnPlace.
+        return SlabSupport.getYOffset(world, pos, state) < -1.0e-6;
     }
 
     private static boolean isOrdinaryAnchorCandidate(BlockView world, BlockPos pos, BlockState state) {

@@ -778,7 +778,7 @@ public final class SlabSupport {
      * Lanterns are NOT here either: a standing lantern legitimately rests on a support, so it
      * keeps the normal path (HANGING lanterns are already excluded from the below-walk).
      */
-    private static boolean isAlwaysCeilingHungDecoration(BlockState state) {
+    public static boolean isAlwaysCeilingHungDecoration(BlockState state) {
         if (state == null || state.isAir()) {
             return false;
         }
