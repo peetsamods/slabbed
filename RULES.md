@@ -186,6 +186,13 @@ the model, state-change jitter. They are enumerated permanently in
   must check what's actually **compiled and registered** (build.gradle include-lists, mixin
   json registration), not just what exists under `src/` — see that file's "written but never
   wired / excluded from the build" failure modes.
+- The **`dy` values themselves are specified**, not folklore: [`DY_SPEC.md`](DY_SPEC.md) is the
+  version-invariant oracle (each (block-role × config) → required dy + its law), enforced by
+  `DySpecificationTest`. Prefer proving a behavior against the spec headlessly over discovering
+  it live. When you fix a dy behavior, add/append its spec row so it becomes a permanent,
+  portable assertion — the spec + its test are what a new port runs to know what to fix BEFORE
+  launching the game. A dy value is "version-specific" only if it's a real product decision
+  (then update the spec and every port) — otherwise a divergence is a port bug, not an exception.
 - A fix "tested" only on the model, or only on the outline, or only headless, is NOT done — see
   §6 (the triad is non-negotiable) and §10 (live verification outranks automated proof for feel
   bugs). Headless-green and live-confirmed are DIFFERENT claims; never conflate them in a commit
