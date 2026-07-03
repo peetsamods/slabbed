@@ -12,11 +12,17 @@ import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 
 /**
- * Enumeration of {@code DY_SPEC.md}: one @GameTest per pinnable spec row, asserting the
- * implementation's {@code dy} equals the row's <em>product-intent</em> value. This is
- * correctness by enumeration over the specified domain — the "scientific" backbone that lets a
- * port prove conformance without live testing, and that turns every historical fix into a
- * permanent, named, version-invariant assertion.
+ * Direct enumeration of the CORE rows of {@code DY_SPEC.md}, asserting the implementation's
+ * {@code dy} equals the row's <em>product-intent</em> value. This pins 8 rows here; the remaining
+ * spec rows are carried by the specialized tests each row cites (never-pop, combine-vs-extend,
+ * chaining-matrix, etc.) — this class is the shared table, not the entire proof. It is the
+ * "scientific" backbone that lets a port prove conformance on the core lanes without live testing.
+ *
+ * <p>SCOPE (honest): each method asserts the shared {@code getYOffset} SCALAR — not the three
+ * triad application sites (outline/raycast VoxelShape, model mesh) — and builds fixtures with
+ * {@code setBlockState} (the GEOMETRIC lane, no placement anchor). The {@code *-BOTTOM} rows
+ * therefore do not exercise the {@code SlabAnchorAttachment} never-pop lane; that is proven by the
+ * {@code *NeverPopTest} classes. See {@code DY_SPEC.md} footnotes ¹²³ and the Coverage section.
  *
  * <p>Each method is named for its {@code SPEC-ID} in {@code DY_SPEC.md}. The dy values are the
  * spec's intent, cross-anchored to the specialized tests ({@code SlabbedLabFixtureTest},
