@@ -180,6 +180,12 @@ the model, state-change jitter. They are enumerated permanently in
   must have a fresh in-game confirmation.
 - When you fix one of these, add or greenlight its AUTO gametest so the next port catches the
   regression for free. Do not rely on remembering to eyeball it.
+- Cross-branch status of every row lives in [`PORT_FIX_MATRIX.md`](PORT_FIX_MATRIX.md) — check
+  it before assuming a fix on `main` also applies to another loader/version line, and before
+  assuming another line hasn't already solved something `main` still has open. A survey step
+  must check what's actually **compiled and registered** (build.gradle include-lists, mixin
+  json registration), not just what exists under `src/` — see that file's "written but never
+  wired / excluded from the build" failure modes.
 - A fix "tested" only on the model, or only on the outline, or only headless, is NOT done — see
   §6 (the triad is non-negotiable) and §10 (live verification outranks automated proof for feel
   bugs). Headless-green and live-confirmed are DIFFERENT claims; never conflate them in a commit
