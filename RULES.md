@@ -226,8 +226,9 @@ green test. This rule makes the missing steps mandatory gates. Before any change
   invariant" unless G1 is 100%. Tag every claim: `EXHAUSTIVE` / `PARTIAL[scope]` / `HEADLESS-ONLY`
   / `UNVERIFIED`. Default to understatement; state what is NOT covered every time. "Suite green" ≠
   "behavior correct".
-- **G6 end with the completeness critic**: "what did I NOT check?" — logged as a known gap, never
-  omitted.
+- **G6 end with the completeness critic**: "what did I NOT check?" — logged as a known gap in
+  [`KNOWN_INCOMPLETE.md`](KNOWN_INCOMPLETE.md), never omitted. That ledger is the canonical home for
+  real-but-unfixed / unproven / live-only gaps; a category is not "done" while its rows are open.
 
 The one-line test: could a hostile reviewer name one input, one call site, or one triad member I
 did not check? If yes, it is a `PARTIAL[…]`, not "done".
