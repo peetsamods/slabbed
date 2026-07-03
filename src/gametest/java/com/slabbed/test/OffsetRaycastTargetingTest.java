@@ -363,11 +363,14 @@ public final class OffsetRaycastTargetingTest {
                 Blocks.LANTERN.getDefaultState().with(net.minecraft.state.property.Properties.HANGING, true),
                 Block.NOTIFY_LISTENERS);
 
+        // DEPRECATED-REACH ruling (2026-07-03): the +0.5 reach-up is gone — a hanging lantern under
+        // a top slab now hangs FLUSH (0.0). Raycast must still target it at its actual outline
+        // (offset-aware targeting of LOWERED objects is covered by the -0.5 tests elsewhere here).
         double dy = SlabSupport.getYOffset(world, lantern, world.getBlockState(lantern));
-        ctx.assertTrue(dy == 0.5,
-                "fixture: hanging lantern under top slab should be +0.5, got " + dy);
+        ctx.assertTrue(dy == 0.0,
+                "fixture: hanging lantern under top slab now hangs FLUSH 0.0 (reach-up deprecated), got " + dy);
 
-        // Aim horizontally at the centre of the lantern's actual offset outline.
+        // Aim horizontally at the centre of the lantern's actual outline.
         VoxelShape outline = world.getBlockState(lantern).getOutlineShape(world, lantern, ShapeContext.absent());
         ctx.assertFalse(outline.isEmpty(), "lantern outline non-empty");
         double midY = lantern.getY() + (outline.getBoundingBox().minY + outline.getBoundingBox().maxY) / 2.0;
@@ -375,7 +378,7 @@ public final class OffsetRaycastTargetingTest {
         Vec3d end = v(origin, 3.5, midY - origin.getY(), 7.5);
         BlockHitResult hit = slabbed(world, eye, end);
         ctx.assertTrue(hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(lantern),
-                "offset-aware raycast should target the +0.5 hanging lantern " + lantern
+                "raycast should target the flush hanging lantern " + lantern
                         + ", got " + hit.getType() + " " + hit.getBlockPos());
         ctx.complete();
     }

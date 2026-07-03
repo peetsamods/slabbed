@@ -81,7 +81,7 @@ dripstone still smooshed while the always-hung test stayed green.
 
 | SPEC-ID | subject | local config | dy | law | test |
 |---|---|---|---|---|---|
-| `CH-VANILLA-TOP` | hanging roots / lantern / dripstone | under a vanilla TOP slab | **+0.5** | raised-attach baseline | `DySpecificationTest`, `SmooshUnderTerrainSlabsTest` (roots + lantern + dripstone controls) |
+| `CH-VANILLA-TOP` | hanging roots / lantern / dripstone / chain | under a vanilla TOP slab | **0.0** (was +0.5) | reach-up DEPRECATED 2026-07-03 (Maintainer live ruling — flush looked better; provisional, may regress) | `DySpecificationTest`, `SmooshUnderTerrainSlabsTest` (roots + lantern + dripstone + chain, all flush) |
 | `CH-TS` | hanging roots (always-hung lane) | under a TS TOP/DOUBLE slab | **0.0** | L4 (no smoosh) | `SmooshUnderTerrainSlabsTest` |
 | `CH-TS-OBJECT` | hanging lantern / Y-chain / pointed dripstone (`getYOffsetInner` lane) | under a TS TOP/DOUBLE slab | **0.0** | L4 (no smoosh) | `SmooshUnderTerrainSlabsTest` (lantern TOP+DOUBLE, chain TOP, dripstone TOP) |
 | `CH-FLUSH` | hanging roots | under a flush full block | **0.0** | — (weak control¹) | `DySpecificationTest`, `SmooshUnderTerrainSlabsTest` |

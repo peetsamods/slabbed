@@ -103,8 +103,8 @@ public final class DySpecificationTest {
 
     // ── Ceiling-hung decorations ──────────────────────────────────────────────────────────
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void specChVanillaTop(TestContext ctx) { // CH-VANILLA-TOP
-        assertDy(ctx, "CH-VANILLA-TOP", dyUnderSupportAbove(ctx, Blocks.HANGING_ROOTS.getDefaultState(), vanillaSlab(SlabType.TOP)), 0.5);
+    public void specChVanillaTop(TestContext ctx) { // CH-VANILLA-TOP (reach-up deprecated 2026-07-03 → flush)
+        assertDy(ctx, "CH-VANILLA-TOP", dyUnderSupportAbove(ctx, Blocks.HANGING_ROOTS.getDefaultState(), vanillaSlab(SlabType.TOP)), 0.0);
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")

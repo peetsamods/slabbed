@@ -90,15 +90,14 @@ public final class SmooshUnderTerrainSlabsTest {
         ctx.complete();
     }
 
-    // REGRESSION GUARD: under a VANILLA top slab the hanger keeps its legit +0.5 raised-attach
-    // baseline (the slab's underside sits half a block above the hanger's natural attach). The fix
-    // must NOT touch this — a vanilla top slab is not shouldSkipOffset, so the walk still fires.
+    // DEPRECATED-REACH ruling (2026-07-03, Maintainer live): the +0.5 reach-up is deprecated —
+    // ceiling-attached things hang FLUSH (0.0) under a vanilla top slab too, not raised. (Was +0.5.)
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void hangingRootsUnderVanillaTopSlabKeepRaisedAttach(TestContext ctx) {
+    public void hangingRootsUnderVanillaTopSlabHangFlush(TestContext ctx) {
         double dy = hangerDyUnder(ctx, vanillaSlab(SlabType.TOP));
-        ctx.assertTrue(Math.abs(dy - 0.5) <= EPS,
-                "hanging roots under a VANILLA top slab must keep +0.5 raised-attach (unchanged by "
-                        + "the TS fix); got " + dy);
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "hanging roots under a VANILLA top slab must hang FLUSH (0.0) — +0.5 reach-up "
+                        + "deprecated; got " + dy);
         ctx.complete();
     }
 
@@ -148,21 +147,29 @@ public final class SmooshUnderTerrainSlabsTest {
         ctx.complete();
     }
 
-    // VANILLA CONTROLS — the getYOffsetInner walk still fires for a non-TS top slab, so these
-    // keep their legit +0.5 raised-attach; proves the completion changed ONLY the TS path.
+    // DEPRECATED-REACH ruling: objects hang FLUSH (0.0) under a vanilla top slab too — this is the
+    // live bug Maintainer reported (lantern/dripstone/chain smooshed +0.5 up into the slab). Was +0.5.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void hangingLanternUnderVanillaTopSlabKeepRaisedAttach(TestContext ctx) {
+    public void hangingLanternUnderVanillaTopSlabHangFlush(TestContext ctx) {
         double dy = ceilingBlockDyUnder(ctx, hangingLantern(), vanillaSlab(SlabType.TOP));
-        ctx.assertTrue(Math.abs(dy - 0.5) <= EPS,
-                "a hanging lantern under a VANILLA top slab keeps +0.5 (unchanged by the TS fix); got " + dy);
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "a hanging lantern under a VANILLA top slab must hang FLUSH (0.0) — reach-up deprecated; got " + dy);
         ctx.complete();
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void pointedDripstoneUnderVanillaTopSlabKeepRaisedAttach(TestContext ctx) {
+    public void pointedDripstoneUnderVanillaTopSlabHangFlush(TestContext ctx) {
         double dy = ceilingBlockDyUnder(ctx, Blocks.POINTED_DRIPSTONE.getDefaultState(), vanillaSlab(SlabType.TOP));
-        ctx.assertTrue(Math.abs(dy - 0.5) <= EPS,
-                "pointed dripstone under a VANILLA top slab keeps +0.5 (unchanged by the TS fix); got " + dy);
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "pointed dripstone under a VANILLA top slab must hang FLUSH (0.0) — reach-up deprecated; got " + dy);
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void yAxisChainUnderVanillaTopSlabHangFlush(TestContext ctx) {
+        double dy = ceilingBlockDyUnder(ctx, yAxisChain(), vanillaSlab(SlabType.TOP));
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "a Y-axis chain under a VANILLA top slab must hang FLUSH (0.0) — reach-up deprecated; got " + dy);
         ctx.complete();
     }
 }

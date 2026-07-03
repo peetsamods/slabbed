@@ -1434,7 +1434,16 @@ public final class SlabSupport {
      * lantern may still ATTACH to a TS underside; only its rendered dy must stay flush.
      */
     private static boolean isLoweringTopLikeCeiling(BlockState state) {
-        return !CompatHooks.shouldSkipOffset(state) && isTopLikeCeilingSurface(state);
+        // DEPRECATED (2026-07-03, Maintainer live ruling): the +0.5 "reach-up" for ceiling-attached
+        // objects (lantern / dripstone / chain / …) under a top slab is deprecated — everything
+        // hangs FLUSH now. In live testing the reach-up smooshed those objects UP into the slab;
+        // flush looked better. Returning false disables the +0.5 at ALL three ceiling walks (the
+        // ceilingHungDecorationDy cursor loop + the two getYOffsetInner walks) from ONE place, so
+        // the ruling is trivially reversible if it regresses (Maintainer: "subject to further review").
+        // The `slabSupportDy + 0.5` flush-COMPENSATION for a LOWERED top slab (SlabSupport.java:817
+        // and :1012) is a DIFFERENT path — it nets 0.0 (flush against the lowered underside), not a
+        // reach-up — and deliberately stays. Prior body: !shouldSkipOffset && isTopLikeCeilingSurface.
+        return false;
     }
 
     private static boolean isTopLikeCeilingSurface(BlockState state) {
