@@ -30,7 +30,8 @@
       "com.slabbed.test.BlockEntityNeverPopTest",
       "com.slabbed.test.SmooshUnderTerrainSlabsTest",
       "com.slabbed.test.DySpecificationTest",
-      "com.slabbed.test.AuditFixesTest"
+      "com.slabbed.test.AuditFixesTest",
+      "com.slabbed.test.CantileverProbeTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",
