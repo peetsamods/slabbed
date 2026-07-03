@@ -90,6 +90,11 @@ The most useful reports include:
 - Exact placement steps, plus what you expected vs. what happened
 - A short screenshot or video — especially of the crosshair, placement attempt, or visual mismatch
 
+**Tip — the `/slabdy` overlay.** Every build includes a lightweight diagnostic overlay that
+shows, in a screen corner, the exact height offset of whatever block your crosshair is on. It is
+on by default; type `/slabdy` to toggle it. Including that readout in a bug report pins down a
+visual-offset issue far faster than a screenshot alone.
+
 ## Status
 
 Slabbed is currently in **beta**. Behavior expands carefully — category by category, by proven behavior.

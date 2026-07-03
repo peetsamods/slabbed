@@ -168,3 +168,31 @@ Not done:
 - the behavior is “probably fine”
 
 Done means the behavior is actually correct. :contentReference[oaicite:25]{index=25} :contentReference[oaicite:26]{index=26}
+
+## 19) Standard regression triggers are tested before every release and every port
+The same bug classes regress on every loader/version fork — snaps and never-pop, the visual
+triad, smoosh/double-offset under Terrain Slabs, world-hole DODOs, particles that don't follow
+the model, state-change jitter. They are enumerated permanently in
+[`RELEASE_REGRESSION_TRIGGERS.md`](RELEASE_REGRESSION_TRIGGERS.md).
+
+- Before any build is called release-ready — and before any port is called "ported" — every
+  **AUTO** row in that checklist must be green (`./gradlew runGameTest`) and every **LIVE** row
+  must have a fresh in-game confirmation.
+- When you fix one of these, add or greenlight its AUTO gametest so the next port catches the
+  regression for free. Do not rely on remembering to eyeball it.
+- A fix "tested" only on the model, or only on the outline, or only headless, is NOT done — see
+  §6 (the triad is non-negotiable) and §10 (live verification outranks automated proof for feel
+  bugs). Headless-green and live-confirmed are DIFFERENT claims; never conflate them in a commit
+  body or a doc.
+
+## 20) Debug tooling ships in every jar, off-switchable — never compiled out
+`/slabdy` (and any successor debug tooling) is **present in every build** and never stripped at
+compile time. It exists so a live tester can read the truth on screen instead of sending a video.
+
+- The passive target-dy overlay defaults ON on test/debug builds (a player should not have to
+  invoke a command to see it). A clean release cut turns it off by build flag
+  (`-Dslabbed.targetDyOverlay=false`), NOT by deleting the code.
+- Keep it ambient-cost-free: the overlay only draws when enabled; `record`/`row`/`use` only run
+  when invoked. Gated trace machinery stays off by default.
+- Do not re-introduce a "release-stripped, no tooling" build. If a past doc says main is
+  stripped of `/slabdy`, it is superseded by this rule.

@@ -5,6 +5,30 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
+## [Unreleased] — 1.21.11 (Fabric)
+
+> Staged for testing, **not yet released**. These fixes are proven by the automated gametest
+> suite and are pending an in-game confirmation pass before they ship in a versioned build.
+
+### Fixed
+- **Fences, walls, panes, and fence gates keep their placed height** — a lowered fence no longer
+  pops back up (and a flat one is no longer pulled down) when a neighbouring block changes.
+- **Selection outline and targeting match the rendered fence/wall/pane** on a slab — the box you
+  see and the block you hit are now at the same lowered height ([#21](https://github.com/peetsamods/slabbed/issues/21)).
+- **Hoppers, chests, and furnaces on a slab keep their lowered height** — no more one-frame snap
+  when the block below them changes.
+- **In-place block changes no longer jitter the height** — e.g. a grass block converting to dirt
+  keeps its placed offset instead of flickering.
+- **Lowered redstone torches emit their dust particles at the torch head**, not at full block
+  height.
+- **A full block placed on a lowered log surface shares that surface's height** (no see-through
+  seam) ([#22](https://github.com/peetsamods/slabbed/issues/22)).
+
+### Added
+- **`/slabdy` debug overlay** now ships in every build (a passive corner readout of the height
+  offset your crosshair is targeting). It is a diagnostic aid, on by default in test builds and
+  toggled with `/slabdy`; release builds can ship it off.
+
 ## [0.4.2] — Ports: 1.21.1 + Minecraft 26.x
 
 ### Added
