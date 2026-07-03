@@ -11,6 +11,8 @@
     "TorchParticleAccessor",
     "TorchParticleMixin",
     "WallTorchParticleMixin",
+    "RedstoneTorchParticleMixin",
+    "WallRedstoneTorchParticleMixin",
     "RedstoneWireBlockMixin",
     "BlockItemPlaceTraceMixin",
     "BlockItemPlacementIntentMixin",
