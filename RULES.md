@@ -209,3 +209,25 @@ compile time. It exists so a live tester can read the truth on screen instead of
   when invoked. Gated trace machinery stays off by default.
 - Do not re-introduce a "release-stripped, no tooling" build. If a past doc says main is
   stripped of `/slabdy`, it is superseded by this rule.
+
+## 21) Verification is complete and calibrated, or it is not done — [`VERIFICATION_PROTOCOL.md`](VERIFICATION_PROTOCOL.md)
+The recurring failure here is INCOMPLETE verification stated with OVERCONFIDENCE: a fix applied to
+one call site / one input, tested on one case, declared "done" while siblings stay broken behind a
+green test. This rule makes the missing steps mandatory gates. Before any change is called done:
+- **G1 enumerate the full input domain** (every call site + every input category, with counts) and
+  state coverage as covered/total with the uncovered items NAMED. "Fences" is not a domain.
+- **G2 sweep EVERY call site** of any shared function/predicate you touched; classify each
+  must-change / must-not-change / unaffected. (The absence of this step caused the TS-smoosh half-fix.)
+- **G3 no green is trusted until seen RED** for the right reason (RED-first for fixes; mutation for
+  characterization). Cover the domain, not one representative.
+- **G4 run the adversarial/seek-failure pass by DEFAULT** (self-attack for small; fan-out workflow
+  for large) — the user must never have to ask for rigor.
+- **G5 OVER-CLAIMING IS BANNED.** No bare "done / verified / complete / conforms / all / proven /
+  invariant" unless G1 is 100%. Tag every claim: `EXHAUSTIVE` / `PARTIAL[scope]` / `HEADLESS-ONLY`
+  / `UNVERIFIED`. Default to understatement; state what is NOT covered every time. "Suite green" ≠
+  "behavior correct".
+- **G6 end with the completeness critic**: "what did I NOT check?" — logged as a known gap, never
+  omitted.
+
+The one-line test: could a hostile reviewer name one input, one call site, or one triad member I
+did not check? If yes, it is a `PARTIAL[…]`, not "done".
