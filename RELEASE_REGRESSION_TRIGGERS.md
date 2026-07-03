@@ -26,10 +26,12 @@ Legend: ✅ fixed + covered · ⚠️ known-open · 🔁 recurs-on-port (verify 
 |---|---|---|---|
 | Fence/wall/pane/gate placed lowered on a slab | stays −0.5, never pops when a neighbour changes | ✅🔁 | AUTO `FenceNeverPopTest` |
 | Fence/wall/gate placed FLAT | stays 0.0; a slab placed under/beside later can't pull it down | ✅🔁 | AUTO `FenceNeverPopTest` (flat lane) |
-| Full block / slab placed lowered or flat | stays at placed dy | ✅🔁 | AUTO `SlabbedLabFixtureTest` (anchor/frozen-flat) |
-| **Snap on placement** — block appears HIGH for a split second then snaps down to its lowered rest | placed at final dy IMMEDIATELY; no snap ("snaps are illegal") | ⚠️🔁 | LIVE-ONLY (transient — recorder logs only final state) |
-| **Hopper placed too high, snaps down** when a block is placed underneath | placed at final dy immediately | ⚠️🔁 | LIVE-ONLY |
-| **State-change jitter** — grass-block tower on a slab, grass→dirt conversion triggers jitter / merge / jump | a block-state change (same position) must NOT re-trigger lowering/merge | ⚠️🔁 | needs AUTO (a setBlockState-swap gametest) + LIVE |
+| Full block / slab placed lowered or flat | stays at placed dy | ✅🔁 | AUTO `SlabbedLabFixtureTest` + `NeverPopMatrixTest` |
+| Every block category (full/fence/wall/pane/gate) never-pops on support removal | placed dy stays | ✅🔁 | AUTO `NeverPopMatrixTest` |
+| **Hopper/chest/furnace (block entity) placed lowered on a slab** | height-locked, does NOT snap when the column below changes | ✅🔁 | AUTO `BlockEntityNeverPopTest` (server half — commit 7f213cb1) |
+| Flat-placed hopper not pulled down by a slab added under it | stays flat | ✅🔁 | AUTO `BlockEntityNeverPopTest` |
+| **State-change jitter** — grass-block tower, grass→dirt conversion | the in-place transform must NOT strip the height-lock (dy stays) | ✅🔁 | AUTO `StateChangeAnchorTest` (server FIX — commit 78ec0aa4); residual client re-render transient is LIVE-only |
+| **Snap on placement (client)** — block shown at grid for a split second then settles | placed at final dy immediately | ⚠️🔁 | LIVE-ONLY (irreducible one-frame client placement-prediction gap; server dy is now correct/locked) |
 
 ## 2. Visual triad — model == outline == raycast (WYSIWYG targeting)
 
@@ -43,8 +45,7 @@ Legend: ✅ fixed + covered · ⚠️ known-open · 🔁 recurs-on-port (verify 
 
 | Trigger | Expected | Status | Test |
 |---|---|---|---|
-| Hanging sign UNDER a TS slab | hangs at the correct depth; does NOT smoosh upward into the TS (works on vanilla) | ⚠️🔁 TS | LIVE-ONLY |
-| Hanging roots UNDER a TS slab | do NOT clip/smoosh upward (vanilla is fine) | ⚠️🔁 TS | LIVE-ONLY |
+| Hanging sign / roots UNDER a TS slab | hang flush; do NOT smoosh/clip UP into the TS (works on vanilla) | ⚠️🔁 TS | LIVE-ONLY. **Root cause found:** `SlabSupport.ceilingHungDecorationDy` — under a TS support, `shouldSkipOffset` skips the lowered-support lanes (line 808) but the code falls through to the +0.5 top-like-ceiling CHAIN WALK (lines 821-832), pushing the hanger UP into the TS. Documented intent (line 797-799) is dy=0 flush. **Fix design:** when `CompatHooks.shouldSkipOffset(above)` is true, return 0.0 flush and skip the chain walk. NOT shipped — TS behavior can't be headless-verified (gametest shim is a vanilla slab) and the TS-compat path is live-confirmed; needs a real-TS live pass. |
 | Dripstone into a vanilla slab | not smooshed too high (combining itself is OK) | ⚠️🔁 | LIVE-ONLY |
 | Lantern on a TS surface | single −0.5, not double-offset (TS already wraps it) | ✅🔁 TS | AUTO `SlabbedDiagnostics` SMOOSH flag; LIVE confirm |
 | Chain + lantern hanging stack | same dy, no vertical gap | ✅🔁 | AUTO `SlabbedDiagnostics` GAP flag |
@@ -61,7 +62,7 @@ Legend: ✅ fixed + covered · ⚠️ known-open · 🔁 recurs-on-port (verify 
 
 | Trigger | Expected | Status | Test |
 |---|---|---|---|
-| Lowered redstone torch | dust/flame particles emit at the LOWERED position, not grid height ("particles too high") | ⚠️🔁 | LIVE-ONLY (particles are client-render) |
+| Lowered redstone torch | dust particles emit at the LOWERED position, not grid height ("particles too high") | ✅🔁 | FIX landed (commit a414ad3d: RedstoneTorch/WallRedstoneTorch particle mixins). Particles are client-render → the offset math is proven but the rendered result is LIVE-only |
 | Lowered floor torch flame | flame follows the lowered post | ⚠️🔁 | LIVE-ONLY |
 
 ## 6. Redstone
