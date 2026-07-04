@@ -35,6 +35,7 @@
       "com.slabbed.test.ConnectingBlockCantileverTest",
       "com.slabbed.test.BlockEntityCantileverTest",
       "com.slabbed.test.UpFaceEdgeCombineGuardTest",
+      "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest",
       "com.slabbed.test.TerrainSlabsChainAnchorTest",
       "com.slabbed.test.SlabHeightStepCullTest",
       "com.slabbed.test.SlabOnSlabVerticalAnchorTest"

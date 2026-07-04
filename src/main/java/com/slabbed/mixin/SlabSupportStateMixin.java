@@ -87,8 +87,13 @@ public abstract class SlabSupportStateMixin {
 
     @Inject(method = "isSideSolid", at = @At("HEAD"), cancellable = true)
     private void slabbed$slabTopSolid(BlockView world, BlockPos pos, Direction direction, SideShapeType shapeType, CallbackInfoReturnable<Boolean> cir) {
-        BlockState self = (BlockState) (Object) this;
-        if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
+        // Must match slabbed$slabTopSolidFullSquare's gate (canTreatAsSolidTopFace), not the
+        // narrower isBottomSlab: AbstractRedstoneGateBlock.canPlaceAbove (repeater/comparator)
+        // calls isSideSolid(UP, RIGID) -- NOT isSideSolidFullSquare -- so isBottomSlab's exclusion
+        // of Terrain-Slabs-owned states (via isSupportingSlab -> shouldSkipSlabSupport) silently
+        // made TS bottom slabs unable to host redstone gates, even though the FULL_SQUARE sibling
+        // below already correctly treated them as solid support.
+        if (direction == Direction.UP && SlabSupport.canTreatAsSolidTopFace(world, pos)) {
             cir.setReturnValue(true);
         }
     }
