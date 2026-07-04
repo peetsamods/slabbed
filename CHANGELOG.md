@@ -5,10 +5,12 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
-## [Unreleased] — 1.21.11 (Fabric)
+## [0.5.0-beta.1] — 1.21.11 (Fabric) — 2026-07-04
 
-> Staged for testing, **not yet released**. These fixes are proven by the automated gametest
-> suite and are pending an in-game confirmation pass before they ship in a versioned build.
+> Skips 0.4.0: that number was already spent on a 1.21.11 release that was pulled from
+> Modrinth/CurseForge after a critical world-hole regression (see `release/mc1.21.11-0.4.0-beta.3`);
+> the project's own decision at the time was to treat 0.3.0 as latest again and cut the next real
+> release fresh. This is that release — the accumulated never-pop / WYSIWYG hardening batch.
 
 ### Fixed
 - **Fences, walls, panes, and fence gates keep their placed height** — a lowered fence no longer
@@ -37,11 +39,32 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
   vanilla slab** (previously this cull fix only covered Terrain Slabs surfaces).
 - **A slab resting on top of another lowered slab no longer pops back to full height when the
   slab underneath it is broken.**
+- Dropped the stale `indium` recommendation from `fabric.mod.json` (Sodium 0.6+ ships its own
+  FRAPI-compatible renderer; this was already cleaned up on an abandoned release branch and had
+  never been ported back to this line).
 
 ### Added
 - **`/slabdy` debug overlay** now ships in every build (a passive corner readout of the height
   offset your crosshair is targeting). It is a diagnostic aid, on by default in test builds and
   toggled with `/slabdy`; release builds can ship it off.
+
+### Pending live confirmation
+Every fix above is proven by the automated gametest suite (141/141 green). The following were
+**not yet** explicitly re-confirmed against a real client at time of cut, and should be watched
+for on the next live pass rather than assumed solid:
+- **Candle/candle-cake particle height** — the mixin wiring is proven headlessly, but the actual
+  rendered particle position is client-only and has not had an explicit live re-look since the fix
+  landed.
+- **Hopper/chest horizontal-chain fix** — proven headlessly; no explicit live confirmation on
+  record.
+- **Terrain Slabs chained-row break-pop fix** — proven headlessly; no explicit live confirmation
+  on record.
+- **Vanilla-slab see-through-seam cull fix** — proven headlessly; the mitigation targets Indigo's
+  renderer class by name and has **not** been checked against Sodium's own FRAPI-compatible
+  implementation, which is what this project actually runs live. If the seam is still visible on a
+  plain anchored block (no Terrain Slabs involved), Sodium needs its own equivalent patch.
+- **Vertical slab-on-slab anchor fix (this change's newest fix)** — proven headlessly (RED/GREEN
+  both directions); zero live testing yet, staged fresh in this same build.
 
 ## [0.4.2] — Ports: 1.21.1 + Minecraft 26.x
 
