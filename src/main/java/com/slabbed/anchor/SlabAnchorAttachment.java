@@ -160,11 +160,19 @@ public final class SlabAnchorAttachment {
                 && !sideSlabAnchor
                 && !belowAnchoredAnchor
                 && qualifiesForBlockEntityLoweredAnchor(world, pos, state);
+        boolean decorativeAnchor = !directAnchor
+                && !adjacentAnchor
+                && !columnAnchor
+                && !sideSlabAnchor
+                && !belowAnchoredAnchor
+                && !blockEntityAnchor
+                && qualifiesForDecorativeObjectAnchor(world, pos, state);
         boolean qualifies = directAnchor || adjacentAnchor || columnAnchor || sideSlabAnchor
-                || belowAnchoredAnchor || blockEntityAnchor;
+                || belowAnchoredAnchor || blockEntityAnchor || decorativeAnchor;
         if (TRACE) {
-            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={} direct={} adjacent={} column={} sideSlab={} belowAnchored={}",
-                    pos.toShortString(), state, qualifies, directAnchor, adjacentAnchor, columnAnchor, sideSlabAnchor, belowAnchoredAnchor);
+            Slabbed.LOGGER.info("[ANCHOR] add attempt side=SERVER pos={} state={} qualifies={} direct={} adjacent={} column={} sideSlab={} belowAnchored={} blockEntity={} decorative={}",
+                    pos.toShortString(), state, qualifies, directAnchor, adjacentAnchor, columnAnchor, sideSlabAnchor,
+                    belowAnchoredAnchor, blockEntityAnchor, decorativeAnchor);
         }
         if (!qualifies) {
             return;
@@ -485,6 +493,40 @@ public final class SlabAnchorAttachment {
             return false;
         }
         // Only lock a genuinely-lowered placement; a flat BE is covered by freezeLoweredOnPlace.
+        return SlabSupport.getYOffset(world, pos, state) < -1.0e-6;
+    }
+
+    /**
+     * Anchors a lowered DECORATIVE object (candle, trapdoor, button, repeater, comparator, rail,
+     * ...) resting ON TOP of a lowered support at placement, so it stops re-deriving its dy
+     * purely from a live read of that support — live-reported "pop upon breaking at the end" for
+     * a candle on a slab and a trapdoor on a fence, both {@code anchor=none} their entire
+     * lifetime, both popping from -0.5 to 0.0 the instant their support below was broken. These
+     * subjects are non-solid and non-connecting, so {@link #isOrdinaryAnchorCandidate} rejects
+     * them, and they are not a {@link SlabBlock} or {@link BlockEntityProvider}, so none of the
+     * other qualifier lanes apply either — they had NO anchor coverage at all, unlike every other
+     * subject category.
+     *
+     * <p>Ceiling-attached / always-ceiling-hung decorations (lanterns hanging under a support,
+     * chains, hanging signs, spore blossom, ...) are explicitly excluded: their whole design is
+     * to keep DYNAMICALLY following the support above them (see
+     * {@code SlabSupport#isLoweredUndersideHangerOwner}), so freezing them at a placement-time
+     * anchor would be wrong — if their support's own dy later changes, they must follow it, not
+     * stay pinned to the old value.
+     */
+    private static boolean qualifiesForDecorativeObjectAnchor(BlockView world, BlockPos pos, BlockState state) {
+        if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        if (state.getBlock() instanceof SlabBlock || state.getBlock() instanceof BlockEntityProvider) {
+            return false;
+        }
+        if (isOrdinaryAnchorCandidate(world, pos, state)) {
+            return false;
+        }
+        if (SlabSupport.isCeilingAttached(state) || SlabSupport.isAlwaysCeilingHungDecoration(state)) {
+            return false;
+        }
         return SlabSupport.getYOffset(world, pos, state) < -1.0e-6;
     }
 
