@@ -5,7 +5,17 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
-## [0.5.0-beta.4] — 1.21.11 (Fabric) — 2026-07-04
+## [0.5.0-beta.5] — 1.21.11 (Fabric) — 2026-07-04
+
+> `0.5.0-beta.4` (below) is superseded and was never published.
+
+### Added
+- **A brief one-time notice that Slabbed is in beta.** The first time you join a world in a play
+  session, a short message fades in above the hotbar: "Slabbed is in beta — expect some rough
+  edges while it's being developed." It shows once per session (not on every world/server join)
+  and never appears again until you restart the game.
+
+## [0.5.0-beta.4] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
 
 > `/slabdy`'s passive overlay now defaults to **off**, matching every other diagnostic tool in the
 > mod (present in every build, but never on-screen unless a player explicitly asks for it via bare

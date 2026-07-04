@@ -12,6 +12,7 @@ public final class SlabbedClient implements ClientModInitializer {
         SlabbedModelLoadingPlugin.init();
         SlabAnchorClientSync.init();
         SlabdyClientCommands.register();
+        BetaNoticeClient.init();
         initBsFbLiveTraceClient();
         initGapFillerOverlay();
         initScreenshotCaptureService();
