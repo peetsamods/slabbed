@@ -21,8 +21,22 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
   keeps its placed offset instead of flickering.
 - **Lowered redstone torches emit their dust particles at the torch head**, not at full block
   height.
+- **Lowered candles and candle cakes emit their smoke particles at the candle's height**, not at
+  full block height.
 - **A full block placed on a lowered log surface shares that surface's height** (no see-through
   seam) ([#22](https://github.com/peetsamods/slabbed/issues/22)).
+- **Placing a fence, wall, pane, or gate beside an existing lowered one now matches its height**
+  instead of sitting flat and detached.
+- **Chaining a hopper or chest horizontally beside a lowered one keeps the lowered height**
+  instead of placing upward at full block height.
+- **Placing a slab near the edge of another lowered slab no longer silently merges the two into a
+  double slab** — found and fixed via two separate triggers of the same visible symptom.
+- **Breaking one slab in a lowered, chained row of Terrain Slabs slabs no longer pops the rest of
+  the row upward.**
+- **Fixed a see-through gap that could appear at the seam of a lowered block placed on an ordinary
+  vanilla slab** (previously this cull fix only covered Terrain Slabs surfaces).
+- **A slab resting on top of another lowered slab no longer pops back to full height when the
+  slab underneath it is broken.**
 
 ### Added
 - **`/slabdy` debug overlay** now ships in every build (a passive corner readout of the height
