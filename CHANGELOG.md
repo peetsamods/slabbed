@@ -8,7 +8,7 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 ## [Unreleased] — 1.21.11 (Fabric)
 
 > Staged for testing, **not yet released**. Found in the first live-test rounds against
-> `0.5.0-beta.1`; proven by the automated gametest suite (153/153) and pending an in-game
+> `0.5.0-beta.1`; proven by the automated gametest suite (157/157) and pending an in-game
 > confirmation pass before they ship in a versioned build.
 
 ### Fixed
@@ -26,6 +26,11 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
   lantern and the slab). This was a regression introduced earlier in this same batch by the
   decorative-object anchor work; a lantern now stays flush under a Terrain Slabs slab, matching how
   a hanging sign already behaved.
+- **A slab placed beside a lowered full block no longer has an invisible side face**
+  ([#24](https://github.com/peetsamods/slabbed/issues/24)). The see-through-hole mitigation
+  (`isSlabHeightStepFace`) only ever considered opaque full cubes as a subject/neighbour — a BOTTOM
+  or TOP slab's own face toward a lowered neighbour was never evaluated at all, only the opposite
+  (full-block) side was. Widened to also cover slabs.
 
 ### Known issue (deferred)
 - Full blocks, fences, and standing objects placed directly on top of a Terrain Slabs slab can

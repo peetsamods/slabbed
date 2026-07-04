@@ -231,6 +231,13 @@ public final class SlabSupport {
      * has a {@code ChunkRendererRegion}-safe fallback path, so it is safe to call from this
      * per-face chunk culling hot path exactly like {@link #isDirectCustomSlabSupportedObject}.
      *
+     * <p>GH#24 (github.com/peetsamods/slabbed/issues/24): the original subject/neighbour gate
+     * required {@code state.isOpaqueFullCube()}, which a DOUBLE slab satisfies but a BOTTOM or
+     * TOP slab never does — so a slab's OWN face toward a lowered full-block neighbour was never
+     * evaluated at all (only the neighbour's face toward the slab was), leaving one side of the
+     * seam invisible. Widened to also accept slab states so a slab can itself be the subject or
+     * the neighbour of this check, same as an opaque full cube already was.
+     *
      * <p>KNOWN RESIDUAL GAP: a block lowered ONLY by live adjacency/column inheritance and
      * NOT YET anchored (a narrow, transient window — most real placements anchor within the
      * same tick) is still not covered here; widening further would need the full dy
@@ -238,12 +245,12 @@ public final class SlabSupport {
      */
     public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
         if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
-                || !direction.getAxis().isHorizontal() || !state.isOpaqueFullCube()) {
+                || !direction.getAxis().isHorizontal() || !isStepCullEligibleSubject(state)) {
             return false;
         }
         BlockPos neighborPos = pos.offset(direction);
         BlockState neighbor = getBlockStateOrNull(world, neighborPos);
-        if (neighbor == null) {
+        if (neighbor == null || !isStepCullEligibleSubject(neighbor)) {
             return false;
         }
         boolean selfLowered = isLoweredOpaqueFullCubeForStepCull(world, pos, state);
@@ -251,9 +258,14 @@ public final class SlabSupport {
         return selfLowered != neighborLowered;
     }
 
+    private static boolean isStepCullEligibleSubject(BlockState state) {
+        return state.isOpaqueFullCube() || (state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE));
+    }
+
     private static boolean isLoweredOpaqueFullCubeForStepCull(BlockView world, BlockPos pos, BlockState state) {
         return isDirectCustomSlabSupportedObject(world, pos, state)
-                || (state.isOpaqueFullCube() && SlabAnchorAttachment.isAnchored(world, pos));
+                || ((state.isOpaqueFullCube() || state.getBlock() instanceof SlabBlock)
+                        && SlabAnchorAttachment.isAnchored(world, pos));
     }
 
     /**
