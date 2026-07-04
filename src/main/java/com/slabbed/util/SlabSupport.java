@@ -598,6 +598,16 @@ public final class SlabSupport {
         }
     }
 
+    /**
+     * Read-only peek at the client-side visual-dy cache for {@code pos}, for diagnostics only
+     * ({@code /slabdy}). Returns {@code null} on a cache miss. Never writes, never falls back to
+     * a fresh computation — callers that want the live value should call {@link #getYOffset}
+     * directly and compare the two, which is exactly what a stale-cache bug looks like.
+     */
+    public static Double peekCachedClientVisualYOffset(BlockPos pos) {
+        return cachedClientVisualYOffset(pos);
+    }
+
     /** Bounded depth used by the client dependent-rerender pass (Fix 3). */
     public static int chainRerenderDepth() {
         return MAX_CHAIN_DEPTH;

@@ -42,7 +42,7 @@ public final class SlabdyRowFormatterTest {
                 "missing", null);
         String row = join(lines);
 
-        ctx.assertTrue(lines.size() == 7, "row must have exactly 7 lines: " + row);
+        ctx.assertTrue(lines.size() == 8, "row must have exactly 8 lines (7 + the cache-vs-fresh diagnostic): " + row);
         ctx.assertTrue(row.contains("dy=0.000 flush"), "flat stone must report dy=0.000 flush: " + row);
         ctx.assertTrue(row.contains("src=-"), "a non-lowered, non-anchored block must report src=-: " + row);
         ctx.assertTrue(row.contains("held=empty"), "an empty held item must report held=empty: " + row);

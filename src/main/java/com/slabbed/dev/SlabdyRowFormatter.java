@@ -61,6 +61,18 @@ public final class SlabdyRowFormatter {
         double belowDy = SlabSupport.getVisualYOffset(world, belowPos, belowState);
         String belowSrc = dySource(world, belowPos, belowState, belowDy);
 
+        // Cache-vs-fresh diagnostic (2026-07-04, live-reported hanging-lantern gap where a
+        // support's dy differed depending on who read it): the client-side visual-dy cache
+        // (SlabSupport.CLIENT_VISUAL_Y_OFFSETS) is what the chunk-mesh render worker prefers
+        // instead of recomputing. If a cached value disagrees with a fresh recompute, the
+        // render worker may be baking a stale mesh even though every live query looks correct.
+        // Checked for BOTH the target and the block above it (the common "hanger reads its
+        // support" relationship) so a tester can point at either half of the pair.
+        BlockPos abovePos = pos.up();
+        BlockState aboveState = world.getBlockState(abovePos);
+        String cacheLine = "  cache: target=" + formatCacheComparison(world, pos, state)
+                + " | above=" + formatCacheComparison(world, abovePos, aboveState);
+
         List<String> lines = new ArrayList<>();
         lines.add("[slabdy] target=" + pos.toShortString() + " " + id);
         lines.add("  owner=" + pos.toShortString() + " * " + sourceLabel(id)
@@ -81,8 +93,25 @@ public final class SlabdyRowFormatter {
         lines.add("  below=" + belowPos.toShortString() + " " + blockId(belowState)
                 + " * dy=" + format(belowDy)
                 + " * src=" + belowSrc);
+        lines.add(cacheLine);
         return lines;
     }
+
+    /**
+     * "pos(block) cache=<value or MISS> fresh=<value>", with "*** STALE ***" appended when a
+     * cache entry exists and disagrees with a fresh {@link SlabSupport#getYOffset} recompute by
+     * more than epsilon. {@code getYOffset} never itself consults the cache, so it is a true
+     * "what would this recompute to right now" baseline to compare the cached value against.
+     */
+    private static String formatCacheComparison(BlockView world, BlockPos pos, BlockState state) {
+        Double cached = SlabSupport.peekCachedClientVisualYOffset(pos);
+        double fresh = SlabSupport.getYOffset(world, pos, state);
+        String cachedStr = cached == null ? "MISS" : format(cached);
+        boolean stale = cached != null && Math.abs(cached - fresh) > 1.0e-6;
+        return pos.toShortString() + "(" + blockId(state) + ") cache=" + cachedStr
+                + " fresh=" + format(fresh) + (stale ? " *** STALE ***" : "");
+    }
+
 
     /**
      * {@code state.getOutlineShape(world, pos)} is ALREADY shifted by {@code getVisualYOffset}
