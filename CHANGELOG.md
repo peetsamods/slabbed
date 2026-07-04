@@ -5,71 +5,11 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
-## [0.5.0-beta.7] — 1.21.11 (Fabric) — 2026-07-04
+## [0.5.0-beta.7] — 1.21.11 (Fabric) — 2026-07-04 — **published on Modrinth and CurseForge**
 
-> `0.5.0-beta.6` (below) is superseded and was never published.
-
-### Fixed
-- **Starting a brand-new world no longer silently skipped the beta notice** if you'd already
-  dismissed it (or just seen it) in a different world earlier in the same play session. The
-  notice's "once per session" cap was tracked with a single flag shared across every world; it's
-  now tracked per world/server, matching the "don't show again" behavior actually intended.
-
-## [0.5.0-beta.6] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
-
-> `0.5.0-beta.5` (below) is superseded and was never published.
-
-### Changed
-- **The beta notice now has a "don't show again" option.** The first time you join a world in a
-  play session, a short chat message appears: "Slabbed is in beta — expect some rough edges while
-  it's being developed." with a clickable **[Don't show again]** link. Clicking it silences the
-  notice for that specific world/server only — a different world you haven't dismissed it in will
-  still show it. It still only shows once per play session either way.
-
-## [0.5.0-beta.5] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
-
-> `0.5.0-beta.4` (below) is superseded and was never published.
-
-### Added
-- **A brief one-time notice that Slabbed is in beta.** The first time you join a world in a play
-  session, a short message fades in above the hotbar: "Slabbed is in beta — expect some rough
-  edges while it's being developed." It shows once per session (not on every world/server join)
-  and never appears again until you restart the game.
-
-## [0.5.0-beta.4] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
-
-> `/slabdy`'s passive overlay now defaults to **off**, matching every other diagnostic tool in the
-> mod (present in every build, but never on-screen unless a player explicitly asks for it via bare
-> `/slabdy`). `0.5.0-beta.3` (below) is superseded and was never published.
-
-### Changed
-- **The `/slabdy` target-height overlay is now off by default.** It still ships in every build and
-  can be turned on with a bare `/slabdy`, but a player no longer sees a diagnostic readout in the
-  corner of their screen unless they asked for it.
-
-## [0.5.0-beta.3] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
-
-> Pre-release hygiene pass on `0.5.0-beta.2` (below) before that build was ever uploaded to
-> Modrinth/CurseForge — `0.5.0-beta.2` is superseded and was never published.
-
-### Removed (internal, pre-release hygiene)
-- **The dev-only cursor/intent recorder and its supporting audit/probe classes no longer ship in
-  the release jar.** They are a file-writing test harness used during development, not
-  player-facing tooling, and shipping them risked moderation rejection independent of the
-  credential-redaction fix already applied below. `/slabdy` and `/slabdev`'s own overlay/command
-  surface is unaffected and still ships as always; the handful of always-shipped classes that talk
-  to the recorder now do so through a reflection layer that no-ops gracefully when it's absent,
-  instead of hard-depending on it.
-
-### Fixed (internal)
-- `/slabdev audit` and `/slabdy record` now report "unavailable in this build" instead of risking
-  a crash, in the (now-standard) case where the dev-only audit package isn't present in the jar.
-
-## [0.5.0-beta.2] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
-
-> Found in the first live-test rounds against `0.5.0-beta.1`; proven by the automated gametest
-> suite (157/157) and confirmed against a real client build (`SLABBED TEST 29`) before release.
-> The player-facing fixes below are unchanged and carried forward into `0.5.0-beta.3`.
+> Consolidates what was internally iterated as beta.2 through beta.7 in a single day of live-test
+> fixes on top of `0.5.0-beta.1` — those intermediate version numbers were never separately
+> published; this is the one entry for what's actually live.
 
 ### Fixed
 - **Redstone repeaters and comparators can now be placed on a Terrain Slabs bottom slab** (this
@@ -92,17 +32,25 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
   or TOP slab's own face toward a lowered neighbour was never evaluated at all, only the opposite
   (full-block) side was. Widened to also cover slabs. *(Live-confirmed.)*
 
-### Security
-- **The dev-only cursor/intent recorder's `manifest.json` no longer leaks live Microsoft account
-  credentials.** It was writing an unredacted `sun.java.command`, which can contain an active
-  session's `accessToken`/`uuid`/`xuid`/`clientId`; these are now stripped before the file is
-  written. Recorder output is dev-tooling only and off by default in a normal build, but this was
-  a real leak for anyone who had it enabled.
-
 ### Added
+- **A brief one-time notice reminding you Slabbed is in beta.** The first time you join a world in
+  a play session, a short chat message appears: "Slabbed is in beta — expect some rough edges
+  while it's being developed." with a clickable **[Don't show again]** link. Dismissing it only
+  silences that specific world/server — a different world you haven't dismissed it in will still
+  show it. Shows at most once per world per play session either way.
 - **`/slabdy` now reports a "cache:" line** showing the cached (last-rendered) vs freshly
   recomputed height offset for the block you're targeting and its support, so a stale-render bug
   and a real logic bug can be told apart at a glance.
+
+### Changed
+- **The `/slabdy` target-height overlay is now off by default.** It still ships in every build and
+  can be turned on with a bare `/slabdy`, but a player no longer sees a diagnostic readout in the
+  corner of their screen unless they asked for it.
+
+### Security
+- **An internal dev tool's output file could contain live Microsoft account credentials.** This
+  tool is not part of a normal build and never affected regular play, but the leak is fixed, and
+  the tool has additionally been removed from release builds entirely.
 
 ### Fixed (tooling)
 - **The `/slabdy` overlay's outline display was double-applying the height offset**, making a
