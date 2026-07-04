@@ -40,6 +40,7 @@
       "com.slabbed.test.RecorderManifestRedactionTest",
       "com.slabbed.test.SlabdyOutlineDoubleOffsetTest",
       "com.slabbed.test.SlabdyCacheVsFreshDiagnosticTest",
+      "com.slabbed.test.LanternUnderTerrainSlabsHangerTest",
       "com.slabbed.test.TerrainSlabsChainAnchorTest",
       "com.slabbed.test.SlabHeightStepCullTest",
       "com.slabbed.test.SlabOnSlabVerticalAnchorTest"

@@ -1257,6 +1257,19 @@ public final class SlabSupport {
                 || !state.getFluidState().isEmpty()) {
             return Double.NaN;
         }
+        // Terrain Slabs owns its own vertical offset and renders its slabs FLUSH (shouldSkipOffset).
+        // A hanger under, or an object standing on, a TS slab must NOT follow a Slabbed -0.5 — the
+        // same invariant ceilingHungDecorationDy enforces via its !shouldSkipOffset guard (~line
+        // 878, which is why a hanging SIGN stays flush under a TS slab). Folded INTO this shared
+        // helper, not into one caller: BOTH consumers — the isLoweredUndersideHangerOwner hanger
+        // lane (~1086) AND the object-standing-on-a-TOP/DOUBLE-slab lane (~1180) — call it with no
+        // guard, so guarding one would leave the other exposed ([[slabbed-shared-predicate-half-fix-trap]]).
+        // MUST precede the cache short-circuit: this session's L8/L10 anchor-widening made a
+        // cantilevered TS slab anchorable, so its own -0.5 visual dy is now cached and would leak
+        // through here. Regression fixed live-reported 2026-07-04 (lantern-under-TS gap).
+        if (CompatHooks.shouldSkipOffset(state)) {
+            return 0.0;
+        }
         Double cachedDy = cachedClientVisualYOffset(pos);
         if (cachedDy != null) {
             return cachedDy;
