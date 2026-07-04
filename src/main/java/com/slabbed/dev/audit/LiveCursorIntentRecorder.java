@@ -38,6 +38,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -941,6 +942,23 @@ public final class LiveCursorIntentRecorder {
                 "slabbed-live-cursor-recorder-shutdown"));
     }
 
+    // SECURITY (RECORDER_REVIEW.md H1): sun.java.command is the full launcher command line, which
+    // for a real Microsoft-authenticated client includes --accessToken (a live JWT), --uuid, and
+    // --xuid as plain launch arguments. manifest.json is a debug file routinely shared for
+    // analysis (as every session.jsonl this project uses has been), so those values must never
+    // reach disk unredacted. Matches "--flag value" pairs case-insensitively; value is whatever
+    // non-whitespace token follows (session tokens/UUIDs never contain spaces).
+    private static final Pattern SENSITIVE_LAUNCH_ARG_PATTERN = Pattern.compile(
+            "(--(?:accessToken|uuid|xuid|clientId|session))\\s+\\S+", Pattern.CASE_INSENSITIVE);
+
+    /** Public for {@code RECORDER_REVIEW.md} H1 test coverage — a pure, stateless redaction. */
+    public static String redactJavaCommand(String command) {
+        if (command == null || command.isEmpty()) {
+            return command;
+        }
+        return SENSITIVE_LAUNCH_ARG_PATTERN.matcher(command).replaceAll("$1 [REDACTED]");
+    }
+
     private static void writeManifest() {
         String manifest = "{"
                 + jsonPair("schemaVersion", SCHEMA_VERSION) + ","
@@ -957,7 +975,7 @@ public final class LiveCursorIntentRecorder {
                 + jsonPair("fabricLoaderVersion", modVersion("fabricloader")) + ","
                 + jsonPair("slabbedVersion", modVersion(Slabbed.MOD_ID)) + ","
                 + jsonPair("userDir", System.getProperty("user.dir", "")) + ","
-                + jsonPair("javaCommand", System.getProperty("sun.java.command", ""))
+                + jsonPair("javaCommand", redactJavaCommand(System.getProperty("sun.java.command", "")))
                 + "}\n";
         if (writeAtomic(manifestPath, manifest, "manifest")) {
             incHealth("manifestWrites");
