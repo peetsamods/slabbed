@@ -5,7 +5,18 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
-## [0.5.0-beta.5] — 1.21.11 (Fabric) — 2026-07-04
+## [0.5.0-beta.6] — 1.21.11 (Fabric) — 2026-07-04
+
+> `0.5.0-beta.5` (below) is superseded and was never published.
+
+### Changed
+- **The beta notice now has a "don't show again" option.** The first time you join a world in a
+  play session, a short chat message appears: "Slabbed is in beta — expect some rough edges while
+  it's being developed." with a clickable **[Don't show again]** link. Clicking it silences the
+  notice for that specific world/server only — a different world you haven't dismissed it in will
+  still show it. It still only shows once per play session either way.
+
+## [0.5.0-beta.5] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
 
 > `0.5.0-beta.4` (below) is superseded and was never published.
 
