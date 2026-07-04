@@ -15,6 +15,7 @@
     "WallRedstoneTorchParticleMixin",
     "CandleParticleMixin",
     "BrewingStandParticleMixin",
+    "DecoratedPotParticleMixin",
     "RedstoneWireBlockMixin",
     "BlockItemPlaceTraceMixin",
     "BlockItemPlacementIntentMixin",
