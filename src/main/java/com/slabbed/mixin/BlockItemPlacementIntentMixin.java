@@ -8,6 +8,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
@@ -348,6 +349,51 @@ public abstract class BlockItemPlacementIntentMixin {
                 ? targetPos.getY() + 0.501d   // > 0.5 → vanilla → TOP
                 : targetPos.getY() + 0.499d;  // ≤ 0.5 → vanilla → BOTTOM
         Vec3d remappedHitPos = new Vec3d(originalHitPos.x, remappedY, originalHitPos.z);
+        BlockHitResult remappedHit = new BlockHitResult(
+                remappedHitPos,
+                effectiveSide,
+                targetPos,
+                context.hitsInsideBlock(),
+                false
+        );
+
+        // SECOND, distinct failure surface from the "neighbour already occupied" guard
+        // above: even when the inferred side-neighbour is EMPTY, the (effectiveSide,
+        // remappedY) pair this method just built can STILL make vanilla's OWN
+        // ItemPlacementContext construction decide the ORIGINAL clicked slab itself is
+        // replaceable (canReplaceExisting=true — getBlockPos() resolves back to
+        // targetPos, never routing to the adjacent cell at all). That is ALSO an
+        // unwanted same-cell combine: it happens directly on the block the player's
+        // crosshair landed on, regardless of what the neighbour holds (live repro:
+        // an up-face-edge click on a lowered TOP slab combined it to DOUBLE in place
+        // instead of placing a new slab in the adjacent cell — same_cell_double_combine
+        // again, a different trigger than the first guard). The up-face-edge heuristic
+        // exists ONLY to redirect an ambiguous top-face-edge click into "place beside";
+        // it must never modify the clicked block itself. Ask vanilla's own construction
+        // directly (constructing a throwaway, read-only ItemPlacementContext) rather
+        // than re-deriving SlabBlock's canReplace arithmetic a second time.
+        if (itemIsSlab && "up_face_edge".equals(hitDescriptor)) {
+            ItemPlacementContext probe = new ItemPlacementContext(new ItemUsageContext(
+                    context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit));
+            if (probe.getBlockPos().equals(targetPos)) {
+                slabbed$recordRemapAttempt(
+                        context,
+                        itemEligible,
+                        true,
+                        targetIsSolid,
+                        targetHasBlockEntity,
+                        targetIsCraftingTable,
+                        yOffset,
+                        ordinaryLoweredFullBlockGuard,
+                        false,
+                        "up_face_edge_would_modify_clicked_slab",
+                        null,
+                        effectiveSide,
+                        hitDescriptor);
+                return context;
+            }
+        }
+
         slabbed$recordRemapAttempt(
                 context,
                 itemEligible,
@@ -362,13 +408,6 @@ public abstract class BlockItemPlacementIntentMixin {
                 remappedHitPos,
                 effectiveSide,
                 hitDescriptor);
-        BlockHitResult remappedHit = new BlockHitResult(
-                remappedHitPos,
-                effectiveSide,
-                targetPos,
-                context.hitsInsideBlock(),
-                false
-        );
 
         return new ItemUsageContext(context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit) {
         };

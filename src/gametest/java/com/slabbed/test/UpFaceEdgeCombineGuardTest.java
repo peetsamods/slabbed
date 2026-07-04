@@ -94,6 +94,54 @@ public final class UpFaceEdgeCombineGuardTest {
         ctx.complete();
     }
 
+    // SECOND, DISTINCT failure surface (live TEST 20, actionId a9 in the recorder trace): the
+    // inferred side-neighbour is EMPTY (unlike the test above), yet the up-face-edge inference's
+    // own (effectiveSide, remappedY) combo makes vanilla's ItemPlacementContext decide the
+    // ORIGINAL clicked slab is replaceable, combining it to DOUBLE in place — never routing to
+    // the (empty) neighbour at all. The first guard (checking the neighbour's occupancy) cannot
+    // catch this, since the neighbour was never occupied to begin with.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void upFaceEdgeClickWithEmptyNeighborDoesNotCombineClickedSlab(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        BlockPos base = origin.add(3, 2, 4);
+        world.setBlockState(base, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        BlockPos fb = base.up();
+        world.setBlockState(fb, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos top = fb.up();
+        world.setBlockState(top, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_LISTENERS);
+
+        double visualDy = SlabSupport.getVisualYOffset(world, top, world.getBlockState(top));
+        ctx.assertTrue(visualDy == -0.5,
+                "fixture: TOP slab on a lowered full block must render lowered -0.5, got " + visualDy);
+
+        BlockPos neighbor = top.west();
+        ctx.assertTrue(world.getBlockState(neighbor).isAir(),
+                "fixture: the west neighbour must start EMPTY (isolates this from the occupied-neighbour case)");
+
+        PlayerEntity player = UseOnCombineVsExtendPlacementTest.mockSlabPlayer(ctx, top.west(3));
+        // Exact-boundary edge hit (localX=0.05, y = the visible lowered top surface exactly):
+        // forces the BOTTOM-intent branch of the remap, which — for an existing TYPE=TOP target
+        // clicked from a horizontal side — satisfies vanilla's own combine condition directly.
+        Vec3d edgeHit = new Vec3d(top.getX() + 0.05, top.getY() + 0.5, top.getZ() + 0.5);
+        ActionResult result = UseOnCombineVsExtendPlacementTest.useHeldOakSlab(
+                world, player, top, Direction.UP, edgeHit);
+        System.out.println("[USEON] upFaceEdge.emptyNeighbor | clicked="
+                + UseOnCombineVsExtendPlacementTest.describe(world, top) + " | neighbor="
+                + UseOnCombineVsExtendPlacementTest.describe(world, neighbor) + " | result=" + result);
+
+        BlockState clickedAfter = world.getBlockState(top);
+        ctx.assertTrue(!(clickedAfter.contains(SlabBlock.TYPE) && clickedAfter.get(SlabBlock.TYPE) == SlabType.DOUBLE),
+                "the up-face-edge inference must NOT combine the CLICKED slab itself even when "
+                        + "the inferred neighbour is empty (live 'placed under instead of on top' "
+                        + "bug — a9 in the recorder trace); got "
+                        + UseOnCombineVsExtendPlacementTest.describe(world, top));
+        ctx.complete();
+    }
+
     // REGRESSION GUARD: a LITERAL, deliberate horizontal click (not an up-face-edge inference)
     // against an occupied same-material neighbour keeps vanilla's normal combine behaviour —
     // the fix must NOT suppress genuine, direct side-placement combines.
