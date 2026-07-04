@@ -612,7 +612,14 @@ public final class SlabSupport {
                 || !slabState.getFluidState().isEmpty()) {
             return false;
         }
-        return SlabAnchorAttachment.isAnchored(world, slabPos)
+        // Vertical support (a slab resting directly on a lowered TOP/DOUBLE slab or lowered full
+        // block below): mirrors isVerticallyLoweredSlabSource, the SAME live check
+        // getYOffsetInner's slab branch already uses (line ~918) to derive -0.5 for this exact
+        // relationship. Without this, a slab resting on a lowered support rendered correctly at
+        // placement time purely via that live derivation, but never persisted an anchor for it —
+        // breaking the support later popped it flush even though it was never re-placed (live-
+        // reported "pop upon breaking at the end").
+        return isVerticallyLoweredSlabSource(world, slabPos, slabState)
                 || isAdjacentSideSlabLowered(world, slabPos, slabState);
     }
 
