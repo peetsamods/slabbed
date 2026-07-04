@@ -4,7 +4,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.dev.SlabbedDiagnostics;
 import com.slabbed.dev.SlabdyRowFormatter;
-import com.slabbed.dev.audit.LiveCursorIntentRecorder;
+import com.slabbed.util.SlabbedAuditBridge;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -46,11 +46,11 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
  *   <li>{@code /slabdy row} — print the current target's full diagnostic dump to chat.</li>
  *   <li>{@code /slabdy use} — perform a real use/place against the current target and
  *       report the block before/after at the expected placement position.</li>
- *   <li>{@code /slabdy record} — toggle {@link LiveCursorIntentRecorder} (the existing,
- *       far more capable append-only placement/targeting recorder already on this
- *       branch — re-derived from Forge's simpler {@code SlabbedRecorder} was NOT
- *       needed here; this just wires the existing tool to a slash-command toggle
- *       instead of a JVM-flag-only, class-init-cached one).</li>
+ *   <li>{@code /slabdy record} — toggle the existing, far more capable append-only
+ *       placement/targeting recorder (accessed via {@link SlabbedAuditBridge} reflection
+ *       since that recorder is a dev-only tool excluded from the release jar — see
+ *       build.gradle's pre-release hygiene gate; this command just no-ops gracefully in
+ *       a release build instead of failing to load).</li>
  * </ul>
  */
 public final class SlabdyClientCommands {
@@ -90,7 +90,7 @@ public final class SlabdyClientCommands {
     private static String lastRecordedSignature = "";
 
     private static void maybeRecordTargetDiagnostic(MinecraftClient client) {
-        if (!LiveCursorIntentRecorder.isEnabled()) {
+        if (!SlabbedAuditBridge.isRecorderEnabled()) {
             return;
         }
         if (client == null || client.world == null) {
@@ -112,7 +112,7 @@ public final class SlabdyClientCommands {
         }
         lastRecordedSignature = sig;
         SlabbedDiagnostics.Sample sample = SlabbedDiagnostics.analyze(client.world, pos, state, modelDy);
-        LiveCursorIntentRecorder.recordVisualDiagnostic(pos, sample);
+        SlabbedAuditBridge.recordVisualDiagnostic(pos, sample);
     }
 
     /** The render-thread model dy for pos if the trace happens to hold it, else NaN. */
@@ -178,9 +178,9 @@ public final class SlabdyClientCommands {
     }
 
     private static int runRecord(CommandContext<FabricClientCommandSource> ctx) {
-        boolean nowOn = LiveCursorIntentRecorder.toggle();
+        boolean nowOn = SlabbedAuditBridge.toggleRecorder();
         ctx.getSource().sendFeedback(Text.literal("Slabbed recorder: "
-                + (nowOn ? "on -> " + LiveCursorIntentRecorder.currentLogPathDisplay() : "off")));
+                + (nowOn ? "on -> " + SlabbedAuditBridge.recorderLogPathDisplay() : "off")));
         return 1;
     }
 

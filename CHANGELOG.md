@@ -5,10 +5,29 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
-## [0.5.0-beta.2] — 1.21.11 (Fabric) — 2026-07-04
+## [0.5.0-beta.3] — 1.21.11 (Fabric) — 2026-07-04
+
+> Pre-release hygiene pass on `0.5.0-beta.2` (below) before that build was ever uploaded to
+> Modrinth/CurseForge — `0.5.0-beta.2` is superseded and was never published.
+
+### Removed (internal, pre-release hygiene)
+- **The dev-only cursor/intent recorder and its supporting audit/probe classes no longer ship in
+  the release jar.** They are a file-writing test harness used during development, not
+  player-facing tooling, and shipping them risked moderation rejection independent of the
+  credential-redaction fix already applied below. `/slabdy` and `/slabdev`'s own overlay/command
+  surface is unaffected and still ships as always; the handful of always-shipped classes that talk
+  to the recorder now do so through a reflection layer that no-ops gracefully when it's absent,
+  instead of hard-depending on it.
+
+### Fixed (internal)
+- `/slabdev audit` and `/slabdy record` now report "unavailable in this build" instead of risking
+  a crash, in the (now-standard) case where the dev-only audit package isn't present in the jar.
+
+## [0.5.0-beta.2] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
 
 > Found in the first live-test rounds against `0.5.0-beta.1`; proven by the automated gametest
 > suite (157/157) and confirmed against a real client build (`SLABBED TEST 29`) before release.
+> The player-facing fixes below are unchanged and carried forward into `0.5.0-beta.3`.
 
 ### Fixed
 - **Redstone repeaters and comparators can now be placed on a Terrain Slabs bottom slab** (this

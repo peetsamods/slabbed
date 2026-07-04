@@ -88,9 +88,20 @@ jar {
     }
 
     // Exclude dev-only and debug-only content from public release jar.
-    // com/slabbed/dev/** is intentionally NOT excluded: /slabdy and /slabdev must always
-    // ship (default-off, player-toggleable via slash command) — see SlabbedDevCommands
-    // and SlabdyClientCommands.
+    // com/slabbed/dev/** (top-level only) is intentionally NOT excluded: /slabdy and
+    // /slabdev's own overlay/toggle commands must always ship (default-off,
+    // player-toggleable via slash command) — see SlabbedDevCommands and
+    // SlabdyClientCommands.
+    //
+    // com/slabbed/dev/audit/** IS excluded — the pre-release hygiene gate (Maintainer's
+    // standing rule): it's a file-writing dev/test harness (LiveCursorIntentRecorder,
+    // CategoryAuditRunner/Report, LoweredSideLiveHitRemapRuntimeAudit, probes), not
+    // player-facing UI, and shipping it risks moderation rejection regardless of the
+    // credential-redaction fix already applied to it. The 2 always-shipped classes that
+    // reference it (SlabbedDevCommands, SlabdyClientCommands) go through
+    // SlabbedAuditBridge's reflection layer, not a hard import, so they load fine with
+    // this package absent.
+    exclude("com/slabbed/dev/audit/**")
     exclude("com/slabbed/debug/**")
     exclude("com/slabbed/client/debug/**")
     exclude("com/slabbed/mixin/debug/**")
