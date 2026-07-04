@@ -216,14 +216,25 @@ public final class SlabSupport {
     /**
      * True if the {@code direction} side face of the opaque cube {@code state} at
      * {@code pos} should be DRAWN even though the chunk mesher culls it, because exactly
-     * one of this block and its {@code direction} neighbour is a lowered custom-supported
-     * object — i.e. they sit at different visual heights and the slab step exposes part of
-     * the shared face (the see-through "window" / "doom-infinity" hole on a lowered cube in
-     * a terrace).
+     * one of this block and its {@code direction} neighbour is lowered — i.e. they sit at
+     * different visual heights and the slab step exposes part of the shared face (the
+     * see-through "window" / "doom-infinity" hole on a lowered cube in a terrace).
      *
-     * <p>Cheap: uses {@link #isDirectCustomSlabSupportedObject} (fast-false for ordinary
-     * terrain) rather than the deep column walk in {@link #getYOffset}, so it is safe to
-     * call from the per-face chunk culling path. Only ever ADDS faces.
+     * <p>"Lowered" here is EITHER a {@link #isDirectCustomSlabSupportedObject} (an object
+     * resting directly on a Terrain-Slabs-owned custom surface) OR a persistently-{@link
+     * SlabAnchorAttachment#isAnchored anchored} opaque full cube — the ordinary "full block
+     * placed on a slab" case that is this mod's own core, documented product intent
+     * (RULES.md §1), which the original direct-custom-support-only check did not cover (a
+     * live goblin-test session found ~80 see-through-hole diagnostic hits on plain anchored
+     * dirt, none of them Terrain-Slabs-related). {@code isAnchored} is a cheap O(1) chunk-
+     * attachment set lookup — NOT the deep column walk in {@link #getYOffset} — and already
+     * has a {@code ChunkRendererRegion}-safe fallback path, so it is safe to call from this
+     * per-face chunk culling hot path exactly like {@link #isDirectCustomSlabSupportedObject}.
+     *
+     * <p>KNOWN RESIDUAL GAP: a block lowered ONLY by live adjacency/column inheritance and
+     * NOT YET anchored (a narrow, transient window — most real placements anchor within the
+     * same tick) is still not covered here; widening further would need the full dy
+     * resolution this method deliberately avoids for performance. Only ever ADDS faces.
      */
     public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
         if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
@@ -235,9 +246,14 @@ public final class SlabSupport {
         if (neighbor == null) {
             return false;
         }
-        boolean selfLowered = isDirectCustomSlabSupportedObject(world, pos, state);
-        boolean neighborLowered = isDirectCustomSlabSupportedObject(world, neighborPos, neighbor);
+        boolean selfLowered = isLoweredOpaqueFullCubeForStepCull(world, pos, state);
+        boolean neighborLowered = isLoweredOpaqueFullCubeForStepCull(world, neighborPos, neighbor);
         return selfLowered != neighborLowered;
+    }
+
+    private static boolean isLoweredOpaqueFullCubeForStepCull(BlockView world, BlockPos pos, BlockState state) {
+        return isDirectCustomSlabSupportedObject(world, pos, state)
+                || (state.isOpaqueFullCube() && SlabAnchorAttachment.isAnchored(world, pos));
     }
 
     /**

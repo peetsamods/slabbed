@@ -35,7 +35,8 @@
       "com.slabbed.test.ConnectingBlockCantileverTest",
       "com.slabbed.test.BlockEntityCantileverTest",
       "com.slabbed.test.UpFaceEdgeCombineGuardTest",
-      "com.slabbed.test.TerrainSlabsChainAnchorTest"
+      "com.slabbed.test.TerrainSlabsChainAnchorTest",
+      "com.slabbed.test.SlabHeightStepCullTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",
