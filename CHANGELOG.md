@@ -7,26 +7,33 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 
 ## [Unreleased] — 1.21.11 (Fabric)
 
-> Staged for testing, **not yet released**. Found in the first live-test round against
-> `0.5.0-beta.1`; proven by the automated gametest suite (147/147) and pending an in-game
+> Staged for testing, **not yet released**. Found in the first live-test rounds against
+> `0.5.0-beta.1`; proven by the automated gametest suite (153/153) and pending an in-game
 > confirmation pass before they ship in a versioned build.
 
 ### Fixed
 - **Redstone repeaters and comparators can now be placed on a Terrain Slabs bottom slab** (this
   also generically fixes any other block whose placement depends on the same vanilla solidity
-  check — buttons, pressure plates, rails, etc.).
+  check — buttons, pressure plates, rails, etc.). *(Live-confirmed.)*
 - **Decorative objects (candles, trapdoors, and similar) resting on a slab, fence, or other
   support no longer pop back to full height when that support is broken** — previously they had
   no persisted height-lock at all, unlike every other object category.
 - **Lowered brewing stands emit their ambient smoke particles at the stand's rendered height**,
   not full block height.
 - **Stashing an item into a lowered decorated pot spawns its particle burst at the pot's rendered
-  height**, not full block height.
+  height**, not full block height. *(Live-confirmed.)*
+- **A hanging lantern under a Terrain Slabs slab no longer hangs too low** (a gap between the
+  lantern and the slab). This was a regression introduced earlier in this same batch by the
+  decorative-object anchor work; a lantern now stays flush under a Terrain Slabs slab, matching how
+  a hanging sign already behaved.
+
+### Known issue (deferred)
+- Full blocks, fences, and standing objects placed directly on top of a Terrain Slabs slab can
+  render half a block too low in some arrangements — same underlying cause as the lantern fix
+  above, but via a different code path that is entangled with the combined-slab behaviour, so it is
+  being addressed carefully rather than rushed.
 
 ### Investigated, not yet resolved
-- A visual gap reported on a hanging lantern under a Terrain Slabs surface (not present when
-  lanterns are chained) — the underlying dy/outline numbers checked out consistent; needs a
-  close-up screenshot to investigate further.
 - Recurring see-through "world hole" diagnostics — all match the mod's own intended geometry with
   no confirmed height mismatch in the data available; needs exact coordinates of a visible hole
   (if any) to pursue further.
