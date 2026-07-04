@@ -5,7 +5,18 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
-## [0.5.0-beta.3] — 1.21.11 (Fabric) — 2026-07-04
+## [0.5.0-beta.4] — 1.21.11 (Fabric) — 2026-07-04
+
+> `/slabdy`'s passive overlay now defaults to **off**, matching every other diagnostic tool in the
+> mod (present in every build, but never on-screen unless a player explicitly asks for it via bare
+> `/slabdy`). `0.5.0-beta.3` (below) is superseded and was never published.
+
+### Changed
+- **The `/slabdy` target-height overlay is now off by default.** It still ships in every build and
+  can be turned on with a bare `/slabdy`, but a player no longer sees a diagnostic readout in the
+  corner of their screen unless they asked for it.
+
+## [0.5.0-beta.3] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
 
 > Pre-release hygiene pass on `0.5.0-beta.2` (below) before that build was ever uploaded to
 > Modrinth/CurseForge — `0.5.0-beta.2` is superseded and was never published.

@@ -55,13 +55,12 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
  */
 public final class SlabdyClientCommands {
 
-    // Defaults ON so the passive target-dy reading shows in the UL corner WITHOUT the
-    // player having to invoke anything (Maintainer's request: "a passive reading at the UL
-    // corner ... I should not have to invoke the command"). Bare `/slabdy` toggles it
-    // off. The initial state can be forced with -Dslabbed.targetDyOverlay=false for a
-    // clean release cut; on these debug/test builds the passive reading is the point.
+    // Defaults OFF for a release build: /slabdy always SHIPS (per the standing debug-tooling
+    // rule — it must never be compiled out), but a player shouldn't see a diagnostic overlay
+    // in the corner of their screen unless they explicitly asked for it via bare `/slabdy`.
+    // Force it on for a dev/test session with -Dslabbed.targetDyOverlay=true.
     private static boolean overlayEnabled =
-            Boolean.parseBoolean(System.getProperty("slabbed.targetDyOverlay", "true"));
+            Boolean.parseBoolean(System.getProperty("slabbed.targetDyOverlay", "false"));
 
     private SlabdyClientCommands() {
     }
