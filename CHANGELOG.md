@@ -20,10 +20,10 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
   no persisted height-lock at all, unlike every other object category.
 - **Lowered brewing stands emit their ambient smoke particles at the stand's rendered height**,
   not full block height.
+- **Stashing an item into a lowered decorated pot spawns its particle burst at the pot's rendered
+  height**, not full block height.
 
 ### Investigated, not yet resolved
-- Decorated pot particles reportedly appearing at the wrong height when interacting with the pot —
-  could not locate the responsible code path; needs the exact triggering action to root-cause.
 - A visual gap reported on a hanging lantern under a Terrain Slabs surface (not present when
   lanterns are chained) — the underlying dy/outline numbers checked out consistent; needs a
   close-up screenshot to investigate further.
