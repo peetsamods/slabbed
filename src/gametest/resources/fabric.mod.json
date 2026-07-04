@@ -44,7 +44,8 @@
       "com.slabbed.test.TerrainSlabsChainAnchorTest",
       "com.slabbed.test.SlabHeightStepCullTest",
       "com.slabbed.test.SlabOnSlabVerticalAnchorTest",
-      "com.slabbed.client.BetaNoticeDismissedWorldsTest"
+      "com.slabbed.client.BetaNoticeDismissedWorldsTest",
+      "com.slabbed.client.BetaNoticeSessionGateTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",

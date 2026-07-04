@@ -5,7 +5,17 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
-## [0.5.0-beta.6] — 1.21.11 (Fabric) — 2026-07-04
+## [0.5.0-beta.7] — 1.21.11 (Fabric) — 2026-07-04
+
+> `0.5.0-beta.6` (below) is superseded and was never published.
+
+### Fixed
+- **Starting a brand-new world no longer silently skipped the beta notice** if you'd already
+  dismissed it (or just seen it) in a different world earlier in the same play session. The
+  notice's "once per session" cap was tracked with a single flag shared across every world; it's
+  now tracked per world/server, matching the "don't show again" behavior actually intended.
+
+## [0.5.0-beta.6] — 1.21.11 (Fabric) — 2026-07-04 — **superseded, never published**
 
 > `0.5.0-beta.5` (below) is superseded and was never published.
 

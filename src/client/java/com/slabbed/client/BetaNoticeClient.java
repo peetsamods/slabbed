@@ -15,15 +15,14 @@ import net.minecraft.util.WorldSavePath;
 /**
  * A brief, one-time chat notice ("Slabbed is in beta...") with a click-to-dismiss link.
  *
- * <p>Shown at most once per client session (hopping between worlds in one sitting doesn't
- * repeat it), AND permanently skipped for any specific world/server the player has clicked
- * "don't show this again" for — but a brand new world/server the player hasn't dismissed
- * will still show it, even if they've dismissed it elsewhere. That's a deliberate choice
- * (Maintainer's explicit request): this is a per-world preference, not a single global switch.
+ * <p>Shown at most once per client session PER WORLD (hopping back into the SAME world in one
+ * sitting doesn't repeat it — see {@link BetaNoticeSessionGate}), AND permanently skipped for
+ * any specific world/server the player has clicked "don't show this again" for — but a brand
+ * new world/server the player hasn't dismissed will still show it, even if they've dismissed it
+ * elsewhere. That's a deliberate choice (Maintainer's explicit request): this is a per-world
+ * preference, not a single global switch.
  */
 public final class BetaNoticeClient {
-
-    private static boolean shownThisSession = false;
 
     private BetaNoticeClient() {
     }
@@ -34,17 +33,14 @@ public final class BetaNoticeClient {
                         .executes(BetaNoticeClient::runDismiss)));
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            if (shownThisSession) {
-                return;
-            }
             String worldKey = currentWorldKey(client);
-            if (BetaNoticeDismissedWorlds.isDismissed(worldKey)) {
+            if (!BetaNoticeSessionGate.shouldShow(worldKey)) {
                 return;
             }
-            shownThisSession = true;
             if (client.player == null) {
                 return;
             }
+            BetaNoticeSessionGate.markShown(worldKey);
             client.player.sendMessage(
                     Text.literal("Slabbed is in beta — expect some rough edges while it's being developed. ")
                             .formatted(Formatting.GRAY, Formatting.ITALIC)
