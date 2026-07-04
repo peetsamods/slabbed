@@ -48,7 +48,7 @@ public final class SlabdyRowFormatter {
         double dy = SlabSupport.getVisualYOffset(world, pos, state);
         String status = dy < -1.0e-6 ? "LOWERED" : (dy > 1.0e-6 ? "RAISED" : "flush");
         String src = dySource(world, pos, state, dy);
-        VoxelShape outline = outlineAt(world, pos, state, dy);
+        VoxelShape outline = outlineAt(world, pos, state);
         Box outlineBox = outline.isEmpty() ? null : outline.getBoundingBox();
         String half = targetHalf(hit, pos, outlineBox);
         Vec3d local = hit == null ? null : hit.subtract(pos.getX(), pos.getY(), pos.getZ());
@@ -84,12 +84,15 @@ public final class SlabdyRowFormatter {
         return lines;
     }
 
-    private static VoxelShape outlineAt(BlockView world, BlockPos pos, BlockState state, double dy) {
-        VoxelShape outline = state.getOutlineShape(world, pos);
-        if (dy != 0.0d && !outline.isEmpty()) {
-            outline = outline.offset(0.0d, dy, 0.0d);
-        }
-        return outline;
+    /**
+     * {@code state.getOutlineShape(world, pos)} is ALREADY shifted by {@code getVisualYOffset}
+     * via {@code SlabSupportStateMixin.slabbed$offsetOutline} (an {@code @Inject at RETURN}) —
+     * that mixin is the entire reason the outline/hitbox tracks the model. Applying {@code dy}
+     * to it again here double-counts the offset (a real bug this session, found via a live
+     * report of an "internally inconsistent" block: dy=-0.500 in text, outline shifted -1.000).
+     */
+    private static VoxelShape outlineAt(BlockView world, BlockPos pos, BlockState state) {
+        return state.getOutlineShape(world, pos);
     }
 
     private static String targetHalf(Vec3d hit, BlockPos pos, Box outlineBox) {
