@@ -5,11 +5,10 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
-## [Unreleased] — 1.21.11 (Fabric)
+## [0.5.0-beta.2] — 1.21.11 (Fabric) — 2026-07-04
 
-> Staged for testing, **not yet released**. Found in the first live-test rounds against
-> `0.5.0-beta.1`; proven by the automated gametest suite (157/157) and pending an in-game
-> confirmation pass before they ship in a versioned build.
+> Found in the first live-test rounds against `0.5.0-beta.1`; proven by the automated gametest
+> suite (157/157) and confirmed against a real client build (`SLABBED TEST 29`) before release.
 
 ### Fixed
 - **Redstone repeaters and comparators can now be placed on a Terrain Slabs bottom slab** (this
@@ -17,7 +16,7 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
   check — buttons, pressure plates, rails, etc.). *(Live-confirmed.)*
 - **Decorative objects (candles, trapdoors, and similar) resting on a slab, fence, or other
   support no longer pop back to full height when that support is broken** — previously they had
-  no persisted height-lock at all, unlike every other object category.
+  no persisted height-lock at all, unlike every other object category. *(Live-confirmed.)*
 - **Lowered brewing stands emit their ambient smoke particles at the stand's rendered height**,
   not full block height.
 - **Stashing an item into a lowered decorated pot spawns its particle burst at the pot's rendered
@@ -25,12 +24,30 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 - **A hanging lantern under a Terrain Slabs slab no longer hangs too low** (a gap between the
   lantern and the slab). This was a regression introduced earlier in this same batch by the
   decorative-object anchor work; a lantern now stays flush under a Terrain Slabs slab, matching how
-  a hanging sign already behaved.
+  a hanging sign already behaved. *(Live-confirmed.)*
 - **A slab placed beside a lowered full block no longer has an invisible side face**
   ([#24](https://github.com/peetsamods/slabbed/issues/24)). The see-through-hole mitigation
   (`isSlabHeightStepFace`) only ever considered opaque full cubes as a subject/neighbour — a BOTTOM
   or TOP slab's own face toward a lowered neighbour was never evaluated at all, only the opposite
-  (full-block) side was. Widened to also cover slabs.
+  (full-block) side was. Widened to also cover slabs. *(Live-confirmed.)*
+
+### Security
+- **The dev-only cursor/intent recorder's `manifest.json` no longer leaks live Microsoft account
+  credentials.** It was writing an unredacted `sun.java.command`, which can contain an active
+  session's `accessToken`/`uuid`/`xuid`/`clientId`; these are now stripped before the file is
+  written. Recorder output is dev-tooling only and off by default in a normal build, but this was
+  a real leak for anyone who had it enabled.
+
+### Added
+- **`/slabdy` now reports a "cache:" line** showing the cached (last-rendered) vs freshly
+  recomputed height offset for the block you're targeting and its support, so a stale-render bug
+  and a real logic bug can be told apart at a glance.
+
+### Fixed (tooling)
+- **The `/slabdy` overlay's outline display was double-applying the height offset**, making a
+  perfectly correct block look "internally inconsistent" in its own debug readout. This was a bug
+  in the diagnostic tool itself, not in any block's actual rendered height — an earlier finding
+  during this same investigation that blamed a real dy bug has been corrected in the ledger.
 
 ### Known issue (deferred)
 - Full blocks, fences, and standing objects placed directly on top of a Terrain Slabs slab can
