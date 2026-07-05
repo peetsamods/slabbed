@@ -19,7 +19,8 @@
       "com.slabbed.test.Slabbed2612CompoundMatrixTest",
       "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest",
       "com.slabbed.test.SlabHeightStepCullGh24Test",
-      "com.slabbed.test.SlabOnSlabVerticalAnchorTest"
+      "com.slabbed.test.SlabOnSlabVerticalAnchorTest",
+      "com.slabbed.test.DecorativeObjectSupportAnchorTest"
     ]
   },
   "depends": {
