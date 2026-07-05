@@ -1350,6 +1350,28 @@ public final class SlabSupport {
         if (!a.hasProperty(SlabBlock.TYPE) || !b.hasProperty(SlabBlock.TYPE)) {
             return false;
         }
+        // L11-broader (task #25): the pass-through/candidate gate of the hasLoweredSlabLaneSupport BFS —
+        // the ONLY consumer of this private BlockState overload (both its uses, the enqueue gate at :1973
+        // and the subject-vs-cursor return gate at :1959, route through here). A Terrain-Slabs-owned slab
+        // is a self-positioned surface and is NOT a member of Slabbed's lowered-slab-lane graph at all, so
+        // it must TERMINATE the lane walk — never serve as a valid chain LINK the walk propagates THROUGH.
+        // 6a3f2859 guarded the SUBJECT slab (isAdjacentSideSlabLowered, before the BFS is entered) and
+        // 08dd9291 guarded the far-end lane OWNER (isPersistentLoweredSlabCarrierState, read by
+        // isLoweredSlabLaneOwnerForSideInheritance), but NEITHER guarded a TS slab sitting in the MIDDLE of
+        // a slab chain as a pure CONDUIT: this gate was a pure SlabType compatibility check with no
+        // namespace exclusion, so a 3-slab run (vanilla subject | TS conduit | genuine vanilla lane owner)
+        // let the lowered-lane status propagate ACROSS the TS slab from the far end to the subject (probe:
+        // subject sideInherited=true even with the TS override ON — the same double-offset "smoosh" family).
+        // Excluding either endpoint TERMINATES that link specifically (the TS slab is never enqueued as a
+        // lane member, so nothing beyond it is reachable via the TS slab) WITHOUT poisoning the whole walk:
+        // a legitimate all-vanilla parallel lane is still found. Reuse the one shared
+        // isTsExcludedFromVerticalSupport choke point (no new mechanism, the 5304e4b3/6a3f2859/08dd9291
+        // precedent); NARROWING only, keyed on the terrain_slabs/terrainslabs namespace → byte-identical in
+        // a non-TS world (both the fingerprint and every all-vanilla lane), and no consumer ever wants a
+        // TS-positioned surface treated as a Slabbed lowered-lane member.
+        if (isTsExcludedFromVerticalSupport(a) || isTsExcludedFromVerticalSupport(b)) {
+            return false;
+        }
         SlabType aType = a.getValue(SlabBlock.TYPE);
         SlabType bType = b.getValue(SlabBlock.TYPE);
         return isCompatibleLoweredSlabLane(aType, bType);
