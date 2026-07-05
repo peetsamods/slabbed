@@ -1366,6 +1366,41 @@ public final class SlabSupport {
         return SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state);
     }
 
+    /**
+     * A slab (of ANY type) resting directly on top of a lowered TOP- or DOUBLE-type slab must
+     * itself inherit -0.5 so the vertical stack stays visually continuous — the exact vertical
+     * analogue of {@link #isLoweredDoubleSlabCarrier}'s DOUBLE-only slab-below check, widened to
+     * also recognise a lowered TOP support (a lowered TOP slab is "sunk" into the block below it
+     * exactly like a lowered DOUBLE slab is, so its recessed top surface is just as valid a
+     * vertical support to inherit from).
+     *
+     * <p>Deliberately EXCLUDES a BOTTOM-type support: a BOTTOM slab's own top surface sits at the
+     * vanilla y=0.5 plane regardless of whether the BOTTOM slab itself is lowered, so a slab
+     * resting on a BOTTOM support is never visually "sunk" by that support the way it is by a
+     * TOP/DOUBLE support's recessed top surface. Mirrors the sibling 1.21.1/1.21.11 L8 port
+     * (support must be TOP or DOUBLE), matching the {@code slabOnBottomTypeSupportNeverAnchorsVertically}
+     * regression guard.
+     *
+     * <p>Recursion-safe: only reads {@link SlabAnchorAttachment#isPersistentLoweredSlabCarrier} and
+     * {@link #isAdjacentSideSlabLowered}; never calls {@link #getYOffset} (this method runs INSIDE
+     * {@code getYOffsetInner}). The support's own lowering source is either a persisted anchor or a
+     * live adjacent-side lowered slab lane, matching {@code isLoweredDoubleSlabCarrier}.
+     */
+    public static boolean isLoweredTopLikeSlabCarrier(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || state == null
+                || !(state.getBlock() instanceof SlabBlock)
+                || !state.hasProperty(SlabBlock.TYPE)
+                || (state.getValue(SlabBlock.TYPE) != SlabType.TOP
+                        && state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE)
+                || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {
+            return true;
+        }
+        return isAdjacentSideSlabLowered(world, pos, state);
+    }
+
     public static boolean isFullHeightLoweredCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         return isLoweredFullBlockCarrier(world, pos, state)
                 || isLoweredDoubleSlabCarrier(world, pos, state);
@@ -2157,7 +2192,13 @@ public final class SlabSupport {
             BlockState below = world.getBlockState(belowPos);
             Block belowBlock = below.getBlock();
             if (belowBlock instanceof SlabBlock) {
-                if (isLoweredDoubleSlabCarrier(world, belowPos, below)) {
+                // L8: a slab resting on a lowered TOP/DOUBLE slab inherits -0.5 so the vertical
+                // stack stays visually continuous. isLoweredDoubleSlabCarrier only ever matched
+                // SlabType.DOUBLE — a lowered TOP support (its own recessed top surface) was
+                // silently ignored, so the upper slab rendered flush (dy=0) and popped when the
+                // support was broken. isLoweredTopLikeSlabCarrier is the TOP/DOUBLE analogue.
+                if (isLoweredDoubleSlabCarrier(world, belowPos, below)
+                        || isLoweredTopLikeSlabCarrier(world, belowPos, below)) {
                     return -0.5;
                 }
             } else if (!isCompoundVisibleOwnerTopSlab(world, pos, state)

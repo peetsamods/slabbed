@@ -1093,7 +1093,38 @@ public final class SlabAnchorAttachment {
                 && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && (SlabSupport.isLoweredSideLaneSlabCarrier(world, pos, state)
                 || qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock(world, pos, state)
-                || qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(world, pos, state));
+                || qualifiesForPersistentLoweredBottomSlabOnAdjacentLoweredBridgeSupport(world, pos, state)
+                || qualifiesForPersistentLoweredSlabOnVerticalLoweredSlabSupport(world, pos, state));
+    }
+
+    /**
+     * L8 vertical lane: a slab of ANY type (TOP/BOTTOM/DOUBLE) resting directly on top of a lowered
+     * TOP- or DOUBLE-type slab must anchor at placement so breaking the support later cannot pop it
+     * back to flush. This is the vertical counterpart of
+     * {@link SlabSupport#isLoweredSideLaneSlabCarrier} (horizontal neighbour lowering) — the gap it
+     * closes: {@code SlabSupport.getYOffsetInner}'s slab-below branch already live-derives -0.5 for
+     * this relationship (via {@link SlabSupport#isLoweredTopLikeSlabCarrier}), but nothing previously
+     * PERSISTED it, so removing the support slab removed the only path to -0.5 (live-reported "pop
+     * upon breaking at the end").
+     *
+     * <p>Support must be TOP or DOUBLE type — a BOTTOM-type support is never a valid vertical
+     * lowering source (its own top face sits at the vanilla y=0.5 plane regardless of whether the
+     * BOTTOM slab itself is lowered), matching the regression guard that a slab resting on a
+     * BOTTOM-type support must never anchor vertically. Delegates the TOP/DOUBLE + lowering-source
+     * decision to {@link SlabSupport#isLoweredTopLikeSlabCarrier} so the persistence lane and the
+     * live-dy lane share one definition of "lowered vertical support".
+     */
+    private static boolean qualifiesForPersistentLoweredSlabOnVerticalLoweredSlabSupport(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (world == null || pos == null || !isPersistentLoweredSlabCarrierState(state)) {
+            return false;
+        }
+        BlockPos belowPos = pos.below();
+        BlockState below = world.getBlockState(belowPos);
+        return SlabSupport.isLoweredTopLikeSlabCarrier(world, belowPos, below);
     }
 
     private static boolean qualifiesForCompoundVisibleOwnerTopSlab(
