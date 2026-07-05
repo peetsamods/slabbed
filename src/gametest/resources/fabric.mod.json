@@ -5,6 +5,9 @@
   "name": "Slabbed GameTest",
   "environment": "*",
   "entrypoints": {
+    "main": [
+      "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest$TerrainSlabsRedstoneGateTestEntrypoint"
+    ],
     "fabric-gametest": [
       "com.slabbed.test.GhostLoweredCollisionProofTest",
       "com.slabbed.test.Slabbed2612LoweringContractTest",
@@ -13,7 +16,9 @@
       "com.slabbed.test.Slabbed2612RestingDyTest",
       "com.slabbed.test.Slabbed2612ConnectorSurvivalTest",
       "com.slabbed.test.Slabbed2612CollisionDepthTest",
-      "com.slabbed.test.Slabbed2612CompoundMatrixTest"
+      "com.slabbed.test.Slabbed2612CompoundMatrixTest",
+      "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest",
+      "com.slabbed.test.SlabHeightStepCullGh24Test"
     ]
   },
   "depends": {
