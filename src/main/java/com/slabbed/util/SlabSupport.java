@@ -678,6 +678,25 @@ public final class SlabSupport {
                 || !state.contains(SlabBlock.TYPE) || !state.getFluidState().isEmpty()) {
             return Double.NaN;
         }
+        // Bug A (the actual L11 lesson — a REAL, empirically-confirmed leak here). Terrain Slabs owns its
+        // own vertical offset and renders its slabs FLUSH. A hanger under (spore blossom / hanging roots /
+        // pale moss / non-HANGING lantern) or a top-half trapdoor under a TS slab must NOT follow a Slabbed
+        // -0.5 — TS already renders that slab flush, so following smooshes the object a half-block into the
+        // block. This session's L8 anchor-widening made a cantilevered TS slab a persistent lowered carrier,
+        // so the non-BOTTOM branch below (isAdjacentSideSlabLowered) now reports a TS TOP/DOUBLE support
+        // lowered and returns -0.5. MEASURED leak (guard neutralized): a spore blossom under a lowered TS
+        // DOUBLE slab read -0.5 instead of flush 0.0. (A TS BOTTOM support already returns NaN here via the
+        // isBottomSlab->isSupportingSlab->shouldSkipSlabSupport exclusion in floorTorchBottomSlabSupportDy,
+        // and a TS TOP support's leak is masked by the +0.5 top-slab hanger adjustment — but DOUBLE is
+        // unmasked and wrong.) Folded INTO this shared helper — NOT one caller — so it fixes every consumer
+        // at once: the isBeta35LoweredSlabUndersideVisibleOwnerObject hanger lane (~547/2334) AND the
+        // top-half-trapdoor lane (~2315) ([[slabbed-shared-predicate-half-fix-trap]]). Mirrors the sibling's
+        // L11 fix and ceilingHungDecorationDy's own !shouldSkipOffset guard (~line 585, why a hanging SIGN
+        // already stays flush under a TS slab). MUST precede the compound-visible/BOTTOM short-circuits.
+        // Returns 0.0 ("not a lowered Slabbed support"), the function's own not-lowered value.
+        if (CompatHooks.shouldSkipOffset(state)) {
+            return 0.0d;
+        }
         if (SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)
@@ -2400,6 +2419,20 @@ public final class SlabSupport {
         if (world == null || pos == null || state == null || !isBottomSlab(state) || !state.getFluidState().isEmpty()) {
             return Double.NaN;
         }
+        // Bug A twin (DEFENSIVE / belt-and-suspenders — verified redundant TODAY, kept for robustness).
+        // An object STANDING ON a bottom slab reads this helper as "is my support slab lowered". If that
+        // support were a Terrain-Slabs-owned bottom slab, TS renders it flush itself, so the object must
+        // NOT follow a Slabbed -0.5 (that would smoosh it a half-block into the TS slab). EMPIRICALLY,
+        // this helper is already TS-immune: its first guard requires isBottomSlab(state), and isBottomSlab
+        // -> isSupportingSlab -> returns false for any shouldSkipSlabSupport (== shouldSkipOffset) slab,
+        // so a TS state already returns NaN above and never reaches the lowered branches (measured: FTB
+        // always returns NaN for a TS slab, guards on or off). This explicit guard is kept so the "no
+        // Slabbed offset off a TS support" invariant is stated at THIS shared helper too — matching the
+        // sibling's guard-every-consumer law ([[slabbed-shared-predicate-half-fix-trap]]) and surviving
+        // any future change that loosened isBottomSlab's TS exclusion. Returns 0.0 (not-lowered value).
+        if (CompatHooks.shouldSkipOffset(state)) {
+            return 0.0d;
+        }
         if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
             return -1.0d;
@@ -2410,7 +2443,18 @@ public final class SlabSupport {
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
         if (below.getBlock() instanceof SlabBlock) {
-            if (isLoweredDoubleSlabCarrier(world, belowPos, below)) {
+            // Bug B: this bottom slab is itself lowered when it rests on a lowered TOP- OR DOUBLE-type
+            // carrier below. This was DOUBLE-only (isLoweredDoubleSlabCarrier), the exact same gap
+            // Phase 2 (L8) fixed in getYOffsetInner's own slab-below branch (~line 2128) via the new
+            // isLoweredTopLikeSlabCarrier. Empirically confirmed reachable+wrong: a floor torch on a
+            // bottom slab over a lowered TOP carrier read dy=-0.5 vs the identical DOUBLE case's -1.0
+            // (probe measured torchDy=-0.5 TOP vs -1.0 DOUBLE, both carriers rendering -0.5). Widened
+            // here to match — same recursion-safe TOP/DOUBLE predicate, so every floorTorchBottomSlab
+            // caller (torch/sign/door/trapdoor/fence-gate/full-block) now follows a lowered TOP carrier
+            // identically to a lowered DOUBLE one. isLoweredTopLikeSlabCarrier excludes BOTTOM supports,
+            // so this cannot lower off a non-sunk bottom support.
+            if (isLoweredDoubleSlabCarrier(world, belowPos, below)
+                    || isLoweredTopLikeSlabCarrier(world, belowPos, below)) {
                 return -0.5d;
             }
         } else if (!isCompoundVisibleOwnerTopSlab(world, pos, state)

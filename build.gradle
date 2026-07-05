@@ -35,7 +35,8 @@ sourceSets {
                     "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java",
                     "com/slabbed/test/RedstoneGateOnTerrainSlabsPlacementTest.java",
                     "com/slabbed/test/SlabOnSlabVerticalAnchorTest.java",
-                    "com/slabbed/test/DecorativeObjectSupportAnchorTest.java"
+                    "com/slabbed/test/DecorativeObjectSupportAnchorTest.java",
+                    "com/slabbed/test/LanternUnderTerrainSlabsHangerTest.java"
             ])
         }
     }
