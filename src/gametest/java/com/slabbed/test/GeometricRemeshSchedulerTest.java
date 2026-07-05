@@ -272,6 +272,74 @@ public final class GeometricRemeshSchedulerTest {
         helper.succeed();
     }
 
+    // ── compound-visible refresh call site: block coords MUST be converted to section coords ──────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void compoundVisibleRefreshConvertsBlockCoordsToSectionCoords(GameTestHelper helper) {
+        // The regression this pins (pre-4df516ab): SlabAnchorClientSync.scheduleCompoundVisibleRenderRefresh
+        // fed RAW BLOCK coords to ClientLevel.setSectionRangeDirty, which takes SECTION coords (no >>4).
+        // For block (100,64,100) that dirtied SECTIONS 99..101 (blocks 1584..1631) — a 27-section box
+        // ~16x too far from the anchor, so the compound-visible mesh could stay stale. The fixed call site
+        // computes its dirty box through SlabGeometricRemeshScheduler.compoundVisibleDirtySectionBox (the
+        // exact method scheduleCompoundVisibleRenderRefresh now names); asserting on that method's OWN
+        // output means a mutation reverting the call site back to raw block coords — or repointing it at a
+        // wrong conversion — turns this RED. SlabAnchorClientSync itself is @Environment(CLIENT) and cannot
+        // load in the headless server gametest, so the shared conversion deliberately lives on this
+        // un-annotated scheduler where both the call site and this test can reach it.
+        SectionBox box = SlabGeometricRemeshScheduler.compoundVisibleDirtySectionBox(100, 64, 100);
+
+        // block 100 >> 4 = section 6, block 64 >> 4 = section 4. Correct box is that section ±1.
+        int sx = SectionPos.blockToSectionCoord(100); // 6
+        int sy = SectionPos.blockToSectionCoord(64);  // 4
+        int sz = SectionPos.blockToSectionCoord(100); // 6
+        assertBox(helper, box, sx - 1, sy - 1, sz - 1, sx + 1, sy + 1, sz + 1,
+                "compound-visible refresh at block (100,64,100)");
+
+        // Explicit sanity floor: this must be the section box (5..7 / 3..5 / 5..7), NOT the buggy raw-block
+        // box (99..101 / 63..65 / 99..101). Assert the literal expected corner so the arithmetic is pinned
+        // and the two ranges are provably disjoint (correct maxX=7 < buggy minX=99).
+        if (box.minX() != 5 || box.minY() != 3 || box.minZ() != 5
+                || box.maxX() != 7 || box.maxY() != 5 || box.maxZ() != 7) {
+            throw helper.assertionException(
+                    "compound-visible refresh at block (100,64,100) must dirty SECTION box [5,3,5 .. 7,5,7], "
+                            + "not the raw-BLOCK box [99,63,99 .. 101,65,101]; got " + box);
+        }
+        if (box.maxX() >= 99) {
+            throw helper.assertionException(
+                    "compound-visible refresh dirtied a section >= 99 for block x=100 — block coords were fed "
+                            + "to the SECTION-coordinate setSectionRangeDirty API (the pre-4df516ab bug); got " + box);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void compoundVisibleRefreshBoxMatchesTheSharedDirtySectionBoxHelper(GameTestHelper helper) {
+        // Single-authority invariant: the compound-visible refresh call site and the geometric-remesh
+        // mixin must both derive their dirty region from the SAME SlabGeometricRemeshScheduler.dirtySectionBox
+        // conversion — so the dirty-region shape/radius can never silently diverge between the two re-mesh
+        // paths. Swept across positive, negative and section-boundary block coordinates.
+        int[][] positions = {
+                {100, 64, 100},
+                {0, 0, 0},
+                {15, 15, 15},     // last block of section 0 on every axis
+                {16, 16, 16},     // first block of section 1
+                {-1, -1, -1},     // floor-division edge: section -1, not 0
+                {-16, -33, -17},
+                {2048, 200, -2048},
+        };
+        for (int[] p : positions) {
+            SectionBox callSite = SlabGeometricRemeshScheduler.compoundVisibleDirtySectionBox(p[0], p[1], p[2]);
+            SectionBox shared = SlabGeometricRemeshScheduler.dirtySectionBox(p[0], p[1], p[2]);
+            if (!callSite.equals(shared)) {
+                throw helper.assertionException(
+                        "compound-visible refresh box " + callSite + " at block (" + p[0] + "," + p[1] + ","
+                                + p[2] + ") diverged from the shared dirtySectionBox " + shared
+                                + " — both re-mesh paths must use the one canonical block->section conversion");
+            }
+        }
+        helper.succeed();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void schedulingDecisionIsPureAndStableUnderRepetition(GameTestHelper helper) {
         // Structural proof of the near-zero-cost claim for the irrelevant-change fast path: the decision is

@@ -208,12 +208,15 @@ public final class SlabAnchorClientSync {
             BlockState state,
             AttachmentType<LongOpenHashSet> attachmentType
     ) {
-        // setSectionRangeDirty takes SECTION coords, not block coords (ClientLevel forwards them
-        // straight to LevelExtractor.setSectionDirty with no >>4 conversion) — convert via the same
-        // helper SlabGeometricRemeshScheduler.dirtySectionBox uses, or this dirties a 27-section box
-        // far from pos instead of the intended +/-1-section neighbourhood around it.
+        // setSectionRangeDirty takes SECTION coords, not block coords (ClientLevel forwards them straight
+        // to LevelExtractor.setSectionDirty with no >>4 conversion — confirmed via bytecode). Feeding raw
+        // block coords (the pre-4df516ab bug) dirtied a 27-section box ~16x too far from pos — e.g. block
+        // x=100 dirtied SECTIONS 99..101 (blocks 1584..1631), nowhere near the actual anchor. Route through
+        // the one canonical block->section conversion SlabGeometricRemeshScheduler.compoundVisibleDirtySectionBox,
+        // shared with the geometric-remesh mixin, so both re-mesh paths agree on the dirty-region shape and
+        // the conversion is pinned by GeometricRemeshSchedulerTest.
         SlabGeometricRemeshScheduler.SectionBox box =
-                SlabGeometricRemeshScheduler.dirtySectionBox(pos.getX(), pos.getY(), pos.getZ());
+                SlabGeometricRemeshScheduler.compoundVisibleDirtySectionBox(pos.getX(), pos.getY(), pos.getZ());
         mc.level.setSectionRangeDirty(
                 box.minX(), box.minY(), box.minZ(),
                 box.maxX(), box.maxY(), box.maxZ());
