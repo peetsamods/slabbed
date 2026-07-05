@@ -1514,8 +1514,17 @@ public final class SlabSupport {
 
         BlockPos belowPos = pos.below();
         BlockState below = world.getBlockState(belowPos);
+        // L8/L11 widening (mirrors getYOffsetInner :2295, beta35FenceWallVisibleSupportDy :548, and
+        // floorTorchBottomSlabSupportDy :2639): a bottom slab is "backed by a lowered carrier" when the
+        // slab directly below it is a lowered DOUBLE *or* TOP-type carrier. isLoweredDoubleSlabCarrier
+        // matched SlabType.DOUBLE only — a lowered TOP-type support (its own recessed top surface, just
+        // as valid a vertical support) was silently ignored (probe PROBE-BSLCB: carrierTopLike=true /
+        // carrierIsDouble=false with the subject's own getYOffset already -0.5 still yielded
+        // isBottomSlabLoweredByCarrierBelow=false; should be true). Both carrier predicates share the
+        // isTsExcludedFromVerticalSupport guard, so this widening cannot leak a TS-owned support.
         boolean backedByLoweredCarrier = below.getBlock() instanceof SlabBlock
-                ? isLoweredDoubleSlabCarrier(world, belowPos, below)
+                ? (isLoweredDoubleSlabCarrier(world, belowPos, below)
+                        || isLoweredTopLikeSlabCarrier(world, belowPos, below))
                 : hasLoweredCarrierBelow(world, pos);
         return backedByLoweredCarrier && getYOffset(world, pos, state) == -0.5d;
     }

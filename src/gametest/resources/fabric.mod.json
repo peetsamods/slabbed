@@ -37,7 +37,8 @@
       "com.slabbed.test.SlabdyRowFormatterFieldsTest",
       "com.slabbed.client.BetaNoticeSessionGateTest",
       "com.slabbed.client.BetaNoticeDismissedWorldsTest",
-      "com.slabbed.client.BetaNoticeDismissFeedbackTest"
+      "com.slabbed.client.BetaNoticeDismissFeedbackTest",
+      "com.slabbed.test.BottomSlabLoweredByCarrierBelowTest"
     ]
   },
   "depends": {
