@@ -22,7 +22,8 @@
       "com.slabbed.test.Slabbed1211DyFingerprintTest",
       "com.slabbed.test.Slabbed1211StandardChecklistHeadlessTest",
       "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest",
-      "com.slabbed.test.SlabOnSlabVerticalAnchorTest"
+      "com.slabbed.test.SlabOnSlabVerticalAnchorTest",
+      "com.slabbed.test.DecorativeObjectSupportAnchorTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",

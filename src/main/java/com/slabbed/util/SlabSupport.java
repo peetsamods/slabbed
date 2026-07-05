@@ -460,19 +460,83 @@ public final class SlabSupport {
         return "pale_hanging_moss".equals(path) || "pale_hanging_moss_tip".equals(path);
     }
 
+    /**
+     * A decorative hanger that attaches to the block ABOVE it and whose whole design is to keep
+     * DYNAMICALLY FOLLOWING that support down (lantern / soul lantern / spore blossom / hanging
+     * roots / pale hanging moss). NOT chains — chains keep extending to reach their support rather
+     * than lowering, so they are deliberately absent.
+     *
+     * <p>Extracted so the underside-owner visibility lanes
+     * ({@link #isBeta35LoweredSlabUndersideVisibleOwnerObject} /
+     * {@link #isBeta35LoweredFullBlockUndersideVisibleOwnerObject}) and the placement-time
+     * height-lock exclusion (L10:
+     * {@code SlabAnchorAttachment.freezeLoweredOnPlace}) share ONE definition of the must-follow
+     * set. Freezing one of these at a placement anchor is wrong: the {@link #getYOffsetInner}
+     * anchor branch (which runs BEFORE the underside-owner branches) would then pin it to its
+     * placement dy, so if its support's own dy later changes it would stop following (a stale
+     * gap) — the L10 latent divergence this branch had that the 1.21.11 sibling does not.
+     */
+    public static boolean isLoweredUndersideHangerOwner(BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return state.isOf(Blocks.LANTERN)
+                || state.isOf(Blocks.SOUL_LANTERN)
+                || block instanceof SporeBlossomBlock
+                || block instanceof HangingRootsBlock
+                || isPaleHangingMossBlock(state);
+    }
+
+    /**
+     * L10 must-follow set: a decoration whose dy is a pure function of the support ABOVE it and
+     * which must keep DYNAMICALLY FOLLOWING that support — never be frozen at a placement-time
+     * anchor. This is the exclusion for {@code SlabAnchorAttachment.freezeLoweredOnPlace}'s
+     * unconditional lowered-anchor path.
+     *
+     * <p>Members: the underside-hanger set ({@link #isLoweredUndersideHangerOwner}: lantern / soul
+     * lantern / spore blossom / hanging roots / pale hanging moss), plus Y-axis chains, hanging
+     * signs, and anything carrying the vanilla {@code HANGING=true} property. Precisely NOT keyed
+     * on {@link #isCeilingAttached}, which blanket-matches every {@code ButtonBlock} (and top-half
+     * trapdoors, bells, levers) — a FLOOR button / BOTTOM trapdoor genuinely rests on the support
+     * BELOW it and DOES want its placement anchor (verified: those already anchor-and-never-pop on
+     * this branch), so excluding them would reintroduce L10's pop for exactly those subjects.
+     *
+     * <p>WHY this matters on this branch specifically: {@code getYOffsetInner}'s anchor branch
+     * (non-slab + {@code isAnchored}) runs BEFORE the two underside-owner branches, so a frozen
+     * anchor on one of these would pin it to its placement dy and the underside-owner follow lane
+     * would never be reached — the block would stop tracking its support (a stale gap when the
+     * support's own dy later changes). The 1.21.11 sibling never hits this because its decorative
+     * anchor is a gated {@code addAnchor} lane that already excludes these; this branch's
+     * {@code freezeLoweredOnPlace} anchors any lowered placement unchecked, so the exclusion must
+     * live here instead.
+     */
+    public static boolean isMustFollowCeilingDecoration(BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        if (isLoweredUndersideHangerOwner(state)) {
+            return true;
+        }
+        Block block = state.getBlock();
+        if (block instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y) {
+            return true;
+        }
+        if (block instanceof HangingSignBlock || block instanceof WallHangingSignBlock) {
+            return true;
+        }
+        return state.contains(Properties.HANGING) && state.get(Properties.HANGING);
+    }
+
     private static boolean isBeta35LoweredSlabUndersideVisibleOwnerObject(
             BlockView world, BlockPos pos, BlockState state
     ) {
         if (world == null || pos == null || state == null || state.isAir() || !state.getFluidState().isEmpty()) {
             return false;
         }
-        Block block = state.getBlock();
-        boolean supportedCeilingObject = state.isOf(Blocks.LANTERN)
-                || state.isOf(Blocks.SOUL_LANTERN)
-                || block instanceof SporeBlossomBlock
-                || block instanceof HangingRootsBlock
-                || isPaleHangingMossBlock(state);
-        if (!supportedCeilingObject) {
+        if (!isLoweredUndersideHangerOwner(state)) {
             return false;
         }
         BlockPos supportPos = pos.up();
@@ -499,13 +563,7 @@ public final class SlabSupport {
         if (world == null || pos == null || state == null || state.isAir() || !state.getFluidState().isEmpty()) {
             return false;
         }
-        Block block = state.getBlock();
-        boolean supportedCeilingObject = state.isOf(Blocks.LANTERN)
-                || state.isOf(Blocks.SOUL_LANTERN)
-                || block instanceof SporeBlossomBlock
-                || block instanceof HangingRootsBlock
-                || isPaleHangingMossBlock(state);
-        if (!supportedCeilingObject) {
+        if (!isLoweredUndersideHangerOwner(state)) {
             return false;
         }
         BlockPos supportPos = pos.up();
