@@ -119,6 +119,8 @@ sourceSets {
             include("com/slabbed/test/Slabbed2612ConnectorSurvivalTest.java")
             include("com/slabbed/test/Slabbed2612CollisionDepthTest.java")
             include("com/slabbed/test/Slabbed2612CompoundMatrixTest.java")
+            include("com/slabbed/test/RedstoneGateOnTerrainSlabsPlacementTest.java")
+            include("com/slabbed/test/SlabHeightStepCullGh24Test.java")
         }
     }
 }
