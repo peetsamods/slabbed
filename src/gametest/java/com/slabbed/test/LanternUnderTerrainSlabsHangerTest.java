@@ -64,8 +64,25 @@ public final class LanternUnderTerrainSlabsHangerTest {
         }
     }
 
+    // Local z-offset used by every loweredCarrier() call in this file. Each @GameTest method gets its
+    // OWN independently-positioned "empty" structure instance (confirmed 8x8x8 -- see empty.snbt), so
+    // methods never need distinct z-lanes to avoid colliding with EACH OTHER. The previous per-call
+    // zOff values (12/24/36/48/60/72/84) were local coordinates already unconditionally outside any
+    // single method's own 8x8x8 structure bounds -- regardless of the .east() hop below -- so this
+    // helper intermittently read whatever a DIFFERENT test's structure happened to occupy at that
+    // shared absolute world position, purely as a function of batch/repartition ordering (the same
+    // flake class fixed in DecorativeObjectSupportAnchorTest, commit 0d4f6ce4). A single small,
+    // in-bounds constant replaces all of them.
+    private static final int LOWERED_CARRIER_LOCAL_Z = 3;
+
     // Places an anchored dirt lowering a same-level cantilevered slab of `carrierType` via horizontal
     // side-adjacency, and returns that carrier's pos. `carrierBlock` chooses vanilla vs the TS stub.
+    // The horizontal dirt->carrier adjacency itself is retained deliberately: it is the actual
+    // production lane under test (isLoweredSideLaneSlabCarrier / isAdjacentSideSlabLowered), the only
+    // path that currently persists a TOP/DOUBLE slab as a lowered carrier -- there is no purely
+    // vertical route to that persistence in production code today. What made this fragile was never
+    // the .east() hop itself (a single in-bounds step is fine, as proven safe elsewhere in this suite,
+    // e.g. SlabOnSlabVerticalAnchorTest), it was pairing it with an out-of-bounds zOff.
     private static BlockPos loweredCarrier(ServerWorld w, TestContext ctx, int zOff, Block carrierBlock, SlabType carrierType) {
         BlockPos anchorBottomSlab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, zOff);
         BlockPos dirt = anchorBottomSlab.up();
@@ -90,7 +107,7 @@ public final class LanternUnderTerrainSlabsHangerTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void sporeBlossomUnderTerrainSlabsDoubleSlabStaysFlush(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos tsCarrier = loweredCarrier(w, ctx, 12, TEST_TS_SLAB, SlabType.DOUBLE);
+        BlockPos tsCarrier = loweredCarrier(w, ctx, LOWERED_CARRIER_LOCAL_Z, TEST_TS_SLAB, SlabType.DOUBLE);
         double tsDy = SlabSupport.getYOffset(w, tsCarrier, w.getBlockState(tsCarrier));
         ctx.assertTrue(Math.abs(tsDy) <= EPS,
                 "setup: the TS DOUBLE slab must render FLUSH (0.0) — TS owns its offset; got " + tsDy);
@@ -114,7 +131,7 @@ public final class LanternUnderTerrainSlabsHangerTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void sporeBlossomUnderLoweredVanillaDoubleSlabStillFollows(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos carrier = loweredCarrier(w, ctx, 24, Blocks.BIRCH_SLAB, SlabType.DOUBLE);
+        BlockPos carrier = loweredCarrier(w, ctx, LOWERED_CARRIER_LOCAL_Z, Blocks.BIRCH_SLAB, SlabType.DOUBLE);
         double carrierDy = SlabSupport.getYOffset(w, carrier, w.getBlockState(carrier));
         ctx.assertTrue(Math.abs(carrierDy + 0.5) <= EPS,
                 "setup: the vanilla DOUBLE carrier must itself render -0.5 (Slabbed lowers it, unlike TS); got " + carrierDy);
@@ -134,7 +151,7 @@ public final class LanternUnderTerrainSlabsHangerTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void hangingLanternUnderTerrainSlabsBottomSlabStaysFlush(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos tsCarrier = loweredCarrier(w, ctx, 36, TEST_TS_SLAB, SlabType.BOTTOM);
+        BlockPos tsCarrier = loweredCarrier(w, ctx, LOWERED_CARRIER_LOCAL_Z, TEST_TS_SLAB, SlabType.BOTTOM);
         ctx.assertTrue(SlabAnchorAttachment.isPersistentLoweredSlabCarrier(w, tsCarrier, w.getBlockState(tsCarrier)),
                 "setup: TS slab must anchor (L8 widening) or this proves nothing");
 
@@ -153,7 +170,7 @@ public final class LanternUnderTerrainSlabsHangerTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void topTrapdoorUnderTerrainSlabsSlabStaysFlush(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos tsCarrier = loweredCarrier(w, ctx, 48, TEST_TS_SLAB, SlabType.BOTTOM);
+        BlockPos tsCarrier = loweredCarrier(w, ctx, LOWERED_CARRIER_LOCAL_Z, TEST_TS_SLAB, SlabType.BOTTOM);
         BlockPos trapdoorPos = tsCarrier.down();
         w.setBlockState(trapdoorPos,
                 Blocks.OAK_TRAPDOOR.getDefaultState().with(Properties.BLOCK_HALF, BlockHalf.TOP), Block.NOTIFY_LISTENERS);
@@ -171,7 +188,7 @@ public final class LanternUnderTerrainSlabsHangerTest {
     // without the widening (measured -0.5).
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void floorTorchOnBottomSlabOverLoweredTopCarrierFollowsToMinusOne(TestContext ctx) {
-        double torchDy = floorTorchDyOverLoweredCarrier(ctx, SlabType.TOP, 60);
+        double torchDy = floorTorchDyOverLoweredCarrier(ctx, SlabType.TOP, LOWERED_CARRIER_LOCAL_Z);
         ctx.assertTrue(Math.abs(torchDy + 1.0) <= EPS,
                 "Bug B: a floor torch on a bottom slab resting on a lowered TOP carrier must follow to -1.0 "
                         + "(matching the DOUBLE case); got " + torchDy);
@@ -181,7 +198,7 @@ public final class LanternUnderTerrainSlabsHangerTest {
     // CONTROL (Bug B): the already-correct DOUBLE case — same geometry, DOUBLE carrier, must be -1.0.
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void floorTorchOnBottomSlabOverLoweredDoubleCarrierFollowsToMinusOne(TestContext ctx) {
-        double torchDy = floorTorchDyOverLoweredCarrier(ctx, SlabType.DOUBLE, 72);
+        double torchDy = floorTorchDyOverLoweredCarrier(ctx, SlabType.DOUBLE, LOWERED_CARRIER_LOCAL_Z);
         ctx.assertTrue(Math.abs(torchDy + 1.0) <= EPS,
                 "control: a floor torch on a bottom slab resting on a lowered DOUBLE carrier follows to -1.0; got "
                         + torchDy);
@@ -194,7 +211,9 @@ public final class LanternUnderTerrainSlabsHangerTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void floorTorchOnBottomSlabOverPlainTopSlabIsNotDoubleLowered(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos plainTopSlab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 84);
+        // In-bounds local coordinate (see LOWERED_CARRIER_LOCAL_Z doc comment above): this method has
+        // its own independent structure instance, so it does not need to avoid the other methods' lanes.
+        BlockPos plainTopSlab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, LOWERED_CARRIER_LOCAL_Z);
         BlockPos bottomSlabOnTop = plainTopSlab.up();
         BlockPos torch = bottomSlabOnTop.up();
 

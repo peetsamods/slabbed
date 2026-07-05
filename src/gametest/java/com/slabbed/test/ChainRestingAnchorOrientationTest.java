@@ -52,6 +52,25 @@ public final class ChainRestingAnchorOrientationTest {
         return Blocks.CHAIN.getDefaultState().with(Properties.AXIS, Direction.Axis.Y);
     }
 
+    // Builds a lowered SOLID support that has AIR beneath it (so a decoration can hang from its
+    // underside), whose -0.5 dy is a DETERMINISTIC anchor lookup — not a cantilever side-walk. A
+    // support is placed on a bottom slab and anchored, then the slab is pulled: the never-pop anchor
+    // holds the support at -0.5 with open air below. This is isolation-immune (no horizontal
+    // adjacency walk that could read across the 8x8x8 gametest structure bound into a neighbouring
+    // test — the same flake class fixed in DecorativeObjectSupportAnchorTest via
+    // buildAnchoredLoweredSupportWithAirBelow, commit 0d4f6ce4). Returns the support pos.
+    private static BlockPos buildAnchoredLoweredSupportWithAirBelow(ServerWorld w, BlockPos slabPos) {
+        BlockPos supportPos = slabPos.up();
+        w.setBlockState(slabPos, Blocks.SMOOTH_STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        w.setBlockState(supportPos, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, supportPos, w.getBlockState(supportPos));
+        placeAsIfOnPlaced(w, supportPos);
+        // Pull the slab: the never-pop anchor holds the support lowered, leaving air below for the deco.
+        w.setBlockState(slabPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        return supportPos;
+    }
+
     // ── THE FIX: a Y-chain RESTING on a lowered bottom slab must anchor and never pop ────────────────
     // Vanilla chains have no support requirement (ChainBlock has no canPlaceAt check), so breaking the
     // slab below leaves the chain floating in place — the perfect never-pop probe: its dy must stay
@@ -183,16 +202,13 @@ public final class ChainRestingAnchorOrientationTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void hangingLanternRemainsMustFollowAndUnfrozen(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 19);
-        BlockPos dirt = slabPos.up();
-        BlockPos support = dirt.east();          // cantilevered stone beside anchored dirt -> lowered -0.5
-        BlockPos lanternPos = support.down();    // lantern hangs from the support's underside
-        w.setBlockState(slabPos, Blocks.SMOOTH_STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
-                Block.NOTIFY_LISTENERS);
-        w.setBlockState(dirt, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
-        SlabAnchorAttachment.addAnchor(w, dirt, w.getBlockState(dirt));
-        w.setBlockState(support, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
-        placeAsIfOnPlaced(w, support);
+        // Deterministically-anchored lowered support with air below (isolation-immune — see
+        // buildAnchoredLoweredSupportWithAirBelow; the earlier cantilevered dirt.east() form at local
+        // z=19 was already outside the "empty" template's 8x8x8 structure bounds regardless of the
+        // .east() hop, so it could intermittently read a neighbouring test's blocks under batch
+        // repartitioning).
+        BlockPos support = buildAnchoredLoweredSupportWithAirBelow(w, ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 4, 3));
+        BlockPos lanternPos = support.down();    // lantern hangs from the support's underside (air below the support)
 
         w.setBlockState(lanternPos, Blocks.LANTERN.getDefaultState().with(Properties.HANGING, true),
                 Block.NOTIFY_LISTENERS);
