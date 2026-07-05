@@ -40,14 +40,14 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * and also falls through to {@code adjacentLoweredSideMagnitude} (the full-block/slab source lane)
  * on every BFS cursor. Both routes terminate FLUSH at a Terrain-Slabs-owned block already:
  * {@code slabColumnYOffset} returns {@code 0.0} the moment the column walk meets a block for which
- * {@code CompatHooks.shouldSkipSlabSupport} is true (the same choke point {@code hasSlabInColumn}
- * uses), and {@code adjacentLoweredSideMagnitude} routes through {@code isAdjacentSideSlabLowered} /
- * {@code loweredSlabMagnitude}, the exact two choke points {@link CantileverBfsTerrainSlabsGuardTest}
- * already proves are TS-guarded. So a chest lowered ONLY by a TS-owned slab column is not a
- * "genuinely lowered" source by either route, and a hopper cantilevered beside it must stay flush.
- * {@code SlabAnchorAttachment.isAnchored} itself carries no TS check at all — it is a persisted
- * placement-decision marker, correctly TS-independent (an anchored neighbour SHOULD still be read as
- * lowered even with TS active, per the ba80d735 commit message).
+ * {@code CompatHooks.shouldSkipSlabSupport} is true, and {@code adjacentLoweredSideMagnitude} routes
+ * through {@code isAdjacentSideSlabLowered} / {@code loweredSlabMagnitude}. So a chest lowered ONLY by
+ * a TS-owned slab column is not a "genuinely lowered" source by either route, and a hopper
+ * cantilevered beside it must stay flush. {@code SlabAnchorAttachment.isAnchored} itself carries no TS
+ * check at all — it is a persisted placement-decision marker, correctly TS-independent (an anchored
+ * neighbour SHOULD still be read as lowered even with TS active, per the ba80d735 commit message).
+ * (The precise guard-count/identity claim for each route is corrected below — read that note, not
+ * just this paragraph, before relying on "two choke points" or "three choke points" as a count.)
  *
  * <p>Each scene below builds a chest that is lowered ONLY via the live TS-owned column (never
  * anchored), so the neighbour-recognition test exercises exactly the {@code slabColumnYOffset} route
@@ -57,15 +57,58 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * namespace-scoped: a hopper beside a chest lowered by a genuine VANILLA column must still inherit
  * {@code -0.5} while the same override is active.
  *
- * <p><b>Mutation-proof note (traced during this class's own RED-first verification).</b> The
- * slab-carrier scenes below are protected by THREE independent choke points, not two: the two
- * {@code isTsExcludedFromVerticalSupport} reads already documented on
- * {@link CantileverBfsTerrainSlabsGuardTest} ({@code loweredSlabMagnitude} and
- * {@code isAdjacentSideSlabLowered}) PLUS the pass-through/conduit guard inside
- * {@code hasLoweredSlabLaneSupport}'s compatibility check (the same one
- * {@link SlabLaneConduitTerrainSlabsGuardTest} pins). All three had to be disabled simultaneously
- * before {@code hopperBesideTerrainSlabsCarrierSlabStaysFlush} went RED — disabling any one or two
- * alone left the scene GREEN via a still-active redundant guard.
+ * <p><b>Mutation-proof note — CORRECTED 2026-07-05 by a fresh empirical re-run (see HANDOFF.md /
+ * SLABBED_SPINE.md for the full mutation table; this replaces the original "three independent choke
+ * points" claim, which underspecified the picture in both directions).</b> A campaign sweeper
+ * reviewing this class's original commit ({@code 6ca3f050}) traced a FOURTH candidate choke point by
+ * hand — {@code SlabAnchorAttachment.isPersistentLoweredSlabCarrier}, gated by its own
+ * {@code isPersistentLoweredSlabCarrierState}'s {@code !CompatHooks.shouldSkipSlabSupport(state)}
+ * clause (the {@code 08dd9291} fix) — and asked whether the original "disable all 3 named guards"
+ * mutation-testing narrative still holds given that 4th guard. A fresh, from-scratch mutation sweep
+ * (every single guard alone, then every pair, then the original trio, then all four) measured the
+ * following for {@code hopperBesideTerrainSlabsCarrierSlabStaysFlush} (the slab-carrier route):
+ * <ul>
+ *   <li>The original claim IS reproducible as stated: disabling exactly the three named guards —
+ *       {@code loweredSlabMagnitude}'s check, {@code isAdjacentSideSlabLowered}'s check, and the
+ *       {@code isCompatibleLoweredSlabLane} conduit guard inside {@code hasLoweredSlabLaneSupport} —
+ *       together (and no smaller subset of those three) reliably produces RED. The 4th guard
+ *       ({@code isPersistentLoweredSlabCarrierState}) does NOT need to be additionally disabled for
+ *       this to break; adding it on top of the trio changes nothing for this scene (it only adds its
+ *       own independent failures in {@code TerrainSlabsOwnSlabDyGuardTest}, a different scenario).</li>
+ *   <li><b>However, the trio is not the ONLY minimal breaking combination.</b> {@code loweredSlabMagnitude}'s
+ *       check ALONE, plus the 4th guard ALONE, together ALSO reliably produce RED — a genuinely
+ *       smaller (2-guard) break than the documented 3-guard one. This works because
+ *       {@code loweredSlabMagnitude}'s own check is the FIRST thing evaluated for a slab neighbour
+ *       (its bypass alone is a no-op, since two alternate reads it falls through to —
+ *       {@code isAdjacentSideSlabLowered} and {@code isPersistentLoweredBottomSlabCarrierNonRecursive}
+ *       — are each still separately gated by the SAME {@code isPersistentLoweredSlabCarrierState}
+ *       check as the 4th guard); disabling that shared state-gate directly removes both fallbacks at
+ *       once, without needing the conduit guard at all.</li>
+ *   <li>Neither guard alone, nor any other 2-guard pairing not containing
+ *       {@code loweredSlabMagnitude}'s own check, breaks this scene (measured: {G1,G2}, {G1,G3},
+ *       {G2,G3}, {G2,G4}, {G3,G4} all stay GREEN for this specific test).</li>
+ * </ul>
+ * <b>Bottom line: this route is protected by 4 distinct guard call sites (not 3, not merely "some
+ * redundant subset of 4"), but two of them ({@code isAdjacentSideSlabLowered}'s own check and
+ * {@code isPersistentLoweredSlabCarrierState}, reached via {@code isPersistentLoweredSlabCarrier}) key
+ * on state that is reachable through more than one path, so more than one minimal disabling
+ * combination exists — {loweredSlabMagnitude, isAdjacentSideSlabLowered, conduit-guard} and
+ * {loweredSlabMagnitude, isPersistentLoweredSlabCarrierState} are BOTH independently sufficient, and
+ * no proper subset of either is.</b> The block-entity-neighbour route
+ * ({@code hopperBesideChestOnTerrainSlabsColumnStaysFlush}) is a separate, disjoint guard pair not
+ * touched by any of the above: {@code hasSlabInColumn} and {@code slabColumnYOffset}'s OWN
+ * {@code shouldSkipSlabSupport} checks (not {@code isTsExcludedFromVerticalSupport}, though it is the
+ * same underlying predicate) must BOTH be disabled together — {@code hasSlabInColumn} alone is
+ * insufficient because {@code shouldOffset} still resolves {@code true} via its {@code isBottomSlab}
+ * fallback (which has no TS guard at all and matches a TS slab, since it extends {@code SlabBlock});
+ * {@code slabColumnYOffset} alone is unreachable to matter because {@code shouldOffset}'s own
+ * short-circuit (via the SAME unguarded {@code hasSlabInColumn} fallback) never lets execution reach
+ * it while {@code hasSlabInColumn} is intact. This pair has no bearing from the slab-carrier route's
+ * 4 guards at all (measured: neither guard here shares a choke point with {@code loweredSlabMagnitude}
+ * / {@code isAdjacentSideSlabLowered} / the conduit guard / {@code isPersistentLoweredSlabCarrierState}
+ * for this exact scene — the chest sits directly on the slab, never reaching
+ * {@code isAdjacentSideSlabLowered}'s carrier-marker branch because {@code isBottomSlab} resolves
+ * first in both {@code hasSlabInColumn} and {@code slabColumnYOffset}).
  */
 public final class BlockEntityCantileverTerrainSlabsGuardTest {
 
