@@ -1371,8 +1371,13 @@ public final class SlabSupport {
      * block directly above a lowered one) are a documented follow-up; see
      * {@code docs/CULL-WINDOW-FIX-DESIGN.md}. Disabled by {@code -Dslabbed.disableStepCull}.
      *
-     * <p>No render wiring calls this yet — it is pure, recursion-guarded ({@link #getYOffset})
-     * logic, safe to call from the chunk-mesh BlockView context.
+     * <p>LIVE-WIRED (doc corrected 2026-07-05; the prior "no render wiring calls this yet" note was
+     * stale): {@code OffsetBlockStateModel.emitBlockQuads} calls this from its per-quad
+     * {@code pushTransform} to clear {@code cullFace} on step faces. It is pure, recursion-guarded
+     * ({@link #getYOffset}) logic, safe to call from the chunk-mesh BlockView context. There is no
+     * type gate on subject or neighbour — a slab subject is handled identically to a full block
+     * (both route through {@link #getYOffset}), so the 1.21.11 GH#24/L12 slab-subject cull bug (whose
+     * predicate carried an {@code isOpaqueFullCube()} gate) cannot occur here.
      */
     public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
         if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null

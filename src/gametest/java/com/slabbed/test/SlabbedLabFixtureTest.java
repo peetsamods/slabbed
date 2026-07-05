@@ -629,8 +629,10 @@ public final class SlabbedLabFixtureTest {
 
     /**
      * Truth table for {@link SlabSupport#isSlabHeightStepFace} — the renderer-agnostic predicate
-     * a future cull mixin will use to force-draw the see-through "ghost window" seam (see
-     * docs/CULL-WINDOW-FIX-DESIGN.md). Pure logic; no render wiring calls it yet.
+     * that force-draws the see-through "ghost window" seam (see docs/CULL-WINDOW-FIX-DESIGN.md).
+     * NOTE (2026-07-05): this predicate is LIVE-WIRED into the model path — OffsetBlockStateModel's
+     * per-quad pushTransform clears cullFace on step faces via it; the older "no render wiring calls
+     * it yet" note here was stale. See SlabHeightStepCullGh24Test for the slab-subject (GH#24) case.
      *
      * <ul>
      *   <li>lowered (stone-on-slab, dy=-0.5) | flat (stone-on-stone, dy=0), horizontal seam → TRUE (both directions)</li>

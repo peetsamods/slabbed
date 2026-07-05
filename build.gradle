@@ -37,7 +37,8 @@ sourceSets {
                     "com/slabbed/test/SlabOnSlabVerticalAnchorTest.java",
                     "com/slabbed/test/DecorativeObjectSupportAnchorTest.java",
                     "com/slabbed/test/LanternUnderTerrainSlabsHangerTest.java",
-                    "com/slabbed/test/ChainRestingAnchorOrientationTest.java"
+                    "com/slabbed/test/ChainRestingAnchorOrientationTest.java",
+                    "com/slabbed/test/SlabHeightStepCullGh24Test.java"
             ])
         }
     }
