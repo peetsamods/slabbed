@@ -12,7 +12,8 @@
       "com.slabbed.test.FenceWallVisibleSupportDyTest$TerrainSlabsFenceWallSupportGuardTestEntrypoint",
       "com.slabbed.test.CantileverBfsTerrainSlabsGuardTest$TerrainSlabsCantileverBfsGuardTestEntrypoint",
       "com.slabbed.test.TerrainSlabsOwnSlabDyGuardTest$TerrainSlabsOwnSlabDyGuardTestEntrypoint",
-      "com.slabbed.test.SlabLaneConduitTerrainSlabsGuardTest$TerrainSlabsSlabLaneConduitGuardTestEntrypoint"
+      "com.slabbed.test.SlabLaneConduitTerrainSlabsGuardTest$TerrainSlabsSlabLaneConduitGuardTestEntrypoint",
+      "com.slabbed.test.BlockEntityCantileverTerrainSlabsGuardTest$TerrainSlabsBlockEntityCantileverGuardTestEntrypoint"
     ],
     "fabric-gametest": [
       "com.slabbed.test.GhostLoweredCollisionProofTest",
@@ -41,6 +42,7 @@
       "com.slabbed.test.BottomSlabLoweredByCarrierBelowTest",
       "com.slabbed.test.BlockEntityNeverPopTest",
       "com.slabbed.test.BlockEntityCantileverTest",
+      "com.slabbed.test.BlockEntityCantileverTerrainSlabsGuardTest",
       "com.slabbed.test.LiveCursorIntentRecorderCaptureGameTest",
       "com.slabbed.test.RecorderManifestRedactionTest"
     ],
