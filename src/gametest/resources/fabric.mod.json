@@ -9,7 +9,8 @@
   ],
   "entrypoints": {
     "main": [
-      "com.slabbed.test.Slabbed1211StandardChecklistHeadlessTest$TerrainSlabsCompatTestEntrypoint"
+      "com.slabbed.test.Slabbed1211StandardChecklistHeadlessTest$TerrainSlabsCompatTestEntrypoint",
+      "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest$TerrainSlabsRedstoneGateTestEntrypoint"
     ],
     "client": [
       "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint"
@@ -19,7 +20,8 @@
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest",
       "com.slabbed.test.Slabbed1211DyFingerprintTest",
-      "com.slabbed.test.Slabbed1211StandardChecklistHeadlessTest"
+      "com.slabbed.test.Slabbed1211StandardChecklistHeadlessTest",
+      "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",
