@@ -54,10 +54,27 @@ public final class BetaNoticeClient {
     private static int runDismiss(CommandContext<FabricClientCommandSource> ctx) {
         Minecraft client = Minecraft.getInstance();
         String worldKey = currentWorldKey(client);
-        BetaNoticeDismissedWorlds.dismiss(worldKey);
-        ctx.getSource().sendFeedback(Component.literal("Won't show the beta notice again for this world.")
-                .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
+        boolean persisted = BetaNoticeDismissedWorlds.dismiss(worldKey);
+        ctx.getSource().sendFeedback(dismissFeedbackMessage(persisted));
         return 1;
+    }
+
+    /**
+     * The chat feedback shown after the player clicks "Don't show again". Must never claim the
+     * preference was saved unless it actually was: {@code persisted} is {@code false} when
+     * {@link #currentWorldKey} couldn't identify this context (e.g. an unresolvable Realms world),
+     * in which case {@link BetaNoticeDismissedWorlds#dismiss} is a documented no-op and the notice
+     * WILL reappear next session — telling the player otherwise would be a false success message.
+     */
+    static Component dismissFeedbackMessage(boolean persisted) {
+        if (persisted) {
+            return Component.literal("Won't show the beta notice again for this world.")
+                    .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
+        }
+        return Component.literal(
+                        "Couldn't identify this world, so that preference couldn't be saved — "
+                                + "the beta notice may show again next time.")
+                .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
     }
 
     /**

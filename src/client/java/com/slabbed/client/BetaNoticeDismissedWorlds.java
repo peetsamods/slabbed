@@ -36,14 +36,20 @@ final class BetaNoticeDismissedWorlds {
         return cache.contains(worldKey);
     }
 
-    static synchronized void dismiss(String worldKey) {
+    /**
+     * Persists {@code worldKey} as dismissed. Returns {@code true} if the key was identifiable
+     * and is now (or was already) recorded as dismissed; returns {@code false} for a {@code null}
+     * key, which is never persisted — callers must not report success to the player in that case.
+     */
+    static synchronized boolean dismiss(String worldKey) {
         if (worldKey == null) {
-            return;
+            return false;
         }
         load();
         if (cache.add(worldKey)) {
             save();
         }
+        return true;
     }
 
     private static void load() {
