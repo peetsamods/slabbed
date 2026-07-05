@@ -148,4 +148,29 @@ public final class SlabGeometricRemeshScheduler {
                 sx - SECTION_RADIUS, sy - SECTION_RADIUS, sz - SECTION_RADIUS,
                 sx + SECTION_RADIUS, sy + SECTION_RADIUS, sz + SECTION_RADIUS);
     }
+
+    /**
+     * The SECTION-coordinate box to dirty for a COMPOUND-VISIBLE render refresh at block
+     * ({@code blockX},{@code blockY},{@code blockZ}), issued by
+     * {@code SlabAnchorClientSync.scheduleCompoundVisibleRenderRefresh} when a compound-slab
+     * side/owner-top anchor attachment changes on the client.
+     *
+     * <p>{@code ClientLevel.setSectionRangeDirty} takes SECTION coordinates, not block coordinates — it
+     * forwards straight to {@code LevelExtractor.setSectionDirty} with no {@code >>4} conversion
+     * (confirmed via bytecode). Feeding it raw block coords (the pre-{@code 4df516ab} bug) dirtied a
+     * 27-section box ~16× too far from the block — e.g. block x=100 dirtied SECTIONS 99..101 (blocks
+     * 1584..1631), nowhere near the actual anchor — so the compound-visible mesh could stay stale, the
+     * same failure family as the geometric mesh-staleness bug ({@code b94b48ae}).
+     *
+     * <p>Delegates to {@link #dirtySectionBox} so the compound-visible refresh path and the
+     * geometric-remesh mixin share ONE canonical block→section conversion and can never diverge on the
+     * dirty-region shape/radius. Named distinctly (rather than the call site inlining {@code >>4}
+     * arithmetic) so this exact call site's coordinate math is headlessly loadable and
+     * mutation-provable from the server gametest — {@code SlabAnchorClientSync} itself is
+     * {@code @Environment(CLIENT)} and cannot be loaded there, but this un-annotated scheduler can.
+     * Pinned by {@code GeometricRemeshSchedulerTest.compoundVisibleRefreshConvertsBlockCoordsToSectionCoords}.
+     */
+    public static SectionBox compoundVisibleDirtySectionBox(int blockX, int blockY, int blockZ) {
+        return dirtySectionBox(blockX, blockY, blockZ);
+    }
 }
