@@ -103,10 +103,17 @@ public final class SlabOnSlabVerticalAnchorTest {
 
     // REGRESSION GUARD: a flat (never-lowered) slab resting on another flat slab must never gain
     // a spurious anchor.
+    //
+    // Local z is deliberately 3, matching the other methods in this file, not spaced out (e.g.
+    // 8/12) the way an earlier version of this test had it: each @GameTest method gets its own
+    // independent structure instance, so there's no need to offset methods from each other, and
+    // any local coordinate >= 8 is unconditionally outside the fabric-gametest-api-v1:empty
+    // template's own 8x8x8 bounds — exactly the batch-repartition isolation-flake shape this
+    // session hardened three times elsewhere (see HANDOFF.md).
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void flatSlabOnFlatSlabNeverAnchors(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos lower = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 8);
+        BlockPos lower = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 3);
         BlockPos upper = lower.up();
         w.setBlockState(lower, Blocks.BIRCH_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_LISTENERS);
@@ -128,7 +135,7 @@ public final class SlabOnSlabVerticalAnchorTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void slabOnBottomTypeSupportNeverAnchorsVertically(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos support = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 12);
+        BlockPos support = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 3);
         BlockPos upper = support.up();
         w.setBlockState(support, Blocks.BIRCH_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                 Block.NOTIFY_LISTENERS);
