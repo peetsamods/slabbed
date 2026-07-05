@@ -1,6 +1,7 @@
 package com.slabbed.client;
 
 import com.slabbed.Slabbed;
+import com.slabbed.util.LiveCursorIntentRecorder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -36,7 +37,15 @@ public final class SlabbedClient implements ClientModInitializer {
                                 .then(ClientCommands.literal("off")
                                         .executes(context -> setTargetDyOverlay(false)))
                                 .then(ClientCommands.literal("toggle")
-                                        .executes(context -> setTargetDyOverlay(!TargetDyOverlay.isEnabled()))))));
+                                        .executes(context -> setTargetDyOverlay(!TargetDyOverlay.isEnabled()))))
+                        .then(ClientCommands.literal("record")
+                                .executes(context -> setLiveCursorRecorder(LiveCursorIntentRecorder.toggle()))
+                                .then(ClientCommands.literal("on")
+                                        .executes(context -> setLiveCursorRecorderTo(true)))
+                                .then(ClientCommands.literal("off")
+                                        .executes(context -> setLiveCursorRecorderTo(false)))
+                                .then(ClientCommands.literal("toggle")
+                                        .executes(context -> setLiveCursorRecorder(LiveCursorIntentRecorder.toggle()))))));
     }
 
     private static int setTargetDyOverlay(boolean enabled) {
@@ -45,6 +54,27 @@ public final class SlabbedClient implements ClientModInitializer {
         if (client.player != null) {
             client.player.sendSystemMessage(Component.literal(
                     "[slabdev] debug overlay: " + (enabled ? "on" : "off")));
+        }
+        return 1;
+    }
+
+    private static int setLiveCursorRecorderTo(boolean target) {
+        // The recorder's toggle() flips its own volatile flag; drive it to the requested state.
+        if (LiveCursorIntentRecorder.enabled() != target) {
+            LiveCursorIntentRecorder.toggle();
+        } else if (target) {
+            // Already on: still ensure the session dir/manifest exist for a fresh /slabdev record on.
+            LiveCursorIntentRecorder.bootstrap();
+        }
+        return setLiveCursorRecorder(target);
+    }
+
+    private static int setLiveCursorRecorder(boolean enabled) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player != null) {
+            client.player.sendSystemMessage(Component.literal(
+                    "[slabdev] live cursor recorder: " + (enabled ? "on" : "off")
+                            + " (" + LiveCursorIntentRecorder.currentLogPathDisplay() + ")"));
         }
         return 1;
     }

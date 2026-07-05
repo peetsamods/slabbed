@@ -40,7 +40,12 @@
       "com.slabbed.client.BetaNoticeDismissFeedbackTest",
       "com.slabbed.test.BottomSlabLoweredByCarrierBelowTest",
       "com.slabbed.test.BlockEntityNeverPopTest",
-      "com.slabbed.test.BlockEntityCantileverTest"
+      "com.slabbed.test.BlockEntityCantileverTest",
+      "com.slabbed.test.LiveCursorIntentRecorderCaptureGameTest",
+      "com.slabbed.test.RecorderManifestRedactionTest"
+    ],
+    "fabric-client-gametest": [
+      "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest"
     ]
   },
   "depends": {

@@ -137,6 +137,9 @@ sourceSets {
             include("com/slabbed/test/BottomSlabLoweredByCarrierBelowTest.java")
             include("com/slabbed/test/BlockEntityNeverPopTest.java")
             include("com/slabbed/test/BlockEntityCantileverTest.java")
+            include("com/slabbed/test/LiveCursorIntentRecorderCaptureGameTest.java")
+            include("com/slabbed/test/RecorderManifestRedactionTest.java")
+            include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }
 }
