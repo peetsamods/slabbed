@@ -91,18 +91,32 @@ public abstract class BlockItemPlacementIntentMixin {
         return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
+    /**
+     * Gate for the vertical/below-support half of {@link SlabAnchorAttachment#updatePersistentLoweredSlabCarrier}'s
+     * call site (the horizontal side-click half is {@link #slabbed$isPersistentLoweredSideSlabCarrierCandidate}).
+     *
+     * <p>PRE-L8 HISTORY: this gate required {@code SlabType.BOTTOM} and only recognised "the block
+     * below is a lowered FULL BLOCK" ({@code isOrdinaryFullBlockAnchorCandidate} below) — so a slab
+     * placed on top of a lowered TOP/DOUBLE slab support (the L8 scenario) could NEVER reach
+     * {@code updatePersistentLoweredSlabCarrier} at all, no matter what the qualifier or the live-dy
+     * lane did. Confirmed by a throwaway empirical probe (deleted): with the whole three-layer chain
+     * unfixed the upper slab live-derived dy=0.0 and never persisted, so breaking its support popped
+     * it flush.
+     *
+     * <p>Widened to delegate directly to
+     * {@link SlabAnchorAttachment#qualifiesForPersistentLoweredSlabCarrier}, which already encodes the
+     * correct full disjunction for ANY slab type (horizontal side-lane, bottom-on-lowered-full-block,
+     * bottom-on-adjacent-bridge-support, and the new L8 vertical-on-lowered-TOP/DOUBLE-slab lane) —
+     * this is the layer that makes the whole persistence dispatcher actually reachable from real
+     * player placement for TOP/DOUBLE slabs, not just from direct test calls.
+     */
     private static boolean slabbed$isPersistentLoweredBottomSlabCarrierCandidate(Level world, BlockPos pos, BlockState state) {
         if (!(state.getBlock() instanceof SlabBlock)
                 || !state.hasProperty(SlabBlock.TYPE)
-                || state.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !state.getFluidState().isEmpty()) {
             return false;
         }
-        BlockPos belowPos = pos.below();
-        BlockState below = world.getBlockState(belowPos);
-        return SlabAnchorAttachment.isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)
-                && (SlabAnchorAttachment.isAnchored(world, belowPos)
-                || SlabSupport.getYOffset(world, belowPos, below) < 0.0d);
+        return SlabAnchorAttachment.qualifiesForPersistentLoweredSlabCarrier(world, pos, state);
     }
 
     private static boolean slabbed$isPersistentLoweredSideSlabCarrierCandidate(
