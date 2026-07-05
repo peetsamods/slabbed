@@ -24,7 +24,8 @@
       "com.slabbed.test.SlabOnSlabVerticalAnchorTest",
       "com.slabbed.test.DecorativeObjectSupportAnchorTest",
       "com.slabbed.test.SlabVerticalSupportTerrainSlabsGuardTest",
-      "com.slabbed.test.FloorTorchSupportDyTest"
+      "com.slabbed.test.FloorTorchSupportDyTest",
+      "com.slabbed.test.CeilingHungDecorationFreezeAnchorTest"
     ]
   },
   "depends": {
