@@ -34,7 +34,9 @@
       "com.slabbed.test.CantileverBfsTerrainSlabsGuardTest",
       "com.slabbed.test.TerrainSlabsOwnSlabDyGuardTest",
       "com.slabbed.test.SlabLaneConduitTerrainSlabsGuardTest",
-      "com.slabbed.test.SlabdyRowFormatterFieldsTest"
+      "com.slabbed.test.SlabdyRowFormatterFieldsTest",
+      "com.slabbed.client.BetaNoticeSessionGateTest",
+      "com.slabbed.client.BetaNoticeDismissedWorldsTest"
     ]
   },
   "depends": {

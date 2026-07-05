@@ -131,6 +131,8 @@ sourceSets {
             include("com/slabbed/test/TerrainSlabsOwnSlabDyGuardTest.java")
             include("com/slabbed/test/SlabLaneConduitTerrainSlabsGuardTest.java")
             include("com/slabbed/test/SlabdyRowFormatterFieldsTest.java")
+            include("com/slabbed/client/BetaNoticeSessionGateTest.java")
+            include("com/slabbed/client/BetaNoticeDismissedWorldsTest.java")
         }
     }
 }

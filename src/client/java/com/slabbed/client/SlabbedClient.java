@@ -23,6 +23,7 @@ public final class SlabbedClient implements ClientModInitializer {
         initTargetDyCommand();
         initScreenshotCaptureService();
         initDyFingerprintDump();
+        BetaNoticeClient.init();
     }
 
     private static void initTargetDyCommand() {
