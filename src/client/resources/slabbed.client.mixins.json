@@ -6,6 +6,7 @@
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
+    "ClientLevelBlockChangeRemeshMixin",
     "GameRendererCrosshairRetargetMixin",
     "ItemFrameRenderOffsetMixin",
     "LocalPlayerPickOffsetRaycastMixin",
