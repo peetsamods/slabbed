@@ -87,8 +87,15 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *             behind a {@code state.getBlock() instanceof SlabBlock} ENTRY guard — a ceiling-hung
  *             decoration is never a {@code SlabBlock}, so they are unreachable via type, NOT via
  *             solid-render;</li>
- *         <li>the remaining five ({@code slabbed$formatSideOwnerFacts} and the trace/signature builders)
- *             are genuinely diagnostic string/signature builders with no behavioral effect.</li>
+ *         <li>the remaining six ({@code slabbed$formatSideOwnerFacts}, {@code slabbed$laneKind}, and
+ *             the four trace/signature builders {@code slabbed$appendBlockTruth} /
+ *             {@code slabbed$appendHitFields} / {@code slabbed$traceBeta4FinalTarget} /
+ *             {@code slabbed$beta4FinalTargetSignature}) are genuinely diagnostic string/signature
+ *             builders with no behavioral effect. ({@code slabbed$laneKind} — the raw read at
+ *             {@code GameRendererCrosshairRetargetMixin} ~line 1895 — was the site omitted from the
+ *             original accounting; it returns the {@code "OwnerLaneKind"} HUD/trace string via a single
+ *             caller at ~line 1867 and never gates a targeting decision. NOTE: this site is NOT dead
+ *             code — it has exactly one live caller; it belongs in this diagnostic-only bucket.)</li>
  *       </ul>
  *       Since every member here is {@code solidRender=false} AND is never a {@code SlabBlock}, EVERY one
  *       of those guard mechanisms rules it out — no targeting decision acts on the marker.</li>
