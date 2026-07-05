@@ -134,6 +134,7 @@ sourceSets {
             include("com/slabbed/client/BetaNoticeSessionGateTest.java")
             include("com/slabbed/client/BetaNoticeDismissedWorldsTest.java")
             include("com/slabbed/client/BetaNoticeDismissFeedbackTest.java")
+            include("com/slabbed/test/BottomSlabLoweredByCarrierBelowTest.java")
         }
     }
 }
