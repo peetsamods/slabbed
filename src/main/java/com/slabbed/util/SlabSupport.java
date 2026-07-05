@@ -489,45 +489,130 @@ public final class SlabSupport {
     }
 
     /**
-     * L10 must-follow set: a decoration whose dy is a pure function of the support ABOVE it and
-     * which must keep DYNAMICALLY FOLLOWING that support — never be frozen at a placement-time
-     * anchor. This is the exclusion for {@code SlabAnchorAttachment.freezeLoweredOnPlace}'s
-     * unconditional lowered-anchor path.
+     * True for a block whose block-type PLUS orientation is UNCONDITIONALLY ceiling-only: it can
+     * only exist attached to the block ABOVE it and vanilla survival forbids it resting on a support
+     * below (so it is never floor-resting, in any orientation — no world lookup needed to decide).
      *
-     * <p>Members: the underside-hanger set ({@link #isLoweredUndersideHangerOwner}: lantern / soul
-     * lantern / spore blossom / hanging roots / pale hanging moss), plus Y-axis chains, hanging
-     * signs, and anything carrying the vanilla {@code HANGING=true} property. Precisely NOT keyed
-     * on {@link #isCeilingAttached}, which blanket-matches every {@code ButtonBlock} (and top-half
-     * trapdoors, bells, levers) — a FLOOR button / BOTTOM trapdoor genuinely rests on the support
-     * BELOW it and DOES want its placement anchor (verified: those already anchor-and-never-pop on
-     * this branch), so excluding them would reintroduce L10's pop for exactly those subjects.
+     * <p>Members are exactly the ones the cross-phase review (2026-07-05) and a decompiled vanilla
+     * 1.21.1 survival audit confirmed as genuinely ceiling-only: spore blossom
+     * ({@code canPlaceAt} = small square face on {@code pos.up()}), hanging roots
+     * ({@code isSideSolidFullSquare} on {@code pos.up()}), hanging signs (ceiling
+     * {@link HangingSignBlock} = solid face on {@code pos.up()}; {@link WallHangingSignBlock} =
+     * side-attached, never floor-resting), and any block carrying {@code HANGING=true} (the property
+     * itself encodes "attached to the block above", e.g. a hanging lantern).
      *
-     * <p>WHY this matters on this branch specifically: {@code getYOffsetInner}'s anchor branch
-     * (non-slab + {@code isAnchored}) runs BEFORE the two underside-owner branches, so a frozen
-     * anchor on one of these would pin it to its placement dy and the underside-owner follow lane
-     * would never be reached — the block would stop tracking its support (a stale gap when the
-     * support's own dy later changes). The 1.21.11 sibling never hits this because its decorative
-     * anchor is a gated {@code addAnchor} lane that already excludes these; this branch's
-     * {@code freezeLoweredOnPlace} anchors any lowered placement unchecked, so the exclusion must
-     * live here instead.
+     * <p>DELIBERATELY EXCLUDED from this set (they are floor-resting-CAPABLE and so need an
+     * orientation check, not a block-type check — see
+     * {@link #isMustFollowCeilingDecoration(BlockView, BlockPos, BlockState)}): Y-axis chains (vanilla
+     * {@link ChainBlock} has NO {@code canPlaceAt} support check at all — a Y-chain floats and can sit
+     * on a lowered slab below it), and SITTING lanterns ({@code LANTERN}/{@code SOUL_LANTERN} with
+     * {@code HANGING=false}, whose {@code canPlaceAt} requires support BELOW, i.e. a floor-standing
+     * variant). Pale hanging moss is a 1.21.4+ block (absent as a {@code Blocks} constant here) and is
+     * matched via registry id by {@link #isPaleHangingMossBlock}; it is ceiling-only, kept here.
      */
-    public static boolean isMustFollowCeilingDecoration(BlockState state) {
-        if (state == null || state.isAir()) {
-            return false;
-        }
-        if (isLoweredUndersideHangerOwner(state)) {
-            return true;
-        }
+    private static boolean isUnconditionalCeilingOnlyDecoration(BlockState state) {
         Block block = state.getBlock();
-        if (block instanceof ChainBlock
-                && state.contains(Properties.AXIS)
-                && state.get(Properties.AXIS) == Direction.Axis.Y) {
+        if (block instanceof SporeBlossomBlock
+                || block instanceof HangingRootsBlock
+                || isPaleHangingMossBlock(state)) {
             return true;
         }
         if (block instanceof HangingSignBlock || block instanceof WallHangingSignBlock) {
             return true;
         }
         return state.contains(Properties.HANGING) && state.get(Properties.HANGING);
+    }
+
+    /**
+     * L10 must-follow set (state-only, orientation-UNAWARE — treats every Y-chain and every lantern
+     * as must-follow). Retained for callers that only have a {@link BlockState}; the freeze path uses
+     * the world/pos-aware overload below, which is orientation-correct.
+     *
+     * @deprecated Prefer {@link #isMustFollowCeilingDecoration(BlockView, BlockPos, BlockState)} at any
+     *     call site that has a world+pos: it distinguishes a genuinely ceiling-hung chain / hanging
+     *     lantern (must keep following) from one merely RESTING on a lowered support below (which must
+     *     get its never-pop freeze anchor like any other floor-resting object). This overload
+     *     conservatively over-matches the two floor-resting-capable families and would re-introduce
+     *     the cross-phase-review pop for a chain / sitting lantern resting on a lowered slab.
+     */
+    @Deprecated
+    public static boolean isMustFollowCeilingDecoration(BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        if (isLoweredUndersideHangerOwner(state) || isUnconditionalCeilingOnlyDecoration(state)) {
+            return true;
+        }
+        Block block = state.getBlock();
+        return block instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y;
+    }
+
+    /**
+     * L10 must-follow set, ORIENTATION-AWARE: a decoration whose dy is a pure function of the support
+     * ABOVE it and which must keep DYNAMICALLY FOLLOWING that support — never be frozen at a
+     * placement-time anchor. This is the exclusion for
+     * {@code SlabAnchorAttachment.freezeLoweredOnPlace}'s unconditional lowered-anchor path.
+     *
+     * <p>Two of the categories are floor-resting-CAPABLE and therefore decided by ORIENTATION at
+     * {@code pos}, not by block type alone (cross-phase-review correction of {@code 27aa96e1}, L10):
+     * <ul>
+     *   <li><b>Y-axis chains.</b> Vanilla {@link ChainBlock} has no support check and the SAME
+     *       {@code AXIS=Y} blockstate represents both a chain HANGING from a ceiling support above it
+     *       (must keep following — its dy is {@code +0.5} reaching up, or {@code 0.0}) and a chain
+     *       merely RESTING on a lowered bottom slab below it (structurally like a candle: its only
+     *       lowering path is the generic {@code hasSlabInColumn} fallback, {@code dy=-0.5}). The
+     *       ceiling-hung orientation is detected by {@link #isCeilingBridgedVerticalChainColumnMember}
+     *       (this chain, or a stack of chains it belongs to, leads up to a TOP/DOUBLE-slab ceiling).
+     *       If NOT ceiling-bridged, the chain is floor-resting and DOES want its never-pop anchor —
+     *       otherwise breaking the slab pops its dy from {@code -0.5} back to {@code 0.0}, the exact
+     *       regression L10 exists to prevent.</li>
+     *   <li><b>Lanterns.</b> A {@code HANGING=true} lantern is ceiling-attached (kept in the
+     *       unconditional set). A {@code HANGING=false} lantern is the floor-standing variant whose
+     *       {@code canPlaceAt} requires support BELOW — it rests on a lowered slab like a candle and
+     *       wants its anchor. So a lantern is must-follow only when {@code HANGING=true}.</li>
+     * </ul>
+     *
+     * <p>The remaining categories are UNCONDITIONALLY ceiling-only in vanilla (spore blossom /
+     * hanging roots / pale hanging moss / hanging + wall-hanging signs / any {@code HANGING=true}
+     * block — verified against decompiled 1.21.1 survival) and stay in the set regardless of
+     * orientation via {@link #isUnconditionalCeilingOnlyDecoration}.
+     *
+     * <p>Precisely NOT keyed on {@link #isCeilingAttached}, which blanket-matches every
+     * {@code ButtonBlock} (and top-half trapdoors, bells, levers) — a FLOOR button / BOTTOM trapdoor
+     * genuinely rests on the support BELOW it and DOES want its placement anchor, so excluding them
+     * would reintroduce L10's pop for exactly those subjects.
+     *
+     * <p>WHY this matters on this branch specifically: {@code getYOffsetInner}'s anchor branch
+     * (non-slab + {@code isAnchored}) runs BEFORE the two underside-owner branches, so a frozen
+     * anchor on a genuinely-hanging decoration would pin it to its placement dy and the
+     * underside-owner follow lane would never be reached — the block would stop tracking its support.
+     * Symmetrically, WITHHOLDING the anchor from a floor-RESTING chain/lantern lets breaking its
+     * support pop it. Orientation is the discriminator.
+     */
+    public static boolean isMustFollowCeilingDecoration(BlockView world, BlockPos pos, BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        if (isUnconditionalCeilingOnlyDecoration(state)) {
+            return true;
+        }
+        Block block = state.getBlock();
+        // Y-axis chain: must-follow only when it is genuinely ceiling-hung (part of a chain column
+        // that leads up to a TOP/DOUBLE-slab ceiling). A chain resting on a lowered support below is
+        // NOT ceiling-hung and must get its freeze anchor.
+        if (block instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y) {
+            return world != null && pos != null
+                    && isCeilingBridgedVerticalChainColumnMember(world, pos, state);
+        }
+        // Sitting lantern (HANGING=false): rests on the support BELOW, wants its freeze anchor.
+        // (A HANGING=true lantern was already caught by isUnconditionalCeilingOnlyDecoration above.)
+        // isLoweredUndersideHangerOwner matches lanterns regardless of HANGING, so it is NOT used
+        // here — the orientation check is the HANGING property itself.
+        return false;
     }
 
     private static boolean isBeta35LoweredSlabUndersideVisibleOwnerObject(

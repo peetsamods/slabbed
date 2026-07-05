@@ -289,18 +289,21 @@ public final class SlabAnchorAttachment {
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }
-        // L10: a MUST-FOLLOW ceiling decoration (lantern / soul lantern / spore blossom / hanging
-        // roots / pale hanging moss / Y-chain / hanging sign / any HANGING block) must keep
-        // DYNAMICALLY tracking the support ABOVE it — never be frozen at a placement anchor. On this
-        // branch getYOffsetInner's anchor branch runs BEFORE the underside-owner follow branches, so
-        // a spurious anchor here would pin such a decoration to its placement dy and it would stop
-        // following its support (a stale gap when the support's own dy later changes). Ordinary
-        // floor-resting decorations (candle / flower pot / floor button / BOTTOM trapdoor / rail /
-        // pressure plate / sign) genuinely rest on the support BELOW them and DO want their anchor,
-        // so they are deliberately NOT in this set. Mirrors the 1.21.11 sibling's
-        // qualifiesForDecorativeObjectAnchor ceiling-hung exclusion, adapted to this branch's
-        // unchecked-freeze placement architecture.
-        if (SlabSupport.isMustFollowCeilingDecoration(state)) {
+        // L10: a MUST-FOLLOW ceiling decoration (spore blossom / hanging roots / pale hanging moss /
+        // hanging sign / any HANGING block, plus a genuinely CEILING-HUNG Y-chain or HANGING lantern)
+        // must keep DYNAMICALLY tracking the support ABOVE it — never be frozen at a placement anchor.
+        // On this branch getYOffsetInner's anchor branch runs BEFORE the underside-owner follow
+        // branches, so a spurious anchor here would pin such a decoration to its placement dy and it
+        // would stop following its support (a stale gap when the support's own dy later changes).
+        // Ordinary floor-resting decorations (candle / flower pot / floor button / BOTTOM trapdoor /
+        // rail / pressure plate / sign) genuinely rest on the support BELOW them and DO want their
+        // anchor, so they are deliberately NOT in this set. The ORIENTATION-AWARE overload is used
+        // (cross-phase-review correction of 27aa96e1): a Y-chain merely RESTING on a lowered bottom
+        // slab, and a SITTING lantern (HANGING=false), are floor-resting and DO want their never-pop
+        // anchor — only their genuinely ceiling-hung orientations stay excluded. Mirrors the 1.21.11
+        // sibling's qualifiesForDecorativeObjectAnchor ceiling-hung exclusion, adapted to this
+        // branch's unchecked-freeze placement architecture.
+        if (SlabSupport.isMustFollowCeilingDecoration(world, pos, state)) {
             return;
         }
         double dy = SlabSupport.getYOffset(world, pos, state);
