@@ -68,6 +68,15 @@ public abstract class BlockItemPlaceTraceMixin {
             RuntimeDiagnostics.logInspectPlacement("HEAD", world, itemId, ctx, hitPos, placePos, null);
         }
 
+        // Additive: forward to the LiveCursorIntentRecorder alongside the existing sbsb-gated invoke
+        // below. The recorder gates itself (its own /slabdy record toggle), independent of
+        // slabbed.debug.sbsb, so this must run BEFORE the isEnabled() short-circuit — invokeRecorder
+        // no-ops cheaply when the recorder is disabled or excluded from the jar.
+        RuntimeDiagnostics.invokeRecorder(
+                "recordPlacementContext",
+                new Class<?>[]{ItemPlacementContext.class},
+                ctx);
+
         if (!RuntimeDiagnostics.isEnabled()) return;
 
         RuntimeDiagnostics.invoke(
@@ -135,6 +144,14 @@ public abstract class BlockItemPlaceTraceMixin {
                     ctx,
                     cir.getReturnValue(),
                     "anchorFinalization=after_tick_observation");
+            // Additive: forward the placement result to the LiveCursorIntentRecorder. Fires on the
+            // recorder's own /slabdy record enablement (invokeRecorder self-gates), independent of the
+            // sbsb-gated invoke() in the SLABBED$TRACE block below — and unlike that block, this runs
+            // for any traced placement regardless of dy, matching the sibling recorder's coverage.
+            RuntimeDiagnostics.invokeRecorder(
+                    "recordPlacementResult",
+                    new Class<?>[]{ItemPlacementContext.class, ActionResult.class},
+                    ctx, cir.getReturnValue());
         }
 
         TraceCtx trace = SLABBED$TRACE.get();

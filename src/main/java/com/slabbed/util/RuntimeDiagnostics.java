@@ -43,6 +43,8 @@ public final class RuntimeDiagnostics {
             "com.slabbed.util." + "Beta35SlabJumpSourceTruthRecorder";
     private static final String MODEL_DY_TRACE_BRIDGE_CLASS_NAME =
             "com.slabbed.client.runtime.ModelDyTranslateTraceBridge";
+    private static final String LIVE_CURSOR_INTENT_RECORDER_CLASS_NAME =
+            "com.slabbed.dev.audit.LiveCursorIntentRecorder";
     private static final boolean ENABLED = Boolean.getBoolean("slabbed.debug.sbsb");
     // Off-by-default in release. Gates the per-block model-dy recorder so the hot render
     // path never builds reflection args or dispatches a call when tracing is disabled.
@@ -61,6 +63,21 @@ public final class RuntimeDiagnostics {
     // was the 0.4.0-beta.3 lag regression. Record the miss once and short-circuit thereafter.
     private static final Set<String> ABSENT_CLASSES = ConcurrentHashMap.newKeySet();
 
+    // The LiveCursorIntentRecorder (dev-only, excluded from the release jar) is resolved ONCE, not
+    // per-call: isRecorderEnabled() is polled every client tick by the /slabdy record command surface,
+    // so a per-tick Class.forName-by-string would reintroduce the exact per-frame-reflection lag class
+    // that has shipped twice on this project (PERF hygiene gate). A null RECORDER_CLASS is the expected
+    // shape of a release build; every recorder-forwarding method below no-ops cheaply when it is null.
+    private static final Class<?> RECORDER_CLASS = resolveRecorderClass();
+
+    private static Class<?> resolveRecorderClass() {
+        try {
+            return Class.forName(LIVE_CURSOR_INTENT_RECORDER_CLASS_NAME);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
+    }
+
     private RuntimeDiagnostics() {
     }
 
@@ -74,6 +91,77 @@ public final class RuntimeDiagnostics {
 
     public static boolean isBsFbLiveTraceEnabled() {
         return Boolean.getBoolean("slabbed.bsfb.live.trace");
+    }
+
+    // ---- LiveCursorIntentRecorder forwarding (dev-only; no-ops when the recorder is excluded) ----
+    // Mirrors the sibling 1.21.11 branch's SlabbedAuditBridge recorder surface. The recorder gates
+    // itself (its own isEnabled()/toggle()); these forward reflectively so always-shipped code carries
+    // no hard reference to the release-excluded recorder class.
+
+    /** Polled every client tick by the /slabdy record command surface — RECORDER_CLASS is cached, not re-resolved. */
+    public static boolean isRecorderEnabled() {
+        if (RECORDER_CLASS == null) {
+            return false;
+        }
+        try {
+            return (boolean) RECORDER_CLASS.getMethod("isEnabled").invoke(null);
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return false;
+        }
+    }
+
+    public static void bootstrapLiveRecorder() {
+        if (RECORDER_CLASS == null) {
+            return;
+        }
+        try {
+            RECORDER_CLASS.getMethod("bootstrap").invoke(null);
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+        }
+    }
+
+    /** {@code /slabdy record} toggle. Returns the new enabled state, or {@code false} if unavailable. */
+    public static boolean toggleRecorder() {
+        if (RECORDER_CLASS == null) {
+            return false;
+        }
+        try {
+            return (boolean) RECORDER_CLASS.getMethod("toggle").invoke(null);
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return false;
+        }
+    }
+
+    /** Display path for the recorder's current log directory, or a fallback message if unavailable. */
+    public static String recorderLogPathDisplay() {
+        if (RECORDER_CLASS == null) {
+            return "unavailable (dev-only tool, not present in this build)";
+        }
+        try {
+            return (String) RECORDER_CLASS.getMethod("currentLogPathDisplay").invoke(null);
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return "unavailable";
+        }
+    }
+
+    /**
+     * Additive recorder dispatch used by the trace mixins ALONGSIDE {@link #invoke} (which routes to
+     * {@code LoweredSideLiveHitRemapRuntimeAudit}). Gated on the recorder's own {@code isEnabled()} so a
+     * disabled recorder pays only one cached reflective read; the RECORDER_CLASS handle itself is
+     * resolved once at class init, never per-call.
+     */
+    public static void invokeRecorder(String methodName, Class<?>[] paramTypes, Object... args) {
+        if (RECORDER_CLASS == null) {
+            return;
+        }
+        try {
+            if (!(boolean) RECORDER_CLASS.getMethod("isEnabled").invoke(null)) {
+                return;
+            }
+            RECORDER_CLASS.getMethod(methodName, paramTypes).invoke(null, args);
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            // Recording-tool failure must never take gameplay down.
+        }
     }
 
     public static boolean compoundLivePathEnabled() {

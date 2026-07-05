@@ -429,6 +429,26 @@ public abstract class BlockItemPlacementIntentMixin {
                 remappedHitPos,
                 effectiveSide,
                 hitDescriptor);
+        // Additive: forward the same remap attempt to the LiveCursorIntentRecorder. Every call site of
+        // this helper reaches both dispatchers; invokeRecorder self-gates on the recorder's own /slabdy
+        // record enablement (independent of the sbsb-gated invoke above) and no-ops when the recorder is
+        // excluded. REMAP_ATTEMPT_PARAM_TYPES matches the recorder's recordRemapAttempt signature exactly.
+        RuntimeDiagnostics.invokeRecorder(
+                "recordRemapAttempt",
+                REMAP_ATTEMPT_PARAM_TYPES,
+                context,
+                itemIsSlab,
+                faceHorizontal,
+                targetIsSolid,
+                targetHasBlockEntity,
+                targetIsCraftingTable,
+                yOffset,
+                ordinaryLoweredFullBlockGuard,
+                remapped,
+                rejectionReason,
+                remappedHitPos,
+                effectiveSide,
+                hitDescriptor);
     }
 
     private static boolean slabbed$repeatSeamTraceEnabled() {

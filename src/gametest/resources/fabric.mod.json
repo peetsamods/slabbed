@@ -27,7 +27,8 @@
       "com.slabbed.test.DecorativeObjectSupportAnchorTest",
       "com.slabbed.test.LanternUnderTerrainSlabsHangerTest",
       "com.slabbed.test.ChainRestingAnchorOrientationTest",
-      "com.slabbed.test.SlabHeightStepCullGh24Test"
+      "com.slabbed.test.SlabHeightStepCullGh24Test",
+      "com.slabbed.test.RecorderManifestRedactionTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",
