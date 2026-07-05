@@ -1,6 +1,6 @@
 # Cull / "ghost window" fix — design & status (1.21.1)
 
-**Status: ROOT-CAUSED + predicate shipped & tested + RENDERER-AGNOSTIC FIX IMPLEMENTED (model-path, mirrors 1.21.11). Live visual confirmation is the one remaining step.** Written 2026-06-11 (overnight autonomous session). Investigation backed by a 4-agent workflow + direct jar verification.
+**Status: ROOT-CAUSED + predicate shipped & tested + RENDERER-AGNOSTIC FIX IMPLEMENTED AND LIVE-WIRED (model-path, mirrors 1.21.11).** Written 2026-06-11 (overnight autonomous session). Investigation backed by a 4-agent workflow + direct jar verification. **STATUS UPDATE (2026-07-05):** the "Render wiring" section below is superseded — see the DOC-DRIFT CORRECTION note under "The fix predicate" and the retitled section for what actually shipped.
 
 > **UPDATE (same session):** the per-renderer cull-mixin plan below was SUPERSEDED. After reading the 1.21.11 repo I found a renderer-agnostic fix it already ships — clear the *emitted quad's own `cullFace`* on step faces in `OffsetBlockStateModel`. Because the dy-shift already rides `RenderContext.pushTransform` and that path is honoured by Indigo **and Sodium** (blocks already render lowered under Sodium), clearing `cullFace` in the same transform un-culls the exposed strip under every renderer — **no Indigo/Sodium mixin, no conditional machinery, no Sodium-internal coupling.** Implemented on 1.21.1 in `OffsetBlockStateModel.emitBlockQuads` (clears `cullFace`, preserves `nominalFace`, gated by `slabbed$hasLoweredStepFace` so the flat neighbour's exposed face is un-culled too; only flips cull→draw). Compiles, 30/30 gametests green. The per-renderer-mixin analysis below is kept for reference / as the fallback if the model-path approach ever proves insufficient.
 
@@ -36,9 +36,11 @@ Slabbed lowers a block **only in the render mesh** (dy), via:
 
 This predicate + a headless truth-table gametest are committed. **DOC-DRIFT CORRECTION (2026-07-05):** the predicate is now LIVE-WIRED — the model-path fix in the top UPDATE banner shipped. `OffsetBlockStateModel.emitBlockQuads` calls `slabbed$hasLoweredStepFace` (which loops the four horizontal directions through `isSlabHeightStepFace`) and, inside its per-quad `pushTransform`, clears `cullFace` on any emitted quad whose `cullFace` is a step face (`isSlabHeightStepFace(view,pos,state,cullFace)` == true), preserving `nominalFace`. So the sentences below in "The fix predicate" / "Render wiring — DEFERRED" that say *"Nothing calls it at render time yet"* / *"zero behaviour change until the wiring is approved"* / *"Render wiring — DEFERRED, needs approval"* are **STALE** — the per-renderer-mixin plan (Option A) and the culling-shape offset (Option B) were both SUPERSEDED by the shipped model-path approach and were never implemented. There is NO type gate on the subject or neighbour (both overloads and the helper compare live `getYOffset` values only), so the GH#24 / L12 slab-subject bug from the 1.21.11 sibling (whose predicate carried an `isOpaqueFullCube()` gate) cannot occur here; a slab subject is exercised by `SlabHeightStepCullGh24Test` and confirmed handled correctly by architecture.
 
-## Render wiring — DEFERRED, needs approval
+## Render wiring — SUPERSEDED, kept for historical reference
 
-Two options:
+**This section describes a plan that was NOT what shipped.** The render wiring was actually done via the model-path approach (see the top UPDATE banner and the DOC-DRIFT CORRECTION note above): `OffsetBlockStateModel.emitBlockQuads` clears `cullFace` on step-face quads using `isSlabHeightStepFace`. That fix is live-wired today. Neither Option A (per-renderer cull mixins) nor Option B (offset the culling shape) below was ever implemented — both were superseded before being built. Kept only so the reasoning that led to the simpler model-path fix isn't lost.
+
+Two options (neither implemented; historical):
 
 **Option A — per-renderer cull mixins (recommended).** A safe `@Inject(method=…, at=@At("RETURN"), cancellable=true)` on each renderer's gate: if it returned false (cull) AND `isSlabHeightStepFace` → `setReturnValue(true)`.
 - **Sodium** (the one that matters here): target `net.caffeinemc.mods.sodium.client.render.chunk.compile.pipeline.BlockOcclusionCache#shouldDrawSide(class_2680,class_1922,class_2338,class_2350)`. Live-verifiable in Maintainer's env, A/B via `-Dslabbed.disableStepCull`.
@@ -47,11 +49,13 @@ Two options:
 
 **Option B — offset the culling shape (renderer-agnostic, higher risk).** Offset the lowered block's `getSidesShape`/culling shape to match the model; then *all* renderers' occlusion (which consult the culling shape) account for the offset → one fix, no per-renderer mixins, no Sodium-internal coupling. **But** the culling shape is load-bearing (light propagation, AO, neighbour occlusion); offsetting it risks light leaks / AO artifacts and needs careful testing. Worth prototyping behind the same kill switch.
 
-## Recommendation
+## Recommendation — SUPERSEDED, kept for historical reference
 
-1. Land the predicate + test now (done).
-2. Supervised: prototype **Option B** first (one clean, renderer-agnostic change). If light/AO regress, fall back to **Option A** with the Sodium-conditional machinery, live-verifying in the Sodium profile.
-3. Either way, ship behind `-Dslabbed.disableStepCull` and A/B both directions to prove the hook is the thing fixing it.
+**Not the path taken.** This 3-step plan (below) predates the model-path fix that actually shipped; it was never executed. See "Render wiring — SUPERSEDED" above.
+
+1. ~~Land the predicate + test now (done).~~ Done, but the predicate ended up wired via the model path, not Option A/B.
+2. ~~Supervised: prototype **Option B** first (one clean, renderer-agnostic change). If light/AO regress, fall back to **Option A** with the Sodium-conditional machinery, live-verifying in the Sodium profile.~~ Not done — model-path fix made this unnecessary.
+3. ~~Either way, ship behind `-Dslabbed.disableStepCull` and A/B both directions to prove the hook is the thing fixing it.~~ The kill switch (`-Dslabbed.disableStepCull`) still gates the shipped predicate, but there was no Option A/B to A/B against.
 
 ## Known limitation
 
