@@ -45,7 +45,9 @@ sourceSets {
                     "com/slabbed/test/SlabHeightStepCullGh24Test.java",
                     "com/slabbed/test/RecorderManifestRedactionTest.java",
                     "com/slabbed/test/SlabbedDiagnosticsTest.java",
-                    "com/slabbed/test/SlabdyRowFormatterTest.java"
+                    "com/slabbed/test/SlabdyRowFormatterTest.java",
+                    "com/slabbed/client/BetaNoticeDismissedWorldsTest.java",
+                    "com/slabbed/client/BetaNoticeSessionGateTest.java"
             ])
         }
     }
