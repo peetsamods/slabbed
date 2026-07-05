@@ -1889,6 +1889,18 @@ public final class SlabSupport {
                 || !state.hasProperty(SlabBlock.TYPE)) {
             return Double.NaN;
         }
+        // L11-broader (task #24): this is the RC2 slab-NEIGHBOR magnitude reader consumed by the two
+        // cantilever BFS paths (adjacentLoweredSideMagnitude for the slab lane, cantileverLoweredConnecting-
+        // Magnitude for the connecting lane) — "how far is THIS slab lowered as a Slabbed cantilever
+        // source." A Terrain-Slabs-owned slab must NEVER be a source. Its two remaining unguarded reads here
+        // (isAnchored via freeze-on-place, and the direct isPersistentLoweredBottomSlabCarrierNonRecursive
+        // below — NOT the isAdjacentSideSlabLowered call, which is now guarded at its own choke point) still
+        // returned -0.5 for a TS slab carrying a lowered marker, double-offsetting a slab cantilevered beside
+        // it onto TS's own surface. Reuse the one shared choke point; NaN = "not a lowered source", so the
+        // caller reads flush. No-op without Terrain Slabs.
+        if (isTsExcludedFromVerticalSupport(state)) {
+            return Double.NaN;
+        }
         // -1.0 compound side-slab cases (same markers the slab branch reads to mint -1.0).
         if (SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
@@ -2004,6 +2016,24 @@ public final class SlabSupport {
 
     private static boolean isAdjacentSideSlabLowered(BlockGetter world, BlockPos slabPos, BlockState slabState) {
         if (!slabState.hasProperty(SlabBlock.TYPE)) {
+            return false;
+        }
+        // L11-broader (task #24): a Terrain-Slabs-owned slab is a self-positioned surface and must NEVER be
+        // classified as a Slabbed lowered SOURCE. This is the shared "is this SUBJECT slab lowered by a
+        // Slabbed lane" choke point (17 callers) — its own persisted-carrier / side-lane reads carry NO
+        // namespace guard, so a TS slab that acquired a lowered-carrier marker (or sits side-lane beside a
+        // vanilla lowered slab) was reported lowered. The three ArrayDeque BFS traversals
+        // (isCantileverLoweredFullBlock, cantileverLoweredConnectingMagnitude, adjacentLoweredSideMagnitude)
+        // call this directly on a NEIGHBOR with no preceding shouldSkipSlabSupport check (unlike
+        // slabColumnYOffset / hasSlabInColumn, which terminate FLUSH at a TS block BEFORE reaching here), so
+        // they terminated on a TS slab and propagated a lowered -0.5 through a cantilever run onto TS's own
+        // surface (the double-offset "smoosh"). Fold the invariant into the shared predicate (reuses the one
+        // isTsExcludedFromVerticalSupport choke point, no new mechanism); NARROWING is uniformly correct —
+        // no consumer ever wants a TS-positioned surface treated as a Slabbed lowering source. No-op without
+        // Terrain Slabs (shouldSkipSlabSupport keys only on terrain_slabs/terrainslabs ids). Callers that
+        // already pre-guard (slabColumnYOffset / hasSlabInColumn) are unaffected — the TS block never reaches
+        // this method there, so the guard is redundant-but-harmless for them.
+        if (isTsExcludedFromVerticalSupport(slabState)) {
             return false;
         }
         if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, slabPos, slabState)) {
