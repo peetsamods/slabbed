@@ -6,7 +6,8 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest$TerrainSlabsRedstoneGateTestEntrypoint"
+      "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest$TerrainSlabsRedstoneGateTestEntrypoint",
+      "com.slabbed.test.SlabVerticalSupportTerrainSlabsGuardTest$TerrainSlabsVerticalSupportGuardTestEntrypoint"
     ],
     "fabric-gametest": [
       "com.slabbed.test.GhostLoweredCollisionProofTest",
@@ -20,7 +21,8 @@
       "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest",
       "com.slabbed.test.SlabHeightStepCullGh24Test",
       "com.slabbed.test.SlabOnSlabVerticalAnchorTest",
-      "com.slabbed.test.DecorativeObjectSupportAnchorTest"
+      "com.slabbed.test.DecorativeObjectSupportAnchorTest",
+      "com.slabbed.test.SlabVerticalSupportTerrainSlabsGuardTest"
     ]
   },
   "depends": {

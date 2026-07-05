@@ -139,6 +139,74 @@ public final class SlabOnSlabVerticalAnchorTest {
         helper.succeed();
     }
 
+    /**
+     * Cross-phase-review Finding 1 (correcting L8 {@code f70eec96}): a BOTTOM slab placed on a full
+     * block that itself compounds to {@code -1.0} (a full block resting on a lowered bottom-slab stack,
+     * un-anchored) must PERSIST as a lowered carrier and must NOT pop when the {@code -1.0} support is
+     * broken. L8's mixin-gate widening delegated the below-support decision to
+     * {@code qualifiesForPersistentLoweredSlabCarrier}, whose sub-lane
+     * {@code qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlock} checked the support reads
+     * exactly {@code -0.5} (the OLD mixin gate used {@code < 0.0d}) — narrowing the accepted magnitude
+     * and dropping the {@code -1.0} case. The fix restores {@code < 0.0d}.
+     *
+     * <p>HONEST SCOPE NOTE: end-to-end this exact scenario is ALSO covered by the more-lenient
+     * {@code isLoweredSideLaneSlabCarrier} / non-recursive-carrier lanes (both accept {@code -1.0} via
+     * {@code hasBottomSlabBelow}), so this test PASSES both before and after the sub-lane fix — it is a
+     * standing never-pop invariant pin, NOT the discriminating RED for the fix line. The sub-lane
+     * regression itself was proven directly (throwaway probe: for a {@code -1.0} un-anchored support the
+     * OLD {@code < 0.0d} gate returned true while the narrowed {@code == -0.5} sub-lane returned false);
+     * the fix removes that latent inconsistency so persistence never depends on the masking lane.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void bottomSlabOnCompoundMinusOneFullBlockPersistsAndDoesNotPop(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        // Compound -1.0 full block (un-anchored, geometric): stone / bottom slab / stone / bottom slab /
+        // stone -> the top stone reads -1.0.
+        w.setBlock(helper.absolutePos(new BlockPos(2, 1, 2)), Blocks.STONE.defaultBlockState(), 2);
+        w.setBlock(helper.absolutePos(new BlockPos(2, 2, 2)),
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+        w.setBlock(helper.absolutePos(new BlockPos(2, 3, 2)), Blocks.STONE.defaultBlockState(), 2);
+        w.setBlock(helper.absolutePos(new BlockPos(2, 4, 2)),
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+        BlockPos fb = helper.absolutePos(new BlockPos(2, 5, 2));
+        BlockPos upperRel = new BlockPos(2, 6, 2);
+        BlockPos upper = helper.absolutePos(upperRel);
+        w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
+        double fbDy = SlabSupport.getYOffset(w, fb, w.getBlockState(fb));
+        if (Math.abs(fbDy + 1.0) > EPS) {
+            throw helper.assertionException(new BlockPos(2, 5, 2),
+                    "setup: the compound full block must read -1.0, got " + fbDy);
+        }
+        if (SlabAnchorAttachment.isAnchored(w, fb)) {
+            throw helper.assertionException(new BlockPos(2, 5, 2),
+                    "setup: the compound full block must be UN-anchored (purely geometric -1.0)");
+        }
+
+        // BOTTOM slab on top of the -1.0 full block; simulate real placement finalization.
+        w.setBlock(upper, Blocks.BIRCH_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+        SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(w, upper, w.getBlockState(upper));
+        double upperDy = SlabSupport.getYOffset(w, upper, w.getBlockState(upper));
+        if (Math.abs(upperDy + 0.5) > EPS) {
+            throw helper.assertionException(upperRel,
+                    "a BOTTOM slab on a -1.0 compound full block should render -0.5, got " + upperDy);
+        }
+        if (!SlabAnchorAttachment.isPersistentLoweredSlabCarrier(w, upper, w.getBlockState(upper))) {
+            throw helper.assertionException(upperRel,
+                    "Finding 1: a BOTTOM slab on a lowered (-1.0) full-block support must persist as a lowered "
+                            + "carrier (the OLD < 0.0d gate accepted a -1.0 support; the L8 == -0.5 sub-lane narrowed it)");
+        }
+
+        // Break the -1.0 support column; the upper slab must NOT pop back to flush.
+        w.setBlock(fb, Blocks.AIR.defaultBlockState(), 2);
+        double upperDyAfter = SlabSupport.getYOffset(w, upper, w.getBlockState(upper));
+        if (Math.abs(upperDyAfter + 0.5) > EPS) {
+            throw helper.assertionException(upperRel,
+                    "never-pop violation: slab on a -1.0 support popped from -0.5 to " + upperDyAfter
+                            + " after the support was broken");
+        }
+        helper.succeed();
+    }
+
     // REGRESSION GUARD: a flat (never-lowered) slab resting on another flat slab must never gain a
     // spurious anchor, nor live-derive a lowered dy.
     @GameTest(structure = "fabric-gametest-api-v1:empty")

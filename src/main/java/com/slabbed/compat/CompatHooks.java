@@ -3,6 +3,8 @@ package com.slabbed.compat;
 import com.slabbed.compat.terrainslabs.TerrainSlabsCompat;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.function.Predicate;
+
 /**
  * Central compat dispatch. All compat hooks must be subtractive-only and
  * unreachable (no-op) when their target mod is not present.
@@ -10,6 +12,17 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class CompatHooks {
     private CompatHooks() {
     }
+
+    /**
+     * Test-only injectable override for {@link #shouldSkipSlabSupport}. Terrain Slabs is NOT on the
+     * gametest classpath, so {@link TerrainSlabsCompat#isLoaded()} is {@code false} and the real hook
+     * always returns {@code false} in tests — headless coverage of the TS-exclusion guards (sweeper
+     * Finding 2) therefore needs a seam to force the "TS-owned" verdict for a stand-in block registered
+     * under the {@code terrain_slabs} namespace. Mirrors the existing
+     * {@code SlabAnchorAttachment.clientLoweredSlabCarrierLookup} injectable-predicate precedent. Never
+     * set in production (only the gametest sets/clears it); {@code null} means "use the real hook".
+     */
+    public static volatile Predicate<BlockState> shouldSkipSlabSupportTestOverride = null;
 
     /**
      * Returns true if compat requires skipping slab offset behavior for this state.
@@ -26,6 +39,10 @@ public final class CompatHooks {
      * support-source semantics.
      */
     public static boolean shouldSkipSlabSupport(BlockState state) {
+        Predicate<BlockState> override = shouldSkipSlabSupportTestOverride;
+        if (override != null && override.test(state)) {
+            return true;
+        }
         if (TerrainSlabsCompat.isLoaded()) {
             return TerrainSlabsCompat.shouldSkipSlabSupport(state);
         }
