@@ -1832,6 +1832,89 @@ public final class SlabSupport {
     }
 
     /**
+     * A BLOCK ENTITY (hopper / chest / furnace / …) cantilevered over AIR — the block-entity analogue of
+     * {@link #isCantileverFullBlockCandidate} / {@link #isCantileverConnectingCandidate}. Air-gated
+     * ({@code pos.below()} must be air) so a block entity resting on its OWN solid ground beside a lowered
+     * neighbour keeps dy=0 and never sinks (the maintainer's NEVER-POP rail). Ceiling-hung block entities (hanging
+     * signs) are excluded — they hang from ABOVE and are dispatched first by {@link #getYOffsetInner}, so
+     * they never reach this lane. Recursion-safe (no {@link #getYOffset}).
+     */
+    private static boolean isCantileverBlockEntityCandidate(BlockGetter world, BlockPos pos, BlockState state) {
+        return world != null
+                && pos != null
+                && state != null
+                && !state.isAir()
+                && state.getBlock() instanceof EntityBlock
+                && !isAlwaysCeilingHungDecoration(state)
+                && state.getFluidState().isEmpty()
+                && world.getBlockState(pos.below()).isAir();
+    }
+
+    /**
+     * Port of 1.21.11 {@code 8b485767} adapted to 26.2's cantilever architecture: a BLOCK ENTITY
+     * (hopper / chest / …) cantilevered over AIR beside a lowered neighbour inherits that neighbour's
+     * lowered dy so it lands flush instead of placing "upward into vanilla" — the live report "a lowered
+     * chest with lowered hoppers next to it, the next horizontally chained hopper places upward". 1.21.11's
+     * flat {@code isAdjacentToLoweredSupport} filter has no direct 26.2 equivalent; 26.2's own family is the
+     * {@code adjacentLoweredSideMagnitude} / cantilever-BFS shape, so this is the block-entity sibling of
+     * those readers.
+     *
+     * <p>Breadth-first walk (bounded by {@link #MAX_CHAIN_DEPTH}) through connected cantilever block
+     * entities, each over air, returning the neighbour's magnitude as soon as the lane reaches a lowered
+     * source: a lowered BLOCK ENTITY (recognised recursion-safely by a persisted anchor OR a lowered
+     * column below it — the same two conditions {@link #isGenuinelyLoweredFullBlockSource} uses for full
+     * blocks), a genuine lowered FULL BLOCK / lowered SLAB (via {@link #adjacentLoweredSideMagnitude},
+     * which already carries the -1.0 compound magnitude), so a chest lowered on a slab is a valid source
+     * and a hopper→hopper→chest run all settle at one level. No lane self-sustains: a block-entity source
+     * requires a real anchor/column, not mere membership. Recursion-safe (no {@link #getYOffset}); reached
+     * only inside the {@link #IN_GET_Y_OFFSET} guard.
+     */
+    private static double adjacentLoweredBlockEntityMagnitude(BlockGetter world, BlockPos pos, BlockState state) {
+        if (!isCantileverBlockEntityCandidate(world, pos, state)) {
+            return Double.NaN;
+        }
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
+        queue.add(pos);
+        visited.add(pos.asLong());
+        while (!queue.isEmpty() && visited.size() <= MAX_CHAIN_DEPTH) {
+            BlockPos cursor = queue.removeFirst();
+            // A lowered FULL BLOCK or SLAB neighbour (with its -1.0 compound magnitude) is a valid source
+            // too, so a hopper beside a lowered stone/slab lane settles flush — reuse the existing reader.
+            double sideMag = adjacentLoweredSideMagnitude(world, cursor);
+            if (!Double.isNaN(sideMag)) {
+                return sideMag;
+            }
+            for (Direction dir : Direction.Plane.HORIZONTAL) {
+                BlockPos neighborPos = cursor.relative(dir);
+                BlockState neighbor = world.getBlockState(neighborPos);
+                if (neighbor == null || neighbor.isAir()) {
+                    continue;
+                }
+                // A lowered BLOCK-ENTITY neighbour is the reported source (a lowered chest/hopper). Its
+                // lowering must come from a REAL support — a persisted anchor or a lowered column below it —
+                // never mere lane membership, or the lane could self-sustain over air. Excludes ceiling-hung
+                // block entities (they are not lowered floor supports). Reads recursion-safely: no getYOffset.
+                if (neighbor.getBlock() instanceof EntityBlock
+                        && !isAlwaysCeilingHungDecoration(neighbor)
+                        && !(neighbor.getBlock() instanceof SlabBlock)) {
+                    if (SlabAnchorAttachment.isAnchored(world, neighborPos)
+                            || (shouldOffset(world, neighborPos, neighbor)
+                                    && slabColumnYOffset(world, neighborPos) < -1.0e-6d)) {
+                        return -0.5d;
+                    }
+                }
+                // Propagate only through further cantilevered block entities (each over air).
+                if (isCantileverBlockEntityCandidate(world, neighborPos, neighbor)
+                        && visited.add(neighborPos.asLong())) {
+                    queue.addLast(neighborPos);
+                }
+            }
+        }
+        return Double.NaN;
+    }
+
+    /**
      * Returns true when the non-slab solid block at {@code pos} carries compound dy=-1.0 —
      * i.e. the same conditions that cause {@link #getYOffsetInner} to return -1.0 for it.
      * Safe to call inside the IN_GET_Y_OFFSET recursion guard: does not delegate to getYOffset.
@@ -2134,7 +2217,7 @@ public final class SlabSupport {
      * These attach to the block ABOVE and have no floor variant, so their dy must be a pure
      * function of that support and must never be lowered by a block below them in the column.
      */
-    private static boolean isAlwaysCeilingHungDecoration(BlockState state) {
+    public static boolean isAlwaysCeilingHungDecoration(BlockState state) {
         Block block = state.getBlock();
         return block instanceof HangingRootsBlock
                 || block instanceof SporeBlossomBlock
@@ -2455,6 +2538,20 @@ public final class SlabSupport {
         if (!Double.isNaN(connectingMag)) {
             // GAP-1: -1.0 beside a compound stack carried out of the BFS, else -0.5.
             return connectingMag;
+        }
+
+        // Cantilevered BLOCK ENTITY (hopper/chest/…) over AIR beside a lowered block entity / full block /
+        // slab merges to that neighbour's lowered surface — the reported "next horizontally chained hopper
+        // places upward into vanilla" (port of 1.21.11 8b485767). Reached only when the block IS a block
+        // entity, is NOT a slab and NOT anchored / frozen-flat (all returned above), so there is no ordering
+        // conflict; a LOWERED block entity placed on its own slab is already anchored/frozen and never gets
+        // here (it took the anchor branch). AIR-GATED inside isCantileverBlockEntityCandidate (NEVER-POP
+        // rail: a hopper on solid ground beside a lowered lane stays flush at 0). Recursion-safe,
+        // MAX_CHAIN_DEPTH-bounded. Ceiling-hung block entities (hanging signs) were dispatched at the top of
+        // getYOffsetInner and are additionally excluded by the candidate, so they never reach this lane.
+        double blockEntityMag = adjacentLoweredBlockEntityMagnitude(world, pos, state);
+        if (!Double.isNaN(blockEntityMag)) {
+            return blockEntityMag;
         }
 
         if (isFloorTorch(state)) {
