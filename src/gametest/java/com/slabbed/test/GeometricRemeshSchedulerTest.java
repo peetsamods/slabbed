@@ -107,6 +107,41 @@ public final class GeometricRemeshSchedulerTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fencePlacedTriggersRemesh(GameTestHelper helper) {
+        // A fence is a cantilever CONNECTING-BLOCK candidate (SlabSupport.isCantileverConnectingCandidate)
+        // — a mid-chain propagator between a dependent cantilevered neighbour and its actual lowered
+        // source. It is deliberately NOT isSolidRender (see that method's javadoc), so it falls through
+        // the isSolidRender() fallback and needs its own instanceof in the gate.
+        if (!SlabGeometricRemeshScheduler.shouldRemeshNeighborhood(air(), Blocks.OAK_FENCE.defaultBlockState())) {
+            throw helper.assertionException(
+                    "placing a fence (air -> oak fence) is a cantilever connecting-block candidate and MUST schedule a re-mesh");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void wallPlacedTriggersRemesh(GameTestHelper helper) {
+        // Same connecting-block lane as fences (SlabSupport.isCantileverConnectingCandidate); walls are
+        // also not isSolidRender.
+        if (!SlabGeometricRemeshScheduler.shouldRemeshNeighborhood(air(), Blocks.COBBLESTONE_WALL.defaultBlockState())) {
+            throw helper.assertionException(
+                    "placing a wall (air -> cobblestone wall) is a cantilever connecting-block candidate and MUST schedule a re-mesh");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void ironBarsPlacedTriggersRemesh(GameTestHelper helper) {
+        // Same connecting-block lane as fences/walls (SlabSupport.isCantileverConnectingCandidate); iron
+        // bars are also not isSolidRender.
+        if (!SlabGeometricRemeshScheduler.shouldRemeshNeighborhood(air(), Blocks.IRON_BARS.defaultBlockState())) {
+            throw helper.assertionException(
+                    "placing iron bars (air -> iron bars) is a cantilever connecting-block candidate and MUST schedule a re-mesh");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void terrainSlabsSurfaceTriggersRemesh(GameTestHelper helper) {
         // A TS-owned surface terminates a column walk flush; its presence/absence changes a subject's dy.
         // Force the TS-owned verdict via the same seam the TS-guard tests use.

@@ -3,7 +3,10 @@ package com.slabbed.client;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.IronBarsBlock;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -53,6 +56,14 @@ import net.minecraft.world.level.block.state.BlockState;
  * SECTION RANGE are unit-testable headlessly, independent of whether a real client renderer executes
  * the resulting dirty. The actual dirty is issued by {@code ClientLevelBlockChangeRemeshMixin}.
  *
+ * <h2>Known accepted boundary (not a gap)</h2>
+ * A second vanilla client dirty path, {@code Level.setBlocksDirty}, bypasses this fix's hook (which is
+ * on {@code ClientLevel.sendBlockUpdated}, not this method). Confirmed by scanning every vanilla class
+ * in the merged 26.2 jar: its only two callers are {@code DetectorRailBlock} and
+ * {@code BasePressurePlateBlock}/{@code PressurePlateBlock} — neither is a type
+ * {@link #isPotentialLoweringSource} cares about (rails and pressure plates are never a lowering
+ * source/support). This is a documented, accepted boundary, not a gap to close.
+ *
  * <p>Lives in the client source set (only ever invoked from the client-only mixin, and only shipped
  * client-side via that source set), but is deliberately NOT {@code @Environment(CLIENT)}: it is pure,
  * dependency-free logic with no client-only references, and the annotation would make the headless
@@ -95,8 +106,11 @@ public final class SlabGeometricRemeshScheduler {
      * True when {@code state} is a block that could act as a Slabbed lowering source or support surface
      * for a geometric neighbour: a slab (bottom-slab support / column member / adjacency source), a full
      * opaque cube ({@code isSolidRender} — a cantilever/column full-block source or a support below), a
-     * block entity (hopper/chest cantilever lane), or a Terrain-Slabs surface (its presence terminates a
-     * column walk flush). {@code null}/air is never a source (it is only ever a transition ENDPOINT, and
+     * block entity (hopper/chest cantilever lane), a connecting block (fence/wall/iron-bars — a cantilever
+     * START/PROPAGATE candidate per {@code SlabSupport.isCantileverConnectingCandidate}, which is deliberately
+     * NOT solid-render so it falls through the {@code isSolidRender()} check below and needs its own
+     * instanceof), or a Terrain-Slabs surface (its presence terminates a column walk flush). {@code
+     * null}/air is never a source (it is only ever a transition ENDPOINT, and
      * {@link #shouldRemeshNeighborhood} inspects the non-air side). All checks are allocation-free and
      * read no world state.
      */
@@ -108,6 +122,11 @@ public final class SlabGeometricRemeshScheduler {
             return true;
         }
         if (state.getBlock() instanceof EntityBlock) {
+            return true;
+        }
+        if (state.getBlock() instanceof FenceBlock
+                || state.getBlock() instanceof WallBlock
+                || state.getBlock() instanceof IronBarsBlock) {
             return true;
         }
         if (CompatHooks.shouldSkipSlabSupport(state)) {
