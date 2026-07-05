@@ -4,65 +4,106 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * VERIFIED-HARMLESS PIN (Phase 5, sweeper agent {@code a0557ec561eab297f}'s L10 residual finding).
+ * VERIFIED-HARMLESS PIN (Phase 5, sweeper agent {@code a0557ec561eab297f}'s L10 residual finding;
+ * BROADENED in the follow-up sweep to the full {@code getYOffsetInner} ceiling-hung DISPATCH family).
  *
  * <p><b>The reported gap:</b> {@code SlabAnchorAttachment.freezeLoweredOnPlace}'s {@code dy < -1e-6}
- * branch calls {@code addAnchorUnchecked} with NO exclusion for the always-ceiling-hung decoration
- * family ({@code isAlwaysCeilingHungDecoration}: hanging roots, spore blossom, hanging sign). The one
- * carve-out that exists there, {@code SlabSupport.slabLoweringIsSideInheritedOnly}, is gated to
+ * branch calls {@code addAnchorUnchecked} with NO exclusion for the ceiling-hung decoration family. The
+ * one carve-out that exists there, {@code SlabSupport.slabLoweringIsSideInheritedOnly}, is gated to
  * {@code instanceof SlabBlock}, so it gives zero protection to a non-slab decoration. Therefore a
  * ceiling-hung decoration placed under a genuinely LOWERED (non-flush) support DOES acquire a
  * persistent {@code ANCHOR_TYPE} marker through the real placement hook — the pre-existing
  * {@code DecorativeObjectSupportAnchorTest.hangingLanternNeverAnchorsViaFreeze} guard only covered the
  * FLUSH case ({@code dy=0}, the branch is never entered), so nothing pinned this LOWERED combination.
  *
- * <p><b>Empirically measured (throwaway probe, built + run + deleted 2026-07-05) for all three
- * decorations, identical results — spore blossom / hanging roots / hanging sign under an anchored
- * {@code -0.5} stone support with air below (the
+ * <p><b>Scope correction (this is why the pin was broadened):</b> the ACTUAL condition in
+ * {@code getYOffsetInner} that routes a block into {@code ceilingHungDecorationDy} — the mechanism the
+ * whole "dy read is dead" argument depends on — is broader than the narrow
+ * {@code isAlwaysCeilingHungDecoration} predicate (hanging roots / spore blossom / hanging sign). It is:
+ * <pre>
+ *   isAlwaysCeilingHungDecoration(state)
+ *       || isDownwardSpeleothem(state)                       // a downward-pointed dripstone
+ *       || (state.hasProperty(HANGING) && state.getValue(HANGING))   // e.g. a HANGING lantern
+ * </pre>
+ * So the family that {@code freezeLoweredOnPlace} spuriously anchors — and that
+ * {@code ceilingHungDecorationDy} then renders as a pure function of the support ABOVE — also includes a
+ * <b>downward dripstone</b> and any <b>HANGING</b> block (a hanging lantern). All five are probed and
+ * pinned here.
+ *
+ * <p><b>Empirically measured (throwaway probe, built + run + deleted 2026-07-05) — IDENTICAL results for
+ * all FIVE members (spore blossom / hanging roots / hanging sign / downward dripstone / hanging lantern)
+ * under an anchored {@code -0.5} stone support with air below (the
  * {@code Slabbed2612LoweringContractTest.hangingRootsFollowLoweredSupportAbove} scene):</b>
  * <pre>
  *   supportDy=-0.5  dyBeforeFreeze=-0.5  anchoredAfterFreeze=TRUE  dyAfterFreeze=-0.5
  *   nativeRaycastEmpty=false  solidRender=false  dyAfterSupportBreak=0.0
  * </pre>
  *
- * <p><b>Why the spurious anchor is provably HARMLESS (both {@code isAnchored} consumers ruled out):</b>
+ * <p><b>Why the spurious anchor is provably HARMLESS (both {@code isAnchored} consumers ruled out for
+ * every member):</b>
  * <ol>
  *   <li><b>Rendered dy is a dead read.</b> {@code getYOffsetInner} dispatches the ceiling-hung family
- *       (line ~2119) BEFORE any anchor branch, so dy is a pure function of the support ABOVE and never
- *       consults the marker. Proven by {@code dyAfterSupportBreak=0.0}: after the lowered support is
- *       removed the decoration correctly re-reads flush — the stale anchor does NOT freeze it lowered.</li>
+ *       (the three-way condition above) BEFORE any anchor branch, so dy is a pure function of the
+ *       support ABOVE and never consults the marker. Proven by {@code dyAfterSupportBreak=0.0}: after the
+ *       lowered support is removed the decoration correctly re-reads flush — the stale anchor does NOT
+ *       freeze it lowered.</li>
  *   <li><b>Server/shared raycast-basis consumer ruled out.</b> The single behavioral {@code isAnchored}
  *       read in {@code SlabSupportStateMixin} lives in {@code slabbed$needsLoweredFullBlockRaycastBasis},
- *       which returns false unless the block's native interaction shape is EMPTY. Ceiling-hung
- *       decorations have a non-empty interaction shape ({@code nativeRaycastEmpty=false}), so the
- *       {@code isAnchored} read is never reached for them.</li>
- *   <li><b>Client crosshair-retarget consumers ruled out.</b> Every BEHAVIORAL {@code isAnchored} read
- *       in {@code GameRendererCrosshairRetargetMixin} (the two shared predicates
- *       {@code slabbed$isAnchoredLoweredFullBlock} / {@code slabbed$isAnchoredOrLoweredFullBlock} and
- *       the raw {@code slabbed$anchoredFbCandidateHitAt} / {@code slabbed$anchoredFbCandidateAt} sites)
- *       first requires {@code state.isSolidRender()}; the rest are diagnostic string builders with no
- *       effect. Ceiling-hung decorations are not solid-render ({@code solidRender=false}), so no
- *       targeting decision acts on the marker.</li>
+ *       which returns false unless the block's native interaction shape is EMPTY. Every member has a
+ *       non-empty interaction shape ({@code nativeRaycastEmpty=false}), so the {@code isAnchored} read is
+ *       never reached for them.</li>
+ *   <li><b>Client crosshair-retarget consumers ruled out.</b> Every BEHAVIORAL {@code isAnchored} read in
+ *       {@code GameRendererCrosshairRetargetMixin} is guarded so that a ceiling-hung decoration can never
+ *       reach or act on the marker. The <b>corrected</b> per-site accounting (13 raw {@code isAnchored}
+ *       call sites; the blanket "the rest are diagnostic string builders" claim in the original commit
+ *       was inaccurate — several are real behavioral branches that are safe for a DIFFERENT reason):
+ *       <ul>
+ *         <li>the two shared predicates {@code slabbed$isAnchoredLoweredFullBlock} /
+ *             {@code slabbed$isAnchoredOrLoweredFullBlock} return early on {@code !isSolidRender()}
+ *             BEFORE the {@code isAnchored} read — safe via solid-render;</li>
+ *         <li>{@code initialAnchored} (in {@code slabbed$traceSlabHeldUpGuardSideOwnerClassification},
+ *             which despite the "trace" name DOES pick the returned target) IS a real behavioral branch,
+ *             but it is co-gated with {@code initialFullBlock == isSolidRender()} in the SAME {@code &&}
+ *             expression — safe via solid-render co-gating, not by being diagnostic;</li>
+ *         <li>{@code slabbed$anchoredFbCandidateHitAt} reads {@code anchored} then immediately does
+ *             {@code if (!isSolidRender() || !anchored || dy != -0.5) return null;} — behavioral, but
+ *             safe via the solid-render guard in that return-null;</li>
+ *         <li>{@code slabbed$anchoredFbCandidateAt} similarly guards with
+ *             {@code if (!solid || !anchored || dy != -0.5) return null;} before building any string —
+ *             behavioral guard, not "just a diagnostic";</li>
+ *         <li>the two sites inside {@code slabbed$...MissSideRescue...} / {@code loweredSlabCandidateAt}
+ *             ({@code SlabAnchorAttachment.isAnchored(...)} in an {@code SlabBlock}-typed method) are
+ *             behind a {@code state.getBlock() instanceof SlabBlock} ENTRY guard — a ceiling-hung
+ *             decoration is never a {@code SlabBlock}, so they are unreachable via type, NOT via
+ *             solid-render;</li>
+ *         <li>the remaining five ({@code slabbed$formatSideOwnerFacts} and the trace/signature builders)
+ *             are genuinely diagnostic string/signature builders with no behavioral effect.</li>
+ *       </ul>
+ *       Since every member here is {@code solidRender=false} AND is never a {@code SlabBlock}, EVERY one
+ *       of those guard mechanisms rules it out — no targeting decision acts on the marker.</li>
  * </ol>
  *
  * <p>Because both consumers are structurally guarded and the render read is dead, the marker changes
- * NOTHING today. Adding an {@code isAlwaysCeilingHungDecoration} exclusion would be pure dead code
- * guarding against consumers that are already guarded — so this is pinned as harmless (the
- * {@code 41ce9f8a}-style precedent) rather than "fixed". This test asserts the ACTUAL measured state
- * so a regression is caught in EITHER direction:
+ * NOTHING today for any of the five members. Adding an exclusion (using the ACTUAL broader dispatch
+ * condition, mirroring how {@code slabLoweringIsSideInheritedOnly} carves out slabs) would be pure dead
+ * code guarding against consumers that are already guarded — so this is pinned as harmless (the
+ * {@code 41ce9f8a}-style precedent) rather than "fixed". Each pin asserts the ACTUAL measured state so a
+ * regression is caught in EITHER direction:
  * <ul>
- *   <li>if a future change makes a ceiling-hung decoration solid-render or gives it an empty native
- *       raycast, its guard assertion here goes RED — signalling the marker has become LIVE and now
- *       genuinely needs the exclusion;</li>
+ *   <li>if a future change makes a member solid-render or gives it an empty native raycast, its guard
+ *       assertion here goes RED — signalling the marker has become LIVE and now genuinely needs the
+ *       exclusion;</li>
  *   <li>if the {@code getYOffsetInner} ceiling-hung dispatch is reordered so the dead anchor starts
  *       holding dy lowered after the support is gone, {@code dyAfterSupportBreak} goes RED.</li>
  * </ul>
@@ -77,7 +118,8 @@ public final class CeilingHungDecorationFreezeAnchorTest {
 
     /**
      * Builds the genuinely-lowered scene, drives the REAL placement hook, and pins the measured
-     * anchored-but-harmless state and both consumer guards.
+     * anchored-but-harmless state and both consumer guards. Identical for every ceiling-hung dispatch
+     * member; {@code label} names which of the three-way {@code getYOffsetInner} conditions routes it.
      */
     private void assertAnchorsButIsHarmless(GameTestHelper helper, String label, BlockState decoState) {
         ServerLevel w = helper.getLevel();
@@ -117,12 +159,12 @@ public final class CeilingHungDecorationFreezeAnchorTest {
         SlabAnchorAttachment.freezeLoweredOnPlace(w, deco, placed);
 
         // PIN 1 — the known-spurious marker: freezeLoweredOnPlace's unchecked dy<0 branch DOES anchor a
-        // ceiling-hung decoration (no isAlwaysCeilingHungDecoration carve-out). Documented, not a bug.
+        // ceiling-hung decoration (no carve-out for the ceiling-hung dispatch family). Documented, not a bug.
         if (!SlabAnchorAttachment.isAnchored(w, deco)) {
             throw helper.assertionException(decoRel,
                     "PIN CHANGED: " + label + " no longer anchors via freezeLoweredOnPlace's unchecked dy<0 "
-                            + "branch. If an isAlwaysCeilingHungDecoration exclusion was added, this pin should be "
-                            + "re-scoped to assert NOT-anchored instead — re-read the class doc.");
+                            + "branch. If a ceiling-hung-dispatch exclusion was added, this pin should be re-scoped "
+                            + "to assert NOT-anchored instead — re-read the class doc.");
         }
 
         // PIN 2 — the marker is a DEAD read for rendered dy: the ceiling-hung dispatch in getYOffsetInner
@@ -135,18 +177,20 @@ public final class CeilingHungDecorationFreezeAnchorTest {
         }
 
         // PIN 3 — CONSUMER GUARD A (client crosshair retarget): every behavioral isAnchored read there is
-        // gated on isSolidRender(). A ceiling-hung decoration is NOT solid-render, so none of them act on
-        // the marker. If this flips to true the marker becomes live for targeting -> add the exclusion.
+        // ruled out for a non-solid-render, non-SlabBlock subject (solid-render early-return, solid-render
+        // co-gating, or a SlabBlock entry guard — see class doc for the per-site accounting). A ceiling-hung
+        // decoration is NOT solid-render, so none of them act on the marker. If this flips to true the marker
+        // becomes live for targeting -> add the exclusion.
         if (placed.isSolidRender()) {
             throw helper.assertionException(decoRel,
                     "CONSUMER GUARD A BROKEN: " + label + " is now solidRender=true, so the client crosshair "
                             + "retarget mixin's isAnchored reads would ACT on the spurious anchor. The "
-                            + "freezeLoweredOnPlace exclusion for isAlwaysCeilingHungDecoration is now REQUIRED.");
+                            + "freezeLoweredOnPlace exclusion for the ceiling-hung dispatch family is now REQUIRED.");
         }
 
         // PIN 4 — CONSUMER GUARD B (server/shared raycast-basis): SlabSupportStateMixin's lone behavioral
         // isAnchored read (slabbed$needsLoweredFullBlockRaycastBasis) only fires when the native
-        // interaction shape is EMPTY. A ceiling-hung decoration's is non-empty, so the read is never
+        // interaction shape is EMPTY. Every ceiling-hung member's is non-empty, so the read is never
         // reached. If this shape becomes empty the marker becomes live -> add the exclusion.
         VoxelShape nativeRaycast = placed.getInteractionShape(w, deco);
         boolean nativeRaycastEmpty = nativeRaycast == null || nativeRaycast.isEmpty();
@@ -168,24 +212,43 @@ public final class CeilingHungDecorationFreezeAnchorTest {
                     "MARKER NO LONGER INERT: " + label + " read " + dyAfterSupportBreak + " (not 0.0) after its "
                             + "support was removed — the spurious freeze anchor is now sticky-holding it lowered "
                             + "via some anchor-consulting dy path, which is a real 'pops/sticks' bug. Investigate "
-                            + "and add the isAlwaysCeilingHungDecoration exclusion to freezeLoweredOnPlace.");
+                            + "and add the ceiling-hung-dispatch exclusion to freezeLoweredOnPlace.");
         }
 
         helper.succeed();
     }
 
+    // --- Family member 1: isAlwaysCeilingHungDecoration -> SporeBlossomBlock ---
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void sporeBlossomUnderLoweredSupportAnchorsButHarmless(GameTestHelper helper) {
         assertAnchorsButIsHarmless(helper, "spore_blossom", Blocks.SPORE_BLOSSOM.defaultBlockState());
     }
 
+    // --- Family member 2: isAlwaysCeilingHungDecoration -> HangingRootsBlock ---
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void hangingRootsUnderLoweredSupportAnchorsButHarmless(GameTestHelper helper) {
         assertAnchorsButIsHarmless(helper, "hanging_roots", Blocks.HANGING_ROOTS.defaultBlockState());
     }
 
+    // --- Family member 3: isAlwaysCeilingHungDecoration -> HangingSignBlock ---
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void hangingSignUnderLoweredSupportAnchorsButHarmless(GameTestHelper helper) {
         assertAnchorsButIsHarmless(helper, "hanging_sign", Blocks.OAK_HANGING_SIGN.defaultBlockState());
+    }
+
+    // --- Family member 4: isDownwardSpeleothem -> a downward-pointed dripstone (broadened scope) ---
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void downwardDripstoneUnderLoweredSupportAnchorsButHarmless(GameTestHelper helper) {
+        assertAnchorsButIsHarmless(helper, "downward_dripstone",
+                Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                        .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN));
+    }
+
+    // --- Family member 5: HANGING property true -> a hanging lantern (broadened scope) ---
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingLanternUnderLoweredSupportAnchorsButHarmless(GameTestHelper helper) {
+        assertAnchorsButIsHarmless(helper, "hanging_lantern",
+                Blocks.LANTERN.defaultBlockState()
+                        .setValue(BlockStateProperties.HANGING, true));
     }
 }
