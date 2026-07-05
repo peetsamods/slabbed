@@ -140,16 +140,37 @@ public abstract class BlockItemPlacementIntentMixin {
         return Math.abs(yOffset + 1.0d) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
-    private static boolean slabbed$isPersistentLoweredBottomSlabCarrierCandidate(World world, BlockPos pos, BlockState state) {
+    /**
+     * Gate for {@link SlabAnchorAttachment#updatePersistentLoweredSlabCarrier}'s only call site.
+     *
+     * <p>PRE-FIX HISTORY: this gate used to require {@code SlabType.BOTTOM} and only checked
+     * "is the block below a lowered full block" ({@code isLoweredFullBlockSlabCarrierSupport}) —
+     * so a TOP- or DOUBLE-type slab placement could NEVER reach
+     * {@code updatePersistentLoweredSlabCarrier} at all, and neither could a BOTTOM slab resting
+     * on a lowered TOP/DOUBLE slab support (only a lowered non-slab full block was recognised).
+     * That meant the ENTIRE persistent-slab-carrier dispatcher — including the pre-existing
+     * horizontal-adjacency lane ({@code SlabSupport.isLoweredSideLaneSlabCarrier}, e.g. a TOP slab
+     * placed beside an anchored lowered full block) — was effectively dead at real placement time
+     * for anything except a BOTTOM slab landing on a lowered full block. Confirmed by direct
+     * empirical probe (temporary gametest, deleted): calling
+     * {@code SlabAnchorAttachment.updatePersistentLoweredSlabCarrier} directly against production
+     * code DID mark a TOP support slab as a persistent carrier, but the mixin's own gate would
+     * never have reached that call for it.
+     *
+     * <p>Widened to delegate directly to
+     * {@link SlabAnchorAttachment#qualifiesForPersistentLoweredSlabCarrier}, which already
+     * encodes the correct full disjunction (horizontal side-lane, bottom-on-lowered-full-block,
+     * bottom-on-adjacent-bridge-support, and the new vertical-on-lowered-TOP/DOUBLE-slab lane) —
+     * this gate's only remaining job is "is it even worth doing the qualifier's work", which the
+     * qualifier itself already checks safely for any slab type.
+     */
+    private static boolean slabbed$isPersistentLoweredSlabCarrierCandidate(World world, BlockPos pos, BlockState state) {
         if (!(state.getBlock() instanceof SlabBlock)
                 || !state.contains(SlabBlock.TYPE)
-                || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !state.getFluidState().isEmpty()) {
             return false;
         }
-        BlockPos belowPos = pos.down();
-        BlockState below = world.getBlockState(belowPos);
-        return SlabAnchorAttachment.isLoweredFullBlockSlabCarrierSupport(world, belowPos, below);
+        return SlabAnchorAttachment.qualifiesForPersistentLoweredSlabCarrier(world, pos, state);
     }
 
     private static boolean slabbed$isCompoundVisibleOwnerTopSlabResult(
@@ -1056,12 +1077,12 @@ public abstract class BlockItemPlacementIntentMixin {
                         false,
                         false,
                         "COMPOUND_VISIBLE_OWNER_TOP_SLAB");
-            } else if (slabbed$isPersistentLoweredBottomSlabCarrierCandidate(world, placePos, placedState)) {
+            } else if (slabbed$isPersistentLoweredSlabCarrierCandidate(world, placePos, placedState)) {
                 boolean compoundBefore = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
-                boolean persistentBefore = SlabAnchorAttachment.isAnchored(world, placePos);
+                boolean persistentBefore = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, placedState);
                 SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(world, placePos, placedState);
                 boolean compoundAfter = SlabAnchorAttachment.isCompoundFullBlockAnchor(world, placePos);
-                boolean persistentAfter = SlabAnchorAttachment.isAnchored(world, placePos);
+                boolean persistentAfter = SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, placedState);
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",
                         Registries.ITEM.getId(self),
@@ -1082,7 +1103,7 @@ public abstract class BlockItemPlacementIntentMixin {
                         compoundAfter,
                         persistentBefore,
                         persistentAfter,
-                        "held_slab_persistent_bottom_carrier_candidate");
+                        "held_slab_persistent_lowered_slab_carrier_candidate");
             } else {
                 RuntimeDiagnostics.recordPlace(
                         "finalization-return",

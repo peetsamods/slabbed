@@ -33,7 +33,8 @@ sourceSets {
                     "com/slabbed/test/Slabbed1211StandardChecklistHeadlessTest.java",
                     "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
                     "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java",
-                    "com/slabbed/test/RedstoneGateOnTerrainSlabsPlacementTest.java"
+                    "com/slabbed/test/RedstoneGateOnTerrainSlabsPlacementTest.java",
+                    "com/slabbed/test/SlabOnSlabVerticalAnchorTest.java"
             ])
         }
     }
