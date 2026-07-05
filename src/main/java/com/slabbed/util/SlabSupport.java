@@ -508,6 +508,21 @@ public final class SlabSupport {
         if (world == null || pos == null || state == null || state.isAir() || !state.getFluidState().isEmpty()) {
             return Double.NaN;
         }
+        // TS-COMPAT GUARD (CROSS-PORT LAW / failure mode 4, mirroring floorTorchBottomSlabSupportDy's
+        // L11 guard 68088bc6): this helper reports the lowered dy of the slab/full-block SUPPORT a
+        // fence / wall / iron-bars / floor-button rests directly on. A Terrain-Slabs-owned slab is a
+        // SELF-RENDERING surface TS positions itself, so Slabbed must NEVER add its own -0.5 on top of
+        // it (the double-offset "smoosh" family). The BOTTOM-support lane already delegates to the
+        // TS-guarded floorTorchBottomSlabSupportDy, and the below-support slab lane (via
+        // isLoweredDoubleSlabCarrier / isLoweredTopLikeSlabCarrier) already inherits the shared
+        // isTsExcludedFromVerticalSupport guard, but the non-bottom SUBJECT-slab lanes below
+        // (isAdjacentSideSlabLowered / the compound markers) had NO guard — empirically REACHABLE
+        // end-to-end: a TS-owned DOUBLE support persisted lowered via the side-lane still made a floor
+        // button read -0.5 with the TS override active (probe: dyWithOverride=-0.5, the smoosh). Reuse
+        // the single shared choke point rather than a new mechanism. No-op when Terrain Slabs is absent.
+        if (isTsExcludedFromVerticalSupport(state)) {
+            return Double.NaN;
+        }
         if (isBottomSlab(state)) {
             return floorTorchBottomSlabSupportDy(world, pos, state);
         }
@@ -522,7 +537,16 @@ public final class SlabSupport {
             }
             BlockPos belowPos = pos.below();
             BlockState below = world.getBlockState(belowPos);
-            if (below.getBlock() instanceof SlabBlock && isLoweredDoubleSlabCarrier(world, belowPos, below)) {
+            // L8/L11 widening (mirrors getYOffsetInner :2219 and floorTorchBottomSlabSupportDy): the below
+            // support slab lowers this support -0.5 when it is a lowered DOUBLE *or* TOP-type carrier.
+            // isLoweredDoubleSlabCarrier matched SlabType.DOUBLE only — a lowered TOP-type support (its own
+            // recessed top surface) was silently ignored, so a fence/wall/bars/floor-button on a TOP/DOUBLE
+            // support resting on a lowered TOP-type column stayed flush (probe: PROBE-GAP1 buttonDy=0.0 for a
+            // topLike=true/isDouble=false carrier below; should be -0.5). Both predicates share the
+            // isTsExcludedFromVerticalSupport guard, so this widening cannot leak a TS-owned support.
+            if (below.getBlock() instanceof SlabBlock
+                    && (isLoweredDoubleSlabCarrier(world, belowPos, below)
+                            || isLoweredTopLikeSlabCarrier(world, belowPos, below))) {
                 return -0.5d;
             }
             if (hasLoweredCarrierBelow(world, pos) || isAdjacentSideSlabLowered(world, pos, state)) {
