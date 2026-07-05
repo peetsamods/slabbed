@@ -204,16 +204,48 @@ public final class LiveCursorIntentRecorder {
         }
     }
 
-    // PORT NOTE (1.21.1, 2026-07-05): the 1.21.11 sibling's
-    // {@code recordVisualDiagnostic(BlockPos, com.slabbed.dev.SlabbedDiagnostics.Sample)} method is
-    // deliberately OMITTED on this branch. Its {@code SlabbedDiagnostics.Sample} visual-triad capture
-    // type does not exist here (this branch has no {@code com.slabbed.dev.SlabbedDiagnostics}), and its
-    // only caller on the sibling ({@code SlabdyClientCommands}, a per-tick crosshair-diagnostic HUD) is
-    // likewise absent — that whole {@code /slabdy} visual-diagnostic command surface is tracked as
-    // still-unported /slabdy field-parity work (see HANDOFF "Unified debug-tooling spec"). Every other
-    // recorder method — including the security-critical {@link #redactJavaCommand(String)} and all the
-    // placement/targeting methods invoked reflectively by the mixins — is ported verbatim. Re-add this
-    // method (and wire its caller) only once SlabbedDiagnostics itself is ported to this branch.
+    /**
+     * Enriched per-target visual capture: the full {@link com.slabbed.dev.SlabbedDiagnostics.Sample}
+     * (visual triad, DODO/smoosh/gap/triad-mismatch flags, anchor state, above/below dy). Fired
+     * from the client on crosshair-target CHANGE (deduped) so a manual play session leaves a
+     * scannable trail of every block looked at and which ones tripped a red flag. Safe to call
+     * every candidate change — no-ops fast when disabled.
+     *
+     * <p>PORT NOTE (1.21.1, 2026-07-05): ported from the 1.21.11 sibling now that
+     * {@code com.slabbed.dev.SlabbedDiagnostics} has been ported here too. Both this recorder
+     * and {@code SlabbedDiagnostics} live in the release-stripped {@code com.slabbed.dev} tree, so
+     * this hard reference is release-safe. The always-shipped caller
+     * ({@code SlabbedClient}'s per-tick target-change detection) reaches this method release-safely
+     * via {@code RuntimeDiagnostics.recordVisualDiagnostic(BlockPos, Object)}, which takes a
+     * plain {@code Object} sample and dispatches reflectively — closing the loop Phase 7
+     * ({@code b2a50c55}) deliberately left open.
+     */
+    public static void recordVisualDiagnostic(BlockPos pos, com.slabbed.dev.SlabbedDiagnostics.Sample s) {
+        if (!enabled || pos == null || s == null) {
+            return;
+        }
+        synchronized (LiveCursorIntentRecorder.class) {
+            ensureInitialized();
+            writeSession("visual_diagnostic", null, "CLIENT", fields(
+                    "pos", pos.toShortString(),
+                    "block", s.blockId(),
+                    "visualDy", com.slabbed.dev.SlabbedDiagnostics.format(s.visualDy()),
+                    "modelDy", com.slabbed.dev.SlabbedDiagnostics.format(s.modelDy()),
+                    "outlineMinY", com.slabbed.dev.SlabbedDiagnostics.format(s.outlineMinY()),
+                    "raycastMinY", com.slabbed.dev.SlabbedDiagnostics.format(s.raycastMinY()),
+                    "collisionMinY", com.slabbed.dev.SlabbedDiagnostics.format(s.collisionMinY()),
+                    "opaqueFullCube", Boolean.toString(s.opaqueFullCube()),
+                    "slab", Boolean.toString(s.slab()),
+                    "anchor", s.anchorState(),
+                    "above", s.aboveId(),
+                    "aboveDy", com.slabbed.dev.SlabbedDiagnostics.format(s.aboveDy()),
+                    "below", s.belowId(),
+                    "belowDy", com.slabbed.dev.SlabbedDiagnostics.format(s.belowDy()),
+                    "collisionFollowsVisual", Boolean.toString(s.collisionFollowsVisual()),
+                    "flags", s.flagSummary(),
+                    "suspect", Boolean.toString(s.anySuspect())));
+        }
+    }
 
     public static void recordCrosshairTarget(
             HitResult initialTarget,
