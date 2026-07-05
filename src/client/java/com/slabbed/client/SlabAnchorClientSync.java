@@ -208,9 +208,15 @@ public final class SlabAnchorClientSync {
             BlockState state,
             AttachmentType<LongOpenHashSet> attachmentType
     ) {
+        // setSectionRangeDirty takes SECTION coords, not block coords (ClientLevel forwards them
+        // straight to LevelExtractor.setSectionDirty with no >>4 conversion) — convert via the same
+        // helper SlabGeometricRemeshScheduler.dirtySectionBox uses, or this dirties a 27-section box
+        // far from pos instead of the intended +/-1-section neighbourhood around it.
+        SlabGeometricRemeshScheduler.SectionBox box =
+                SlabGeometricRemeshScheduler.dirtySectionBox(pos.getX(), pos.getY(), pos.getZ());
         mc.level.setSectionRangeDirty(
-                pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
-                pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1);
+                box.minX(), box.minY(), box.minZ(),
+                box.maxX(), box.maxY(), box.maxZ());
         logCompoundVisibleRenderRefresh(mc, pos, state, attachmentType);
     }
 
