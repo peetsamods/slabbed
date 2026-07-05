@@ -1352,12 +1352,30 @@ public final class SlabSupport {
         return SlabAnchorAttachment.isAnchored(world, pos);
     }
 
+    /**
+     * CROSS-PHASE-REVIEW FIX (sweeper Finding 2, correcting/hardening L8 f70eec96): the single shared
+     * TS-compat guard for the two vertical-support carrier predicates below
+     * ({@link #isLoweredDoubleSlabCarrier} and {@link #isLoweredTopLikeSlabCarrier}). Both classify a
+     * slab {@code state} they read from {@code world.getBlockState(cursor.below())} as a "lowered support
+     * to inherit -0.5 from"; a Terrain-Slabs-owned slab is a SELF-RENDERING surface that TS positions
+     * itself, so it must NEVER be treated as a Slabbed lowering support (the same choke-point rule
+     * {@link #hasBottomSlabBelow} already applies to its own below-read via
+     * {@link CompatHooks#shouldSkipSlabSupport}). The DOUBLE gap pre-existed; L8 doubled its reach by
+     * adding the TOP surface — per the CROSS-PORT LAW ("widening what's lowered leaks through unguarded
+     * consumers lacking a shouldSkipOffset guard"), the guard is added ONCE here, shared by both
+     * predicates, rather than duplicated per call site. No-op when Terrain Slabs is not loaded.
+     */
+    private static boolean isTsExcludedFromVerticalSupport(BlockState state) {
+        return CompatHooks.shouldSkipSlabSupport(state);
+    }
+
     public static boolean isLoweredDoubleSlabCarrier(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || state == null
                 || !(state.getBlock() instanceof SlabBlock)
                 || !state.hasProperty(SlabBlock.TYPE)
                 || state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
-                || !state.getFluidState().isEmpty()) {
+                || !state.getFluidState().isEmpty()
+                || isTsExcludedFromVerticalSupport(state)) {
             return false;
         }
         if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {
@@ -1392,7 +1410,8 @@ public final class SlabSupport {
                 || !state.hasProperty(SlabBlock.TYPE)
                 || (state.getValue(SlabBlock.TYPE) != SlabType.TOP
                         && state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE)
-                || !state.getFluidState().isEmpty()) {
+                || !state.getFluidState().isEmpty()
+                || isTsExcludedFromVerticalSupport(state)) {
             return false;
         }
         if (SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)) {

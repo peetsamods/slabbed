@@ -636,6 +636,79 @@ public final class Slabbed2612UseOnPlacementTest {
     //         this configuration is correct, not the feared gap. (RC4's full-block-on-edge case may still
     //         differ; this pins the slab-on-anchored-cantilever case as good.)
 
+    /**
+     * L8 REAL-PLACEMENT COVERAGE (cross-phase-review Finding 3, correcting L8 f70eec96): the L8 fix's
+     * HEADLINE layer was widening {@code BlockItemPlacementIntentMixin}'s below-support placement gate so
+     * a slab placed VERTICALLY on a lowered TOP/DOUBLE slab support actually reaches
+     * {@code updatePersistentLoweredSlabCarrier} from real player placement — but the only L8 test
+     * ({@code SlabOnSlabVerticalAnchorTest}) calls {@code updatePersistentLoweredSlabCarrier} DIRECTLY,
+     * bypassing the mixin gate entirely, so a regression in the gate would not be caught by anything in
+     * the suite. This test drives the upper slab through the REAL {@code useOn}/{@code BlockItem.place}
+     * path ({@code placeSlabViaAndFindChangedSlab}), then breaks the support, then asserts the upper slab
+     * stays at its lowered dy (does NOT pop back to flush) — the actual live-reported "pop upon breaking
+     * at the end". Mutation-proven RED against a revert of just the mixin-gate widening.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabOnLoweredDoubleSlabSupportPersistsAndDoesNotPopWhenSupportBroken(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // Build a genuinely-lowered + PERSISTED DOUBLE support the way real gameplay does (mirrors
+        // SlabOnSlabVerticalAnchorTest's scene): anchored dirt -> persisted lowered BOTTOM slab ->
+        // DOUBLE support beside it inheriting via the horizontal slab side-lane.
+        helper.setBlock(new BlockPos(2, 1, 2),
+                Blocks.SMOOTH_STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
+        BlockPos dirt = helper.absolutePos(new BlockPos(2, 2, 2));
+        helper.setBlock(new BlockPos(2, 2, 2), Blocks.DIRT.defaultBlockState());
+        SlabAnchorAttachment.addAnchor(level, dirt, level.getBlockState(dirt));
+
+        BlockPos loweredBottom = helper.absolutePos(new BlockPos(2, 3, 2));
+        helper.setBlock(new BlockPos(2, 3, 2),
+                Blocks.BIRCH_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
+        SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(level, loweredBottom, level.getBlockState(loweredBottom));
+
+        BlockPos support = helper.absolutePos(new BlockPos(3, 3, 2)); // DOUBLE support beside the lowered slab
+        helper.setBlock(new BlockPos(3, 3, 2),
+                Blocks.BIRCH_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE));
+        SlabAnchorAttachment.updatePersistentLoweredSlabCarrier(level, support, level.getBlockState(support));
+        double supportDy = SlabSupport.getYOffset(level, support, level.getBlockState(support));
+        if (Math.abs(supportDy + 0.5) > EPS) {
+            throw helper.assertionException(new BlockPos(3, 3, 2),
+                    "SETUP: DOUBLE support beside the lowered slab must render -0.5, got " + supportDy);
+        }
+        if (!SlabSupport.isLoweredTopLikeSlabCarrier(level, support, level.getBlockState(support))) {
+            throw helper.assertionException(new BlockPos(3, 3, 2),
+                    "SETUP: lowered DOUBLE support must be a top-like carrier for the upper slab to inherit");
+        }
+
+        // THE REAL PATH: place the upper slab by clicking the support's UP face — this flows through
+        // BlockItem.useOn -> BlockItem.place -> the widened below-support gate -> updatePersistentLoweredSlabCarrier.
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 5, 2)));
+        BlockPos upper = placeSlabViaAndFindChangedSlab(helper, player, support, Direction.UP, upHit(support));
+        if (!upper.equals(support.above())) {
+            throw helper.assertionException(helper.relativePos(support.above()),
+                    "L8 useOn: UP-face placement on the lowered DOUBLE support must land in the cell above, got "
+                            + helper.relativePos(upper).toShortString());
+        }
+        assertSlabDy(helper, level, upper, helper.relativePos(upper), -0.5,
+                "L8 useOn: slab placed on the lowered DOUBLE support must render -0.5 (rests flush on the recessed top)");
+        if (!SlabAnchorAttachment.isPersistentLoweredSlabCarrier(level, upper, level.getBlockState(upper))) {
+            throw helper.assertionException(helper.relativePos(upper),
+                    "L8 useOn (THE FIX): a slab placed via REAL useOn on a lowered TOP/DOUBLE support must PERSIST a "
+                            + "lowered-slab-carrier anchor through the placement mixin gate — the L8 headline layer. "
+                            + "Without the mixin-gate widening this placement never reaches updatePersistentLoweredSlabCarrier.");
+        }
+
+        // Break the support — the upper slab must NOT pop back to flush.
+        helper.setBlock(new BlockPos(3, 3, 2), Blocks.AIR.defaultBlockState());
+        double upperDyAfter = SlabSupport.getYOffset(level, upper, level.getBlockState(upper));
+        log("l8_useon_upper_after_support_broken", level, upper);
+        if (Math.abs(upperDyAfter + 0.5) > EPS) {
+            throw helper.assertionException(helper.relativePos(upper),
+                    "L8 useOn NEVER-POP: the useOn-placed upper slab popped from -0.5 to " + upperDyAfter
+                            + " after its support was broken (the live-reported 'pop upon breaking at the end')");
+        }
+        helper.succeed();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabOnAnchoredCantileverBlockFollowsToMinusHalf(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

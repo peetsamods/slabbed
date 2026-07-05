@@ -123,6 +123,7 @@ sourceSets {
             include("com/slabbed/test/SlabHeightStepCullGh24Test.java")
             include("com/slabbed/test/SlabOnSlabVerticalAnchorTest.java")
             include("com/slabbed/test/DecorativeObjectSupportAnchorTest.java")
+            include("com/slabbed/test/SlabVerticalSupportTerrainSlabsGuardTest.java")
         }
     }
 }

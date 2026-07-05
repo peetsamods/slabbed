@@ -1213,7 +1213,18 @@ public final class SlabAnchorAttachment {
         if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
             return false;
         }
-        return isAnchored(world, belowPos) || SlabSupport.getYOffset(world, belowPos, below) == -0.5;
+        // CROSS-PHASE-REVIEW FIX (sweeper Finding 1, correcting L8 f70eec96): the below-support reading
+        // must accept ANY lowered magnitude (< 0), not just exactly -0.5. When the L8 phase widened the
+        // BlockItemPlacementIntentMixin below-support gate to delegate to
+        // qualifiesForPersistentLoweredSlabCarrier (this method's caller), it replaced that mixin's OLD
+        // inline check — isOrdinaryFullBlockAnchorCandidate(below) && (isAnchored(below) ||
+        // getYOffset(below) < 0.0d) — so a BOTTOM slab placed for real on a full block that itself
+        // compounds to -1.0 (un-anchored, e.g. a full block resting on a lowered bottom-slab stack)
+        // must still qualify exactly as it did pre-L8. The exact "== -0.5" narrowed that: it rejected a
+        // -1.0 support, regressing the case the old gate accepted (proven RED via a throwaway probe:
+        // belowDy=-1.0, un-anchored -> OLD gate true, "== -0.5" sub-lane false). Restore the old, broader
+        // "< 0" behaviour (which subsumes -0.5 and -1.0) so persistence is never dropped.
+        return isAnchored(world, belowPos) || SlabSupport.getYOffset(world, belowPos, below) < 0.0d;
     }
 
     private static boolean qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlockNonRecursive(
