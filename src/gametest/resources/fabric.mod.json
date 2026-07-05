@@ -8,7 +8,8 @@
     "main": [
       "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest$TerrainSlabsRedstoneGateTestEntrypoint",
       "com.slabbed.test.SlabVerticalSupportTerrainSlabsGuardTest$TerrainSlabsVerticalSupportGuardTestEntrypoint",
-      "com.slabbed.test.FloorTorchSupportDyTest$TerrainSlabsFloorTorchSupportGuardTestEntrypoint"
+      "com.slabbed.test.FloorTorchSupportDyTest$TerrainSlabsFloorTorchSupportGuardTestEntrypoint",
+      "com.slabbed.test.FenceWallVisibleSupportDyTest$TerrainSlabsFenceWallSupportGuardTestEntrypoint"
     ],
     "fabric-gametest": [
       "com.slabbed.test.GhostLoweredCollisionProofTest",
@@ -25,7 +26,8 @@
       "com.slabbed.test.DecorativeObjectSupportAnchorTest",
       "com.slabbed.test.SlabVerticalSupportTerrainSlabsGuardTest",
       "com.slabbed.test.FloorTorchSupportDyTest",
-      "com.slabbed.test.CeilingHungDecorationFreezeAnchorTest"
+      "com.slabbed.test.CeilingHungDecorationFreezeAnchorTest",
+      "com.slabbed.test.FenceWallVisibleSupportDyTest"
     ]
   },
   "depends": {
