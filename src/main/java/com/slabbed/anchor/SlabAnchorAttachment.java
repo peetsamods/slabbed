@@ -3,6 +3,7 @@ package com.slabbed.anchor;
 import java.util.function.Predicate;
 import com.mojang.serialization.Codec;
 import com.slabbed.Slabbed;
+import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
@@ -1156,7 +1157,29 @@ public final class SlabAnchorAttachment {
         return state != null
                 && state.getBlock() instanceof SlabBlock
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getFluidState().isEmpty();
+                && state.getFluidState().isEmpty()
+                // TS-COMPAT SUBJECT GUARD (CROSS-PORT LAW / failure mode 4). A Terrain-Slabs-owned slab is
+                // a SELF-RENDERING surface TS positions itself; from Slabbed's perspective it must be treated
+                // as flush/vanilla-solid, FULL STOP (the world-hole invariant) — it must NEVER become a
+                // Slabbed "persistent lowered slab carrier" in its own right. This is the single shared STATE
+                // gate every carrier read/write path routes through: isPersistentLoweredSlabCarrier (read),
+                // qualifiesForPersistentLoweredSlabCarrier (write — all four disjunction lanes),
+                // qualifiesForPersistentLoweredSlabOnVerticalLoweredSlabSupport (Lane D), and via
+                // isBottomPersistentLoweredSlabCarrierState the two *NonRecursive read helpers + their
+                // qualifier lanes. Empirically REACHABLE before this guard (throwaway probe driving the real
+                // getYOffsetInner path under the shouldSkipSlabSupportTestOverride seam): a TS-owned BOTTOM
+                // slab resting on a lowered full block (Lane B/C NonRecursive), or on a lowered TOP/DOUBLE
+                // support (Lane D), or side-lane beside a vanilla lowered slab, both LIVE-qualified as a
+                // carrier AND its own getYOffsetInner read -0.5 — Slabbed treating a TS-positioned surface as
+                // if IT were subtractively lowered. (The public getYOffset entry is separately guarded by its
+                // own CompatHooks.shouldSkipOffset(state) short-circuit for a TS subject, so the render dy was
+                // already flush in production; this closes the carrier-MARKER vector so no stale/inert TS
+                // marker can ever be written or read by any un-shouldSkipOffset-guarded consumer — the
+                // internal getYOffsetInner recursions and every direct isPersistentLoweredSlabCarrier reader.)
+                // NARROWING only, keyed on the terrain_slabs/terrainslabs namespace → byte-identical without
+                // Terrain Slabs loaded. Reuses the one shared shouldSkipSlabSupport choke point (no new
+                // mechanism), the 5304e4b3/68088bc6/c7a19048/6a3f2859 precedent.
+                && !CompatHooks.shouldSkipSlabSupport(state);
     }
 
     private static boolean isCompoundVisibleSideLowerSlabState(BlockState state) {

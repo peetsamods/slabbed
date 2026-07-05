@@ -128,6 +128,7 @@ sourceSets {
             include("com/slabbed/test/CeilingHungDecorationFreezeAnchorTest.java")
             include("com/slabbed/test/FenceWallVisibleSupportDyTest.java")
             include("com/slabbed/test/CantileverBfsTerrainSlabsGuardTest.java")
+            include("com/slabbed/test/TerrainSlabsOwnSlabDyGuardTest.java")
         }
     }
 }
