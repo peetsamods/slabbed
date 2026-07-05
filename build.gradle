@@ -9,7 +9,11 @@ loom {
         client {
             // Slabbed debug lanes stay default-off even in dev runs (guardrail 9: deliberate
             // enable path). Pass -Dslabbed.debug.sbsb=true explicitly when a session needs it.
-            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true"
+            // EXCEPTION: the /slabdy passive overlay defaults OFF in the release jar (players never
+            // see a diagnostic HUD unless they type bare /slabdy — matches the sibling's beta.4
+            // default flip), but a dev/test session gets it on for convenience.
+            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true",
+                    "-Dslabbed.targetDyOverlay=true"
         }
     }
 }
@@ -40,7 +44,8 @@ sourceSets {
                     "com/slabbed/test/ChainRestingAnchorOrientationTest.java",
                     "com/slabbed/test/SlabHeightStepCullGh24Test.java",
                     "com/slabbed/test/RecorderManifestRedactionTest.java",
-                    "com/slabbed/test/SlabbedDiagnosticsTest.java"
+                    "com/slabbed/test/SlabbedDiagnosticsTest.java",
+                    "com/slabbed/test/SlabdyRowFormatterTest.java"
             ])
         }
     }

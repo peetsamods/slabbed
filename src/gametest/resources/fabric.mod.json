@@ -29,7 +29,8 @@
       "com.slabbed.test.ChainRestingAnchorOrientationTest",
       "com.slabbed.test.SlabHeightStepCullGh24Test",
       "com.slabbed.test.RecorderManifestRedactionTest",
-      "com.slabbed.test.SlabbedDiagnosticsTest"
+      "com.slabbed.test.SlabbedDiagnosticsTest",
+      "com.slabbed.test.SlabdyRowFormatterTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",
