@@ -2529,6 +2529,20 @@ public final class SlabSupport {
         if (world == null || pos == null || state == null || !isBottomSlab(state) || !state.getFluidState().isEmpty()) {
             return Double.NaN;
         }
+        // TS-COMPAT GUARD (CROSS-PORT LAW / failure mode 4, mirroring the L8-corrections phase 5304e4b3):
+        // this helper reports the lowered dy of the BOTTOM slab SUPPORT an object (floor torch, sign,
+        // door, trapdoor, fence gate, floor button, full block, ...) rests directly on. A Terrain-Slabs-
+        // owned slab is a SELF-RENDERING surface TS positions itself, so Slabbed must NEVER add its own
+        // -0.5 on top of it — doing so is the double-offset "smoosh" family. The below-support slab lane
+        // (via isLoweredDoubleSlabCarrier / isLoweredTopLikeSlabCarrier) already inherits the shared
+        // isTsExcludedFromVerticalSupport guard, but the SUBJECT-slab lanes below
+        // (isPersistentLoweredBottomSlabCarrierNonRecursive / isAdjacentSideSlabLowered / the compound
+        // markers) had NO guard — empirically REACHABLE: a TS-owned bottom slab that Slabbed persisted as
+        // a lowered carrier still reported -0.5 here (probe: withOverride stayed -0.5). Reuse the single
+        // shared choke point rather than a new mechanism. No-op when Terrain Slabs is not loaded.
+        if (isTsExcludedFromVerticalSupport(state)) {
+            return Double.NaN;
+        }
         if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)) {
             return -1.0d;
@@ -2539,7 +2553,15 @@ public final class SlabSupport {
         BlockPos belowPos = pos.below();
         BlockState below = world.getBlockState(belowPos);
         if (below.getBlock() instanceof SlabBlock) {
-            if (isLoweredDoubleSlabCarrier(world, belowPos, below)) {
+            // L8 widening (mirrors getYOffsetInner :2219 and beta35FenceWallVisibleSupportDy): the below
+            // support slab lowers this slab -0.5 when it is a lowered DOUBLE *or* TOP-type carrier.
+            // isLoweredDoubleSlabCarrier matched SlabType.DOUBLE only — a lowered TOP-type support (its own
+            // recessed top surface) was silently ignored, so an object on a bottom slab resting on a
+            // lowered TOP-type column stayed flush (probe: PROBE-TOP-VERTLANE restingHelperDy=0.0 for a
+            // topIsTopLike=true/topIsDouble=false support; should be -0.5). Both predicates share the
+            // isTsExcludedFromVerticalSupport guard, so this widening cannot leak a TS-owned support.
+            if (isLoweredDoubleSlabCarrier(world, belowPos, below)
+                    || isLoweredTopLikeSlabCarrier(world, belowPos, below)) {
                 return -0.5d;
             }
         } else if (!isCompoundVisibleOwnerTopSlab(world, pos, state)
