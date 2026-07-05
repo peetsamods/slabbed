@@ -1,23 +1,25 @@
 package com.slabbed.client;
 
-import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabdyRowFormatter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
-import java.util.Locale;
+import java.util.List;
 
 /**
  * Dev HUD readout of the crosshair-targeted block: position, name, source
  * (vanilla / other mod), the visual dy from {@link SlabSupport#getYOffset},
- * and LOWERED / RAISED / flush + hit side.
+ * LOWERED / RAISED / flush, hit side/half, the hit vector, the outline box,
+ * the held item, the expected-placement neighbour, and the block below — the
+ * per-field line-building is done headlessly in {@link SlabdyRowFormatter} (so
+ * the exact strings shown here are gametest-assertable); this class only wires
+ * the live crosshair target in and draws.
  *
  * <p>Rendered by {@code TargetDyHudMixin} at the tail of
  * {@code Gui.extractRenderState} (no Fabric rendering-API dependency, which
@@ -64,57 +66,21 @@ public final class TargetDyOverlay {
         }
         BlockPos pos = blockHit.getBlockPos();
         BlockState state = client.level.getBlockState(pos);
-        var id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
-        String namespace = id == null ? "?" : id.getNamespace();
+        ItemStack held = client.player == null ? ItemStack.EMPTY : client.player.getMainHandItem();
 
+        List<String> lines = SlabdyRowFormatter.formatRow(
+                client.level, pos, state, blockHit.getDirection(), blockHit.getLocation(), held);
+
+        // Colour keyed on the visual dy — yellow when lowered, orange when raised, grey when flush.
         double dy = SlabSupport.getYOffset(client.level, pos, state);
-        String status = dy < -1.0e-6 ? "LOWERED" : (dy > 1.0e-6 ? "RAISED" : "flush");
-        String source = "minecraft".equals(namespace) ? "VANILLA" : "MOD:" + namespace;
-
-        // Which half of the targeted block the crosshair is on, relative to its VISUAL shape
-        // (the lowered/offset outline). Drives slab top/bottom placement.
-        String half = "?";
-        VoxelShape outline = state.getShape(client.level, pos);
-        if (!outline.isEmpty()) {
-            double mid = pos.getY() + (outline.min(Direction.Axis.Y) + outline.max(Direction.Axis.Y)) / 2.0;
-            half = blockHit.getLocation().y >= mid ? "UPPER" : "LOWER";
-        }
-
-        // Why is the block at this dy? — distinguishes a frozen/anchored placement from live
-        // geometric/compound-side lowering (the snapping we are diagnosing).
-        String why;
-        if (SlabAnchorAttachment.isFrozenFlat(client.level, pos)) {
-            why = "FROZEN-FLAT";
-        } else if (SlabAnchorAttachment.isAnchored(client.level, pos)) {
-            why = "ANCHORED";
-        } else if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(client.level, pos, state)
-                || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(client.level, pos, state)
-                || SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(client.level, pos, state)
-                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(client.level, pos, state)) {
-            why = "compound-side";
-        } else {
-            why = (dy < -1.0e-6 || dy > 1.0e-6) ? "geometric" : "-";
-        }
-
-        String line1 = "[slabdy] " + pos.toShortString() + "  " + state.getBlock().getName().getString();
-        String line2 = "  " + source + " · dy=" + format(dy) + " " + status
-                + " · side=" + blockHit.getDirection().getName() + " · half=" + half;
-        String line3 = "  src=" + why;
         int color = dy == 0.0d ? 0xffd7d7d7 : (dy < 0.0d ? 0xffffd166 : 0xffff8866);
-        drawLine(context, client, line1, 8, 8, color);
-        drawLine(context, client, line2, 8, 20, color);
-        drawLine(context, client, line3, 8, 32, color);
+        for (int i = 0; i < lines.size(); i++) {
+            drawLine(context, client, lines.get(i), 8, 8 + (i * 12), color);
+        }
     }
 
     private static void drawLine(GuiGraphicsExtractor context, Minecraft client, String line, int x, int y, int color) {
         context.fill(x - 3, y - 3, x + client.font.width(line) + 3, y + 11, 0x99000000);
         context.text(client.font, line, x, y, color, true);
-    }
-
-    private static String format(double value) {
-        if (!Double.isFinite(value)) {
-            return "NaN";
-        }
-        return String.format(Locale.ROOT, "%.3f", value);
     }
 }

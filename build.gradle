@@ -130,6 +130,7 @@ sourceSets {
             include("com/slabbed/test/CantileverBfsTerrainSlabsGuardTest.java")
             include("com/slabbed/test/TerrainSlabsOwnSlabDyGuardTest.java")
             include("com/slabbed/test/SlabLaneConduitTerrainSlabsGuardTest.java")
+            include("com/slabbed/test/SlabdyRowFormatterFieldsTest.java")
         }
     }
 }
