@@ -310,7 +310,20 @@ public final class SlabAnchorAttachment {
         // structural pieces so decorative followers stay geometric; non-structural and natural
         // (setBlockState, which never calls onPlaced) pieces are untouched.
         boolean structural = isOrdinaryFullBlockAnchorCandidate(world, pos, state)
-                || state.getBlock() instanceof SlabBlock;
+                || state.getBlock() instanceof SlabBlock
+                // A flat-placed BLOCK ENTITY (hopper / chest / furnace / barrel resting on flush ground)
+                // must ALSO freeze-flat so a slab or lowered carrier shoved under it later cannot pull it
+                // down to -0.5 — the reported "hopper places too high, then snaps down when a block is
+                // placed underneath". Block entities are rejected by isOrdinaryFullBlockAnchorCandidate
+                // (which excludes EntityBlock), yet isSlabSitCandidate lowers every EntityBlock onto a
+                // slab, so a flat hopper's height came ONLY from a live column walk that toggled 0<->-0.5
+                // whenever the cell below changed — that toggle IS the snap. Ceiling-hung block entities
+                // (hanging signs) are excluded: they hang from ABOVE and must keep following their support
+                // (getYOffsetInner also dispatches them first, before any anchor/frozen read). The LOWERED
+                // block-entity case is already covered structurally by the addAnchorUnchecked branch above
+                // (dy < 0), exactly like the decorative-object case — see DecorativeObjectSupportAnchorTest.
+                || (state.getBlock() instanceof EntityBlock
+                        && !SlabSupport.isAlwaysCeilingHungDecoration(state));
         if (structural) {
             addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
         }
