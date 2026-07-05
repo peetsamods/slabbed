@@ -33,7 +33,8 @@
       "com.slabbed.test.FenceWallVisibleSupportDyTest",
       "com.slabbed.test.CantileverBfsTerrainSlabsGuardTest",
       "com.slabbed.test.TerrainSlabsOwnSlabDyGuardTest",
-      "com.slabbed.test.SlabLaneConduitTerrainSlabsGuardTest"
+      "com.slabbed.test.SlabLaneConduitTerrainSlabsGuardTest",
+      "com.slabbed.test.SlabdyRowFormatterFieldsTest"
     ]
   },
   "depends": {
