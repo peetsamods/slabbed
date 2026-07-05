@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.dev.SlabbedDiagnostics;
+import com.slabbed.dev.audit.LiveCursorIntentRecorder;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -11,6 +12,9 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.GameTest;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 /**
  * Proves the {@link SlabbedDiagnostics} detectors actually fire — both the pure predicates
@@ -197,6 +201,57 @@ public final class SlabbedDiagnosticsTest {
         ctx.assertTrue(!direct.anySuspect(), "a clean lowered fence must trip no flags");
         ctx.assertTrue(bridgedFlags == null,
                 "flag-summary bridge must return null for a clean sample, got: " + bridgedFlags);
+        ctx.complete();
+    }
+
+    /**
+     * Perf-hygiene regression (cross-phase review, 2026-07-05): {@code isRecorderEnabled()} used to
+     * re-resolve {@code LiveCursorIntentRecorder.isEnabled}'s {@link Method} handle via a fresh
+     * {@code getMethod()} call on every invocation instead of caching it like every sibling
+     * reflective forwarder in {@code RuntimeDiagnostics} does. This is a pure perf fix — the
+     * returned boolean must be byte-for-byte identical before and after — so the proof here is
+     * twofold: (1) repeated calls still track {@code LiveCursorIntentRecorder}'s real state
+     * (including after a toggle), and (2) the backing {@code IS_ENABLED_METHOD} field is populated
+     * exactly once and stays the SAME {@link Method} reference across calls, i.e. it is genuinely
+     * cached rather than re-looked-up.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void isRecorderEnabledTracksLiveStateViaACachedMethodHandle(TestContext ctx) throws ReflectiveOperationException {
+        boolean before = LiveCursorIntentRecorder.isEnabled();
+        try {
+            LiveCursorIntentRecorder.toggle();
+            boolean toggled = LiveCursorIntentRecorder.isEnabled();
+            ctx.assertTrue(RuntimeDiagnostics.isRecorderEnabled() == toggled,
+                    "isRecorderEnabled() must reflect the recorder's real (toggled) state, not a stale read");
+            ctx.assertTrue(RuntimeDiagnostics.isRecorderEnabled() == toggled,
+                    "a second call must return the identical value as the first (no per-call drift)");
+
+            LiveCursorIntentRecorder.toggle();
+            boolean toggledBack = LiveCursorIntentRecorder.isEnabled();
+            ctx.assertTrue(toggledBack == before, "toggle must be a pure flip, restoring the original state");
+            ctx.assertTrue(RuntimeDiagnostics.isRecorderEnabled() == toggledBack,
+                    "isRecorderEnabled() must track the state change back too, proving the cached handle "
+                            + "still dispatches live (it is cached, not stale/frozen)");
+        } finally {
+            // Defensive: guarantee we leave the recorder exactly as we found it even if an assertion above throws.
+            if (LiveCursorIntentRecorder.isEnabled() != before) {
+                LiveCursorIntentRecorder.toggle();
+            }
+        }
+
+        // Reach into RuntimeDiagnostics' cached field via reflection (test-only introspection) and
+        // confirm it is populated once and is the SAME Method reference across repeated accesses —
+        // the actual "resolved once, not per-call" claim this fix makes.
+        Field methodField = RuntimeDiagnostics.class.getDeclaredField("IS_ENABLED_METHOD");
+        methodField.setAccessible(true);
+        Object firstRead = methodField.get(null);
+        ctx.assertTrue(firstRead instanceof Method,
+                "IS_ENABLED_METHOD must be populated in a dev/test build where the recorder class is present");
+        RuntimeDiagnostics.isRecorderEnabled();
+        RuntimeDiagnostics.isRecorderEnabled();
+        Object secondRead = methodField.get(null);
+        ctx.assertTrue(firstRead == secondRead,
+                "IS_ENABLED_METHOD must be the SAME cached Method instance across calls, not re-resolved per call");
         ctx.complete();
     }
 }

@@ -74,11 +74,26 @@ public final class RuntimeDiagnostics {
     // that has shipped twice on this project (PERF hygiene gate). A null RECORDER_CLASS is the expected
     // shape of a release build; every recorder-forwarding method below no-ops cheaply when it is null.
     private static final Class<?> RECORDER_CLASS = resolveRecorderClass();
+    // Cached alongside RECORDER_CLASS for the same reason: isRecorderEnabled() is polled every
+    // client tick, so the isEnabled() Method handle must be resolved once, not re-looked-up via
+    // getMethod() on every call (the exact per-frame-reflection lag class documented above).
+    private static final Method IS_ENABLED_METHOD = resolveIsEnabledMethod();
 
     private static Class<?> resolveRecorderClass() {
         try {
             return Class.forName(LIVE_CURSOR_INTENT_RECORDER_CLASS_NAME);
         } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
+    }
+
+    private static Method resolveIsEnabledMethod() {
+        if (RECORDER_CLASS == null) {
+            return null;
+        }
+        try {
+            return RECORDER_CLASS.getMethod("isEnabled");
+        } catch (ReflectiveOperationException | LinkageError e) {
             return null;
         }
     }
@@ -103,13 +118,13 @@ public final class RuntimeDiagnostics {
     // itself (its own isEnabled()/toggle()); these forward reflectively so always-shipped code carries
     // no hard reference to the release-excluded recorder class.
 
-    /** Polled every client tick by the /slabdy record command surface — RECORDER_CLASS is cached, not re-resolved. */
+    /** Polled every client tick by the /slabdy record command surface — IS_ENABLED_METHOD is cached, not re-resolved. */
     public static boolean isRecorderEnabled() {
-        if (RECORDER_CLASS == null) {
+        if (IS_ENABLED_METHOD == null) {
             return false;
         }
         try {
-            return (boolean) RECORDER_CLASS.getMethod("isEnabled").invoke(null);
+            return (boolean) IS_ENABLED_METHOD.invoke(null);
         } catch (ReflectiveOperationException | LinkageError ignored) {
             return false;
         }
@@ -160,7 +175,7 @@ public final class RuntimeDiagnostics {
             return;
         }
         try {
-            if (!(boolean) RECORDER_CLASS.getMethod("isEnabled").invoke(null)) {
+            if (IS_ENABLED_METHOD == null || !(boolean) IS_ENABLED_METHOD.invoke(null)) {
                 return;
             }
             RECORDER_CLASS.getMethod(methodName, paramTypes).invoke(null, args);
@@ -208,7 +223,7 @@ public final class RuntimeDiagnostics {
             return;
         }
         try {
-            if (!(boolean) RECORDER_CLASS.getMethod("isEnabled").invoke(null)) {
+            if (IS_ENABLED_METHOD == null || !(boolean) IS_ENABLED_METHOD.invoke(null)) {
                 return;
             }
             RECORD_VISUAL_DIAGNOSTIC_METHOD.invoke(null, pos, sample);
