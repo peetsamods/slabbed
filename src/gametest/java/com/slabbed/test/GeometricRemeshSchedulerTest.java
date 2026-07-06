@@ -340,6 +340,71 @@ public final class GeometricRemeshSchedulerTest {
         helper.succeed();
     }
 
+    // ── plain-anchor refresh call site: block coords MUST be converted to section coords ──────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void anchorAttachmentRefreshConvertsBlockCoordsToSectionCoords(GameTestHelper helper) {
+        // The freeze-on-place mesh-staleness fix. When a plain ANCHOR_TYPE / FROZEN_FLAT_TYPE /
+        // LOWERED_SLAB_CARRIER_TYPE / COMPOUND_FULL_BLOCK_ANCHOR_TYPE attachment set changes on the client,
+        // SlabAnchorClientSync.scheduleRerendersForSet used to call ClientLevel.setBlocksDirty(pos, current,
+        // current) — a NO-OP, because ModelManager.requiresRender(a, b) returns false the instant a == b
+        // (BlockStates are interned singletons). Server freeze-on-place records the anchor ~40ms after
+        // placement with NO BlockState change, so the section never re-baked to the anchored dy until an
+        // unrelated change or Sodium's background sweep rebuilt it (the live-reported delayed snap — the
+        // live-cursor recorder captured two placement entries ~41ms apart with byte-identical afterState,
+        // afterDy/afterLaneKind flipping 0.0/unnamed → -0.5/anchored_full_block). The fixed call site now
+        // routes through SlabGeometricRemeshScheduler.anchorAttachmentDirtySectionBox (the exact method
+        // scheduleAnchorAttachmentRenderRefresh names) + SlabImportantRemesh.dirtyImportant, a real
+        // section-dirty. Asserting on that method's OWN output means a mutation reverting the call site to the
+        // no-op setBlocksDirty (which no longer references this helper) or repointing the helper at a wrong
+        // conversion turns this RED. SlabAnchorClientSync itself is @Environment(CLIENT) and cannot load in
+        // the headless server gametest, so the shared conversion lives on this un-annotated scheduler.
+        SectionBox box = SlabGeometricRemeshScheduler.anchorAttachmentDirtySectionBox(100, 64, 100);
+
+        int sx = SectionPos.blockToSectionCoord(100); // 6
+        int sy = SectionPos.blockToSectionCoord(64);  // 4
+        int sz = SectionPos.blockToSectionCoord(100); // 6
+        assertBox(helper, box, sx - 1, sy - 1, sz - 1, sx + 1, sy + 1, sz + 1,
+                "plain-anchor refresh at block (100,64,100)");
+
+        // Explicit floor: SECTION box [5,3,5 .. 7,5,7], NOT a raw-BLOCK box [99,63,99 .. 101,65,101].
+        if (box.minX() != 5 || box.minY() != 3 || box.minZ() != 5
+                || box.maxX() != 7 || box.maxY() != 5 || box.maxZ() != 7) {
+            throw helper.assertionException(
+                    "plain-anchor refresh at block (100,64,100) must dirty SECTION box [5,3,5 .. 7,5,7]; got " + box);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void anchorAttachmentRefreshBoxMatchesTheSharedDirtySectionBoxHelper(GameTestHelper helper) {
+        // Single-authority invariant: the plain-anchor refresh call site, the compound-visible refresh call
+        // site, and the geometric-remesh mixin must all derive their dirty region from the SAME
+        // SlabGeometricRemeshScheduler.dirtySectionBox conversion — so the three re-mesh paths can never
+        // silently diverge on dirty-region shape/radius. Swept across positive, negative and section-boundary
+        // block coordinates.
+        int[][] positions = {
+                {100, 64, 100},
+                {0, 0, 0},
+                {15, 15, 15},     // last block of section 0 on every axis
+                {16, 16, 16},     // first block of section 1
+                {-1, -1, -1},     // floor-division edge: section -1, not 0
+                {-16, -33, -17},
+                {2048, 200, -2048},
+        };
+        for (int[] p : positions) {
+            SectionBox callSite = SlabGeometricRemeshScheduler.anchorAttachmentDirtySectionBox(p[0], p[1], p[2]);
+            SectionBox shared = SlabGeometricRemeshScheduler.dirtySectionBox(p[0], p[1], p[2]);
+            if (!callSite.equals(shared)) {
+                throw helper.assertionException(
+                        "plain-anchor refresh box " + callSite + " at block (" + p[0] + "," + p[1] + ","
+                                + p[2] + ") diverged from the shared dirtySectionBox " + shared
+                                + " — all re-mesh paths must use the one canonical block->section conversion");
+            }
+        }
+        helper.succeed();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void schedulingDecisionIsPureAndStableUnderRepetition(GameTestHelper helper) {
         // Structural proof of the near-zero-cost claim for the irrelevant-change fast path: the decision is

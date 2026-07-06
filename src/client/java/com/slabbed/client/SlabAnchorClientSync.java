@@ -196,10 +196,39 @@ public final class SlabAnchorClientSync {
                 if (SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType)) {
                     scheduleCompoundVisibleRenderRefresh(mc, rerenderPos, current, attachmentType);
                 } else {
-                    mc.level.setBlocksDirty(rerenderPos, current, current);
+                    scheduleAnchorAttachmentRenderRefresh(mc, rerenderPos);
                 }
             }
         }
+    }
+
+    /**
+     * Re-mesh for a PLAIN anchor attachment change (the non-{@code COMPOUND_VISIBLE_*} branch:
+     * {@link SlabAnchorAttachment#ANCHOR_TYPE}, {@link SlabAnchorAttachment#FROZEN_FLAT_TYPE},
+     * {@link SlabAnchorAttachment#LOWERED_SLAB_CARRIER_TYPE},
+     * {@link SlabAnchorAttachment#COMPOUND_FULL_BLOCK_ANCHOR_TYPE}).
+     *
+     * <p>This is the freeze-on-place mesh-staleness fix. The prior implementation called
+     * {@code mc.level.setBlocksDirty(pos, current, current)} — but vanilla's
+     * {@code ModelManager.requiresRender(a, b)} short-circuits to {@code false} the instant {@code a == b}
+     * (BlockStates are interned singletons, so passing the same state twice is reference-equal), making that
+     * call a NO-OP. Server-side freeze-on-place ({@code SlabAnchorAttachment.freezeLoweredOnPlace}) records
+     * the anchor ~40&nbsp;ms AFTER placement with NO BlockState change — only the attachment (and thus the
+     * baked dy) changes — so {@code onAttachedSet(ANCHOR_TYPE)} fires but the old no-op did nothing, leaving
+     * the section baked at the pre-anchor height until an unrelated change or Sodium's background sweep
+     * eventually rebuilt it (the live-reported "only snaps when a nearby object updates, or after a long
+     * delay"). See {@code SlabGeometricRemeshScheduler.anchorAttachmentDirtySectionBox}.
+     *
+     * <p>Fix: dirty the anchor's own SECTION via the same IMPORTANT-priority path
+     * ({@code SlabImportantRemesh.dirtyImportant}) the geometric-remesh mixin and the compound-visible
+     * refresh already use, so the section re-bakes to the anchored height within a frame or two of the
+     * anchor being set, regardless of whether the BlockState changed. The dirty box comes from the one
+     * canonical block→section conversion shared with those paths.
+     */
+    private static void scheduleAnchorAttachmentRenderRefresh(Minecraft mc, BlockPos pos) {
+        SlabGeometricRemeshScheduler.SectionBox box =
+                SlabGeometricRemeshScheduler.anchorAttachmentDirtySectionBox(pos.getX(), pos.getY(), pos.getZ());
+        SlabImportantRemesh.dirtyImportant(mc.level, box);
     }
 
     private static void scheduleCompoundVisibleRenderRefresh(

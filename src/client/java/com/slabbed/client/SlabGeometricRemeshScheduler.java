@@ -196,4 +196,43 @@ public final class SlabGeometricRemeshScheduler {
     public static SectionBox compoundVisibleDirtySectionBox(int blockX, int blockY, int blockZ) {
         return dirtySectionBox(blockX, blockY, blockZ);
     }
+
+    /**
+     * The SECTION-coordinate box to dirty for an ORDINARY ANCHOR ATTACHMENT refresh at block
+     * ({@code blockX},{@code blockY},{@code blockZ}), issued by
+     * {@code SlabAnchorClientSync.scheduleRerendersForSet} when a plain
+     * {@code SlabAnchorAttachment.ANCHOR_TYPE} / {@code FROZEN_FLAT_TYPE} /
+     * {@code LOWERED_SLAB_CARRIER_TYPE} / {@code COMPOUND_FULL_BLOCK_ANCHOR_TYPE} attachment set changes
+     * on the client (the non-{@code COMPOUND_VISIBLE_*} branch).
+     *
+     * <h2>Why this exists (the plain-anchor freeze-on-place mesh-staleness bug)</h2>
+     * A block is placed and its section bakes at the pre-anchor height; then ~40&nbsp;ms later the SERVER's
+     * freeze-on-place ({@code SlabAnchorAttachment.freezeLoweredOnPlace} →
+     * {@code addAnchorUnchecked} → {@code chunk.setAttached(ANCHOR_TYPE, …)}) records the anchor, which the
+     * synced attachment auto-pushes to the client. The client's {@code onAttachedSet(ANCHOR_TYPE)} listener
+     * fires — but the BlockState never changed (the live-cursor recorder captured two placement entries
+     * ~41&nbsp;ms apart with BYTE-IDENTICAL {@code afterState}, {@code afterDy}/{@code afterLaneKind}
+     * flipping {@code 0.0/unnamed_or_vanilla_slab} → {@code -0.5/anchored_full_block}). The previous refresh
+     * for this branch called {@code ClientLevel.setBlocksDirty(pos, current, current)} with the SAME state
+     * on both sides; vanilla's {@code ModelManager.requiresRender(a, b)} returns {@code false} immediately
+     * when {@code a == b} (BlockStates are interned singletons, so {@code current == current} is
+     * reference-equal), making that call a complete NO-OP. So the anchor's dy was never re-baked at
+     * placement time — the model only snapped down when some unrelated nearby change or Sodium's background
+     * sweep eventually rebuilt the section (the reported "only snaps when a nearby object updates, or after
+     * a long delay").
+     *
+     * <p>Routing this branch through {@link #dirtySectionBox} + {@code SlabImportantRemesh.dirtyImportant}
+     * instead (a real section-dirty, IMPORTANT under Sodium) marks the anchor's own section render-dirty
+     * regardless of whether the BlockState changed, so it re-bakes to the anchored height within a frame or
+     * two of the anchor being set. Delegates to {@link #dirtySectionBox} so the plain-anchor path, the
+     * compound-visible path, and the geometric-remesh mixin all share ONE canonical block→section
+     * conversion. Named distinctly (rather than the call site inlining {@code >>4} arithmetic) so this exact
+     * call site's coordinate math is headlessly loadable and mutation-provable from the server gametest —
+     * {@code SlabAnchorClientSync} itself is {@code @Environment(CLIENT)} and cannot load there, but this
+     * un-annotated scheduler can. Pinned by
+     * {@code GeometricRemeshSchedulerTest.anchorAttachmentRefreshConvertsBlockCoordsToSectionCoords}.
+     */
+    public static SectionBox anchorAttachmentDirtySectionBox(int blockX, int blockY, int blockZ) {
+        return dirtySectionBox(blockX, blockY, blockZ);
+    }
 }
