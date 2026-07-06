@@ -141,6 +141,7 @@ sourceSets {
             include("com/slabbed/test/GeometricRemeshSchedulerTest.java")
             include("com/slabbed/test/LiveCursorIntentRecorderCaptureGameTest.java")
             include("com/slabbed/test/RecorderManifestRedactionTest.java")
+            include("com/slabbed/test/DoubleSlabPlacementNonDestructiveTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }
