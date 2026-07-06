@@ -655,6 +655,15 @@ public final class LiveCursorIntentRecorder {
                 + jsonPair("minecraftVersion", modVersion("minecraft")) + ","
                 + jsonPair("fabricLoaderVersion", modVersion("fabricloader")) + ","
                 + jsonPair("slabbedVersion", modVersion(Slabbed.MOD_ID)) + ","
+                // Jar-identity stamp (anti-whack-a-mole audit): a session log must be attributable to an
+                // exact build — version strings alone have already collided across different artifacts.
+                + jsonPair("gitSha", BuildStamp.GIT_SHA) + ","
+                + jsonPair("buildTime", BuildStamp.BUILD_TIME) + ","
+                + jsonPair("jarFile", BuildStamp.JAR_FILE) + ","
+                // Records why cursor rows may be absent (the legacy pick-TAIL cursor leg is bypassed
+                // whenever the offset raycast is active) and that the mesh-staleness sentinel exists.
+                + jsonPair("offsetRaycastEnabled", Boolean.toString(SlabbedOffsetRaycast.ENABLED)) + ","
+                + jsonPair("modelStaleSentinel", "present") + ","
                 + jsonPair("userDir", System.getProperty("user.dir", "")) + ","
                 + jsonPair("javaCommand", redactJavaCommand(System.getProperty("sun.java.command", "")))
                 + "}\n";
