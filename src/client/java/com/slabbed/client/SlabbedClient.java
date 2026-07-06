@@ -1,6 +1,7 @@
 package com.slabbed.client;
 
 import com.slabbed.Slabbed;
+import com.slabbed.util.BuildStamp;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -75,6 +76,10 @@ public final class SlabbedClient implements ClientModInitializer {
             client.player.sendSystemMessage(Component.literal(
                     "[slabdev] live cursor recorder: " + (enabled ? "on" : "off")
                             + " (" + LiveCursorIntentRecorder.currentLogPathDisplay() + ")"));
+            // Jar-identity echo: a session log must be attributable to an exact build, in-game, without
+            // digging into the profile folder (same-version/different-bytes jars have already happened).
+            client.player.sendSystemMessage(Component.literal(
+                    "[slabdev] " + BuildStamp.describeShort()));
         }
         return 1;
     }

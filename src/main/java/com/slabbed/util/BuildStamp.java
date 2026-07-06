@@ -1,0 +1,98 @@
+package com.slabbed.util;
+
+import java.net.URI;
+import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
+
+/**
+ * Jar-identity stamp, read once from this jar's own MANIFEST.MF (attributes {@code Slabbed-Git-Sha} and
+ * {@code Slabbed-Build-Time}, written by the {@code jar} task in build.gradle).
+ *
+ * <p>Why this exists (anti-whack-a-mole audit, 2026-07-06): a built jar could not be traced to its
+ * commit from its own bytes — two different artifacts have already shipped self-identifying as the same
+ * fabric.mod.json version, and one full live sweep on the 1.21.11 line was analyzed against a jar built
+ * AFTER the session it supposedly produced. Every recorder session manifest and the {@code /slabdev
+ * record} feedback line now carry this stamp so a session log is always attributable to an exact build.
+ *
+ * <p>Static-final caching is deliberate and safe here (unlike runtime debug flags, which must stay
+ * live-readable): a process's jar identity cannot change after launch. All lookups are best-effort and
+ * exception-proof — identity metadata must never affect startup. In a dev launch (classes directory,
+ * no jar manifest) the values read {@code dev-classes}/{@code unknown}.
+ */
+public final class BuildStamp {
+    private static final String UNKNOWN = "unknown";
+
+    public static final String GIT_SHA;
+    public static final String BUILD_TIME;
+    public static final String JAR_FILE;
+
+    static {
+        String sha = UNKNOWN;
+        String time = UNKNOWN;
+        String jarFile = "dev-classes";
+        try {
+            URL location = BuildStamp.class.getProtectionDomain().getCodeSource() == null
+                    ? null
+                    : BuildStamp.class.getProtectionDomain().getCodeSource().getLocation();
+            Path jarPath = toLocalJarPath(location);
+            if (jarPath != null) {
+                jarFile = jarPath.getFileName() == null ? jarPath.toString() : jarPath.getFileName().toString();
+                try (JarFile jar = new JarFile(jarPath.toFile())) {
+                    Manifest manifest = jar.getManifest();
+                    if (manifest != null) {
+                        String stampedSha = manifest.getMainAttributes().getValue("Slabbed-Git-Sha");
+                        String stampedTime = manifest.getMainAttributes().getValue("Slabbed-Build-Time");
+                        if (stampedSha != null && !stampedSha.isBlank()) {
+                            sha = stampedSha;
+                        }
+                        if (stampedTime != null && !stampedTime.isBlank()) {
+                            time = stampedTime;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // Identity is best-effort; never let it interfere with mod init.
+        }
+        GIT_SHA = sha;
+        BUILD_TIME = time;
+        JAR_FILE = jarFile;
+    }
+
+    private BuildStamp() {
+    }
+
+    /** One-line identity for chat feedback / log headers, e.g. {@code build=ab12cd34ef jar=TEST (3).jar}. */
+    public static String describeShort() {
+        return "build=" + GIT_SHA + " jar=" + JAR_FILE;
+    }
+
+    /**
+     * Resolve a code-source URL to a local jar path, tolerating the nested/percent-encoded URL shapes the
+     * Fabric Knot classloader can produce ({@code jar:file:...!/}, plain {@code file:...}). Returns null
+     * for a non-jar source (a dev classes directory) or anything unresolvable.
+     */
+    private static Path toLocalJarPath(URL location) {
+        if (location == null) {
+            return null;
+        }
+        try {
+            String spec = location.toString();
+            if (spec.startsWith("jar:")) {
+                int bang = spec.indexOf("!/");
+                spec = bang >= 0 ? spec.substring(4, bang) : spec.substring(4);
+            }
+            if (!spec.startsWith("file:")) {
+                return null;
+            }
+            Path path = Paths.get(new URI(spec));
+            String name = path.getFileName() == null ? "" : path.getFileName().toString();
+            return name.endsWith(".jar") ? path : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+}

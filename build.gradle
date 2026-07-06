@@ -148,9 +148,31 @@ sourceSets {
     }
 }
 
+// Jar-identity stamp: a jar must be traceable to its exact commit from its own bytes. Two different
+// artifacts have shipped self-identifying as the same fabric.mod.json version, and a live session was
+// once analyzed against the wrong build. Read at runtime by com.slabbed.util.BuildStamp.
+def slabbedGitSha = { ->
+    try {
+        def head = 'git rev-parse --short=10 HEAD'.execute(null, rootDir).text.trim()
+        if (head.isEmpty()) {
+            return 'unknown'
+        }
+        def dirty = 'git status --porcelain'.execute(null, rootDir).text.trim()
+        return dirty.isEmpty() ? head : head + '-dirty'
+    } catch (Exception ignored) {
+        return 'unknown'
+    }
+}()
+def slabbedBuildTime = java.time.Instant.now().toString()
+
 jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}"}
+    }
+
+    manifest {
+        attributes 'Slabbed-Git-Sha': slabbedGitSha,
+                   'Slabbed-Build-Time': slabbedBuildTime
     }
 
     // Exclude dev-only and debug-only content from public release jar
