@@ -81,6 +81,29 @@ public final class SlabGeometricRemeshScheduler {
     public static final int SECTION_RADIUS = 1;
 
     /**
+     * Whether Slabbed's client re-mesh paths request an <b>IMPORTANT</b> (near-immediate) rebuild rather
+     * than the deferred default.
+     *
+     * <p>The public {@code ClientLevel.setSectionRangeDirty} path hardcodes the {@code important} flag to
+     * {@code false}. On vanilla that flag is only a "dirty-from-player" ordering hint and the section
+     * rebuilds within a frame or two regardless — but under <b>Sodium</b> (in the live-test profile),
+     * {@code important == false} routes the rebuild into Sodium's DEFERRED, per-frame-budgeted background
+     * queue, which only flushes when a worker eventually reaches it: the ~30-second "snap" delay the
+     * project lead observed live for the mesh-staleness fix. {@code important == true} instead reaches
+     * Sodium's near-immediate presentation path for a near-camera section (exactly the mesh-staleness
+     * case, which is by definition at the block the player just interacted with).
+     *
+     * <p>So Slabbed issues its own dirties as IMPORTANT via
+     * {@code LevelExtractorImportantDirtyAccessor} (the private {@code setSectionDirty(x,y,z,true)}
+     * overload Sodium {@code @Overwrite}s), not via the {@code important == false} public path. This is a
+     * priority change to ONLY Slabbed's own dirty calls; it must remain {@code true} for the fix to hold.
+     * Pinned by {@code GeometricRemeshSchedulerTest.slabbedRequestsImportantRebuild}. This constant is the
+     * headlessly-provable half of the fix; whether the section then re-bakes near-instantly on-screen
+     * under Sodium is a live-only observation (a gametest runs no renderer).
+     */
+    public static final boolean REQUEST_IMPORTANT_REBUILD = true;
+
+    /**
      * Immutable inclusive SECTION-coordinate box: the region to mark dirty. Fields are SECTION coords
      * (block {@code >> 4}), ready to hand straight to {@code ClientLevel.setSectionRangeDirty}.
      */
