@@ -143,6 +143,7 @@ sourceSets {
             include("com/slabbed/test/RecorderManifestRedactionTest.java")
             include("com/slabbed/test/DoubleSlabPlacementNonDestructiveTest.java")
             include("com/slabbed/test/ChainCeilingBridgeTextureTest.java")
+            include("com/slabbed/test/ModelStaleSentinelContractTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }
