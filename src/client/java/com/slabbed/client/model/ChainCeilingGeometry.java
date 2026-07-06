@@ -1,6 +1,7 @@
 package com.slabbed.client.model;
 
 import com.slabbed.Slabbed;
+import com.slabbed.util.ChainBridgeTextureVariant;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.model.loading.v1.ExtraModelKey;
 import net.fabricmc.fabric.api.client.model.loading.v1.FabricModelManager;
@@ -16,6 +17,8 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
@@ -28,16 +31,61 @@ import java.util.function.Predicate;
  *
  * <p>Port of the proofed-but-unmerged 1.21.11 {@code fix/chains-*} branches (b95a742d + a56fc90b +
  * 57704624), adapted to the 26.x render path: emitted directly into {@code OffsetBlockStateModel#
- * emitQuads} (26.1.2 has no {@code BlockModelDyTranslateMixin}). Standalone model registered via the
- * Fabric extra-model API ({@link #KEY} / {@link #MODEL_ID}).
+ * emitQuads} (26.1.2 has no {@code BlockModelDyTranslateMixin}). Standalone models registered via the
+ * Fabric extra-model API, one per chain texture.
+ *
+ * <p><b>Per-chain-type texture (2026-07-06).</b> 26.2 has five chain textures — {@code iron_chain}
+ * plus the four copper weather states ({@code copper}/{@code exposed}/{@code weathered}/{@code
+ * oxidized}, each shared by its waxed variant). The bridge is emitted INSTEAD of the block's own
+ * model, so a single hardcoded-{@code iron_chain} bridge made every non-iron chain under a slab
+ * ceiling render with the plain iron texture (a copper chain "turned into" a plain chain, reverting
+ * to copper when the slab was broken and the bridge lane deactivated — live-reported). Fixed by
+ * baking one bridge model per texture ({@link ChainBridgeTextureVariant}, a pure server-loadable
+ * selector) and selecting it from the chain block's registry id, so each chain type bridges with its
+ * own texture. The dy is unchanged (still grid-height 0.0 for a bridged chain — the deliberate
+ * chandelier-style ceiling-mount geometry, unchanged by this fix).
  */
 public final class ChainCeilingGeometry {
-    public static final Identifier MODEL_ID = Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "block/chain_ceiling_support");
-    public static final ExtraModelKey<BlockStateModel> KEY = ExtraModelKey.create(() -> "slabbed:chain_ceiling_support");
 
-    private static volatile BlockStateModel model;
+    /** Per-texture bridge model: keyed off the pure {@link ChainBridgeTextureVariant} model path. */
+    private static final Map<ChainBridgeTextureVariant, ExtraModelKey<BlockStateModel>> KEYS =
+            new EnumMap<>(ChainBridgeTextureVariant.class);
+    private static final Map<ChainBridgeTextureVariant, Identifier> MODEL_IDS =
+            new EnumMap<>(ChainBridgeTextureVariant.class);
+    private static final Map<ChainBridgeTextureVariant, BlockStateModel> BAKED =
+            new EnumMap<>(ChainBridgeTextureVariant.class);
+
+    static {
+        for (ChainBridgeTextureVariant variant : ChainBridgeTextureVariant.values()) {
+            String path = variant.modelPath();
+            MODEL_IDS.put(variant, Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "block/" + path));
+            KEYS.put(variant, ExtraModelKey.create(() -> "slabbed:" + path));
+        }
+    }
+
+    /**
+     * Backward-compatible aliases for the iron (default) bridge model — the names the model-loading
+     * plugin used before the per-texture split.
+     */
+    public static final Identifier MODEL_ID = MODEL_IDS.get(ChainBridgeTextureVariant.IRON);
+    public static final ExtraModelKey<BlockStateModel> KEY = KEYS.get(ChainBridgeTextureVariant.IRON);
 
     private ChainCeilingGeometry() {
+    }
+
+    /** The registered extra-model key for a given texture variant (used by the model-loading plugin). */
+    public static ExtraModelKey<BlockStateModel> keyFor(ChainBridgeTextureVariant variant) {
+        return KEYS.get(variant);
+    }
+
+    /** The model resource id for a given texture variant (used by the model-loading plugin). */
+    public static Identifier modelIdFor(ChainBridgeTextureVariant variant) {
+        return MODEL_IDS.get(variant);
+    }
+
+    /** All texture variants that must be registered as extra models. */
+    public static ChainBridgeTextureVariant[] variants() {
+        return ChainBridgeTextureVariant.values();
     }
 
     /** True for a Y-axis chain whose block directly above is a ceiling support (TOP/DOUBLE slab). */
@@ -55,7 +103,7 @@ public final class ChainCeilingGeometry {
         if (!usesAlternateGeometry(world, pos, state)) {
             return false;
         }
-        BlockStateModel alternate = alternateModel();
+        BlockStateModel alternate = alternateModel(ChainBridgeTextureVariant.forBlock(state));
         if (!(alternate instanceof FabricBlockStateModel fabric)) {
             return false;
         }
@@ -63,8 +111,8 @@ public final class ChainCeilingGeometry {
         return true;
     }
 
-    private static BlockStateModel alternateModel() {
-        BlockStateModel cached = model;
+    private static BlockStateModel alternateModel(ChainBridgeTextureVariant variant) {
+        BlockStateModel cached = BAKED.get(variant);
         if (cached != null) {
             return cached;
         }
@@ -72,9 +120,9 @@ public final class ChainCeilingGeometry {
         if (client == null || client.getModelManager() == null) {
             return null;
         }
-        BlockStateModel baked = ((FabricModelManager) client.getModelManager()).getModel(KEY);
+        BlockStateModel baked = ((FabricModelManager) client.getModelManager()).getModel(KEYS.get(variant));
         if (baked != null) {
-            model = baked;
+            BAKED.put(variant, baked);
         }
         return baked;
     }

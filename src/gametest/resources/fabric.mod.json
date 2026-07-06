@@ -47,7 +47,8 @@
       "com.slabbed.test.GeometricRemeshSchedulerTest",
       "com.slabbed.test.LiveCursorIntentRecorderCaptureGameTest",
       "com.slabbed.test.RecorderManifestRedactionTest",
-      "com.slabbed.test.DoubleSlabPlacementNonDestructiveTest"
+      "com.slabbed.test.DoubleSlabPlacementNonDestructiveTest",
+      "com.slabbed.test.ChainCeilingBridgeTextureTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest"

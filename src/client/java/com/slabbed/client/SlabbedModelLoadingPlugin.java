@@ -13,9 +13,13 @@ public final class SlabbedModelLoadingPlugin {
     }
 
     public static void init() {
-        // Standalone extra model for the chain-ceiling-support extended geometry (ChainCeilingGeometry).
-        ModelLoadingPlugin.register(plugin -> plugin.addModel(ChainCeilingGeometry.KEY,
-                SimpleUnbakedExtraModel.blockStateModel(ChainCeilingGeometry.MODEL_ID)));
+        // Standalone extra models for the chain-ceiling-support extended geometry (ChainCeilingGeometry) —
+        // one per chain texture (iron + the four copper weather states) so a bridged copper chain keeps
+        // its own texture instead of rendering as plain iron.
+        for (var variant : ChainCeilingGeometry.variants()) {
+            ModelLoadingPlugin.register(plugin -> plugin.addModel(ChainCeilingGeometry.keyFor(variant),
+                    SimpleUnbakedExtraModel.blockStateModel(ChainCeilingGeometry.modelIdFor(variant))));
+        }
         ModelLoadingPlugin.register(plugin -> plugin.modifyBlockModelAfterBake().register(ModelModifier.WRAP_PHASE, (model, context) -> {
             if (model instanceof FabricBlockStateModel) {
                 return new OffsetBlockStateModel((BlockStateModel) model);
