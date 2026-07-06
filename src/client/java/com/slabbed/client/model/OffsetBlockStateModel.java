@@ -2,6 +2,7 @@ package com.slabbed.client.model;
 
 import com.slabbed.Slabbed;
 import com.slabbed.client.ClientDy;
+import com.slabbed.util.SlabModelStaleSentinel;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.client.renderer.v1.model.FabricBlockStateModel;
@@ -61,12 +62,27 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         // for a block at the section's top edge (26.x throws on OOB) — fall through to normal emission.
         try {
             if (ChainCeilingGeometry.emitIfPresent(fabricWrapped, emitter, view, pos, state, random, cullTest)) {
+                // MODEL_STALE sentinel: the bridge renders at grid height by design — record dy=0 so an
+                // armed chain cell is not misread as "never re-baked" by the absence rule.
+                if (SlabModelStaleSentinel.shouldCapture() && SlabModelStaleSentinel.isArmed(pos.asLong())) {
+                    SlabModelStaleSentinel.recordBake(pos, 0.0f);
+                }
                 return;
             }
         } catch (IndexOutOfBoundsException outsideRenderRegion) {
             // fall through to the standard offset emission below (also render-region guarded)
         }
-        float dy = slabbed$modelDy(view, pos, state);
+        // MODEL_STALE sentinel capture — SUBJECT emissions only (a neighbor probe from another section's
+        // bake pass recomputes fresh dy and would mask that this pos's own mesh is stale), and never the
+        // render-region OOB fallback (that 0.0 is a border artifact, not a dy decision — the section
+        // re-bakes with fuller bounds a frame later). Gate order is load-bearing (perf contract): one
+        // volatile read, then the armed-set binary search, before any other work.
+        float dy;
+        if (SlabModelStaleSentinel.shouldCapture() && SlabModelStaleSentinel.isArmed(pos.asLong())) {
+            dy = slabbed$modelDyCaptured(view, pos, state);
+        } else {
+            dy = slabbed$modelDy(view, pos, state);
+        }
         // DODO / step-face cull: a FLAT block (dy=0) adjacent to a lowered one ALSO owns a step face
         // whose cullFace must be cleared — otherwise the strip the neighbour's -0.5 offset exposes
         // culls into a see-through "ghost window". 26.1.2 previously only wrapped dy!=0 blocks, so the
@@ -87,26 +103,42 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         // with fuller bounds once neighbouring sections load, so the real offset settles a frame later.
         // (Older MC render regions clamped OOB reads to air instead of throwing — a 26.x-specific need.)
         try {
-            if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof MossyCarpetBlock) {
-                return (float) ClientDy.dyFor(view, pos, state);
-            }
+            return slabbed$modelDyUnguarded(view, pos, state);
+        } catch (IndexOutOfBoundsException outsideRenderRegion) {
+            return 0.0f;
+        }
+    }
 
-            float dy = (float) SlabSupport.getYOffset(view, pos, state);
-            if (dy == 0.0f) {
-                return 0.0f;
-            }
-
-            if (state.getBlock() instanceof FenceBlock
-                    || state.getBlock() instanceof WallBlock
-                    || state.getBlock() instanceof IronBarsBlock) {
-                if (!SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
-                    return 0.0f;
-                }
-            }
+    /** Sentinel-armed twin of {@link #slabbed$modelDy}: identical dy, but records what was baked —
+     *  except the OOB fallback, which is deliberately not a recordable dy decision. */
+    private static float slabbed$modelDyCaptured(BlockAndTintGetter view, BlockPos pos, BlockState state) {
+        try {
+            float dy = slabbed$modelDyUnguarded(view, pos, state);
+            SlabModelStaleSentinel.recordBake(pos, dy);
             return dy;
         } catch (IndexOutOfBoundsException outsideRenderRegion) {
             return 0.0f;
         }
+    }
+
+    private static float slabbed$modelDyUnguarded(BlockAndTintGetter view, BlockPos pos, BlockState state) {
+        if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof MossyCarpetBlock) {
+            return (float) ClientDy.dyFor(view, pos, state);
+        }
+
+        float dy = (float) SlabSupport.getYOffset(view, pos, state);
+        if (dy == 0.0f) {
+            return 0.0f;
+        }
+
+        if (state.getBlock() instanceof FenceBlock
+                || state.getBlock() instanceof WallBlock
+                || state.getBlock() instanceof IronBarsBlock) {
+            if (!SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
+                return 0.0f;
+            }
+        }
+        return dy;
     }
 
     /**

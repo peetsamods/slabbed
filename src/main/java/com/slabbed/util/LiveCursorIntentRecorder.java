@@ -72,6 +72,9 @@ public final class LiveCursorIntentRecorder {
     private static long collisionIteratorTargetPresentRows;
     private static long greenCursorTriadRows;
     private static long greenPlacementAuthoringRows;
+    private static long modelStaleDivergentRows;
+    private static long modelStaleAbsentRows;
+    private static long modelStaleYellowRows;
     private static long lastCursorRowId;
     private static LinkedHashMap<String, String> lastCursorRow;
 
@@ -207,6 +210,34 @@ public final class LiveCursorIntentRecorder {
             writeSession(row);
             writeRenderedOutlineTsv(row);
             writeMismatchRows(row, markers);
+            writeSummary();
+        }
+    }
+
+    /**
+     * MODEL_STALE sentinel rows ({@link SlabModelStaleSentinel}): the render-truth probe's red/yellow
+     * verdicts. Non-yellow kinds land in mismatches.tsv via the standard marker path, so a live session's
+     * staleness verdicts are machine-greppable next to every other mismatch family.
+     */
+    public static void recordSentinel(LinkedHashMap<String, String> fields) {
+        if (!enabled()) {
+            return;
+        }
+        LinkedHashMap<String, String> row = copy(fields);
+        row.putIfAbsent("type", "model_stale_sentinel");
+        row.putIfAbsent("rowId", Long.toString(ROW_IDS.incrementAndGet()));
+        row.putIfAbsent("recordedAt", Instant.now().toString());
+        String kind = row.getOrDefault("kind", "unknown");
+        String marker = "LIVE_" + kind;
+        row.put("marker", marker);
+        synchronized (LOCK) {
+            switch (kind) {
+                case SlabModelStaleSentinel.KIND_DIVERGENT -> modelStaleDivergentRows++;
+                case SlabModelStaleSentinel.KIND_ABSENT -> modelStaleAbsentRows++;
+                default -> modelStaleYellowRows++;
+            }
+            writeSession(row);
+            writeMismatchRows(row, marker);
             writeSummary();
         }
     }
@@ -555,6 +586,9 @@ public final class LiveCursorIntentRecorder {
         text.append("collisionIteratorTargetPresentRows=").append(collisionIteratorTargetPresentRows).append('\n');
         text.append("liveGreenCursorTriadRows=").append(greenCursorTriadRows).append('\n');
         text.append("liveGreenPlacementRows=").append(greenPlacementAuthoringRows).append('\n');
+        text.append("modelStaleDivergentRows=").append(modelStaleDivergentRows).append('\n');
+        text.append("modelStaleAbsentRows=").append(modelStaleAbsentRows).append('\n');
+        text.append("modelStaleYellowRows=").append(modelStaleYellowRows).append('\n');
         writeFile("summary.md", text.toString(), false);
     }
 

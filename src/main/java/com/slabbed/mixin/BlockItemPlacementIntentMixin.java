@@ -3,6 +3,7 @@ package com.slabbed.mixin;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.PlacementIntentState;
+import com.slabbed.util.SlabModelStaleSentinel;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.Blocks;
@@ -1435,6 +1436,24 @@ public abstract class BlockItemPlacementIntentMixin {
         slabbed$traceRepeatPlacementContext("placement-exit", context, remappedContext,
                 "exit=remapped expectedType=" + expectedType + " remappedY=" + remappedY);
         return slabbed$inspectReturn(context, remappedContext, "remapped");
+    }
+
+    /**
+     * MODEL_STALE sentinel arming — MUST be at HEAD (pre-mutation): the sentinel's absence rule compares
+     * live dy against the PRE-placement baseline of each armed neighbor; sampled after the world mutates,
+     * the baseline would already include the placement's effect and the rule would be vacuous (the exact
+     * gap the design's adversarial refuters flagged). Client side only; no-ops in one volatile read
+     * unless a recorder session is active.
+     */
+    @Inject(method = "place", at = @At("HEAD"))
+    private void slabbed$armModelStaleSentinel(
+            BlockPlaceContext context,
+            CallbackInfoReturnable<net.minecraft.world.InteractionResult> cir
+    ) {
+        Level world = context.getLevel();
+        if (world.isClientSide()) {
+            SlabModelStaleSentinel.armPlacement(world, context.getClickedPos(), world.getGameTime());
+        }
     }
 
     @Inject(method = "place", at = @At("RETURN"))
