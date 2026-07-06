@@ -25,6 +25,7 @@ public final class SlabbedClient implements ClientModInitializer {
         initTargetDyCommand();
         initScreenshotCaptureService();
         initDyFingerprintDump();
+        SlabModelStaleSentinelClient.init();
         BetaNoticeClient.init();
     }
 
