@@ -2,6 +2,7 @@ package com.slabbed.mixin.client;
 
 import com.slabbed.client.SlabGeometricRemeshScheduler;
 import com.slabbed.client.SlabGeometricRemeshScheduler.SectionBox;
+import com.slabbed.client.SlabImportantRemesh;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -24,8 +25,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * on an irrelevant change (torch, flower, redstone, crop growth) is a few allocation-free
  * {@code instanceof} checks and nothing more.
  *
- * <p>Recursion-safe: {@code setSectionRangeDirty} only marks section render-dirty flags; it never
- * re-enters {@code sendBlockUpdated}.
+ * <p>Recursion-safe: the dirty issued here (via {@code SlabImportantRemesh}, an IMPORTANT-priority
+ * variant of the section-dirty call — see {@link SlabGeometricRemeshScheduler#REQUEST_IMPORTANT_REBUILD})
+ * only marks section render-dirty flags; it never re-enters {@code sendBlockUpdated}.
  */
 @Mixin(ClientLevel.class)
 public abstract class ClientLevelBlockChangeRemeshMixin {
@@ -41,8 +43,10 @@ public abstract class ClientLevelBlockChangeRemeshMixin {
             return;
         }
         SectionBox box = SlabGeometricRemeshScheduler.dirtySectionBox(pos.getX(), pos.getY(), pos.getZ());
-        ((ClientLevel) (Object) this).setSectionRangeDirty(
-                box.minX(), box.minY(), box.minZ(),
-                box.maxX(), box.maxY(), box.maxZ());
+        // Dirty the box as an IMPORTANT rebuild rather than via setSectionRangeDirty (which hardcodes
+        // important=false). Under Sodium, important=false lands in the deferred, per-frame-budgeted queue
+        // — the ~30-second-snap delay; important=true reaches the near-immediate presentation path for
+        // this near-camera section. See SlabGeometricRemeshScheduler.REQUEST_IMPORTANT_REBUILD.
+        SlabImportantRemesh.dirtyImportant((ClientLevel) (Object) this, box);
     }
 }

@@ -367,6 +367,29 @@ public final class GeometricRemeshSchedulerTest {
         helper.succeed();
     }
 
+    // ── important-rebuild priority: the 30-second-snap-delay fix ─────────────────────────────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabbedRequestsImportantRebuild(GameTestHelper helper) {
+        // The headlessly-provable half of the 30-second-snap-delay fix. Slabbed's own client re-mesh must
+        // request an IMPORTANT (near-immediate) rebuild, NOT the deferred default. The public
+        // ClientLevel.setSectionRangeDirty path hardcodes important=false, which under Sodium routes into
+        // its deferred, per-frame-budgeted background queue (the ~30-second "snap" the lead observed live);
+        // important=true reaches Sodium's near-immediate presentation path for a near-camera section — which
+        // is exactly the mesh-staleness case (the block the player just interacted with). SlabImportantRemesh
+        // (the client-only dispatcher both re-mesh call sites use) reads this flag to decide the priority, so
+        // flipping it to false silently restores the deferred-queue delay. Whether the section then re-bakes
+        // near-instantly on-screen under Sodium is a live-only observation (a gametest runs no renderer); this
+        // pins the priority DECISION, the only part that is headlessly checkable.
+        if (!SlabGeometricRemeshScheduler.REQUEST_IMPORTANT_REBUILD) {
+            throw helper.assertionException(
+                    "Slabbed must request an IMPORTANT rebuild for its own client re-mesh (REQUEST_IMPORTANT_REBUILD "
+                            + "== true); important=false lands in Sodium's deferred per-frame-budgeted queue — the "
+                            + "~30-second-snap delay the geometric mesh-staleness fix was reported to have live");
+        }
+        helper.succeed();
+    }
+
     private static void assertBox(GameTestHelper helper, SectionBox box,
                                   int minX, int minY, int minZ, int maxX, int maxY, int maxZ, String scene) {
         if (box.minX() != minX || box.minY() != minY || box.minZ() != minZ

@@ -7,8 +7,10 @@
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
     "ClientLevelBlockChangeRemeshMixin",
+    "ClientLevelLevelExtractorAccessor",
     "GameRendererCrosshairRetargetMixin",
     "ItemFrameRenderOffsetMixin",
+    "LevelExtractorImportantDirtyAccessor",
     "LocalPlayerPickOffsetRaycastMixin",
     "MinecartRenderOffsetMixin",
     "TargetDyHudMixin"
