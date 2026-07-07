@@ -38,6 +38,11 @@ public final class BuildStamp {
                     ? null
                     : BuildStamp.class.getProtectionDomain().getCodeSource().getLocation();
             Path jarPath = toLocalJarPath(location);
+            if (jarPath == null && location != null && location.toString().contains(".jar")) {
+                // A jar-shaped code source we could not resolve — do NOT mislabel it as a dev launch
+                // ("dev-classes" conflating 'dev' with 'resolution failed' would hide a real gap).
+                jarFile = "unresolved-code-source";
+            }
             if (jarPath != null) {
                 jarFile = jarPath.getFileName() == null ? jarPath.toString() : jarPath.getFileName().toString();
                 try (JarFile jar = new JarFile(jarPath.toFile())) {

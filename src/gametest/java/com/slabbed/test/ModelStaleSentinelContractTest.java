@@ -7,6 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CarpetBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
 
@@ -38,12 +39,14 @@ public final class ModelStaleSentinelContractTest {
 
     private static List<LinkedHashMap<String, String>> freshSentinel() {
         SlabModelStaleSentinel.resetCold();
+        SlabModelStaleSentinel.resetLiveDyPolicyForTest();
         SlabModelStaleSentinel.testSessionOverride = true;
         return new ArrayList<>();
     }
 
     private static void teardown() {
         SlabModelStaleSentinel.testSessionOverride = false;
+        SlabModelStaleSentinel.resetLiveDyPolicyForTest();
         SlabModelStaleSentinel.resetCold();
     }
 
@@ -306,6 +309,76 @@ public final class ModelStaleSentinelContractTest {
             if (SlabModelStaleSentinel.armedCount() != SlabModelStaleSentinel.ARMED_CAP) {
                 throw helper.assertionException("armed set must be capped at " + SlabModelStaleSentinel.ARMED_CAP
                         + ", got " + SlabModelStaleSentinel.armedCount());
+            }
+            helper.succeed();
+        } finally {
+            teardown();
+        }
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void renderPolicyDivergenceFromLogicalDyDoesNotFalseRed(GameTestHelper helper) {
+        // Adversarial review finding #1: the render dy policy DELIBERATELY diverges from logical dy for
+        // carpets (ClientDy.dyFor lowers a carpet-on-slab to -0.5; SlabSupport.getYOffset holds thin top
+        // layers at 0.0). Arming/judging with one policy while the mesher bakes the other guarantees a
+        // false DIVERGENT on a healthy scene. This pins the cure: the sentinel arms AND judges with the
+        // INJECTED policy (the client driver injects the real render twin; here its exact carpet split
+        // is expressed without client types, since headless has no BlockAndTintGetter view).
+        List<LinkedHashMap<String, String>> rows = freshSentinel();
+        try {
+            ServerLevel w = helper.getLevel();
+            BlockPos slab = helper.absolutePos(new BlockPos(2, 2, 2));
+            BlockPos carpet = helper.absolutePos(new BlockPos(2, 3, 2));
+            w.setBlock(slab, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+            // 26.2 folds the 16 dyed carpets into Blocks.CARPET (a ColorCollection record).
+            w.setBlock(carpet, Blocks.CARPET.white().defaultBlockState(), 2);
+            SlabModelStaleSentinel.setLiveDyPolicy((level, pos, state) ->
+                    state.getBlock() instanceof CarpetBlock ? -0.5 : SlabSupport.getYOffset(level, pos, state));
+            if (Math.abs(liveDy(w, carpet)) > EPS) {
+                throw helper.assertionException("scene premise: LOGICAL dy of carpet-on-slab must be 0.0 (thin top layer)");
+            }
+            SlabModelStaleSentinel.armForTest(w, carpet, SlabModelStaleSentinel.REASON_NEIGHBORHOOD, T0);
+            // What the real mesher bakes for this carpet: the render policy's -0.5.
+            SlabModelStaleSentinel.recordBake(carpet, -0.5f);
+            for (long t = T0 + 20; t <= T0 + 300; t += 20) {
+                pass(helper, t, rows);
+            }
+            if (!rows.isEmpty()) {
+                throw helper.assertionException(
+                        "healthy carpet-on-slab scene must stay green when arm/judge/bake share the render policy; got " + rows);
+            }
+            helper.succeed();
+        } finally {
+            teardown();
+        }
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void yellowThenLateWrongBakeStillReds(GameTestHelper helper) {
+        List<LinkedHashMap<String, String>> rows = freshSentinel();
+        try {
+            ServerLevel w = helper.getLevel();
+            BlockPos subject = helper.absolutePos(new BlockPos(2, 2, 2));
+            w.setBlock(subject, Blocks.STONE.defaultBlockState(), 2);
+            SlabModelStaleSentinel.armForTest(w, subject, SlabModelStaleSentinel.REASON_PLACEMENT, T0);
+            // No bake within the window: yellow fires...
+            for (long t = T0 + 20; t <= T0 + 120; t += 20) {
+                pass(helper, t, rows);
+            }
+            if (rows.size() != 1 || !SlabModelStaleSentinel.KIND_NO_BAKE_YELLOW.equals(rows.get(0).get("kind"))) {
+                throw helper.assertionException("premise: expected exactly the yellow row first, got " + rows);
+            }
+            // ...then the bake finally arrives WRONG (the deferred-Sodium-heal-bakes-stale shape, within
+            // TTL). The earlier yellow must NOT have consumed the red latch — this must still red.
+            SlabModelStaleSentinel.recordBake(subject, -0.5f);
+            for (long t = T0 + 140; t <= T0 + 140 + 2L * SlabModelStaleSentinel.RED_PERSIST_TICKS; t += 20) {
+                pass(helper, t, rows);
+            }
+            boolean redFired = rows.stream().anyMatch(r ->
+                    SlabModelStaleSentinel.KIND_DIVERGENT.equals(r.get("kind")));
+            if (!redFired) {
+                throw helper.assertionException(
+                        "a late wrong bake after a yellow must still red (yellow must not preempt the red latch); got " + rows);
             }
             helper.succeed();
         } finally {

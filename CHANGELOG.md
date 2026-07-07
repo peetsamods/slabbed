@@ -3,9 +3,9 @@
 - **MODEL_STALE sentinel (debug/proof tooling).** While `/slabdev record` is on, Slabbed now watches every
   placement's neighborhood and compares what the chunk mesher actually baked against live block geometry;
   a model stuck at the wrong height for more than ~5 seconds produces a red row in the recorder log
-  (`session.jsonl`/`mismatches.tsv`, `LIVE_MODEL_STALE_*`) and a rate-limited chat ping. Verified by 14 new
-  gametests + a real-renderer self-check; zero overhead when the recorder is off (machine-enforced by a new
-  allocation gate). Triage guide: `docs/process/MODEL_STALE_RUNBOOK.md`.
+  (`session.jsonl`/`mismatches.tsv`, `LIVE_MODEL_STALE_*`) and a rate-limited chat ping. Verified by 16 new
+  gametests + a real-renderer self-check. Recorder off costs one volatile read per block emission with zero
+  allocation — machine-enforced by a new allocation gate. Triage guide: `docs/process/MODEL_STALE_RUNBOOK.md`.
 - **Jar identity stamp.** Jars now embed the exact git commit + build time (`Slabbed-Git-Sha`,
   `Slabbed-Build-Time` in `MANIFEST.MF`); the recorder session manifest records them and `/slabdev record`
   echoes `build=<sha> jar=<file>` in chat, so a session log is always attributable to an exact build.

@@ -231,13 +231,18 @@ public final class LiveCursorIntentRecorder {
         String marker = "LIVE_" + kind;
         row.put("marker", marker);
         synchronized (LOCK) {
+            boolean yellow;
             switch (kind) {
-                case SlabModelStaleSentinel.KIND_DIVERGENT -> modelStaleDivergentRows++;
-                case SlabModelStaleSentinel.KIND_ABSENT -> modelStaleAbsentRows++;
-                default -> modelStaleYellowRows++;
+                case SlabModelStaleSentinel.KIND_DIVERGENT -> { modelStaleDivergentRows++; yellow = false; }
+                case SlabModelStaleSentinel.KIND_ABSENT -> { modelStaleAbsentRows++; yellow = false; }
+                default -> { modelStaleYellowRows++; yellow = true; }
             }
             writeSession(row);
-            writeMismatchRows(row, marker);
+            if (!yellow) {
+                // Yellows are ambiguous breadcrumbs, not verdicts — keeping them out of mismatches.tsv
+                // keeps that file's triage signal clean (they remain greppable in session.jsonl).
+                writeMismatchRows(row, marker);
+            }
             writeSummary();
         }
     }
