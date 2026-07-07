@@ -49,10 +49,12 @@
       "com.slabbed.test.RecorderManifestRedactionTest",
       "com.slabbed.test.DoubleSlabPlacementNonDestructiveTest",
       "com.slabbed.test.ChainCeilingBridgeTextureTest",
-      "com.slabbed.test.ModelStaleSentinelContractTest"
+      "com.slabbed.test.ModelStaleSentinelContractTest",
+      "com.slabbed.test.ModelStaleSentinelAllocationGateTest"
     ],
     "fabric-client-gametest": [
-      "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest"
+      "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
+      "com.slabbed.test.ModelStaleSentinelSelfCheckClientGameTest"
     ]
   },
   "depends": {
