@@ -157,6 +157,9 @@ public final class SlabModelStaleSentinel {
         int mismatchSamples;
         long firstMismatchTick;
         boolean redLatched;
+        /** Ensemble-coherence classification runs once per placement entry, on its first judged pass
+         *  (dys are server-settled by then) — Phase 1 of ENSEMBLE_COHERENCE_DESIGN.md. */
+        boolean ensembleChecked;
         /** Separate from {@link #redLatched}: a NO_BAKE yellow must not preempt a later real divergence
          *  red if the bake finally arrives wrong (adversarial review finding #2 — an earlier version of
          *  this split was silently lost to a `git checkout` during mutation runs and the commit message
@@ -348,6 +351,10 @@ public final class SlabModelStaleSentinel {
                     continue;
                 }
                 float liveDy = (float) liveDyPolicy.dyFor(level, entry.pos, state);
+                if (!entry.ensembleChecked && REASON_PLACEMENT.equals(entry.reason)) {
+                    entry.ensembleChecked = true;
+                    emitEnsembleVerdicts(level, entry, liveDy, nowTick, redRowSink);
+                }
                 BakeSample bake = BAKES.get(mapEntry.getKey());
                 boolean bakedSinceArm = bake != null && bake.nanos >= entry.armedNanos;
 
@@ -392,6 +399,52 @@ public final class SlabModelStaleSentinel {
                 publishSnapshotLocked();
             }
         }
+    }
+
+    /**
+     * Phase 1 measurement gate (ENSEMBLE_COHERENCE_DESIGN.md): classify the freshly-placed block's two
+     * vertical pairs + its own occupancy visibility, once, at first judged pass. Emits ENSEMBLE_* rows
+     * through the same sink as staleness reds — the class the 2026-07-07 video proved row-silent.
+     */
+    private static void emitEnsembleVerdicts(BlockGetter level, ArmedEntry entry, float liveDy,
+                                             long nowTick, Consumer<LinkedHashMap<String, String>> sink) {
+        BlockPos pos = entry.pos;
+        BlockPos below = pos.below();
+        BlockPos above = pos.above();
+        double dyBelow = level.getBlockState(below).isAir() ? 0.0 : liveDyPolicy.dyFor(level, below, level.getBlockState(below));
+        double dyAbove = level.getBlockState(above).isAir() ? 0.0 : liveDyPolicy.dyFor(level, above, level.getBlockState(above));
+        SlabEnsembleCoherence.Verdict pairBelow = SlabEnsembleCoherence.classifyVerticalPair(level, below, dyBelow, liveDy);
+        SlabEnsembleCoherence.Verdict pairAbove = SlabEnsembleCoherence.classifyVerticalPair(level, pos, liveDy, dyAbove);
+        if (pairBelow.kind() != SlabEnsembleCoherence.Kind.COHERENT) {
+            sink.accept(ensembleRow(entry, "ENSEMBLE_" + pairBelow.kind(), below, pos, dyBelow, liveDy,
+                    pairBelow.depth(), level, nowTick));
+        }
+        if (pairAbove.kind() != SlabEnsembleCoherence.Kind.COHERENT) {
+            sink.accept(ensembleRow(entry, "ENSEMBLE_" + pairAbove.kind(), pos, above, liveDy, dyAbove,
+                    pairAbove.depth(), level, nowTick));
+        }
+        if (SlabEnsembleCoherence.isOccludedOccupancy(level, pos, liveDy)) {
+            sink.accept(ensembleRow(entry, "ENSEMBLE_" + SlabEnsembleCoherence.Kind.OCCLUDED_OCCUPANCY,
+                    pos, pos, liveDy, liveDy, 0.0, level, nowTick));
+        }
+    }
+
+    private static LinkedHashMap<String, String> ensembleRow(ArmedEntry entry, String kind,
+                                                             BlockPos lowerPos, BlockPos upperPos,
+                                                             double dyLower, double dyUpper, double depth,
+                                                             BlockGetter level, long nowTick) {
+        LinkedHashMap<String, String> row = new LinkedHashMap<>();
+        row.put("kind", kind);
+        row.put("pos", lowerPos.getX() + " " + lowerPos.getY() + " " + lowerPos.getZ());
+        row.put("pairPos", upperPos.getX() + " " + upperPos.getY() + " " + upperPos.getZ());
+        row.put("dyLower", Double.toString(dyLower));
+        row.put("dyUpper", Double.toString(dyUpper));
+        row.put("depth", Double.toString(depth));
+        row.put("lowerState", level.getBlockState(lowerPos).toString());
+        row.put("upperState", level.getBlockState(upperPos).toString());
+        row.put("armedReason", entry.reason);
+        row.put("ticksSinceArm", Long.toString(nowTick - entry.armedTick));
+        return row;
     }
 
     private static LinkedHashMap<String, String> row(ArmedEntry entry, String kind, Float bakedDy,

@@ -77,6 +77,7 @@ public final class LiveCursorIntentRecorder {
     private static long modelStaleYellowRows;
     private static long breakRows;
     private static long placementSideDySplitRows;
+    private static long ensembleClashRows;
     // Same-instant client/server pair rule state (guarded by LOCK): the TEST (3) triage found the L3
     // first-frame split only by hand-mining millisecond row pairs — "data but no rule". Now a rule.
     private static String lastClientPlacementKey;
@@ -240,10 +241,17 @@ public final class LiveCursorIntentRecorder {
         row.put("marker", marker);
         synchronized (LOCK) {
             boolean yellow;
-            switch (kind) {
-                case SlabModelStaleSentinel.KIND_DIVERGENT -> { modelStaleDivergentRows++; yellow = false; }
-                case SlabModelStaleSentinel.KIND_ABSENT -> { modelStaleAbsentRows++; yellow = false; }
-                default -> { modelStaleYellowRows++; yellow = true; }
+            if (kind.startsWith("ENSEMBLE_")) {
+                // Phase 1 ensemble-coherence verdicts (ENSEMBLE_COHERENCE_DESIGN.md) — the class the
+                // 2026-07-07 video proved row-silent. Verdicts, not breadcrumbs: they hit mismatches.tsv.
+                ensembleClashRows++;
+                yellow = false;
+            } else {
+                switch (kind) {
+                    case SlabModelStaleSentinel.KIND_DIVERGENT -> { modelStaleDivergentRows++; yellow = false; }
+                    case SlabModelStaleSentinel.KIND_ABSENT -> { modelStaleAbsentRows++; yellow = false; }
+                    default -> { modelStaleYellowRows++; yellow = true; }
+                }
             }
             writeSession(row);
             if (!yellow) {
@@ -384,6 +392,7 @@ public final class LiveCursorIntentRecorder {
             modelStaleYellowRows = 0L;
             breakRows = 0L;
             placementSideDySplitRows = 0L;
+            ensembleClashRows = 0L;
             lastClientPlacementKey = null;
             lastClientAfterDy = null;
             lastClientActionNanos = 0L;
@@ -670,6 +679,7 @@ public final class LiveCursorIntentRecorder {
         text.append("modelStaleYellowRows=").append(modelStaleYellowRows).append('\n');
         text.append("breakRows=").append(breakRows).append('\n');
         text.append("placementSideDySplitRows=").append(placementSideDySplitRows).append('\n');
+        text.append("ensembleClashRows=").append(ensembleClashRows).append('\n');
         // Sentinel liveness (green-by-evidence, not green-by-absence): zero red rows only counts as a
         // clean bill when these show the probe actually armed and judged during the session.
         text.append("sentinelArmedTotal=").append(SlabModelStaleSentinel.armedTotalCount()).append('\n');
