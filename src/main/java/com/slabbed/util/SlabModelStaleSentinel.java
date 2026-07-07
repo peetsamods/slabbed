@@ -128,6 +128,13 @@ public final class SlabModelStaleSentinel {
     private static volatile long suppressedUntilTick = Long.MIN_VALUE;
     private static volatile boolean invalidatePending;
 
+    // Liveness counters (JVM-lifetime, surfaced in the recorder summary): a session with zero red rows
+    // is only a clean bill if these prove the probe actually armed and judged (green-by-evidence).
+    private static final java.util.concurrent.atomic.AtomicLong ARMED_TOTAL =
+            new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicLong SAMPLE_PASSES =
+            new java.util.concurrent.atomic.AtomicLong();
+
     // Guarded by LOCK (client main thread + gametest threads).
     private static final LinkedHashMap<Long, ArmedEntry> ARMED = new LinkedHashMap<>();
     // Written by mesh worker threads, read/purged under LOCK on the sampling thread.
@@ -257,6 +264,7 @@ public final class SlabModelStaleSentinel {
     }
 
     private static void armEntry(ArmedEntry entry) {
+        ARMED_TOTAL.incrementAndGet();
         Long key = entry.pos.asLong();
         // Re-arming an existing key restarts its window (fresh baseline/reason) — deliberate: the newest
         // placement is the interesting event.
@@ -307,6 +315,7 @@ public final class SlabModelStaleSentinel {
         if (nowTick < suppressedUntilTick) {
             return;
         }
+        SAMPLE_PASSES.incrementAndGet();
         synchronized (LOCK) {
             boolean removedAny = false;
             Iterator<Map.Entry<Long, ArmedEntry>> it = ARMED.entrySet().iterator();
@@ -442,6 +451,16 @@ public final class SlabModelStaleSentinel {
                 publishSnapshotLocked();
             }
         }
+    }
+
+    /** JVM-lifetime count of entries ever armed (recorder-summary liveness evidence). */
+    public static long armedTotalCount() {
+        return ARMED_TOTAL.get();
+    }
+
+    /** JVM-lifetime count of judging passes that ran past all gates (recorder-summary liveness). */
+    public static long samplePassCount() {
+        return SAMPLE_PASSES.get();
     }
 
     /** Armed-entry count (tests + /slabdev display). */

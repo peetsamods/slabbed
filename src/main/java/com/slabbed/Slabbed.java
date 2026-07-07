@@ -15,6 +15,18 @@ public class Slabbed implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("Slabbed initialized");
         com.slabbed.anchor.SlabAnchorAttachment.register();
+        // Recorder break capture (TEST (3)-triage upgrade): the recorder was break-blind — it caused
+        // the "data-destructive downgrade" false alarm, and the maintainer's tower-churn "jumping when I break
+        // things" report left ZERO rows. Observation only: the handler must ALWAYS return true (never
+        // cancel the break), and gates on the recorder flag in one volatile read.
+        net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.register(
+                (world, player, pos, state, blockEntity) -> {
+                    if (com.slabbed.util.LiveCursorIntentRecorder.enabled()) {
+                        com.slabbed.util.LiveCursorIntentRecorder.recordBreakEvent(world, pos, state,
+                                player == null ? "none" : player.getName().getString());
+                    }
+                    return true;
+                });
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
             initDevFeatures();
         }

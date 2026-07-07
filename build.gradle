@@ -146,6 +146,7 @@ sourceSets {
             include("com/slabbed/test/ModelStaleSentinelContractTest.java")
             include("com/slabbed/test/ModelStaleSentinelAllocationGateTest.java")
             include("com/slabbed/test/ModelStaleSentinelSelfCheckClientGameTest.java")
+            include("com/slabbed/test/RecorderUpgradeContractTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }
