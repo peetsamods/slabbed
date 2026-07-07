@@ -412,6 +412,14 @@ public final class SlabModelStaleSentinel {
         }
     }
 
+    /** Test seam: the latest bake sample for a position, or null if the mesher never fed one. The live
+     *  self-check uses this to prove the emitQuads capture path is ALIVE — the one link the headless
+     *  contract suite structurally cannot see (S7). */
+    public static Float peekBakedDyForTest(long posKey) {
+        BakeSample sample = BAKES.get(posKey);
+        return sample == null ? null : sample.dy();
+    }
+
     private static boolean sessionActive() {
         return LiveCursorIntentRecorder.enabled() || testSessionOverride;
     }
