@@ -145,6 +145,45 @@ public final class EnsembleCoherenceContractTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void breakNeighborhoodClassifiesPairsOnceAndNeverYellows(GameTestHelper helper) {
+        // Phase 1.5: breaks reshuffle neighbor dys; the break neighborhood must be ensemble-classified
+        // (each vertical pair exactly once, via its lower member) and must NEVER produce NO_BAKE
+        // yellows (an unchanged far neighbor legitimately never re-bakes).
+        List<LinkedHashMap<String, String>> rows = new ArrayList<>();
+        SlabModelStaleSentinel.resetCold();
+        SlabModelStaleSentinel.resetLiveDyPolicyForTest();
+        SlabModelStaleSentinel.testSessionOverride = true;
+        try {
+            ServerLevel w = helper.getLevel();
+            BlockPos hopper = helper.absolutePos(new BlockPos(2, 2, 2));
+            w.setBlock(hopper, Blocks.HOPPER.defaultBlockState(), 2);
+            w.setBlock(hopper.above(), Blocks.CHEST.defaultBlockState(), 2);
+            SlabModelStaleSentinel.setLiveDyPolicy((level, pos, state) ->
+                    state.getBlock() == Blocks.CHEST ? -0.5 : 0.0);
+            // The "break" happened one cell east — both stack members fall inside its radius-2 box.
+            SlabModelStaleSentinel.armBreakNeighborhood(w, hopper.east(), 1_000_000L);
+            for (long t = 1_000_020L; t <= 1_000_020L + 3L * SlabModelStaleSentinel.RED_PERSIST_TICKS; t += 20) {
+                SlabModelStaleSentinel.samplePass(w, t, pos -> true, rows::add);
+            }
+            long clashes = rows.stream().filter(r -> r.getOrDefault("kind", "").startsWith("ENSEMBLE_")).count();
+            long yellows = rows.stream().filter(r ->
+                    SlabModelStaleSentinel.KIND_NO_BAKE_YELLOW.equals(r.get("kind"))).count();
+            if (clashes != 1) {
+                throw helper.assertionException("break neighborhood must judge the clashing pair exactly ONCE, got "
+                        + clashes + " in " + rows);
+            }
+            if (yellows != 0) {
+                throw helper.assertionException("break-armed entries must never yellow, got " + yellows);
+            }
+            helper.succeed();
+        } finally {
+            SlabModelStaleSentinel.testSessionOverride = false;
+            SlabModelStaleSentinel.resetLiveDyPolicyForTest();
+            SlabModelStaleSentinel.resetCold();
+        }
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void sentinelEmitsEnsembleRowOncePerPlacement(GameTestHelper helper) {
         List<LinkedHashMap<String, String>> rows = new ArrayList<>();
         SlabModelStaleSentinel.resetCold();
