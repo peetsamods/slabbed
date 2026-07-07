@@ -9,6 +9,13 @@
 - **Jar identity stamp.** Jars now embed the exact git commit + build time (`Slabbed-Git-Sha`,
   `Slabbed-Build-Time` in `MANIFEST.MF`); the recorder session manifest records them and `/slabdev record`
   echoes `build=<sha> jar=<file>` in chat, so a session log is always attributable to an exact build.
+- Fixed: lowered candles, candle cakes, brewing stands, wall redstone torches, and decorated-pot
+  insert bursts spawned their particles at grid height — 0.5 above the lowered model (the four
+  remaining particle fixes from the 1.21.11 0.5.0 line, now ported).
+- Recorder: action rows now carry side/player and the placement cell's pre-place state+dy; block
+  BREAKS are recorded (broken cell + neighbors); client/server placement-height disagreements are
+  auto-flagged (`LIVE_PLACEMENT_SIDE_DY_SPLIT`); the summary proves the sentinel actually ran
+  (`sentinelArmedTotal`/`sentinelSamplePasses`).
 - Fixed: a bridged copper chain under a slab ceiling rendered with the plain iron texture (per-variant
   bridge models; the chain's grid-height bridge geometry itself is intentional and unchanged).
 - *(Note: the 2026-07-02→06 porting-campaign fixes — L8–L12 ports, beta-notice port, hopper/chest
