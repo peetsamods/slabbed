@@ -91,6 +91,19 @@ public final class SlabEnsembleCoherence {
     }
 
     /**
+     * Phase 3a (render tiling, first tranche): the height of the GAP-FILL BAND the mesher should emit
+     * above the block at {@code lowerPos} to close a visible mid-stack air seam — exactly the
+     * classifier's GAP depth, and 0 for every other verdict (coherent, interpenetration, by-design
+     * vanilla gaps, TS-owned, air). Pure and headless-testable; the band emission itself is client-side
+     * ({@code OffsetBlockStateModel}).
+     */
+    public static double gapFillBandHeight(BlockGetter world, BlockPos lowerPos,
+                                           double dyLower, double dyUpper) {
+        Verdict verdict = classifyVerticalPair(world, lowerPos, dyLower, dyUpper);
+        return verdict.kind() == Kind.GAP ? verdict.depth() : 0.0;
+    }
+
+    /**
      * Single-block rule: does this block render entirely at/below its own cell floor (zero visible
      * volume in its cell — occupied space that LOOKS placeable)? {@code dy} is the block's live dy.
      */
