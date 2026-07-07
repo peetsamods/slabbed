@@ -67,6 +67,9 @@ apparent space — converts the 5x-refused-clicks case into a WYSIWYG placement)
 build-order inversions (placing flush under an existing lowered block), which have NO lawful coherent
 candidate (the new block would have to sink below its aimed cell) — Phase 3 by law. Phase 2b touches
 the placement-remap mixin (S11 danger territory) and gets its own carefully-scoped lane.
+**Phase 2b LANDED (2026-07-07, 274/274):** slabbed$remapClickOnOccludedSurface — up-face click, vanilla-
+would-fail only, occluded occupant (TS-guarded), air above; remapped placement deep-follows via the
+existing compound lanes. RED-first + surgical-scope pin + occluded-condition mutation RED.
 
 ### Phase 3 (long-term, NOT this lane) — Render tiling + occupancy visibility
 Model stretching/trimming so residual mixed-dy pairs tile seamlessly (the chain-bridge approach
