@@ -1454,6 +1454,16 @@ public abstract class BlockItemPlacementIntentMixin {
         // up to 124 dy reads under a recorder session; any exotic throw is swallowed and warned once.
         try {
             Level world = context.getLevel();
+            // Recorder upgrade (TEST (3) triage): capture the placement cell's PRIOR state + dy here,
+            // pre-mutation, on BOTH sides — the action row samples only post-place, which is why the
+            // candle-cap and dripstone false alarms took real digging to clear (and why one stayed
+            // ambiguous). Consumed by slabbed$recordLiveCursorIntentPlacementAction at RETURN.
+            if (LiveCursorIntentRecorder.enabled() && world != null) {
+                BlockPos priorPos = context.getClickedPos();
+                BlockState prior = world.getBlockState(priorPos);
+                slabbed$placePriorState.set(new PriorPlaceState(prior.toString(),
+                        String.format("%.6f", SlabSupport.getYOffset(world, priorPos, prior))));
+            }
             if (world.isClientSide()) {
                 SlabModelStaleSentinel.armPlacement(world, context.getClickedPos(), world.getGameTime());
             }
@@ -1466,6 +1476,13 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private static boolean slabbed$sentinelArmWarned;
+
+    private record PriorPlaceState(String state, String dy) {
+    }
+
+    /** Per-thread (client/server logical sides are distinct threads) pre-place snapshot of the
+     *  placement cell, set at place-HEAD, consumed at place-RETURN by the recorder row. */
+    private static final ThreadLocal<PriorPlaceState> slabbed$placePriorState = new ThreadLocal<>();
 
     @Inject(method = "place", at = @At("RETURN"))
     private void slabbed$anchorLoweredFullBlockSidePlacement(
@@ -1591,6 +1608,9 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPlaceContext context,
             InteractionResult result
     ) {
+        // Consume the HEAD snapshot unconditionally so a mid-placement toggle can't leak it.
+        PriorPlaceState prior = slabbed$placePriorState.get();
+        slabbed$placePriorState.remove();
         if (!LiveCursorIntentRecorder.enabled() || context == null || context.getLevel() == null) {
             return;
         }
@@ -1602,11 +1622,17 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState afterState = world.getBlockState(placePos);
         LinkedHashMap<String, String> row = new LinkedHashMap<>();
         row.put("actionType", result != null && result.consumesAction() ? "place_block" : "use_block");
+        // Side + player disambiguate the interleaved client/server row pairs an integrated-SP session
+        // writes (schema-5 capability the TEST (3) triage had to reconstruct from millisecond pairing).
+        row.put("side", world.isClientSide() ? "client" : "server");
+        row.put("player", context.getPlayer() == null ? "none" : context.getPlayer().getName().getString());
         row.put("heldItem", BuiltInRegistries.ITEM.getKey(context.getItemInHand().getItem()).toString());
         row.put("clickedOwnerPos", clickedOwnerPos.toShortString());
         row.put("clickedFace", clickedFace.toString());
         row.put("clickedHitVec", slabbed$placementIntentVec(context.getClickLocation()));
         row.put("placementPos", placePos.toShortString());
+        row.put("placeBeforeState", prior == null ? "unrecorded" : prior.state());
+        row.put("placeBeforeDy", prior == null ? "unrecorded" : prior.dy());
         row.put("beforeState", beforeState.toString());
         row.put("beforeDy", String.format("%.6f", SlabSupport.getYOffset(world, clickedOwnerPos, beforeState)));
         row.put("beforeLaneKind", slabbed$liveCursorLaneKind(world, clickedOwnerPos, beforeState));

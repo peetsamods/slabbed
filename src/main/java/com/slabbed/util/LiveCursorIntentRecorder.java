@@ -75,6 +75,14 @@ public final class LiveCursorIntentRecorder {
     private static long modelStaleDivergentRows;
     private static long modelStaleAbsentRows;
     private static long modelStaleYellowRows;
+    private static long breakRows;
+    private static long placementSideDySplitRows;
+    // Same-instant client/server pair rule state (guarded by LOCK): the TEST (3) triage found the L3
+    // first-frame split only by hand-mining millisecond row pairs — "data but no rule". Now a rule.
+    private static String lastClientPlacementKey;
+    private static String lastClientAfterDy;
+    private static long lastClientActionNanos;
+    private static final long PAIR_WINDOW_NANOS = 1_000_000_000L;
     private static long lastCursorRowId;
     private static LinkedHashMap<String, String> lastCursorRow;
 
@@ -247,6 +255,43 @@ public final class LiveCursorIntentRecorder {
         }
     }
 
+    /**
+     * Break capture (TEST (3)-triage upgrade): the recorder was break-blind, which caused the
+     * "data-destructive downgrade" false alarm and left the tower-churn "jumping on break" report with
+     * zero rows. Records the broken block + its up/down neighbors' states and dys pre-break — the
+     * pop-detection cells the never-pop law cares about. Observation only; never affects the break.
+     */
+    public static void recordBreakEvent(net.minecraft.world.level.Level world,
+                                        net.minecraft.core.BlockPos pos,
+                                        net.minecraft.world.level.block.state.BlockState state,
+                                        String playerName) {
+        if (!enabled()) {
+            return;
+        }
+        LinkedHashMap<String, String> row = new LinkedHashMap<>();
+        row.put("type", "break");
+        row.put("side", world.isClientSide() ? "client" : "server");
+        row.put("player", playerName == null ? "none" : playerName);
+        row.put("pos", pos.toShortString());
+        row.put("state", state.toString());
+        row.put("dy", String.format("%.6f", SlabSupport.getYOffset(world, pos, state)));
+        net.minecraft.core.BlockPos above = pos.above();
+        net.minecraft.world.level.block.state.BlockState aboveState = world.getBlockState(above);
+        net.minecraft.core.BlockPos below = pos.below();
+        net.minecraft.world.level.block.state.BlockState belowState = world.getBlockState(below);
+        row.put("aboveState", aboveState.toString());
+        row.put("aboveDy", String.format("%.6f", SlabSupport.getYOffset(world, above, aboveState)));
+        row.put("belowState", belowState.toString());
+        row.put("belowDy", String.format("%.6f", SlabSupport.getYOffset(world, below, belowState)));
+        row.put("rowId", Long.toString(ROW_IDS.incrementAndGet()));
+        row.put("recordedAt", Instant.now().toString());
+        synchronized (LOCK) {
+            breakRows++;
+            writeSession(row);
+            writeSummary();
+        }
+    }
+
     public static void recordAction(LinkedHashMap<String, String> fields) {
         if (!enabled()) {
             return;
@@ -262,6 +307,27 @@ public final class LiveCursorIntentRecorder {
         row.put("marker", markers);
         synchronized (LOCK) {
             actionRows++;
+            // Same-instant client/server afterDy pair rule (the measured L3 first-frame split, ~4% of
+            // TEST (3) placements): a server row matching the immediately-preceding client row's
+            // placement but disagreeing on afterDy is flagged — the player SAW a snap.
+            String side = row.getOrDefault("side", "");
+            String pairKey = row.getOrDefault("placementPos", "") + "|" + row.getOrDefault("heldItem", "");
+            if ("client".equals(side)) {
+                lastClientPlacementKey = pairKey;
+                lastClientAfterDy = row.get("afterDy");
+                lastClientActionNanos = System.nanoTime();
+            } else if ("server".equals(side)
+                    && pairKey.equals(lastClientPlacementKey)
+                    && System.nanoTime() - lastClientActionNanos < PAIR_WINDOW_NANOS
+                    && lastClientAfterDy != null
+                    && !lastClientAfterDy.equals(row.get("afterDy"))) {
+                placementSideDySplitRows++;
+                row.put("clientAfterDy", lastClientAfterDy);
+                markers = markers == null || markers.isEmpty() || "none".equals(markers)
+                        ? "LIVE_PLACEMENT_SIDE_DY_SPLIT"
+                        : "LIVE_PLACEMENT_SIDE_DY_SPLIT|" + markers;
+                row.put("marker", markers);
+            }
             if (markers.contains("LIVE_PLACEMENT_EXPECTED_DY_MISMATCH")) {
                 placementExpectedDyMismatchRows++;
             }
@@ -313,6 +379,14 @@ public final class LiveCursorIntentRecorder {
             collisionIteratorTargetPresentRows = 0L;
             greenCursorTriadRows = 0L;
             greenPlacementAuthoringRows = 0L;
+            modelStaleDivergentRows = 0L;
+            modelStaleAbsentRows = 0L;
+            modelStaleYellowRows = 0L;
+            breakRows = 0L;
+            placementSideDySplitRows = 0L;
+            lastClientPlacementKey = null;
+            lastClientAfterDy = null;
+            lastClientActionNanos = 0L;
             lastCursorRowId = 0L;
             lastCursorRow = null;
         }
@@ -594,6 +668,12 @@ public final class LiveCursorIntentRecorder {
         text.append("modelStaleDivergentRows=").append(modelStaleDivergentRows).append('\n');
         text.append("modelStaleAbsentRows=").append(modelStaleAbsentRows).append('\n');
         text.append("modelStaleYellowRows=").append(modelStaleYellowRows).append('\n');
+        text.append("breakRows=").append(breakRows).append('\n');
+        text.append("placementSideDySplitRows=").append(placementSideDySplitRows).append('\n');
+        // Sentinel liveness (green-by-evidence, not green-by-absence): zero red rows only counts as a
+        // clean bill when these show the probe actually armed and judged during the session.
+        text.append("sentinelArmedTotal=").append(SlabModelStaleSentinel.armedTotalCount()).append('\n');
+        text.append("sentinelSamplePasses=").append(SlabModelStaleSentinel.samplePassCount()).append('\n');
         writeFile("summary.md", text.toString(), false);
     }
 

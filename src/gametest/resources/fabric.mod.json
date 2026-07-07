@@ -50,7 +50,8 @@
       "com.slabbed.test.DoubleSlabPlacementNonDestructiveTest",
       "com.slabbed.test.ChainCeilingBridgeTextureTest",
       "com.slabbed.test.ModelStaleSentinelContractTest",
-      "com.slabbed.test.ModelStaleSentinelAllocationGateTest"
+      "com.slabbed.test.ModelStaleSentinelAllocationGateTest",
+      "com.slabbed.test.RecorderUpgradeContractTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
