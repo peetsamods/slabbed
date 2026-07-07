@@ -4,6 +4,7 @@ import com.slabbed.compat.CompatHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -67,8 +68,8 @@ public final class SlabEnsembleCoherence {
         if (lower.isAir() || upper.isAir() || isTsOwned(lower) || isTsOwned(upper)) {
             return Verdict.COHERENT;
         }
-        VoxelShape lowerShape = lower.getShape(world, lowerPos);
-        VoxelShape upperShape = upper.getShape(world, upperPos);
+        VoxelShape lowerShape = vanillaShape(lower);
+        VoxelShape upperShape = vanillaShape(upper);
         if (lowerShape.isEmpty() || upperShape.isEmpty()) {
             return Verdict.COHERENT;
         }
@@ -98,10 +99,22 @@ public final class SlabEnsembleCoherence {
         if (state.isAir() || isTsOwned(state)) {
             return false;
         }
-        VoxelShape shape = state.getShape(world, pos);
+        VoxelShape shape = vanillaShape(state);
         if (shape.isEmpty()) {
             return false;
         }
         return shape.max(Direction.Axis.Y) + dy <= EPS;
+    }
+
+    /**
+     * VANILLA-space shape, deliberately queried context-free: on this branch {@code getShape(world,
+     * pos)} is the triad's OUTLINE leg and is ALREADY dy-offset for a genuinely lowered block, so any
+     * math that adds the caller's dy on top double-counts it — the /slabdy {@code 0bf59d56} disease,
+     * reproduced by this classifier's own first live outing (TEST (5): 30 of 76 rows were false
+     * OCCLUDED verdicts on −0.5 full cubes). With {@link EmptyBlockGetter} the dy lanes see no support
+     * context and return the unshifted shape in BOTH live and headless environments.
+     */
+    private static VoxelShape vanillaShape(BlockState state) {
+        return state.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
     }
 }

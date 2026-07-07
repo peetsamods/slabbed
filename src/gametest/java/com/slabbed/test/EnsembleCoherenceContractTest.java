@@ -119,6 +119,32 @@ public final class EnsembleCoherenceContractTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void reallyLoweredBlockShapesAreNotDoubleCounted(GameTestHelper helper) {
+        // TEST (5) live regression, caught by the gate's own first outing: getShape is the OUTLINE leg
+        // of the triad — ALREADY dy-offset for a genuinely lowered block — so classifier math that adds
+        // the caller's dy on top double-applies it (the /slabdy 0bf59d56 disease, F9). 30 of 76 live
+        // rows were false OCCLUDED verdicts on -0.5 full cubes. Repro needs a REAL lowered block
+        // (anchored, live dy -0.5), not injected dys over flush geometry — which is exactly why the
+        // original suite stayed green while live lied.
+        ServerLevel w = helper.getLevel();
+        BlockPos support = helper.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos log = support.above();
+        w.setBlock(support, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+        w.setBlock(log, Blocks.OAK_LOG.defaultBlockState(), 2);
+        com.slabbed.anchor.SlabAnchorAttachment.addAnchor(w, log, w.getBlockState(log));
+        com.slabbed.anchor.SlabAnchorAttachment.freezeLoweredOnPlace(w, log, w.getBlockState(log));
+        double liveDy = com.slabbed.util.SlabSupport.getYOffset(w, log, w.getBlockState(log));
+        if (Math.abs(liveDy + 0.5) > 1.0e-6) {
+            throw helper.assertionException("premise: log on a bottom slab must be genuinely lowered -0.5, got " + liveDy);
+        }
+        if (SlabEnsembleCoherence.isOccludedOccupancy(w, log, liveDy)) {
+            throw helper.assertionException(
+                    "a genuinely lowered -0.5 FULL CUBE still shows half a block in its cell — flagging it occluded means dy was double-counted (offset outline shape + dy again)");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void sentinelEmitsEnsembleRowOncePerPlacement(GameTestHelper helper) {
         List<LinkedHashMap<String, String>> rows = new ArrayList<>();
         SlabModelStaleSentinel.resetCold();
