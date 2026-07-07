@@ -3,6 +3,7 @@ package com.slabbed.mixin;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.PlacementIntentState;
+import com.slabbed.util.SlabEnsembleCoherence;
 import com.slabbed.util.SlabModelStaleSentinel;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.world.level.block.EntityBlock;
@@ -828,6 +829,53 @@ public abstract class BlockItemPlacementIntentMixin {
                 && SlabSupport.isCompatibleLoweredSlabLane(
                         targetState.getValue(SlabBlock.TYPE),
                         state.getValue(SlabBlock.TYPE));
+    }
+
+    /**
+     * Phase 2b — OCCLUDED-surface placement remap (ENSEMBLE_COHERENCE_DESIGN.md, the t=98s
+     * five-refused-clicks scene): a lowered support can carry an occupant that renders ENTIRELY below
+     * its own cell floor ({@code SlabEnsembleCoherence.isOccludedOccupancy}) — the occupant's cell
+     * LOOKS like free space above the visible surface, so an up-face click targets it and vanilla
+     * refuses (occupied). Remap the click one cell up onto the occluded occupant, so the placement
+     * lands in the APPARENT space and deep-follows the stack (the existing compound lanes assign
+     * −1.0; nothing existing moves).
+     *
+     * <p>SURGICAL by the S11 hijack law — fires ONLY when ALL hold: up-face click; vanilla placement
+     * would FAIL ({@code BlockPlaceContext.canPlace()} false — a working placement is NEVER touched);
+     * the blocking occupant is genuinely occluded (TS-guarded inside the classifier); and the cell
+     * above the occupant is plain air. Recursion terminates: the remapped click's own placement can
+     * place, so the guard fails on re-entry.
+     */
+    @Inject(method = "useOn", at = @At("HEAD"), cancellable = true)
+    private void slabbed$remapClickOnOccludedSurface(
+            UseOnContext context,
+            CallbackInfoReturnable<InteractionResult> cir
+    ) {
+        if (context.getClickedFace() != Direction.UP) {
+            return;
+        }
+        Level level = context.getLevel();
+        BlockPos occupied = context.getClickedPos().above();
+        BlockState occupant = level.getBlockState(occupied);
+        if (occupant.isAir() || !level.getBlockState(occupied.above()).isAir()) {
+            return;
+        }
+        if (new BlockPlaceContext(context).canPlace()) {
+            return;   // vanilla placement works — never hijack a working placement
+        }
+        double occupantDy = SlabSupport.getYOffset(level, occupied, occupant);
+        if (!SlabEnsembleCoherence.isOccludedOccupancy(level, occupied, occupantDy)) {
+            return;
+        }
+        BlockItem self = (BlockItem) (Object) this;
+        Vec3 click = context.getClickLocation();
+        BlockHitResult liftedHit = new BlockHitResult(
+                new Vec3(click.x, occupied.getY() + 1.0, click.z), Direction.UP, occupied, false);
+        UseOnContext remapped = new UseOnContext(
+                context.getLevel(), context.getPlayer(), context.getHand(),
+                context.getItemInHand(), liftedHit) {
+        };
+        cir.setReturnValue(self.useOn(remapped));
     }
 
     @Inject(method = "useOn", at = @At("HEAD"), cancellable = true)

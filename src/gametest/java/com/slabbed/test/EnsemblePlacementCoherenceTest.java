@@ -91,6 +91,65 @@ public final class EnsemblePlacementCoherenceTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void clickingOccludedSurfacePlacesIntoTheApparentSpace(GameTestHelper helper) {
+        // Phase 2b (the t=98 five-refused-clicks scene, reconstructed): a lowered log carries an
+        // OCCLUDED slab (renders level with the log top — its own cell looks empty). Clicking the
+        // visible surface must place the new block into the APPARENT space (the cell above the
+        // occluded occupant) at the deep-follow dy — instead of vanilla refusing on the occupied cell.
+        ServerLevel w = helper.getLevel();
+        BlockPos base = helper.absolutePos(new BlockPos(2, 1, 2));
+        BlockPos log = base.above();
+        w.setBlock(base, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+        w.setBlock(log, Blocks.OAK_LOG.defaultBlockState(), 2);
+        onPlaced(w, log);
+        if (Math.abs(SlabSupport.getYOffset(w, log, w.getBlockState(log)) + 0.5) > EPS) {
+            throw helper.assertionException("premise: the log must be lowered -0.5");
+        }
+        place(helper, new ItemStack(Items.OAK_SLAB), log, Direction.UP);
+        BlockPos occluded = log.above();
+        if (w.getBlockState(occluded).isAir()) {
+            throw helper.assertionException("premise: the slab must land on the log top");
+        }
+        onPlaced(w, occluded);
+        double slabDy = SlabSupport.getYOffset(w, occluded, w.getBlockState(occluded));
+        if (Math.abs(slabDy + 0.5) > EPS
+                || !com.slabbed.util.SlabEnsembleCoherence.isOccludedOccupancy(w, occluded, slabDy)) {
+            throw helper.assertionException("premise: the slab must be OCCLUDED at -0.5, got dy=" + slabDy);
+        }
+        // THE CLICK: the t=98 action — up-face of the log, target cell occupied by the invisible slab.
+        place(helper, new ItemStack(Items.STONE), log, Direction.UP);
+        BlockPos apparent = occluded.above();
+        if (w.getBlockState(apparent).isAir()) {
+            throw helper.assertionException(
+                    "Phase 2b: clicking the visible surface over an OCCLUDED occupant must place into the apparent space, not be refused");
+        }
+        double dy = SlabSupport.getYOffset(w, apparent, w.getBlockState(apparent));
+        if (Math.abs(dy + 1.0) > EPS) {
+            throw helper.assertionException("the remapped placement must deep-follow -1.0 to fill the visible gap, got " + dy);
+        }
+        if (Math.abs(SlabSupport.getYOffset(w, occluded, w.getBlockState(occluded)) + 0.5) > EPS) {
+            throw helper.assertionException("the occluded occupant must be untouched (never-pop)");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void nonOccludedOccupiedTargetStillRefuses(GameTestHelper helper) {
+        // Surgical guard (the S11 hijack lesson): the remap fires ONLY for occluded occupants — an
+        // ordinary occupied target keeps vanilla refusal, and nothing lands anywhere.
+        ServerLevel w = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        BlockPos occupant = ground.above();
+        w.setBlock(ground, Blocks.STONE.defaultBlockState(), 2);
+        w.setBlock(occupant, Blocks.STONE.defaultBlockState(), 2);
+        place(helper, new ItemStack(Items.HOPPER), ground, Direction.UP);
+        if (!w.getBlockState(occupant.above()).isAir()) {
+            throw helper.assertionException("a non-occluded occupied target must stay a vanilla refusal — nothing may be remapped");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void loweredSupportStillFollowedNormally(GameTestHelper helper) {
         // Control: the coherence rule must ONLY fire on clash shapes — a block on a genuinely LOWERED
         // support keeps following it down (WYSIWYG on the stack), no freeze-flat regression.
