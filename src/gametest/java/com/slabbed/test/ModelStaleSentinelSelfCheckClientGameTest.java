@@ -46,6 +46,11 @@ public final class ModelStaleSentinelSelfCheckClientGameTest implements FabricCl
             int baseX = (playerPos.getX() & ~15) + 6;
             int baseZ = (playerPos.getZ() & ~15) + 6;
             int baseY = playerPos.getY() + 3;
+            if ((baseY & 15) == 15) {
+                // Keep support AND torch in the same Y section — otherwise the poke below would re-mesh
+                // only the support's section and the torch bake could legitimately never arrive (flake).
+                baseY++;
+            }
             BlockPos support = new BlockPos(baseX, baseY, baseZ);
             BlockPos torch = support.above();
             BlockPos poke = new BlockPos(baseX + 2, baseY, baseZ);

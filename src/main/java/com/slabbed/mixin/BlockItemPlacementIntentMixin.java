@@ -1450,11 +1450,22 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPlaceContext context,
             CallbackInfoReturnable<net.minecraft.world.InteractionResult> cir
     ) {
-        Level world = context.getLevel();
-        if (world.isClientSide()) {
-            SlabModelStaleSentinel.armPlacement(world, context.getClickedPos(), world.getGameTime());
+        // Diagnostic-only: must NEVER interfere with placement (BuildStamp precedent). armPlacement runs
+        // up to 124 dy reads under a recorder session; any exotic throw is swallowed and warned once.
+        try {
+            Level world = context.getLevel();
+            if (world.isClientSide()) {
+                SlabModelStaleSentinel.armPlacement(world, context.getClickedPos(), world.getGameTime());
+            }
+        } catch (Throwable t) {
+            if (!slabbed$sentinelArmWarned) {
+                slabbed$sentinelArmWarned = true;
+                com.slabbed.Slabbed.LOGGER.warn("[MODEL_STALE sentinel] arming failed; sentinel coverage degraded for this session", t);
+            }
         }
     }
+
+    private static boolean slabbed$sentinelArmWarned;
 
     @Inject(method = "place", at = @At("RETURN"))
     private void slabbed$anchorLoweredFullBlockSidePlacement(

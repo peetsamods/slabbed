@@ -91,6 +91,33 @@ public final class SlabModelStaleSentinel {
     private static final long[] EMPTY_SNAPSHOT = new long[0];
     private static final Object LOCK = new Object();
 
+    /**
+     * The dy function used for BOTH arming baselines and sampler live reads. This MUST be the same
+     * policy the capture path records, or healthy scenes red falsely: the mesher's dy is NOT raw
+     * {@link SlabSupport#getYOffset} — carpets deliberately render at {@code ClientDy.dyFor} (-0.5 on a
+     * bottom slab) while the logical policy holds them at 0.0 (adversarial review finding #1: judging
+     * with getYOffset while capturing the render policy guaranteed a false DIVERGENT on any placement
+     * near a carpet-on-slab). The client driver injects the render-twin at init; headless defaults to
+     * getYOffset, which is self-consistent because headless tests also feed bakes synthetically.
+     */
+    @FunctionalInterface
+    public interface LiveDyPolicy {
+        double dyFor(BlockGetter level, BlockPos pos, BlockState state);
+    }
+
+    private static final LiveDyPolicy DEFAULT_POLICY = SlabSupport::getYOffset;
+    private static volatile LiveDyPolicy liveDyPolicy = DEFAULT_POLICY;
+
+    /** Client init injects the render-intent dy twin; tests may inject synthetic policies. */
+    public static void setLiveDyPolicy(LiveDyPolicy policy) {
+        liveDyPolicy = policy == null ? DEFAULT_POLICY : policy;
+    }
+
+    /** Test seam: restore the default (getYOffset) policy. */
+    public static void resetLiveDyPolicyForTest() {
+        liveDyPolicy = DEFAULT_POLICY;
+    }
+
     /** Test seam (CompatHooks.shouldSkipSlabSupportTestOverride convention): lets the headless contract
      *  suite run the sentinel without toggling the real file-writing recorder session. */
     public static volatile boolean testSessionOverride;
@@ -123,6 +150,11 @@ public final class SlabModelStaleSentinel {
         int mismatchSamples;
         long firstMismatchTick;
         boolean redLatched;
+        /** Separate from {@link #redLatched}: a NO_BAKE yellow must not preempt a later real divergence
+         *  red if the bake finally arrives wrong (adversarial review finding #2 — an earlier version of
+         *  this split was silently lost to a `git checkout` during mutation runs and the commit message
+         *  over-claimed it; re-applied WITH the contract test that pins it). */
+        boolean yellowLatched;
 
         ArmedEntry(BlockPos pos, String reason, Block armedBlock, float baselineDy, boolean hasBaseline,
                    long armedNanos, long armedTick) {
@@ -162,7 +194,13 @@ public final class SlabModelStaleSentinel {
      * real event (an armed position re-baking), not steady-state work.
      */
     public static void recordBake(BlockPos pos, float bakedDy) {
-        BAKES.put(pos.asLong(), new BakeSample(bakedDy, System.nanoTime()));
+        BakeSample sample = new BakeSample(bakedDy, System.nanoTime());
+        // Keep-max-nanos merge (adversarial review finding #5): two rebuilds of the same section can be
+        // in flight on different workers; a superseded OLDER build emitting after the fresh one must not
+        // overwrite the newer sample, or a stale pre-change dy with fresh-enough ordering would
+        // manufacture a false DIVERGENT.
+        BAKES.merge(pos.asLong(), sample, (existing, incoming) ->
+                existing.nanos() >= incoming.nanos() ? existing : incoming);
     }
 
     // ── arming (client main thread; placement-HEAD, pre-mutation) ───────────────────────────────────
@@ -192,7 +230,7 @@ public final class SlabModelStaleSentinel {
                         if (state.isAir()) {
                             continue;
                         }
-                        float baseline = (float) SlabSupport.getYOffset(world, cursor, state);
+                        float baseline = (float) liveDyPolicy.dyFor(world, cursor, state);
                         armEntry(new ArmedEntry(cursor.immutable(), REASON_NEIGHBORHOOD, state.getBlock(),
                                 baseline, true, nowNanos, nowTick));
                     }
@@ -210,7 +248,7 @@ public final class SlabModelStaleSentinel {
                 armEntry(new ArmedEntry(pos.immutable(), reason, null, 0.0f, false, nowNanos, nowTick));
             } else {
                 BlockState state = world.getBlockState(pos);
-                float baseline = state.isAir() ? 0.0f : (float) SlabSupport.getYOffset(world, pos, state);
+                float baseline = state.isAir() ? 0.0f : (float) liveDyPolicy.dyFor(world, pos, state);
                 armEntry(new ArmedEntry(pos.immutable(), reason, state.getBlock(), baseline, !state.isAir(),
                         nowNanos, nowTick));
             }
@@ -300,7 +338,7 @@ public final class SlabModelStaleSentinel {
                     removedAny = true;
                     continue;
                 }
-                float liveDy = (float) SlabSupport.getYOffset(level, entry.pos, state);
+                float liveDy = (float) liveDyPolicy.dyFor(level, entry.pos, state);
                 BakeSample bake = BAKES.get(mapEntry.getKey());
                 boolean bakedSinceArm = bake != null && bake.nanos >= entry.armedNanos;
 
@@ -316,9 +354,10 @@ public final class SlabModelStaleSentinel {
                     kind = KIND_ABSENT;
                 } else {
                     // Placed cell that never baked: suspicious after the persistence window (vanilla
-                    // always dirties the placed pos) but ambiguous — YELLOW once, never red.
-                    if (!entry.redLatched && nowTick - entry.armedTick >= RED_PERSIST_TICKS) {
-                        entry.redLatched = true;
+                    // always dirties the placed pos) but ambiguous — YELLOW once, never red. Latched
+                    // separately from red: a late wrong bake must still be able to red.
+                    if (!entry.yellowLatched && nowTick - entry.armedTick >= RED_PERSIST_TICKS) {
+                        entry.yellowLatched = true;
                         redRowSink.accept(row(entry, KIND_NO_BAKE_YELLOW, null, liveDy, state, nowTick));
                     }
                     continue;

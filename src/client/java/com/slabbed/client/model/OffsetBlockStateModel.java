@@ -94,6 +94,16 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         fabricWrapped.emitQuads(out, view, pos, state, random, slabbed$offsetAwareCullTest(view, pos, state, dy, cullTest));
     }
 
+    /**
+     * The render-intent dy policy, publicly callable so the MODEL_STALE sentinel judges live dy with the
+     * SAME function the capture records (adversarial review finding #1: judging with raw
+     * {@code SlabSupport.getYOffset} while capturing this policy guaranteed false DIVERGENT reds on
+     * carpets, whose render dy deliberately differs from their logical dy).
+     */
+    public static float liveModelDy(BlockAndTintGetter view, BlockPos pos, BlockState state) {
+        return slabbed$modelDy(view, pos, state);
+    }
+
     private static float slabbed$modelDy(BlockAndTintGetter view, BlockPos pos, BlockState state) {
         // Render-region crash guard (26.x): on the chunk-meshing thread `view` is a bounds-limited
         // RenderSectionRegion that THROWS (ArrayIndexOutOfBoundsException) on a read outside its border.

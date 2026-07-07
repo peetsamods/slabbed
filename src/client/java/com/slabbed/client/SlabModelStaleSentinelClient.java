@@ -1,7 +1,9 @@
 package com.slabbed.client;
 
+import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.SlabModelStaleSentinel;
+import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.InvalidateRenderStateCallback;
@@ -34,6 +36,13 @@ public final class SlabModelStaleSentinelClient {
     }
 
     public static void init() {
+        // The judge/baseline dy MUST be the render-intent twin, not raw getYOffset — carpets render at
+        // ClientDy.dyFor (-0.5 on a slab) while logical dy holds them at 0.0; a mixed policy falsely
+        // reds healthy scenes (adversarial review finding #1). Non-client views fall back to logical dy.
+        SlabModelStaleSentinel.setLiveDyPolicy((level, pos, state) ->
+                level instanceof BlockAndTintGetter view
+                        ? OffsetBlockStateModel.liveModelDy(view, pos, state)
+                        : com.slabbed.util.SlabSupport.getYOffset(level, pos, state));
         ClientTickEvents.END_CLIENT_TICK.register(SlabModelStaleSentinelClient::onEndClientTick);
         ClientChunkEvents.CHUNK_UNLOAD.register((clientLevel, chunk) -> {
             // 26.2 ChunkPos hides x/z behind the packed-long accessors.
@@ -49,6 +58,10 @@ public final class SlabModelStaleSentinelClient {
             // World join / leave / dimension change: drop all sentinel state and open the grace window —
             // join-time mesh churn must never be judged.
             lastLevel = level;
+            // Ping bookkeeping is per-world game time — carrying a large lastPingTick into a world with
+            // a smaller clock would silently starve every ping (adversarial review finding #3).
+            lastPingTick = Long.MIN_VALUE;
+            redRowsSinceLastPing = 0;
             if (level == null) {
                 SlabModelStaleSentinel.resetCold();
             } else {
