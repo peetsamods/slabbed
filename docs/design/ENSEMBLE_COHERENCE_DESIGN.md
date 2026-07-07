@@ -56,6 +56,18 @@ RED-first: gametests build the video's exact scenes via real `useOn` (hopper flu
 lowered context → assert pair coherent; slab-level-with-lowered-log → assert placement refused cells
 are visually distinguishable is Phase 3's problem — Phase 2 only asserts dy assignment).
 
+### Phase 2a RESULT (2026-07-07, empirical): already coherent — pinned, re-scoped
+The RED-first suite for placement-onto-flush-support interpenetration came back GREEN unfixed: the
+existing freeze-flat rails already assign the coherent dy in every reconstructed shape (2 permanent
+pin tests: EnsemblePlacementCoherenceTest). Therefore the remaining placement-sourced clash inventory
+is: (a) OCCLUDED_OCCUPANCY — the block is WYSIWYG-correct but invisible in its own cell; fixable only
+by **Phase 2b: occluded-surface placement remap** (clicking the visible flush top of an occluded slab
+places the new block in the cell ABOVE the logical target with the deep-follow dy, filling the
+apparent space — converts the 5x-refused-clicks case into a WYSIWYG placement); and (b) new-LOWER
+build-order inversions (placing flush under an existing lowered block), which have NO lawful coherent
+candidate (the new block would have to sink below its aimed cell) — Phase 3 by law. Phase 2b touches
+the placement-remap mixin (S11 danger territory) and gets its own carefully-scoped lane.
+
 ### Phase 3 (long-term, NOT this lane) — Render tiling + occupancy visibility
 Model stretching/trimming so residual mixed-dy pairs tile seamlessly (the chain-bridge approach
 generalized), and a placement-preview cue when the expectedPlace cell is occupied-but-displaced.
