@@ -2,6 +2,7 @@ package com.slabbed.client.model;
 
 import com.slabbed.Slabbed;
 import com.slabbed.client.ClientDy;
+import com.slabbed.util.SlabEnsembleCoherence;
 import com.slabbed.util.SlabModelStaleSentinel;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
@@ -92,6 +93,49 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         boolean stepSeam = dy != 0.0f || slabbed$anyMismatchedNeighborDy(view, pos, dy);
         QuadEmitter out = stepSeam ? YOffsetEmitter.wrap(emitter, dy, slabbed$hasMismatchedNeighborDy(view, pos, dy)) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, slabbed$offsetAwareCullTest(view, pos, state, dy, cullTest));
+        slabbed$emitGapFillBand(out, view, pos, dy);
+    }
+
+    /**
+     * Phase 3a (ENSEMBLE_COHERENCE_DESIGN.md, render tiling first tranche): when this block's
+     * face-contact pair ABOVE sits higher (the measured GAP class — −1.0 under −0.5 stacks, doors over
+     * lowered slabs, hopper columns), emit an additive BAND of this block's side texture spanning the
+     * seam, so the visible mid-stack air strip closes. Same philosophy as the chain ceiling bridge:
+     * extra geometry, nothing moves, dy laws untouched. Emitted through the SAME dy-shifted emitter, so
+     * band-local y ∈ [1, 1+d] lands exactly between the two visual bodies. Vanilla-contact requirement
+     * lives in the classifier (a bottom slab's by-design half-gap is never banded); TS pairs are
+     * guarded there too. Region-border reads fall back to no band (the section re-bakes with fuller
+     * bounds a frame later — same contract as slabbed$modelDy).
+     */
+    private void slabbed$emitGapFillBand(QuadEmitter out, BlockAndTintGetter view, BlockPos pos, float dy) {
+        try {
+            BlockPos above = pos.above();
+            BlockState aboveState = view.getBlockState(above);
+            if (aboveState.isAir()) {
+                return;
+            }
+            double dyAbove = slabbed$neighborModelDy(view, above);
+            double d = SlabEnsembleCoherence.gapFillBandHeight(view, pos, dy, dyAbove);
+            if (d <= 1.0e-4) {
+                return;
+            }
+            Material.Baked particle = wrapped.particleMaterial();
+            if (particle == null) {
+                return;
+            }
+            float top = 1.0f + (float) d;
+            for (Direction face : Direction.values()) {
+                if (face.getAxis() == Direction.Axis.Y) {
+                    continue;
+                }
+                out.square(face, 0.0f, 1.0f, 1.0f, top, 0.0f);
+                out.materialBake(particle, net.fabricmc.fabric.api.client.renderer.v1.mesh.MutableQuadView.BAKE_LOCK_UV);
+                out.color(-1, -1, -1, -1);
+                out.emit();
+            }
+        } catch (IndexOutOfBoundsException outsideRenderRegion) {
+            // no band at the region border; the re-bake with fuller bounds draws it a frame later
+        }
     }
 
     /**

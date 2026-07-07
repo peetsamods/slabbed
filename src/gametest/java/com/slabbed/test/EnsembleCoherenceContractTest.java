@@ -220,4 +220,25 @@ public final class EnsembleCoherenceContractTest {
             SlabModelStaleSentinel.resetCold();
         }
     }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void gapFillBandHeightMatchesGapDepthAndOnlyGapDepth(GameTestHelper helper) {
+        // Phase 3a: the band plan is exactly the classifier GAP depth — zero for every other verdict.
+        ServerLevel w = helper.getLevel();
+        BlockPos lower = helper.absolutePos(new BlockPos(2, 2, 2));
+        w.setBlock(lower, Blocks.STONE.defaultBlockState(), 2);
+        w.setBlock(lower.above(), Blocks.STONE.defaultBlockState(), 2);
+        if (Math.abs(SlabEnsembleCoherence.gapFillBandHeight(w, lower, -1.0, -0.5) - 0.5) > 1.0e-6) {
+            throw helper.assertionException("-1.0 under -0.5 must band 0.5");
+        }
+        if (SlabEnsembleCoherence.gapFillBandHeight(w, lower, -0.5, -0.5) != 0.0
+                || SlabEnsembleCoherence.gapFillBandHeight(w, lower, 0.0, -0.5) != 0.0) {
+            throw helper.assertionException("coherent and interpenetrating pairs must never band");
+        }
+        w.setBlock(lower, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+        if (SlabEnsembleCoherence.gapFillBandHeight(w, lower, -1.0, 0.0) != 0.0) {
+            throw helper.assertionException("a by-design vanilla gap (bottom slab lower) must never band");
+        }
+        helper.succeed();
+    }
 }
