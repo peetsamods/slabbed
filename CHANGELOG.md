@@ -12,6 +12,9 @@
 - Fixed: lowered candles, candle cakes, brewing stands, wall redstone torches, and decorated-pot
   insert bursts spawned their particles at grid height — 0.5 above the lowered model (the four
   remaining particle fixes from the 1.21.11 0.5.0 line, now ported).
+- Recorder: ensemble-coherence verdicts — mixed-height neighbors that clip into each other, leave
+  mid-stack gaps, or occupy cells invisibly (the dominant deep-compound complaint) are now auto-flagged
+  as LIVE_ENSEMBLE_* rows with pair positions, dys, and depth (design: docs/design/ENSEMBLE_COHERENCE_DESIGN.md).
 - Recorder: action rows now carry side/player and the placement cell's pre-place state+dy; block
   BREAKS are recorded (broken cell + neighbors); client/server placement-height disagreements are
   auto-flagged (`LIVE_PLACEMENT_SIDE_DY_SPLIT`); the summary proves the sentinel actually ran
