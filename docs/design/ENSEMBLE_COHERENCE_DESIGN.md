@@ -71,7 +71,14 @@ the placement-remap mixin (S11 danger territory) and gets its own carefully-scop
 would-fail only, occluded occupant (TS-guarded), air above; remapped placement deep-follows via the
 existing compound lanes. RED-first + surgical-scope pin + occluded-condition mutation RED.
 
-### Phase 3 (long-term, NOT this lane) — Render tiling + occupancy visibility
+### Phase 3 — GREENLIT 2026-07-07; decomposition by measured harm
+3a **GAP-FILL BANDS (LANDED, 275/275)**: additive side-texture band spanning [top, top+d] of the lower
+member of a GAP pair, emitted through the dy-shifted emitter (chain-bridge philosophy generalized).
+Plan = classifier GAP depth, pure + pinned + mutation-proven; emission client-side, NEEDS-LIVE (TEST
+(9) A/B). 3b interpenetration trim (vertex clipping — hard, deferred). 3c BER pipeline (chests — the
+band covers static models only today). 3d occupancy cue (largely obsoleted by Phase 2b remap).
+
+### Phase 3 original scoping (retained) — Render tiling + occupancy visibility
 Model stretching/trimming so residual mixed-dy pairs tile seamlessly (the chain-bridge approach
 generalized), and a placement-preview cue when the expectedPlace cell is occupied-but-displaced.
 Chest is a BlockEntityRenderer (separate dy path from `OffsetBlockStateModel`) — any render-side work
