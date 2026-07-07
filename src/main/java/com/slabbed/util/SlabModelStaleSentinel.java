@@ -87,6 +87,11 @@ public final class SlabModelStaleSentinel {
 
     public static final String REASON_PLACEMENT = "placement";
     public static final String REASON_NEIGHBORHOOD = "neighborhood";
+    /** Break-neighborhood entries (Phase 1.5): ensemble-classified once + divergence-checked, but never
+     *  yellow (no bake on an unchanged far neighbor is normal) and never absence-ruled (no baseline —
+     *  server-armed, and TEST (6) showed 40/94 breaks touch lowered geometry the placement-only gate
+     *  could not see). */
+    public static final String REASON_BREAK = "break";
 
     private static final long[] EMPTY_SNAPSHOT = new long[0];
     private static final Object LOCK = new Object();
@@ -250,6 +255,36 @@ public final class SlabModelStaleSentinel {
         }
     }
 
+    /**
+     * Phase 1.5: arm the non-air neighborhood of a BREAK (radius 2) for ensemble classification +
+     * divergence staleness. Called from the server-side break event, recorder-gated by the caller.
+     * No baselines (the absence rule stays off for these — the render-twin policy is not available on
+     * the server side, and a wrong baseline is worse than none).
+     */
+    public static void armBreakNeighborhood(BlockGetter world, BlockPos brokenPos, long nowTick) {
+        if (!sessionActive()) {
+            return;
+        }
+        long nowNanos = System.nanoTime();
+        synchronized (LOCK) {
+            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+            for (int dx = -ARM_RADIUS; dx <= ARM_RADIUS; dx++) {
+                for (int dy = -ARM_RADIUS; dy <= ARM_RADIUS; dy++) {
+                    for (int dz = -ARM_RADIUS; dz <= ARM_RADIUS; dz++) {
+                        cursor.setWithOffset(brokenPos, dx, dy, dz);
+                        BlockState state = world.getBlockState(cursor);
+                        if (state.isAir()) {
+                            continue;
+                        }
+                        armEntry(new ArmedEntry(cursor.immutable(), REASON_BREAK, state.getBlock(),
+                                0.0f, false, nowNanos, nowTick));
+                    }
+                }
+            }
+            publishSnapshotLocked();
+        }
+    }
+
     /** Test seam: arm a single entry directly (same bookkeeping path as {@link #armPlacement}). */
     public static void armForTest(BlockGetter world, BlockPos pos, String reason, long nowTick) {
         long nowNanos = System.nanoTime();
@@ -351,7 +386,8 @@ public final class SlabModelStaleSentinel {
                     continue;
                 }
                 float liveDy = (float) liveDyPolicy.dyFor(level, entry.pos, state);
-                if (!entry.ensembleChecked && REASON_PLACEMENT.equals(entry.reason)) {
+                if (!entry.ensembleChecked
+                        && (REASON_PLACEMENT.equals(entry.reason) || REASON_BREAK.equals(entry.reason))) {
                     entry.ensembleChecked = true;
                     emitEnsembleVerdicts(level, entry, liveDy, nowTick, redRowSink);
                 }
@@ -371,7 +407,11 @@ public final class SlabModelStaleSentinel {
                 } else {
                     // Placed cell that never baked: suspicious after the persistence window (vanilla
                     // always dirties the placed pos) but ambiguous — YELLOW once, never red. Latched
-                    // separately from red: a late wrong bake must still be able to red.
+                    // separately from red: a late wrong bake must still be able to red. Break-armed
+                    // entries never yellow (no bake on an unchanged far neighbor is normal).
+                    if (REASON_BREAK.equals(entry.reason)) {
+                        continue;
+                    }
                     if (!entry.yellowLatched && nowTick - entry.armedTick >= RED_PERSIST_TICKS) {
                         entry.yellowLatched = true;
                         redRowSink.accept(row(entry, KIND_NO_BAKE_YELLOW, null, liveDy, state, nowTick));
@@ -413,12 +453,17 @@ public final class SlabModelStaleSentinel {
         BlockPos above = pos.above();
         double dyBelow = level.getBlockState(below).isAir() ? 0.0 : liveDyPolicy.dyFor(level, below, level.getBlockState(below));
         double dyAbove = level.getBlockState(above).isAir() ? 0.0 : liveDyPolicy.dyFor(level, above, level.getBlockState(above));
-        SlabEnsembleCoherence.Verdict pairBelow = SlabEnsembleCoherence.classifyVerticalPair(level, below, dyBelow, liveDy);
-        SlabEnsembleCoherence.Verdict pairAbove = SlabEnsembleCoherence.classifyVerticalPair(level, pos, liveDy, dyAbove);
-        if (pairBelow.kind() != SlabEnsembleCoherence.Kind.COHERENT) {
-            sink.accept(ensembleRow(entry, "ENSEMBLE_" + pairBelow.kind(), below, pos, dyBelow, liveDy,
-                    pairBelow.depth(), level, nowTick));
+        // Break entries classify their pairAbove only: every neighbor of the break is itself armed, so
+        // each vertical pair is judged exactly once (by its LOWER member) — no duplicate rows. The
+        // placed entry keeps both pairs: its neighborhood entries never ensemble-classify.
+        if (!REASON_BREAK.equals(entry.reason)) {
+            SlabEnsembleCoherence.Verdict pairBelow = SlabEnsembleCoherence.classifyVerticalPair(level, below, dyBelow, liveDy);
+            if (pairBelow.kind() != SlabEnsembleCoherence.Kind.COHERENT) {
+                sink.accept(ensembleRow(entry, "ENSEMBLE_" + pairBelow.kind(), below, pos, dyBelow, liveDy,
+                        pairBelow.depth(), level, nowTick));
+            }
         }
+        SlabEnsembleCoherence.Verdict pairAbove = SlabEnsembleCoherence.classifyVerticalPair(level, pos, liveDy, dyAbove);
         if (pairAbove.kind() != SlabEnsembleCoherence.Kind.COHERENT) {
             sink.accept(ensembleRow(entry, "ENSEMBLE_" + pairAbove.kind(), pos, above, liveDy, dyAbove,
                     pairAbove.depth(), level, nowTick));
