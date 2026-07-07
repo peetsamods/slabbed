@@ -7,7 +7,10 @@
     "BlockItemPlacementIntentMixin",
     "BlockOnPlacedAnchorMixin",
     "BlockOnStateReplacedAnchorMixin",
+    "BrewingStandParticleMixin",
+    "CandleParticleMixin",
     "CarpetBlockMixin",
+    "DecoratedPotParticleMixin",
     "FencePaneSlabConnectionMixin",
     "HangingSignAttachedMixin",
     "LivingEntityLoweredScaffoldingMixin",
@@ -18,6 +21,7 @@
     "SlabSupportStateMixin",
     "TorchParticleAccessor",
     "TorchParticleMixin",
+    "WallRedstoneTorchParticleMixin",
     "WallSlabConnectionMixin",
     "WallTorchParticleMixin",
     "torch.TorchBlockMixin"
