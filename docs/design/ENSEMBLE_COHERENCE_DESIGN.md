@@ -72,7 +72,12 @@ would-fail only, occluded occupant (TS-guarded), air above; remapped placement d
 existing compound lanes. RED-first + surgical-scope pin + occluded-condition mutation RED.
 
 ### Phase 3 — GREENLIT 2026-07-07; decomposition by measured harm
-3a **GAP-FILL BANDS (LANDED, 275/275)**: additive side-texture band spanning [top, top+d] of the lower
+3a **GAP-FILL BANDS — take-1 PULLED (2026-07-07, TEST (9) live rejection)**: LOCK_UV beyond the unit
+square bleeds into neighboring atlas sprites — every stack grew alien texture strips (frames on file).
+The live gate did its job. Take-2 requirements: explicit uv() with V tiled inside the sprite bounds
+(emit floor(d/1)+1 segments of height <=1, each V spanning 0..segH), or a dedicated band sprite;
+must add a client-gametest screenshot assertion if feasible BEFORE restaging. Plan function + pins
+retained (LANDED at the logic layer, 275/275): additive side-texture band spanning [top, top+d] of the lower
 member of a GAP pair, emitted through the dy-shifted emitter (chain-bridge philosophy generalized).
 Plan = classifier GAP depth, pure + pinned + mutation-proven; emission client-side, NEEDS-LIVE (TEST
 (9) A/B). 3b interpenetration trim (vertex clipping — hard, deferred). 3c BER pipeline (chests — the

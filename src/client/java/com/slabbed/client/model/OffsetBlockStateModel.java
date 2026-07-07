@@ -93,7 +93,12 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         boolean stepSeam = dy != 0.0f || slabbed$anyMismatchedNeighborDy(view, pos, dy);
         QuadEmitter out = stepSeam ? YOffsetEmitter.wrap(emitter, dy, slabbed$hasMismatchedNeighborDy(view, pos, dy)) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, slabbed$offsetAwareCullTest(view, pos, state, dy, cullTest));
-        slabbed$emitGapFillBand(out, view, pos, dy);
+        // Phase 3a band emission PULLED after live rejection (TEST (9), 2026-07-07): BAKE_LOCK_UV
+        // derives UVs from vertex positions, and band tops exceed the unit square — the UVs walk off
+        // the block's sprite into NEIGHBORING ATLAS SPRITES, painting alien texture strips on every
+        // stack. Take-2 must use explicit uv() with V clamped/tiled inside the sprite (see design doc);
+        // until then no band is emitted. The plan function + its pins remain.
+        // slabbed$emitGapFillBand(out, view, pos, dy);
     }
 
     /**
