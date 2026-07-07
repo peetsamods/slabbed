@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+- **MODEL_STALE sentinel (debug/proof tooling).** While `/slabdev record` is on, Slabbed now watches every
+  placement's neighborhood and compares what the chunk mesher actually baked against live block geometry;
+  a model stuck at the wrong height for more than ~5 seconds produces a red row in the recorder log
+  (`session.jsonl`/`mismatches.tsv`, `LIVE_MODEL_STALE_*`) and a rate-limited chat ping. Verified by 14 new
+  gametests + a real-renderer self-check; zero overhead when the recorder is off (machine-enforced by a new
+  allocation gate). Triage guide: `docs/process/MODEL_STALE_RUNBOOK.md`.
+- **Jar identity stamp.** Jars now embed the exact git commit + build time (`Slabbed-Git-Sha`,
+  `Slabbed-Build-Time` in `MANIFEST.MF`); the recorder session manifest records them and `/slabdev record`
+  echoes `build=<sha> jar=<file>` in chat, so a session log is always attributable to an exact build.
+- Fixed: a bridged copper chain under a slab ceiling rendered with the plain iron texture (per-variant
+  bridge models; the chain's grid-height bridge geometry itself is intentional and unchanged).
+- *(Note: the 2026-07-02→06 porting-campaign fixes — L8–L12 ports, beta-notice port, hopper/chest
+  cantilever, the mesh-staleness re-mesh family — are not yet itemized here; backfill pending before the
+  next release cut.)*
+
 ## [0.4.2-beta.2+26.2] - MC 26.2 debug HUD release correction
 
 - Fixed an unintended player-facing debug HUD: the `[slabdy]` target-dy overlay now defaults off in normal builds.
