@@ -58,7 +58,8 @@
       "com.slabbed.test.HauntedCarrierCellTest",
       "com.slabbed.test.ConnectingStructuralFreezeTest",
       "com.slabbed.test.AnchoredDepthReadbackTest",
-      "com.slabbed.test.CeilingFlushRulingTest"
+      "com.slabbed.test.CeilingFlushRulingTest",
+      "com.slabbed.test.WaterlogReadSymmetryTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",

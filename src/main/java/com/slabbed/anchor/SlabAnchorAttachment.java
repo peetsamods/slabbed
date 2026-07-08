@@ -1225,10 +1225,11 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean isPersistentLoweredSlabCarrierState(BlockState state) {
+        // F5: fluid-blind — a waterlog flip is height-neutral; it must neither de-qualify the
+        // WRITE-belt (which was silently removing the carrier on the flip) nor blind the reads.
         return state != null
                 && state.getBlock() instanceof SlabBlock
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getFluidState().isEmpty()
                 // TS-COMPAT SUBJECT GUARD (CROSS-PORT LAW / failure mode 4). A Terrain-Slabs-owned slab is
                 // a SELF-RENDERING surface TS positions itself; from Slabbed's perspective it must be treated
                 // as flush/vanilla-solid, FULL STOP (the world-hole invariant) — it must NEVER become a
@@ -1253,36 +1254,36 @@ public final class SlabAnchorAttachment {
                 && !CompatHooks.shouldSkipSlabSupport(state);
     }
 
+    // F5 (audit STATE_DEFENSE_DIVERGENCE_2026-07-07): the marker STATE predicates are FLUID-BLIND,
+    // like the anchor-family reads — a bucket/sponge flip at the cell must never change its height
+    // authority. (The attachments themselves already survive the property flip; these gates were the
+    // read-side half of the pop.) Waterlog is height-neutral; a slab TYPE change still re-keys.
     private static boolean isCompoundVisibleSideLowerSlabState(BlockState state) {
         return state != null
                 && state.is(Blocks.STONE_SLAB)
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM
-                && state.getFluidState().isEmpty();
+                && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 
     private static boolean isCompoundVisibleSideUpperSlabState(BlockState state) {
         return state != null
                 && state.is(Blocks.STONE_SLAB)
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getValue(SlabBlock.TYPE) == SlabType.TOP
-                && state.getFluidState().isEmpty();
+                && state.getValue(SlabBlock.TYPE) == SlabType.TOP;
     }
 
     private static boolean isCompoundVisibleSideDoubleSlabState(BlockState state) {
         return state != null
                 && state.is(Blocks.STONE_SLAB)
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
-                && state.getFluidState().isEmpty();
+                && state.getValue(SlabBlock.TYPE) == SlabType.DOUBLE;
     }
 
     private static boolean isCompoundVisibleOwnerTopSlabState(BlockState state) {
         return state != null
                 && state.is(Blocks.STONE_SLAB)
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM
-                && state.getFluidState().isEmpty();
+                && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 
     private static boolean isBottomPersistentLoweredSlabCarrierState(BlockState state) {
