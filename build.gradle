@@ -154,6 +154,7 @@ sourceSets {
             include("com/slabbed/test/ConnectingStructuralFreezeTest.java")
             include("com/slabbed/test/AnchoredDepthReadbackTest.java")
             include("com/slabbed/test/CeilingFlushRulingTest.java")
+            include("com/slabbed/test/WaterlogReadSymmetryTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }

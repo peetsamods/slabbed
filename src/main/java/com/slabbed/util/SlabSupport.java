@@ -505,7 +505,8 @@ public final class SlabSupport {
     }
 
     private static double beta35FenceWallVisibleSupportDy(BlockGetter world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || state == null || state.isAir() || !state.getFluidState().isEmpty()) {
+        // F5: fluid-blind (sibling choke point of floorTorchBottomSlabSupportDy — same invariant).
+        if (world == null || pos == null || state == null || state.isAir()) {
             return Double.NaN;
         }
         // TS-COMPAT GUARD (CROSS-PORT LAW / failure mode 4, mirroring floorTorchBottomSlabSupportDy's
@@ -2812,16 +2813,18 @@ public final class SlabSupport {
     }
 
     private static boolean canUseInheritedSlabLaneYOffset(BlockGetter world, BlockPos pos, BlockState state) {
+        // F5: fluid-blind — the inherited-lane gate must not flip a lowered slab flush on waterlog.
         return state != null
                 && state.getBlock() instanceof SlabBlock
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getFluidState().isEmpty()
                 && (isNamedLoweredSlabLane(world, pos, state)
                         || SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state));
     }
 
     private static double floorTorchBottomSlabSupportDy(BlockGetter world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || state == null || !isBottomSlab(state) || !state.getFluidState().isEmpty()) {
+        // F5: the SUPPORT slab's waterlog state is height-neutral — fluid-blind like the anchor reads
+        // (the fluid term here popped every dependent when its support slab was bucketed).
+        if (world == null || pos == null || state == null || !isBottomSlab(state)) {
             return Double.NaN;
         }
         // TS-COMPAT GUARD (CROSS-PORT LAW / failure mode 4, mirroring the L8-corrections phase 5304e4b3):
