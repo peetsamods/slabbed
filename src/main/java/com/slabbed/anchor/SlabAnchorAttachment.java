@@ -522,7 +522,11 @@ public final class SlabAnchorAttachment {
         if (world == null || (world.isClientSide() && !allowClient)) {
             return;
         }
-        boolean qualifies = qualifiesForPersistentLoweredSlabCarrier(world, pos, state);
+        // F1 write-side belt: never WRITE a carrier marker onto a frozen-flat slab (and since the
+        // else-branch below clears non-qualifying slabs, an existing contradictory marker self-heals
+        // on the next update pass).
+        boolean qualifies = !isFrozenFlat(world, pos)
+                && qualifiesForPersistentLoweredSlabCarrier(world, pos, state);
         if (TRACE) {
             Slabbed.LOGGER.info("[ANCHOR] lowered slab carrier update side={} pos={} state={} qualifies={}",
                     world.isClientSide() ? "CLIENT" : "SERVER", pos.toShortString(), state, qualifies);
@@ -615,6 +619,11 @@ public final class SlabAnchorAttachment {
                 "compound_visible_side_double_slab");
         removeFromAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
+        // F2 (haunted-cells audit, STATE_DEFENSE_DIVERGENCE_2026-07-07): the carrier marker must die
+        // with its slab like every other attachment — it was the ONE type this method didn't clear
+        // (and removePersistentLoweredSlabCarrier had zero callers), so markers outlived break/replace
+        // cycles and re-lowered fresh slabs placed at old lane positions forever.
+        removeFromAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
     }
 
     public static void removePersistentLoweredSlabCarrier(Level world, BlockPos pos) {
@@ -885,6 +894,14 @@ public final class SlabAnchorAttachment {
         if (!isPersistentLoweredSlabCarrierState(state) || pos == null) {
             return false;
         }
+        // F1 (haunted-cells audit): a FROZEN-FLAT slab renders flush — it is definitionally NOT a
+        // lowered carrier. Folded into THE shared read (the shared-predicate half-fix lesson) so every
+        // support reader (floorTorch family, magnitude walks, side-lane qualifiers) sees the same
+        // truth; without this, objects placed on a visually-flush slab sank 0.5-1.0 into it whenever
+        // the RETURN-hook qualifier had also marked it (the false-support contradiction).
+        if (isFrozenFlat(world, pos)) {
+            return false;
+        }
         if (isCompoundVisibleOwnerTopSlab(world, pos, state)) {
             return false;
         }
@@ -913,6 +930,12 @@ public final class SlabAnchorAttachment {
             BlockState state
     ) {
         if (!isBottomPersistentLoweredSlabCarrierState(state) || world == null || pos == null) {
+            return false;
+        }
+        // F1 (haunted-cells audit): a FROZEN-FLAT slab renders flush — it must not live-qualify as a
+        // lowered carrier either. This NonRecursive read is consumed DIRECTLY by support readers
+        // (bypassing isPersistentLoweredSlabCarrier's own gate), so the invariant must live here too.
+        if (isFrozenFlat(world, pos)) {
             return false;
         }
         if (isCompoundVisibleOwnerTopSlab(world, pos, state)) {
