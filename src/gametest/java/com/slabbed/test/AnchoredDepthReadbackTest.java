@@ -193,6 +193,18 @@ public final class AnchoredDepthReadbackTest {
                 new ItemStack(Items.CANDLE), -1.0, "candle on lowered slab stack");
     }
 
+    /**
+     * Generic floor-top-contact lane where its value DIFFERS from the compound-dy entry's -1.0:
+     * a candle on the marked slab is -1.5 (marker-aware support dy -1.0, minus the half-block seat).
+     * This is the scene that makes the lane's own existence observable (kills the M3 mutation).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void candleOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                new ItemStack(Items.CANDLE), -1.5, "candle on marked slab");
+    }
+
     /** Floor-torch lane on TOP of the compound full block itself (support dy -1.0, not a slab) → -1.0. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void floorTorchOnCompoundFullBlockSurvivesReadback(GameTestHelper helper) {
