@@ -746,6 +746,36 @@ public final class WaterlogReadSymmetryTest {
         helper.succeed();
     }
 
+    /**
+     * F5c side-carrier authoring, FULLY submerged (:140's proving scene): waterlogged lane source
+     * AND a water placement cell. Here the bottom-carrier candidate is blocked by its own placed-
+     * fluid gate (kept, shadowed elsewhere), so the SIDE candidate's source term alone decides —
+     * the mutation that re-adds the source fluid term REDs exactly this scene (the dry-cell twin
+     * above is bottom-route-shadowed and pins the lane instead).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void submergedSlabBesideWaterloggedLaneSourceAuthorsSideCarrier(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos source = buildMarkedLowerSlab(helper, w);
+        BlockPos cell = source.west();
+        setWaterlogged(w, source, true);
+        assertDy(helper, w, source, -1.0,
+                "scene premise: the waterlogged lane source keeps -1.0 (F5 core — height-neutral flip)");
+        w.setBlock(cell, Blocks.WATER.defaultBlockState(), 2);
+        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST);
+        BlockState placed = w.getBlockState(cell);
+        if (!(placed.getBlock() instanceof SlabBlock)
+                || !placed.getValue(BlockStateProperties.WATERLOGGED)) {
+            throw helper.assertionException(
+                    "scene premise: a WATERLOGGED slab must place into the water cell, got " + placed);
+        }
+        if (!SlabAnchorAttachment.isPersistentLoweredSlabCarrier(w, cell, placed)) {
+            throw helper.assertionException(
+                    "F5c: the fully submerged lane extension must author the side-carrier marker");
+        }
+        helper.succeed();
+    }
+
     /** Marked side-UPPER TOP slab rig (D2's CeilingFlushRulingTest rig): -1.0, authored marker. */
     private static BlockPos buildMarkedUpperTopSlabRig(GameTestHelper helper, ServerLevel w) {
         BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
