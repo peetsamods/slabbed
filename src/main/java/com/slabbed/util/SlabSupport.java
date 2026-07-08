@@ -894,15 +894,19 @@ public final class SlabSupport {
             return false;
         }
 
-        // blocks under a top slab that get +0.5 UP via getYOffset should not
-        // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
+        // Ceiling-attached blocks under a top slab are OWNED by the ceiling walks in
+        // getYOffsetInner (post-D2 ruling: flush 0.0, or the lowered merge compensation) — never by
+        // the -0.5 below-lane. NOTE (D2 high-sweeper finding 2, awaiting Maintainer's ruling — audit Q4):
+        // this exclusion also denies the below-lane to a SANDWICHED object (bottom slab below, top
+        // slab above), which pops it to 0.0 when the top slab appears. Behavior is donor-parity;
+        // kept as-is pending the ruling. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
         if (isCeilingAttached(state) && isTopSlab(world.getBlockState(pos.above()))) {
             return false;
         }
 
-        // ceiling-attached blocks further down a chain of ceiling blocks
-        // leading to a top slab also get +0.5 UP; exclude from -0.5
+        // ceiling-attached blocks further down a chain of ceiling blocks leading to a top slab
+        // are likewise owned by the ceiling walks (same donor-parity exclusion + Q4 caveat as above)
         if (isCeilingAttached(state)) {
             BlockPos cursor = pos.above();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
@@ -919,7 +923,7 @@ public final class SlabSupport {
         }
 
         // blocks hanging from above (lanterns, etc.) — don't offset DOWN by slab below
-        // (they may get a separate +0.5 UP offset via getYOffset)
+        // (their dy is owned by the ceiling-hung walk: flush 0.0 or the lowered merge)
         if (state.hasProperty(BlockStateProperties.HANGING) && state.getValue(BlockStateProperties.HANGING)) {
             return false;
         }
@@ -998,7 +1002,10 @@ public final class SlabSupport {
      * Returns the Y offset for the block at {@code pos}.
      * <ul>
      *   <li>{@code -0.5} for blocks sitting above a bottom slab (or chain).</li>
-     *   <li>{@code +0.5} for hanging blocks (HANGING=true) directly below a top slab.</li>
+     *   <li>{@code slabDy + 0.5} (net &lt;= 0.0) for ceiling-attached blocks under a LOWERED top
+     *       slab (merge compensation); under a FLUSH top slab they hang at {@code 0.0} — the old
+     *       +0.5 reach-up is dead per Maintainer's 2026-07-03 ruling (isLoweringTopLikeCeiling).</li>
+     *   <li>{@code -1.5} for floor-contact objects seated on a compound-visible marked slab.</li>
      *   <li>{@code 0.0} otherwise (no offset).</li>
      * </ul>
      */
@@ -2285,14 +2292,6 @@ public final class SlabSupport {
     }
 
     /**
-     * Rendered dy for an always-ceiling-hung decoration, decided SOLELY by the support directly
-     * ABOVE — never by any block below — so it cannot be dragged down by a carrier lower in the
-     * column. Under a LOWERED non-ceiling support it follows that support's dy (a TOP slab adds the
-     * +0.5 raised-attach baseline so it sits flush, not 0.5 too low). A Terrain Slabs slab renders
-     * FLUSH ({@code shouldSkipOffset}), so it is never treated as a lowered support. Under a normal
-     * TOP slab (directly or via a chain of hangers) it floats +0.5; otherwise flush.
-     */
-    /**
      * A top-like ceiling surface that Slabbed itself lowers — i.e. one a ceiling-attached block below
      * should follow UP by +0.5 (raised-attach). D2 port of the donor 1.21.11 predicate: the ONE shared
      * choke point for EVERY dy-computing ceiling walk (the {@code ceilingHungDecorationDy} cursor loop
@@ -2313,6 +2312,15 @@ public final class SlabSupport {
         return false;
     }
 
+    /**
+     * Rendered dy for an always-ceiling-hung decoration, decided SOLELY by the support directly
+     * ABOVE — never by any block below — so it cannot be dragged down by a carrier lower in the
+     * column. Under a LOWERED non-ceiling support it follows that support's dy (a TOP slab adds the
+     * +0.5 merge compensation so it sits flush against the lowered underside, not 0.5 too low). A
+     * Terrain Slabs slab renders FLUSH ({@code shouldSkipOffset}), so it is never treated as a
+     * lowered support. Under a FLUSH top slab it hangs flush at 0.0 — the old +0.5 reach-up is dead
+     * per Maintainer's 2026-07-03 ruling ({@link #isLoweringTopLikeCeiling}).
+     */
     private static double ceilingHungDecorationDy(BlockGetter world, BlockPos pos, BlockState state) {
         BlockPos supportPos = pos.above();
         BlockState above = world.getBlockState(supportPos);
@@ -2348,7 +2356,11 @@ public final class SlabSupport {
             if (!cur.isAir() && !CompatHooks.shouldSkipOffset(cur)) {
                 double supportDy = getYOffsetInner(world, cursor, cur);
                 if (supportDy < -1.0e-6d) {
-                    return supportDy;
+                    // Mirror the direct leg above: a lowered TOP-slab column top needs the +0.5 merge
+                    // compensation or a cascaded hanger sinks 0.5 BELOW its own carrier. Pre-D2 the
+                    // reach-up return shadowed this tail for every top-slab top, so the missing
+                    // compensation was unreachable; the ruling exposed it (D2 high-sweeper finding 1).
+                    return isTopSlab(cur) ? supportDy + 0.5d : supportDy;
                 }
             }
             break;
@@ -2754,9 +2766,15 @@ public final class SlabSupport {
         // (dead since 2026-07-03): a flush top slab no longer moves the block — it stays 0.0.
         // Recursion-safe: getYOffsetInner runs under the IN_GET_Y_OFFSET guard (mirrors ceilingHungDecorationDy).
         if (isCeilingAttached(state) && isTopSlab(above)) {
-            double aboveDy = getYOffsetInner(world, pos.above(), above);
-            if (aboveDy < -1.0e-6d) {
-                return aboveDy + 0.5d;
+            // TS-COMPAT GUARD (CROSS-PORT LAW / failure mode 4): a Terrain-Slabs-owned top slab is a
+            // SELF-RENDERING surface — its recursion-visible dy must never feed the tracking leg (the
+            // donor folded this L4 invariant into the predicate; this leg bypasses the predicate, so
+            // it needs the guard directly). No-op without Terrain Slabs loaded.
+            if (!CompatHooks.shouldSkipOffset(above)) {
+                double aboveDy = getYOffsetInner(world, pos.above(), above);
+                if (aboveDy < -1.0e-6d) {
+                    return aboveDy + 0.5d;
+                }
             }
             if (isLoweringTopLikeCeiling(above)) {
                 return 0.5d;

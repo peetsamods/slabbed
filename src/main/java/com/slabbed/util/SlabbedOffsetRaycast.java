@@ -16,7 +16,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * targeting. (MC 26.2 Mojang-mapped port of the 1.21.1/1.21.11 overhaul.)
  *
  * <p><b>Why this exists.</b> Slabbed renders some blocks at a visual Y offset
- * ({@link SlabSupport#getYOffset} returns one of {@code -1.0, -0.5, 0.0, +0.5}) and
+ * ({@link SlabSupport#getYOffset} historically returned one of {@code -1.0, -0.5, 0.0, +0.5};
+ * the 2a marker lanes added {@code -1.5} and the D2 flush ruling killed {@code +0.5}) and
  * offsets their outline/raycast {@link VoxelShape}s to match
  * ({@code SlabSupportStateMixin} offsets {@code getShape} and {@code getInteractionShape}).
  * Vanilla {@code Level.clip} uses a voxel DDA that returns the <em>first cell</em> along
@@ -34,7 +35,10 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * the vertical neighbours {@code C.below()}/{@code C.above()} that carry a non-zero visual
  * offset.
  *
- * <p><b>±1 window completeness.</b> Visual offsets lie in {@code {-1.0,-0.5,0.0,+0.5}} and
+ * <p><b>±1 window completeness.</b> CAVEAT (recorded in the state-defense audit, Q6): the
+ * argument below predates the {@code -1.5} marker lanes — a shape rendered at {@code -1.5} has
+ * its lower half TWO cells below its owner, outside this window, so rays crossing only that
+ * lowest half-cell can miss it. Original argument: visual offsets lie in {@code {-1.0,-0.5,0.0,+0.5}} and
  * every block shape is at most one cell tall, so an owner at {@code P} occupies at most
  * {@code {P, P.below()}} or {@code {P, P.above()}}; any ray hitting it enters a cell within
  * ±1 of {@code P}.

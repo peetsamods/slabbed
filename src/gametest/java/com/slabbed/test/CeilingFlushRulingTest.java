@@ -131,6 +131,67 @@ public final class CeilingFlushRulingTest {
         helper.succeed();
     }
 
+    /**
+     * Ceiling LEVER — a named D2 symptom family with previously zero dy coverage (medium sweeper).
+     * SlabSupportStateMixin makes any TOP/DOUBLE slab underside sturdy, so ceiling levers genuinely
+     * survive under top slabs in this codebase; the ruling must keep them flush.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void ceilingLeverUnderFlushTopSlabStaysFlush(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos slab = helper.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos lever = slab.below();
+        w.setBlock(slab, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
+        place(helper, new ItemStack(Items.LEVER), slab, Direction.DOWN, 0.0);
+        if (!w.getBlockState(lever).is(Blocks.LEVER)) {
+            throw helper.assertionException("scene premise: the lever must place under the top slab, got "
+                    + w.getBlockState(lever));
+        }
+        assertDy(helper, w, lever, 0.0,
+                "D2 flush ruling: a ceiling lever under a FLUSH top slab hangs flush, not +0.5");
+        helper.succeed();
+    }
+
+    /** Ceiling BUTTON — same family, same ruling. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void ceilingButtonUnderFlushTopSlabStaysFlush(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos slab = helper.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos button = slab.below();
+        w.setBlock(slab, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
+        place(helper, new ItemStack(Items.STONE_BUTTON), slab, Direction.DOWN, 0.0);
+        if (!w.getBlockState(button).is(Blocks.STONE_BUTTON)) {
+            throw helper.assertionException("scene premise: the button must place under the top slab, got "
+                    + w.getBlockState(button));
+        }
+        assertDy(helper, w, button, 0.0,
+                "D2 flush ruling: a ceiling button under a FLUSH top slab hangs flush, not +0.5");
+        helper.succeed();
+    }
+
+    /**
+     * The BREAK direction of the audit symptom ("jump on break"): the dy must stay 0.0 through the
+     * whole slab lifecycle — absent, placed above, REMOVED again. Pins the transition itself instead
+     * of relying on two static snapshots being the same code path (medium sweeper: a future anchor or
+     * cache on the ceiling path could break the transition without breaking either snapshot).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void topTrapdoorHoldsFlushThroughSlabPlaceAndBreak(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos wall = helper.absolutePos(new BlockPos(2, 2, 3));
+        BlockPos trapdoor = helper.absolutePos(new BlockPos(2, 2, 2));
+        w.setBlock(wall, Blocks.STONE.defaultBlockState(), 2);
+        placeTopTrapdoor(helper, w, wall, trapdoor);
+        assertDy(helper, w, trapdoor, 0.0, "premise: flush before any slab exists");
+        w.setBlock(trapdoor.above(),
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP),
+                Block.UPDATE_ALL);
+        assertDy(helper, w, trapdoor, 0.0, "D2: flush while the top slab is above");
+        w.setBlock(trapdoor.above(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        assertDy(helper, w, trapdoor, 0.0, "D2 (jump-on-break): still flush after the slab is broken");
+        helper.succeed();
+    }
+
     // ── CONTROLS: the lowered-top-slab paths deliberately SURVIVE the ruling ──
 
     /** Side-lowered TOP slab (over air, beside a lowered column) for the compensation controls. */
@@ -151,10 +212,14 @@ public final class CeilingFlushRulingTest {
 
     /**
      * POST-RULING healing pin (was RED even before the D2 patch, for a different reason): the
-     * SIDE-lowered slab lane is not recursion-safe from inside walk B (the inner getYOffsetInner read
-     * under the IN_GET_Y_OFFSET guard sees 0.0), so pre-ruling the trapdoor smooshed +0.5 INTO the
-     * -0.5 slab. Post-ruling the flush branch is dead and the trapdoor reads 0.0 — which for a -0.5
-     * slab IS the correct merge value (slabDy + 0.5). The ruling heals this scene incidentally.
+     * side-lowered slab's -0.5 comes from the AIR-gated RC2-A branch, and once the trapdoor occupies
+     * slab.below() that gate no longer fires — so walk B's nested read of the slab sees 0.0, not
+     * -0.5 (a STATE-DEPENDENT blindness, traced by the D2 medium sweeper). Pre-ruling the trapdoor
+     * therefore smooshed +0.5 INTO the -0.5 slab. Post-ruling it reads 0.0 via the flush fallback —
+     * which happens to equal the correct merge value for a -0.5 slab (slabDy + 0.5 = 0.0), so this
+     * pin stays green even if the air-gate blindness is ever fixed (both mechanisms produce 0.0).
+     * NOTE: this scene does NOT exercise the aboveDy+0.5 compensation formula — only the marked-upper
+     * controls below prove that leg (-1.0 -> -0.5).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void trapdoorUnderSideLoweredTopSlabReadsMergedFlush(GameTestHelper helper) {
@@ -169,7 +234,7 @@ public final class CeilingFlushRulingTest {
         helper.succeed();
     }
 
-    /** Same healing pin for walk A: roots under the -0.5 side-lowered top slab read the merged 0.0. */
+    /** Same healing pin for walk A (same state-dependent air-gate mechanism; see the trapdoor pin above). */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void hangingRootsUnderSideLoweredTopSlabReadMergedFlush(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
@@ -211,6 +276,27 @@ public final class CeilingFlushRulingTest {
             throw helper.assertionException("scene premise: the marked side-UPPER top slab must read -1.0, got " + slabDy);
         }
         return slab;
+    }
+
+    /**
+     * D2 high-sweeper finding 1 (verified, fixed): a CASCADED hanger whose column tops at a lowered
+     * TOP slab must read the SAME merged dy as its carrier. Pre-D2 the reach-up return shadowed walk
+     * A's lowered tail for every top-slab top; the ruling exposed the tail's missing +0.5 merge
+     * compensation and the lower hanger sank to raw -1.0 while its carrier sat at -0.5.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cascadedHangingSignUnderMarkedUpperSlabFollowsCarrier(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos slab = buildMarkedUpperTopSlab(helper, w);
+        BlockPos upper = slab.below();
+        BlockPos lower = upper.below();
+        w.setBlock(upper, Blocks.OAK_HANGING_SIGN.defaultBlockState(), 2);
+        w.setBlock(lower, Blocks.OAK_HANGING_SIGN.defaultBlockState(), 2);
+        assertDy(helper, w, upper, -0.5,
+                "premise/direct leg: the upper hanging sign merges at -0.5 under the -1.0 marked slab");
+        assertDy(helper, w, lower, -0.5,
+                "D2 cascade tail: the lower hanging sign must match its carrier (-0.5), not sink to raw -1.0");
+        helper.succeed();
     }
 
     /** Maintainer's live-confirmed merge: trapdoor under the -1.0 marked slab reads -0.5 — survives the ruling. */

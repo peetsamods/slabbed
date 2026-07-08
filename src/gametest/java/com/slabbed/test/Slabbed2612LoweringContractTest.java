@@ -636,7 +636,7 @@ public final class Slabbed2612LoweringContractTest {
      * visual seam to the slab underside from grid height.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void chainUnderTopSlabRaisesHalf(GameTestHelper helper) {
+    public void chainUnderTopSlabHangsFlush(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos chain = new BlockPos(2, 3, 2);
         helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
