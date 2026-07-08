@@ -35,10 +35,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * the vertical neighbours {@code C.below()}/{@code C.above()} that carry a non-zero visual
  * offset.
  *
- * <p><b>±1 window completeness.</b> CAVEAT (recorded in the state-defense audit, Q6): the
- * argument below predates the {@code -1.5} marker lanes — a shape rendered at {@code -1.5} has
- * its lower half TWO cells below its owner, outside this window, so rays crossing only that
- * lowest half-cell can miss it. Original argument: visual offsets lie in {@code {-1.0,-0.5,0.0,+0.5}} and
+ * <p><b>Window completeness.</b> Fixed for the deep lanes (Q6): each marched cell also probes
+ * {@code C.above(2)} for owners strictly deeper than {@code -1.0}, so a {@code -1.5}-rendered
+ * shape's lowest half-cell is covered. Original ±1 argument: visual offsets lie in {@code {-1.0,-0.5,0.0,+0.5}} and
  * every block shape is at most one cell tall, so an owner at {@code P} occupies at most
  * {@code {P, P.below()}} or {@code {P, P.above()}}; any ray hitting it enters a cell within
  * ±1 of {@code P}.
@@ -134,6 +133,37 @@ public final class SlabbedOffsetRaycast {
             testPrimary(x, y, z);
             testNeighbor(x, y - 1, z);
             testNeighbor(x, y + 1, z);
+            testDeepAbove(x, y + 2, z);
+        }
+
+        /**
+         * Q6 (dy-triad law): the ±1 window predates the {@code -1.5} marker lanes — a deep-lane
+         * owner's rendered lower half lies TWO cells below it, so a near-horizontal ray crossing
+         * only that band never tested the owner (untargetable fence-gate/candle bottoms on marked
+         * slabs; torches are separately covered by the support's comfort-proxy overlay). Only
+         * owners strictly deeper than {@code -1.0} need the extra cell — a {@code -1.0} owner
+         * reaches exactly the {@code C.above()} cell's floor, already inside the window.
+         */
+        private void testDeepAbove(int x, int y, int z) {
+            long key = BlockPos.asLong(x, y, z);
+            if (shapeTested.contains(key)) {
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            BlockState state = world.getBlockState(pos);
+            if (state.isAir()) {
+                return;
+            }
+            double dy = dyMemo.get(key);
+            if (Double.isNaN(dy)) {
+                dy = SlabSupport.getYOffset(world, pos, state);
+                dyMemo.put(key, dy);
+            }
+            if (dy > -1.0 - 1.0e-6) {
+                return;
+            }
+            shapeTested.add(key);
+            accumulate(pos, state, false);
         }
 
         private void testPrimary(int x, int y, int z) {
