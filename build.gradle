@@ -150,6 +150,7 @@ sourceSets {
             include("com/slabbed/test/EnsembleCoherenceContractTest.java")
             include("com/slabbed/test/EnsemblePlacementCoherenceTest.java")
             include("com/slabbed/test/StateChangeAnchorTest.java")
+            include("com/slabbed/test/HauntedCarrierCellTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }

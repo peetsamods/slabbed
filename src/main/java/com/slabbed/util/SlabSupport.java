@@ -2132,6 +2132,13 @@ public final class SlabSupport {
         if (!slabState.hasProperty(SlabBlock.TYPE)) {
             return false;
         }
+        // F1 (haunted-cells audit): a FROZEN-FLAT slab RENDERS FLUSH — it is never "side-lowered", for
+        // all 17 callers of this shared subject-lowering choke point (incl. the anchored-object
+        // read-back at the D3/F3 lane, which was sinking anchored torches -1.0 into visually-flush
+        // slabs). Same fold-into-the-predicate discipline as the TS guard directly below.
+        if (com.slabbed.anchor.SlabAnchorAttachment.isFrozenFlat(world, slabPos)) {
+            return false;
+        }
         // L11-broader (task #24): a Terrain-Slabs-owned slab is a self-positioned surface and must NEVER be
         // classified as a Slabbed lowered SOURCE. This is the shared "is this SUBJECT slab lowered by a
         // Slabbed lane" choke point (17 callers) — its own persisted-carrier / side-lane reads carry NO
@@ -2723,6 +2730,15 @@ public final class SlabSupport {
         // a lowered carrier still reported -0.5 here (probe: withOverride stayed -0.5). Reuse the single
         // shared choke point rather than a new mechanism. No-op when Terrain Slabs is not loaded.
         if (isTsExcludedFromVerticalSupport(state)) {
+            return Double.NaN;
+        }
+        // F1 (haunted-cells audit, STATE_DEFENSE_DIVERGENCE_2026-07-07): a FROZEN-FLAT support slab
+        // RENDERS FLUSH — it contributes no lowered support-dy, regardless of markers or side-lane
+        // geometry. The subject-slab carrier gates alone are insufficient: the lanes below read SIDE
+        // neighbors and below-carriers that are genuinely lowered for the LANE but not for this flush
+        // slab, so objects placed on a visually-flush slab sank -1.0 INTO it (the false-support
+        // contradiction). Same shared-choke-point discipline as the TS guard above.
+        if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
             return Double.NaN;
         }
         if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)
