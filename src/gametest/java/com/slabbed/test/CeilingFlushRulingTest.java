@@ -299,6 +299,28 @@ public final class CeilingFlushRulingTest {
         helper.succeed();
     }
 
+    /**
+     * The GEOMETRIC walk-B compensation leg, pinned on an UNANCHORED trapdoor (setBlock — no
+     * placement hooks). A real useOn placement anchors at dy&lt;0 and the anchored branch's -0.5
+     * fallback COINCIDES with the compensation value here, so the anchored control below cannot
+     * see this leg (exposed when the compensation-drop mutation survived the suite). The geometric
+     * leg is what serves support-arrives-later / worldgen / command-placed cells.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unanchoredTrapdoorUnderMarkedUpperSlabReadsGeometricMerge(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos slab = buildMarkedUpperTopSlab(helper, w);
+        BlockPos trapdoor = slab.below();
+        w.setBlock(trapdoor, Blocks.OAK_TRAPDOOR.defaultBlockState()
+                .setValue(BlockStateProperties.HALF, Half.TOP), 2);
+        if (com.slabbed.anchor.SlabAnchorAttachment.isAnchored(w, trapdoor)) {
+            throw helper.assertionException("scene premise: the setBlock trapdoor must be UNANCHORED");
+        }
+        assertDy(helper, w, trapdoor, -0.5,
+                "walk B geometric compensation: unanchored trapdoor under the -1.0 marked slab merges at -0.5");
+        helper.succeed();
+    }
+
     /** Maintainer's live-confirmed merge: trapdoor under the -1.0 marked slab reads -0.5 — survives the ruling. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void controlTrapdoorUnderMarkedUpperSlabKeepsCompensation(GameTestHelper helper) {
