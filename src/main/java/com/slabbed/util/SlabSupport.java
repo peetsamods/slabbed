@@ -578,6 +578,59 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
+    /**
+     * D3/F4 (audit STATE_DEFENSE_DIVERGENCE_2026-07-07): the complete floor-TORCH support lane, extracted
+     * so the LIVE dispatch and the in-anchor re-read whitelist call ONE authority. The anchor records
+     * PRESENCE, not depth — before this lane existed in the anchored branch, a torch the client predicted
+     * at -1.5/-1.0 collapsed to the generic -0.5 anchored fallback on the server read (the "+0.5 pop
+     * right after placing", the RC1 lesson). NaN = no torch lane applies.
+     */
+    private static double beta35FloorTorchContactLaneDy(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isFloorTorch(state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.below();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (isBottomSlab(supportState)
+                && (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState)
+                        || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, supportPos, supportState))) {
+            return -1.5;
+        }
+        double loweredBottomSupportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
+            return loweredBottomSupportDy - 0.5d;
+        }
+        if (isTopSlab(supportState)
+                && SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, supportPos, supportState)) {
+            return -1.0;
+        }
+        // floor_torch on a lowered ordinary full-block support (supportDy=-1.0):
+        // must follow the support down so the torch base contacts the support visual top.
+        // Only applies to floor_torch; does not affect wall_torch, lanterns, signs, or chains.
+        // dy=-1.0 does not violate the dy>=-1.0 invariant.
+        if (isOrdinaryFullBlockWithCompoundDy(world, supportPos, supportState)) {
+            return -1.0;
+        }
+        return Double.NaN;
+    }
+
+    /**
+     * D3/F4: the generic floor-top-contact lane (candles / flower pots on a lowered bottom-slab
+     * support), extracted for the same one-authority reason as {@link #beta35FloorTorchContactLaneDy}.
+     */
+    private static double beta35FloorTopContactLaneDy(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35FloorTopContactObject(state)) {
+            return Double.NaN;
+        }
+        BlockPos supportPos = pos.below();
+        BlockState supportState = world.getBlockState(supportPos);
+        double loweredBottomSupportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
+        if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
+            return loweredBottomSupportDy - 0.5d;
+        }
+        return Double.NaN;
+    }
+
     private static double beta35FloorButtonContactDy(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35FloorButtonContactObject(state)) {
             return Double.NaN;
@@ -2448,6 +2501,24 @@ public final class SlabSupport {
                 }
                 return compoundDy;
             }
+            // D3/F4 (audit STATE_DEFENSE_DIVERGENCE_2026-07-07): FLOOR-CONTACT lanes re-read the SAME
+            // live authorities placement (and the client's prediction) used — the anchor records
+            // PRESENCE, not depth. These MUST run BEFORE the generic compound-dy entry below: a floor
+            // torch on a compound-visible marked slab is -1.5 via its own lane, and the -1.0 entry
+            // below would shadow it (while families with NO whitelist lane collapsed all the way to
+            // the generic -0.5 fallback — the "+0.5 pop right after placing").
+            double anchoredFloorTorchLaneDy = beta35FloorTorchContactLaneDy(world, pos, state);
+            if (Double.isFinite(anchoredFloorTorchLaneDy)) {
+                return anchoredFloorTorchLaneDy;
+            }
+            double anchoredFloorTopContactLaneDy = beta35FloorTopContactLaneDy(world, pos, state);
+            if (Double.isFinite(anchoredFloorTopContactLaneDy)) {
+                return anchoredFloorTopContactLaneDy;
+            }
+            double anchoredFenceGateContactDy = beta35FenceGateContactDy(world, pos, state);
+            if (Double.isFinite(anchoredFenceGateContactDy)) {
+                return anchoredFenceGateContactDy;
+            }
             // Compound Lowered Full Block on Lowered Bottom Slab Carrier
             // (named legal state). When the bottom slab directly below is itself
             // in the lowered lane (persistent lowered slab carrier or
@@ -2561,38 +2632,14 @@ public final class SlabSupport {
             return blockEntityMag;
         }
 
-        if (isFloorTorch(state)) {
-            BlockPos supportPos = pos.below();
-            BlockState supportState = world.getBlockState(supportPos);
-            if (isBottomSlab(supportState)
-                    && (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, supportPos, supportState)
-                            || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, supportPos, supportState))) {
-                return -1.5;
-            }
-            double loweredBottomSupportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
-            if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
-                return loweredBottomSupportDy - 0.5d;
-            }
-            if (isTopSlab(supportState)
-                    && SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, supportPos, supportState)) {
-                return -1.0;
-            }
-            // floor_torch on a lowered ordinary full-block support (supportDy=-1.0):
-            // must follow the support down so the torch base contacts the support visual top.
-            // Only applies to floor_torch; does not affect wall_torch, lanterns, signs, or chains.
-            // dy=-1.0 does not violate the dy>=-1.0 invariant.
-            if (isOrdinaryFullBlockWithCompoundDy(world, supportPos, supportState)) {
-                return -1.0;
-            }
+        double floorTorchContactLaneDy = beta35FloorTorchContactLaneDy(world, pos, state);
+        if (Double.isFinite(floorTorchContactLaneDy)) {
+            return floorTorchContactLaneDy;
         }
 
-        if (isBeta35FloorTopContactObject(state)) {
-            BlockPos supportPos = pos.below();
-            BlockState supportState = world.getBlockState(supportPos);
-            double loweredBottomSupportDy = floorTorchBottomSlabSupportDy(world, supportPos, supportState);
-            if (Double.isFinite(loweredBottomSupportDy) && loweredBottomSupportDy < -1.0e-6d) {
-                return loweredBottomSupportDy - 0.5d;
-            }
+        double floorTopContactLaneDy = beta35FloorTopContactLaneDy(world, pos, state);
+        if (Double.isFinite(floorTopContactLaneDy)) {
+            return floorTopContactLaneDy;
         }
 
         double floorButtonContactDy = beta35FloorButtonContactDy(world, pos, state);
