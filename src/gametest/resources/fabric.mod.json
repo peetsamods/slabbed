@@ -59,7 +59,8 @@
       "com.slabbed.test.ConnectingStructuralFreezeTest",
       "com.slabbed.test.AnchoredDepthReadbackTest",
       "com.slabbed.test.CeilingFlushRulingTest",
-      "com.slabbed.test.WaterlogReadSymmetryTest"
+      "com.slabbed.test.WaterlogReadSymmetryTest",
+      "com.slabbed.test.WysiwygMarkerHandOffTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
