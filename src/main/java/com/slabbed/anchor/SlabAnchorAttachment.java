@@ -566,6 +566,35 @@ public final class SlabAnchorAttachment {
     }
 
     /**
+     * D1 port (donor: 1.21.11 {@code 78ec0ac4}, audit STATE_DEFENSE_DIVERGENCE_2026-07-07): true when
+     * an in-place block-KIND replacement should KEEP the height-lock — the new occupant is itself a
+     * lock-eligible block (grass_block → dirt, log → stripped, copper oxidation), so stripping the
+     * attachments would make the block un-lower/jitter with no player action. Air, fluids, and
+     * non-lock kinds (slabs — the donor's explicit ruling: a slab never inherits a full-block anchor)
+     * still clear. Mirrors 26.2's own freeze-flat structural gate (ordinary full block / lockable
+     * block entity) plus the connecting-structural family.
+     */
+    public static boolean replacementPreservesAnchor(BlockGetter world, BlockPos pos, BlockState newState) {
+        if (newState == null || newState.isAir() || !newState.getFluidState().isEmpty()) {
+            return false;
+        }
+        return isOrdinaryFullBlockAnchorCandidate(world, pos, newState)
+                || (newState.getBlock() instanceof EntityBlock
+                        && !SlabSupport.isAlwaysCeilingHungDecoration(newState))
+                || isConnectingStructural(newState);
+    }
+
+    /** Fence / wall / pane / gate — connecting blocks that must be height-locked like solids
+     *  (donor: 1.21.11 {@code isConnectingStructural}; also the D4 seed). */
+    public static boolean isConnectingStructural(BlockState state) {
+        var b = state.getBlock();
+        return b instanceof net.minecraft.world.level.block.FenceBlock
+                || b instanceof net.minecraft.world.level.block.WallBlock
+                || b instanceof net.minecraft.world.level.block.IronBarsBlock
+                || b instanceof net.minecraft.world.level.block.FenceGateBlock;
+    }
+
+    /**
      * Clears any anchor at {@code pos}. Server-side only.
      */
     public static void removeAnchor(Level world, BlockPos pos) {

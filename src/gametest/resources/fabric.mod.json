@@ -53,7 +53,8 @@
       "com.slabbed.test.ModelStaleSentinelAllocationGateTest",
       "com.slabbed.test.RecorderUpgradeContractTest",
       "com.slabbed.test.EnsembleCoherenceContractTest",
-      "com.slabbed.test.EnsemblePlacementCoherenceTest"
+      "com.slabbed.test.EnsemblePlacementCoherenceTest",
+      "com.slabbed.test.StateChangeAnchorTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
