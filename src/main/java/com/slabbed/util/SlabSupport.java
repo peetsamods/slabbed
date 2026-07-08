@@ -2479,6 +2479,23 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
+            // D3/F4 second tranche (sweeper-verified): an anchored CONNECTING block (fence/wall/
+            // iron-bars) stacked on a deeper-lowered support must follow the stack to its TRUE live
+            // magnitude — and this must run BEFORE the compound-FB sidecar below, because a deep-placed
+            // connector gets the compound marker self-tagged by freezeLoweredOnPlace and the sidecar
+            // CLAMPS at -1.0 while the live lane legitimately says -1.5 on a compound-visible marked
+            // slab (support -1.0 + seat 0.5 - 1.0): the +0.5 pop-on-sync, one family over. The sidecar
+            // stays as the connector's NEVER-POP fallback: support removed -> below is air -> lane NaN
+            // -> sidecar preserves -1.0; support flushed -> lane NaN -> sidecar follows to -0.5 (the
+            // anti-sink MERGE rule). Recursion-safe (beta35FenceWallVariantContactDy never calls
+            // getYOffset); the maintainer's precedent: "stacking a lowered fencepost on a lowered fencepost
+            // snaps the upper one upward".
+            if (isBeta35FenceWallVariantContactObject(state)) {
+                double stackedConnectingDy = beta35FenceWallVariantContactDy(world, pos, state);
+                if (Double.isFinite(stackedConnectingDy) && stackedConnectingDy < -0.5d - 1.0e-6d) {
+                    return stackedConnectingDy;
+                }
+            }
             // Beta4 sidecar: an authored compound full-block anchor means the block sits on a slab
             // that was ITSELF lowered, so it drops an extra -0.5 below the slab's lowered top (total
             // -1.0). It must FOLLOW the slab directly below it: -1.0 only while that slab is genuinely
@@ -2515,9 +2532,29 @@ public final class SlabSupport {
             if (Double.isFinite(anchoredFloorTopContactLaneDy)) {
                 return anchoredFloorTopContactLaneDy;
             }
+            double anchoredFloorButtonContactDy = beta35FloorButtonContactDy(world, pos, state);
+            if (Double.isFinite(anchoredFloorButtonContactDy)) {
+                return anchoredFloorButtonContactDy;
+            }
             double anchoredFenceGateContactDy = beta35FenceGateContactDy(world, pos, state);
             if (Double.isFinite(anchoredFenceGateContactDy)) {
                 return anchoredFenceGateContactDy;
+            }
+            double anchoredOakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);
+            if (Double.isFinite(anchoredOakTrapdoorContactDy)) {
+                return anchoredOakTrapdoorContactDy;
+            }
+            double anchoredRegularDoorContactDy = beta35RegularDoorContactDy(world, pos, state);
+            if (Double.isFinite(anchoredRegularDoorContactDy)) {
+                return anchoredRegularDoorContactDy;
+            }
+            double anchoredStandingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
+            if (Double.isFinite(anchoredStandingOakSignContactDy)) {
+                return anchoredStandingOakSignContactDy;
+            }
+            double anchoredSpecialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
+            if (Double.isFinite(anchoredSpecialFullblockContactDy)) {
+                return anchoredSpecialFullblockContactDy;
             }
             // Compound Lowered Full Block on Lowered Bottom Slab Carrier
             // (named legal state). When the bottom slab directly below is itself
@@ -2528,6 +2565,10 @@ public final class SlabSupport {
             // anchor return -0.5 below collapses the freshly placed compound
             // case (live evidence: BETA4_PLACEMENT_AUTHOR_RECORDER at 9bf3bdc).
             // See docs/beta4-compound-lowered-fullblock-height.md.
+            // D3/F4 second tranche: this family-AGNOSTIC entry now runs AFTER all the family lanes
+            // above, mirroring the live dispatch (where the compound fallback lives in shouldOffset,
+            // after every beta35 lane) — it was shadowing the five sibling families' -1.5 to -1.0 on
+            // marked slabs (sweeper-verified, six RED scenes in AnchoredDepthReadbackTest).
             BlockPos belowPos = pos.below();
             BlockState belowSlab = world.getBlockState(belowPos);
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, belowPos, belowSlab)) {
@@ -2537,26 +2578,6 @@ public final class SlabSupport {
                             side, pos.toShortString(), state, belowPos.toShortString(), belowSlab);
                 }
                 return -1.0;
-            }
-            double specialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
-            if (Double.isFinite(specialFullblockContactDy)) {
-                return specialFullblockContactDy;
-            }
-            double oakTrapdoorContactDy = beta35OakTrapdoorContactDy(world, pos, state);
-            if (Double.isFinite(oakTrapdoorContactDy)) {
-                return oakTrapdoorContactDy;
-            }
-            double regularDoorContactDy = beta35RegularDoorContactDy(world, pos, state);
-            if (Double.isFinite(regularDoorContactDy)) {
-                return regularDoorContactDy;
-            }
-            double standingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
-            if (Double.isFinite(standingOakSignContactDy)) {
-                return standingOakSignContactDy;
-            }
-            double floorButtonContactDy = beta35FloorButtonContactDy(world, pos, state);
-            if (Double.isFinite(floorButtonContactDy)) {
-                return floorButtonContactDy;
             }
             // GAP-1 (one config deeper): an anchored CONNECTING block (fence / wall / iron-bars)
             // cantilevered over air beside a COMPOUND -1.0 neighbour must read -1.0, not the hardcoded
@@ -2570,20 +2591,8 @@ public final class SlabSupport {
                     return anchoredConnMag;   // -1.0 beside a live compound stack
                 }
             }
-            // An anchored CONNECTING block (fence/wall) stacked VERTICALLY on a deeper-lowered support
-            // below — e.g. a fence on a fence on a lowered bottom slab — must follow the stack to its
-            // true magnitude (-1.0), not the generic -0.5 floor below. The anchor records PRESENCE, not
-            // depth, so without this it pops UP from its placed -1.0 to -0.5 the instant it connects and
-            // re-meshes (the maintainer: "stacking a lowered fencepost on a lowered fencepost snaps the upper one
-            // upward"). Mirrors the GAP-1 cantilever magnitude read for the support-directly-below case
-            // via the geometric beta35 reader; the -0.5 floor still covers the cantilever / source-removed
-            // NEVER-POP case. Recursion-safe (beta35FenceWallVariantContactDy never calls getYOffset).
-            if (isBeta35FenceWallVariantContactObject(state)) {
-                double stackedFenceDy = beta35FenceWallVariantContactDy(world, pos, state);
-                if (Double.isFinite(stackedFenceDy) && stackedFenceDy < -0.5d - 1.0e-6d) {
-                    return stackedFenceDy;
-                }
-            }
+            // (The stacked fence/wall entry moved ABOVE the compound-FB sidecar — D3/F4 second
+            // tranche; see the comment at the top of this anchored branch.)
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.level.Level w && w.isClientSide()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy=-0.5",

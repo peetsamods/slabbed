@@ -214,13 +214,91 @@ public final class AnchoredDepthReadbackTest {
                 new ItemStack(Items.TORCH), -1.0, "floor torch on compound FB");
     }
 
-    /** Consistency-only (no live-lane pin): a fence gate on top of the compound full block. */
+    /**
+     * A fence gate on top of the compound full block: the gate lane only handles bottom-slab supports,
+     * so the live value comes from the generic column fallback = -0.5 (medium-sweeper trace, verified:
+     * shouldOffset -> hasSlabInColumn true via isAnchored(fb) -> slabColumnYOffset -0.5). Pinned so a
+     * regression that shifts BOTH sides to a wrong-but-consistent value cannot hide. (That a gate reads
+     * -0.5 where a torch reads -1.0 is a live-lane design question logged in the audit ledger — the
+     * read-back contract here is agnostic to it.)
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void fenceGateOnCompoundFullBlockSurvivesReadback(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
         buildCompoundVisibleSupport(helper, w);
         depthSurvivesReadback(helper, compoundSourcePos(helper),
-                new ItemStack(Items.OAK_FENCE_GATE), Double.NaN, "fence gate on compound FB");
+                new ItemStack(Items.OAK_FENCE_GATE), -0.5, "fence gate on compound FB");
+    }
+
+    /**
+     * BLOCKER scene (medium sweeper, verified): a FENCE on the marked slab. The connecting-block
+     * extension in freezeLoweredOnPlace self-tags COMPOUND_FULL_BLOCK_ANCHOR at dy &lt; -0.5, and the
+     * anchored compound sidecar (which runs before the family lanes and clamps at -1.0) answered
+     * instead of the live fence/wall lane: client predicts -1.5 (marker-aware support -1.0 + 0.5 - 1.0),
+     * anchored read gave -1.0 — the same +0.5 pop one family over.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fenceOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                new ItemStack(Items.OAK_FENCE), -1.5, "fence on marked slab");
+    }
+
+    /** Two-authority agreement pin: fence on the ordinary -0.5 stack — lane and sidecar both say -1.0. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fenceOnLoweredSlabStackSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildLoweredSlabStack(helper, w),
+                new ItemStack(Items.OAK_FENCE), -1.0, "fence on lowered slab stack");
+    }
+
+    /** Flower pot rides the same generic floor-top-contact lane as the candle: marked slab → -1.5. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void flowerPotOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                new ItemStack(Items.FLOWER_POT), -1.5, "flower pot on marked slab");
+    }
+
+    // ── The five SIBLING whitelist families (high-sweeper MAJOR, verified): their anchored entries sat
+    // BELOW the compound-dy entry while the live dispatch runs their lanes FIRST — on a marked slab the
+    // client predicts -1.5 (marker-aware support -1.0, minus the half-block seat) but the anchored read
+    // was shadowed to the compound-dy -1.0. Same +0.5 pop, five more families. ──
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void oakTrapdoorOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                new ItemStack(Items.OAK_TRAPDOOR), -1.5, "oak trapdoor on marked slab");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void oakDoorOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                new ItemStack(Items.OAK_DOOR), -1.5, "oak door on marked slab");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void oakSignOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                new ItemStack(Items.OAK_SIGN), -1.5, "standing oak sign on marked slab");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void floorButtonOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                new ItemStack(Items.STONE_BUTTON), -1.5, "floor button on marked slab");
+    }
+
+    /** Chest = the special-fullblock contact family (EntityBlock, never compound-self-tagged). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chestOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                new ItemStack(Items.CHEST), -1.5, "chest on marked slab");
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
