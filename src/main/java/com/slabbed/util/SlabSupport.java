@@ -1517,7 +1517,11 @@ public final class SlabSupport {
                 || !state.hasProperty(SlabBlock.TYPE)
                 || (state.getValue(SlabBlock.TYPE) != SlabType.TOP
                         && state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE)
-                // F5b: fluid-blind — the SUPPORT role must match the subject's own fluid-blind read.
+                // F5b note: the fluid term below was provisionally removed and REVERTED — its removal
+                // survived mutation testing (no reachable scene: persistent-carrier reads are already
+                // fluid-blind and the placement-path collapse was RC2-A's). Retained pending a proving
+                // scene; see the F5b ledger entry.
+                || !state.getFluidState().isEmpty()
                 || isTsExcludedFromVerticalSupport(state)) {
             return false;
         }
