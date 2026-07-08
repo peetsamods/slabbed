@@ -1422,6 +1422,10 @@ public abstract class BlockItemPlacementIntentMixin {
                         && originalHitPos.y <= abovePos.getY() + 0.5d + LOWERED_VISUAL_BOUNDARY_EPSILON
                         && slabbed$isOrdinaryLoweredFullBlock(context, abovePos, aboveState);
         if (upperVisibleHitBelongsToAboveLoweredFullBlock) {
+            // F10: the placement target moves one cell up — the WYSIWYG follow marker moves with it
+            // (orphaned, it freeze-flats the hopped slab 0.5 above the aimed lowered surface when the
+            // post-hop cell sits on solid flush ground).
+            SlabAnchorAttachment.liftWysiwygFollowMarkerForUpperVisibleHop();
             targetPos = abovePos;
             targetState = aboveState;
             yOffset = SlabSupport.getYOffset(context.getLevel(), targetPos, targetState);

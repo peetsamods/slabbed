@@ -254,6 +254,21 @@ public final class SlabAnchorAttachment {
         WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.remove();
     }
 
+    /**
+     * F10 (audit STATE_DEFENSE_DIVERGENCE_2026-07-07): the 2b upper-visible hop retargets the
+     * placement ONE CELL UP inside the same useOn — carry the follow marker along or it is orphaned
+     * and the consume-side (deliberately strict-equals) misses: the hopped slab then freeze-flats at
+     * grid height 0.5 above the aimed lowered side surface. Only load-bearing when the post-hop cell
+     * has solid flush ground below (over air, RC2-C anchors the cantilever regardless). Thread-scoped
+     * like the marker itself; no-op when no marker is set.
+     */
+    public static void liftWysiwygFollowMarkerForUpperVisibleHop() {
+        BlockPos marked = WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.get();
+        if (marked != null) {
+            WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.set(marked.above());
+        }
+    }
+
     private static boolean consumeWysiwygFollowClickedLoweredFace(BlockPos pos) {
         BlockPos marked = WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.get();
         if (marked != null && marked.equals(pos)) {
