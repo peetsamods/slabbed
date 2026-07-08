@@ -156,6 +156,7 @@ sourceSets {
             include("com/slabbed/test/CeilingFlushRulingTest.java")
             include("com/slabbed/test/WaterlogReadSymmetryTest.java")
             include("com/slabbed/test/WysiwygMarkerHandOffTest.java")
+            include("com/slabbed/test/OffsetRaycastDeepLaneTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }
