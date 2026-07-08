@@ -185,6 +185,14 @@ public final class AnchoredDepthReadbackTest {
                 new ItemStack(Items.OAK_FENCE_GATE), -1.0, "fence gate on lowered slab stack");
     }
 
+    /** Generic floor-top-contact lane (beta35FloorTopContactLaneDy): candle on the -0.5 stack → -1.0. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void candleOnLoweredSlabStackSurvivesReadback(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        depthSurvivesReadback(helper, buildLoweredSlabStack(helper, w),
+                new ItemStack(Items.CANDLE), -1.0, "candle on lowered slab stack");
+    }
+
     /** Floor-torch lane on TOP of the compound full block itself (support dy -1.0, not a slab) → -1.0. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void floorTorchOnCompoundFullBlockSurvivesReadback(GameTestHelper helper) {
