@@ -28,8 +28,10 @@ import net.minecraft.world.phys.Vec3;
  * keeps its dy when waterlogged. Marker/carrier reads were fluid-gated, so a BUCKET at a marked slab
  * popped the slab to flush and popped its dependents (torch -1.5 -> -0.5) with no player action at
  * their cells — Maintainer's never-pop law violated by a water flip. The waterlog property transform
- * itself PRESERVES the attachments (audit Verified-CLEAN); the defect was read-side only, so the fix
- * makes every attachment read fluid-blind like the anchor reference.
+ * itself PRESERVES the attachments (audit Verified-CLEAN); the defects were read-side fluid gates
+ * plus ONE write-belt effect (the carrier state predicate's fluid term de-qualified the carrier on
+ * the flip), so the fix makes every attachment read AND the shared state predicates fluid-blind,
+ * matching the anchor reference.
  */
 public final class WaterlogReadSymmetryTest {
 
