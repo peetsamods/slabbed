@@ -1517,7 +1517,7 @@ public final class SlabSupport {
                 || !state.hasProperty(SlabBlock.TYPE)
                 || (state.getValue(SlabBlock.TYPE) != SlabType.TOP
                         && state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE)
-                || !state.getFluidState().isEmpty()
+                // F5b: fluid-blind — the SUPPORT role must match the subject's own fluid-blind read.
                 || isTsExcludedFromVerticalSupport(state)) {
             return false;
         }
@@ -2427,8 +2427,8 @@ public final class SlabSupport {
                 // inside the over-air cantilever region) and bounded via adjacentLoweredSideMagnitude.
                 // NEVER-POP preserved: if the -1.0 source is later removed this falls back to the anchored
                 // -0.5 floor (still lowered, never pops UP to 0.0); a -0.5 neighbour or none yields -0.5.
-                if (state.getFluidState().isEmpty()
-                        && world.getBlockState(pos.below()).isAir()
+                // F5b: fluid-blind — bucketing an anchored -1.0 cantilever must not half-pop it.
+                if (world.getBlockState(pos.below()).isAir()
                         && !isCompoundVisibleOwnerTopSlab(world, pos, state)) {
                     double anchoredSideMag = adjacentLoweredSideMagnitude(world, pos);
                     if (anchoredSideMag < -0.5 - 1.0e-6) {
@@ -2457,8 +2457,9 @@ public final class SlabSupport {
             // and BEFORE the canUseInheritedSlabLaneYOffset gate, which would short-circuit a fresh
             // unmarked plain slab to 0.0. AIR-GATED at pos.below(): a slab on its own SOLID ground
             // beside a lowered block keeps dy=0 and stays FROZEN_FLAT (Maintainer's NEVER-POP rail).
-            if (state.getFluidState().isEmpty()
-                    && world.getBlockState(pos.below()).isAir()
+            // F5b: fluid-blind — bucketing an unmarked RC2-A cantilever slab must not pop it flush
+            // (and everything riding it) while its dry twin holds.
+            if (world.getBlockState(pos.below()).isAir()
                     && !isCompoundVisibleOwnerTopSlab(world, pos, state)) {
                 // GAP-1: return the NEIGHBOUR's ACTUAL lowered dy (-1.0 beside a compound stack), not a
                 // hardcoded -0.5. GAP-2: a bare single lowered slab neighbour now yields -0.5 (was 0.0).

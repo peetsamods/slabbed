@@ -279,8 +279,10 @@ public final class SlabAnchorAttachment {
     }
 
     public static void freezeLoweredOnPlace(Level world, BlockPos pos, BlockState state) {
-        if (world == null || world.isClientSide() || pos == null || state == null
-                || state.isAir() || !state.getFluidState().isEmpty()) {
+        // F5b (deep-sweep finding 1): the WRITER is fluid-blind like the reads — a slab placed INTO
+        // water on a lowered support read -0.5 but was never anchored, so it popped when the support
+        // broke while its dry twin held (never-pop must not depend on the water it was placed into).
+        if (world == null || world.isClientSide() || pos == null || state == null || state.isAir()) {
             return;
         }
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
