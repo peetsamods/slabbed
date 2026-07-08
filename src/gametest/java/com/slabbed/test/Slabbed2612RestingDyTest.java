@@ -505,8 +505,8 @@ public final class Slabbed2612RestingDyTest {
         helper.setBlock(upper, pointedDripstoneDownBase());
         helper.setBlock(lower, pointedDripstoneDownTip());
 
-        expect(helper, level, chain, 0.5,
-                "SETUP: direct Y-chain under a top slab keeps its ceiling-attach dy");
+        expect(helper, level, chain, 0.0,
+                "SETUP: direct Y-chain under a top slab hangs flush (D2 flush-ceiling ruling)");
         expect(helper, level, upper, 0.0,
                 "P26 ceiling-bridged pointed dripstone upper segment follows the visible chain bottom");
         expect(helper, level, lower, 0.0,
@@ -526,8 +526,8 @@ public final class Slabbed2612RestingDyTest {
         helper.setBlock(upper, sulfurSpikeDownBase());
         helper.setBlock(lower, sulfurSpikeDownTip());
 
-        expect(helper, level, chain, 0.5,
-                "SETUP: direct Y-chain under a top slab keeps its ceiling-attach dy");
+        expect(helper, level, chain, 0.0,
+                "SETUP: direct Y-chain under a top slab hangs flush (D2 flush-ceiling ruling)");
         expect(helper, level, upper, 0.0,
                 "P26 ceiling-bridged sulfur spike upper segment follows the visible chain bottom");
         expect(helper, level, lower, 0.0,
@@ -545,8 +545,8 @@ public final class Slabbed2612RestingDyTest {
         helper.setBlock(upper, pointedDripstoneDownBase());
         helper.setBlock(lower, pointedDripstoneDownTip());
 
-        expect(helper, level, upper, 0.5,
-                "SETUP: direct downward pointed-dripstone segment under a top slab attaches upward");
+        expect(helper, level, upper, 0.0,
+                "SETUP: direct downward pointed-dripstone segment under a top slab hangs flush (D2 ruling)");
         expect(helper, level, lower, 0.0,
                 "P26 chained pointed-dripstone descendant must stay grid-height, not merge into the raised segment");
         helper.succeed();
@@ -562,17 +562,17 @@ public final class Slabbed2612RestingDyTest {
         helper.setBlock(upper, sulfurSpikeDownBase());
         helper.setBlock(lower, sulfurSpikeDownTip());
 
-        expect(helper, level, upper, 0.5,
-                "SETUP: direct downward sulfur-spike segment under a top slab attaches upward");
+        expect(helper, level, upper, 0.0,
+                "SETUP: direct downward sulfur-spike segment under a top slab hangs flush (D2 ruling)");
         expect(helper, level, lower, 0.0,
                 "P26 chained sulfur-spike descendant must stay grid-height, not merge into the raised segment");
         helper.succeed();
     }
 
-    // ── ceiling-hung decorations directly under a TOP slab → +0.5 ─────────────────────────────────
+    // ── ceiling-hung decorations directly under a TOP slab → FLUSH 0.0 (D2 2026-07-03 ruling) ─────
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void ceilingHungUnderTopSlabRaiseHalf(GameTestHelper helper) {
+    public void ceilingHungUnderTopSlabHangFlush(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos ceil = new BlockPos(2, 3, 2);
         BlockPos obj = new BlockPos(2, 2, 2);
@@ -586,7 +586,7 @@ public final class Slabbed2612RestingDyTest {
         for (BlockState s : states) {
             helper.setBlock(ceil, topSlab());
             helper.setBlock(obj, s);
-            expect(helper, level, obj, 0.5, s.getBlock().getName().getString() + " hung under a top slab raises +0.5");
+            expect(helper, level, obj, 0.0, s.getBlock().getName().getString() + " hung under a top slab hangs flush (D2 ruling)");
             clear(helper, obj, ceil);
         }
         helper.succeed();
@@ -736,17 +736,17 @@ public final class Slabbed2612RestingDyTest {
 
     // ── ceiling-attached trapdoor (HALF=TOP) directly under a TOP slab — measure-and-lock ─────────
 
-    /** An OAK_TRAPDOOR[half=TOP] is ceiling-attached; under a top slab it raises +0.5 to hug the underside. */
+    /** An OAK_TRAPDOOR[half=TOP] is ceiling-attached; under a FLUSH top slab it stays flush (D2 ruling). */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void trapdoorTopUnderTopSlabRaisesHalf(GameTestHelper helper) {
+    public void trapdoorTopUnderTopSlabStaysFlush(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         helper.setBlock(new BlockPos(2, 3, 2), topSlab());
         helper.setBlock(new BlockPos(2, 2, 2),
                 Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(BlockStateProperties.HALF, Half.TOP));
         double got = dy(level, helper, new BlockPos(2, 2, 2));
         Slabbed.LOGGER.info("RESTING-FP | trapdoor_top_under_top_slab | dy={}", got);
-        expect(helper, level, new BlockPos(2, 2, 2), 0.5,
-                "OAK_TRAPDOOR[TOP] (ceiling-attached) under a top slab raises +0.5 to the underside");
+        expect(helper, level, new BlockPos(2, 2, 2), 0.0,
+                "OAK_TRAPDOOR[TOP] (ceiling-attached) under a FLUSH top slab stays flush (D2 ruling)");
         helper.succeed();
     }
 

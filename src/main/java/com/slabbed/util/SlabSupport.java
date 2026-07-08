@@ -2292,6 +2292,27 @@ public final class SlabSupport {
      * FLUSH ({@code shouldSkipOffset}), so it is never treated as a lowered support. Under a normal
      * TOP slab (directly or via a chain of hangers) it floats +0.5; otherwise flush.
      */
+    /**
+     * A top-like ceiling surface that Slabbed itself lowers — i.e. one a ceiling-attached block below
+     * should follow UP by +0.5 (raised-attach). D2 port of the donor 1.21.11 predicate: the ONE shared
+     * choke point for EVERY dy-computing ceiling walk (the {@code ceilingHungDecorationDy} cursor loop
+     * and the two {@code getYOffsetInner} walks), so the ruling can never be applied to one walk and
+     * forgotten on the others.
+     *
+     * <p>DEPRECATED (2026-07-03, the maintainer live ruling): the +0.5 "reach-up" for ceiling-attached objects
+     * (lantern / dripstone / chain / lever / TOP-trapdoor / ...) under a FLUSH top slab is deprecated —
+     * everything hangs FLUSH now. In live testing the reach-up smooshed those objects UP into the slab;
+     * flush looked better. Returning false disables the +0.5 at ALL three ceiling walks from ONE place,
+     * so the ruling is trivially reversible if it regresses (the maintainer: "subject to further review").
+     * The {@code slabDy + 0.5} flush-COMPENSATION for a LOWERED top slab (the walk-B tracking and the
+     * ceilingHungDecorationDy support read) is a DIFFERENT path — it nets &lt;= 0.0 (flush against the
+     * lowered underside), not a reach-up — and deliberately stays: it is the 26.2-native live-confirmed
+     * trapdoor-merge fix. Donor's pre-ruling body: {@code !shouldSkipOffset && isTopLikeCeilingSurface}.
+     */
+    private static boolean isLoweringTopLikeCeiling(BlockState state) {
+        return false;
+    }
+
     private static double ceilingHungDecorationDy(BlockGetter world, BlockPos pos, BlockState state) {
         BlockPos supportPos = pos.above();
         BlockState above = world.getBlockState(supportPos);
@@ -2316,7 +2337,8 @@ public final class SlabSupport {
             if (isCeilingBridgedVerticalChainColumnMember(world, cursor, cur)) {
                 return 0.0d;
             }
-            if (isTopSlab(cur)) {
+            // D2 flush ruling: dead while isLoweringTopLikeCeiling returns false (was isTopSlab(cur)).
+            if (isLoweringTopLikeCeiling(cur)) {
                 return 0.5d;
             }
             if (isCeilingAttached(cur)) {
@@ -2725,12 +2747,21 @@ public final class SlabSupport {
         BlockState above = world.getBlockState(pos.above());
 
         // direct: ceiling-attached blocks directly under a top slab. Track the slab's OWN dy so a
-        // LOWERED top slab gives the block a flush 0.0 (slabDy=-0.5 → -0.5+0.5=0.0), NOT +0.5 which
-        // would float it UP into the lowered slab (the maintainer: "trapdoor placed under a lowered slab merges
-        // into it; breaking the slab drops it to flush 0.0"). A flush top slab (slabDy=0) keeps +0.5.
+        // LOWERED top slab gives the block a flush merge (slabDy=-0.5 → 0.0, slabDy=-1.0 → -0.5), NOT
+        // +0.5 which would float it UP into the lowered slab (the maintainer: "trapdoor placed under a lowered
+        // slab merges into it; breaking the slab drops it to flush 0.0" — 26.2-native, live-confirmed,
+        // survives the D2 ruling). The FLUSH top slab's +0.5 reach-up is gated by the ruling predicate
+        // (dead since 2026-07-03): a flush top slab no longer moves the block — it stays 0.0.
         // Recursion-safe: getYOffsetInner runs under the IN_GET_Y_OFFSET guard (mirrors ceilingHungDecorationDy).
         if (isCeilingAttached(state) && isTopSlab(above)) {
-            return getYOffsetInner(world, pos.above(), above) + 0.5d;
+            double aboveDy = getYOffsetInner(world, pos.above(), above);
+            if (aboveDy < -1.0e-6d) {
+                return aboveDy + 0.5d;
+            }
+            if (isLoweringTopLikeCeiling(above)) {
+                return 0.5d;
+            }
+            return 0.0d;
         }
 
         // The direct top chain is rendered with a 1.5-block ceiling bridge model. Descendant chains
@@ -2747,7 +2778,8 @@ public final class SlabSupport {
             BlockPos cursor = pos.above();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
-                if (isTopSlab(cur)) {
+                // D2 flush ruling: dead while isLoweringTopLikeCeiling returns false (was isTopSlab(cur)).
+                if (isLoweringTopLikeCeiling(cur)) {
                     return 0.5;
                 }
                 if (isCeilingAttached(cur)) {

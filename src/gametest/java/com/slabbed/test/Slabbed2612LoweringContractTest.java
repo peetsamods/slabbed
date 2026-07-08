@@ -630,8 +630,10 @@ public final class Slabbed2612LoweringContractTest {
     }
 
     /**
-     * Documents that a Y-axis chain under a TOP slab raises +0.5 (the "connect up" behavior the user
-     * sees as src=geometric dy=+0.500) — identical in 26.1.2 and 1.21.11.
+     * Documents that a Y-axis chain under a TOP slab hangs FLUSH at 0.0 — the maintainer's 2026-07-03
+     * flush-ceiling ruling (D2 port; the donor's isLoweringTopLikeCeiling returns false). The old
+     * +0.5 "connect up" reach-up is deprecated; the ceiling-bridge MODEL (1.5-block) closes the
+     * visual seam to the slab underside from grid height.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void chainUnderTopSlabRaisesHalf(GameTestHelper helper) {
@@ -639,8 +641,8 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos chain = new BlockPos(2, 3, 2);
         helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         helper.setBlock(chain, yChain());
-        assertDy(helper, level, chain, 0.5,
-                "Y-axis chain directly under a TOP slab raises +0.5 to connect up (vanilla connect-up; same as 1.21.11)");
+        assertDy(helper, level, chain, 0.0,
+                "Y-axis chain directly under a TOP slab hangs FLUSH (D2 2026-07-03 flush-ceiling ruling)");
         helper.succeed();
     }
 
@@ -655,8 +657,8 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos chain = new BlockPos(2, 3, 2);
         helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         helper.setBlock(chain, yChain());
-        assertDy(helper, level, chain, 0.5,
-                "P26-8 setup: direct Y-chain under a TOP slab still reports +0.5 for ceiling attach");
+        assertDy(helper, level, chain, 0.0,
+                "P26-8 setup: direct Y-chain under a TOP slab hangs flush (D2 flush-ceiling ruling)");
 
         BlockPos abs = helper.absolutePos(chain);
         BlockState actual = level.getBlockState(abs);
@@ -686,8 +688,8 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(upperChain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         helper.setBlock(upperChain, yChain());
         helper.setBlock(lowerChain, yChain());
-        assertDy(helper, level, upperChain, 0.5,
-                "P26-6 setup: direct Y-chain under a TOP slab still reports +0.5 for ceiling attach");
+        assertDy(helper, level, upperChain, 0.0,
+                "P26-6 setup: direct Y-chain under a TOP slab hangs flush (D2 flush-ceiling ruling)");
         assertDy(helper, level, lowerChain, 0.0,
                 "P26-6: lower Y-chain under the extended top-chain model must stay grid-height, not overlap it");
         helper.succeed();
@@ -706,8 +708,8 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         helper.setBlock(chain, yChain());
         helper.setBlock(lantern, hangingLantern());
-        assertDy(helper, level, chain, 0.5,
-                "P26-7 setup: direct Y-chain under a TOP slab still reports +0.5 for ceiling attach");
+        assertDy(helper, level, chain, 0.0,
+                "P26-7 setup: direct Y-chain under a TOP slab hangs flush (D2 flush-ceiling ruling)");
         assertDy(helper, level, lantern, 0.0,
                 "P26-7: hanging lantern under the extended top-chain model must stay grid-height, not merge into the chain");
         helper.succeed();
