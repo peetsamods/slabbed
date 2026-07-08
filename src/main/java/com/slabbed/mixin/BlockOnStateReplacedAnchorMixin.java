@@ -26,6 +26,16 @@ public abstract class BlockOnStateReplacedAnchorMixin {
     @Inject(method = "affectNeighborsAfterRemoval", at = @At("HEAD"))
     private void slabbed$clearSlabAnchor(BlockState oldState, ServerLevel world, BlockPos pos,
                                          boolean moved, CallbackInfo ci) {
+        // D1 port (donor: 1.21.11 78ec0ac4): only clear the height-lock when the block genuinely
+        // LEAVES this cell. An in-place block-KIND transform to another lock-eligible block
+        // (grass_block -> dirt from a random tick, log -> stripped_log, copper oxidation) keeps the
+        // lock so the block does not un-lower / jitter with no player action (the state-change jitter
+        // defense the port was missing — audit D1). A piston move (moved), a real break (-> air /
+        // fluid), or a replacement with a non-lock block still clears it. The hook fires AFTER the new
+        // state is set, so getBlockState(pos) here is the replacement.
+        if (!moved && SlabAnchorAttachment.replacementPreservesAnchor(world, pos, world.getBlockState(pos))) {
+            return;
+        }
         SlabAnchorAttachment.removeAnchor(world, pos);
     }
 }
