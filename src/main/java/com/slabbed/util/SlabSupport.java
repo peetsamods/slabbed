@@ -29,6 +29,7 @@ import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.HangingRootsBlock;
 import net.minecraft.world.level.block.HangingSignBlock;
 import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.MossyCarpetBlock;
 import net.minecraft.world.level.block.IronBarsBlock;
 import net.minecraft.world.level.block.PowderSnowBlock;
@@ -1227,7 +1228,7 @@ public final class SlabSupport {
                         SlabType.DOUBLE,
                         "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB"));
             }
-            if (!candidateState.isAir()) {
+            if (!isCompoundSidePlacementOpenCell(candidateState)) {
                 return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
                         CompoundSlabRemapDecision.rejected(
                         sourcePos,
@@ -1256,7 +1257,7 @@ public final class SlabSupport {
                         SlabType.DOUBLE,
                         "COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB"));
             }
-            if (!candidateState.isAir()) {
+            if (!isCompoundSidePlacementOpenCell(candidateState)) {
                 return traceCompoundSlabRemap(world, sourcePos, sourceState, intendedDirection, hitPos,
                         CompoundSlabRemapDecision.rejected(
                         sourcePos,
@@ -1340,6 +1341,18 @@ public final class SlabSupport {
             return SlabType.TOP;
         }
         return SlabType.BOTTOM;
+    }
+
+    /**
+     * F5c: the side-visible candidate cell is open for the compound-side placement if it is AIR or a
+     * SOURCE fluid cell (vanilla places into it and the slab waterlogs — the fluid must not gate
+     * marker AUTHORING when every marker READ is fluid-blind; pre-F5c the `candidate_not_air`
+     * rejection fed the useOn-HEAD guard, so an underwater side click on a compound FB placed
+     * NOTHING at all). FLOWING fluid still rejects: Q7's flowing-water ruling is untouched.
+     */
+    private static boolean isCompoundSidePlacementOpenCell(BlockState state) {
+        return state.isAir()
+                || (state.getBlock() instanceof LiquidBlock && state.getFluidState().isSource());
     }
 
     private static boolean isCompoundVisibleSideLowerHit(
@@ -1542,12 +1555,14 @@ public final class SlabSupport {
     }
 
     public static boolean isLoweredSideLaneSlabCarrier(BlockGetter world, BlockPos pos, BlockState state) {
+        // F5c: fluid-blind SUBJECT (the F5b-deferred "finding 6" belt gate, now reachable through the
+        // fluid-blind side-carrier candidate): a slab placed into a water cell beside a lane must
+        // qualify like its dry twin — the water flip is height-neutral everywhere else since F5.
         return world != null
                 && pos != null
                 && state != null
                 && state.getBlock() instanceof SlabBlock
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getFluidState().isEmpty()
                 && isAdjacentSideSlabLowered(world, pos, state);
     }
 
@@ -2183,12 +2198,14 @@ public final class SlabSupport {
             BlockPos pos,
             BlockState state
     ) {
+        // F5c: fluid-blind lane OWNER (the F5b-deferred "finding 6" belt gate, now reachable): a
+        // WATERLOGGED marked lane owner keeps its dy (F5 core scene) — it must keep SOURCING the
+        // lane too, or a placement beside a bucketed owner silently loses its carrier marker.
         return world != null
                 && pos != null
                 && state != null
                 && state.getBlock() instanceof SlabBlock
                 && state.hasProperty(SlabBlock.TYPE)
-                && state.getFluidState().isEmpty()
                 && !isCompoundVisibleOwnerTopSlab(world, pos, state)
                 && isNamedLoweredSlabLane(world, pos, state);
     }
@@ -2757,7 +2774,12 @@ public final class SlabSupport {
                 || blk instanceof PowderSnowBlock
                 || isThinTopLayer(state)
                 || state.isAir()
-                || !state.getFluidState().isEmpty()
+                // F5c: a pure fluid CELL keeps its early-out, but a WATERLOGGED subject must walk on —
+                // the old `!getFluidState().isEmpty()` term kicked waterlogged walk-B/C subjects
+                // (Y-chains, TOP-trapdoors) to 0.0 while walk A (ceilingHungDecorationDy) is
+                // fluid-blind: bucketing a chain under a -1.0 marked TOP slab popped it +0.5 while a
+                // lantern in the same spot held.
+                || blk instanceof LiquidBlock
                 || state.isSolidRender()) {
             return 0.0;
         }

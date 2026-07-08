@@ -126,10 +126,12 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPos placePos,
             BlockState placedState
     ) {
+        // F5c: fluid-blind on BOTH the placed state and the lane source — an underwater lane
+        // extension (or one beside a bucketed source) must author its carrier like the dry twin;
+        // the side lane has no live read fallback, so the missing marker was a real never-pop hole.
         if (context.getClickedFace().getAxis().isVertical()
                 || !(placedState.getBlock() instanceof SlabBlock)
-                || !placedState.hasProperty(SlabBlock.TYPE)
-                || !placedState.getFluidState().isEmpty()) {
+                || !placedState.hasProperty(SlabBlock.TYPE)) {
             return false;
         }
         Level world = context.getLevel();
@@ -137,7 +139,6 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState sourceState = world.getBlockState(sourcePos);
         if (!(sourceState.getBlock() instanceof SlabBlock)
                 || !sourceState.hasProperty(SlabBlock.TYPE)
-                || !sourceState.getFluidState().isEmpty()
                 || !SlabSupport.isCompatibleLoweredSlabLane(
                 sourceState.getValue(SlabBlock.TYPE),
                 placedState.getValue(SlabBlock.TYPE))) {
@@ -172,11 +173,13 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPos placePos,
             BlockState placedState
     ) {
+        // F5c: fluid-blind — the slab placed into a water cell arrives WATERLOGGED and must still
+        // receive its side-LOWER marker (reads have been fluid-blind since F5; without the marker
+        // the underwater placement read lowered but never persisted).
         if (context.getClickedFace().getAxis().isVertical()
                 || !placedState.is(Blocks.STONE_SLAB)
                 || !placedState.hasProperty(SlabBlock.TYPE)
-                || placedState.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
-                || !placedState.getFluidState().isEmpty()) {
+                || placedState.getValue(SlabBlock.TYPE) != SlabType.BOTTOM) {
             return false;
         }
         BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
@@ -196,11 +199,11 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPos placePos,
             BlockState placedState
     ) {
+        // F5c: fluid-blind (see the side-LOWER predicate above — same authoring symmetry).
         if (context.getClickedFace().getAxis().isVertical()
                 || !placedState.is(Blocks.STONE_SLAB)
                 || !placedState.hasProperty(SlabBlock.TYPE)
-                || placedState.getValue(SlabBlock.TYPE) != SlabType.TOP
-                || !placedState.getFluidState().isEmpty()) {
+                || placedState.getValue(SlabBlock.TYPE) != SlabType.TOP) {
             return false;
         }
         BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());
@@ -220,6 +223,10 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPos placePos,
             BlockState placedState
     ) {
+        // F5c NOTE: the fluid term below is UNREACHABLE-wet (vanilla slab-merge forces
+        // WATERLOGGED=false on the DOUBLE result, so this placed state can never carry fluid) —
+        // kept under the surviving-mutant rule (no honest wet scene is constructible to prove its
+        // removal; the F5b isLoweredTopLikeSlabCarrier precedent).
         if (context.getClickedFace().getAxis().isVertical()
                 || !placedState.is(Blocks.STONE_SLAB)
                 || !placedState.hasProperty(SlabBlock.TYPE)
