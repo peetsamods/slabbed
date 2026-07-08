@@ -55,7 +55,8 @@
       "com.slabbed.test.EnsembleCoherenceContractTest",
       "com.slabbed.test.EnsemblePlacementCoherenceTest",
       "com.slabbed.test.StateChangeAnchorTest",
-      "com.slabbed.test.HauntedCarrierCellTest"
+      "com.slabbed.test.HauntedCarrierCellTest",
+      "com.slabbed.test.ConnectingStructuralFreezeTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",

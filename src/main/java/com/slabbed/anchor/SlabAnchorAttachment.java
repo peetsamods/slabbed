@@ -323,7 +323,13 @@ public final class SlabAnchorAttachment {
                 // block-entity case is already covered structurally by the addAnchorUnchecked branch above
                 // (dy < 0), exactly like the decorative-object case — see DecorativeObjectSupportAnchorTest.
                 || (state.getBlock() instanceof EntityBlock
-                        && !SlabSupport.isAlwaysCeilingHungDecoration(state));
+                        && !SlabSupport.isAlwaysCeilingHungDecoration(state))
+                // D4 port (donor: 1.21.11 isConnectingStructural admission; audit
+                // STATE_DEFENSE_DIVERGENCE_2026-07-07): fences/walls/panes/gates placed FLAT freeze
+                // like every other structural piece — without this they stayed LIVE forever and sank
+                // -0.5 whenever a slab was shoved under them later (down-pop while editing beneath
+                // existing builds). Lowered-placed connectors still anchor via the dy<0 branch above.
+                || isConnectingStructural(state);
         if (structural) {
             addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
         }
