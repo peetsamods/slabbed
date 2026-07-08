@@ -138,11 +138,12 @@ public abstract class SlabSupportStateMixin {
             BlockState state,
             double yOff
     ) {
+        // F5b: fluid-blind — a waterlogged marked slab renders lowered; refusing it here made the
+        // interaction shape EMPTY (untargetable) while model/outline showed the lowered box.
         if (yOff >= 0.0
                 || state == null
                 || !(state.getBlock() instanceof SlabBlock)
-                || !state.hasProperty(SlabBlock.TYPE)
-                || !state.getFluidState().isEmpty()) {
+                || !state.hasProperty(SlabBlock.TYPE)) {
             return false;
         }
         return SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)
@@ -161,8 +162,7 @@ public abstract class SlabSupportStateMixin {
         if (yOff != 0.0
                 || state == null
                 || !(state.getBlock() instanceof SlabBlock)
-                || !state.hasProperty(SlabBlock.TYPE)
-                || !state.getFluidState().isEmpty()) {
+                || !state.hasProperty(SlabBlock.TYPE)) {
             return false;
         }
         return !SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state)

@@ -237,6 +237,193 @@ public final class WaterlogReadSymmetryTest {
         helper.succeed();
     }
 
+    // ── F5b (deep-sweep tranche): the fluid-blind invariant extends to WRITERS, lane/support-role
+    // derivations, and interaction surfaces — the two-authority split had moved one hop away. ──
+
+    /** Owner-top marker family (the surviving-mutant rider from F5a): waterlog moves nothing. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void waterloggingAnOwnerTopSlabMovesNothing(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
+        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+        bottomSlab(w, base.above(1));
+        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+        bottomSlab(w, base.above(3));
+        BlockPos fb = base.above(4);
+        w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
+        SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
+        BlockPos slab = fb.above();
+        bottomSlab(w, slab);
+        SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(w, slab, w.getBlockState(slab),
+                fb, w.getBlockState(fb));
+        double slabDy = dy(w, slab);
+        if (Math.abs(slabDy + 1.0) > EPS) {
+            throw helper.assertionException("scene premise: the owner-top slab must read -1.0, got " + slabDy);
+        }
+        setWaterlogged(w, slab, true);
+        assertDy(helper, w, slab, -1.0,
+                "F5b: waterlogging the owner-top slab must not pop it (owner-top predicate fluid-blind)");
+        helper.succeed();
+    }
+
+    /**
+     * WRITER symmetry (deep-sweep finding 1): a slab PLACED underwater on a lowered support reads
+     * -0.5 (fluid-blind reads) but the freeze-on-place writer refused waterlogged states — so it was
+     * never anchored and popped flush when the support broke, while its dry twin held. Never-pop must
+     * not depend on the water the slab was placed into.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabPlacedUnderwaterOnLoweredSupportNeverPops(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos base = helper.absolutePos(new BlockPos(2, 1, 2));
+        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+        bottomSlab(w, base.above(1));
+        BlockPos support = base.above(2);
+        w.setBlock(support, Blocks.STONE.defaultBlockState(), 2);
+        double supportDy = dy(w, support);
+        if (Math.abs(supportDy + 0.5) > EPS) {
+            throw helper.assertionException("scene premise: the support must read -0.5, got " + supportDy);
+        }
+        BlockPos placedPos = support.above();
+        w.setBlock(placedPos, Blocks.WATER.defaultBlockState(), 2);
+        place(helper, new ItemStack(Items.STONE_SLAB), support, Direction.UP);
+        BlockState placed = w.getBlockState(placedPos);
+        if (!(placed.getBlock() instanceof SlabBlock)
+                || !placed.getValue(BlockStateProperties.WATERLOGGED)) {
+            throw helper.assertionException("scene premise: a WATERLOGGED slab must place into the water cell, got "
+                    + placed);
+        }
+        assertDy(helper, w, placedPos, -0.5, "premise: the underwater-placed slab reads -0.5");
+        if (!SlabAnchorAttachment.isAnchored(w, placedPos)) {
+            throw helper.assertionException(
+                    "F5b WRITE half: the underwater placement must ANCHOR like its dry twin (writer fluid-blind)");
+        }
+        w.destroyBlock(support, false);
+        assertDy(helper, w, placedPos, -0.5,
+                "F5b: breaking the support must not pop the underwater-placed slab (never-pop)");
+        helper.succeed();
+    }
+
+    /**
+     * Vertical-lane SUPPORT role (deep-sweep finding 2): bucketing a lowered TOP-type support must
+     * not pop the unmarked slab riding it (isLoweredTopLikeSlabCarrier's gate fired before its
+     * marker read).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void waterloggingALoweredTopSupportKeepsTheSlabAboveLowered(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
+        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+        bottomSlab(w, base.above(1));
+        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+        BlockPos topSupport = helper.absolutePos(new BlockPos(2, 3, 2));
+        w.setBlock(topSupport, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
+        double supportDy = dy(w, topSupport);
+        if (Math.abs(supportDy + 0.5) > EPS) {
+            throw helper.assertionException("scene premise: the side-lowered TOP support must read -0.5, got " + supportDy);
+        }
+        // DRY BASELINE first: if the rider does not follow a DRY side-lowered TOP support either,
+        // the gap is a pre-existing lane hole, NOT a fluid asymmetry — and this scene must not
+        // blame F5 for it.
+        BlockPos rider = topSupport.above();
+        place(helper, new ItemStack(Items.STONE_SLAB), topSupport, Direction.UP);
+        if (!(w.getBlockState(rider).getBlock() instanceof SlabBlock)) {
+            throw helper.assertionException("scene premise: the rider slab must place above the support, got "
+                    + w.getBlockState(rider));
+        }
+        double dryRiderDy = dy(w, rider);
+        if (Math.abs(dryRiderDy + 0.5) > EPS) {
+            throw helper.assertionException(
+                    "DRY BASELINE: the rider on a DRY side-lowered TOP support reads " + dryRiderDy
+                            + " (pre-existing lane gap, not a fluid asymmetry)");
+        }
+        w.destroyBlock(rider, false);
+        setWaterlogged(w, topSupport, true);
+        place(helper, new ItemStack(Items.STONE_SLAB), topSupport, Direction.UP);
+        if (!(w.getBlockState(rider).getBlock() instanceof SlabBlock)) {
+            throw helper.assertionException("scene premise: the wet-case rider must place above the support, got "
+                    + w.getBlockState(rider));
+        }
+        assertDy(helper, w, rider, -0.5,
+                "F5b: a slab placed ON a waterlogged lowered TOP support must follow it down like the dry twin");
+        helper.succeed();
+    }
+
+    /**
+     * Lane-OWNER role (deep-sweep finding 3a): bucketing a marked lane owner must not pop an
+     * unmarked side member inheriting -0.5 through the live side-lane BFS.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void waterloggingALaneOwnerKeepsSideMembersLowered(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos owner = buildMarkedLowerSlab(helper, w);
+        BlockPos member = owner.west();
+        bottomSlab(w, member);   // over AIR: the live cantilever/side lane, no attachments
+        double memberDy = dy(w, member);
+        if (memberDy > -EPS) {
+            throw helper.assertionException("scene premise: the side member must inherit a lowered dy, got " + memberDy);
+        }
+        setWaterlogged(w, owner, true);
+        assertDy(helper, w, member, memberDy,
+                "F5b: bucketing the lane owner must not pop the inheriting side member (owner role fluid-blind)");
+        helper.succeed();
+    }
+
+    /**
+     * Anchored deep-cantilever magnitude (deep-sweep finding 5a): bucketing an anchored -1.0
+     * cantilever slab beside a compound stack must not half-pop it to -0.5.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void waterloggingAnAnchoredCantileverKeepsItsDepth(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos support = buildMarkedLowerSlab(helper, w);
+        BlockPos fb = support.east();
+        BlockPos placedPos = fb.north();
+        place(helper, new ItemStack(Items.STONE_SLAB), fb, Direction.NORTH);
+        BlockState placed = w.getBlockState(placedPos);
+        if (!(placed.getBlock() instanceof SlabBlock)) {
+            throw helper.assertionException("scene premise: the side placement must land at fb.north(), got " + placed);
+        }
+        double placedDy = dy(w, placedPos);
+        if (placedDy > -1.0 + EPS) {
+            throw helper.assertionException("scene premise: the cantilever slab must read the deep -1.0, got " + placedDy);
+        }
+        setWaterlogged(w, placedPos, true);
+        assertDy(helper, w, placedPos, placedDy,
+                "F5b: bucketing the anchored cantilever must not half-pop it (deep-magnitude read fluid-blind)");
+        helper.succeed();
+    }
+
+    /**
+     * Interaction-surface triad (deep-sweep finding 4): a waterlogged marked slab renders and
+     * outlines lowered — its interaction shape must agree (the dy-triad law), not refuse the
+     * lawful-lowered fallback because of the fluid.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void waterloggedMarkedSlabInteractionShapeMatchesOutline(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos slab = buildMarkedLowerSlab(helper, w);
+        setWaterlogged(w, slab, true);
+        BlockState state = w.getBlockState(slab);
+        var outline = state.getShape(w, slab);
+        var interaction = state.getInteractionShape(w, slab);
+        if (outline.isEmpty()) {
+            throw helper.assertionException("premise: the outline must be non-empty, got " + outline);
+        }
+        if (interaction.isEmpty()) {
+            throw helper.assertionException("F5b dy-triad: the waterlogged marked slab's interaction shape is "
+                    + "EMPTY while its outline renders lowered — the block is untargetable");
+        }
+        if (Math.abs(outline.bounds().minY - interaction.bounds().minY) > EPS
+                || Math.abs(outline.bounds().maxY - interaction.bounds().maxY) > EPS) {
+            throw helper.assertionException("F5b dy-triad: the waterlogged marked slab's interaction shape ["
+                    + interaction.bounds().minY + "," + interaction.bounds().maxY
+                    + "] must match its outline [" + outline.bounds().minY + "," + outline.bounds().maxY + "]");
+        }
+        helper.succeed();
+    }
+
     /** No over-lowering: an UNMARKED, unanchored waterlogged slab on flush ground stays flush. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void plainWaterloggedSlabStaysFlushControl(GameTestHelper helper) {
