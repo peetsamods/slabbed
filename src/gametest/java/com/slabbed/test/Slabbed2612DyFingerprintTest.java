@@ -253,7 +253,7 @@ public final class Slabbed2612DyFingerprintTest {
         BlockPos chain = new BlockPos(2, 3, 2);
         helper.setBlock(chain.above(), topSlab());
         helper.setBlock(chain, Blocks.IRON_CHAIN.defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.Y));
-        fingerprint(helper, level, chain, "chain_raise", 0.5);
+        fingerprint(helper, level, chain, "chain_raise", 0.0);
         helper.succeed();
     }
 

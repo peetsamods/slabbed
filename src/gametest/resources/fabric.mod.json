@@ -57,7 +57,8 @@
       "com.slabbed.test.StateChangeAnchorTest",
       "com.slabbed.test.HauntedCarrierCellTest",
       "com.slabbed.test.ConnectingStructuralFreezeTest",
-      "com.slabbed.test.AnchoredDepthReadbackTest"
+      "com.slabbed.test.AnchoredDepthReadbackTest",
+      "com.slabbed.test.CeilingFlushRulingTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",

@@ -20,7 +20,7 @@ candle_contact_OBSERVED   | dy=-0.500 | src=ANCHORED        # ⚠ live-confirm: 
 cantilever_merge          | dy=-0.500 | src=geometric
 ceiling_flush             | dy=0.000  | src=geometric
 ceiling_follow            | dy=-0.500 | src=geometric
-chain_raise               | dy=0.500  | src=geometric
+chain_raise               | dy=0.000  | src=geometric
 compound_anchor           | dy=-1.000 | src=compound-anchor
 compound_vertical         | dy=-1.000 | src=geometric
 door_lower_on_slab        | dy=-0.500 | src=geometric        # + isBeta35LoweredRegularDoorServerHitTarget=true
