@@ -1,5 +1,10 @@
 # Slabbed — Rules (Development Guardrails)
 
+> **See LAW.md — it is supreme and this file does not redefine the law.** The one inviolable law is
+> WYSIWYG / NEVER-POP: a placed block's height is frozen at placement and a neighbor update never
+> changes it. Every rule below operates *under* that law; where any rule appears to conflict, LAW.md
+> wins. Enforced by `NeighborUpdateInvarianceTest` and the `tools/hooks` guardrails.
+
 These rules are intentionally strict. Slabbed must remain predictable, reversible, visually correct, and aligned with the actual product intent. The current canonical intent is global slab support: ordinary full blocks anchoring on slabs is intended product behavior, and past selective-only framing caused regressions and project drift. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
 
 ## 1) Global slab support is the product intent
