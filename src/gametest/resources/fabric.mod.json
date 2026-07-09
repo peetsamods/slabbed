@@ -62,7 +62,8 @@
       "com.slabbed.test.WaterlogReadSymmetryTest",
       "com.slabbed.test.WysiwygMarkerHandOffTest",
       "com.slabbed.test.OffsetRaycastDeepLaneTest",
-      "com.slabbed.test.NeighborUpdateInvarianceTest"
+      "com.slabbed.test.NeighborUpdateInvarianceTest",
+      "com.slabbed.test.RegistrySweepTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
