@@ -87,6 +87,22 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
             return set != null && set.contains(pos.asLong());
         };
+        // FROZEN-DY (Step 0): client-world mirror for the placement-height value store, so the model
+        // render path returns the frozen height (not a client-side geometric guess). NaN = none stored.
+        SlabAnchorAttachment.clientPlacementDyLookup = pos -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.level == null) {
+                return Double.NaN;
+            }
+            LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk == null) {
+                return Double.NaN;
+            }
+            it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap map =
+                    chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+            long key = pos.asLong();
+            return (map != null && map.containsKey(key)) ? map.get(key) : Double.NaN;
+        };
 
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
@@ -116,6 +132,7 @@ public final class SlabAnchorClientSync {
         registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
         registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        registerDyRerenderListener(chunk);
 
         // Also handle any attachment value already present at chunk-load time.
         // This covers the case where the chunk attachment sync packet arrived before
@@ -156,6 +173,33 @@ public final class SlabAnchorClientSync {
             scheduleRerendersForSet(mc, oldSet, attachmentType);
             scheduleRerendersForSet(mc, newSet, attachmentType);
         });
+    }
+
+    /** FROZEN-DY (Step 0): re-mesh a section when its stored placement heights sync, like the flags. */
+    private static void registerDyRerenderListener(LevelChunk chunk) {
+        chunk.<it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap>onAttachedSet(SlabAnchorAttachment.PLACEMENT_DY_TYPE)
+                .register((oldMap, newMap) -> {
+                    Minecraft mc = Minecraft.getInstance();
+                    if (mc.levelRenderer == null) {
+                        return;
+                    }
+                    scheduleRerendersForDyMap(mc, oldMap);
+                    scheduleRerendersForDyMap(mc, newMap);
+                });
+    }
+
+    private static void scheduleRerendersForDyMap(Minecraft mc, it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap map) {
+        if (map == null || map.isEmpty()) {
+            return;
+        }
+        BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
+        for (long packed : map.keySet()) {
+            mutable.set(packed);
+            BlockPos pos = mutable.immutable();
+            if (mc.level != null && mc.level.getBlockState(pos) != null) {
+                scheduleAnchorAttachmentRenderRefresh(mc, pos);
+            }
+        }
     }
 
     private static void scheduleInitialRerenders(

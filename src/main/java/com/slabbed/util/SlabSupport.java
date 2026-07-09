@@ -1022,6 +1022,18 @@ public final class SlabSupport {
             return 0.0;
         }
 
+        // FROZEN-DY (LAW.md restoration, Step 0, flag-gated -Dslabbed.frozenDy): return the height this
+        // block was placed at, stored verbatim — the value the player aimed at, never re-derived from
+        // the current neighbours. Default off; when off this is skipped and behaviour is unchanged. At
+        // placement the value is absent (captured just after), so the capture path still reads the live
+        // lanes once to determine the aim.
+        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            double frozen = SlabAnchorAttachment.storedPlacementDy(world, pos);
+            if (!Double.isNaN(frozen)) {
+                return frozen;
+            }
+        }
+
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
         if (IN_GET_Y_OFFSET.get()) {
             return 0.0;
