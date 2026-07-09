@@ -50,74 +50,81 @@ Hard stop unless the root is:
 
 If the tree is dirty, inspect only the files relevant to the intended slice before editing. Do not auto-stash, clean, reset, or revert unrelated work.
 
-## When to Use Superpowers / Subagents
+## Tiered Agent Workflow (the Fable tiered workflow, adapted for Slabbed)
 
-Use the Superpowers plugin to delegate to subagents when the work can be decomposed into independent units with bounded context.
-Subagents are separate model runs and may cost more and slow the session through coordination overhead. Use them only when their outputs will directly reduce main-thread work, risk, or context size.
+Slabbed runs the **Fable tiered model workflow**: the right model does the right job, the expensive
+context-sensitive reasoning stays at the two ends (plan + evaluate), and the high-volume trial-and-error
+middle routes to cheaper models. It operates **entirely under LAW.md and the `tools/hooks` guardrails** —
+the workflow never overrides the law, the S-2 gate, or the commit rules below. Reference specs live in
+`docs/workflow/` (`TIERED-AGENTS.md`, `HANDOFF-TEMPLATE.md`); the run log is `handoffs/RUN-STATE.md`;
+agent definitions are in `.claude/agents/`.
 
-### Required invocation sequence
+### Roles and model tiers
 
-- **Must explicitly invoke** `@Superpowers` before launching any subagent work for this workspace.
-- **Default mode:** when a request can be decomposed into 2+ independent slices, automatically delegate only if the cost/benefit rule below passes. Otherwise keep the work in the main context, even if `@Superpowers` skills are used.
-- After `@Superpowers` is acknowledged, invoke the dispatcher (`@dispatching-parallel-agents` when there are multiple independent slices, or `@systematic-debugging` / other single-specialist skill as needed) in the same turn.
-- Provide each subagent a fixed contract in one message:
-  - Inputs and current file scope.
-  - Expected output.
-  - Hard constraints and non-goals.
-  - Acceptance criteria.
-- Do not proceed with delegated execution until the invocation sequence has happened in order.
+| Tier | Agent | Model | Role | Writes code? |
+|------|-------|-------|------|--------------|
+| Plan / evaluate | **architect** | Fable (`claude-fable-5`) | Restate goal, explore read-only, decompose into handoff packages, gate the Definition of Ready, route by tier, do the final eval. | No (Write only to emit packages) |
+| Implement | **developer** | Opus (`claude-opus-4-8`) | The heavy lifting: real logic, cross-module changes, the build/fix/retry loop. | Yes |
+| Assist | **test-writer** | Sonnet (`claude-sonnet-5`) | Boilerplate tests, mocks, fixtures, smoke checks, well-specified repetitive work. | Yes (tests/fixtures) |
+| Review | **reviewer** | Fable (`claude-fable-5`) | Read the diff + worker reports **against LAW.md, RULES.md, the plan docs, and the acceptance criteria**, then return a structured verdict and **decide if the commit is ready**. | No (read-only) |
+| Adversarial sweep | **sweeper** (panel) | tiered by task | Independent hostile review — try to break the change. Panel intelligence matches the task (see below). | No (read-only) |
 
-### Use subagents when:
-- The task can be split into **2 or more independent slices** with minimal or no shared mutable state.
-- Each slice has a **clear contract**: inputs, expected outputs, constraints, and acceptance criteria.
-- The work benefits from **parallel execution** or **separate review passes**.
-- The amount of context needed per slice is much smaller than the full session context.
-- A **fresh context** is valuable to reduce contamination from previous reasoning, false starts, or unrelated history.
-- The task includes a **natural review boundary** such as:
-  - spec compliance
-  - correctness review
-  - code quality review
-  - regression check
-- The cost of coordination overhead is lower than the cost of keeping the entire problem in one context.
+**You (the main session) are ALWAYS the project architect.** You hold the architect role in the main
+context — you plan, decompose, route, and do the final eval; you do not drop into the trial-and-error
+loop yourself. Delegate implementation to **developer**, repetitive tests to **test-writer**, and the
+diff-depth review to **reviewer**. Keep a Fable-clean head at the top: don't ingest raw build logs or
+churn — workers report a synthesized result and log it to `handoffs/RUN-STATE.md`.
 
-### Do not use subagents when:
-- The work is **tightly coupled** and requires continuous shared state across steps.
-- The task is **small enough** that subagent setup and review overhead would dominate the total effort.
-- The task is routine preflight, simple grep, a small edit, live-client/runtime debugging, or any step where the main thread must preserve one continuous evidence chain.
-- The next step depends on information that is only available after the previous step completes, with no meaningful parallelism.
-- The task requires **frequent interactive back-and-forth** with the user to resolve ambiguity before progress can be made.
-- The task requires a single coherent reasoning chain where splitting context would reduce accuracy.
-- The scope is unstable and cannot yet be decomposed into well-defined slices.
-- The result depends on subtle cross-file or cross-system interactions that one agent must hold in working memory at once.
+### Assign the most appropriate model/intelligence to every subagent
 
-### Preferred pattern
-- Use one subagent per independent problem domain.
-- Give each subagent a narrow scope and explicit deliverable.
-- Keep the main agent as coordinator only.
-- Review outputs at the boundaries, not continuously.
-- Re-dispatch with corrected context if a subagent reports `NEEDS_CONTEXT` or `BLOCKED`.
+Match the tier to the token/intelligence profile, not prestige:
+- Novel logic, cross-module, law-sensitive height/placement work → **developer (Opus)**.
+- Scaffolding, mocks, fixtures, added gametest rows, smoke checks → **test-writer (Sonnet)**.
+- Planning, routing, final eval, and the commit-gating review → **architect / reviewer (Fable)**.
+- **Adversarial sweeper panel** (the standing Slabbed pattern): tier each sweeper to its lens —
+  - **high** (architecture parity, LAW.md compliance, donor-vs-port divergence, multiple dy authorities, lifecycle/state) → Fable or Opus (`inherit` the main model when unsure);
+  - **medium** (test adequacy, false-green risk, RED-matches-symptom, mutation coverage) → Sonnet;
+  - **clerical** (callers/imports/registration/wiring/docs, no architecture judgment) → Haiku (`claude-haiku-4-5`).
+  Run them in parallel (one message, multiple Agent calls). **You verify/reject every sweeper finding
+  locally before acting on it** — never relay a finding unverified.
 
-### Cost/benefit rule
-Use subagents only when there are 2+ genuinely independent subtasks and at least one of the following is true:
-- they enable parallelism,
-- they materially reduce context size,
-- they improve review isolation,
-- or they reduce the chance of cross-contamination in reasoning.
+### The loop (per unit of work)
 
-Use subagents mainly for parallel read-only lanes: artifact summaries, dirty-tree classification, mod/tag inventories, log-marker extraction, or independent review passes. Otherwise, execute directly in the main context.
+1. **Architect (you)** — restate the goal; explore read-only; write one self-contained handoff package
+   per modular unit to `handoffs/packages/<slug>.md` (use `docs/workflow/HANDOFF-TEMPLATE.md`); gate each
+   on the Definition of Ready (files named, acceptance criteria testable, scope bounded, test command
+   given, **LAW-PREFLIGHT answered**, no open questions). If a real decision is unresolved, mark it
+   `Status: blocked-needs-decision` and surface it to the maintainer — do NOT route. Reset `handoffs/RUN-STATE.md`.
+2. **Developer / test-writer** — execute the packages under their pinned models; own the build loop;
+   report a synthesized result (files changed one-line each, test pass/fail, deviations) to RUN-STATE.
+3. **Adversarial sweeper panel** — hostile review, tiered as above; findings verified by you.
+4. **Reviewer (Fable)** — read the diff + reports **against LAW.md / RULES.md / the plan / acceptance
+   criteria**, adjudicate sweeper + (optional) Codex findings, and return the verdict + a
+   **commit-ready: yes/no** decision. Route required changes back down; the reviewer never edits code.
+5. **Architect (you)** — final eval. **On a successful pass, COMMIT** (see the commit rule below), then
+   advance to the next unit. Anything failing routes back to the right worker.
 
-- Work one port slice only.
-- Prefer mapping/tooling/classpath proof before source migration.
-- Prefer one-file mechanical probes for source API drift.
-- Do not broaden into gameplay behavior, beta release finalization, phase19 proof work, or unrelated compatibility families unless the maintainer explicitly says so.
-- Preserve unrelated dirty files and untracked evidence, especially `tmp/` and `docs/porting/`.
-- Stage only intended files.
-- Never invent commits, tags, pushes, tests, or proof.
+Optional cross-model second opinion: `scripts/codex-review.sh` (OpenAI Codex, a different model family).
+If the CLI is absent it exits cleanly and the workflow proceeds on the sweeper + reviewer verdict.
 
-## 26.1.2 Port Defaults
+### Commit after every successful pass (the maintainer's rule)
 
-- Base release provenance starts at `release/0.2.0-beta.4` / `f9014fb`.
-- Branch is expected to be `port/mc-26.1.2` unless Git proves otherwise.
+**A commit is made after each successful pass** — reviewer says commit-ready and the gates below are
+green. Do not batch multiple units into one commit; one reviewed unit → one commit. Every commit still
+goes through the `tools/hooks` guardrails:
+- **LAW-PREFLIGHT** trailer on any `src/main` change (S-4).
+- The **S-3 tripwire** (no new neighbor-recompute vocabulary without `LAW-SIGNOFF` + an invariance row).
+- **S-2** (`NeighborUpdateInvarianceTest`) — the law gate; a behavior change that would let a neighbor
+  move a placed block cannot be called a successful pass.
+- **S-5** — no second behavior-changing commit stacks without a recorded live pass in
+  `docs/process/LIVE_LEDGER.md`. Behavior changes therefore stop for the maintainer's live A/B between passes.
+
+Keep the work one unit at a time; name files, don't paste bodies; stage only intended files; never
+invent commits, tags, pushes, tests, or proof.
+
+## 26.2 Port Defaults
+
+- Branch is expected to be `port/mc-26.2-0.4.1-beta.1` unless Git proves otherwise.
 - Treat this checkout as an experimental port workspace until a clean savepoint proves otherwise.
 - Java 25 / Gradle 9.4.x / Fabric Loom / mappings decisions must be proven from the active checkout or a verified donor, not guessed from broad cache scans.
 - A green `buildEnvironment` is not proof that `compileJava` is green.
