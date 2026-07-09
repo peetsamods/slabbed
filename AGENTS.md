@@ -1,27 +1,34 @@
-# AGENTS.md - Slabbed 26.1.2 Port Rules
+# AGENTS.md - Slabbed 26.2 Port Rules
 
-These rules apply only to the dedicated MC 26.1.2 port checkout:
+These rules apply to the dedicated MC 26.2 port checkout:
 
 ```text
-<home>/CascadeProjects/Slabbed-port-26.1.2
+<home>/CascadeProjects/Slabbed-port-26.2
 ```
 
-Do not apply this file to `<home>/CascadeProjects/Slabbed-phase19-integrate` or any other Slabbed tree.
+Do not apply this file to any other Slabbed tree.
+
+## LAW — read first, above everything
+
+**`LAW.md` is required reading #1 and is supreme over every other doc, including this one.** If anything
+below conflicts with LAW.md, LAW.md wins. The one law: *where a block is placed is where it goes and
+STAYS; height is frozen at placement and a neighbor update never changes it.* Before you edit
+`src/main/**`, you must be able to answer **"does this change let a neighbor edit move an already-placed
+block?"** — and record the answer in the commit trailer `LAW-PREFLIGHT: n` (or `y` + the maintainer's sign-off).
+The `commit-msg` hook enforces this; install it once with `git config core.hooksPath tools/hooks`.
 
 ## Required First Reads
 
-Before any Slabbed 26.1.2 port work, read:
+Before any Slabbed 26.2 port work, read:
 
-1. `AGENTS.md`
-2. `HANDOFF.md`
-3. `SLABBED_SPINE.md`
-4. `docs/lessons/LESSONS_INDEX.md`
-5. `docs/porting/PORTING_MAP.md` for port/backport/API/mapping work
-6. `docs/process/LIVE_DRIVE_PREFLIGHT.md` before any live-client or Modrinth-profile work
-7. `docs/process/FALSE_GREEN_CHECKLIST.md` when automation proof and live behavior disagree
-8. Relevant `docs/porting/*` notes for the active blocker
+1. **`LAW.md`** — the one law (supreme). Nothing you do may violate it.
+2. `docs/audits/WYSIWYG-LAW-VIOLATION-POSTMORTEM.md` — how the law was violated for months, and the guardrails.
+3. `HANDOFF.md`
+4. `SLABBED_SPINE.md`
+5. `docs/process/LIVE_LEDGER.md` — the live-verification gate (no stacking behavior changes unseen).
+6. Relevant `docs/**` notes for the active task.
 
-Legacy phase19 source-index/doctrine/status files are not required in this checkout unless they are explicitly added here later. Treat `SLABBED_SPINE.md` as the current operating context for this port, but verify it against Git before edits.
+Treat `SLABBED_SPINE.md` as the current operating context, but verify it against Git before edits.
 
 ## Required Preflight
 
@@ -38,7 +45,7 @@ git tag --points-at HEAD
 Hard stop unless the root is:
 
 ```text
-<home>/CascadeProjects/Slabbed-port-26.1.2
+<home>/CascadeProjects/Slabbed-port-26.2
 ```
 
 If the tree is dirty, inspect only the files relevant to the intended slice before editing. Do not auto-stash, clean, reset, or revert unrelated work.
