@@ -18,6 +18,18 @@ fabricApi {
     }
 }
 
+// Forward -Dslabbed.sweep from the gradle invocation into the forked gametest JVM so
+// `./gradlew runGameTest -Dslabbed.sweep=true` reaches RegistrySweepTest. Loom run tasks do NOT
+// inherit the daemon's -D properties by default; RunConfigSettings.property() wires it through.
+// (RegistrySweepTest also honours the SLABBED_SWEEP env var directly as a fallback.)
+loom {
+    runs {
+        gameTest {
+            property "slabbed.sweep", System.getProperty("slabbed.sweep", "false")
+        }
+    }
+}
+
 version = project.mod_version
 group = project.maven_group
 
@@ -158,6 +170,7 @@ sourceSets {
             include("com/slabbed/test/WysiwygMarkerHandOffTest.java")
             include("com/slabbed/test/OffsetRaycastDeepLaneTest.java")
             include("com/slabbed/test/NeighborUpdateInvarianceTest.java")
+            include("com/slabbed/test/RegistrySweepTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }
