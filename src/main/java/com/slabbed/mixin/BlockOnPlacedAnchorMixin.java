@@ -31,5 +31,9 @@ public abstract class BlockOnPlacedAnchorMixin {
         // removed), and a flat structural piece records FROZEN_FLAT (a slab placed under/beside it
         // later can't pull it down). No-op for decorative followers and non-structural blocks.
         SlabAnchorAttachment.freezeLoweredOnPlace(world, pos, state);
+        // FROZEN-DY (LAW.md restoration, Step 0): capture the exact height this placement landed at,
+        // AFTER the markers above, so every later read returns it verbatim. The read short-circuit is
+        // flag-gated (-Dslabbed.frozenDy), so this is a no-op store until the switch is on.
+        SlabAnchorAttachment.capturePlacementDy(world, pos, state);
     }
 }

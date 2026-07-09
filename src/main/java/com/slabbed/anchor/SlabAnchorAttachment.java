@@ -1,10 +1,13 @@
 package com.slabbed.anchor;
 
 import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.slabbed.Slabbed;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
@@ -67,6 +70,14 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
 
+    /**
+     * FROZEN-DY (LAW.md restoration, Step 0): client-side mirror for the placement-height value store,
+     * matching the {@code clientAnchorLookup} pattern for chunk render paths that get a non-{@link Level}
+     * view. Returns {@link Double#NaN} when no height was stored at {@code pos}. Set by the client
+     * entrypoint; null on a dedicated server.
+     */
+    public static ToDoubleFunction<BlockPos> clientPlacementDyLookup = null;
+
     private static final Identifier ANCHOR_ID = Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "slab_anchors");
     private static final Identifier FROZEN_FLAT_ID = Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "frozen_flat");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
@@ -81,6 +92,8 @@ public final class SlabAnchorAttachment {
             Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "compound_visible_side_double_slabs");
     private static final Identifier COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID =
             Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
+    private static final Identifier PLACEMENT_DY_ID =
+            Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "placement_dy");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -181,6 +194,111 @@ public final class SlabAnchorAttachment {
                     .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
             );
 
+    // ── FROZEN-DY value store (LAW.md restoration, Step 0) ────────────────────────────────────────
+    // The law: a block's height is decided ONCE at placement and STAYS. Unlike the presence flags
+    // above, this stores the actual height (a double) per position, so a read returns the exact value
+    // the player aimed at — never a value derived afresh from the current neighbours. Synced to clients
+    // exactly like the flags, so the frozen height is what renders. Flag-gated (default off) for Step 0.
+    private record DyEntry(long pos, double dy) {
+    }
+
+    private static final Codec<DyEntry> DY_ENTRY_CODEC = RecordCodecBuilder.create(inst -> inst.group(
+            Codec.LONG.fieldOf("p").forGetter(DyEntry::pos),
+            Codec.DOUBLE.fieldOf("d").forGetter(DyEntry::dy)
+    ).apply(inst, DyEntry::new));
+
+    private static Long2DoubleOpenHashMap newDyMap() {
+        Long2DoubleOpenHashMap m = new Long2DoubleOpenHashMap();
+        m.defaultReturnValue(Double.NaN);
+        return m;
+    }
+
+    private static final Codec<Long2DoubleOpenHashMap> DY_MAP_CODEC = DY_ENTRY_CODEC.listOf().xmap(
+            list -> {
+                Long2DoubleOpenHashMap m = newDyMap();
+                for (DyEntry e : list) {
+                    m.put(e.pos(), e.dy());
+                }
+                return m;
+            },
+            map -> {
+                java.util.List<DyEntry> l = new java.util.ArrayList<>(map.size());
+                for (var e : map.long2DoubleEntrySet()) {
+                    l.add(new DyEntry(e.getLongKey(), e.getDoubleValue()));
+                }
+                return l;
+            }
+    );
+
+    private static final StreamCodec<RegistryFriendlyByteBuf, Long2DoubleOpenHashMap> DY_MAP_PACKET_CODEC =
+            StreamCodec.of(
+                    (buf, map) -> {
+                        buf.writeVarInt(map.size());
+                        for (var e : map.long2DoubleEntrySet()) {
+                            buf.writeLong(e.getLongKey());
+                            buf.writeDouble(e.getDoubleValue());
+                        }
+                    },
+                    buf -> {
+                        int n = buf.readVarInt();
+                        Long2DoubleOpenHashMap m = newDyMap();
+                        for (int i = 0; i < n; i++) {
+                            long k = buf.readLong();
+                            double v = buf.readDouble();
+                            m.put(k, v);
+                        }
+                        return m;
+                    }
+            );
+
+    public static final AttachmentType<Long2DoubleOpenHashMap> PLACEMENT_DY_TYPE =
+            AttachmentRegistry.<Long2DoubleOpenHashMap>create(PLACEMENT_DY_ID, builder -> builder
+                    .persistent(DY_MAP_CODEC)
+                    .syncWith(DY_MAP_PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
+
+    /** Step 0 master switch: {@code -Dslabbed.frozenDy=true} routes reads through the value store. */
+    public static boolean FROZEN_DY_ENABLED = Boolean.getBoolean("slabbed.frozenDy");
+
+    /**
+     * Records the height this placement landed at, so every later read returns it verbatim. Server-side
+     * only. Called from the placement hook AFTER the existing markers are written, so the captured value
+     * is the true placement-time height (the aim). Stores every non-air placement, height 0 included, so
+     * a flat placement stays flat even when a lowered neighbour appears later.
+     */
+    public static void capturePlacementDy(Level world, BlockPos pos, BlockState state) {
+        if (world == null || world.isClientSide() || pos == null || state == null || state.isAir()) {
+            return;
+        }
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return;
+        }
+        Long2DoubleOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
+        Long2DoubleOpenHashMap map = existing == null ? newDyMap() : new Long2DoubleOpenHashMap(existing);
+        map.defaultReturnValue(Double.NaN);
+        map.put(pos.asLong(), dy);
+        chunk.setAttached(PLACEMENT_DY_TYPE, map);
+    }
+
+    /** The frozen placement height at {@code pos}, or {@link Double#NaN} if none was stored. */
+    public static double storedPlacementDy(BlockGetter world, BlockPos pos) {
+        if (pos == null) {
+            return Double.NaN;
+        }
+        if (!(world instanceof Level w)) {
+            return clientPlacementDyLookup != null ? clientPlacementDyLookup.applyAsDouble(pos) : Double.NaN;
+        }
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return Double.NaN;
+        }
+        Long2DoubleOpenHashMap map = chunk.getAttached(PLACEMENT_DY_TYPE);
+        long key = pos.asLong();
+        return (map != null && map.containsKey(key)) ? map.get(key) : Double.NaN;
+    }
+
     /**
      * Triggers static-init class loading. Call once from the mod entrypoint so the
      * attachment is registered before any chunk loads.
@@ -194,7 +312,8 @@ public final class SlabAnchorAttachment {
                 || COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE == null
                 || COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE == null
                 || COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE == null
-                || COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE == null) {
+                || COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE == null
+                || PLACEMENT_DY_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
     }
@@ -647,6 +766,20 @@ public final class SlabAnchorAttachment {
         // (and removePersistentLoweredSlabCarrier had zero callers), so markers outlived break/replace
         // cycles and re-lowered fresh slabs placed at old lane positions forever.
         removeFromAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
+        // FROZEN-DY (Step 0): the stored placement height dies with the block, so a fresh placement in
+        // the same cell captures its own aim from scratch.
+        if (world != null && !world.isClientSide()) {
+            LevelChunk dyChunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (dyChunk != null) {
+                Long2DoubleOpenHashMap dyMap = dyChunk.getAttached(PLACEMENT_DY_TYPE);
+                if (dyMap != null && dyMap.containsKey(pos.asLong())) {
+                    Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(dyMap);
+                    copy.defaultReturnValue(Double.NaN);
+                    copy.remove(pos.asLong());
+                    dyChunk.setAttached(PLACEMENT_DY_TYPE, copy);
+                }
+            }
+        }
     }
 
     public static void removePersistentLoweredSlabCarrier(Level world, BlockPos pos) {
