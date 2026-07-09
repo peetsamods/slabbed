@@ -15,6 +15,11 @@ public class Slabbed implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("Slabbed initialized");
         com.slabbed.anchor.SlabAnchorAttachment.register();
+        // /slabrig — the standard live-test rig builder. Dev tooling that SHIPS in every jar (present,
+        // behaviour-neutral until invoked, op-gated). Server command: it authors real block state and
+        // genuine anchor attachments, so it registers unconditionally here (mirrors the always-on
+        // client /slabdev registration), NOT behind the dev-environment gate below.
+        com.slabbed.command.SlabRigCommand.register();
         // Recorder break capture (TEST (3)-triage upgrade): the recorder was break-blind — it caused
         // the "data-destructive downgrade" false alarm, and the maintainer's tower-churn "jumping when I break
         // things" report left ZERO rows. Observation only: the handler must ALWAYS return true (never
