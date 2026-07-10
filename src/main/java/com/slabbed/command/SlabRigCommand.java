@@ -21,6 +21,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -108,6 +109,35 @@ public final class SlabRigCommand {
     private static final double[] MEGA_ROW_DY = {0.0, -0.5, -1.0, -0.5};
     private static final String[] MEGA_ROW_NAME = {
             "bottom slab", "slab+block", "compound column", "overhang_and_ceiling"};
+    /** Highest vertical cell offset any {@code mega} column variant touches (the compound FB / ceiling). */
+    private static final int MEGA_TOP_OFFSET = 4;
+
+    /** Default tower count / height for {@code /slabrig tower <n> [height]} (the deep-stack rig). */
+    private static final int DEFAULT_TOWER_COUNT = 4;
+    private static final int MAX_TOWER_COUNT = 8;
+    private static final int DEFAULT_TOWER_HEIGHT = 8;
+    private static final int MAX_TOWER_HEIGHT = 16;
+    /**
+     * Vertical index of the SEAT within each tower's lowered base: the base occupies cell offsets
+     * 0..{@value} (ground stone, slab, stone, slab) and the top slab at offset {@value} is the seat the
+     * alternating stack builds on.
+     */
+    private static final int TOWER_SEAT_INDEX = 3;
+    /**
+     * Grammar bounds for {@code /slabrig platform <y>}: generously wider than any dimension's build
+     * range (datapacks max out at [-2032, 2031]), but bounded so the rig-top arithmetic can never be
+     * fed an extreme int; the per-world {@link #aboveWorldTop}/{@link #belowWorldBottom} guards do the
+     * real limit check.
+     */
+    private static final int MIN_PLATFORM_Y = -4096;
+    private static final int MAX_PLATFORM_Y = 4096;
+    /**
+     * The alternating recipes cycled across towers (index {@code i % length}), one token per cell:
+     * {@code S} = a slab placed via a real item {@code useOn} click, {@code B} = a full block the same
+     * way. Read top-to-bottom with {@link #TOWER_LABELS} for the matching display name.
+     */
+    private static final String[] TOWER_RECIPES = {"SB", "SSBB", "BS", "S"};
+    private static final String[] TOWER_LABELS = {"SBSB", "SSBB", "BSBS", "SSSS"};
 
     /**
      * In-memory per-(player, dimension) record of the last rig volume, for {@code /slabrig clear}.
@@ -138,7 +168,21 @@ public final class SlabRigCommand {
                         .then(Commands.literal("tower")
                                 .executes(ctx -> tower(ctx, false))
                                 .then(Commands.literal("force")
-                                        .executes(ctx -> tower(ctx, true))))
+                                        .executes(ctx -> tower(ctx, true)))
+                                // /slabrig tower <n> [height] [force] — the alternating deep-stack rig
+                                // (distinct from the bare/force compound-tower preset above).
+                                .then(Commands.argument("n", IntegerArgumentType.integer(1, MAX_TOWER_COUNT))
+                                        .executes(ctx -> towerRig(ctx, IntegerArgumentType.getInteger(ctx, "n"),
+                                                DEFAULT_TOWER_HEIGHT, false))
+                                        .then(Commands.literal("force")
+                                                .executes(ctx -> towerRig(ctx, IntegerArgumentType.getInteger(ctx, "n"),
+                                                        DEFAULT_TOWER_HEIGHT, true)))
+                                        .then(Commands.argument("height", IntegerArgumentType.integer(1, MAX_TOWER_HEIGHT))
+                                                .executes(ctx -> towerRig(ctx, IntegerArgumentType.getInteger(ctx, "n"),
+                                                        IntegerArgumentType.getInteger(ctx, "height"), false))
+                                                .then(Commands.literal("force")
+                                                        .executes(ctx -> towerRig(ctx, IntegerArgumentType.getInteger(ctx, "n"),
+                                                                IntegerArgumentType.getInteger(ctx, "height"), true))))))
                         .then(Commands.literal("rows")
                                 .executes(ctx -> rows(ctx, DEFAULT_ROWS, false))
                                 .then(Commands.literal("force")
@@ -157,6 +201,15 @@ public final class SlabRigCommand {
                                         .then(Commands.literal("force")
                                                 .executes(ctx -> mega(ctx,
                                                         IntegerArgumentType.getInteger(ctx, "count"), true)))))
+                        .then(Commands.literal("platform")
+                                .executes(ctx -> platform(ctx, null, false))
+                                .then(Commands.literal("force")
+                                        .executes(ctx -> platform(ctx, null, true)))
+                                .then(Commands.argument("y", IntegerArgumentType.integer(MIN_PLATFORM_Y, MAX_PLATFORM_Y))
+                                        .executes(ctx -> platform(ctx, IntegerArgumentType.getInteger(ctx, "y"), false))
+                                        .then(Commands.literal("force")
+                                                .executes(ctx -> platform(ctx,
+                                                        IntegerArgumentType.getInteger(ctx, "y"), true)))))
                         .then(Commands.literal("clear")
                                 .executes(SlabRigCommand::clear))
         );
@@ -183,12 +236,17 @@ public final class SlabRigCommand {
     private static int usage(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack source = ctx.getSource();
         source.sendSuccess(() -> Component.literal(
-                "[slabrig] usage: /slabrig <tower [force]|rows [n] [force]|mega [n] [force]|clear>\n"
-                        + "  tower [force]    — compound-visible -1.0 marked tower\n"
-                        + "  rows [n] [force] — n columns (default " + DEFAULT_ROWS + ") of -0.5 and -1.0 supports\n"
-                        + "  mega [n] [force] — the everything-rig: n columns x 4 support variants with one\n"
-                        + "                     kit item auto-placed on each (default " + DEFAULT_MEGA_COLUMNS + ", capped by kit size)\n"
-                        + "  clear            — remove the last rig you built in this dimension\n"
+                "[slabrig] usage: /slabrig <tower [force]|tower <n> [height] [force]|rows [n] [force]"
+                        + "|mega [n] [force]|platform [y] [force]|clear>\n"
+                        + "  tower [force]           — compound-visible -1.0 marked tower\n"
+                        + "  tower <n> [h] [force]   — n alternating deep-stack towers (default n="
+                        + DEFAULT_TOWER_COUNT + ", height=" + DEFAULT_TOWER_HEIGHT + ", cap " + MAX_TOWER_HEIGHT
+                        + "); reads back dy per cell and flags disjoints\n"
+                        + "  rows [n] [force]        — n columns (default " + DEFAULT_ROWS + ") of -0.5 and -1.0 supports\n"
+                        + "  mega [n] [force]        — the everything-rig: n columns x 4 support variants with one\n"
+                        + "                            kit item auto-placed on each (default " + DEFAULT_MEGA_COLUMNS + ", capped by kit size)\n"
+                        + "  platform [y] [force]    — the mega rig on a floating platform at absolute Y (default your Y)\n"
+                        + "  clear                   — remove the last rig you built in this dimension\n"
                         + "  (force overwrites a non-empty footprint)"), false);
         return 1;
     }
@@ -270,6 +328,230 @@ public final class SlabRigCommand {
         BlockPos fb = base.above(4);
         cells.add(fb);
         cells.add(fb.relative(facing.getCounterClockWise()));
+    }
+
+    // ── /slabrig tower <n> [height] ──────────────────────────────────────────
+
+    /**
+     * The deep-stack rig: {@code n} side-by-side alternating towers, each starting on the same lowered
+     * -0.5 base the other rigs use (base (ground/slab/stone/slab, seat at offset {@link #TOWER_SEAT_INDEX})) and then
+     * {@code height} more cells stacked ABOVE that seat via REAL item {@code useOn} clicks on the
+     * previous cell's top face — the same capture/freeze path a hand placement takes — so accumulated
+     * depth past the historical floor is reproduced exactly instead of hand-authored as scenery. Every
+     * tower cycles a different alternating recipe ({@link #TOWER_RECIPES}) so one command run covers the
+     * whole family. After building, every cell in every tower is read back
+     * ({@link SlabSupport#getYOffset}) and reported to chat; any adjacent pair whose read-back implies a
+     * gap between the lower cell's top and the upper cell's bottom is flagged with both positions.
+     */
+    private static int towerRig(CommandContext<CommandSourceStack> ctx, int n, int height, boolean force) {
+        CommandSourceStack source = ctx.getSource();
+        ServerLevel world = source.getLevel();
+        Player player = source.getEntity() instanceof Player p ? p : null;
+        if (player == null) {
+            source.sendFailure(Component.literal(
+                    "[slabrig] tower <n> auto-places via your hand — run it as a player, not the console."));
+            return 0;
+        }
+
+        Direction facing = rigFacing(source);
+        Direction right = facing.getClockWise();
+        BlockPos base = rigBase(source);
+        if (belowWorldBottom(source, world, base)) {
+            return 0;
+        }
+        if (aboveWorldTop(source, world, base, TOWER_SEAT_INDEX + height + HEADROOM)) {
+            return 0;
+        }
+
+        BlockPos[] towerBases = new BlockPos[n];
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (int i = 0; i < n; i++) {
+            towerBases[i] = base.relative(right, i * COLUMN_SPACING);
+            collectTowerRigCells(towerBases[i], height, cells);
+        }
+        Bounds bounds = footprintBounds(cells, world.dimension());
+        if (refuseIfFootprintOccupied(source, world, bounds, force)) {
+            return 0;
+        }
+        precleanFootprint(world, bounds);
+
+        int gapCount = 0;
+        int overlapCount = 0;
+        int[] builtCells = new int[n];
+        ItemStack held = player.getMainHandItem().copy();
+        try {
+            for (int i = 0; i < n; i++) {
+                String recipe = TOWER_RECIPES[i % TOWER_RECIPES.length];
+                String label = TOWER_LABELS[i % TOWER_LABELS.length];
+                List<BlockPos> stack = buildAlternatingTower(world, player, towerBases[i], recipe, height, bounds);
+                builtCells[i] = stack.size() - 1; // cells actually placed above the seat
+                ReadbackTally tally = reportTowerReadback(source, i, label, height, world, stack);
+                gapCount += tally.gaps();
+                overlapCount += tally.overlaps();
+            }
+        } finally {
+            player.setItemInHand(InteractionHand.MAIN_HAND, held);
+        }
+        rememberBounds(source, bounds);
+
+        // Honest summary: report what was ACTUALLY built (a tower can legitimately stall early — e.g.
+        // an obstruction or a refused placement), never the requested figure dressed up as fact.
+        StringBuilder perTower = new StringBuilder();
+        boolean anyShort = false;
+        for (int i = 0; i < n; i++) {
+            if (i > 0) {
+                perTower.append('/');
+            }
+            perTower.append(builtCells[i]);
+            anyShort |= builtCells[i] < height;
+        }
+        final int nFinal = n;
+        final int heightFinal = height;
+        final int gapsFinal = gapCount;
+        final int overlapsFinal = overlapCount;
+        final String builtSummary = perTower.toString();
+        final boolean shortFinal = anyShort;
+        source.sendSuccess(() -> Component.literal(
+                "[slabrig] tower rig built at " + base.toShortString() + " facing " + facing.getName()
+                        + " — " + nFinal + " towers, cells built " + builtSummary + " of " + heightFinal
+                        + " requested" + (shortFinal ? " (some towers stalled early)" : "")
+                        + "; GAPs: " + gapsFinal + ", OVERLAPs: " + overlapsFinal), false);
+        return 1;
+    }
+
+    /** Per-tower read-back result: seam-open pairs (gaps) and clip pairs (overlaps) counted separately. */
+    private record ReadbackTally(int gaps, int overlaps) {
+    }
+
+    /**
+     * Builds one alternating tower: the lowered base (cells 0..{@link #TOWER_SEAT_INDEX}) (scenery, same path
+     * {@link #buildCompoundTower} and Row A use), then {@code height} cells above it, each placed via a
+     * REAL item {@code useOn} click on the previous cell's top face per {@code recipe} (cycled, {@code S}
+     * = slab, {@code B} = block). Two different slab items alternate for consecutive {@code S} tokens so
+     * a same-type slab-on-slab click never converts into a double slab in place of advancing to a new
+     * cell. Returns every cell actually authored, seat (the lowered base's top slab) first. A placement
+     * that is refused outright stops the tower early (a real build failure, distinct from a read-back
+     * disjoint) rather than guessing at a cell that was never authored.
+     */
+    private static List<BlockPos> buildAlternatingTower(ServerLevel world, Player player, BlockPos towerBase,
+                                                         String recipe, int height, Bounds bounds) {
+        setStone(world, towerBase, bounds);
+        bottomSlab(world, towerBase.above(1), bounds);
+        setStone(world, towerBase.above(2), bounds);
+        bottomSlab(world, towerBase.above(3), bounds);
+        BlockPos seatTop = towerBase.above(3);
+
+        List<BlockPos> stack = new ArrayList<>();
+        stack.add(seatTop);
+
+        BlockPos cursor = seatTop;
+        // The lowered base's seat is ALWAYS a Blocks.STONE_SLAB (bottomSlab() above); start the
+        // alternation on the OTHER flavor so a recipe that opens with 'S' never clicks a same-type slab
+        // top onto a same-type slab top (which would consolidate into a double instead of advancing).
+        boolean slabFlavorToggle = true;
+        for (int h = 0; h < height; h++) {
+            char token = recipe.charAt(h % recipe.length());
+            Item item;
+            if (token == 'S') {
+                item = slabFlavorToggle ? Items.SMOOTH_STONE_SLAB : Items.STONE_SLAB;
+                slabFlavorToggle = !slabFlavorToggle;
+            } else {
+                item = Items.STONE;
+            }
+            BlockPos target = cursor.above();
+            boolean targetWasAir = world.getBlockState(target).isAir();
+            BlockState cursorBefore = world.getBlockState(cursor);
+            placeVia(world, player, item, cursor, Direction.UP);
+            boolean landed = targetWasAir && !world.getBlockState(target).isAir();
+            if (landed) {
+                cursor = target;
+                stack.add(cursor);
+            } else if (!world.getBlockState(cursor).equals(cursorBefore)) {
+                // Landed back into the same cell (e.g. an unexpected same-type slab consolidation into a
+                // double) — keep going from here.
+            } else {
+                // The item refused outright; stop authoring this tower rather than reporting a phantom cell.
+                break;
+            }
+        }
+        return stack;
+    }
+
+    /**
+     * Reads back every cell in {@code stack} ({@link SlabSupport#getYOffset}, read-only) and reports the
+     * whole tower as ONE compact chat line (per-cell type+dy in order from the seat up — never one line
+     * per cell, which floods chat at full size), then walks adjacent pairs comparing the lower cell's
+     * effective top (its Y + dy + its height fraction) against the upper cell's effective bottom (its Y +
+     * dy). A signed mismatch means the two cells do not sit flush; a positive difference (upper bottom
+     * above lower top) is a GAP (an air seam), a negative one is an OVERLAP (a clip) — physically
+     * distinct failure modes, labelled separately. Anomaly lines are NEVER collapsed or capped: every
+     * flagged pair gets its own full line with both coordinates and the signed seam size.
+     */
+    private static ReadbackTally reportTowerReadback(CommandSourceStack source, int towerIndex, String label,
+                                                     int requestedHeight, ServerLevel world, List<BlockPos> stack) {
+        double[] dys = new double[stack.size()];
+        double[] fracs = new double[stack.size()];
+        StringBuilder cellsLine = new StringBuilder();
+        for (int i = 0; i < stack.size(); i++) {
+            BlockPos pos = stack.get(i);
+            BlockState state = world.getBlockState(pos);
+            double dy = SlabSupport.getYOffset(world, pos, state);
+            dys[i] = dy;
+            fracs[i] = cellHeightFraction(state);
+            if (i > 0) {
+                cellsLine.append(", ");
+            }
+            cellsLine.append(cellType(state)).append(' ').append(dy);
+        }
+        final int built = stack.size() - 1;
+        final String cellsLineFinal = cellsLine.toString();
+        source.sendSuccess(() -> Component.literal(
+                "[slabrig] tower" + towerIndex + "(" + label + ") @" + stack.get(0).toShortString()
+                        + " cells " + built + "/" + requestedHeight + " (seat first): " + cellsLineFinal), false);
+
+        int gaps = 0;
+        int overlaps = 0;
+        for (int i = 1; i < stack.size(); i++) {
+            BlockPos lower = stack.get(i - 1);
+            BlockPos upper = stack.get(i);
+            double lowerTop = lower.getY() + dys[i - 1] + fracs[i - 1];
+            double upperBottom = upper.getY() + dys[i];
+            double seam = upperBottom - lowerTop; // signed: + = air seam (GAP), - = clip (OVERLAP)
+            if (Math.abs(seam) > EPS) {
+                String kind;
+                if (seam > 0) {
+                    gaps++;
+                    kind = "GAP (air seam)";
+                } else {
+                    overlaps++;
+                    kind = "OVERLAP (clip)";
+                }
+                source.sendFailure(Component.literal(
+                        "[slabrig] " + kind + " tower" + towerIndex + "(" + label + ") between "
+                                + lower.toShortString() + " and " + upper.toShortString()
+                                + ": lower top=" + lowerTop + " upper bottom=" + upperBottom
+                                + " seam=" + seam));
+            }
+        }
+        return new ReadbackTally(gaps, overlaps);
+    }
+
+    /** {@code true} if {@code state} is a (non-double) slab — half height for the read-back gap check. */
+    private static String cellType(BlockState state) {
+        boolean slab = state.getBlock() instanceof SlabBlock
+                && state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE;
+        return slab ? "slab" : "block";
+    }
+
+    private static double cellHeightFraction(BlockState state) {
+        return "slab".equals(cellType(state)) ? 0.5 : 1.0;
+    }
+
+    /** The cells {@link #buildAlternatingTower} touches (conservatively — the base + every possible cell). */
+    private static void collectTowerRigCells(BlockPos towerBase, int height, Set<BlockPos> cells) {
+        for (int i = 0; i <= TOWER_SEAT_INDEX + height; i++) {
+            cells.add(towerBase.above(i));
+        }
     }
 
     // ── /slabrig rows [n] ─────────────────────────────────────────────────────
@@ -406,17 +688,68 @@ public final class SlabRigCommand {
             return 0;
         }
 
-        Direction facing = rigFacing(source);
-        Direction right = facing.getClockWise();
         BlockPos base = rigBase(source);
         if (belowWorldBottom(source, world, base)) {
             return 0;
         }
+        if (aboveWorldTop(source, world, base, MEGA_TOP_OFFSET + HEADROOM)) {
+            return 0;
+        }
+
+        return buildMegaRig(source, world, player, base, columns, force, "mega");
+    }
+
+    // ── /slabrig platform [y] ─────────────────────────────────────────────────
+
+    /**
+     * Rebuilds the standard mega rig on a floating platform at an absolute altitude, so every mega
+     * variant (bare slab, slab+block, compound column, overhang-and-ceiling) can be exercised away from
+     * ground level. Uses the same {@code base} horizontal offset {@link #rigBase} does, but Y comes from
+     * {@code yArg} (or the player's current Y when omitted) instead of {@code feet - 1}. Each column's
+     * ground cell is authored as scenery ({@code setBlock}), so it needs no terrain beneath it — the mega
+     * rig has never depended on terrain, which is exactly what makes it usable at altitude.
+     */
+    private static int platform(CommandContext<CommandSourceStack> ctx, Integer yArg, boolean force) {
+        CommandSourceStack source = ctx.getSource();
+        ServerLevel world = source.getLevel();
+        Player player = source.getEntity() instanceof Player p ? p : null;
+        if (player == null) {
+            source.sendFailure(Component.literal(
+                    "[slabrig] platform auto-places kit items via your hand — run it as a player, not the console."));
+            return 0;
+        }
+
+        Direction facing = rigFacing(source);
+        BlockPos feet = BlockPos.containing(source.getPosition());
+        int y = yArg != null ? yArg : feet.getY();
+        BlockPos horiz = feet.relative(facing, 3);
+        BlockPos base = new BlockPos(horiz.getX(), y, horiz.getZ());
+
+        if (belowWorldBottom(source, world, base)) {
+            return 0;
+        }
+        if (aboveWorldTop(source, world, base, MEGA_TOP_OFFSET + HEADROOM)) {
+            return 0;
+        }
+
+        return buildMegaRig(source, world, player, base, DEFAULT_MEGA_COLUMNS, force, "platform");
+    }
+
+    /**
+     * Shared builder behind {@link #mega} and {@link #platform}: {@code n} columns wide (capped by the
+     * kit size), four support variants per column, one kit item auto-placed on each via the real
+     * placement path, self-verified against the sign claims. {@code label} names the rig in chat
+     * ({@code "mega"} or {@code "platform"}).
+     */
+    private static int buildMegaRig(CommandSourceStack source, ServerLevel world, Player player, BlockPos base,
+                                    int columns, boolean force, String label) {
+        Direction facing = rigFacing(source);
+        Direction right = facing.getClockWise();
 
         List<Item> kit = SlabTestKit.placeableItems();
         int n = Math.min(columns, kit.size());
         if (n <= 0) {
-            source.sendFailure(Component.literal("[slabrig] mega has no kit items to place."));
+            source.sendFailure(Component.literal("[slabrig] " + label + " has no kit items to place."));
             return 0;
         }
 
@@ -493,7 +826,7 @@ public final class SlabRigCommand {
             addIfMismatch(mismatches, world, seats[0][v], MEGA_ROW_DY[v], "Row " + v + " (" + MEGA_ROW_NAME[v] + ")");
         }
         if (!mismatches.isEmpty()) {
-            source.sendFailure(warn("mega", base, facing, mismatches));
+            source.sendFailure(warn(label, base, facing, mismatches));
             return 0;
         }
 
@@ -502,7 +835,7 @@ public final class SlabRigCommand {
         final int refusedFinal = refused;
         final String refusedList = summariseIds(refusedIds, MAX_REFUSED_LISTED);
         source.sendSuccess(() -> Component.literal(
-                "[slabrig] mega built at " + base.toShortString() + " facing " + facing.getName()
+                "[slabrig] " + label + " built at " + base.toShortString() + " facing " + facing.getName()
                         + " — " + builtColumns + " columns x " + MEGA_ROW_COUNT + " variants; placed "
                         + placedFinal + ", refused " + refusedFinal + " (of "
                         + (builtColumns * MEGA_ROW_COUNT) + " attempts)"
@@ -678,6 +1011,24 @@ public final class SlabRigCommand {
             source.sendFailure(Component.literal(
                     "[slabrig] rig base Y=" + base.getY() + " is below the world minimum build height "
                             + minY + " — move up and retry."));
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Refuse (with a message) if {@code base + cellsAboveBase} would sit above the world's build height.
+     * The sum is computed in {@code long}: an extreme base Y must widen into a clean refusal, never wrap
+     * negative and slip past the guard.
+     */
+    private static boolean aboveWorldTop(CommandSourceStack source, ServerLevel world, BlockPos base,
+                                         int cellsAboveBase) {
+        int maxY = world.getMaxY();
+        long top = (long) base.getY() + cellsAboveBase;
+        if (top > maxY) {
+            source.sendFailure(Component.literal(
+                    "[slabrig] rig top Y=" + top + " would exceed the world build height " + maxY
+                            + " — reduce height/columns or move down."));
             return true;
         }
         return false;
