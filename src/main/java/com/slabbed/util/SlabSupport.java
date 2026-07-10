@@ -2536,8 +2536,17 @@ public final class SlabSupport {
                 // deliberate: a slab resting on a -1.0 support without the owner-top placement marker
                 // stays at the single-step -0.5 (the WYSIWYG on-top rule, A7); the true -1.0 case is
                 // handled earlier by the owner-top marker when the player aimed the compound top face.
+                // isSolidRender() restricts this lane to genuine opaque full cubes (the "lowered full
+                // block" the comment above describes) — LIVE CRASH FIX (StackOverflowError, TEST 16):
+                // an unrestricted non-air/non-slab match also caught ceiling-attached objects (chains,
+                // dripstone, …) resting under a TOP slab. Those read THEIR OWN dy via the ceiling-hung
+                // lane above, which reads pos.above() — this exact slab — reentering this branch and
+                // calling back down: unbounded mutual recursion with no depth guard (IN_GET_Y_OFFSET
+                // only guards the public getYOffset entry, not getYOffsetInner-to-getYOffsetInner calls).
                 BlockState anchoredBelow = world.getBlockState(pos.below());
-                if (!anchoredBelow.isAir() && !(anchoredBelow.getBlock() instanceof SlabBlock)) {
+                if (!anchoredBelow.isAir()
+                        && !(anchoredBelow.getBlock() instanceof SlabBlock)
+                        && anchoredBelow.isSolidRender()) {
                     double anchoredBelowDy = getYOffsetInner(world, pos.below(), anchoredBelow);
                     if (anchoredBelowDy < -1.0 - 1.0e-6d) {
                         return anchoredBelowDy;
