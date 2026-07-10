@@ -435,7 +435,14 @@ public final class LiveCursorIntentRecorder {
         boolean horizontal = isHorizontalFace(row.get("clickedFace"));
         boolean loweredOwner = isLawfulLoweredLane(row.get("clickedOwnerLaneKind"));
         if (slabHeld && horizontal && loweredOwner) {
-            row.putIfAbsent("expectedAfterDy", "-0.500000");
+            // A slab continuing a lowered side lane lands flush BESIDE the clicked owner, so its
+            // expected height is the OWNER's actual dy (row "beforeDy"), not a fixed -0.5. Deep owners
+            // (past -1.0, depth-cap-removal) legitimately continue the lane deeper; hardcoding -0.5
+            // false-flagged those legit placements as EXPECTED_DY_MISMATCH. Falls back to -0.5 only if
+            // the owner dy was not recorded.
+            String ownerDy = row.getOrDefault("beforeDy", "-0.500000");
+            row.putIfAbsent("expectedAfterDy",
+                    isLoweredDyString(ownerDy) ? ownerDy : "-0.500000");
             row.putIfAbsent("expectedAfterLaneKind", "persistent_lowered_slab_carrier");
             row.putIfAbsent("expectedResult", "lowered_side_lane_continuation");
         } else if (row.getOrDefault("clickedOwnerLaneKind", "").contains("unnamed")
@@ -454,7 +461,10 @@ public final class LiveCursorIntentRecorder {
         String expectedDy = row.getOrDefault("expectedAfterDy", "unknown");
         String afterDy = row.getOrDefault("afterDy", "unknown");
         String afterLane = row.getOrDefault("afterLaneKind", "unknown");
-        boolean loweredExpected = "-0.500000".equals(expectedDy);
+        // Any lowered expectation (not just -0.5): a deep side-lane continuation legitimately expects
+        // the owner's true depth. Comparing against the derived expected dy keeps the mismatch marker
+        // honest for compound owners past -1.0.
+        boolean loweredExpected = isLoweredDyString(expectedDy);
         boolean dyMismatch = loweredExpected && !sameDy(expectedDy, afterDy);
         boolean laneMismatch = loweredExpected
                 && !"persistent_lowered_slab_carrier".equals(afterLane);
@@ -530,6 +540,15 @@ public final class LiveCursorIntentRecorder {
             return Math.abs(Double.parseDouble(expected) - Double.parseDouble(actual)) <= 1.0e-6d;
         } catch (NumberFormatException ignored) {
             return expected.equals(actual);
+        }
+    }
+
+    /** True for a parseable, genuinely lowered (negative) dy string — any depth, not just -0.5. */
+    private static boolean isLoweredDyString(String s) {
+        try {
+            return Double.parseDouble(s) < -1.0e-6d;
+        } catch (NumberFormatException ignored) {
+            return false;
         }
     }
 

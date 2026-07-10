@@ -252,4 +252,104 @@ public final class DeepCompoundTowerLawTest {
         }
         h.succeed();
     }
+
+    /**
+     * S-2 pattern applied to the SUPPORT COLUMN itself (fix-round MAJOR-A): edits AT HEIGHT beside the
+     * column, plus a MID-column break, must leave every remaining cell's dy byte-identical. This is the
+     * invariance envelope of the deep-rest read the depth-cap-removal pass added: the deep cells read
+     * their height through the column below, so this leg proves that side noise at altitude and a
+     * mid-column removal (whose fallback chain re-reads to the SAME values: markers and anchors keep
+     * every surviving cell where it was) cannot move anything. The one genuinely-losing edit — breaking
+     * the cell DIRECTLY below a deep cell — is covered by NeighborUpdateInvarianceTest's
+     * slab_on_deep_lowered_full_block subject (expected red with frozen OFF, the documented hole class).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void towerStaysAfterSupportColumnSideMutation(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos ground = h.absolutePos(new BlockPos(3, 0, 3));
+        List<BlockPos> cells = buildTower(h, w, ground, 7); // slab0..stone3,slab4
+
+        double[] before = new double[cells.size()];
+        for (int i = 0; i < cells.size(); i++) {
+            before[i] = dy(w, cells.get(i));
+        }
+
+        // side edits AT HEIGHT: a slab beside the -1.0 slab3 and a full block beside the -1.5 stone3
+        w.setBlock(cells.get(4).north(), Blocks.STONE_SLAB.defaultBlockState(), 2);
+        w.setBlock(cells.get(5).east(), Blocks.STONE.defaultBlockState(), 2);
+        // MID-column break: remove stone1; every cell ABOVE keeps its dy (slab2's anchored floor is the
+        // same -0.5 it was placed at, and every deeper cell reads through markers that survive).
+        w.destroyBlock(cells.get(1), false);
+
+        List<String> violations = new ArrayList<>();
+        for (int i = 0; i < cells.size(); i++) {
+            BlockPos p = cells.get(i);
+            if (w.getBlockState(p).isAir()) {
+                continue; // the removed cell itself (and any genuine vanilla removal, LAW.md #4)
+            }
+            double after = dy(w, p);
+            if (!sameHeight(before[i], after)) {
+                violations.add("cell " + i + " at " + p + ": dy " + before[i] + " -> " + after);
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw h.assertionException(cells.get(cells.size() - 1),
+                    "LAW VIOLATION — deep tower moved on a support-column edit "
+                            + "(placed height must survive byte-identical):\n  "
+                            + String.join("\n  ", violations));
+        }
+        h.succeed();
+    }
+
+    /**
+     * The documented deep-rest hole and its heal, in one green test (fix-round MAJOR-A verification):
+     * with frozen dy OFF, breaking the stone DIRECTLY below the -1.5 top slab drops its live read to
+     * the -0.5 anchored floor (the same never-pop-on-direct-support-removal hole class the fence_gate
+     * S-2 subject pins — the anchor stores presence, not depth). With the frozen-dy store consulted
+     * ({@code -Dslabbed.frozenDy}, flipped here in-process via the public switch, single-threaded
+     * server tick so the try/finally scope is exact), the SAME cell keeps its placed -1.5 byte-
+     * identical — the store was written at placement regardless of the flag. The live post-break value
+     * is logged, not asserted: the hole's exact magnitude is pinned by the expected-red matrix subject,
+     * and this test must stay green when the hole is eventually fixed.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void deepRestBreakBelowHoleHealsWithFrozenDy(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos ground = h.absolutePos(new BlockPos(3, 0, 3));
+        List<BlockPos> cells = buildTower(h, w, ground, 7); // slab0..stone3,slab4
+        BlockPos topSlab = cells.get(6);
+        BlockPos deepStone = cells.get(5);
+
+        double placedDy = dy(w, topSlab);
+        if (Math.abs(placedDy + 1.5) > EPS) {
+            throw h.assertionException(topSlab,
+                    "premise: top slab should read the uncapped -1.5, got " + placedDy);
+        }
+        double stored = com.slabbed.anchor.SlabAnchorAttachment.storedPlacementDy(w, topSlab);
+        if (Math.abs(stored + 1.5) > EPS) {
+            throw h.assertionException(topSlab,
+                    "premise: placement store should hold -1.5 for the top slab, got " + stored);
+        }
+
+        w.destroyBlock(deepStone, false);
+        double liveAfter = dy(w, topSlab); // frozen OFF: the documented hole (logged, not asserted)
+        Slabbed.LOGGER.info("DEEP-TOWER | break-below live read with frozen OFF: placed={} live={}",
+                placedDy, liveAfter);
+
+        boolean prev = com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        double frozenAfter;
+        com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            frozenAfter = dy(w, topSlab);
+        } finally {
+            com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED = prev;
+        }
+        if (!sameHeight(placedDy, frozenAfter)) {
+            throw h.assertionException(topSlab,
+                    "FROZEN-DY HEAL FAILED — with the store consulted the deep-rest slab must keep its "
+                            + "placed height across a break directly below: placed=" + placedDy
+                            + " frozenRead=" + frozenAfter + " (liveRead=" + liveAfter + ")");
+        }
+        h.succeed();
+    }
 }

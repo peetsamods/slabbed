@@ -1121,27 +1121,40 @@ public final class SlabSupport {
         if (!COLLISION_FOLLOW || getter == null || pos == null) {
             return own;
         }
-        BlockPos abovePos = pos.above();
-        BlockState above = getter.getBlockState(abovePos);
-        if (above.isAir() || !above.getFluidState().isEmpty()) {
-            return own;
+        // Parametric depth walk (depth-cap-removal): an above block lowered by dy overflows |dy| cells
+        // downward, so a block k cells up with dy < 1-k reaches into THIS cell. The old single
+        // pos.above() probe only caught the immediate (k=1, dy<0) overflow; a deep block rendered
+        // past -1.0 clipped through because its collision from two-or-more cells up was never added.
+        // Walk upward, adding each overflowing block's contribution, and stop at the first air cell (a
+        // lowered stack is contiguous), so the shallow case stays a single lookup.
+        // INVARIANT: air-terminated — the deep-collision guarantee covers CONTIGUOUS stacks only. A
+        // command-built floating deep block above an air gap is outside the contract (real placement
+        // always accumulates depth through a contiguous support column, so it cannot produce that shape).
+        VoxelShape result = own;
+        for (int k = 1; k <= MAX_CHAIN_DEPTH; k++) {
+            BlockPos abovePos = pos.above(k);
+            BlockState above = getter.getBlockState(abovePos);
+            if (above.isAir()) {
+                break;
+            }
+            if (!above.getFluidState().isEmpty() || above.getBlock() instanceof ScaffoldingBlock) {
+                continue;
+            }
+            double dy = getYOffset(getter, abovePos, above);
+            if (dy > (1.0 - k) - 1.0e-6) {
+                continue; // does not overflow down into THIS cell
+            }
+            // The above block's collision stays VANILLA per-state (its outline/visual is lowered by dy).
+            // Its visual collision = vanilla.move(0, dy, 0); the part hanging into THIS cell, expressed
+            // in this cell's local frame, is vanilla.move(0, dy + k, 0).
+            VoxelShape aboveVanilla = vanillaCollisionShape(above, getter, abovePos);
+            if (aboveVanilla.isEmpty()) {
+                continue;
+            }
+            VoxelShape hanging = aboveVanilla.move(0.0, dy + k, 0.0);
+            result = result.isEmpty() ? hanging : Shapes.or(result, hanging);
         }
-        if (above.getBlock() instanceof ScaffoldingBlock) {
-            return own;
-        }
-        double dy = getYOffset(getter, abovePos, above);
-        if (dy >= -1.0e-6) {
-            return own;
-        }
-        // The above block's collision stays VANILLA per-state (its outline/visual is lowered by dy).
-        // Its visual collision = vanilla.move(0, dy, 0); the part hanging into THIS cell (the cell
-        // below) is that, expressed in this cell's local frame, i.e. vanilla.move(0, dy + 1, 0).
-        VoxelShape aboveVanilla = vanillaCollisionShape(above, getter, abovePos);
-        if (aboveVanilla.isEmpty()) {
-            return own;
-        }
-        VoxelShape hanging = aboveVanilla.move(0.0, dy + 1.0, 0.0);
-        return own.isEmpty() ? hanging : Shapes.or(own, hanging);
+        return result;
     }
 
     /**
@@ -1619,9 +1632,22 @@ public final class SlabSupport {
      * can decide sidecar authoring without duplicating the logic.
      */
     public static boolean isLoweredCompoundSourceSlab(BlockGetter world, BlockPos pos, BlockState state) {
-        return state != null
-                && isBottomSlab(state)
-                && isAdjacentSideSlabLowered(world, pos, state);
+        if (state == null || !isBottomSlab(state)) {
+            return false;
+        }
+        // Original case: a bottom slab lowered by a lowered SIDE lane.
+        if (isAdjacentSideSlabLowered(world, pos, state)) {
+            return true;
+        }
+        // Deep-stack case (uncapped accumulation): a bottom slab that is itself lowered by a lowered
+        // support DIRECTLY BELOW it (a lowered full block, or a lowered slab column) is equally a
+        // compound source — an ordinary full block placed on top of it accumulates a further -0.5,
+        // regardless of how deep the slab already sits. Without this, past -1.0 total the compound
+        // marker was never authored on the block above and it fell through to the flat -0.5 default,
+        // disjointing the tower (the "past ~5 blocks the law breaks" report). Consulted only at
+        // placement (qualifiesForCompoundFullBlockAnchor), never inside getYOffsetInner, so the
+        // guard-setting getYOffset read is safe here.
+        return getYOffset(world, pos, state) < -1.0e-6d;
     }
 
     public static boolean isBottomSlabLoweredByCarrierBelow(BlockGetter world, BlockPos pos, BlockState state) {
@@ -2103,7 +2129,9 @@ public final class SlabSupport {
         BlockState below = world.getBlockState(pos.below());
         double supportDy = floorTorchBottomSlabSupportDy(world, pos.below(), below);
         if (Double.isFinite(supportDy) && supportDy < -1.0e-6) {
-            return Math.max(-1.0, supportDy - 0.5);
+            // UNCAPPED (depth-cap-removal): accumulate the full support depth minus 0.5 with no -1.0
+            // floor, so a full block reading its lowered support keeps dropping as aimed past -1.0.
+            return supportDy - 0.5;
         }
         return -0.5;
     }
@@ -2499,6 +2527,22 @@ public final class SlabSupport {
                         return anchoredSideMag;   // -1.0 beside a live compound stack
                     }
                 }
+                // Deep vertical rest (depth-cap-removal): an anchored slab resting DIRECTLY on a
+                // lowered full block that sits DEEPER than -1.0 reads that support's true dy flush,
+                // so alternating slab/block stacks stay continuous past -1.0 exactly as aimed. The
+                // anchor records only PRESENCE; the magnitude is read live from the support column
+                // below and is stable under side edits. If the support is later removed the read
+                // falls back to the -0.5 floor below (never pops UP to flush). The -1.0 boundary is
+                // deliberate: a slab resting on a -1.0 support without the owner-top placement marker
+                // stays at the single-step -0.5 (the WYSIWYG on-top rule, A7); the true -1.0 case is
+                // handled earlier by the owner-top marker when the player aimed the compound top face.
+                BlockState anchoredBelow = world.getBlockState(pos.below());
+                if (!anchoredBelow.isAir() && !(anchoredBelow.getBlock() instanceof SlabBlock)) {
+                    double anchoredBelowDy = getYOffsetInner(world, pos.below(), anchoredBelow);
+                    if (anchoredBelowDy < -1.0 - 1.0e-6d) {
+                        return anchoredBelowDy;
+                    }
+                }
                 return -0.5;
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier placed
@@ -2609,7 +2653,12 @@ public final class SlabSupport {
                 BlockState compoundBelow = world.getBlockState(pos.below());
                 double compoundDy = -1.0;
                 if (compoundBelow.getBlock() instanceof SlabBlock) {
-                    compoundDy = Math.max(-1.0, getYOffsetInner(world, pos.below(), compoundBelow) - 0.5);
+                    // UNCAPPED (depth-cap-removal): a full block sits an extra -0.5 below the slab
+                    // directly beneath it, accumulated to the slab's TRUE lowered dy — no -1.0 floor,
+                    // so deep alternating stacks keep dropping past -1.0 exactly as aimed. The slab's
+                    // own dy is read here (getYOffsetInner) so the accumulation is a pure function of
+                    // the support column below, frozen at placement and stable under side edits.
+                    compoundDy = getYOffsetInner(world, pos.below(), compoundBelow) - 0.5;
                 }
                 if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                     String side = (world instanceof net.minecraft.world.level.Level w && w.isClientSide()) ? "CLIENT" : "SERVER";
