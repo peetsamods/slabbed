@@ -176,6 +176,7 @@ sourceSets {
             include("com/slabbed/test/RegistrySweepTest.java")
             include("com/slabbed/test/SlabRigCommandSmokeTest.java")
             include("com/slabbed/test/SlabTestKitPaletteTest.java")
+            include("com/slabbed/test/SlabTestKitCommandsTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
         }
     }

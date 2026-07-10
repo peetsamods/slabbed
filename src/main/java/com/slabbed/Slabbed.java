@@ -20,6 +20,11 @@ public class Slabbed implements ModInitializer {
         // genuine anchor attachments, so it registers unconditionally here (mirrors the always-on
         // client /slabdev registration), NOT behind the dev-environment gate below.
         com.slabbed.command.SlabRigCommand.register();
+        // /slabkit + /slabcheck — the rest of the live-test cockpit (same op-gated, ships-in-every-jar
+        // convention as /slabrig): /slabkit fills the inventory with one representative per category,
+        // /slabcheck scans for placed cells whose height has drifted from its stored placement value.
+        com.slabbed.command.SlabKitCommand.register();
+        com.slabbed.command.SlabCheckCommand.register();
         // Recorder break capture (TEST (3)-triage upgrade): the recorder was break-blind — it caused
         // the "data-destructive downgrade" false alarm, and Maintainer's tower-churn "jumping when I break
         // things" report left ZERO rows. Observation only: the handler must ALWAYS return true (never
