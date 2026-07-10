@@ -38,7 +38,7 @@ must be reverted.
   as an exact value, mutate every class of neighbor without touching the block, assert the height is
   byte-identical. This test *is* the law. It is a blocking release gate. It goes green only when the
   implementation obeys the law.
-- **The diff tripwire** (`tools/law-diff-tripwire.sh`): any added line in `src/main/**` containing
+- **The diff tripwire** (implemented inline in `tools/hooks/commit-msg`): any added line in `src/main/**` containing
   `geometric | merge | follow | inherit | cantilever | recompute | isAdjacent.*Lowered` is presumed a
   violation and blocks the commit unless it carries a logged `LAW-SIGNOFF:` and adds an invariance row.
 - **Session-start reading:** this file is required reading #1 (see `AGENTS.md`). Before editing
