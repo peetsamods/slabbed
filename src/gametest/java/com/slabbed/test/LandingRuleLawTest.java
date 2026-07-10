@@ -168,6 +168,44 @@ public final class LandingRuleLawTest {
         }
     }
 
+    // ═══════════════════════════════ C1 — shipped flag default ═══════════════════════════════
+
+    /**
+     * C1 (design D5, §4.4 row C1): the SHIPPED default of
+     * {@link SlabAnchorAttachment#FROZEN_DY_ENABLED} is ON.
+     *
+     * <p>This row cannot read the live field: the gametest JVM forwards {@code -Dslabbed.frozenDy=false}
+     * (build.gradle — the frozen-OFF compatibility floor of design §4.1), so the field is {@code false}
+     * inside the suite by design. Instead it asserts the field initializer's <em>semantics</em>: with
+     * the property absent, the exact expression the field uses at {@code SlabAnchorAttachment.java}
+     * ({@code Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"))}) evaluates
+     * {@code true}. This mirror MUST be kept in sync with that initializer; flipping the default literal
+     * there to {@code "false"} without updating this row is exactly what this test guards against.
+     *
+     * <p>GREEN as of C1 (this is not an expected-red landing row — it pins the C1 flag flip itself).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void shippedFrozenDyDefaultIsOn(GameTestHelper h) {
+        String saved = System.getProperty("slabbed.frozenDy");
+        boolean shippedDefault;
+        try {
+            System.clearProperty("slabbed.frozenDy");
+            shippedDefault = Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"));
+        } finally {
+            if (saved != null) {
+                System.setProperty("slabbed.frozenDy", saved);
+            }
+        }
+        Slabbed.LOGGER.info("LANDING-RULE | shipped frozenDy default (property absent) = {}", shippedDefault);
+        if (!shippedDefault) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "C1/D5: the shipped default of FROZEN_DY_ENABLED must be ON. The field initializer at "
+                    + "SlabAnchorAttachment.java must read Boolean.parseBoolean(System.getProperty("
+                    + "\"slabbed.frozenDy\", \"true\")); got default=false with the property absent.");
+        }
+        h.succeed();
+    }
+
     // ══════════════════════════════════ C2 family — slabs ══════════════════════════════════
 
     /**
