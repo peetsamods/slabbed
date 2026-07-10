@@ -114,6 +114,179 @@ public final class SlabTestKitCommandsTest {
         h.succeed();
     }
 
+    // ── /slabrig tower <n> [height] ─────────────────────────────────────────────
+
+    /**
+     * {@code /slabrig tower 2 6 force} builds two alternating deep-stack towers, each starting on the
+     * shared lowered base and running (up to) 6 cells above it through real placements. The
+     * {@code fabric-gametest-api-v1:empty} arena is only 8 cells tall (a fixed test-harness bound, not a
+     * game limit) and the harness fences every test with barrier blocks at that height, so a height-6
+     * request from a low-in-the-arena base cannot physically complete inside this one gametest structure
+     * — real placements against the fence correctly stall (this command never fabricates a cell it could
+     * not really place). {@code force} is needed because the reserved headroom above the rig top reaches
+     * that fence and would otherwise read as an occupied footprint. Assert: the command still reports
+     * success (a stall is not a crash), and every cell the arena can actually hold — the lowered base
+     * plus the reachable alternating cells above it — is non-air with the seat reading a lowered dy.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigTowerNHeightBuildsAlternatingTowers(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        // Feet at x=7: facing SOUTH, "right" is WEST (-X), so both towers (x=7 and x=5) sit INSIDE the
+        // arena — a tower outside the structure footprint would be fenced by the harness's barrier
+        // shell and its real placements would (correctly) refuse. Base at relative y=1.
+        CommandSourceStack source = playerSource(w, player, h.absolutePos(new BlockPos(7, 2, 0)));
+
+        int result = execResult(source, "slabrig tower 2 6 force", SlabRigCommand::register);
+
+        Direction facing = SlabRigCommand.rigFacing(source);
+        BlockPos base = SlabRigCommand.rigBase(source);
+        if (facing != Direction.SOUTH) {
+            throw h.assertionException("premise: expected SOUTH facing, got " + facing);
+        }
+        if (result != 1) {
+            throw h.assertionException("/slabrig tower 2 6 force must report success, returned " + result);
+        }
+
+        Direction right = facing.getClockWise();
+        // The tower base sits at relative row 1; the arena's last usable row is relative row 7 (row 8 is
+        // the harness's isolation fence) — 6 rows above the base are reachable before that fence.
+        int reachableTopRow = 6;
+        for (int i = 0; i < 2; i++) {
+            BlockPos towerBase = base.relative(right, i * 2);
+            for (int y = 0; y <= reachableTopRow; y++) {
+                BlockPos cell = towerBase.above(y);
+                // Not air AND not the harness's barrier fence — a barrier here would mean the cell was
+                // never really authored and the assertion was passing vacuously.
+                if (w.getBlockState(cell).isAir() || w.getBlockState(cell).is(Blocks.BARRIER)) {
+                    throw h.assertionException("tower " + i + " cell @" + cell.toShortString()
+                            + " must be genuinely authored (found " + w.getBlockState(cell) + ")");
+                }
+            }
+            // The seat (lowered base top slab) must read a non-zero (lowered) dy.
+            BlockPos seat = towerBase.above(3);
+            double seatDy = SlabSupport.getYOffset(w, seat, w.getBlockState(seat));
+            if (Math.abs(seatDy) < EPS) {
+                throw h.assertionException("tower " + i + " seat @" + seat.toShortString()
+                        + " must read a lowered dy, got " + seatDy);
+            }
+        }
+        h.succeed();
+    }
+
+    /**
+     * All FOUR tower recipes in one run: {@code /slabrig tower 4 3 force} (n=4 reaches recipes SBSB,
+     * SSBB, BSBS, and SSSS; height 3 keeps every cell inside the 8-tall arena). Assert: success; every
+     * tower authored its full base + all 3 recipe cells; and NO two vertically adjacent slab cells in
+     * any stack share the same block id (the anti-consolidation flavor alternation — a same-type
+     * slab-on-slab click would collapse into a double slab instead of advancing a cell, which is
+     * exactly what SSBB and SSSS exercise).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigTowerAllFourRecipesBuildAndAlternateSlabFlavors(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        // Feet at x=7: facing SOUTH, "right" is WEST (-X), so towers land at x = 7,5,3,1 — all inside
+        // the arena. Base at relative (7,1,3); base rows 1-4, recipe cells rows 5-7 (fence at row 8).
+        CommandSourceStack source = playerSource(w, player, h.absolutePos(new BlockPos(7, 2, 0)));
+
+        int result = execResult(source, "slabrig tower 4 3 force", SlabRigCommand::register);
+        if (result != 1) {
+            throw h.assertionException("/slabrig tower 4 3 force must report success, returned " + result);
+        }
+
+        Direction facing = SlabRigCommand.rigFacing(source);
+        BlockPos base = SlabRigCommand.rigBase(source);
+        Direction right = facing.getClockWise();
+        for (int i = 0; i < 4; i++) {
+            BlockPos towerBase = base.relative(right, i * 2);
+            // Base offsets 0-3 plus the 3 recipe cells (offsets 4-6): all genuinely authored (a barrier
+            // would be the harness fence, i.e. a vacuously-passing cell).
+            for (int y = 0; y <= 6; y++) {
+                BlockPos cell = towerBase.above(y);
+                if (w.getBlockState(cell).isAir() || w.getBlockState(cell).is(Blocks.BARRIER)) {
+                    throw h.assertionException("tower " + i + " cell @" + cell.toShortString()
+                            + " must be genuinely authored (recipe " + i + "; found "
+                            + w.getBlockState(cell) + ")");
+                }
+            }
+            // No two vertically adjacent SLAB cells may share a block id (seat at offset 3 included).
+            for (int y = 3; y < 6; y++) {
+                var lowerState = w.getBlockState(towerBase.above(y));
+                var upperState = w.getBlockState(towerBase.above(y + 1));
+                boolean lowerSlab = lowerState.getBlock() instanceof SlabBlock
+                        && lowerState.getValue(SlabBlock.TYPE) != SlabType.DOUBLE;
+                boolean upperSlab = upperState.getBlock() instanceof SlabBlock
+                        && upperState.getValue(SlabBlock.TYPE) != SlabType.DOUBLE;
+                if (lowerSlab && upperSlab && lowerState.getBlock() == upperState.getBlock()) {
+                    throw h.assertionException("tower " + i + " adjacent slab cells @"
+                            + towerBase.above(y).toShortString() + " and "
+                            + towerBase.above(y + 1).toShortString()
+                            + " must not share a flavor (" + lowerState.getBlock() + ")");
+                }
+                if (lowerState.getBlock() instanceof SlabBlock
+                        && lowerState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE) {
+                    throw h.assertionException("tower " + i + " cell @" + towerBase.above(y).toShortString()
+                            + " consolidated into a double slab — the flavor alternation failed");
+                }
+            }
+        }
+        h.succeed();
+    }
+
+    /**
+     * A known-good ladder must read back clean, and the summary must be honest: {@code /slabrig tower 4
+     * 1 force}, chat captured. On the CURRENT tree the depth-cap engine bug (PKG-20260710, sentinel row
+     * 131) makes even one slab placed on the lowered -0.5 seat read -0.5 instead of -1.0 — a genuine
+     * 0.5 air seam this command exists to expose — so a whole-run "GAPs: 0" cannot hold until the
+     * height-engine fix lands (that regression is pinned by the committed RED
+     * {@code DeepCompoundTowerLawTest}, not here). The ladder that IS known-good today is tower 2
+     * (BSBS at height 1): a full block placed on a lowered slab reads -1.0 and sits flush
+     * (live-confirmed by sentinel row 131's stone). Assert: success; tower2(BSBS) is flagged with NO
+     * GAP and NO OVERLAP line; the summary reports the ACTUAL per-tower built cells (1/1/1/1); and the
+     * per-tower report is the compact one-line-per-tower form (exactly four report lines, never one
+     * line per cell).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigTowerKnownGoodLadderCleanAndSummaryHonest(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        StringBuilder chat = new StringBuilder();
+        CommandSourceStack source = capturingPlayerSource(w, player, h.absolutePos(new BlockPos(7, 2, 0)), chat);
+
+        int result = execResult(source, "slabrig tower 4 1 force", SlabRigCommand::register);
+        if (result != 1) {
+            throw h.assertionException("/slabrig tower 4 1 force must report success, returned " + result);
+        }
+        String out = chat.toString();
+        // The known-good ladder (block on lowered slab, flush at -1.0) must report zero disjoints.
+        for (String line : out.split("\n")) {
+            if (line.contains("tower2(BSBS)") && (line.contains("GAP") || line.contains("OVERLAP"))) {
+                throw h.assertionException(
+                        "the known-good BSBS height-1 ladder must report zero disjoints; got: " + line);
+            }
+        }
+        // Honest summary: ACTUAL per-tower built cells, and no stalled-early claim on a full build.
+        if (!out.contains("cells built 1/1/1/1 of 1 requested")) {
+            throw h.assertionException("summary must report the ACTUAL per-tower built cells; chat was: " + out);
+        }
+        if (out.contains("stalled early")) {
+            throw h.assertionException("a fully-built rig must not claim towers stalled early; chat was: " + out);
+        }
+        // Compact reporting: exactly one read-back line per tower (4), never one line per cell.
+        int reportLines = 0;
+        for (String line : out.split("\n")) {
+            if (line.contains("(seat first):")) {
+                reportLines++;
+            }
+        }
+        if (reportLines != 4) {
+            throw h.assertionException("expected exactly 4 compact per-tower report lines, got "
+                    + reportLines + "; chat was: " + out);
+        }
+        h.succeed();
+    }
+
     // ── /slabcheck ────────────────────────────────────────────────────────────────
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -280,6 +453,33 @@ public final class SlabTestKitCommandsTest {
             }
         };
         return positionSource(w, pos).withSource(capture);
+    }
+
+    /** {@link #playerSource} + chat capture: a PLAYER source whose feedback lands in {@code sink}. */
+    private static CommandSourceStack capturingPlayerSource(ServerLevel w, Player player, BlockPos feet,
+                                                            StringBuilder sink) {
+        CommandSource capture = new CommandSource() {
+            @Override
+            public void sendSystemMessage(net.minecraft.network.chat.Component message) {
+                sink.append(message.getString()).append('\n');
+            }
+
+            @Override
+            public boolean acceptsSuccess() {
+                return true;
+            }
+
+            @Override
+            public boolean acceptsFailure() {
+                return true;
+            }
+
+            @Override
+            public boolean shouldInformAdmins() {
+                return false;
+            }
+        };
+        return playerSource(w, player, feet).withSource(capture);
     }
 
     private static boolean inventoryHas(Player player, Item item) {
