@@ -26,6 +26,14 @@ loom {
     runs {
         gameTest {
             property "slabbed.sweep", System.getProperty("slabbed.sweep", "false")
+            // Keep the gametest JVM at the frozen-OFF compatibility floor (design §4.1) even though the
+            // shipped default flipped ON in C1. Every existing expectation — the S-2 expected-red
+            // subjects, the RegistrySweep BASELINE (recorded frozen-OFF), and the law tests that flip
+            // FROZEN_DY_ENABLED in-process and restore to the *default* — stays valid because the
+            // in-JVM default here is false. -Dslabbed.frozenDy=... on the gradle invocation still wins.
+            // The shipped (property-absent) default of true is asserted by
+            // LandingRuleLawTest#shippedFrozenDyDefaultIsOn.
+            property "slabbed.frozenDy", System.getProperty("slabbed.frozenDy", "false")
         }
     }
 }

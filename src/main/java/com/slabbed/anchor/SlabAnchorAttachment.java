@@ -257,14 +257,32 @@ public final class SlabAnchorAttachment {
                     .syncWith(DY_MAP_PACKET_CODEC, AttachmentSyncPredicate.all())
             );
 
-    /** Step 0 master switch: {@code -Dslabbed.frozenDy=true} routes reads through the value store. */
-    public static boolean FROZEN_DY_ENABLED = Boolean.getBoolean("slabbed.frozenDy");
+    /**
+     * Step 0 master switch for the FROZEN-DY value store (LAW.md restoration): when true, reads route
+     * through the stored placement height instead of the live read-lanes.
+     *
+     * <p><b>Default ON as of C1</b> (design ruling D5 — {@code docs/design/GOES-UNIFIED-LANDING-RULE.md}
+     * §4.4 row C1 and §8). The system property still forces it either way:
+     * {@code -Dslabbed.frozenDy=false} is the escape hatch. Legacy worlds carry no stored value for
+     * blocks placed before the flip; those cells read {@link Double#NaN} and fall through to the live
+     * lanes forever — there is no retro-migration (design D5).
+     */
+    public static boolean FROZEN_DY_ENABLED =
+            Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"));
 
     /**
      * Records the height this placement landed at, so every later read returns it verbatim. Server-side
-     * only. Called from the placement hook AFTER the existing markers are written, so the captured value
-     * is the true placement-time height (the aim). Stores every non-air placement, height 0 included, so
-     * a flat placement stays flat even when a lowered neighbour appears later.
+     * only.
+     *
+     * <p><b>True ordering (design §0/§3):</b> invoked from {@code BlockOnPlacedAnchorMixin} at
+     * {@code Block.setPlacedBy} HEAD, which runs <em>before</em> the compound-visible markers authored
+     * at {@code BlockItemPlacementIntentMixin} place-RETURN. The captured value is therefore whatever
+     * the live read-lanes ({@link SlabSupport#getYOffset}) report at {@code setPlacedBy} time — it is
+     * NOT read back after those markers exist. (The prior javadoc claimed the reverse — "AFTER the
+     * existing markers are written" — and was proven false; see design §0.)
+     *
+     * <p>Stores every non-air placement, height 0 included, so a flat placement stays flat even when a
+     * lowered neighbour appears later.
      */
     public static void capturePlacementDy(Level world, BlockPos pos, BlockState state) {
         if (world == null || world.isClientSide() || pos == null || state == null || state.isAir()) {
