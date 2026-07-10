@@ -63,7 +63,8 @@ if [ -n "$BEHAVIOR" ]; then
   RANGE="${LEDGER_COMMIT:+$LEDGER_COMMIT..HEAD}"
   BEHAVIOR_SINCE="$(git log ${RANGE:-} --format=%H -- \
       'src/main/**/SlabSupport.java' 'src/main/**/SlabAnchorAttachment.java' \
-      'src/main/**/*PlacementIntent*' 'src/main/**/*OnPlacedAnchor*' 2>/dev/null | wc -l | tr -d ' ')"
+      'src/main/**/*PlacementIntent*' 'src/main/**/*OnPlacedAnchor*' \
+      'src/main/**/*OnStateReplaced*' 'src/main/**/*OffsetRaycast*' 2>/dev/null | wc -l | tr -d ' ')"
   LEDGER_STAGED="$(echo "$STAGED" | grep -c 'docs/process/LIVE_LEDGER.md' || true)"
   if [ "${BEHAVIOR_SINCE:-0}" -ge 1 ] && [ "${LEDGER_STAGED:-0}" -eq 0 ]; then
     fail "S-5: a behavior-changing commit already landed since the last live pass, and this is another
