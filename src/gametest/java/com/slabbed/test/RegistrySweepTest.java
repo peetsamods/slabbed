@@ -76,9 +76,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li><b>torch on marked slab</b> — vanilla torch minY=0, placedDy=-1.5, placedY=clickedY+1 →
  *       plBot = clickedY+1+0-1.5 = clickedY-0.5 = supTop → <b>FLUSH 0.0000</b> (was a fabricated
  *       OVERLAP -1.1250 under the old double-counting metric).</li>
- *   <li><b>stone on marked slab</b> — vanilla stone minY=0, placedDy=-1.0 → plBot = clickedY+1-1.0 =
- *       clickedY, supTop = clickedY-0.5 → <b>GAP 0.5000</b>. This gap is REAL: a full cube can only
- *       lower to the -1.0 depth floor, half a block short of the slab's visible top.</li>
+ *   <li><b>stone on marked slab</b> — vanilla stone minY=0, placedDy=-1.5 (depth-cap-removal: the full
+ *       cube now accumulates its true -1.5 on the marked slab instead of the old -1.0 depth-floor) →
+ *       plBot = clickedY+1-1.5 = clickedY-0.5 = supTop → <b>FLUSH 0.0000</b>. The old GAP 0.5000 was the
+ *       depth-cap bug (half a block short); the gap now closes, exactly like torch/gate/candle on this
+ *       rig. Under frozen-dy OFF it shows the same break_below STAYS_FAIL those siblings already pin.</li>
  * </ul>
  *
  * <p><b>This is a report generator, not a gate</b> for the 8 registry shards. The single gate is
@@ -144,7 +146,7 @@ public final class RegistrySweepTest {
         // leg. Full-block cohort seats unchanged in kind.
         BASELINE.put("minecraft:stone\tflush_ground",           "0.0000|FLUSH|0.0000|OK");
         BASELINE.put("minecraft:stone\tlowered_stack",          "-1.0000|FLUSH|0.0000|OK");
-        BASELINE.put("minecraft:stone\tmarked_slab",            "-1.0000|GAP|0.5000|OK");
+        BASELINE.put("minecraft:stone\tmarked_slab",            "-1.5000|FLUSH|0.0000|STAYS_FAIL:break_below -1.5->-1.0");
         BASELINE.put("minecraft:oak_slab\tflush_ground",        "0.0000|FLUSH|0.0000|OK");
         BASELINE.put("minecraft:oak_slab\tlowered_stack",       "-0.5000|GAP|0.5000|OK");
         BASELINE.put("minecraft:oak_slab\tmarked_slab",         "0.0000|GAP|1.5000|OK");

@@ -73,8 +73,11 @@ public final class NeighborUpdateInvarianceTest {
     }
 
     private static void clearArena(GameTestHelper h, ServerLevel w) {
+        // y bound is 7 (the full fabric-gametest empty-structure interior, rows 0..7): the deep-rest
+        // subject's tower tops out at y=7, and a stale subject cell surviving between mutations would
+        // silently corrupt the before/after reads.
         for (int x = 0; x <= 6; x++)
-            for (int y = 0; y <= 6; y++)
+            for (int y = 0; y <= 7; y++)
                 for (int z = 0; z <= 6; z++)
                     w.setBlock(h.absolutePos(new BlockPos(x, y, z)), Blocks.AIR.defaultBlockState(), 2);
     }
@@ -110,6 +113,30 @@ public final class NeighborUpdateInvarianceTest {
         w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
         bslab(w, base.above(3)); // reads -0.5 via carrier-below
         return base.above(3);
+    }
+
+    /**
+     * Deep-rest rig (depth-cap-removal, PKG-20260710): a real-useOn SBSB tower (ground stone, then
+     * slab/stone alternating, 6 placements) whose TOP stone reads the uncapped accumulated -1.5.
+     * The subject slab placed on it exercises the anchored-slab deep-rest read (support deeper than
+     * -1.0), the exact lane the depth-cap-removal pass added — previously the matrix had NO subject
+     * resting on anything deeper than -1.0.
+     */
+    private static BlockPos deepLoweredStoneRig(GameTestHelper h, ServerLevel w) {
+        BlockPos ground = h.absolutePos(new BlockPos(3, 0, 3));
+        w.setBlock(ground, Blocks.STONE.defaultBlockState(), 2);
+        Item[] tower = {Items.STONE_SLAB, Items.STONE, Items.STONE_SLAB, Items.STONE, Items.STONE_SLAB, Items.STONE};
+        BlockPos cursor = ground;
+        for (Item item : tower) {
+            place(h, item, cursor, Direction.UP, 0.0);
+            cursor = cursor.above();
+        }
+        double topDy = dy(w, cursor);
+        if (Math.abs(topDy + 1.5) > 1.0e-6) {
+            throw h.assertionException("premise: deep tower top stone should read the uncapped -1.5, got "
+                    + topDy + " at " + cursor);
+        }
+        return cursor; // the -1.5 stone at y=6; the subject slab places ON it (lands at y=7)
     }
 
     /** A full block that renders lowered (-0.5) because it sits on a bottom slab, with air to its WEST. */
@@ -167,6 +194,17 @@ public final class NeighborUpdateInvarianceTest {
                 w.setBlock(ground, Blocks.STONE.defaultBlockState(), 2);
                 place(h, Items.CANDLE, ground, Direction.UP, 0.0); // decoration, NOT freeze-flat protected
                 return ground.above();
+            }),
+            // DEEP-REST subject (depth-cap-removal, PKG-20260710): a slab resting on a stone at -1.5.
+            // EXPECTED RED on break_directly_below with frozen OFF (-1.5 -> -0.5): the anchor records
+            // PRESENCE only, so removing the deep support drops the read to the -0.5 anchored floor —
+            // the SAME documented hole class as fence_gate_on_marked_slab above (whose break_below leg
+            // reds -1.5 -> -0.5 for the identical reason). Heals with frozen dy ON, verified by
+            // DeepCompoundTowerLawTest#deepRestBreakBelowHoleHealsWithFrozenDy.
+            new NamedSubject("slab_on_deep_lowered_full_block", (h, w) -> {
+                BlockPos deepStone = deepLoweredStoneRig(h, w);
+                place(h, Items.STONE_SLAB, deepStone, Direction.UP, 0.0);
+                return deepStone.above();
             })
     );
 
@@ -268,5 +306,15 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void candlePlacedFlatSurvivesNeighborEdits(GameTestHelper h) {
         runSubject(h, SUBJECTS.get(7));
+    }
+
+    /**
+     * EXPECTED RED with frozen OFF (see the subject comment): break_directly_below moves the deep-rest
+     * slab -1.5 -> -0.5, the same documented never-pop-on-direct-support-removal hole class the
+     * fence_gate subject pins. Do not "fix" by adding a lane; it goes green with the frozen-dy store on.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabOnDeepLoweredFullBlockSurvivesNeighborEdits(GameTestHelper h) {
+        runSubject(h, SUBJECTS.get(8));
     }
 }

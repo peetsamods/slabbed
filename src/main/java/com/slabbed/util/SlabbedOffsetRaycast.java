@@ -129,11 +129,30 @@ public final class SlabbedOffsetRaycast {
             this.dyMemo.defaultReturnValue(Double.NaN);
         }
 
+        /** How far above a marched cell a deep owner can overflow into it: an owner k cells up with
+         *  dy &lt; 1-k reaches down into this cell, so the deepest lane we can target is bounded by the
+         *  engine's max chain depth. Kept modest and air-terminated so the common (shallow) case stays
+         *  ~one extra probe. */
+        private static final int MAX_DEEP_PROBE_CELLS = 16;
+
         void consumeCell(int x, int y, int z) {
             testPrimary(x, y, z);
             testNeighbor(x, y - 1, z);
             testNeighbor(x, y + 1, z);
-            testDeepAbove(x, y + 2, z);
+            // Parametric deep-owner window (depth-cap-removal): owners rendered deeper than -1.0 have
+            // their lower half TWO-or-more cells below themselves. An owner k cells above this marched
+            // cell (dy < 1-k) overflows down into it; the old fixed single y+2 probe (dy < -1.0) only
+            // reached a -1.5 owner. Probe upward per-cell, each gated on that owner's own depth, so
+            // owners past -1.5 (down to the max chain) stay targetable. Terminates at the first cell
+            // above that is air (a deep stack is contiguous), keeping the shallow case cheap.
+            // INVARIANT: air-terminated — this deep window covers CONTIGUOUS stacks only. A command-
+            // built floating deep block above an air gap is outside the contract (real placement always
+            // accumulates depth through a contiguous support column, so it cannot produce that shape).
+            for (int k = 2; k <= MAX_DEEP_PROBE_CELLS + 1; k++) {
+                if (!testDeepAbove(x, y + k, z, k)) {
+                    break;
+                }
+            }
         }
 
         /**
@@ -144,26 +163,36 @@ public final class SlabbedOffsetRaycast {
          * owners strictly deeper than {@code -1.0} need the extra cell — a {@code -1.0} owner
          * reaches exactly the {@code C.above()} cell's floor, already inside the window.
          */
-        private void testDeepAbove(int x, int y, int z) {
+        /**
+         * Tests the owner {@code k} cells above the marched cell. An owner at {@code y} (= marched
+         * y + k) whose rendered outline is shifted down by {@code |dy|} reaches into the marched
+         * cell's vertical span only when {@code dy < 1 - k} (its shifted bottom sits below the
+         * marched cell's top). For {@code k == 2} that is the original {@code dy < -1.0} gate.
+         *
+         * @return {@code true} if the probed cell is non-air (keep probing deeper), {@code false}
+         *         when it is air (a deep stack is contiguous, so stop).
+         */
+        private boolean testDeepAbove(int x, int y, int z, int k) {
             long key = BlockPos.asLong(x, y, z);
             if (shapeTested.contains(key)) {
-                return;
+                return true;
             }
             BlockPos pos = new BlockPos(x, y, z);
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) {
-                return;
+                return false;
             }
             double dy = dyMemo.get(key);
             if (Double.isNaN(dy)) {
                 dy = SlabSupport.getYOffset(world, pos, state);
                 dyMemo.put(key, dy);
             }
-            if (dy > -1.0 - 1.0e-6) {
-                return;
+            if (dy > (1.0 - k) - 1.0e-6) {
+                return true; // not deep enough to overflow into the marched cell, but keep probing up
             }
             shapeTested.add(key);
             accumulate(pos, state, false);
+            return true;
         }
 
         private void testPrimary(int x, int y, int z) {
