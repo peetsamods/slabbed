@@ -27,6 +27,7 @@ public final class SlabbedClient implements ClientModInitializer {
         initDyFingerprintDump();
         SlabModelStaleSentinelClient.init();
         BetaNoticeClient.init();
+        com.slabbed.client.palette.SlabPalette.init();
     }
 
     private static void initTargetDyCommand() {
