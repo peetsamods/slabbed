@@ -352,4 +352,69 @@ public final class DeepCompoundTowerLawTest {
         }
         h.succeed();
     }
+
+    /**
+     * LIVE CRASH PIN (TEST 16, StackOverflowError on the render/setupTerrain thread). An anchored
+     * TOP slab resting directly on a ceiling-attached object (an iron_chain, Y-axis) below it used
+     * to infinitely ping-pong: the deep-rest lane ({@code SlabSupport} ~2539) read the chain's dy;
+     * the chain's own ceiling-hung lane (~2894) read back UP to this exact slab (its "above", since
+     * a TOP slab qualifies via {@code isTopSlab}); that reentered the deep-rest lane, which read the
+     * chain again — forever, since neither call goes through the guarded public {@code getYOffset}
+     * entry (the {@code IN_GET_Y_OFFSET} reentrancy flag never engages between two direct
+     * {@code getYOffsetInner} calls). Fixed by restricting the deep-rest lane to
+     * {@code state.isSolidRender()} supports (opaque full cubes only — matching the lane's own
+     * documented intent), which a ceiling-attached decoration never is. This test just needs to
+     * NOT overflow the stack.
+     *
+     * <p>The anchor is forced directly via {@code SlabAnchorAttachment.addAnchor} rather than
+     * relying on natural placement-intent to produce one over a flush (dy=0) chain — the live crash
+     * happened inside a complex multi-tower build where the anchoring context is hard to reproduce
+     * minimally, and the recursion itself only depends on the anchored-slab branch being reached
+     * with a ceiling-attached, non-solid support below, not on HOW the anchor got there. The public
+     * {@code addAnchor} gate (qualifiesForAnchor) rejects this synthetic setup since nothing here
+     * naturally lowers the slab, so the test forces the package-private {@code addAnchorUnchecked}
+     * via reflection — test-only, does not touch production visibility.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void anchoredTopSlabOverCeilingAttachedChainDoesNotRecurse(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos groundAbs = h.absolutePos(new BlockPos(3, 1, 3));
+        w.setBlock(groundAbs, Blocks.STONE.defaultBlockState(), 2);
+        BlockPos chainPos = groundAbs.above();
+        place(h, Items.IRON_CHAIN, groundAbs, Direction.UP, 0.0);
+        if (w.getBlockState(chainPos).getBlock() != Blocks.IRON_CHAIN) {
+            throw h.assertionException(chainPos,
+                    "premise: chain failed to place on ground — got " + w.getBlockState(chainPos).getBlock());
+        }
+        // A TOP slab clicked on the chain's own top face seats directly above it (isCeilingAttached
+        // + isTopSlab(above) is exactly the shape that used to recurse).
+        place(h, Items.STONE_SLAB, chainPos, Direction.UP, 0.999);
+        BlockPos slabPos = chainPos.above();
+        if (w.getBlockState(slabPos).getBlock() != Blocks.STONE_SLAB) {
+            throw h.assertionException(slabPos,
+                    "premise: top slab failed to place on the chain — got " + w.getBlockState(slabPos).getBlock());
+        }
+        forceAnchorUnchecked(w, slabPos);
+        if (!com.slabbed.anchor.SlabAnchorAttachment.isAnchored(w, slabPos)) {
+            throw h.assertionException(slabPos, "premise: forced anchor did not take");
+        }
+        // The call that used to StackOverflow. If we get past this line, the recursion is fixed.
+        double slabDy = dy(w, slabPos);
+        Slabbed.LOGGER.info("DEEP-TOWER | anchored top slab over ceiling-attached chain: dy={}", slabDy);
+        double chainDy = dy(w, chainPos);
+        Slabbed.LOGGER.info("DEEP-TOWER | ceiling-attached chain under that slab: dy={}", chainDy);
+        h.succeed();
+    }
+
+    /** Reflection into the private {@code addAnchorUnchecked} — see the test's javadoc for why. */
+    private static void forceAnchorUnchecked(ServerLevel w, BlockPos pos) {
+        try {
+            java.lang.reflect.Method m = com.slabbed.anchor.SlabAnchorAttachment.class
+                    .getDeclaredMethod("addAnchorUnchecked", net.minecraft.world.level.Level.class, BlockPos.class);
+            m.setAccessible(true);
+            m.invoke(null, w, pos);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
