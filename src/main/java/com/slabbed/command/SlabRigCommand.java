@@ -5,16 +5,23 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabTestKit;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -23,6 +30,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -87,6 +96,19 @@ public final class SlabRigCommand {
     private static final int COLUMN_SPACING = 2;
     private static final double EPS = 1.0e-6;
 
+    /** The mega rig's four support variants, one per row (see {@link #buildMegaColumn}). */
+    private static final int MEGA_ROW_COUNT = 4;
+    /** The overhang_and_ceiling row: its auto-item is a hanging attempt (clicks the ceiling down-face). */
+    private static final int MEGA_ROW_HANGING = 3;
+    /** Cap the refused-id list echoed in the mega chat summary. */
+    private static final int MAX_REFUSED_LISTED = 15;
+    /** Default per-variant column count for {@code /slabrig mega} (capped by the placeable-kit size). */
+    private static final int DEFAULT_MEGA_COLUMNS = 40;
+    /** Expected support-surface dy per mega row, in row order (self-verify against the sign claims). */
+    private static final double[] MEGA_ROW_DY = {0.0, -0.5, -1.0, -0.5};
+    private static final String[] MEGA_ROW_NAME = {
+            "bottom slab", "slab+block", "compound column", "overhang_and_ceiling"};
+
     /**
      * In-memory per-(player, dimension) record of the last rig volume, for {@code /slabrig clear}.
      * Keyed by {@link RigKey} so a rig built in the nether does not orphan an overworld rig record.
@@ -126,6 +148,15 @@ public final class SlabRigCommand {
                                         .then(Commands.literal("force")
                                                 .executes(ctx -> rows(ctx,
                                                         IntegerArgumentType.getInteger(ctx, "count"), true)))))
+                        .then(Commands.literal("mega")
+                                .executes(ctx -> mega(ctx, DEFAULT_MEGA_COLUMNS, false))
+                                .then(Commands.literal("force")
+                                        .executes(ctx -> mega(ctx, DEFAULT_MEGA_COLUMNS, true)))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))
+                                        .executes(ctx -> mega(ctx, IntegerArgumentType.getInteger(ctx, "count"), false))
+                                        .then(Commands.literal("force")
+                                                .executes(ctx -> mega(ctx,
+                                                        IntegerArgumentType.getInteger(ctx, "count"), true)))))
                         .then(Commands.literal("clear")
                                 .executes(SlabRigCommand::clear))
         );
@@ -152,9 +183,11 @@ public final class SlabRigCommand {
     private static int usage(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack source = ctx.getSource();
         source.sendSuccess(() -> Component.literal(
-                "[slabrig] usage: /slabrig <tower [force]|rows [n] [force]|clear>\n"
+                "[slabrig] usage: /slabrig <tower [force]|rows [n] [force]|mega [n] [force]|clear>\n"
                         + "  tower [force]    — compound-visible -1.0 marked tower\n"
                         + "  rows [n] [force] — n columns (default " + DEFAULT_ROWS + ") of -0.5 and -1.0 supports\n"
+                        + "  mega [n] [force] — the everything-rig: n columns x 4 support variants with one\n"
+                        + "                     kit item auto-placed on each (default " + DEFAULT_MEGA_COLUMNS + ", capped by kit size)\n"
                         + "  clear            — remove the last rig you built in this dimension\n"
                         + "  (force overwrites a non-empty footprint)"), false);
         return 1;
@@ -344,6 +377,246 @@ public final class SlabRigCommand {
                     .setMessage(1, Component.literal(l1))
                     .setMessage(2, Component.literal(l2)), true);
         }
+    }
+
+    // ── /slabrig mega [n] ─────────────────────────────────────────────────────
+
+    /**
+     * THE mega rig: {@code n} columns wide, each column carrying the FOUR support variants (one per
+     * row, along the facing axis): (0) a bare bottom slab, (1) a bottom slab + full block, (2) the
+     * compound column (ground/slab/stone/slab/full block) with its marked side slab, and (3) the
+     * overhang-and-ceiling variant (a lowered support with an air cell to the side and a full block
+     * overhead for hanging tests). Every column {@code i} is seated with one kit item ({@code i}-th
+     * entry of {@link SlabTestKit#placeableItems()}) auto-placed on each variant's surface via the
+     * source player's REAL {@code useOn} — so a whole test board of category representatives on every
+     * geometry appears in one command. Items that refuse to place are skipped and counted.
+     *
+     * <p>Scenery is authored with the same {@code setBlock} + anchor-authoring path as {@code tower} /
+     * {@code rows} (it cannot touch height computation); only the SUBJECTS go through the real placement
+     * path, exactly like the gametest rigs. The player's held item is saved and restored around the
+     * auto-placement sweep.
+     */
+    private static int mega(CommandContext<CommandSourceStack> ctx, int columns, boolean force) {
+        CommandSourceStack source = ctx.getSource();
+        ServerLevel world = source.getLevel();
+        Player player = source.getEntity() instanceof Player p ? p : null;
+        if (player == null) {
+            source.sendFailure(Component.literal(
+                    "[slabrig] mega auto-places kit items via your hand — run it as a player, not the console."));
+            return 0;
+        }
+
+        Direction facing = rigFacing(source);
+        Direction right = facing.getClockWise();
+        BlockPos base = rigBase(source);
+        if (belowWorldBottom(source, world, base)) {
+            return 0;
+        }
+
+        List<Item> kit = SlabTestKit.placeableItems();
+        int n = Math.min(columns, kit.size());
+        if (n <= 0) {
+            source.sendFailure(Component.literal("[slabrig] mega has no kit items to place."));
+            return 0;
+        }
+
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        collectMegaCells(base, facing, right, n, cells);
+        Bounds bounds = footprintBounds(cells, world.dimension());
+
+        if (refuseIfFootprintOccupied(source, world, bounds, force)) {
+            return 0;
+        }
+        precleanFootprint(world, bounds);
+
+        // Build every variant column's scenery, remembering each column's four seat surfaces.
+        BlockPos[][] seats = new BlockPos[n][MEGA_ROW_COUNT];
+        for (int i = 0; i < n; i++) {
+            for (int v = 0; v < MEGA_ROW_COUNT; v++) {
+                seats[i][v] = buildMegaColumn(world, base, facing, right, v, i, bounds);
+            }
+        }
+        // One labelled sign per row variant (near end of the row, on the -right side).
+        for (int v = 0; v < MEGA_ROW_COUNT; v++) {
+            BlockPos signGround = base.relative(facing, v).relative(right.getOpposite(), COLUMN_SPACING);
+            signAt(world, signGround, "Row " + v, MEGA_ROW_NAME[v], "dy " + MEGA_ROW_DY[v], bounds);
+        }
+        rememberBounds(source, bounds);
+
+        // Auto-place one kit item on each seat via the REAL placement path. Save/restore the hand.
+        ItemStack held = player.getMainHandItem().copy();
+        int placed = 0;
+        int refused = 0;
+        Set<String> refusedIds = new LinkedHashSet<>();
+        try {
+            for (int i = 0; i < n; i++) {
+                Item item = kit.get(i);
+                for (int v = 0; v < MEGA_ROW_COUNT; v++) {
+                    BlockPos seat = seats[i][v];
+                    // Where the item lands and which face is clicked. Rows 0-2 seat on the support's
+                    // up-face. Row 3 (overhang_and_ceiling) is a HANGING attempt: click the ceiling
+                    // block's DOWN face so the item lands in the hang gap through the real hanging path.
+                    // An item that refuses to hang leaves that gap empty and free for the maintainer to use.
+                    BlockPos clicked;
+                    Direction face;
+                    BlockPos target;
+                    if (v == MEGA_ROW_HANGING) {
+                        clicked = seat.above(2); // the ceiling block (g.above(4))
+                        face = Direction.DOWN;
+                        target = seat.above(1);  // the hang gap (g.above(3))
+                    } else {
+                        clicked = seat;
+                        face = Direction.UP;
+                        target = seat.above();
+                    }
+                    BlockState clickedBefore = world.getBlockState(clicked);
+                    boolean targetWasAir = world.getBlockState(target).isAir();
+                    placeVia(world, player, item, clicked, face);
+                    boolean targetFilled = targetWasAir && !world.getBlockState(target).isAir();
+                    // An in-cell change (e.g. the clicked slab became a double slab) also counts as placed.
+                    boolean clickedChanged = !world.getBlockState(clicked).equals(clickedBefore);
+                    if (targetFilled || clickedChanged) {
+                        placed++;
+                    } else {
+                        refused++;
+                        refusedIds.add(BuiltInRegistries.ITEM.getKey(item).getPath());
+                    }
+                }
+            }
+        } finally {
+            player.setItemInHand(InteractionHand.MAIN_HAND, held);
+        }
+
+        // Self-verify one sample seat per row against its sign's dy claim.
+        List<String> mismatches = new ArrayList<>();
+        for (int v = 0; v < MEGA_ROW_COUNT; v++) {
+            addIfMismatch(mismatches, world, seats[0][v], MEGA_ROW_DY[v], "Row " + v + " (" + MEGA_ROW_NAME[v] + ")");
+        }
+        if (!mismatches.isEmpty()) {
+            source.sendFailure(warn("mega", base, facing, mismatches));
+            return 0;
+        }
+
+        final int builtColumns = n;
+        final int placedFinal = placed;
+        final int refusedFinal = refused;
+        final String refusedList = summariseIds(refusedIds, MAX_REFUSED_LISTED);
+        source.sendSuccess(() -> Component.literal(
+                "[slabrig] mega built at " + base.toShortString() + " facing " + facing.getName()
+                        + " — " + builtColumns + " columns x " + MEGA_ROW_COUNT + " variants; placed "
+                        + placedFinal + ", refused " + refusedFinal + " (of "
+                        + (builtColumns * MEGA_ROW_COUNT) + " attempts)"
+                        + (refusedList.isEmpty() ? "." : " (refused: " + refusedList + ").")), false);
+        return 1;
+    }
+
+    /**
+     * Builds one variant column's scenery and returns the SEAT surface a subject is placed on. {@code v}
+     * selects the variant, {@code i} the column index (spaced along {@code right}); the column's ground
+     * cell sits at {@code base + facing*v + right*(i*spacing)}.
+     */
+    private static BlockPos buildMegaColumn(ServerLevel world, BlockPos base, Direction facing,
+                                            Direction right, int v, int i, Bounds bounds) {
+        BlockPos g = base.relative(facing, v).relative(right, i * COLUMN_SPACING);
+        switch (v) {
+            case 0 -> {
+                // Bare bottom slab on the ground (a flush slab, seat reads 0.0).
+                setStone(world, g, bounds);
+                bottomSlab(world, g.above(1), bounds);
+                return g.above(1);
+            }
+            case 1 -> {
+                // Bottom slab carrying a full block (the lowered full block, seat reads -0.5).
+                setStone(world, g, bounds);
+                bottomSlab(world, g.above(1), bounds);
+                setStone(world, g.above(2), bounds);
+                return g.above(2);
+            }
+            case 2 -> {
+                // The compound column + marked side slab (both read -1.0); the side slab is the seat.
+                BlockPos fb = buildCompoundTower(world, g, facing, bounds);
+                return fb.relative(facing.getCounterClockWise());
+            }
+            default -> {
+                // Overhang-and-ceiling: a lowered support (seat -0.5) with a full block overhead (a
+                // ceiling to hang from) and an open air cell to the side for manual overhang tests.
+                setStone(world, g, bounds);
+                bottomSlab(world, g.above(1), bounds);
+                setStone(world, g.above(2), bounds);
+                setStone(world, g.above(4), bounds); // ceiling block; g.above(3) stays air (the hang gap)
+                return g.above(2);
+            }
+        }
+    }
+
+    /** The cells {@link #buildMegaColumn} + {@link #mega}'s signs touch, for footprint planning. */
+    private static void collectMegaCells(BlockPos base, Direction facing, Direction right, int n,
+                                         Set<BlockPos> cells) {
+        for (int i = 0; i < n; i++) {
+            for (int v = 0; v < MEGA_ROW_COUNT; v++) {
+                BlockPos g = base.relative(facing, v).relative(right, i * COLUMN_SPACING);
+                switch (v) {
+                    case 0 -> {
+                        cells.add(g);
+                        cells.add(g.above(1));
+                    }
+                    case 1 -> {
+                        cells.add(g);
+                        cells.add(g.above(1));
+                        cells.add(g.above(2));
+                    }
+                    case 2 -> collectTowerCells(g, facing, cells);
+                    default -> {
+                        cells.add(g);
+                        cells.add(g.above(1));
+                        cells.add(g.above(2));
+                        cells.add(g.above(3)); // the hang gap (reserved so nothing intrudes)
+                        cells.add(g.above(4)); // ceiling block
+                        cells.add(g.above(2).relative(facing)); // the side overhang air cell (reserved)
+                    }
+                }
+            }
+        }
+        for (int v = 0; v < MEGA_ROW_COUNT; v++) {
+            collectSignCells(base.relative(facing, v).relative(right.getOpposite(), COLUMN_SPACING), cells);
+        }
+    }
+
+    /**
+     * Places {@code item} by clicking {@code clicked}'s {@code face} via the real player {@code useOn}
+     * path (the same capture/freeze/marker machinery a hand placement runs). Sets the item in the
+     * player's hand for the call; the caller restores the original hand afterward. Never throws — if the
+     * item refuses, one bad item never aborts the mega build; the caller decides placed/refused by
+     * inspecting the world.
+     */
+    private static void placeVia(ServerLevel world, Player player, Item item, BlockPos clicked, Direction face) {
+        try {
+            ItemStack stack = new ItemStack(item);
+            player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+            Vec3 hit = Vec3.atCenterOf(clicked).add(face.getStepX() * 0.5, face.getStepY() * 0.5, face.getStepZ() * 0.5);
+            stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                    new BlockHitResult(hit, face, clicked, false)));
+        } catch (RuntimeException e) {
+            // swallow: a refusing item is detected by the caller as an unchanged world.
+        }
+    }
+
+    /** A comma list of up to {@code cap} ids, with a "+K more" suffix when there are more. */
+    private static String summariseIds(Set<String> ids, int cap) {
+        if (ids.isEmpty()) {
+            return "";
+        }
+        List<String> shown = new ArrayList<>();
+        int extra = 0;
+        for (String id : ids) {
+            if (shown.size() < cap) {
+                shown.add(id);
+            } else {
+                extra++;
+            }
+        }
+        String joined = String.join(", ", shown);
+        return extra > 0 ? joined + ", +" + extra + " more" : joined;
     }
 
     // ── /slabrig clear ────────────────────────────────────────────────────────

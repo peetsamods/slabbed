@@ -1047,6 +1047,37 @@ public final class SlabSupport {
     }
 
     /**
+     * The pre-store reading at {@code pos}: exactly what {@link #getYOffset} returns, but WITHOUT the
+     * frozen-store short-circuit — it never consults the stored placement value, always going straight
+     * to {@link #getYOffsetInner}. Read-only and side-effect-free; it shares the same null/air/skip
+     * guards and the same {@link #IN_GET_Y_OFFSET} guard as {@link #getYOffset}. Diagnostics use it to
+     * compare a cell's stored value against this un-stored value, to report which cells would read
+     * differently if the store were not consulted. It does not alter {@link #getYOffset} or any lane.
+     */
+    public static double getUnstoredYOffset(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null) {
+            return 0.0;
+        }
+        if (state == null || state.isAir()) {
+            return 0.0;
+        }
+        if (CompatHooks.shouldSkipOffset(state)) {
+            return 0.0;
+        }
+        // Deliberately SKIP the frozen-store short-circuit that getYOffset does here: this is the
+        // un-stored value, straight from getYOffsetInner.
+        if (IN_GET_Y_OFFSET.get()) {
+            return 0.0;
+        }
+        IN_GET_Y_OFFSET.set(Boolean.TRUE);
+        try {
+            return getYOffsetInner(world, pos, state);
+        } finally {
+            IN_GET_Y_OFFSET.set(Boolean.FALSE);
+        }
+    }
+
+    /**
      * COLLISION-FOLLOW (movement broadphase): toggle with -Dslabbed.collisionFollow=false.
      * Slabbed lowers a block's visual/outline/raycast but leaves its per-state collision shape
      * VANILLA (within-cell) so MC's cell-bounded {@code BlockCollisions} broadphase samples it.
