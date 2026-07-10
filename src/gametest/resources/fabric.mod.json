@@ -64,6 +64,7 @@
       "com.slabbed.test.OffsetRaycastDeepLaneTest",
       "com.slabbed.test.NeighborUpdateInvarianceTest",
       "com.slabbed.test.DeepCompoundTowerLawTest",
+      "com.slabbed.test.LandingRuleLawTest",
       "com.slabbed.test.RegistrySweepTest",
       "com.slabbed.test.SlabRigCommandSmokeTest",
       "com.slabbed.test.SlabTestKitPaletteTest",
