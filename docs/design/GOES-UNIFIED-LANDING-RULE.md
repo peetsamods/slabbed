@@ -5,7 +5,8 @@ All verification complete. Every load-bearing anchor has been re-read in this ch
 # UNIFIED LANDING RULE — Design Document (Slabbed 26.2)
 
 **Repo:** `<home>/CascadeProjects/Slabbed-port-26.2`, branch `port/mc-26.2-0.4.1-beta.1`
-**Status:** Design only — no code changes. All file:line anchors below re-verified in this change against working-tree HEAD (`3c40cf32`). Governing law: `LAW.md:11-33` (height computed ONCE at placement from the aim, then frozen; the aim interpretation is the only legitimate consultation of surrounding geometry). Live evidence base: `docs/process/LIVE_LEDGER.md` TEST 13–17.
+**Status:** Design only — no code changes.
+**Adversarial review (2026-07-10, max scrutiny): SOUND-WITH-AMENDMENTS — amendments A-1..A-5 in `GOES-DESIGN-ADVERSARIAL-REVIEW.md` BIND this design.** Highlights: A-1 the SIDE-at-depth raycast-contiguity hole must be resolved (store-aware deep probe or a SIDE depth cap) and the already-parametric `beta35ShiftedValidationCenter` branch folds into the C2 server-seam generalization; A-2 TEST-17 evidence labels corrected + dy-split provenance pinned before it baselines R2; A-3 C5 perf fast-path (AIM-KEYED family + NaN store ⇒ constant flush BEFORE any lane walk) + snow-layer collision allocation gate; A-4 existing-carpet flush-pop on upgrade disclosed under D3, predicted-entry rollback-on-refusal added, no public release inside the C1→C2 window (or front-load D9); A-5 five spec-precision gaps. Decision list trimmed per review §7: D5/D10/D12 effectively already ruled — the live rulings are D1-D4, D6-D9, D11 plus the new D3 upgrade-pop bullet. All file:line anchors below re-verified in this change against working-tree HEAD (`3c40cf32`). Governing law: `LAW.md:11-33` (height computed ONCE at placement from the aim, then frozen; the aim interpretation is the only legitimate consultation of surrounding geometry). Live evidence base: `docs/process/LIVE_LEDGER.md` TEST 13–17.
 
 ---
 
