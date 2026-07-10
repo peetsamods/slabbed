@@ -210,6 +210,9 @@ All use the real `useOn` path with `FROZEN_DY_ENABLED` flipped in-process; each 
 
 ## 8. DECISIONS MAINTAINER MUST MAKE (before implementation)
 
+> **RULED 2026-07-10 (Maintainer: "Proceed with your recommended actions" — all architect recommendations adopted):**
+> **D1 YES** (A7 flips: aimed top-click on a -1.0 owner lands flush -1.0; incl. D1b bed/pot on marked slab -> true flush). **D2 YES** (aimed powder snow seats; natural stays flush). **D3 YES** (thin layers logically seated when aimed; the existing-carpet flush-pop on upgrade is ACCEPTED and goes in release notes). **D4 YES** (objects never hover at exactly -1.0). **D6 KEEP markers one release.** **D7 ACCEPT** (aimless routes stay vanilla-flush; piston-destination pop disclosed). **D8 SEAT ALL** (stairs/rails/wire/plates/repeaters etc. under the one rule; no exceptions named). **D9 BUILD /slabrig reseat** (player-invoked re-seat tool; pre-fix frozen values otherwise persist by law). **D11 DELETE** the legacy retargeter (C7). D5/D10/D12 were already effectively ruled (review §7) and stand as written.
+
 1. **A7 flip (D1):** aimed top-click on a −1.0 owner lands flush −1.0; A7 re-specified accordingly (§5). Includes **D1b**: bed/pot/objects on a **marked −1.0 bottom slab** seat −1.5 (true flush) instead of today's −1.0.
 2. **Powder snow (D2):** hand-bucketed powder snow seats on the clicked lowered surface (AIM-KEYED), while natural/worldgen powder snow stays flush — flipping only the aimed half of the da8cc3cb DODO decision. Yes/no.
 3. **Thin layers (D3):** carpets/snow layers become **logically** seated when aimed (outline + collision + raycast, not render courtesy) — including carpet on a PLAIN bottom slab becoming logical −0.5 (today render-only). Yes/no; if yes, confirm the triad move (C5).
