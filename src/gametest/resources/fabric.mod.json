@@ -70,6 +70,9 @@
       "com.slabbed.test.SlabRigCommandSmokeTest",
       "com.slabbed.test.SlabRigCaseCatalogTest",
       "com.slabbed.test.SlabRigHangingCatalogTest",
+      "com.slabbed.test.SlabRigHangingPaintingPlanTest",
+      "com.slabbed.test.SlabRigHangingKernelArtifactsTest",
+      "com.slabbed.test.SlabRigHangingPaintingKernelTest",
       "com.slabbed.test.SlabTestKitPaletteTest",
       "com.slabbed.test.SlabTestKitCommandsTest"
     ],
