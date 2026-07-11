@@ -2,6 +2,7 @@ package com.slabbed.mixin;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.placement.LandingHitValidationPolicy;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -30,7 +31,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerGamePacketListenerImpl.class)
 public abstract class ServerInteractBlockHitToleranceMixin {
-    private static final double COMPOUND_DY = -1.0d;
     private static final double EPSILON = 1.0e-6d;
     private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
 
@@ -148,7 +148,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         // (getBeta35ShiftedServerValidationYOffset reads the store first via getYOffset, exactly as
         // slabbed$ownerVisibleDy below does), so whichever lane fires produces the same shifted center.
         // This lane is the ANY-DEPTH backstop for ordinary full blocks the beta35 trigger does not match.
-        double compoundDy = slabbed$legalCompoundFullBlockVisualHitDy(pos, packet, center);
+        double compoundDy = slabbed$legalCompoundFullBlockVisualHitDy(pos, packet);
         if (Double.isNaN(compoundDy)) {
             return center;
         }
@@ -294,17 +294,13 @@ public abstract class ServerInteractBlockHitToleranceMixin {
      * exact-{@code -1.0} gate to any depth (R6); the center is shifted by the true depth, and the visual
      * bounds are parametric in that depth.
      */
-    private double slabbed$legalCompoundFullBlockVisualHitDy(BlockPos pos, ServerboundUseItemOnPacket packet, Vec3 center) {
+    private double slabbed$legalCompoundFullBlockVisualHitDy(BlockPos pos, ServerboundUseItemOnPacket packet) {
         ServerLevel world = player.level();
         BlockHitResult hit = packet.getHitResult();
         if (world == null || hit == null || !pos.equals(hit.getBlockPos())) {
             return Double.NaN;
         }
-        Direction face = hit.getDirection();
         BlockState state = world.getBlockState(pos);
-        if (!slabbed$isOrdinaryFullBlock(world, pos, state)) {
-            return Double.NaN;
-        }
         double ownerDy = slabbed$ownerVisibleDy(world, pos, state);
         // Any-depth: lowered by the compound path (marker OR a store-frozen deep owner), not just -1.0.
         if (!(ownerDy < -EPSILON)
@@ -315,15 +311,11 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return Double.NaN;
         }
         ItemStack heldStack = player.getItemInHand(packet.getHand());
-        boolean heldOrdinaryFullBlock = slabbed$isHeldOrdinaryFullBlock(world, pos, heldStack);
-        boolean heldLegalCompoundSlabRemap = slabbed$isHeldLegalCompoundSlabRemap(world, pos, state, hit, heldStack);
-        if ((face == Direction.UP || face == Direction.DOWN) && !heldLegalCompoundSlabRemap) {
-            return Double.NaN;
-        }
-        if (!heldOrdinaryFullBlock && !heldLegalCompoundSlabRemap) {
-            return Double.NaN;
-        }
-        return slabbed$isInsideCompoundVisualBounds(pos, hit.getLocation(), ownerDy) ? ownerDy : Double.NaN;
+        BlockState heldState = heldStack != null && heldStack.getItem() instanceof BlockItem blockItem
+                ? blockItem.getBlock().defaultBlockState()
+                : null;
+        return LandingHitValidationPolicy.shiftedCenterDy(
+                pos, state, ownerDy, hit.getDirection(), hit.getLocation(), heldState);
     }
 
     /** Owner's visible lowering dy: the frozen store first (any depth), else the live lane. */
@@ -335,64 +327,4 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         return SlabSupport.getYOffset(world, pos, state);
     }
 
-    private static boolean slabbed$isInsideCompoundVisualBounds(BlockPos pos, Vec3 hitPos, double ownerDy) {
-        return hitPos != null
-                && hitPos.x >= pos.getX() - EPSILON
-                && hitPos.x <= pos.getX() + 1.0d + EPSILON
-                && hitPos.y >= pos.getY() + ownerDy - EPSILON
-                && hitPos.y <= pos.getY() + EPSILON
-                && hitPos.z >= pos.getZ() - EPSILON
-                && hitPos.z <= pos.getZ() + 1.0d + EPSILON;
-    }
-
-    private static String slabbed$heldRejectionReason(ItemStack stack) {
-        if (stack != null && stack.getItem() instanceof BlockItem blockItem
-                && blockItem.getBlock() instanceof SlabBlock) {
-            return "held_item_slab";
-        }
-        return "held_item_not_full_block";
-    }
-
-    private void slabbed$logHitValidityBridge(
-            ServerLevel world,
-            BlockPos pos,
-            BlockHitResult hit,
-            ItemStack heldStack,
-            boolean ordinaryFullBlockTarget,
-            boolean compoundFullBlockAnchor,
-            boolean hitInsideVisualBounds,
-            boolean bridgeAccepted,
-            String rejectionReason
-    ) {
-    }
-
-    private static boolean slabbed$isHeldOrdinaryFullBlock(ServerLevel world, BlockPos pos, ItemStack stack) {
-        if (!(stack.getItem() instanceof BlockItem blockItem)
-                || blockItem.getBlock() instanceof SlabBlock) {
-            return false;
-        }
-        return slabbed$isOrdinaryFullBlock(world, pos, blockItem.getBlock().defaultBlockState());
-    }
-
-    private static boolean slabbed$isHeldLegalCompoundSlabRemap(
-            ServerLevel world,
-            BlockPos pos,
-            BlockState state,
-            BlockHitResult hit,
-            ItemStack stack
-    ) {
-        if (!(stack.getItem() instanceof BlockItem blockItem)
-                || !(blockItem.getBlock() instanceof SlabBlock)
-                || hit == null) {
-            return false;
-        }
-        return SlabSupport.findLegalCompoundSlabRemap(world, pos, state, hit.getDirection(), hit.getLocation()).legal();
-    }
-
-    private static boolean slabbed$isOrdinaryFullBlock(ServerLevel world, BlockPos pos, BlockState state) {
-        return state != null
-                && !state.isAir()
-                && !(state.getBlock() instanceof SlabBlock)
-                && state.isSolidRender();
-    }
 }
