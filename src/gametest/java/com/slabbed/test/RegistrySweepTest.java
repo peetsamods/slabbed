@@ -2,6 +2,8 @@ package com.slabbed.test;
 
 import com.mojang.logging.LogUtils;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.command.SlabRigCaseCatalog;
+import com.slabbed.util.BuildStamp;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -33,14 +35,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * THE REGISTRY SWEEP — the maintainer's entire manual block-family sweep, mechanized.
@@ -54,6 +55,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * height must survive a neighbor edit byte-identical, or the block itself vanishes by a genuine
  * vanilla mechanic). One gradle run replaces days of manual testing; the report is the GOES
  * punch-list that drives later, separately-reviewed lane fixes.
+ * The canonical report is self-describing: schema/run/Git/exact-implementation/catalog/count metadata
+ * precedes the measurement header, and its exact bytes are SHA-bound to the COMPLETE sidecar. A
+ * RUNNING sidecar always says {@code report_sha256=none}; consumers must treat report+status as one
+ * evidence pair.
  *
  * <h2>SEAT metric — measured from the VANILLA (un-shifted) shapes, dy applied exactly once</h2>
  * <p>On this branch {@link BlockState#getShape(net.minecraft.world.level.BlockGetter, BlockPos)
@@ -188,70 +193,12 @@ public final class RegistrySweepTest {
         return root.resolve("build").resolve("reports");
     }
 
-    private static Path reportPath() {
-        return reportsDir().resolve("slabbed-sweep.tsv");
-    }
+    /** Exact shipped runtime plus the two GameTest-only classes that implement and guard this sweep. */
+    private static final String SWEEP_RUNTIME_IMPLEMENTATION_SHA256 =
+            BuildStamp.extendRuntimeContentSha256(RegistrySweepArtifacts.class, RegistrySweepTest.class);
 
-    private static Path shardPath(int shard) {
-        return reportsDir().resolve("slabbed-sweep.shard" + shard + ".tsv");
-    }
-
-    private static final Object FILE_LOCK = new Object();
-    private static final String HEADER = "item\trig\tplaced_dy\tstored_dy\tseat\tseat_delta\tstays\tnotes";
-
-    /** Write one shard's rows to its own file (resilience: a timeout in another shard cannot lose these). */
-    private static void writeShardFile(int shard, List<String> rows) {
-        Path out = shardPath(shard);
-        try {
-            Files.createDirectories(out.getParent());
-            Files.writeString(out, rows.isEmpty() ? "" : String.join("\n", rows) + "\n",
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-        } catch (IOException e) {
-            throw new RuntimeException("slabbed-sweep: cannot write shard file " + out, e);
-        }
-    }
-
-    /**
-     * Concatenate every shard file, sort all rows, and write the single authoritative report. Sorting
-     * by construction makes the TSV byte-identical run-to-run regardless of how the gametest framework
-     * batches/orders shard execution (the diffability requirement). Row keys (item\trig) are unique, so
-     * a plain lexicographic sort is a total order.
-     */
-    private static void assembleReport() {
-        synchronized (FILE_LOCK) {
-            List<String> all = new ArrayList<>();
-            for (int s = 0; s < SHARD_COUNT; s++) {
-                Path sp = shardPath(s);
-                if (!Files.exists(sp)) {
-                    continue;
-                }
-                try {
-                    for (String line : Files.readAllLines(sp, StandardCharsets.UTF_8)) {
-                        if (!line.isEmpty()) {
-                            all.add(line);
-                        }
-                    }
-                } catch (IOException e) {
-                    throw new RuntimeException("slabbed-sweep: cannot read shard file " + sp, e);
-                }
-            }
-            all.sort(Comparator.naturalOrder());
-            Path out = reportPath();
-            try {
-                Files.createDirectories(out.getParent());
-                StringBuilder sb = new StringBuilder(HEADER).append('\n');
-                for (String line : all) {
-                    sb.append(line).append('\n');
-                }
-                Files.writeString(out, sb.toString(), StandardCharsets.UTF_8,
-                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                LOGGER.info("[slabbed-sweep] report -> {} ({} rows)", out, all.size());
-            } catch (IOException e) {
-                throw new RuntimeException("slabbed-sweep: cannot write report " + out, e);
-            }
-        }
-    }
+    private static final RegistrySweepArtifacts SWEEP_ARTIFACTS =
+            new RegistrySweepArtifacts(reportsDir(), SHARD_COUNT);
 
     // ── running summary (aggregated across shards) ──────────────────────────
     // per rig: [total, flush, gap, overlap, not_placed, stays_fail]
@@ -284,7 +231,19 @@ public final class RegistrySweepTest {
         }
     }
 
-    private static final AtomicInteger SHARDS_DONE = new AtomicInteger();
+    private static String summaryRunId;
+
+    private static void resetSummaryForRun(String runId) {
+        synchronized (SUMMARY) {
+            if (runId.equals(summaryRunId)) {
+                return;
+            }
+            for (long[] values : SUMMARY.values()) {
+                java.util.Arrays.fill(values, 0L);
+            }
+            summaryRunId = runId;
+        }
+    }
 
     private static void logSummary(String tag) {
         synchronized (SUMMARY) {
@@ -601,24 +560,14 @@ public final class RegistrySweepTest {
     }
 
     // ── the placeable-item universe (sorted for deterministic, clean-diffing shards) ──
-    private static List<Item> placeableItems() {
+    private static List<Item> placeableItems(SlabRigCaseCatalog.Snapshot snapshot) {
         List<Item> items = new ArrayList<>();
-        for (Item item : BuiltInRegistries.ITEM) {
-            if (!(item instanceof BlockItem)) {
-                continue; // spawn eggs, tools, etc. are not placeable blocks
-            }
-            Identifier id = BuiltInRegistries.ITEM.getKey(item);
-            String path = id.getPath();
-            if (path.equals("air")
-                    || path.contains("command_block")
-                    || path.contains("jigsaw")
-                    || path.contains("structure_block")
-                    || path.contains("structure_void")) {
-                continue; // technical/unplaceable
-            }
-            items.add(item);
+        // RIG-2 is the shared runtime authority: every BlockItem is represented, including technical
+        // items whose real useOn may refuse. Non-BlockItems remain explicitly dispositioned in the
+        // catalog rather than silently called "unplaceable" here.
+        for (SlabRigCaseCatalog.CatalogItem entry : snapshot.items()) {
+            items.add(BuiltInRegistries.ITEM.getValue(Identifier.parse(entry.id())));
         }
-        items.sort(Comparator.comparing(i -> BuiltInRegistries.ITEM.getKey(i).toString()));
         return items;
     }
 
@@ -629,7 +578,17 @@ public final class RegistrySweepTest {
             return;
         }
         ServerLevel w = h.getLevel();
-        List<Item> all = placeableItems();
+        SlabRigCaseCatalog.Snapshot snapshot = SlabRigCaseCatalog.snapshot();
+        boolean frozenDyEnabled = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        RegistrySweepArtifacts.RunToken run;
+        try {
+            run = SWEEP_ARTIFACTS.beginShard(snapshot, BuildStamp.GIT_SHA,
+                    SWEEP_RUNTIME_IMPLEMENTATION_SHA256, frozenDyEnabled, shard);
+        } catch (IOException e) {
+            throw h.assertionException("registry sweep refused before measurement: " + e.getMessage());
+        }
+        resetSummaryForRun(run.runId());
+        List<Item> all = placeableItems(snapshot);
         List<String> rows = new ArrayList<>();
         for (int i = shard; i < all.size(); i += SHARD_COUNT) {
             Item item = all.get(i);
@@ -641,13 +600,223 @@ public final class RegistrySweepTest {
             }
         }
         rows.sort(Comparator.naturalOrder());
-        writeShardFile(shard, rows);
+        boolean published;
+        try {
+            published = SWEEP_ARTIFACTS.completeShard(
+                    run, snapshot, frozenDyEnabled, shard, rows);
+        } catch (IOException e) {
+            throw h.assertionException("registry sweep artifact barrier rejected shard " + shard
+                    + ": " + e.getMessage());
+        }
         logSummary("shard=" + shard + " cumulative");
-        if (SHARDS_DONE.incrementAndGet() == SHARD_COUNT) {
+        if (published) {
             logSummary("TOTAL");
-            assembleReport();
+            LOGGER.info("[slabbed-sweep] COMPLETE report={} status={} rows={} catalog={} implementation={} run={}",
+                    SWEEP_ARTIFACTS.reportPath(), SWEEP_ARTIFACTS.statusPath(),
+                    run.expectedRows(), run.catalogHash(), run.runtimeImplementationSha256(), run.runId());
         }
         h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void sweepArtifactLifecycleRejectsStalePartialAndDuplicateRuns(GameTestHelper h) {
+        SlabRigCaseCatalog.Snapshot snapshot = SlabRigCaseCatalog.snapshot();
+        Path root = Paths.get(System.getProperty("user.dir", "."), "build", "tmp",
+                "registry-sweep-artifact-contract-" + System.nanoTime()).toAbsolutePath();
+        RegistrySweepArtifacts artifacts = new RegistrySweepArtifacts(root, SHARD_COUNT);
+        boolean frozenDyEnabled = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        try {
+            Files.createDirectories(root);
+            try {
+                artifacts.beginShard(snapshot, BuildStamp.GIT_SHA, "unavailable",
+                        frozenDyEnabled, 0);
+                throw h.assertionException("sweep must fail closed without an exact implementation digest");
+            } catch (IOException expected) {
+                // expected
+            }
+            Files.writeString(artifacts.reportPath(), "older report\n", StandardCharsets.UTF_8);
+            Files.writeString(artifacts.statusPath(), "older status\n", StandardCharsets.UTF_8);
+
+            RegistrySweepArtifacts.RunToken runA =
+                    artifacts.beginShard(snapshot, BuildStamp.GIT_SHA,
+                            SWEEP_RUNTIME_IMPLEMENTATION_SHA256, frozenDyEnabled, 0);
+            if (Files.exists(artifacts.reportPath()) || !Files.isRegularFile(artifacts.statusPath())
+                    || !Files.readString(artifacts.statusPath()).contains("status\tRUNNING")
+                    || !Files.readString(artifacts.statusPath()).contains(
+                            "runtime_implementation_sha256\t" + SWEEP_RUNTIME_IMPLEMENTATION_SHA256)
+                    || !Files.readString(artifacts.statusPath()).contains(
+                            "frozen_dy_enabled\t" + frozenDyEnabled)
+                    || !Files.readString(artifacts.statusPath()).contains(
+                            "report_sha256\t" + RegistrySweepArtifacts.NO_REPORT_SHA256)) {
+                throw h.assertionException("new sweep must archive old canonical and expose RUNNING status");
+            }
+            try (var history = Files.list(artifacts.historyDir())) {
+                if (history.count() != 2) {
+                    throw h.assertionException("old report and status must both be archived, never reused");
+                }
+            }
+            String differentImplementationSha256 = differentExactSha256(SWEEP_RUNTIME_IMPLEMENTATION_SHA256);
+            try {
+                artifacts.beginShard(snapshot, BuildStamp.GIT_SHA, differentImplementationSha256,
+                        frozenDyEnabled, 1);
+                throw h.assertionException("same build/catalog with different implementation must fail closed");
+            } catch (IOException expected) {
+                // expected
+            }
+            try {
+                artifacts.beginShard(snapshot, BuildStamp.GIT_SHA,
+                        SWEEP_RUNTIME_IMPLEMENTATION_SHA256, !frozenDyEnabled, 1);
+                throw h.assertionException(
+                        "same build/implementation/catalog with different frozen mode must fail closed");
+            } catch (IOException expected) {
+                // expected
+            }
+            try {
+                artifacts.beginShard(snapshot, BuildStamp.GIT_SHA,
+                        SWEEP_RUNTIME_IMPLEMENTATION_SHA256, frozenDyEnabled, 0);
+                throw h.assertionException("duplicate shard start must fail closed");
+            } catch (IOException expected) {
+                // expected
+            }
+
+            try {
+                artifacts.completeShard(runA, snapshot, !frozenDyEnabled, 0,
+                        syntheticSweepRows(snapshot, 0));
+                throw h.assertionException(
+                        "active sweep shard completion must reject a changed frozen mode");
+            } catch (IOException expected) {
+                // expected
+            }
+            boolean published = artifacts.completeShard(runA, snapshot, frozenDyEnabled, 0,
+                    syntheticSweepRows(snapshot, 0));
+            if (published) {
+                throw h.assertionException("one current shard cannot publish a canonical report");
+            }
+            Path exactShardPath = artifacts.shardPath(runA, 0);
+            byte[] exactShard = Files.readAllBytes(exactShardPath);
+            String alteredShard = new String(exactShard, StandardCharsets.UTF_8)
+                    .replace(SWEEP_RUNTIME_IMPLEMENTATION_SHA256, differentImplementationSha256);
+            Files.writeString(exactShardPath, alteredShard, StandardCharsets.UTF_8);
+            try {
+                artifacts.validateShardFileForTests(runA, snapshot, 0);
+                throw h.assertionException(
+                        "same run/build/catalog shard with different implementation must be rejected");
+            } catch (IOException expected) {
+                // expected
+            }
+            Files.write(exactShardPath, exactShard);
+            artifacts.validateShardFileForTests(runA, snapshot, 0);
+            String alteredFrozenModeShard = new String(exactShard, StandardCharsets.UTF_8)
+                    .replace("# frozen_dy_enabled\t" + frozenDyEnabled,
+                            "# frozen_dy_enabled\t" + !frozenDyEnabled);
+            Files.writeString(exactShardPath, alteredFrozenModeShard, StandardCharsets.UTF_8);
+            try {
+                artifacts.validateShardFileForTests(runA, snapshot, 0);
+                throw h.assertionException(
+                        "same run/build/catalog shard from another frozen mode must be rejected");
+            } catch (IOException expected) {
+                // expected
+            }
+            Files.write(exactShardPath, exactShard);
+            artifacts.validateShardFileForTests(runA, snapshot, 0);
+
+            for (int shard = 1; shard < SHARD_COUNT; shard++) {
+                RegistrySweepArtifacts.RunToken token = artifacts.beginShard(snapshot, BuildStamp.GIT_SHA,
+                        SWEEP_RUNTIME_IMPLEMENTATION_SHA256, frozenDyEnabled, shard);
+                published = artifacts.completeShard(token, snapshot, frozenDyEnabled, shard,
+                        syntheticSweepRows(snapshot, shard));
+                if (published != (shard == SHARD_COUNT - 1)) {
+                    throw h.assertionException("canonical report may publish only after 8 unique shards");
+                }
+            }
+            List<String> measurements = artifacts.validateCompleteReportForTests(runA, snapshot);
+            String completeStatus = Files.readString(artifacts.statusPath());
+            if (measurements.size() != snapshot.items().size() * RIGS.length
+                    || !measurements.equals(measurements.stream().sorted().toList())
+                    || !completeStatus.contains("status\tCOMPLETE")
+                    || !completeStatus.contains("frozen_dy_enabled\t" + frozenDyEnabled)
+                    || !completeStatus.matches("(?s).*report_sha256\\t[0-9a-f]{64}\\n.*")) {
+                throw h.assertionException("complete sweep report/status must be exact, sorted, and current");
+            }
+
+            byte[] exactReport = Files.readAllBytes(artifacts.reportPath());
+            String reportText = new String(exactReport, StandardCharsets.UTF_8);
+            int fixture = reportText.indexOf("\tfixture\n");
+            if (fixture < 0) {
+                throw h.assertionException("synthetic canonical report lacks a tamper target");
+            }
+            String tamperedReport = reportText.substring(0, fixture)
+                    + "\ttamper!\n" + reportText.substring(fixture + "\tfixture\n".length());
+            Files.writeString(artifacts.reportPath(), tamperedReport, StandardCharsets.UTF_8);
+            try {
+                artifacts.validateCompleteReportForTests(runA, snapshot);
+                throw h.assertionException("tampered report beside COMPLETE status must be rejected");
+            } catch (IOException expected) {
+                // expected
+            }
+            Files.write(artifacts.reportPath(), exactReport);
+            artifacts.validateCompleteReportForTests(runA, snapshot);
+
+            RegistrySweepArtifacts.RunToken runB =
+                    artifacts.beginShard(snapshot, BuildStamp.GIT_SHA,
+                            SWEEP_RUNTIME_IMPLEMENTATION_SHA256, frozenDyEnabled, 0);
+            if (Files.exists(artifacts.reportPath())) {
+                throw h.assertionException("same-JVM rerun must retire run A before run B starts");
+            }
+            Path staleShard = artifacts.shardPath(runB, SHARD_COUNT - 1);
+            Files.createDirectories(staleShard.getParent());
+            Files.copy(artifacts.shardPath(runA, SHARD_COUNT - 1), staleShard,
+                    StandardCopyOption.REPLACE_EXISTING);
+            try {
+                artifacts.validateShardFileForTests(runB, snapshot, SHARD_COUNT - 1);
+                throw h.assertionException("same-build/catalog shard with an older nonce must be rejected");
+            } catch (IOException expected) {
+                // expected
+            }
+            for (int shard = 0; shard < SHARD_COUNT - 1; shard++) {
+                RegistrySweepArtifacts.RunToken token = shard == 0
+                        ? runB : artifacts.beginShard(snapshot, BuildStamp.GIT_SHA,
+                                SWEEP_RUNTIME_IMPLEMENTATION_SHA256, frozenDyEnabled, shard);
+                if (artifacts.completeShard(token, snapshot, frozenDyEnabled, shard,
+                        syntheticSweepRows(snapshot, shard))) {
+                    throw h.assertionException("seven current shards cannot publish a canonical report");
+                }
+            }
+            if (Files.exists(artifacts.reportPath())
+                    || !Files.readString(artifacts.statusPath()).contains("completed_unique_shards\t7/8")) {
+                throw h.assertionException("partial run must remain visibly RUNNING with no canonical report");
+            }
+            try {
+                artifacts.completeShard(runA, snapshot, frozenDyEnabled, SHARD_COUNT - 1,
+                        syntheticSweepRows(snapshot, SHARD_COUNT - 1));
+                throw h.assertionException("stale run token must not complete the active run");
+            } catch (IOException expected) {
+                // expected
+            }
+        } catch (IOException e) {
+            throw h.assertionException("registry sweep artifact contract I/O failed: " + e.getMessage());
+        }
+        h.succeed();
+    }
+
+    private static String differentExactSha256(String sha256) {
+        if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
+            throw new IllegalStateException("sweep implementation digest is unavailable: " + sha256);
+        }
+        char first = sha256.charAt(0) == '0' ? '1' : '0';
+        return first + sha256.substring(1);
+    }
+
+    private static List<String> syntheticSweepRows(SlabRigCaseCatalog.Snapshot snapshot, int shard) {
+        List<String> rows = new ArrayList<>();
+        for (int index = shard; index < snapshot.items().size(); index += SHARD_COUNT) {
+            String item = snapshot.items().get(index).id();
+            for (String rig : RIGS) {
+                rows.add(item + "\t" + rig + "\t0.0000\tNaN\tFLUSH\t0.0000\tOK\tfixture");
+            }
+        }
+        rows.sort(Comparator.naturalOrder());
+        return rows;
     }
 
     // ── shard methods (alphabetical stride; one timeout kills at most 1/8) ───

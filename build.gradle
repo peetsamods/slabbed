@@ -185,13 +185,55 @@ sourceSets {
             include("com/slabbed/test/DeepCompoundTowerLawTest.java")
             include("com/slabbed/test/LandingRuleLawTest.java")
             include("com/slabbed/test/RegistrySweepTest.java")
+            include("com/slabbed/test/RegistrySweepArtifacts.java")
             include("com/slabbed/test/SlabRigCommandSmokeTest.java")
+            include("com/slabbed/test/SlabRigCaseCatalogTest.java")
             include("com/slabbed/test/SlabTestKitPaletteTest.java")
             include("com/slabbed/test/SlabTestKitCommandsTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
             include("com/slabbed/client/SlabModelStaleSentinelClientThrottleClientGameTest.java")
         }
     }
+}
+
+// RIG-2 must be present on both truth surfaces: compiled gametest sources and Fabric entrypoints.
+// This explicit pre-compile gate makes deleting either registration a deterministic red.
+tasks.register("verifyRig2GametestRegistration") {
+    inputs.file(layout.projectDirectory.file("build.gradle"))
+    inputs.file(layout.projectDirectory.file("src/gametest/resources/fabric.mod.json"))
+    inputs.files(sourceSets.gametest.java)
+    doLast {
+        def configuredSources = sourceSets.gametest.java.files.collect {
+            it.canonicalPath.replace('\\', '/')
+        } as Set
+        [
+                "RegistrySweepArtifacts.java",
+                "RegistrySweepTest.java",
+                "SlabRigCommandSmokeTest.java",
+                "SlabRigCaseCatalogTest.java"
+        ].each { sourceName ->
+            def suffix = "/com/slabbed/test/${sourceName}"
+            if (!configuredSources.any { it.endsWith(suffix) }) {
+                throw new GradleException("RIG-2 gametest source registration missing: ${sourceName}")
+            }
+        }
+        def metadata = new groovy.json.JsonSlurper().parse(
+                layout.projectDirectory.file("src/gametest/resources/fabric.mod.json").asFile)
+        def entrypoints = metadata.entrypoints?.get("fabric-gametest") ?: []
+        [
+                "com.slabbed.test.RegistrySweepTest",
+                "com.slabbed.test.SlabRigCommandSmokeTest",
+                "com.slabbed.test.SlabRigCaseCatalogTest"
+        ].each { className ->
+            if (!entrypoints.contains(className)) {
+                throw new GradleException("RIG-2 Fabric gametest entrypoint missing: ${className}")
+            }
+        }
+    }
+}
+
+tasks.named("compileGametestJava") {
+    dependsOn(tasks.named("verifyRig2GametestRegistration"))
 }
 
 // Jar-identity stamp: a jar must be traceable to its exact commit from its own bytes. Two different
