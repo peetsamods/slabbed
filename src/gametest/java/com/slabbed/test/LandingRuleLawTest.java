@@ -2,6 +2,7 @@ package com.slabbed.test;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.placement.LandingHitValidationPolicy;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedOffsetRaycast;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
@@ -588,6 +589,103 @@ public final class LandingRuleLawTest {
                             ? result[0].getBlockPos().toShortString() : "miss")
                     + " (TODAY: air-termination breaks the deep probe before reaching the owner). "
                     + "Fixed by the store-aware deep probe / SIDE depth cap the A-1 amendment requires.");
+        }
+        h.succeed();
+    }
+
+    /**
+     * TEST 19 live RED (C2 server validation): the real player aimed a stone slab at the SOUTH face
+     * of an ordinary full-block owner stored at {@code dy=-2.0}. The client predicted the correct
+     * -2.0 placement, but the server rejected the packet as too far because its slab-eligibility
+     * qualifier still delegated to the legacy exact--1 compound-remap grammar.
+     *
+     * <p>The absolute live coordinates were owner {@code 512,-39,509}, hit
+     * {@code 512.5,-40.45004642009735,510.0}; this fixture preserves their owner-relative geometry.
+     * The RED phase called the legacy qualifier and failed with
+     * {@code source_not_compound_full_block_dy_-1}. The green proof calls the same pure C2 policy used
+     * by the server mixin; the placement remap grammar itself remains unchanged.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void deepSideServerValidationAcceptsResolverOwnedSlab(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos base = h.absolutePos(new BlockPos(3, 1, 3));
+        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+        bslab(w, base.above(1));
+        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+        bslab(w, base.above(3));
+        BlockPos owner = base.above(4);
+        w.setBlock(owner, Blocks.STONE.defaultBlockState(), 2);
+        SlabAnchorAttachment.addAnchor(w, owner, w.getBlockState(owner));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(w, owner, w.getBlockState(owner));
+        if (!SlabAnchorAttachment.isCompoundFullBlockAnchor(w, owner)) {
+            throw h.assertionException(owner, "premise: owner must retain the legacy compound marker");
+        }
+        forceStore(w, owner, -2.0d);
+
+        double[] shiftedDy = new double[1];
+        withFrozen(() -> {
+            double ownerDy = liveDy(w, owner);
+            if (Double.doubleToRawLongBits(ownerDy) != Double.doubleToRawLongBits(-2.0d)) {
+                throw h.assertionException(owner, "premise: owner must read exact stored dy=-2.0, got " + ownerDy);
+            }
+            Vec3 liveLikeHit = new Vec3(
+                    owner.getX() + 0.5d,
+                    owner.getY() - 1.45004642009735d,
+                    owner.getZ() + 1.0d);
+            shiftedDy[0] = LandingHitValidationPolicy.shiftedCenterDy(
+                    owner,
+                    w.getBlockState(owner),
+                    ownerDy,
+                    Direction.SOUTH,
+                    liveLikeHit,
+                    Blocks.STONE_SLAB.defaultBlockState());
+        });
+
+        if (Double.doubleToRawLongBits(shiftedDy[0]) != Double.doubleToRawLongBits(-2.0d)) {
+            throw h.assertionException(owner, "TEST 19: resolver-owned slab side hit must shift the server "
+                    + "validation center by exact dy=-2.0, got " + shiftedDy[0]);
+        }
+        h.succeed();
+    }
+
+    /** Negative controls for the C2 server policy: no global tolerance or family widening. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void deepServerValidationRejectsUnsupportedAndOutOfEnvelopeHits(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        Vec3 inside = new Vec3(owner.getX() + 0.5d, owner.getY() - 1.45d, owner.getZ() + 1.0d);
+
+        double fullBlockPositive = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
+                Blocks.STONE.defaultBlockState());
+        if (Double.doubleToRawLongBits(fullBlockPositive) != Double.doubleToRawLongBits(-2.0d)) {
+            throw h.assertionException(owner, "C2 full-block control must retain the exact -2.0 center shift");
+        }
+
+        double unsupportedHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
+                Blocks.TORCH.defaultBlockState());
+        double entityBlockHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
+                Blocks.CHEST.defaultBlockState());
+        double flatOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), 0.0d, Direction.SOUTH, inside,
+                Blocks.STONE_SLAB.defaultBlockState());
+        double partialOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE_SLAB.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
+                Blocks.STONE_SLAB.defaultBlockState());
+        Vec3 outside = new Vec3(owner.getX() + 1.25d, owner.getY() - 1.45d, owner.getZ() + 1.0d);
+        double outsideEnvelope = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, outside,
+                Blocks.STONE_SLAB.defaultBlockState());
+
+        if (!Double.isNaN(unsupportedHeld)
+                || !Double.isNaN(entityBlockHeld)
+                || !Double.isNaN(flatOwner)
+                || !Double.isNaN(partialOwner)
+                || !Double.isNaN(outsideEnvelope)) {
+            throw h.assertionException(owner, "server validation policy widened outside C2: unsupported="
+                    + unsupportedHeld + " entityBlock=" + entityBlockHeld + " flatOwner=" + flatOwner
+                    + " partialOwner=" + partialOwner + " outsideEnvelope=" + outsideEnvelope);
         }
         h.succeed();
     }
