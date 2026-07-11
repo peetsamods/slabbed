@@ -161,6 +161,37 @@ public final class SlabRigCommandSmokeTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigHangsDirectRemainsUnavailableDuringRig3B2AKernelPass(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        CommandSourceStack source = sourceAt(world, h.absolutePos(new BlockPos(1, 2, 1)));
+        String before = noWorldFingerprint(h, world, source);
+
+        CommandDispatcher<CommandSourceStack> live = world.getServer().getCommands().getDispatcher();
+        var slabrig = live.getRoot().getChild("slabrig");
+        var hangs = slabrig == null ? null : slabrig.getChild("hangs");
+        if (hangs == null || hangs.getChild("catalog") == null) {
+            throw h.assertionException("RIG-3B2A boundary test lost the existing hangs catalog node");
+        }
+        if (hangs.getChild("direct") != null) {
+            throw h.assertionException(
+                    "RIG-3B2A must not expose a production world-writing hangs direct command");
+        }
+
+        CommandDispatcher<CommandSourceStack> isolated = new CommandDispatcher<>();
+        SlabRigCommand.register(isolated);
+        if (tryExec(isolated, source,
+                "slabrig hangs direct 6143 topology 42 paintings 1 force") != -1) {
+            throw h.assertionException("RIG-3B2A dispatcher accepted its B2B-reserved grammar");
+        }
+        String after = noWorldFingerprint(h, world, source);
+        if (!before.equals(after)) {
+            throw h.assertionException("rejected RIG-3B2B grammar changed world/session state\nbefore="
+                    + before + "\nafter=" + after);
+        }
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabrigStackCatalogAndPageContract(GameTestHelper h) {
         List<String> expected = new ArrayList<>();
         for (int length = 1; length <= 5; length++) {

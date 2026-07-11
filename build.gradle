@@ -189,6 +189,9 @@ sourceSets {
             include("com/slabbed/test/SlabRigCommandSmokeTest.java")
             include("com/slabbed/test/SlabRigCaseCatalogTest.java")
             include("com/slabbed/test/SlabRigHangingCatalogTest.java")
+            include("com/slabbed/test/SlabRigHangingPaintingPlanTest.java")
+            include("com/slabbed/test/SlabRigHangingKernelArtifactsTest.java")
+            include("com/slabbed/test/SlabRigHangingPaintingKernelTest.java")
             include("com/slabbed/test/SlabTestKitPaletteTest.java")
             include("com/slabbed/test/SlabTestKitCommandsTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
@@ -212,7 +215,10 @@ tasks.register("verifyRig2GametestRegistration") {
                 "RegistrySweepTest.java",
                 "SlabRigCommandSmokeTest.java",
                 "SlabRigCaseCatalogTest.java",
-                "SlabRigHangingCatalogTest.java"
+                "SlabRigHangingCatalogTest.java",
+                "SlabRigHangingPaintingPlanTest.java",
+                "SlabRigHangingKernelArtifactsTest.java",
+                "SlabRigHangingPaintingKernelTest.java"
         ].each { sourceName ->
             def suffix = "/com/slabbed/test/${sourceName}"
             if (!configuredSources.any { it.endsWith(suffix) }) {
@@ -226,7 +232,10 @@ tasks.register("verifyRig2GametestRegistration") {
                 "com.slabbed.test.RegistrySweepTest",
                 "com.slabbed.test.SlabRigCommandSmokeTest",
                 "com.slabbed.test.SlabRigCaseCatalogTest",
-                "com.slabbed.test.SlabRigHangingCatalogTest"
+                "com.slabbed.test.SlabRigHangingCatalogTest",
+                "com.slabbed.test.SlabRigHangingPaintingPlanTest",
+                "com.slabbed.test.SlabRigHangingKernelArtifactsTest",
+                "com.slabbed.test.SlabRigHangingPaintingKernelTest"
         ].each { className ->
             if (!entrypoints.contains(className)) {
                 throw new GradleException("RIG catalog Fabric gametest entrypoint missing: ${className}")
