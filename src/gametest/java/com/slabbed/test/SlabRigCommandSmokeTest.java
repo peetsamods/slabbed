@@ -14,11 +14,15 @@ import com.slabbed.util.BuildStamp;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.PermissionSet;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -31,6 +35,7 @@ import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 
@@ -65,6 +70,92 @@ public final class SlabRigCommandSmokeTest {
             }
         } catch (Exception e) {
             throw h.assertionException("production-dispatcher /slabrig catalog threw: " + e);
+        }
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigHangsCatalogIsRegisteredAndWorldFree(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos markerSupport = h.absolutePos(new BlockPos(6, 1, 6));
+        BlockPos markerSubject = markerSupport.above();
+        BlockPos blockEntitySentinel = h.absolutePos(new BlockPos(7, 1, 7));
+        world.setBlock(markerSupport, Blocks.STONE_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.BOTTOM), 3);
+        world.setBlock(markerSubject, Blocks.STONE.defaultBlockState(), 3);
+        SlabAnchorAttachment.addAnchor(world, markerSubject, world.getBlockState(markerSubject));
+        world.setBlock(blockEntitySentinel, Blocks.CHEST.defaultBlockState(), 3);
+        h.makeMockPlayer(GameType.SURVIVAL);
+        if (!SlabAnchorAttachment.isAnchored(world, markerSubject)
+                || world.getBlockEntity(blockEntitySentinel) == null) {
+            throw h.assertionException("RIG-3B1 no-world proof sentinels failed to initialize");
+        }
+        List<String> messages = new ArrayList<>();
+        CommandSource capture = new CommandSource() {
+            @Override
+            public void sendSystemMessage(Component message) {
+                messages.add(message.getString());
+            }
+
+            @Override
+            public boolean acceptsSuccess() {
+                return true;
+            }
+
+            @Override
+            public boolean acceptsFailure() {
+                return true;
+            }
+
+            @Override
+            public boolean shouldInformAdmins() {
+                return false;
+            }
+        };
+        CommandSourceStack source = sourceAt(world, h.absolutePos(new BlockPos(1, 2, 1)))
+                .withSource(capture);
+        String before = noWorldFingerprint(h, world, source);
+        CommandDispatcher<CommandSourceStack> live = world.getServer().getCommands().getDispatcher();
+        var slabrigNode = live.getRoot().getChild("slabrig");
+        if (slabrigNode == null || slabrigNode.getChild("hangs") == null
+                || slabrigNode.getChild("hangs").getChild("catalog") == null) {
+            throw h.assertionException("production dispatcher lacks exact /slabrig hangs catalog nodes");
+        }
+        CommandDispatcher<CommandSourceStack> isolated = new CommandDispatcher<>();
+        SlabRigCommand.register(isolated);
+        if (tryExec(isolated, source, "slabrig hangs") != -1
+                || tryExec(isolated, source, "slabrig hangs junk") != -1
+                || tryExec(isolated, source, "slabrig hangs catalog force") != -1
+                || tryExec(isolated, source.withPermission(PermissionSet.NO_PERMISSIONS),
+                "slabrig hangs catalog") != -1) {
+            throw h.assertionException("hangs catalog grammar/permission boundary accepted an invalid form");
+        }
+        int result = tryExec(live, source, "slabrig hangs catalog");
+        if (result != 1) {
+            throw h.assertionException("/slabrig hangs catalog must export successfully: " + messages);
+        }
+        String firstStatus = messages.getLast();
+        int repeatResult = tryExec(live, source, "slabrig hangs catalog");
+        if (repeatResult != 1 || !firstStatus.equals(messages.getLast())) {
+            throw h.assertionException("repeated hangs catalog command changed identity/path/status: " + messages);
+        }
+        String after = noWorldFingerprint(h, world, source);
+        if (!before.equals(after)) {
+            throw h.assertionException("/slabrig hangs catalog mutated world/session state\nbefore="
+                    + before + "\nafter=" + after);
+        }
+        String status = String.join("\n", messages);
+        for (String required : new String[]{
+                "[slabrig] hangs catalog", "runtimeItems=1537", "subjects=163", "routes=38740",
+                "paintingVariants=51", "randomPlaceable=47", "catalogHash=",
+                "minecraft=26.2", "runtimeContentSha256=", "paintingRegistry=minecraft:painting_variant",
+                "placeableTag=minecraft:placeable", "paintingComponent=minecraft:painting/variant",
+                "paintingHash=", "executionIdentity=", "artifactSha256=",
+                "playerProof=ABSENT", "worldMutation=NONE", "artifact="}) {
+            if (!status.contains(required)) {
+                throw h.assertionException("hangs catalog truthful status omitted '" + required
+                        + "': " + status);
+            }
         }
         h.succeed();
     }
@@ -821,6 +912,65 @@ public final class SlabRigCommandSmokeTest {
 
     // ── harness ────────────────────────────────────────────────────────────────
 
+    /** Synchronous state sentinel for the RIG-3B1 export-only command. */
+    private static String noWorldFingerprint(GameTestHelper h, ServerLevel world,
+                                             CommandSourceStack source) {
+        StringBuilder out = new StringBuilder(32_768);
+        out.append("manifest=").append(SlabRigCommand.trackedManifestStatus(source));
+        out.append("|gameTime=").append(world.getGameTime());
+        out.append("|scheduledTicks=").append(world.getBlockTicks().count()).append(',')
+                .append(world.getFluidTicks().count());
+        var weather = world.getWeatherData();
+        out.append("|weather=").append(weather.getClearWeatherTime()).append(',')
+                .append(weather.isRaining()).append(',').append(weather.getRainTime()).append(',')
+                .append(weather.isThundering()).append(',').append(weather.getThunderTime());
+
+        world.getGameRules().availableRules()
+                .sorted(Comparator.comparing(rule -> rule.getIdentifierWithFallback().toString()))
+                .forEach(rule -> out.append("|rule=").append(rule.getIdentifierWithFallback())
+                        .append('=').append(world.getGameRules().getAsString(rule)));
+
+        for (int y = 0; y < 8; y++) {
+            for (int z = 0; z < 8; z++) {
+                for (int x = 0; x < 8; x++) {
+                    BlockPos pos = h.absolutePos(new BlockPos(x, y, z));
+                    BlockState state = world.getBlockState(pos);
+                    out.append("|block=").append(x).append(',').append(y).append(',').append(z)
+                            .append(':').append(state)
+                            .append(":dyBits=").append(Long.toHexString(Double.doubleToLongBits(
+                                    SlabAnchorAttachment.storedPlacementDy(world, pos))))
+                            .append(":markers=")
+                            .append(SlabAnchorAttachment.isFrozenFlat(world, pos)).append(',')
+                            .append(SlabAnchorAttachment.isAnchored(world, pos)).append(',')
+                            .append(SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)).append(',')
+                            .append(SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)).append(',')
+                            .append(SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(world, pos, state)).append(',')
+                            .append(SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)).append(',')
+                            .append(SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, pos, state)).append(',')
+                            .append(SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, pos, state));
+                    var blockEntity = world.getBlockEntity(pos);
+                    if (blockEntity != null) {
+                        out.append(":be=").append(BuiltInRegistries.BLOCK_ENTITY_TYPE
+                                .getKey(blockEntity.getType())).append(':')
+                                .append(blockEntity.saveWithFullMetadata(world.registryAccess()));
+                    }
+                }
+            }
+        }
+
+        List<String> entities = new ArrayList<>();
+        for (Entity entity : world.getAllEntities()) {
+            entities.add(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()) + "@"
+                    + entity.getUUID() + "@" + entity.position() + "@aabb=" + entity.getBoundingBox()
+                    + "@rot=" + entity.getYRot() + ',' + entity.getXRot());
+        }
+        entities.sort(String::compareTo);
+        for (String entity : entities) {
+            out.append("|entity=").append(entity);
+        }
+        return out.toString();
+    }
+
     private static CommandSourceStack sourceFacingSouth(GameTestHelper h, ServerLevel w) {
         // Source at a known cell facing SOUTH (yaw 0 -> Direction.fromYRot(0) == SOUTH), with full
         // permissions so the GAMEMASTERS gate passes. Feet at (1,2,1) relative -> rig base = feet.below()
@@ -862,6 +1012,11 @@ public final class SlabRigCommandSmokeTest {
     private static int tryExec(CommandSourceStack source, String command) {
         CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
         SlabRigCommand.register(dispatcher);
+        return tryExec(dispatcher, source, command);
+    }
+
+    private static int tryExec(CommandDispatcher<CommandSourceStack> dispatcher,
+                               CommandSourceStack source, String command) {
         try {
             return dispatcher.execute(command, source);
         } catch (Exception e) {
