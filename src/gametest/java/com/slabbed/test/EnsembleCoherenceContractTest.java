@@ -222,6 +222,42 @@ public final class EnsembleCoherenceContractTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void sentinelEmitsOccludedOccupancyOnceWithSelfPair(GameTestHelper helper) {
+        List<LinkedHashMap<String, String>> rows = new ArrayList<>();
+        SlabModelStaleSentinel.resetCold();
+        SlabModelStaleSentinel.resetLiveDyPolicyForTest();
+        SlabModelStaleSentinel.testSessionOverride = true;
+        try {
+            ServerLevel w = helper.getLevel();
+            BlockPos slab = helper.absolutePos(new BlockPos(2, 2, 2));
+            w.setBlock(slab, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+            SlabModelStaleSentinel.setLiveDyPolicy((level, pos, state) ->
+                    state.getBlock() == Blocks.OAK_SLAB ? -0.5 : 0.0);
+            SlabModelStaleSentinel.armForTest(
+                    w, slab, SlabModelStaleSentinel.REASON_PLACEMENT, 1_000_000L);
+            SlabModelStaleSentinel.recordBake(slab, -0.5f);
+            SlabModelStaleSentinel.samplePass(w, 1_000_020L, pos -> true, rows::add);
+            SlabModelStaleSentinel.samplePass(w, 1_000_040L, pos -> true, rows::add);
+
+            List<LinkedHashMap<String, String>> occupancy = rows.stream()
+                    .filter(r -> "ENSEMBLE_OCCLUDED_OCCUPANCY".equals(r.get("kind")))
+                    .toList();
+            String expectedPos = slab.getX() + " " + slab.getY() + " " + slab.getZ();
+            if (occupancy.size() != 1
+                    || !expectedPos.equals(occupancy.get(0).get("pos"))
+                    || !expectedPos.equals(occupancy.get(0).get("pairPos"))) {
+                throw helper.assertionException(
+                        "occluded occupancy must emit once as a self-pair, got " + occupancy);
+            }
+            helper.succeed();
+        } finally {
+            SlabModelStaleSentinel.testSessionOverride = false;
+            SlabModelStaleSentinel.resetLiveDyPolicyForTest();
+            SlabModelStaleSentinel.resetCold();
+        }
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void gapFillBandHeightMatchesGapDepthAndOnlyGapDepth(GameTestHelper helper) {
         // Phase 3a: the band plan is exactly the classifier GAP depth — zero for every other verdict.
         ServerLevel w = helper.getLevel();

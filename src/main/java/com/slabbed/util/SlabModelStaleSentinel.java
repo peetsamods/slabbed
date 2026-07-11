@@ -84,6 +84,37 @@ public final class SlabModelStaleSentinel {
     public static final String KIND_DIVERGENT = "MODEL_STALE_DIVERGENT";
     public static final String KIND_ABSENT = "MODEL_STALE_ABSENT";
     public static final String KIND_NO_BAKE_YELLOW = "MODEL_STALE_NO_BAKE_YELLOW";
+    public static final String KIND_ENSEMBLE_INTERPENETRATION = "ENSEMBLE_INTERPENETRATION";
+    public static final String KIND_ENSEMBLE_GAP = "ENSEMBLE_GAP";
+    public static final String KIND_ENSEMBLE_OCCLUDED_OCCUPANCY = "ENSEMBLE_OCCLUDED_OCCUPANCY";
+
+    /** Recorder/chat routing truth. Unknown diagnostic kinds are deliberately non-red. */
+    public enum DiagnosticSeverity {
+        RED("red"),
+        INFO("info"),
+        YELLOW("yellow");
+
+        private final String wireName;
+
+        DiagnosticSeverity(String wireName) {
+            this.wireName = wireName;
+        }
+
+        public String wireName() {
+            return wireName;
+        }
+    }
+
+    /** One shared authority for recorder mismatch routing and client chat/burst behavior. */
+    public static DiagnosticSeverity diagnosticSeverity(String kind) {
+        return switch (kind == null ? "" : kind) {
+            case KIND_DIVERGENT, KIND_ABSENT,
+                    KIND_ENSEMBLE_INTERPENETRATION, KIND_ENSEMBLE_GAP -> DiagnosticSeverity.RED;
+            case KIND_ENSEMBLE_OCCLUDED_OCCUPANCY -> DiagnosticSeverity.INFO;
+            case KIND_NO_BAKE_YELLOW -> DiagnosticSeverity.YELLOW;
+            default -> DiagnosticSeverity.YELLOW;
+        };
+    }
 
     public static final String REASON_PLACEMENT = "placement";
     public static final String REASON_NEIGHBORHOOD = "neighborhood";

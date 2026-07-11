@@ -73,7 +73,8 @@
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
-      "com.slabbed.test.ModelStaleSentinelSelfCheckClientGameTest"
+      "com.slabbed.test.ModelStaleSentinelSelfCheckClientGameTest",
+      "com.slabbed.client.SlabModelStaleSentinelClientThrottleClientGameTest"
     ]
   },
   "depends": {

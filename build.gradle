@@ -189,6 +189,7 @@ sourceSets {
             include("com/slabbed/test/SlabTestKitPaletteTest.java")
             include("com/slabbed/test/SlabTestKitCommandsTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
+            include("com/slabbed/client/SlabModelStaleSentinelClientThrottleClientGameTest.java")
         }
     }
 }

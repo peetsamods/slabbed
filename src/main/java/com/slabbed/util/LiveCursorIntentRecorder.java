@@ -49,8 +49,8 @@ public final class LiveCursorIntentRecorder {
     // dev/CI launch can start already-enabled, but a player reaches this the same way as everything
     // else in Slabbed's debug surface: a slash command (/slabdev record), never a JVM flag.
     private static volatile boolean enabled = Boolean.getBoolean(ENABLE_PROPERTY);
-    private static final String SCHEMA_VERSION = "1";
-    private static final String RECORDER_VERSION = "26.2-revived-live-cursor-intent";
+    private static final String SCHEMA_VERSION = "2";
+    private static final String RECORDER_VERSION = "26.2-recorder-truth-v2";
     private static final String RUN_ID = UUID.randomUUID().toString();
 
     private static Path sessionDir;
@@ -67,6 +67,7 @@ public final class LiveCursorIntentRecorder {
     private static long renderedOutlineReplayBoundsSplitRows;
     private static long renderedOutlineTargetSplitRows;
     private static long placementExpectedDyMismatchRows;
+    private static long placementExpectedLaneMismatchRows;
     private static long loweredSideSlabPlacementVanillaDyRows;
     private static long collisionIteratorTargetMissRows;
     private static long collisionIteratorTargetPresentRows;
@@ -78,6 +79,7 @@ public final class LiveCursorIntentRecorder {
     private static long breakRows;
     private static long placementSideDySplitRows;
     private static long ensembleClashRows;
+    private static long ensembleOccludedOccupancyInfoRows;
     // Same-instant client/server pair rule state (guarded by LOCK): the TEST (3) triage found the L3
     // first-frame split only by hand-mining millisecond row pairs — "data but no rule". Now a rule.
     private static String lastClientPlacementKey;
@@ -224,9 +226,8 @@ public final class LiveCursorIntentRecorder {
     }
 
     /**
-     * MODEL_STALE sentinel rows ({@link SlabModelStaleSentinel}): the render-truth probe's red/yellow
-     * verdicts. Non-yellow kinds land in mismatches.tsv via the standard marker path, so a live session's
-     * staleness verdicts are machine-greppable next to every other mismatch family.
+     * Sentinel rows ({@link SlabModelStaleSentinel}) are always session-recorded, while the shared
+     * diagnostic-severity policy decides whether they also belong in the red-only mismatch stream.
      */
     public static void recordSentinel(LinkedHashMap<String, String> fields) {
         if (!enabled()) {
@@ -237,26 +238,29 @@ public final class LiveCursorIntentRecorder {
         row.putIfAbsent("rowId", Long.toString(ROW_IDS.incrementAndGet()));
         row.putIfAbsent("recordedAt", Instant.now().toString());
         String kind = row.getOrDefault("kind", "unknown");
-        String marker = "LIVE_" + kind;
+        SlabModelStaleSentinel.DiagnosticSeverity severity =
+                SlabModelStaleSentinel.diagnosticSeverity(kind);
+        String marker = severity == SlabModelStaleSentinel.DiagnosticSeverity.INFO
+                ? "INFO_" + kind
+                : "LIVE_" + kind;
+        row.put("severity", severity.wireName());
         row.put("marker", marker);
         synchronized (LOCK) {
-            boolean yellow;
-            if (kind.startsWith("ENSEMBLE_")) {
-                // Phase 1 ensemble-coherence verdicts (ENSEMBLE_COHERENCE_DESIGN.md) — the class the
-                // 2026-07-07 video proved row-silent. Verdicts, not breadcrumbs: they hit mismatches.tsv.
-                ensembleClashRows++;
-                yellow = false;
-            } else {
-                switch (kind) {
-                    case SlabModelStaleSentinel.KIND_DIVERGENT -> { modelStaleDivergentRows++; yellow = false; }
-                    case SlabModelStaleSentinel.KIND_ABSENT -> { modelStaleAbsentRows++; yellow = false; }
-                    default -> { modelStaleYellowRows++; yellow = true; }
+            switch (severity) {
+                case RED -> {
+                    if (kind.startsWith("ENSEMBLE_")) {
+                        ensembleClashRows++;
+                    } else if (SlabModelStaleSentinel.KIND_DIVERGENT.equals(kind)) {
+                        modelStaleDivergentRows++;
+                    } else if (SlabModelStaleSentinel.KIND_ABSENT.equals(kind)) {
+                        modelStaleAbsentRows++;
+                    }
                 }
+                case INFO -> ensembleOccludedOccupancyInfoRows++;
+                case YELLOW -> modelStaleYellowRows++;
             }
             writeSession(row);
-            if (!yellow) {
-                // Yellows are ambiguous breadcrumbs, not verdicts — keeping them out of mismatches.tsv
-                // keeps that file's triage signal clean (they remain greppable in session.jsonl).
+            if (severity == SlabModelStaleSentinel.DiagnosticSeverity.RED) {
                 writeMismatchRows(row, marker);
             }
             writeSummary();
@@ -339,6 +343,9 @@ public final class LiveCursorIntentRecorder {
             if (markers.contains("LIVE_PLACEMENT_EXPECTED_DY_MISMATCH")) {
                 placementExpectedDyMismatchRows++;
             }
+            if (markers.contains("LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH")) {
+                placementExpectedLaneMismatchRows++;
+            }
             if (markers.contains("LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER")) {
                 loweredSideSlabPlacementVanillaDyRows++;
             }
@@ -382,6 +389,7 @@ public final class LiveCursorIntentRecorder {
             renderedOutlineReplayBoundsSplitRows = 0L;
             renderedOutlineTargetSplitRows = 0L;
             placementExpectedDyMismatchRows = 0L;
+            placementExpectedLaneMismatchRows = 0L;
             loweredSideSlabPlacementVanillaDyRows = 0L;
             collisionIteratorTargetMissRows = 0L;
             collisionIteratorTargetPresentRows = 0L;
@@ -393,6 +401,7 @@ public final class LiveCursorIntentRecorder {
             breakRows = 0L;
             placementSideDySplitRows = 0L;
             ensembleClashRows = 0L;
+            ensembleOccludedOccupancyInfoRows = 0L;
             lastClientPlacementKey = null;
             lastClientAfterDy = null;
             lastClientActionNanos = 0L;
@@ -432,9 +441,10 @@ public final class LiveCursorIntentRecorder {
     private static void appendActionExpectations(LinkedHashMap<String, String> row) {
         boolean slabHeld = "minecraft:stone_slab".equals(row.get("heldItem"))
                 || "block.minecraft.stone_slab".equals(row.get("heldItem"));
+        boolean placementAction = "place_block".equals(row.get("actionType"));
         boolean horizontal = isHorizontalFace(row.get("clickedFace"));
         boolean loweredOwner = isLawfulLoweredLane(row.get("clickedOwnerLaneKind"));
-        if (slabHeld && horizontal && loweredOwner) {
+        if (placementAction && slabHeld && horizontal && loweredOwner) {
             // A slab continuing a lowered side lane lands flush BESIDE the clicked owner, so its
             // expected height is the OWNER's actual dy (row "beforeDy"), not a fixed -0.5. Deep owners
             // (past -1.0, depth-cap-removal) legitimately continue the lane deeper; hardcoding -0.5
@@ -443,7 +453,8 @@ public final class LiveCursorIntentRecorder {
             String ownerDy = row.getOrDefault("beforeDy", "-0.500000");
             row.putIfAbsent("expectedAfterDy",
                     isLoweredDyString(ownerDy) ? ownerDy : "-0.500000");
-            row.putIfAbsent("expectedAfterLaneKind", "persistent_lowered_slab_carrier");
+            // The expectation is categorical: several concrete lane authorities are lawful here.
+            row.putIfAbsent("expectedAfterLaneKind", "lawful_lowered_lane");
             row.putIfAbsent("expectedResult", "lowered_side_lane_continuation");
         } else if (row.getOrDefault("clickedOwnerLaneKind", "").contains("unnamed")
                 || row.getOrDefault("clickedOwnerLaneKind", "").contains("vanilla")) {
@@ -461,20 +472,29 @@ public final class LiveCursorIntentRecorder {
         String expectedDy = row.getOrDefault("expectedAfterDy", "unknown");
         String afterDy = row.getOrDefault("afterDy", "unknown");
         String afterLane = row.getOrDefault("afterLaneKind", "unknown");
+        boolean placementAction = "place_block".equals(row.get("actionType"));
         // Any lowered expectation (not just -0.5): a deep side-lane continuation legitimately expects
         // the owner's true depth. Comparing against the derived expected dy keeps the mismatch marker
         // honest for compound owners past -1.0.
         boolean loweredExpected = isLoweredDyString(expectedDy);
         boolean dyMismatch = loweredExpected && !sameDy(expectedDy, afterDy);
+        // The client prediction may not yet have the server's persistent attachment and can therefore
+        // report the generic slab lane. Exempt only that exact client-side, dy-correct transition; an
+        // authoritative server row without lawful lowered ownership remains a real lane mismatch.
+        boolean clientUnnamedDyCorrect = "client".equals(row.getOrDefault("side", ""))
+                && "unnamed_or_vanilla_slab".equals(afterLane)
+                && sameDy(expectedDy, afterDy);
         boolean laneMismatch = loweredExpected
-                && !"persistent_lowered_slab_carrier".equals(afterLane);
+                && !isLawfulLoweredLane(afterLane)
+                && !clientUnnamedDyCorrect;
         StringBuilder markers = new StringBuilder();
         appendMarker(markers, Boolean.parseBoolean(row.getOrDefault("hiddenOwner", "false")),
                 "LIVE_PLACEMENT_HIDDEN_OWNER");
-        appendMarker(markers, dyMismatch || laneMismatch, "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
+        appendMarker(markers, dyMismatch, "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
+        appendMarker(markers, laneMismatch, "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH");
         appendMarker(markers, loweredExpected && sameDy("0.000000", afterDy),
                 "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER");
-        if (markers.isEmpty() && loweredExpected) {
+        if (markers.isEmpty() && loweredExpected && placementAction) {
             markers.append("LIVE_GREEN_PLACEMENT_AUTHORING");
         }
         return markers.isEmpty() ? "none" : markers.toString();
@@ -687,6 +707,7 @@ public final class LiveCursorIntentRecorder {
                 .append(renderedOutlineReplayBoundsSplitRows).append('\n');
         text.append("renderedOutlineTargetSplitRows=").append(renderedOutlineTargetSplitRows).append('\n');
         text.append("placementExpectedDyMismatchRows=").append(placementExpectedDyMismatchRows).append('\n');
+        text.append("placementExpectedLaneMismatchRows=").append(placementExpectedLaneMismatchRows).append('\n');
         text.append("loweredSideSlabPlacementVanillaDyRows=")
                 .append(loweredSideSlabPlacementVanillaDyRows).append('\n');
         text.append("collisionIteratorTargetMissRows=").append(collisionIteratorTargetMissRows).append('\n');
@@ -699,6 +720,8 @@ public final class LiveCursorIntentRecorder {
         text.append("breakRows=").append(breakRows).append('\n');
         text.append("placementSideDySplitRows=").append(placementSideDySplitRows).append('\n');
         text.append("ensembleClashRows=").append(ensembleClashRows).append('\n');
+        text.append("ensembleOccludedOccupancyInfoRows=")
+                .append(ensembleOccludedOccupancyInfoRows).append('\n');
         // Sentinel liveness (green-by-evidence, not green-by-absence): zero red rows only counts as a
         // clean bill when these show the probe actually armed and judged during the session.
         text.append("sentinelArmedTotal=").append(SlabModelStaleSentinel.armedTotalCount()).append('\n');
