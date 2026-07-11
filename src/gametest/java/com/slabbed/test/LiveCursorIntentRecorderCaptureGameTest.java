@@ -92,7 +92,7 @@ public final class LiveCursorIntentRecorderCaptureGameTest {
 
             Path manifest = dir.resolve("manifest.json");
             assertContains(helper, manifest, "\"recorder\":\"LiveCursorIntentRecorder\"");
-            assertContains(helper, manifest, "\"schemaVersion\":\"1\"");
+            assertContains(helper, manifest, "\"schemaVersion\":\"2\"");
             assertContains(helper, manifest, "--accessToken [REDACTED]");
             String text = read(helper, manifest);
             if (text.contains("super-secret-jwt-token")) {

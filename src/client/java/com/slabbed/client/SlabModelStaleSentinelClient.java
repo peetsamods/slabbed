@@ -74,23 +74,41 @@ public final class SlabModelStaleSentinelClient {
         }
         long nowTick = level.getGameTime();
         SlabModelStaleSentinel.maybeSample(level, nowTick, level::hasChunkAt,
-                row -> emitRedRow(client, nowTick, row));
+                row -> emitDiagnosticRow(client, nowTick, row));
     }
 
-    private static void emitRedRow(Minecraft client, long nowTick, LinkedHashMap<String, String> row) {
+    private static void emitDiagnosticRow(Minecraft client, long nowTick, LinkedHashMap<String, String> row) {
+        // Every diagnostic remains part of the session record. Only shared-policy RED rows participate
+        // in burst accounting or chat; INFO/YELLOW must never impersonate a player-visible failure.
         LiveCursorIntentRecorder.recordSentinel(row);
+        String kind = row.getOrDefault("kind", "unknown");
+        if (SlabModelStaleSentinel.diagnosticSeverity(kind)
+                != SlabModelStaleSentinel.DiagnosticSeverity.RED) {
+            return;
+        }
         redRowsSinceLastPing++;
-        if (client.player == null || nowTick - lastPingTick < CHAT_PING_INTERVAL_TICKS) {
+        if (client.player == null || !shouldSendChatAlert(kind, nowTick, lastPingTick)) {
             return;
         }
         lastPingTick = nowTick;
         String extra = redRowsSinceLastPing > 1 ? " (+" + (redRowsSinceLastPing - 1) + " more in log)" : "";
         client.player.sendSystemMessage(Component.literal(
-                "[slabbed sentinel] " + row.getOrDefault("kind", "MODEL_STALE")
+                "[slabbed sentinel] " + kind
                         + " at " + row.getOrDefault("pos", "?")
                         + " baked=" + row.getOrDefault("bakedDy", "?")
                         + " live=" + row.getOrDefault("liveDy", "?")
                         + extra));
         redRowsSinceLastPing = 0;
+    }
+
+    /** Pure package-visible throttle seam: safe for the Long.MIN_VALUE sentinel and world-clock resets. */
+    static boolean shouldSendChatAlert(String kind, long nowTick, long previousPingTick) {
+        if (SlabModelStaleSentinel.diagnosticSeverity(kind)
+                != SlabModelStaleSentinel.DiagnosticSeverity.RED) {
+            return false;
+        }
+        return previousPingTick == Long.MIN_VALUE
+                || nowTick < previousPingTick
+                || nowTick - previousPingTick >= CHAT_PING_INTERVAL_TICKS;
     }
 }

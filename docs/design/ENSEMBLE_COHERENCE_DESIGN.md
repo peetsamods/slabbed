@@ -1,5 +1,7 @@
 # Ensemble Coherence — Design (2026-07-07, the maintainer-approved lane)
 
+See `LAW.md` — this design does not redefine WYSIWYG or NEVER-POP.
+
 ## The problem (video-proven, 2026-07-07 recording, frames synced to recorder rows)
 
 Every dy in Slabbed is computed and defended **per block** (anchor, freeze-flat, carrier, geometric
@@ -70,6 +72,17 @@ the placement-remap mixin (S11 danger territory) and gets its own carefully-scop
 **Phase 2b LANDED (2026-07-07, 274/274):** slabbed$remapClickOnOccludedSurface — up-face click, vanilla-
 would-fail only, occluded occupant (TS-guarded), air above; remapped placement deep-follows via the
 existing compound lanes. RED-first + surgical-scope pin + occluded-condition mutation RED.
+
+**Recorder-routing correction (2026-07-11, schema v2):** Phase 1's historical text routed every
+`ENSEMBLE_*` observation as a clash. That became false after Phase 2b made occluded occupancy an
+intentional apparent-space signal used by the placement remap. `ENSEMBLE_OCCLUDED_OCCUPANCY` must
+still be emitted once as a self-pair and retained in `session.jsonl`, but it is now
+`severity=info`, marker `INFO_ENSEMBLE_OCCLUDED_OCCUPANCY`, and counted only by
+`ensembleOccludedOccupancyInfoRows`. It does not enter `mismatches.tsv`, `ensembleClashRows`, or chat.
+`ENSEMBLE_GAP` and `ENSEMBLE_INTERPENETRATION` remain red in all three sinks. Historical pre-v2
+`ensembleClashRows` included occluded observations and therefore cannot be compared directly with v2
+counts. The emission-preservation contract and the existing Phase 2b remap contract both stay green;
+the routing fix does not alter the predicate or placement behavior.
 
 ### Phase 3 — GREENLIT 2026-07-07; decomposition by measured harm
 3a **GAP-FILL BANDS — take-1 PULLED (2026-07-07, TEST (9) live rejection)**: LOCK_UV beyond the unit
