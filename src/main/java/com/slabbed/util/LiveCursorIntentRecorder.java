@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -49,9 +50,29 @@ public final class LiveCursorIntentRecorder {
     // dev/CI launch can start already-enabled, but a player reaches this the same way as everything
     // else in Slabbed's debug surface: a slash command (/slabdev record), never a JVM flag.
     private static volatile boolean enabled = Boolean.getBoolean(ENABLE_PROPERTY);
-    private static final String SCHEMA_VERSION = "2";
-    private static final String RECORDER_VERSION = "26.2-recorder-truth-v2";
+    private static final String SCHEMA_VERSION = "3";
+    private static final String RECORDER_VERSION = "26.2-recorder-truth-v3-origin";
     private static final String RUN_ID = UUID.randomUUID().toString();
+    private static final String ACTIONS_HEADER =
+            "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem\tclickedOwnerPos\tclickedFace\tplacementPos"
+                    + "\texpectedAfterDy\tafterDy\texpectedAfterLaneKind\tafterLaneKind\tmarker";
+
+    /** Machine-readable authorship boundary for placement action rows. */
+    public enum ActionOrigin {
+        PLAYER_AUTHORED,
+        AUTO_USEON_PROXY;
+
+        public String wireName() {
+            return name();
+        }
+    }
+
+    /**
+     * Thread-local stack rather than a single flag: command builders can nest shared proxy helpers
+     * without a premature inner close relabelling the still-running outer placement as player input.
+     */
+    private static final ThreadLocal<ArrayDeque<ActionOrigin>> ACTION_ORIGINS =
+            ThreadLocal.withInitial(ArrayDeque::new);
 
     private static Path sessionDir;
     private static boolean startLogged;
@@ -59,6 +80,8 @@ public final class LiveCursorIntentRecorder {
     private static boolean shutdownHookRegistered;
     private static long cursorRows;
     private static long actionRows;
+    private static long playerAuthoredActionRows;
+    private static long autoUseOnProxyActionRows;
     private static long ghostSurfaceRows;
     private static long hiddenOwnerRows;
     private static long outlineRaycastSplitRows;
@@ -90,6 +113,34 @@ public final class LiveCursorIntentRecorder {
     private static LinkedHashMap<String, String> lastCursorRow;
 
     private LiveCursorIntentRecorder() {
+    }
+
+    /** Defaults to real player input whenever no explicit synthetic command scope is active. */
+    public static ActionOrigin currentActionOrigin() {
+        ActionOrigin origin = ACTION_ORIGINS.get().peekLast();
+        return origin == null ? ActionOrigin.PLAYER_AUTHORED : origin;
+    }
+
+    /** Runs {@code action} under a nested-safe, exception-safe machine-readable origin scope. */
+    public static void withActionOrigin(ActionOrigin origin, Runnable action) {
+        if (origin == null) {
+            throw new IllegalArgumentException("action origin must not be null");
+        }
+        ArrayDeque<ActionOrigin> stack = ACTION_ORIGINS.get();
+        stack.addLast(origin);
+        try {
+            action.run();
+        } finally {
+            ActionOrigin removed = stack.removeLast();
+            if (removed != origin) {
+                stack.clear();
+                ACTION_ORIGINS.remove();
+                throw new IllegalStateException("action origin scope closed out of order");
+            }
+            if (stack.isEmpty()) {
+                ACTION_ORIGINS.remove();
+            }
+        }
     }
 
     public static boolean enabled() {
@@ -314,21 +365,31 @@ public final class LiveCursorIntentRecorder {
         row.putIfAbsent("actionId", Long.toString(ROW_IDS.incrementAndGet()));
         row.putIfAbsent("cursorRowId", Long.toString(cursorRowId));
         row.putIfAbsent("recordedAt", Instant.now().toString());
+        // Trusted scope is authoritative. A caller-provided field must never spoof a synthetic command
+        // action as player-authored (or invent an unknown origin that falls through counter routing).
+        ActionOrigin actionOrigin = currentActionOrigin();
+        row.put("actionOrigin", actionOrigin.wireName());
         appendActionExpectations(row);
         String markers = actionMarkers(row);
         row.put("marker", markers);
         synchronized (LOCK) {
             actionRows++;
+            boolean playerAuthored = actionOrigin == ActionOrigin.PLAYER_AUTHORED;
+            if (playerAuthored) {
+                playerAuthoredActionRows++;
+            } else {
+                autoUseOnProxyActionRows++;
+            }
             // Same-instant client/server afterDy pair rule (the measured L3 first-frame split, ~4% of
             // TEST (3) placements): a server row matching the immediately-preceding client row's
             // placement but disagreeing on afterDy is flagged — the player SAW a snap.
             String side = row.getOrDefault("side", "");
             String pairKey = row.getOrDefault("placementPos", "") + "|" + row.getOrDefault("heldItem", "");
-            if ("client".equals(side)) {
+            if (playerAuthored && "client".equals(side)) {
                 lastClientPlacementKey = pairKey;
                 lastClientAfterDy = row.get("afterDy");
                 lastClientActionNanos = System.nanoTime();
-            } else if ("server".equals(side)
+            } else if (playerAuthored && "server".equals(side)
                     && pairKey.equals(lastClientPlacementKey)
                     && System.nanoTime() - lastClientActionNanos < PAIR_WINDOW_NANOS
                     && lastClientAfterDy != null
@@ -381,6 +442,8 @@ public final class LiveCursorIntentRecorder {
             ROW_IDS.set(0L);
             cursorRows = 0L;
             actionRows = 0L;
+            playerAuthoredActionRows = 0L;
+            autoUseOnProxyActionRows = 0L;
             ghostSurfaceRows = 0L;
             hiddenOwnerRows = 0L;
             outlineRaycastSplitRows = 0L;
@@ -407,6 +470,7 @@ public final class LiveCursorIntentRecorder {
             lastClientActionNanos = 0L;
             lastCursorRowId = 0L;
             lastCursorRow = null;
+            ACTION_ORIGINS.remove();
         }
     }
 
@@ -494,7 +558,9 @@ public final class LiveCursorIntentRecorder {
         appendMarker(markers, laneMismatch, "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH");
         appendMarker(markers, loweredExpected && sameDy("0.000000", afterDy),
                 "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER");
-        if (markers.isEmpty() && loweredExpected && placementAction) {
+        boolean playerAuthored = ActionOrigin.PLAYER_AUTHORED.wireName()
+                .equals(row.getOrDefault("actionOrigin", ActionOrigin.PLAYER_AUTHORED.wireName()));
+        if (markers.isEmpty() && loweredExpected && placementAction && playerAuthored) {
             markers.append("LIVE_GREEN_PLACEMENT_AUTHORING");
         }
         return markers.isEmpty() ? "none" : markers.toString();
@@ -651,6 +717,7 @@ public final class LiveCursorIntentRecorder {
                 tsv(row.get("actionId"))
                         + '\t' + tsv(row.get("cursorRowId"))
                         + '\t' + tsv(row.get("actionType"))
+                        + '\t' + tsv(row.get("actionOrigin"))
                         + '\t' + tsv(row.get("heldItem"))
                         + '\t' + tsv(row.get("clickedOwnerPos"))
                         + '\t' + tsv(row.get("clickedFace"))
@@ -698,6 +765,8 @@ public final class LiveCursorIntentRecorder {
         text.append("# Slabbed Live Cursor Intent Recorder Summary\n\n");
         text.append("cursorRows=").append(cursorRows).append('\n');
         text.append("actionRows=").append(actionRows).append('\n');
+        text.append("playerAuthoredActionRows=").append(playerAuthoredActionRows).append('\n');
+        text.append("autoUseOnProxyActionRows=").append(autoUseOnProxyActionRows).append('\n');
         text.append("ghostSurfaceRows=").append(ghostSurfaceRows).append('\n');
         text.append("hiddenOwnerRows=").append(hiddenOwnerRows).append('\n');
         text.append("outlineRaycastSplitRows=").append(outlineRaycastSplitRows).append('\n');
@@ -750,9 +819,11 @@ public final class LiveCursorIntentRecorder {
     private static Path sessionDir() throws IOException {
         if (sessionDir == null) {
             String configured = System.getProperty(DIR_PROPERTY);
-            sessionDir = (configured == null || configured.isBlank())
+            Path requested = (configured == null || configured.isBlank())
                     ? FabricLoader.getInstance().getGameDir().resolve("live-cursor-recorder")
                     : Path.of(configured);
+            Files.createDirectories(requested);
+            sessionDir = isolateFromExistingSession(requested);
             Files.createDirectories(sessionDir);
             if (!startLogged) {
                 startLogged = true;
@@ -760,8 +831,7 @@ public final class LiveCursorIntentRecorder {
                         sessionDir.toAbsolutePath());
             }
             writeHeaderIfMissing(sessionDir.resolve("actions.tsv"),
-                    "actionId\tcursorRowId\tactionType\theldItem\tclickedOwnerPos\tclickedFace\tplacementPos"
-                            + "\texpectedAfterDy\tafterDy\texpectedAfterLaneKind\tafterLaneKind\tmarker\n");
+                    ACTIONS_HEADER + "\n");
             writeHeaderIfMissing(sessionDir.resolve("rendered-outlines.tsv"),
                     "outlineRenderId\tcursorRowId\trenderedOutlinePos\tcursorFinalHitPos\trenderedOutlineState"
                             + "\trenderedOutlineBounds\tcursorOutlineBounds\trenderedOutlineWorldBounds"
@@ -771,6 +841,24 @@ public final class LiveCursorIntentRecorder {
             writeManifest();
         }
         return sessionDir;
+    }
+
+    /**
+     * Never append a new run beneath a recognized old recorder schema/header. Any non-empty v2/v3
+     * manifest/session/TSV/summary artifact is left byte-for-byte in place and the new run starts in a
+     * uniquely named child directory. This also keeps two schema-3 process runs distinct instead of
+     * silently mixing different run ids.
+     */
+    private static Path isolateFromExistingSession(Path requested) throws IOException {
+        for (String artifact : new String[]{
+                "manifest.json", "session.jsonl", "actions.tsv", "rendered-outlines.tsv",
+                "mismatches.tsv", "summary.md"}) {
+            Path path = requested.resolve(artifact);
+            if (Files.exists(path) && Files.size(path) > 0L) {
+                return requested.resolve("schema-" + SCHEMA_VERSION + "-" + RUN_ID);
+            }
+        }
+        return requested;
     }
 
     private static void writeHeaderIfMissing(Path path, String header) throws IOException {
@@ -817,6 +905,7 @@ public final class LiveCursorIntentRecorder {
                 + jsonPair("runId", RUN_ID) + ","
                 + jsonPair("recorder", "LiveCursorIntentRecorder") + ","
                 + jsonPair("recorderVersion", RECORDER_VERSION) + ","
+                + jsonPair("actionOriginContract", "PLAYER_AUTHORED|AUTO_USEON_PROXY") + ","
                 + jsonPair("enabled", Boolean.toString(enabled)) + ","
                 + jsonPair("createdAt", Instant.now().toString()) + ","
                 + jsonPair("dir", sessionDir.toAbsolutePath().toString()) + ","

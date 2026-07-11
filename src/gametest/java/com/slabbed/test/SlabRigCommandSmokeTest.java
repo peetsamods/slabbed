@@ -3,6 +3,7 @@ package com.slabbed.test;
 import com.mojang.brigadier.CommandDispatcher;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.command.SlabRigCommand;
+import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.commands.CommandSourceStack;
@@ -11,12 +12,19 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.PermissionSet;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 
 /**
  * Smoke tests for {@code /slabrig}: register the command into a fresh dispatcher and execute the
@@ -30,6 +38,222 @@ import net.minecraft.world.phys.Vec3;
 public final class SlabRigCommandSmokeTest {
 
     private static final double EPS = 1.0e-6;
+    private static final int COLUMN_SPACING_FOR_TEST = 2;
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigStackCatalogAndPageContract(GameTestHelper h) {
+        List<String> expected = new ArrayList<>();
+        for (int length = 1; length <= 5; length++) {
+            int count = 1 << length;
+            for (int bits = 0; bits < count; bits++) {
+                StringBuilder recipe = new StringBuilder(length);
+                for (int shift = length - 1; shift >= 0; shift--) {
+                    recipe.append((bits & (1 << shift)) == 0 ? 'S' : 'B');
+                }
+                expected.add(recipe.toString());
+            }
+            int prefix = (1 << (length + 1)) - 2;
+            List<String> actualPrefix = SlabRigCommand.stackRecipes(length);
+            if (actualPrefix.size() != prefix || !actualPrefix.equals(expected)) {
+                throw h.assertionException("stack catalog max=" + length + " must be literal length-major "
+                        + "S-before-B order; expected=" + expected + " got=" + actualPrefix);
+            }
+            if (!actualPrefix.equals(SlabRigCommand.stackRecipes(length))) {
+                throw h.assertionException("stack catalog order must be stable across repeated calls");
+            }
+            if (new HashSet<>(actualPrefix).size() != actualPrefix.size()) {
+                throw h.assertionException("stack catalog must contain no duplicates: " + actualPrefix);
+            }
+        }
+
+        List<String> roundTrip = new ArrayList<>();
+        int[] expectedPageSizes = {16, 16, 16, 14};
+        for (int page = 1; page <= 4; page++) {
+            SlabRigCommand.StackPage stackPage = SlabRigCommand.stackPage(5, page);
+            if (stackPage.page() != page || stackPage.pageCount() != 4
+                    || stackPage.recipes().size() != expectedPageSizes[page - 1]) {
+                throw h.assertionException("stack page " + page + " must be 1-based with sizes 16/16/16/14: "
+                        + stackPage);
+            }
+            roundTrip.addAll(stackPage.recipes());
+        }
+        if (!roundTrip.equals(expected)) {
+            throw h.assertionException("concatenated pages must round-trip the exact 62-recipe catalog");
+        }
+
+        if (LiveCursorIntentRecorder.currentActionOrigin()
+                != LiveCursorIntentRecorder.ActionOrigin.PLAYER_AUTHORED) {
+            throw h.assertionException("recorder action origin must default to PLAYER_AUTHORED");
+        }
+        LiveCursorIntentRecorder.withActionOrigin(LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY, () -> {
+            if (LiveCursorIntentRecorder.currentActionOrigin()
+                    != LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY) {
+                throw h.assertionException("outer origin scope must expose AUTO_USEON_PROXY");
+            }
+            LiveCursorIntentRecorder.withActionOrigin(LiveCursorIntentRecorder.ActionOrigin.PLAYER_AUTHORED, () -> {
+                if (LiveCursorIntentRecorder.currentActionOrigin()
+                        != LiveCursorIntentRecorder.ActionOrigin.PLAYER_AUTHORED) {
+                    throw h.assertionException("nested origin scope must expose its own value");
+                }
+            });
+            if (LiveCursorIntentRecorder.currentActionOrigin()
+                    != LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY) {
+                throw h.assertionException("nested origin scope must restore the outer value");
+            }
+        });
+        if (LiveCursorIntentRecorder.currentActionOrigin()
+                != LiveCursorIntentRecorder.ActionOrigin.PLAYER_AUTHORED) {
+            throw h.assertionException("origin scope must restore PLAYER_AUTHORED after exit");
+        }
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigStacksStatusAndExactClear(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        CommandSourceStack source = playerSourceAt(w, player, h.absolutePos(new BlockPos(7, 2, 0)));
+        if (!"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("fresh server session must not report a tracked rig");
+        }
+
+        int result = tryExec(source, "slabrig stacks 1 1 force");
+        // Recipe S honestly exposes the currently sanctioned slab-on-lowered-seed gap; the rig remains
+        // exact-clearable while reporting structural failure instead of a false green.
+        if (result != 0) {
+            throw h.assertionException("stacks 1 must report the known S-seed seam as structural failure");
+        }
+        Direction facing = SlabRigCommand.rigFacing(source);
+        Direction right = facing.getClockWise();
+        BlockPos base = SlabRigCommand.rigBase(source);
+        BlockPos sCell = base.above(4);
+        BlockPos bSeedBase = base.relative(right, COLUMN_SPACING_FOR_TEST);
+        BlockPos bCell = bSeedBase.above(4);
+        assertBottomSlab(h, w, sCell, "recipe S cell");
+        assertBlock(h, w, bCell, Blocks.STONE.defaultBlockState(), "recipe B cell");
+
+        String status = SlabRigCommand.trackedManifestStatus(source);
+        for (String required : new String[]{
+                "preset=stacks", "page=1/1 recipes=1-2/2", "structural=incomplete",
+                "provenance=AUTO_USEON_PROXY", "reserved=", "authored=", "attachments=",
+                "subjects=", "clearOwned=", "present=", "missing=", "bounds="}) {
+            if (!status.contains(required)) {
+                throw h.assertionException("status must expose exact manifest field '" + required
+                        + "'; got: " + status);
+            }
+        }
+
+        // Explicit incidental grid gap: inside displayed bounds and scan-reserved, never clear-owned.
+        BlockPos unrelatedGap = base.relative(right, 1);
+        w.setBlock(unrelatedGap, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        SlabAnchorAttachment.capturePlacementDy(w, unrelatedGap, w.getBlockState(unrelatedGap));
+        double unrelatedStored = SlabAnchorAttachment.storedPlacementDy(w, unrelatedGap);
+        if (Double.isNaN(unrelatedStored)) {
+            throw h.assertionException("premise: unrelated gap must carry stored dy before clear");
+        }
+
+        BlockPos laterSubject = bCell.above();
+        w.setBlock(laterSubject, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+        BlockPos alreadyAirAttachment = bCell.above(2);
+        w.setBlock(alreadyAirAttachment, Blocks.GOLD_BLOCK.defaultBlockState(), 2);
+        SlabAnchorAttachment.capturePlacementDy(w, alreadyAirAttachment,
+                w.getBlockState(alreadyAirAttachment));
+        w.setBlock(alreadyAirAttachment, Blocks.AIR.defaultBlockState(), 2);
+        if (Double.isNaN(SlabAnchorAttachment.storedPlacementDy(w, alreadyAirAttachment))) {
+            throw h.assertionException("premise: flag-2 removal must leave a stored-dy touch on the air slot");
+        }
+        exec(h, source, "slabrig clear");
+        assertAir(h, w, sCell, "recipe S after clear");
+        assertAir(h, w, bCell, "recipe B after clear");
+        assertAir(h, w, laterSubject, "later subject in declared slot after clear");
+        if (!Double.isNaN(SlabAnchorAttachment.storedPlacementDy(w, alreadyAirAttachment))) {
+            throw h.assertionException("exact clear must remove recorded attachment/store touches even for air");
+        }
+        assertBlock(h, w, unrelatedGap, Blocks.DIAMOND_BLOCK.defaultBlockState(),
+                "unrelated in-bounds gap after exact clear");
+        double storedAfter = SlabAnchorAttachment.storedPlacementDy(w, unrelatedGap);
+        if (Double.doubleToLongBits(storedAfter) != Double.doubleToLongBits(unrelatedStored)) {
+            throw h.assertionException("exact clear must preserve unrelated stored dy; before="
+                    + unrelatedStored + " after=" + storedAfter);
+        }
+        if (!"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("status must report none after exact clear");
+        }
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigManifestRefusalForceAndSessionGuards(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        CommandSourceStack source = playerSourceAt(w, player, h.absolutePos(new BlockPos(7, 2, 0)));
+        if (!"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("a fresh player key must not inherit another player's manifest");
+        }
+
+        for (String legacy : new String[]{
+                "slabrig tower", "slabrig tower force", "slabrig tower 1",
+                "slabrig tower 1 2 force", "slabrig rows", "slabrig rows 1 force",
+                "slabrig mega 1 force", "slabrig platform", "slabrig clear"}) {
+            assertParses(h, source, legacy);
+        }
+        BlockPos base = SlabRigCommand.rigBase(source);
+        for (String invalid : new String[]{
+                "slabrig stacks 0", "slabrig stacks 6", "slabrig stacks 1 0",
+                "slabrig stacks 1 1 junk"}) {
+            if (tryExec(source, invalid) >= 0) {
+                throw h.assertionException("invalid grammar must reject without executing: /" + invalid);
+            }
+            if (!w.getBlockState(base).isAir()
+                    || !"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+                throw h.assertionException("invalid grammar must perform zero world/manifest mutation: /" + invalid);
+            }
+        }
+
+        tryExec(source, "slabrig stacks 1 1 force");
+        String oldManifest = SlabRigCommand.trackedManifestStatus(source);
+        BlockState oldBase = w.getBlockState(base);
+        int impossiblePage = tryExec(source, "slabrig stacks 1 2");
+        if (impossiblePage != 0 || !oldManifest.equals(SlabRigCommand.trackedManifestStatus(source))
+                || !oldBase.equals(w.getBlockState(base))) {
+            throw h.assertionException("dynamic invalid page must mutate nothing and preserve the old manifest");
+        }
+
+        int refused = tryExec(source, "slabrig rows 1");
+        if (refused != 0 || !oldManifest.equals(SlabRigCommand.trackedManifestStatus(source))
+                || !oldBase.equals(w.getBlockState(base))) {
+            throw h.assertionException("new non-force build must preserve the tracked rig and world exactly");
+        }
+
+        exec(h, source, "slabrig rows 1 force");
+        String replaced = SlabRigCommand.trackedManifestStatus(source);
+        if (!replaced.contains("preset=rows")) {
+            throw h.assertionException("force must exact-clear/replace without orphaning: " + replaced);
+        }
+
+        ServerLevel otherLevel = w.getServer().getLevel(Level.NETHER);
+        if (otherLevel == null) {
+            throw h.assertionException("premise: GameTest server must expose the nether level");
+        }
+        CommandSourceStack splitSource = playerSourceAt(otherLevel, player,
+                new BlockPos(0, otherLevel.getMinY() + 10, 0));
+        BlockPos splitBase = SlabRigCommand.rigBase(splitSource);
+        BlockState splitBefore = otherLevel.getBlockState(splitBase);
+        if (tryExec(splitSource, "slabrig mega 1 force") != 0
+                || !splitBefore.equals(otherLevel.getBlockState(splitBase))
+                || !"none".equals(SlabRigCommand.trackedManifestStatus(splitSource))
+                || !replaced.equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("source/player level mismatch must refuse before any world or manifest mutation");
+        }
+
+        exec(h, source, "slabrig clear");
+        CommandSourceStack anotherPlayer = playerSourceAt(w, h.makeMockPlayer(GameType.SURVIVAL),
+                h.absolutePos(new BlockPos(7, 2, 0)));
+        if (!"none".equals(SlabRigCommand.trackedManifestStatus(anotherPlayer))) {
+            throw h.assertionException("manifest identity must remain player-bound within one server session");
+        }
+        h.succeed();
+    }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabrigTowerBuildsRigViaDispatcher(GameTestHelper h) {
@@ -143,6 +367,11 @@ public final class SlabRigCommandSmokeTest {
         // author a slab here; the scan must see it and refuse.
         BlockPos intruder = base.above(1);
         w.setBlock(intruder, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        SlabAnchorAttachment.capturePlacementDy(w, intruder, w.getBlockState(intruder));
+        double intruderStoredBefore = SlabAnchorAttachment.storedPlacementDy(w, intruder);
+        if (Double.isNaN(intruderStoredBefore)) {
+            throw h.assertionException("premise: occupied intruder must carry stored dy before refusal");
+        }
 
         // WITHOUT force → refusal: the command returns 0. The intruder must be UNTOUCHED and no rig
         // authored (the Row B FB cell stays air).
@@ -155,6 +384,14 @@ public final class SlabRigCommandSmokeTest {
         if (!w.getBlockState(rowBFb).isAir()) {
             throw h.assertionException("refusal must NOT author any rig (Row B FB should be air, found "
                     + w.getBlockState(rowBFb) + ")");
+        }
+        double intruderStoredAfter = SlabAnchorAttachment.storedPlacementDy(w, intruder);
+        if (Double.doubleToLongBits(intruderStoredAfter) != Double.doubleToLongBits(intruderStoredBefore)) {
+            throw h.assertionException("refusal must preserve the intruder's stored dy byte-identically; before="
+                    + intruderStoredBefore + " after=" + intruderStoredAfter);
+        }
+        if (!"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("occupied non-force refusal must not install a manifest");
         }
         if (refusedResult > 0) {
             throw h.assertionException("rows without force over an occupied footprint must not report success");
@@ -173,13 +410,15 @@ public final class SlabRigCommandSmokeTest {
         // Source at a known cell facing SOUTH (yaw 0 -> Direction.fromYRot(0) == SOUTH), with full
         // permissions so the GAMEMASTERS gate passes. Feet at (1,2,1) relative -> rig base = feet.below()
         // three blocks south = (1,1,4), inside the empty structure's bounds.
-        return sourceAt(w, h.absolutePos(new BlockPos(1, 2, 1)));
+        return playerSourceAt(w, h.makeMockPlayer(GameType.SURVIVAL),
+                h.absolutePos(new BlockPos(1, 2, 1)));
     }
 
     private static CommandSourceStack rowsSourceFacingSouth(GameTestHelper h, ServerLevel w) {
         // Feet at (1,2,0) -> base = (1,1,3); rowB = base + facing*4 = (1,1,7); tower top +4 = y5, +2
         // headroom = y7. Whole facing-SOUTH rows-1 footprint stays inside the 8x8x8 empty arena.
-        return sourceAt(w, h.absolutePos(new BlockPos(1, 2, 0)));
+        return playerSourceAt(w, h.makeMockPlayer(GameType.SURVIVAL),
+                h.absolutePos(new BlockPos(1, 2, 0)));
     }
 
     private static CommandSourceStack sourceAt(ServerLevel w, BlockPos feet) {
@@ -188,6 +427,10 @@ public final class SlabRigCommandSmokeTest {
                 .withPosition(Vec3.atBottomCenterOf(feet))
                 .withRotation(new Vec2(0.0f, 0.0f))
                 .withPermission(PermissionSet.ALL_PERMISSIONS);
+    }
+
+    private static CommandSourceStack playerSourceAt(ServerLevel w, Player player, BlockPos feet) {
+        return sourceAt(w, feet).withEntity(player);
     }
 
     private static void exec(GameTestHelper h, CommandSourceStack source, String command) {
@@ -200,14 +443,24 @@ public final class SlabRigCommandSmokeTest {
         }
     }
 
-    /** Executes a command expected to possibly refuse; returns its result (or 0 if it threw). */
+    /** Executes a command expected to possibly refuse; returns -1 only for parse/dispatch exceptions. */
     private static int tryExec(CommandSourceStack source, String command) {
         CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
         SlabRigCommand.register(dispatcher);
         try {
             return dispatcher.execute(command, source);
         } catch (Exception e) {
-            return 0;
+            return -1;
+        }
+    }
+
+    private static void assertParses(GameTestHelper h, CommandSourceStack source, String command) {
+        CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+        SlabRigCommand.register(dispatcher);
+        var parsed = dispatcher.parse(command, source);
+        if (parsed.getReader().canRead() || !parsed.getExceptions().isEmpty()) {
+            throw h.assertionException("legacy command form must remain parseable: /" + command
+                    + " remaining='" + parsed.getReader().getRemaining() + "'");
         }
     }
 

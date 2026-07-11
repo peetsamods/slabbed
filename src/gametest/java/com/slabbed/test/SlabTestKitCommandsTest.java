@@ -46,6 +46,40 @@ public final class SlabTestKitCommandsTest {
 
     private static final double EPS = 1.0e-6;
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigMegaDeclaresMultiCellSubjectEnvelope(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        CommandSourceStack source = playerSource(w, player, h.absolutePos(new BlockPos(1, 2, 0)));
+        int result = execResult(source, "slabrig mega 1 force", SlabRigCommand::register);
+        if (result != 1) {
+            throw h.assertionException("mega 1 force must build before the multi-cell clear probe");
+        }
+        if (SlabRigCommand.trackedSubjectSlotCountForTests(source) < 2) {
+            throw h.assertionException("mega must declare a multi-cell subject/effect envelope before proxy writes");
+        }
+
+        Direction facing = SlabRigCommand.rigFacing(source);
+        BlockPos base = SlabRigCommand.rigBase(source);
+        BlockPos seat = base.relative(facing, 1).above(2);
+        BlockPos lower = seat.above();
+        BlockPos upper = lower.above();
+        // Replace mega's auto subject with a later, real two-cell door in the already-declared effect
+        // envelope. Exact clear must remove BOTH halves, not just the clicked/nominal target cell.
+        w.setBlock(lower, Blocks.AIR.defaultBlockState(), 3);
+        w.setBlock(upper, Blocks.AIR.defaultBlockState(), 3);
+        place(h, Items.OAK_DOOR.getDefaultInstance(), seat, Direction.UP);
+        if (!w.getBlockState(lower).is(Blocks.OAK_DOOR) || !w.getBlockState(upper).is(Blocks.OAK_DOOR)) {
+            throw h.assertionException("premise: later door must occupy lower+upper effect cells; lower="
+                    + w.getBlockState(lower) + " upper=" + w.getBlockState(upper));
+        }
+        if (execResult(source, "slabrig clear", SlabRigCommand::register) != 1
+                || !w.getBlockState(lower).isAir() || !w.getBlockState(upper).isAir()) {
+            throw h.assertionException("mega exact clear must remove both later door cells");
+        }
+        h.succeed();
+    }
+
     // ── /slabkit ────────────────────────────────────────────────────────────────
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")

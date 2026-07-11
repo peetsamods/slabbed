@@ -12,9 +12,11 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
     @Override
     public void runTest(ClientGameTestContext ctx) {
         try {
-            Path evidenceDir = freshEvidenceDir(Path.of(System.getProperty(
+            Path evidenceRoot = Path.of(System.getProperty(
                     "slabbed.liveCursorIntentRecorderContractDir",
-                    "tmp/live-cursor-intent-recorder-contract")));
+                    "tmp/live-cursor-intent-recorder-contract"));
+            Path evidenceDir = freshEvidenceDir(
+                    evidenceRoot.resolve("contract-" + System.nanoTime()));
             System.setProperty("slabbed.liveCursorIntentRecorder", "true");
             System.setProperty("slabbed.liveCursorIntentRecorderDir", evidenceDir.toString());
             LiveCursorIntentRecorder.resetForTests();
@@ -54,6 +56,19 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             LiveCursorIntentRecorder.recordAction(loweredSideAction(
                     "server", "114,-39,30", "115,-39,30", "-2.000000", "anchored_full_block"));
 
+            LinkedHashMap<String, String> cleanProxy = loweredSideAction(
+                    "server", "116,-39,30", "117,-39,30", "-2.000000", "anchored_full_block");
+            cleanProxy.put("actionOrigin", "PLAYER_AUTHORED"); // hostile caller spoof attempt
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> LiveCursorIntentRecorder.recordAction(cleanProxy));
+            LinkedHashMap<String, String> redProxy = loweredSideAction(
+                    "server", "118,-39,30", "119,-39,30", "-1.500000", "anchored_full_block");
+            redProxy.put("actionOrigin", "BOGUS_ORIGIN"); // unknown values cannot fall through as proxy
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> LiveCursorIntentRecorder.recordAction(redProxy));
+
             // Same dy on an authoritative server row is still lane-red when the server has no lawful
             // lowered ownership. This must be a LANE mismatch only, never mislabeled as a dy mismatch.
             LiveCursorIntentRecorder.recordAction(loweredSideAction(
@@ -91,8 +106,20 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("session.jsonl"), "LIVE_CURSOR_GHOST_SURFACE");
             assertContains(evidenceDir.resolve("rendered-outlines.tsv"), "LIVE_RENDERED_OUTLINE_LARGE_BOUNDS");
             assertContains(evidenceDir.resolve("rendered-outlines.tsv"), "LIVE_RENDERED_OUTLINE_REPLAY_BOUNDS_SPLIT");
-            assertContains(evidenceDir.resolve("manifest.json"), "\"schemaVersion\":\"2\"");
-            assertContains(evidenceDir.resolve("actions.tsv"), "3\t1\tplace_block");
+            assertContains(evidenceDir.resolve("manifest.json"), "\"schemaVersion\":\"3\"");
+            assertContains(evidenceDir.resolve("manifest.json"),
+                    "\"actionOriginContract\":\"PLAYER_AUTHORED|AUTO_USEON_PROXY\"");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem");
+            assertContains(evidenceDir.resolve("actions.tsv"), "3\t1\tplace_block\tPLAYER_AUTHORED");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "place_block\tAUTO_USEON_PROXY\tminecraft:stone_slab\t116,-39,30");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "117,-39,30\t-2.000000\t-2.000000\tlawful_lowered_lane\tanchored_full_block\tnone");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "place_block\tAUTO_USEON_PROXY\tminecraft:stone_slab\t118,-39,30");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "119,-39,30\t-2.000000\t-1.500000\tlawful_lowered_lane\tanchored_full_block\tLIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "105,-39,30\t-2.000000\t-2.000000\tlawful_lowered_lane\tunnamed_or_vanilla_slab\tLIVE_GREEN_PLACEMENT_AUTHORING");
             assertContains(evidenceDir.resolve("actions.tsv"),
@@ -106,6 +133,8 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("actions.tsv"), "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH");
+            assertNotContains(evidenceDir.resolve("mismatches.tsv"), "116,-39,30");
+            assertContains(evidenceDir.resolve("mismatches.tsv"), "118,-39,30");
             assertNotContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_GREEN_PLACEMENT_AUTHORING");
             assertContains(evidenceDir.resolve("session.jsonl"),
                     "\"severity\":\"info\",\"marker\":\"INFO_ENSEMBLE_OCCLUDED_OCCUPANCY\"");
@@ -121,9 +150,11 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("summary.md"), "renderedOutlineLargeBoundsRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "renderedOutlineReplayBoundsSplitRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "loweredSideSlabPlacementVanillaDyRows=1");
-            assertContains(evidenceDir.resolve("summary.md"), "placementExpectedDyMismatchRows=2");
+            assertContains(evidenceDir.resolve("summary.md"), "placementExpectedDyMismatchRows=3");
             assertContains(evidenceDir.resolve("summary.md"), "placementExpectedLaneMismatchRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "liveGreenPlacementRows=2");
+            assertContains(evidenceDir.resolve("summary.md"), "playerAuthoredActionRows=6");
+            assertContains(evidenceDir.resolve("summary.md"), "autoUseOnProxyActionRows=2");
             assertContains(evidenceDir.resolve("summary.md"), "modelStaleDivergentRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "modelStaleAbsentRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "ensembleOccludedOccupancyInfoRows=1");
