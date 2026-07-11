@@ -1,9 +1,16 @@
 package com.slabbed.test;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.command.SlabRigCommand;
+import com.slabbed.command.SlabRigCaseArtifacts;
+import com.slabbed.command.SlabRigCaseCatalog;
 import com.slabbed.util.LiveCursorIntentRecorder;
+import com.slabbed.util.BuildStamp;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.commands.CommandSourceStack;
@@ -13,6 +20,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -39,6 +47,27 @@ public final class SlabRigCommandSmokeTest {
 
     private static final double EPS = 1.0e-6;
     private static final int COLUMN_SPACING_FOR_TEST = 2;
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigIsRegisteredInProductionServerDispatcher(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        CommandSourceStack source = sourceAt(world, h.absolutePos(new BlockPos(1, 2, 1)));
+        CommandDispatcher<CommandSourceStack> live = world.getServer().getCommands().getDispatcher();
+        if (live.getRoot().getChild("slabrig") == null) {
+            throw h.assertionException(
+                    "production server dispatcher is missing /slabrig after Slabbed.onInitialize");
+        }
+        try {
+            int result = live.execute("slabrig catalog", source);
+            if (result != 1) {
+                throw h.assertionException(
+                        "production-dispatcher /slabrig catalog must execute successfully, got " + result);
+            }
+        } catch (Exception e) {
+            throw h.assertionException("production-dispatcher /slabrig catalog threw: " + e);
+        }
+        h.succeed();
+    }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabrigStackCatalogAndPageContract(GameTestHelper h) {
@@ -194,7 +223,9 @@ public final class SlabRigCommandSmokeTest {
         for (String legacy : new String[]{
                 "slabrig tower", "slabrig tower force", "slabrig tower 1",
                 "slabrig tower 1 2 force", "slabrig rows", "slabrig rows 1 force",
-                "slabrig mega 1 force", "slabrig platform", "slabrig clear"}) {
+                "slabrig mega 1 force", "slabrig platform", "slabrig catalog",
+                "slabrig cases", "slabrig cases 1 force", "slabrig cases resume force",
+                "slabrig clear"}) {
             assertParses(h, source, legacy);
         }
         BlockPos base = SlabRigCommand.rigBase(source);
@@ -252,6 +283,390 @@ public final class SlabRigCommandSmokeTest {
         if (!"none".equals(SlabRigCommand.trackedManifestStatus(anotherPlayer))) {
             throw h.assertionException("manifest identity must remain player-bound within one server session");
         }
+        h.succeed();
+    }
+
+    @GameTest(structure = "slabbed_gametest:rig2_board")
+    public void slabrigCasesPageResumeStatusAndExactClear(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        CommandSourceStack source = playerSourceAt(w, player, h.absolutePos(new BlockPos(30, 2, 0)));
+        SlabRigCaseCatalog.Snapshot snapshot = SlabRigCaseCatalog.snapshot();
+
+        java.nio.file.Path progressPath = SlabRigCaseArtifacts.progressPath(
+                SlabRigCaseArtifacts.defaultRoot(), player.getUUID().toString(),
+                w.dimension().identifier().toString(), SlabRigCommand.caseWorldKey(source));
+        try {
+            SlabRigCaseArtifacts.writeProgress(progressPath, new SlabRigCaseArtifacts.Progress(
+                    SlabRigCommand.caseWorldKey(source), BuildStamp.GIT_SHA,
+                    BuildStamp.RUNTIME_CONTENT_SHA256, SlabAnchorAttachment.FROZEN_DY_ENABLED,
+                    SlabRigCaseCatalog.EXECUTION_CONTRACT,
+                    "0".repeat(64),
+                    1, snapshot.pageCount(), 0, "none"));
+        } catch (java.io.IOException e) {
+            throw h.assertionException("could not seed stale progress premise: " + e.getMessage());
+        }
+        BlockPos untouchedBase = SlabRigCommand.rigBase(source);
+        if (tryExec(source, "slabrig cases resume force") != 0
+                || !w.getBlockState(untouchedBase).isAir()
+                || !"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("resume must reject a stale catalog hash with zero world/manifest mutation");
+        }
+        try {
+            SlabRigCaseArtifacts.writeCatalog(SlabRigCaseArtifacts.defaultRoot(), snapshot);
+            SlabRigCaseArtifacts.writeProgress(progressPath, new SlabRigCaseArtifacts.Progress(
+                    SlabRigCommand.caseWorldKey(source), BuildStamp.GIT_SHA,
+                    BuildStamp.RUNTIME_CONTENT_SHA256, SlabAnchorAttachment.FROZEN_DY_ENABLED,
+                    SlabRigCaseCatalog.EXECUTION_CONTRACT,
+                    snapshot.catalogHash(),
+                    2, snapshot.pageCount(), 1, "1".repeat(64)));
+        } catch (java.io.IOException e) {
+            throw h.assertionException("could not seed forged same-catalog progress premise: " + e.getMessage());
+        }
+        if (tryExec(source, "slabrig cases resume force") != 0
+                || !w.getBlockState(untouchedBase).isAir()
+                || !"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("resume must reject a missing prior page manifest with zero mutation");
+        }
+
+        BlockPos base = SlabRigCommand.rigBase(source);
+        BlockPos reservedOnly = base.offset(2, 1, 2);
+        w.setBlock(reservedOnly, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        SlabAnchorAttachment.capturePlacementDy(w, reservedOnly, w.getBlockState(reservedOnly));
+        double stored = SlabAnchorAttachment.storedPlacementDy(w, reservedOnly);
+        BlockPos hauntedAir = base.offset(-2, 1, -2);
+        w.setBlock(hauntedAir, Blocks.GOLD_BLOCK.defaultBlockState(), 2);
+        SlabAnchorAttachment.capturePlacementDy(w, hauntedAir, w.getBlockState(hauntedAir));
+        w.setBlock(hauntedAir, Blocks.AIR.defaultBlockState(), 2);
+        double hauntedStored = SlabAnchorAttachment.storedPlacementDy(w, hauntedAir);
+        if (Double.isNaN(hauntedStored)) {
+            throw h.assertionException("premise: flag-2 air must retain haunted stored dy");
+        }
+
+        int built = tryExec(source, "slabrig cases 1 force");
+        if (built != 1) {
+            throw h.assertionException("RIG-2 page 1 must finalize as an exact proxy diagnostic board");
+        }
+        String pageOne = SlabRigCommand.trackedManifestStatus(source);
+        for (String required : new String[]{
+                "preset=cases", "page=1/" + snapshot.pageCount(),
+                "catalogHash=" + snapshot.catalogHash(), "caseBoard=4_items_x_4_topologies",
+                "frozenDy=" + SlabAnchorAttachment.FROZEN_DY_ENABLED,
+                "playerProof=ABSENT", "provenance=AUTO_USEON_PROXY", "structural=incomplete",
+                "topologyLawReds="}) {
+            if (!pageOne.contains(required)) {
+                throw h.assertionException("cases status missing " + required + ": " + pageOne);
+            }
+        }
+        String pageOneJson = SlabRigCommand.trackedCaseManifestJsonForTests(source);
+        assertCaseManifestLimits(h, pageOneJson, 1, snapshot.pageCount());
+        assertGuardContext(h, pageOneJson, reservedOnly, hauntedAir);
+        assertTrackedRigInsideStructure(h, source);
+        byte[] progressAfterPageOne = readRequiredBytes(h, progressPath,
+                "page 1 durable cursor premise");
+        exec(h, source, "slabrig clear");
+        if (!w.getBlockState(base).isAir()
+                || !"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("cross-mode premise requires page 1 world ownership cleared");
+        }
+        boolean pageOneFrozenMode = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = !pageOneFrozenMode;
+        try {
+            int crossModeResume = tryExec(source, "slabrig cases resume force");
+            if (crossModeResume != 0
+                    || !w.getBlockState(base).isAir()
+                    || !"none".equals(SlabRigCommand.trackedManifestStatus(source))
+                    || !java.util.Arrays.equals(progressAfterPageOne,
+                    readRequiredBytes(h, progressPath, "cursor after cross-mode resume refusal"))) {
+                throw h.assertionException(
+                        "resume must reject another frozen-dy mode with world/cursor byte-exactly preserved");
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = pageOneFrozenMode;
+        }
+        if (tryExec(source, "slabrig cases 1 force") != 1) {
+            throw h.assertionException("matching-mode page 1 must rebuild after cross-mode refusal");
+        }
+        pageOne = SlabRigCommand.trackedManifestStatus(source);
+        if (!java.util.Arrays.equals(progressAfterPageOne,
+                readRequiredBytes(h, progressPath, "cursor after matching-mode page 1 rebuild"))) {
+            throw h.assertionException("same-mode page 1 rebuild must restore identical cursor bytes");
+        }
+
+        int nonForce = tryExec(source, "slabrig cases 2");
+        if (nonForce != 0 || !pageOne.equals(SlabRigCommand.trackedManifestStatus(source))
+                || !java.util.Arrays.equals(progressAfterPageOne,
+                readRequiredBytes(h, progressPath, "cursor after non-force refusal"))) {
+            throw h.assertionException(
+                    "non-force page replacement must preserve active board and cursor byte-exactly");
+        }
+        int invalid = tryExec(source, "slabrig cases " + (snapshot.pageCount() + 1));
+        if (invalid != 0 || !pageOne.equals(SlabRigCommand.trackedManifestStatus(source))
+                || !java.util.Arrays.equals(progressAfterPageOne,
+                readRequiredBytes(h, progressPath, "cursor after invalid-page refusal"))) {
+            throw h.assertionException(
+                    "invalid case page must preserve world/manifest/progress byte-exactly");
+        }
+
+        int resumed = tryExec(source, "slabrig cases resume force");
+        if (resumed != 1) {
+            throw h.assertionException("durable resume must build exact next page for the matching catalog hash");
+        }
+        String pageTwo = SlabRigCommand.trackedManifestStatus(source);
+        if (!pageTwo.contains("preset=cases") || !pageTwo.contains("page=2/" + snapshot.pageCount())) {
+            throw h.assertionException("resume must advance to page 2, got: " + pageTwo);
+        }
+        assertBlock(h, w, reservedOnly, Blocks.DIAMOND_BLOCK.defaultBlockState(),
+                "reserved-only guard cell after force replacement");
+        double after = SlabAnchorAttachment.storedPlacementDy(w, reservedOnly);
+        if (Double.doubleToLongBits(stored) != Double.doubleToLongBits(after)) {
+            throw h.assertionException("force replacement must preserve unrelated reserved-only stored dy");
+        }
+        assertAir(h, w, hauntedAir, "haunted guard state after force replacement");
+        double hauntedAfterForce = SlabAnchorAttachment.storedPlacementDy(w, hauntedAir);
+        if (Double.doubleToLongBits(hauntedStored) != Double.doubleToLongBits(hauntedAfterForce)) {
+            throw h.assertionException("force replacement must preserve haunted-air stored dy byte-exactly");
+        }
+
+        exec(h, source, "slabrig clear");
+        assertBlock(h, w, reservedOnly, Blocks.DIAMOND_BLOCK.defaultBlockState(),
+                "reserved-only guard cell after exact clear");
+        if (!"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException("exact clear must remove the active cases manifest");
+        }
+        assertAir(h, w, hauntedAir, "haunted guard state after exact clear");
+        double hauntedAfterClear = SlabAnchorAttachment.storedPlacementDy(w, hauntedAir);
+        if (Double.doubleToLongBits(hauntedStored) != Double.doubleToLongBits(hauntedAfterClear)) {
+            throw h.assertionException("exact clear must preserve haunted-air stored dy byte-exactly");
+        }
+        SlabAnchorAttachment.removeAnchor(w, reservedOnly);
+        w.setBlock(reservedOnly, Blocks.AIR.defaultBlockState(), 3);
+        SlabAnchorAttachment.removeAnchor(w, hauntedAir);
+        h.succeed();
+    }
+
+    @GameTest(structure = "slabbed_gametest:rig2_board")
+    public void slabrigCasesRecordDoorAndBedMultiCellEffects(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        CommandSourceStack source = playerSourceAt(w, player, h.absolutePos(new BlockPos(30, 2, 0)));
+        SlabRigCaseCatalog.Snapshot snapshot = SlabRigCaseCatalog.snapshot();
+
+        int doorPage = pageForItem(snapshot, "minecraft:oak_door", 0);
+        if (tryExec(source, "slabrig cases " + doorPage + " force") != 1) {
+            throw h.assertionException("door case page must finalize");
+        }
+        assertMultiCellCase(h, SlabRigCommand.trackedCaseManifestJsonForTests(source),
+                "minecraft:oak_door");
+
+        int bedPage = pageForItem(snapshot, "minecraft:white_bed", 0);
+        if (tryExec(source, "slabrig cases " + bedPage + " force") != 1) {
+            throw h.assertionException("bed case page must finalize");
+        }
+        assertMultiCellCase(h, SlabRigCommand.trackedCaseManifestJsonForTests(source),
+                "minecraft:white_bed");
+        assertTrackedRigInsideStructure(h, source);
+        exec(h, source, "slabrig clear");
+        h.succeed();
+    }
+
+    @GameTest(structure = "slabbed_gametest:rig2_board")
+    public void slabrigCasesNonForcePreservesHauntedAirInsideEffectCell(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        CommandSourceStack source = playerSourceAt(world, player,
+                h.absolutePos(new BlockPos(30, 2, 0)));
+        BlockPos base = SlabRigCommand.rigBase(source);
+        BlockPos hauntedEffect = base.above();
+        world.setBlock(hauntedEffect, Blocks.GOLD_BLOCK.defaultBlockState(), 2);
+        SlabAnchorAttachment.capturePlacementDy(world, hauntedEffect,
+                world.getBlockState(hauntedEffect));
+        world.setBlock(hauntedEffect, Blocks.AIR.defaultBlockState(), 2);
+        double before = SlabAnchorAttachment.storedPlacementDy(world, hauntedEffect);
+        if (Double.isNaN(before)) {
+            throw h.assertionException("premise: flag-2 air must retain stored dy inside effect cell");
+        }
+
+        int refused = tryExec(source, "slabrig cases 1");
+        double after = SlabAnchorAttachment.storedPlacementDy(world, hauntedEffect);
+        if (refused != 0 || !world.getBlockState(base).isAir()
+                || !world.getBlockState(hauntedEffect).isAir()
+                || Double.doubleToLongBits(before) != Double.doubleToLongBits(after)
+                || !"none".equals(SlabRigCommand.trackedManifestStatus(source))) {
+            throw h.assertionException(
+                    "non-force case build must refuse before preclean and preserve haunted effect data");
+        }
+        SlabAnchorAttachment.removeAnchor(world, hauntedEffect);
+        h.succeed();
+    }
+
+    @GameTest(structure = "slabbed_gametest:rig2_board")
+    public void slabrigCasesPostActionTopologyResetIsExplicitLawRed(GameTestHelper h) {
+        boolean savedFrozenMode = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        ServerLevel world = h.getLevel();
+        Player player = h.makeMockPlayer(GameType.SURVIVAL);
+        CommandSourceStack source = playerSourceAt(world, player,
+                h.absolutePos(new BlockPos(30, 2, 0)));
+        SlabRigCaseCatalog.Snapshot snapshot = SlabRigCaseCatalog.snapshot();
+        SlabRigCaseCatalog.Topology topology = snapshot.topologies().stream()
+                .filter(candidate -> "SBSBS".equals(candidate.recipe()))
+                .findFirst().orElseThrow();
+        SlabRigCaseCatalog.CatalogItem item = snapshot.items().stream()
+                .filter(candidate -> "minecraft:stone".equals(candidate.id()))
+                .findFirst().orElseThrow();
+        SlabRigCaseCatalog.CaseDefinition definition = SlabRigCaseCatalog.caseAt(snapshot,
+                (long) item.index() * snapshot.topologies().size() + topology.index());
+        int page = pageForItem(snapshot, item.id(), topology.index());
+        Direction facing = Direction.SOUTH;
+        BlockPos tile = SlabRigCommand.rigBase(source)
+                .relative(facing.getClockWise(), (item.index() % 4) * 8)
+                .relative(facing, (topology.index() % 4) * 8);
+        BlockPos topSlab = tile.above(3 + topology.recipe().length());
+        boolean[] injected = {false};
+        try {
+            SlabRigCommand.installCasePostUseHookForTests(source, definition.id(), () -> {
+                BlockState state = world.getBlockState(topSlab);
+                double stored = SlabAnchorAttachment.storedPlacementDy(world, topSlab);
+                if (!(state.getBlock() instanceof SlabBlock) || Double.isNaN(stored)) {
+                    throw h.assertionException(
+                            "premise: SBSBS terminal S must be a stored slab before reset injection");
+                }
+                injected[0] = true;
+                SlabAnchorAttachment.removeAnchor(world, topSlab);
+            });
+            try {
+                if (tryExec(source, "slabrig cases " + page + " force") != 1 || !injected[0]) {
+                    throw h.assertionException(
+                            "target case page/hook must execute through the real command path");
+                }
+                JsonObject root = JsonParser.parseString(
+                        SlabRigCommand.trackedCaseManifestJsonForTests(source)).getAsJsonObject();
+                JsonObject targetRow = null;
+                int postStable = 0;
+                int postLawRed = 0;
+                for (JsonElement element : root.getAsJsonArray("cases")) {
+                    JsonObject row = element.getAsJsonObject();
+                    if ("STABLE".equals(row.get("postActionStructureStatus").getAsString())) {
+                        postStable++;
+                    } else if ("LAW_RED".equals(
+                            row.get("postActionStructureStatus").getAsString())) {
+                        postLawRed++;
+                    }
+                    if (definition.id().equals(row.get("caseId").getAsString())) {
+                        targetRow = row;
+                    }
+                }
+                if (targetRow == null
+                        || !root.get("frozenDyEnabled").getAsBoolean()
+                        || root.getAsJsonObject("coverage").get("topologyLawReds").getAsInt() != 1
+                        || postStable != 15 || postLawRed != 1
+                        || !"FINALIZED_WITH_REDS".equals(root.get("status").getAsString())
+                        || !"LAW_RED".equals(targetRow.get("structureStatus").getAsString())
+                        || !"LAW_RED".equals(targetRow.get("postActionStructureStatus").getAsString())
+                        || !targetRow.get("structureDetail").getAsString()
+                        .contains("postActionTopologyChanged=")
+                        || !targetRow.get("outcome").getAsString().startsWith("PLACED_")
+                        || !targetRow.get("persistentSubjectPresent").getAsBoolean()
+                        || targetRow.getAsJsonArray("actualStructureCells")
+                        .equals(targetRow.getAsJsonArray("postActionStructureCells"))) {
+                    throw h.assertionException(
+                            "successful target placement must expose exactly the injected frozen-on reset: "
+                                    + targetRow);
+                }
+                exec(h, source, "slabrig clear");
+            } finally {
+                SlabRigCommand.clearCasePostUseHookForTests(source);
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = savedFrozenMode;
+        }
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabrigSameCountVanishIsNeverReportedAsRefusal(GameTestHelper h) {
+        if (!"REFUSED_NO_CHANGE".equals(SlabRigCommand.classifyAbsentSubject(
+                false, "minecraft:stone", 1, "minecraft:stone", 1, false))
+                || !"PLACED_THEN_VANISHED".equals(SlabRigCommand.classifyAbsentSubject(
+                true, "minecraft:stone", 1, "minecraft:stone", 1, false))
+                || !"PLACED_THEN_VANISHED".equals(SlabRigCommand.classifyAbsentSubject(
+                false, "minecraft:powder_snow_bucket", 1, "minecraft:bucket", 1, false))
+                || !"PLACED_THEN_VANISHED".equals(SlabRigCommand.classifyAbsentSubject(
+                false, "minecraft:stone", 1, "minecraft:stone", 1, true))) {
+            throw h.assertionException(
+                    "absent-subject truth table must independently cover action, transformation, and residuals");
+        }
+        ServerLevel world = h.getLevel();
+        BlockPos survivalSupport = h.absolutePos(new BlockPos(1, 1, 1));
+        BlockPos survivalTarget = survivalSupport.above();
+        world.setBlock(survivalSupport, Blocks.STONE.defaultBlockState(), 3);
+        Player survival = h.makeMockPlayer(GameType.SURVIVAL);
+        boolean[] survivalPlaced = {false};
+        SlabRigCommand.CasePlacementProbeForTests survivalProbe =
+                SlabRigCommand.probeCasePlacementForTests(
+                        world, survival, Items.POWDER_SNOW_BUCKET,
+                        survivalSupport, survivalTarget, () -> {
+                            if (!world.getBlockState(survivalTarget).is(Blocks.POWDER_SNOW)) {
+                                throw h.assertionException(
+                                        "premise: survival powder-snow bucket must place its subject before vanish");
+                            }
+                            survivalPlaced[0] = true;
+                            world.setBlock(survivalTarget, Blocks.AIR.defaultBlockState(), 3);
+                        });
+        if (!survivalPlaced[0]
+                || !"PLACED_THEN_VANISHED".equals(survivalProbe.outcome())
+                || !survivalProbe.interactionConsumesAction()
+                || survivalProbe.persistentSubjectPresent()
+                || !"minecraft:powder_snow_bucket".equals(survivalProbe.stackItemBefore())
+                || !"minecraft:bucket".equals(survivalProbe.stackItemAfter())
+                || survivalProbe.stackBefore() != 1 || survivalProbe.stackAfter() != 1
+                || survivalProbe.error() != null || survivalProbe.outsideEffect()) {
+            throw h.assertionException(
+                    "same-count survival item transformation must be an explicit vanished red: "
+                            + survivalProbe);
+        }
+
+        BlockPos creativeSupport = h.absolutePos(new BlockPos(4, 1, 1));
+        BlockPos creativeTarget = creativeSupport.above();
+        world.setBlock(creativeSupport, Blocks.STONE.defaultBlockState(), 3);
+        Player creative = h.makeMockPlayer(GameType.CREATIVE);
+        // makeMockPlayer records the requested mode but direct ItemStack.useOn consults this flag.
+        creative.getAbilities().instabuild = true;
+        boolean[] creativePlaced = {false};
+        SlabRigCommand.CasePlacementProbeForTests creativeProbe =
+                SlabRigCommand.probeCasePlacementForTests(
+                        world, creative, Items.STONE,
+                        creativeSupport, creativeTarget, () -> {
+                            BlockState placed = world.getBlockState(creativeTarget);
+                            if (!placed.is(Blocks.STONE)) {
+                                throw h.assertionException(
+                                        "premise: creative block item must place its subject before vanish");
+                            }
+                            creativePlaced[0] = true;
+                            SlabAnchorAttachment.capturePlacementDy(world, creativeTarget, placed);
+                            world.setBlock(creativeTarget, Blocks.AIR.defaultBlockState(), 2);
+                        });
+        if (!creativePlaced[0]
+                || !"PLACED_THEN_VANISHED".equals(creativeProbe.outcome())
+                || !creativeProbe.interactionConsumesAction()
+                || creativeProbe.persistentSubjectPresent()
+                || !"minecraft:stone".equals(creativeProbe.stackItemBefore())
+                || !"minecraft:stone".equals(creativeProbe.stackItemAfter())
+                || creativeProbe.stackBefore() != 1 || creativeProbe.stackAfter() != 1
+                || creativeProbe.observedChangeCount() < 1
+                || creativeProbe.error() != null || creativeProbe.outsideEffect()) {
+            throw h.assertionException(
+                    "same-count creative consumed action with residual evidence must be a vanished red: "
+                            + creativeProbe);
+        }
+        if (!world.getBlockState(survivalTarget).isAir()
+                || !world.getBlockState(creativeTarget).isAir()
+                || !Double.isNaN(SlabAnchorAttachment.storedPlacementDy(world, creativeTarget))) {
+            throw h.assertionException("placement probe must exact-clean its subject/store evidence");
+        }
+        world.setBlock(survivalSupport, Blocks.AIR.defaultBlockState(), 3);
+        world.setBlock(creativeSupport, Blocks.AIR.defaultBlockState(), 3);
         h.succeed();
     }
 
@@ -451,6 +866,116 @@ public final class SlabRigCommandSmokeTest {
             return dispatcher.execute(command, source);
         } catch (Exception e) {
             return -1;
+        }
+    }
+
+    private static int pageForItem(SlabRigCaseCatalog.Snapshot snapshot, String itemId,
+                                   int topologyIndex) {
+        int itemIndex = snapshot.items().stream()
+                .filter(item -> item.id().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("runtime item missing: " + itemId))
+                .index();
+        int itemGroup = itemIndex / SlabRigCaseCatalog.PAGE_GRID_SIDE;
+        int topologyGroup = topologyIndex / SlabRigCaseCatalog.PAGE_GRID_SIDE;
+        int topologyGroups = snapshot.topologies().size() / SlabRigCaseCatalog.PAGE_GRID_SIDE;
+        return itemGroup * topologyGroups + topologyGroup + 1;
+    }
+
+    private static void assertCaseManifestLimits(GameTestHelper h, String json, int page, int pageCount) {
+        if (json == null) {
+            throw h.assertionException("cases command must retain its final canonical page manifest");
+        }
+        try {
+            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+            JsonObject coverage = root.getAsJsonObject("coverage");
+            if (!root.get("status").getAsString().startsWith("FINALIZED")
+                    || root.get("page").getAsInt() != page
+                    || root.get("pageCount").getAsInt() != pageCount
+                    || !"ABSENT_PROXY_DIAGNOSTIC_ONLY".equals(root.get("playerProof").getAsString())
+                    || !"OUT_OF_SCOPE_RIG2_V1_SEPARATE_PASS".equals(root.get("hangingCoverage").getAsString())
+                    || !root.get("runtimeContentSha256").getAsString().matches("[0-9a-f]{64}")
+                    || coverage.get("topologyLawReds").getAsInt() < 1
+                    || coverage.get("placedThenVanished").getAsInt() != 0
+                    || coverage.get("planned").getAsInt() != 0
+                    || coverage.get("errors").getAsInt() != 0
+                    || coverage.get("interrupted").getAsInt() != 0
+                    || coverage.get("proxyExecuted").getAsInt()
+                    + coverage.get("deferred").getAsInt() != 16
+                    || coverage.get("playerAuthoredPaired").getAsInt() != 0) {
+                throw h.assertionException("case manifest blurred proxy/page/hanging proof limits: " + json);
+            }
+        } catch (RuntimeException e) {
+            throw h.assertionException("cases command emitted invalid JSON: " + e.getMessage());
+        }
+    }
+
+    private static void assertMultiCellCase(GameTestHelper h, String json, String itemId) {
+        JsonObject root;
+        try {
+            root = JsonParser.parseString(json).getAsJsonObject();
+        } catch (RuntimeException e) {
+            throw h.assertionException("invalid case manifest JSON: " + e.getMessage());
+        }
+        JsonArray cases = root.getAsJsonArray("cases");
+        for (JsonElement element : cases) {
+            JsonObject row = element.getAsJsonObject();
+            if (itemId.equals(row.get("itemId").getAsString())) {
+                if (!"PLACED_MULTI_CELL".equals(row.get("outcome").getAsString())
+                        || row.getAsJsonArray("actualChanges").size() < 2) {
+                    throw h.assertionException(itemId + " must record every multi-cell effect: " + row);
+                }
+                return;
+            }
+        }
+        throw h.assertionException("page manifest missing expected case item " + itemId);
+    }
+
+    private static void assertTrackedRigInsideStructure(GameTestHelper h, CommandSourceStack source) {
+        for (BlockPos pos : SlabRigCommand.trackedReservedCellsForTests(source)) {
+            if (!h.getBounds().contains(Vec3.atCenterOf(pos))) {
+                throw h.assertionException("RIG-2 reserved cell escaped its isolated 36x16x36 fixture: " + pos);
+            }
+        }
+    }
+
+    private static void assertGuardContext(GameTestHelper h, String json, BlockPos nonAir, BlockPos hauntedAir) {
+        JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+        if (root.getAsJsonObject("coverage").get("externalGuardCells").getAsInt() < 2) {
+            throw h.assertionException("forced board must disclose non-air and haunted-air guard context");
+        }
+        String nonAirKey = nonAir.getX() + "," + nonAir.getY() + "," + nonAir.getZ();
+        String hauntedKey = hauntedAir.getX() + "," + hauntedAir.getY() + "," + hauntedAir.getZ();
+        boolean sawNonAir = false;
+        boolean sawHaunted = false;
+        for (JsonElement caseElement : root.getAsJsonArray("cases")) {
+            for (JsonElement contextElement : caseElement.getAsJsonObject()
+                    .getAsJsonArray("externalGuardContext")) {
+                JsonObject context = contextElement.getAsJsonObject();
+                if (nonAirKey.equals(context.get("pos").getAsString())
+                        && context.get("state").getAsString().contains("diamond_block")) {
+                    sawNonAir = true;
+                }
+                if (hauntedKey.equals(context.get("pos").getAsString())
+                        && context.get("state").getAsString().contains("air")
+                        && !"NaN".equals(context.get("storedDy").getAsString())) {
+                    sawHaunted = true;
+                }
+            }
+        }
+        if (!sawNonAir || !sawHaunted) {
+            throw h.assertionException("guard context manifest omitted exact non-air/haunted fixtures");
+        }
+    }
+
+    private static byte[] readRequiredBytes(GameTestHelper h, java.nio.file.Path path, String label) {
+        try {
+            if (!java.nio.file.Files.isRegularFile(path)) {
+                throw h.assertionException(label + " missing at " + path);
+            }
+            return java.nio.file.Files.readAllBytes(path);
+        } catch (java.io.IOException e) {
+            throw h.assertionException(label + " could not be read: " + e.getMessage());
         }
     }
 
