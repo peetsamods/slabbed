@@ -34,11 +34,12 @@ import java.util.LinkedHashMap;
 public final class RecorderUpgradeContractTest {
 
     private static Path setup(String name) {
-        Path dir = Path.of("tmp", "recorder-upgrade-" + name);
+        Path dir = Path.of("tmp", "recorder-upgrade-" + name + "-" + System.nanoTime());
         System.setProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY, "true");
         System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, dir.toString());
         LiveCursorIntentRecorder.resetForTests();
-        return dir;
+        LiveCursorIntentRecorder.bootstrap();
+        return Path.of(LiveCursorIntentRecorder.currentLogPathDisplay());
     }
 
     private static void teardown() {

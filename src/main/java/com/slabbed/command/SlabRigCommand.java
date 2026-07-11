@@ -4,9 +4,11 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabTestKit;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -17,6 +19,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -35,9 +38,12 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,10 +57,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * genuine Slabbed anchor attachments), so it registers via {@link CommandRegistrationCallback} and
  * lives in a shipping package — NOT {@code com.slabbed.dev}, which the release jar strips.
  *
- * <p>It builds SCENERY only: {@code w.setBlock(..)} plus the public attachment-authoring API
+ * <p>It builds exact planned scenery plus explicitly labelled synthetic {@code useOn} subjects. Every
+ * synthetic action is recorder-labelled {@code AUTO_USEON_PROXY}; it is diagnostic setup, never a
+ * substitute for raw player-authored WYSIWYG closure. Scenery uses {@code w.setBlock(..)} plus the
+ * public attachment-authoring API
  * ({@link SlabAnchorAttachment#addAnchor}, {@link SlabAnchorAttachment#addCompoundFullBlockAnchor},
  * {@link SlabAnchorAttachment#addCompoundVisibleSideLowerSlab}). It never touches height computation,
- * so it cannot violate the WYSIWYG law — the rigs are exactly what the gametest rig builders author
+ * so it cannot change production WYSIWYG behavior. The rigs mirror what the gametest builders author,
+ * and their readback reports any scene that does not match its declared structure
  * ({@code NeighborUpdateInvarianceTest.markedSlabRig} /
  * {@code AnchoredDepthReadbackTest.buildCompoundVisibleSupport}).
  *
@@ -65,14 +75,17 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>{@code /slabrig rows [n] [force]} — n columns (default 16, 2-cell spacing) of lowered -0.5
  *       supports (stone-on-bottom-slab-on-ground), plus a parallel row of genuine -1.0 compound
  *       supports, each row labelled with a sign stating the expected dy.
- *   <li>{@code /slabrig clear} — removes the last rig this player built in THIS dimension (bounds
- *       tracked per player per dimension, including 2 cells of headroom for hand-placed subjects).
+ *   <li>{@code /slabrig stacks [max_length] [page] [force]} — one exact 4x4 page of every S/B word
+ *       through length five, built above separately named standardized lowered seeds.
+ *   <li>{@code /slabrig status} — reports the exact server-session manifest and structural state.
+ *   <li>{@code /slabrig clear} — directly removes exact cells owned by the last tracked rig; vanilla
+ *       neighbor survival may also remove a dependent whose support was one of those cells.
  * </ul>
  *
- * <p>Safety: {@code tower}/{@code rows} refuse to overwrite a non-empty footprint (add the literal
- * {@code force} to overwrite), refuse to build below the world's minimum build height, pre-clean every
- * footprint cell's Slabbed attachments (flag-2 {@code setBlock} does NOT fire the removal hook, so a
- * rig authored over stale markers would be "haunted" — its sign would lie), and read back
+ * <p>Safety: builders refuse to overwrite non-empty reserved cells (add the literal {@code force} to
+ * overwrite direct clear-owned cells), refuse to build below the world's minimum build height,
+ * pre-clean every exact clear-owned cell's Slabbed attachments (flag-2 {@code setBlock} does NOT fire
+ * the removal hook, so a rig authored over stale markers would be "haunted" — its sign would lie), and read back
  * {@link SlabSupport#getYOffset} after authoring so a rig that does not measure what its sign says
  * warns in red instead of reporting success.
  */
@@ -131,6 +144,10 @@ public final class SlabRigCommand {
      */
     private static final int MIN_PLATFORM_Y = -4096;
     private static final int MAX_PLATFORM_Y = 4096;
+    private static final int MAX_STACK_LENGTH = 5;
+    private static final int DEFAULT_STACK_LENGTH = 5;
+    private static final int STACK_PAGE_SIZE = 16;
+    private static final int STACK_GRID_SIDE = 4;
     /**
      * The alternating recipes cycled across towers (index {@code i % length}), one token per cell:
      * {@code S} = a slab placed via a real item {@code useOn} click, {@code B} = a full block the same
@@ -139,22 +156,135 @@ public final class SlabRigCommand {
     private static final String[] TOWER_RECIPES = {"SB", "SSBB", "BS", "S"};
     private static final String[] TOWER_LABELS = {"SBSB", "SSBB", "BSBS", "SSSS"};
 
-    /**
-     * In-memory per-(player, dimension) record of the last rig volume, for {@code /slabrig clear}.
-     * Keyed by {@link RigKey} so a rig built in the nether does not orphan an overworld rig record.
-     * Concurrent because commands may run on the server thread while worlds unload elsewhere.
-     */
-    private static final Map<RigKey, Bounds> LAST_BOUNDS = new ConcurrentHashMap<>();
-    private static final UUID CONSOLE_KEY = new UUID(0L, 0L);
+    private static final List<String> STACK_RECIPES = buildStackRecipes();
 
-    /** Identity of a remembered rig: which player, in which dimension. */
-    private record RigKey(UUID player, ResourceKey<Level> dimension) {
+    /**
+     * In-memory server-session-bound exact manifests. The key includes the actual server object by
+     * identity, so a new integrated-server world can never reuse a prior world's record just because
+     * player UUID and dimension id match.
+     */
+    private static final Map<RigKey, RigManifest> LAST_MANIFEST = new ConcurrentHashMap<>();
+    private static final UUID CONSOLE_KEY = new UUID(0L, 0L);
+    private static boolean lifecycleHookRegistered;
+
+    /** Identity of a remembered rig: actual server session, player, and dimension. */
+    private static final class RigKey {
+        private final MinecraftServer server;
+        private final UUID player;
+        private final ResourceKey<Level> dimension;
+
+        private RigKey(MinecraftServer server, UUID player, ResourceKey<Level> dimension) {
+            this.server = server;
+            this.player = player;
+            this.dimension = dimension;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof RigKey key
+                    && server == key.server
+                    && player.equals(key.player)
+                    && dimension.equals(key.dimension);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * (31 * System.identityHashCode(server) + player.hashCode()) + dimension.hashCode();
+        }
+    }
+
+    /** One immutable page view of the canonical S/B catalog. */
+    public record StackPage(int maxLength, int page, int pageCount, int firstCatalogIndex,
+                            List<String> recipes) {
+        public StackPage {
+            recipes = List.copyOf(recipes);
+        }
+    }
+
+    private record StackEntry(int catalogIndex, String recipe, BlockPos seed, List<BlockPos> recipeCells) {
+        private StackEntry {
+            recipeCells = List.copyOf(recipeCells);
+        }
+    }
+
+    /** Exact mutation/ownership record. Bounds are derived display metadata only. */
+    private static final class RigManifest {
+        private final RigKey key;
+        private final String preset;
+        private final BlockPos base;
+        private final Direction facing;
+        private final int maxLength;
+        private final int page;
+        private final int pageCount;
+        private final int firstRecipeIndex;
+        private final int lastRecipeIndex;
+        private final LinkedHashSet<BlockPos> reservedCells = new LinkedHashSet<>();
+        private final LinkedHashMap<BlockPos, BlockState> authoredStates = new LinkedHashMap<>();
+        private final LinkedHashSet<BlockPos> attachmentCells = new LinkedHashSet<>();
+        private final LinkedHashSet<BlockPos> subjectSlots = new LinkedHashSet<>();
+        private final LinkedHashSet<BlockPos> clearOwnedCells = new LinkedHashSet<>();
+        private final List<StackEntry> stacks = new ArrayList<>();
+        private boolean structurallyComplete;
+        private String structuralNote = "planned";
+
+        private RigManifest(RigKey key, String preset, BlockPos base, Direction facing,
+                            int maxLength, int page, int pageCount, int firstRecipeIndex,
+                            int lastRecipeIndex) {
+            this.key = key;
+            this.preset = preset;
+            this.base = base.immutable();
+            this.facing = facing;
+            this.maxLength = maxLength;
+            this.page = page;
+            this.pageCount = pageCount;
+            this.firstRecipeIndex = firstRecipeIndex;
+            this.lastRecipeIndex = lastRecipeIndex;
+        }
+
+        private void claimStructure(BlockPos pos) {
+            BlockPos immutable = pos.immutable();
+            reservedCells.add(immutable);
+            clearOwnedCells.add(immutable);
+        }
+
+        private void reserveSafety(BlockPos pos) {
+            reservedCells.add(pos.immutable());
+        }
+
+        private void declareSubject(BlockPos pos) {
+            BlockPos immutable = pos.immutable();
+            reservedCells.add(immutable);
+            subjectSlots.add(immutable);
+            clearOwnedCells.add(immutable);
+        }
+
+        private void touchAttachment(BlockPos pos) {
+            attachmentCells.add(pos.immutable());
+        }
+
+        private void recordAuthored(BlockPos pos, BlockState before, BlockState after) {
+            if (!Objects.equals(before, after)) {
+                BlockPos immutable = pos.immutable();
+                authoredStates.put(immutable, after);
+                clearOwnedCells.add(immutable);
+            }
+        }
+
+        private Bounds bounds() {
+            return Bounds.of(reservedCells);
+        }
     }
 
     // ── registration ─────────────────────────────────────────────────────────
 
     /** Wires the command into the server dispatcher for every world (integrated and dedicated). */
     public static void register() {
+        synchronized (SlabRigCommand.class) {
+            if (!lifecycleHookRegistered) {
+                lifecycleHookRegistered = true;
+                ServerLifecycleEvents.SERVER_STOPPED.register(SlabRigCommand::clearServerSession);
+            }
+        }
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 register(dispatcher));
     }
@@ -210,9 +340,66 @@ public final class SlabRigCommand {
                                         .then(Commands.literal("force")
                                                 .executes(ctx -> platform(ctx,
                                                         IntegerArgumentType.getInteger(ctx, "y"), true)))))
+                        .then(Commands.literal("stacks")
+                                .executes(ctx -> stacks(ctx, DEFAULT_STACK_LENGTH, 1, false))
+                                .then(Commands.literal("force")
+                                        .executes(ctx -> stacks(ctx, DEFAULT_STACK_LENGTH, 1, true)))
+                                .then(Commands.argument("max_length",
+                                                IntegerArgumentType.integer(1, MAX_STACK_LENGTH))
+                                        .executes(ctx -> stacks(ctx,
+                                                IntegerArgumentType.getInteger(ctx, "max_length"), 1, false))
+                                        .then(Commands.literal("force")
+                                                .executes(ctx -> stacks(ctx,
+                                                        IntegerArgumentType.getInteger(ctx, "max_length"), 1, true)))
+                                        .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                                                .executes(ctx -> stacks(ctx,
+                                                        IntegerArgumentType.getInteger(ctx, "max_length"),
+                                                        IntegerArgumentType.getInteger(ctx, "page"), false))
+                                                .then(Commands.literal("force")
+                                                        .executes(ctx -> stacks(ctx,
+                                                                IntegerArgumentType.getInteger(ctx, "max_length"),
+                                                                IntegerArgumentType.getInteger(ctx, "page"), true))))))
+                        .then(Commands.literal("status")
+                                .executes(SlabRigCommand::status))
                         .then(Commands.literal("clear")
                                 .executes(SlabRigCommand::clear))
         );
+    }
+
+    private static List<String> buildStackRecipes() {
+        List<String> recipes = new ArrayList<>(62);
+        for (int length = 1; length <= MAX_STACK_LENGTH; length++) {
+            int words = 1 << length;
+            for (int bits = 0; bits < words; bits++) {
+                StringBuilder recipe = new StringBuilder(length);
+                for (int shift = length - 1; shift >= 0; shift--) {
+                    recipe.append((bits & (1 << shift)) == 0 ? 'S' : 'B');
+                }
+                recipes.add(recipe.toString());
+            }
+        }
+        return List.copyOf(recipes);
+    }
+
+    /** Canonical immutable prefix through {@code maxLength}; visible for the literal contract test. */
+    public static List<String> stackRecipes(int maxLength) {
+        if (maxLength < 1 || maxLength > MAX_STACK_LENGTH) {
+            throw new IllegalArgumentException("maxLength must be 1.." + MAX_STACK_LENGTH);
+        }
+        int total = (1 << (maxLength + 1)) - 2;
+        return List.copyOf(STACK_RECIPES.subList(0, total));
+    }
+
+    /** One-based, dynamically validated page of the stable prefix catalog. */
+    public static StackPage stackPage(int maxLength, int page) {
+        List<String> recipes = stackRecipes(maxLength);
+        int pageCount = (recipes.size() + STACK_PAGE_SIZE - 1) / STACK_PAGE_SIZE;
+        if (page < 1 || page > pageCount) {
+            throw new IllegalArgumentException("page must be 1.." + pageCount + " for max_length=" + maxLength);
+        }
+        int from = (page - 1) * STACK_PAGE_SIZE;
+        int to = Math.min(from + STACK_PAGE_SIZE, recipes.size());
+        return new StackPage(maxLength, page, pageCount, from, recipes.subList(from, to));
     }
 
     // ── geometry (shared with the smoke test) ─────────────────────────────────
@@ -231,13 +418,59 @@ public final class SlabRigCommand {
         return feet.below().relative(rigFacing(source), 3);
     }
 
+    private static RigManifest planManifest(CommandSourceStack source, String preset, BlockPos base,
+                                            Direction facing, Set<BlockPos> structureCells) {
+        RigManifest manifest = new RigManifest(keyFor(source), preset, base, facing,
+                0, 0, 0, -1, -1);
+        for (BlockPos pos : structureCells) {
+            manifest.claimStructure(pos);
+        }
+        declareTopHeadroom(manifest, structureCells);
+        return manifest;
+    }
+
+    /** Exact headroom columns above actual planned tops; never a filled min/max box. */
+    private static void declareTopHeadroom(RigManifest manifest, Set<BlockPos> structureCells) {
+        for (BlockPos pos : structureCells) {
+            if (!structureCells.contains(pos.above())) {
+                for (int y = 1; y <= HEADROOM; y++) {
+                    manifest.declareSubject(pos.above(y));
+                }
+            }
+        }
+    }
+
+    /** The finite multi-cell envelope a single useOn may change (door upper / bed head included). */
+    private static Set<BlockPos> effectEnvelope(BlockPos clicked, BlockPos target) {
+        LinkedHashSet<BlockPos> cells = new LinkedHashSet<>();
+        cells.add(clicked.immutable());
+        cells.add(target.immutable());
+        cells.add(target.above().immutable());
+        cells.add(target.below().immutable());
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            cells.add(target.relative(direction).immutable());
+        }
+        return cells;
+    }
+
+    private static void declareProxyEffect(RigManifest manifest, BlockPos clicked, BlockPos target) {
+        for (BlockPos pos : effectEnvelope(clicked, target)) {
+            if (!manifest.clearOwnedCells.contains(pos)) {
+                manifest.declareSubject(pos);
+            } else {
+                manifest.reserveSafety(pos);
+            }
+        }
+    }
+
     // ── /slabrig (usage) ──────────────────────────────────────────────────────
 
     private static int usage(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack source = ctx.getSource();
         source.sendSuccess(() -> Component.literal(
                 "[slabrig] usage: /slabrig <tower [force]|tower <n> [height] [force]|rows [n] [force]"
-                        + "|mega [n] [force]|platform [y] [force]|clear>\n"
+                        + "|mega [n] [force]|platform [y] [force]|stacks [max_length] [page] [force]"
+                        + "|status|clear>\n"
                         + "  tower [force]           — compound-visible -1.0 marked tower\n"
                         + "  tower <n> [h] [force]   — n alternating deep-stack towers (default n="
                         + DEFAULT_TOWER_COUNT + ", height=" + DEFAULT_TOWER_HEIGHT + ", cap " + MAX_TOWER_HEIGHT
@@ -246,8 +479,10 @@ public final class SlabRigCommand {
                         + "  mega [n] [force]        — the everything-rig: n columns x 4 support variants with one\n"
                         + "                            kit item auto-placed on each (default " + DEFAULT_MEGA_COLUMNS + ", capped by kit size)\n"
                         + "  platform [y] [force]    — the mega rig on a floating platform at absolute Y (default your Y)\n"
-                        + "  clear                   — remove the last rig you built in this dimension\n"
-                        + "  (force overwrites a non-empty footprint)"), false);
+                        + "  stacks [m] [p] [force]  — exact 4x4 page of all S/B words through length m (default 5)\n"
+                        + "  status                  — show the exact tracked manifest and structural state\n"
+                        + "  clear                   — remove exact owned cells only\n"
+                        + "  (a tracked rig refuses replacement unless force exact-clears it first)"), false);
         return 1;
     }
 
@@ -263,18 +498,14 @@ public final class SlabRigCommand {
             return 0;
         }
 
-        // Footprint = the tower cells + HEADROOM above the rig top, as an inclusive box.
         Set<BlockPos> cells = new LinkedHashSet<>();
         collectTowerCells(base, facing, cells);
-        Bounds bounds = footprintBounds(cells, world.dimension());
-
-        if (refuseIfFootprintOccupied(source, world, bounds, force)) {
+        RigManifest manifest = planManifest(source, "tower", base, facing, cells);
+        if (!prepareManifest(source, world, manifest, force)) {
             return 0;
         }
-        precleanFootprint(world, bounds);
 
-        buildCompoundTower(world, base, facing, bounds);
-        rememberBounds(source, bounds);
+        buildCompoundTower(world, base, facing, manifest);
 
         // F4 self-verify: the compound full block and the marked side slab must both read -1.0.
         BlockPos fb = base.above(4);
@@ -283,9 +514,12 @@ public final class SlabRigCommand {
         addIfMismatch(mismatches, world, fb, -1.0, "compound full block");
         addIfMismatch(mismatches, world, support, -1.0, "marked side slab");
         if (!mismatches.isEmpty()) {
+            manifest.structuralNote = "self-verify:" + String.join(";", mismatches);
             source.sendFailure(warn("tower", base, facing, mismatches));
             return 0;
         }
+        manifest.structurallyComplete = true;
+        manifest.structuralNote = "verified";
 
         source.sendSuccess(() -> Component.literal(
                 "[slabrig] tower built at " + base.toShortString() + " facing " + facing.getName()
@@ -299,23 +533,26 @@ public final class SlabRigCommand {
      * bottom slab, compound full block (anchored + compound-full-block anchor, reads -1.0), and a
      * marked side slab authored against it. Returns the compound full-block cell.
      */
-    private static BlockPos buildCompoundTower(ServerLevel world, BlockPos base, Direction facing, Bounds bounds) {
-        setStone(world, base, bounds);
-        bottomSlab(world, base.above(1), bounds);
-        setStone(world, base.above(2), bounds);
-        bottomSlab(world, base.above(3), bounds);
+    private static BlockPos buildCompoundTower(ServerLevel world, BlockPos base, Direction facing,
+                                                RigManifest manifest) {
+        setStone(world, base, manifest);
+        bottomSlab(world, base.above(1), manifest);
+        setStone(world, base.above(2), manifest);
+        bottomSlab(world, base.above(3), manifest);
 
         BlockPos fb = base.above(4);
-        setStone(world, fb, bounds);
+        setStone(world, fb, manifest);
         SlabAnchorAttachment.addAnchor(world, fb, world.getBlockState(fb));
         SlabAnchorAttachment.addCompoundFullBlockAnchor(world, fb, world.getBlockState(fb));
+        manifest.touchAttachment(fb);
 
         // Marked side slab beside the compound full block (same Y, one horizontal step). The qualifier
         // is direction-agnostic, so we place it on the player's left for a clean read.
         BlockPos support = fb.relative(facing.getCounterClockWise());
-        bottomSlab(world, support, bounds);
+        bottomSlab(world, support, manifest);
         SlabAnchorAttachment.addCompoundVisibleSideLowerSlab(world, support, world.getBlockState(support),
                 fb, world.getBlockState(fb));
+        manifest.touchAttachment(support);
         return fb;
     }
 
@@ -346,10 +583,8 @@ public final class SlabRigCommand {
     private static int towerRig(CommandContext<CommandSourceStack> ctx, int n, int height, boolean force) {
         CommandSourceStack source = ctx.getSource();
         ServerLevel world = source.getLevel();
-        Player player = source.getEntity() instanceof Player p ? p : null;
+        Player player = proxyPlayerOrRefuse(source, "tower <n>");
         if (player == null) {
-            source.sendFailure(Component.literal(
-                    "[slabrig] tower <n> auto-places via your hand — run it as a player, not the console."));
             return 0;
         }
 
@@ -369,11 +604,18 @@ public final class SlabRigCommand {
             towerBases[i] = base.relative(right, i * COLUMN_SPACING);
             collectTowerRigCells(towerBases[i], height, cells);
         }
-        Bounds bounds = footprintBounds(cells, world.dimension());
-        if (refuseIfFootprintOccupied(source, world, bounds, force)) {
+        RigManifest manifest = planManifest(source, "tower-deep", base, facing, cells);
+        for (BlockPos towerBase : towerBases) {
+            BlockPos clicked = towerBase.above(TOWER_SEAT_INDEX);
+            for (int h = 0; h < height; h++) {
+                BlockPos target = clicked.above();
+                declareProxyEffect(manifest, clicked, target);
+                clicked = target;
+            }
+        }
+        if (!prepareManifest(source, world, manifest, force)) {
             return 0;
         }
-        precleanFootprint(world, bounds);
 
         int gapCount = 0;
         int overlapCount = 0;
@@ -383,7 +625,8 @@ public final class SlabRigCommand {
             for (int i = 0; i < n; i++) {
                 String recipe = TOWER_RECIPES[i % TOWER_RECIPES.length];
                 String label = TOWER_LABELS[i % TOWER_LABELS.length];
-                List<BlockPos> stack = buildAlternatingTower(world, player, towerBases[i], recipe, height, bounds);
+                List<BlockPos> stack = buildAlternatingTower(
+                        world, player, towerBases[i], recipe, height, manifest);
                 builtCells[i] = stack.size() - 1; // cells actually placed above the seat
                 ReadbackTally tally = reportTowerReadback(source, i, label, height, world, stack);
                 gapCount += tally.gaps();
@@ -392,8 +635,6 @@ public final class SlabRigCommand {
         } finally {
             player.setItemInHand(InteractionHand.MAIN_HAND, held);
         }
-        rememberBounds(source, bounds);
-
         // Honest summary: report what was ACTUALLY built (a tower can legitimately stall early — e.g.
         // an obstruction or a refused placement), never the requested figure dressed up as fact.
         StringBuilder perTower = new StringBuilder();
@@ -411,6 +652,10 @@ public final class SlabRigCommand {
         final int overlapsFinal = overlapCount;
         final String builtSummary = perTower.toString();
         final boolean shortFinal = anyShort;
+        manifest.structurallyComplete = !anyShort && gapCount == 0 && overlapCount == 0;
+        manifest.structuralNote = manifest.structurallyComplete
+                ? "verified"
+                : "built=" + builtSummary + "/" + height + ",gaps=" + gapCount + ",overlaps=" + overlapCount;
         source.sendSuccess(() -> Component.literal(
                 "[slabrig] tower rig built at " + base.toShortString() + " facing " + facing.getName()
                         + " — " + nFinal + " towers, cells built " + builtSummary + " of " + heightFinal
@@ -434,11 +679,11 @@ public final class SlabRigCommand {
      * disjoint) rather than guessing at a cell that was never authored.
      */
     private static List<BlockPos> buildAlternatingTower(ServerLevel world, Player player, BlockPos towerBase,
-                                                         String recipe, int height, Bounds bounds) {
-        setStone(world, towerBase, bounds);
-        bottomSlab(world, towerBase.above(1), bounds);
-        setStone(world, towerBase.above(2), bounds);
-        bottomSlab(world, towerBase.above(3), bounds);
+                                                         String recipe, int height, RigManifest manifest) {
+        setStone(world, towerBase, manifest);
+        bottomSlab(world, towerBase.above(1), manifest);
+        setStone(world, towerBase.above(2), manifest);
+        bottomSlab(world, towerBase.above(3), manifest);
         BlockPos seatTop = towerBase.above(3);
 
         List<BlockPos> stack = new ArrayList<>();
@@ -461,7 +706,7 @@ public final class SlabRigCommand {
             BlockPos target = cursor.above();
             boolean targetWasAir = world.getBlockState(target).isAir();
             BlockState cursorBefore = world.getBlockState(cursor);
-            placeVia(world, player, item, cursor, Direction.UP);
+            placeVia(world, player, item, cursor, Direction.UP, target, manifest);
             boolean landed = targetWasAir && !world.getBlockState(target).isAir();
             if (landed) {
                 cursor = target;
@@ -569,37 +814,35 @@ public final class SlabRigCommand {
 
         Set<BlockPos> cells = new LinkedHashSet<>();
         collectRowsCells(base, facing, count, cells);
-        Bounds bounds = footprintBounds(cells, world.dimension());
-
-        if (refuseIfFootprintOccupied(source, world, bounds, force)) {
+        RigManifest manifest = planManifest(source, "rows", base, facing, cells);
+        if (!prepareManifest(source, world, manifest, force)) {
             return 0;
         }
-        precleanFootprint(world, bounds);
 
         // Row A — lowered -0.5 supports: the deep lowered-slab stack (ground stone, slab, stone, slab),
         // an exact mirror of AnchoredDepthReadbackTest.buildLoweredSlabStack. The TOP slab reads -0.5 and
         // is where the tester places subjects. (A stone-on-slab is NOT lowered — an opaque full cube is
         // excluded as a subject by the world-hole guard, so it stays flush; the slab is the real seat.)
         BlockPos rowAStart = base;
-        signAt(world, rowAStart.relative(right.getOpposite(), COLUMN_SPACING), "Row A", "dy -0.5", "place on top", bounds);
+        signAt(world, rowAStart.relative(right.getOpposite(), COLUMN_SPACING),
+                "Row A", "dy -0.5", "place on top", manifest);
         for (int i = 0; i < count; i++) {
             BlockPos cell = rowAStart.relative(right, i * COLUMN_SPACING);
-            setStone(world, cell, bounds);            // ground
-            bottomSlab(world, cell.above(1), bounds); // slab (0)
-            setStone(world, cell.above(2), bounds);   // stone (carrier)
-            bottomSlab(world, cell.above(3), bounds); // TOP slab -> reads -0.5 (the seat)
+            setStone(world, cell, manifest);            // ground
+            bottomSlab(world, cell.above(1), manifest); // slab (0)
+            setStone(world, cell.above(2), manifest);   // stone (carrier)
+            bottomSlab(world, cell.above(3), manifest); // TOP slab -> reads -0.5 (the seat)
         }
 
         // Row B — genuine -1.0 supports: a compound tower per column, marked side slab authored.
         // Offset 4 cells deeper so the two rows are clearly parallel and separated.
         BlockPos rowBStart = base.relative(facing, 4);
-        signAt(world, rowBStart.relative(right.getOpposite(), COLUMN_SPACING), "Row B", "dy -1.0", "place on FB/slab", bounds);
+        signAt(world, rowBStart.relative(right.getOpposite(), COLUMN_SPACING),
+                "Row B", "dy -1.0", "place on FB/slab", manifest);
         for (int i = 0; i < count; i++) {
             BlockPos cell = rowBStart.relative(right, i * COLUMN_SPACING);
-            buildCompoundTower(world, cell, facing, bounds);
+            buildCompoundTower(world, cell, facing, manifest);
         }
-
-        rememberBounds(source, bounds);
 
         // F4 self-verify: one sample support per row (Row A top slab -0.5, Row B compound FB -1.0).
         BlockPos rowASample = rowAStart.above(3);
@@ -608,9 +851,12 @@ public final class SlabRigCommand {
         addIfMismatch(mismatches, world, rowASample, -0.5, "Row A support");
         addIfMismatch(mismatches, world, rowBSample, -1.0, "Row B support");
         if (!mismatches.isEmpty()) {
+            manifest.structuralNote = "self-verify:" + String.join(";", mismatches);
             source.sendFailure(warn("rows", base, facing, mismatches));
             return 0;
         }
+        manifest.structurallyComplete = true;
+        manifest.structuralNote = "verified";
 
         final int placed = count;
         source.sendSuccess(() -> Component.literal(
@@ -646,12 +892,12 @@ public final class SlabRigCommand {
     }
 
     /** Places a labelled standing sign one block above {@code ground}, on a stone pedestal. */
-    private static void signAt(ServerLevel world, BlockPos ground, String l0, String l1, String l2, Bounds bounds) {
-        setStone(world, ground, bounds);
+    private static void signAt(ServerLevel world, BlockPos ground, String l0, String l1, String l2,
+                               RigManifest manifest) {
+        setStone(world, ground, manifest);
         BlockPos signPos = ground.above();
         BlockState sign = Blocks.OAK_SIGN.defaultBlockState();
-        world.setBlock(signPos, sign, FLAG);
-        bounds.include(signPos);
+        setPlannedBlock(world, signPos, sign, manifest);
         BlockEntity be = world.getBlockEntity(signPos);
         if (be instanceof SignBlockEntity signEntity) {
             signEntity.updateText(text -> text
@@ -681,10 +927,8 @@ public final class SlabRigCommand {
     private static int mega(CommandContext<CommandSourceStack> ctx, int columns, boolean force) {
         CommandSourceStack source = ctx.getSource();
         ServerLevel world = source.getLevel();
-        Player player = source.getEntity() instanceof Player p ? p : null;
+        Player player = proxyPlayerOrRefuse(source, "mega");
         if (player == null) {
-            source.sendFailure(Component.literal(
-                    "[slabrig] mega auto-places kit items via your hand — run it as a player, not the console."));
             return 0;
         }
 
@@ -712,10 +956,8 @@ public final class SlabRigCommand {
     private static int platform(CommandContext<CommandSourceStack> ctx, Integer yArg, boolean force) {
         CommandSourceStack source = ctx.getSource();
         ServerLevel world = source.getLevel();
-        Player player = source.getEntity() instanceof Player p ? p : null;
+        Player player = proxyPlayerOrRefuse(source, "platform");
         if (player == null) {
-            source.sendFailure(Component.literal(
-                    "[slabrig] platform auto-places kit items via your hand — run it as a player, not the console."));
             return 0;
         }
 
@@ -755,26 +997,35 @@ public final class SlabRigCommand {
 
         Set<BlockPos> cells = new LinkedHashSet<>();
         collectMegaCells(base, facing, right, n, cells);
-        Bounds bounds = footprintBounds(cells, world.dimension());
-
-        if (refuseIfFootprintOccupied(source, world, bounds, force)) {
+        RigManifest manifest = planManifest(source, label, base, facing, cells);
+        for (int i = 0; i < n; i++) {
+            for (int v = 0; v < MEGA_ROW_COUNT; v++) {
+                BlockPos seat = plannedMegaSeat(base, facing, right, v, i);
+                BlockPos clicked = v == MEGA_ROW_HANGING ? seat.above(2) : seat;
+                BlockPos target = seat.above();
+                declareProxyEffect(manifest, clicked, target);
+                if (v == MEGA_ROW_HANGING) {
+                    // Explicit manual overhang slot; it is not an incidental cell from derived bounds.
+                    manifest.declareSubject(seat.relative(facing));
+                }
+            }
+        }
+        if (!prepareManifest(source, world, manifest, force)) {
             return 0;
         }
-        precleanFootprint(world, bounds);
 
         // Build every variant column's scenery, remembering each column's four seat surfaces.
         BlockPos[][] seats = new BlockPos[n][MEGA_ROW_COUNT];
         for (int i = 0; i < n; i++) {
             for (int v = 0; v < MEGA_ROW_COUNT; v++) {
-                seats[i][v] = buildMegaColumn(world, base, facing, right, v, i, bounds);
+                seats[i][v] = buildMegaColumn(world, base, facing, right, v, i, manifest);
             }
         }
         // One labelled sign per row variant (near end of the row, on the -right side).
         for (int v = 0; v < MEGA_ROW_COUNT; v++) {
             BlockPos signGround = base.relative(facing, v).relative(right.getOpposite(), COLUMN_SPACING);
-            signAt(world, signGround, "Row " + v, MEGA_ROW_NAME[v], "dy " + MEGA_ROW_DY[v], bounds);
+            signAt(world, signGround, "Row " + v, MEGA_ROW_NAME[v], "dy " + MEGA_ROW_DY[v], manifest);
         }
-        rememberBounds(source, bounds);
 
         // Auto-place one kit item on each seat via the REAL placement path. Save/restore the hand.
         ItemStack held = player.getMainHandItem().copy();
@@ -804,7 +1055,7 @@ public final class SlabRigCommand {
                     }
                     BlockState clickedBefore = world.getBlockState(clicked);
                     boolean targetWasAir = world.getBlockState(target).isAir();
-                    placeVia(world, player, item, clicked, face);
+                    placeVia(world, player, item, clicked, face, target, manifest);
                     boolean targetFilled = targetWasAir && !world.getBlockState(target).isAir();
                     // An in-cell change (e.g. the clicked slab became a double slab) also counts as placed.
                     boolean clickedChanged = !world.getBlockState(clicked).equals(clickedBefore);
@@ -826,9 +1077,12 @@ public final class SlabRigCommand {
             addIfMismatch(mismatches, world, seats[0][v], MEGA_ROW_DY[v], "Row " + v + " (" + MEGA_ROW_NAME[v] + ")");
         }
         if (!mismatches.isEmpty()) {
+            manifest.structuralNote = "self-verify:" + String.join(";", mismatches);
             source.sendFailure(warn(label, base, facing, mismatches));
             return 0;
         }
+        manifest.structurallyComplete = true;
+        manifest.structuralNote = "verified;placed=" + placed + ",refused=" + refused;
 
         final int builtColumns = n;
         final int placedFinal = placed;
@@ -849,37 +1103,47 @@ public final class SlabRigCommand {
      * cell sits at {@code base + facing*v + right*(i*spacing)}.
      */
     private static BlockPos buildMegaColumn(ServerLevel world, BlockPos base, Direction facing,
-                                            Direction right, int v, int i, Bounds bounds) {
+                                            Direction right, int v, int i, RigManifest manifest) {
         BlockPos g = base.relative(facing, v).relative(right, i * COLUMN_SPACING);
         switch (v) {
             case 0 -> {
                 // Bare bottom slab on the ground (a flush slab, seat reads 0.0).
-                setStone(world, g, bounds);
-                bottomSlab(world, g.above(1), bounds);
+                setStone(world, g, manifest);
+                bottomSlab(world, g.above(1), manifest);
                 return g.above(1);
             }
             case 1 -> {
                 // Bottom slab carrying a full block (the lowered full block, seat reads -0.5).
-                setStone(world, g, bounds);
-                bottomSlab(world, g.above(1), bounds);
-                setStone(world, g.above(2), bounds);
+                setStone(world, g, manifest);
+                bottomSlab(world, g.above(1), manifest);
+                setStone(world, g.above(2), manifest);
                 return g.above(2);
             }
             case 2 -> {
                 // The compound column + marked side slab (both read -1.0); the side slab is the seat.
-                BlockPos fb = buildCompoundTower(world, g, facing, bounds);
+                BlockPos fb = buildCompoundTower(world, g, facing, manifest);
                 return fb.relative(facing.getCounterClockWise());
             }
             default -> {
                 // Overhang-and-ceiling: a lowered support (seat -0.5) with a full block overhead (a
                 // ceiling to hang from) and an open air cell to the side for manual overhang tests.
-                setStone(world, g, bounds);
-                bottomSlab(world, g.above(1), bounds);
-                setStone(world, g.above(2), bounds);
-                setStone(world, g.above(4), bounds); // ceiling block; g.above(3) stays air (the hang gap)
+                setStone(world, g, manifest);
+                bottomSlab(world, g.above(1), manifest);
+                setStone(world, g.above(2), manifest);
+                setStone(world, g.above(4), manifest); // ceiling block; g.above(3) stays air (the hang gap)
                 return g.above(2);
             }
         }
+    }
+
+    private static BlockPos plannedMegaSeat(BlockPos base, Direction facing, Direction right, int v, int i) {
+        BlockPos g = base.relative(facing, v).relative(right, i * COLUMN_SPACING);
+        return switch (v) {
+            case 0 -> g.above(1);
+            case 1 -> g.above(2);
+            case 2 -> g.above(4).relative(facing.getCounterClockWise());
+            default -> g.above(2);
+        };
     }
 
     /** The cells {@link #buildMegaColumn} + {@link #mega}'s signs touch, for footprint planning. */
@@ -903,9 +1167,7 @@ public final class SlabRigCommand {
                         cells.add(g);
                         cells.add(g.above(1));
                         cells.add(g.above(2));
-                        cells.add(g.above(3)); // the hang gap (reserved so nothing intrudes)
                         cells.add(g.above(4)); // ceiling block
-                        cells.add(g.above(2).relative(facing)); // the side overhang air cell (reserved)
                     }
                 }
             }
@@ -922,16 +1184,34 @@ public final class SlabRigCommand {
      * item refuses, one bad item never aborts the mega build; the caller decides placed/refused by
      * inspecting the world.
      */
-    private static void placeVia(ServerLevel world, Player player, Item item, BlockPos clicked, Direction face) {
+    private static Set<BlockPos> placeVia(ServerLevel world, Player player, Item item, BlockPos clicked,
+                                          Direction face, BlockPos target, RigManifest manifest) {
+        Set<BlockPos> envelope = effectEnvelope(clicked, target);
+        LinkedHashMap<BlockPos, BlockState> before = new LinkedHashMap<>();
+        for (BlockPos pos : envelope) {
+            before.put(pos, world.getBlockState(pos));
+        }
         try {
             ItemStack stack = new ItemStack(item);
             player.setItemInHand(InteractionHand.MAIN_HAND, stack);
             Vec3 hit = Vec3.atCenterOf(clicked).add(face.getStepX() * 0.5, face.getStepY() * 0.5, face.getStepZ() * 0.5);
-            stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
-                    new BlockHitResult(hit, face, clicked, false)));
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                            new BlockHitResult(hit, face, clicked, false))));
         } catch (RuntimeException e) {
             // swallow: a refusing item is detected by the caller as an unchanged world.
         }
+        LinkedHashSet<BlockPos> changed = new LinkedHashSet<>();
+        for (Map.Entry<BlockPos, BlockState> entry : before.entrySet()) {
+            BlockState after = world.getBlockState(entry.getKey());
+            if (!after.equals(entry.getValue())) {
+                changed.add(entry.getKey());
+                manifest.recordAuthored(entry.getKey(), entry.getValue(), after);
+                manifest.touchAttachment(entry.getKey());
+            }
+        }
+        return changed;
     }
 
     /** A comma list of up to {@code cap} ids, with a "+K more" suffix when there are more. */
@@ -952,28 +1232,208 @@ public final class SlabRigCommand {
         return extra > 0 ? joined + ", +" + extra + " more" : joined;
     }
 
+    // ── /slabrig stacks [max_length] [page] ─────────────────────────────────
+
+    private static int stacks(CommandContext<CommandSourceStack> ctx, int maxLength, int page,
+                              boolean force) {
+        CommandSourceStack source = ctx.getSource();
+        ServerLevel world = source.getLevel();
+        StackPage stackPage;
+        try {
+            stackPage = stackPage(maxLength, page);
+        } catch (IllegalArgumentException e) {
+            source.sendFailure(Component.literal("[slabrig] stacks refused: " + e.getMessage()
+                    + "; no cells or manifest changed."));
+            return 0;
+        }
+        Player player = proxyPlayerOrRefuse(source, "stacks");
+        if (player == null) {
+            return 0;
+        }
+
+        Direction facing = rigFacing(source);
+        Direction right = facing.getClockWise();
+        BlockPos base = rigBase(source);
+        if (belowWorldBottom(source, world, base)) {
+            return 0;
+        }
+        if (aboveWorldTop(source, world, base,
+                TOWER_SEAT_INDEX + maxLength + HEADROOM)) {
+            return 0;
+        }
+
+        Set<BlockPos> structure = new LinkedHashSet<>();
+        List<StackEntry> entries = new ArrayList<>();
+        for (int local = 0; local < stackPage.recipes().size(); local++) {
+            int row = local / STACK_GRID_SIDE;
+            int column = local % STACK_GRID_SIDE;
+            BlockPos seedBase = base.relative(right, column * COLUMN_SPACING)
+                    .relative(facing, row * COLUMN_SPACING);
+            String recipe = stackPage.recipes().get(local);
+            for (int y = 0; y <= TOWER_SEAT_INDEX; y++) {
+                structure.add(seedBase.above(y));
+            }
+            List<BlockPos> recipeCells = new ArrayList<>(recipe.length());
+            for (int index = 0; index < recipe.length(); index++) {
+                BlockPos pos = seedBase.above(TOWER_SEAT_INDEX + 1 + index);
+                structure.add(pos);
+                recipeCells.add(pos);
+            }
+            entries.add(new StackEntry(stackPage.firstCatalogIndex() + local, recipe,
+                    seedBase.above(TOWER_SEAT_INDEX), recipeCells));
+        }
+
+        RigManifest manifest = new RigManifest(keyFor(source), "stacks", base, facing,
+                maxLength, page, stackPage.pageCount(), stackPage.firstCatalogIndex(),
+                stackPage.firstCatalogIndex() + stackPage.recipes().size() - 1);
+        for (BlockPos pos : structure) {
+            manifest.claimStructure(pos);
+        }
+        declareTopHeadroom(manifest, structure);
+        manifest.stacks.addAll(entries);
+        for (StackEntry entry : entries) {
+            BlockPos clicked = entry.seed();
+            for (BlockPos target : entry.recipeCells()) {
+                declareProxyEffect(manifest, clicked, target);
+                clicked = target;
+            }
+        }
+        // Explicit scan-only safety gaps between the four grid columns. They belong to the rig's
+        // reserved geometry but never to its clear/preclean ownership.
+        for (int row = 0; row < STACK_GRID_SIDE; row++) {
+            for (int column = 0; column < STACK_GRID_SIDE - 1; column++) {
+                manifest.reserveSafety(base.relative(facing, row * COLUMN_SPACING)
+                        .relative(right, column * COLUMN_SPACING + 1));
+            }
+        }
+        if (!prepareManifest(source, world, manifest, force)) {
+            return 0;
+        }
+
+        ItemStack held = player.getMainHandItem().copy();
+        int complete = 0;
+        int gaps = 0;
+        int overlaps = 0;
+        try {
+            for (int local = 0; local < entries.size(); local++) {
+                StackEntry entry = entries.get(local);
+                BlockPos seedBase = entry.seed().below(TOWER_SEAT_INDEX);
+                setStone(world, seedBase, manifest);
+                bottomSlab(world, seedBase.above(1), manifest);
+                setStone(world, seedBase.above(2), manifest);
+                bottomSlab(world, entry.seed(), manifest);
+
+                List<BlockPos> stack = new ArrayList<>();
+                stack.add(entry.seed());
+                BlockPos cursor = entry.seed();
+                boolean smoothNext = true;
+                boolean entryComplete = true;
+                String entryProblem = "none";
+                for (int index = 0; index < entry.recipe().length(); index++) {
+                    char token = entry.recipe().charAt(index);
+                    Item item = token == 'S'
+                            ? (smoothNext ? Items.SMOOTH_STONE_SLAB : Items.STONE_SLAB)
+                            : Items.STONE;
+                    if (token == 'S') {
+                        smoothNext = !smoothNext;
+                    }
+                    BlockPos target = entry.recipeCells().get(index);
+                    BlockState cursorBefore = world.getBlockState(cursor);
+                    placeVia(world, player, item, cursor, Direction.UP, target, manifest);
+                    BlockState actual = world.getBlockState(target);
+                    boolean correctType = token == 'S'
+                            ? actual.getBlock() instanceof SlabBlock
+                            && actual.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
+                            : actual.is(Blocks.STONE);
+                    if (actual.isAir()) {
+                        entryComplete = false;
+                        entryProblem = "refused@" + target.toShortString();
+                        break;
+                    }
+                    if (!correctType) {
+                        entryComplete = false;
+                        entryProblem = "wrong-type@" + target.toShortString() + "=" + actual;
+                        break;
+                    }
+                    if (!world.getBlockState(cursor).equals(cursorBefore)) {
+                        entryComplete = false;
+                        entryProblem = "wrong-cell/consolidation@" + cursor.toShortString();
+                        break;
+                    }
+                    stack.add(target);
+                    cursor = target;
+                }
+                ReadbackTally tally = reportTowerReadback(source, entry.catalogIndex(),
+                        entry.recipe(), entry.recipe().length(), world, stack);
+                gaps += tally.gaps();
+                overlaps += tally.overlaps();
+                if (entryComplete && stack.size() == entry.recipe().length() + 1
+                        && tally.gaps() == 0 && tally.overlaps() == 0) {
+                    complete++;
+                } else if (entryComplete) {
+                    entryProblem = "seams:gaps=" + tally.gaps() + ",overlaps=" + tally.overlaps();
+                }
+                final boolean entryCompleteFinal = entryComplete
+                        && stack.size() == entry.recipe().length() + 1
+                        && tally.gaps() == 0 && tally.overlaps() == 0;
+                final String entryProblemFinal = entryProblem;
+                final int built = stack.size() - 1;
+                final List<BlockPos> actualRecipeCells = List.copyOf(stack.subList(1, stack.size()));
+                source.sendSuccess(() -> Component.literal(
+                        "[slabrig] stack#" + (entry.catalogIndex() + 1)
+                                + " recipe=" + entry.recipe()
+                                + " seed=" + entry.seed().toShortString()
+                                + " plannedRecipeCells=" + entry.recipeCells()
+                                + " actualRecipeCells=" + actualRecipeCells
+                                + " built=" + built + "/" + entry.recipe().length()
+                                + " structural=" + (entryCompleteFinal ? "complete" : "incomplete")
+                                + (entryCompleteFinal ? "" : " problem=" + entryProblemFinal)), false);
+            }
+        } finally {
+            player.setItemInHand(InteractionHand.MAIN_HAND, held);
+        }
+
+        manifest.structurallyComplete = complete == entries.size() && gaps == 0 && overlaps == 0;
+        manifest.structuralNote = "recipes=" + complete + "/" + entries.size()
+                + ",gaps=" + gaps + ",overlaps=" + overlaps;
+        final int completeFinal = complete;
+        final int entriesFinal = entries.size();
+        final int gapsFinal = gaps;
+        final int overlapsFinal = overlaps;
+        source.sendSuccess(() -> Component.literal(
+                "[slabrig] stacks page " + page + "/" + stackPage.pageCount()
+                        + " max_length=" + maxLength
+                        + " catalog=" + (stackPage.firstCatalogIndex() + 1) + "-"
+                        + (stackPage.firstCatalogIndex() + entriesFinal) + "/" + stackRecipes(maxLength).size()
+                        + " grid=4x4 row-major spacing=2 seed=standard_lowered_slab"
+                        + " structural=" + completeFinal + "/" + entriesFinal
+                        + " GAPs=" + gapsFinal + " OVERLAPs=" + overlapsFinal
+                        + " provenance=" + LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY.wireName()), false);
+        return manifest.structurallyComplete ? 1 : 0;
+    }
+
     // ── /slabrig clear ────────────────────────────────────────────────────────
 
     private static int clear(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack source = ctx.getSource();
         ServerLevel world = source.getLevel();
         RigKey key = keyFor(source);
-        Bounds bounds = LAST_BOUNDS.get(key);
+        RigManifest manifest = LAST_MANIFEST.get(key);
 
-        if (bounds == null || bounds.isEmpty()) {
+        if (manifest == null) {
             // Per-dimension records: a rig for this player may live in another dimension — name it
             // rather than silently reporting "nothing to clear".
-            Bounds elsewhere = null;
-            for (Map.Entry<RigKey, Bounds> e : LAST_BOUNDS.entrySet()) {
-                if (e.getKey().player().equals(key.player())) {
+            RigManifest elsewhere = null;
+            for (Map.Entry<RigKey, RigManifest> e : LAST_MANIFEST.entrySet()) {
+                if (e.getKey().server == key.server && e.getKey().player.equals(key.player)) {
                     elsewhere = e.getValue();
                     break;
                 }
             }
-            if (elsewhere != null && !elsewhere.isEmpty()) {
-                final Bounds other = elsewhere;
+            if (elsewhere != null) {
+                final RigManifest other = elsewhere;
                 source.sendFailure(Component.literal(
-                        "[slabrig] your last rig is in " + other.dimensionName()
+                        "[slabrig] your last rig is in " + other.key.dimension.identifier()
                                 + ", not this dimension — clear it there."));
                 return 0;
             }
@@ -981,25 +1441,81 @@ public final class SlabRigCommand {
             return 0;
         }
 
-        LAST_BOUNDS.remove(key);
-        int cleared = 0;
-        for (int x = bounds.minX; x <= bounds.maxX; x++) {
-            for (int y = bounds.minY; y <= bounds.maxY; y++) {
-                for (int z = bounds.minZ; z <= bounds.maxZ; z++) {
-                    BlockPos pos = new BlockPos(x, y, z);
-                    if (!world.getBlockState(pos).isAir()) {
-                        // removeAnchor clears every Slabbed attachment type + the stored-dy entry;
-                        // flag-2 setBlock would NOT fire the removal hook, so do it explicitly first.
-                        SlabAnchorAttachment.removeAnchor(world, pos);
-                        world.setBlock(pos, Blocks.AIR.defaultBlockState(), CLEAR_FLAG);
-                        cleared++;
-                    }
+        int cleared = clearExact(world, manifest);
+        // Remove the manifest only after the whole clear pass, so an exception/partial pass remains
+        // discoverable and retryable instead of orphaning owned cells.
+        LAST_MANIFEST.remove(key, manifest);
+        final int removed = cleared;
+        source.sendSuccess(() -> Component.literal(
+                "[slabrig] directly cleared " + removed + " blocks from exact preset=" + manifest.preset
+                        + "; no direct block/store cleanup targeted outside its manifest. Vanilla survival"
+                        + " updates may also remove unsupported neighboring dependents."), false);
+        return 1;
+    }
+
+    private static int status(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        String status = trackedManifestStatus(source);
+        if ("none".equals(status)) {
+            source.sendFailure(Component.literal("[slabrig] status: no tracked rig in this server session/dimension."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("[slabrig] status: " + status), false);
+        return 1;
+    }
+
+    /** Compact truthful manifest readback; public only so the registered command contract can pin it. */
+    public static String trackedManifestStatus(CommandSourceStack source) {
+        RigManifest manifest = LAST_MANIFEST.get(keyFor(source));
+        if (manifest == null) {
+            return "none";
+        }
+        ServerLevel world = source.getLevel();
+        int present = 0;
+        int missing = 0;
+        int wrong = 0;
+        for (Map.Entry<BlockPos, BlockState> entry : manifest.authoredStates.entrySet()) {
+            BlockState actual = world.getBlockState(entry.getKey());
+            if (actual.isAir()) {
+                missing++;
+            } else {
+                present++;
+                if (!actual.equals(entry.getValue())) {
+                    wrong++;
                 }
             }
         }
-        final int removed = cleared;
-        source.sendSuccess(() -> Component.literal("[slabrig] cleared " + removed + " blocks."), false);
-        return 1;
+        String pageText = manifest.page > 0
+                ? manifest.page + "/" + manifest.pageCount + " recipes="
+                + (manifest.firstRecipeIndex + 1) + "-" + (manifest.lastRecipeIndex + 1)
+                + "/" + stackRecipes(manifest.maxLength).size()
+                : "n/a";
+        boolean completeNow = manifest.structurallyComplete && missing == 0 && wrong == 0;
+        return "preset=" + manifest.preset
+                + " dimension=" + manifest.key.dimension.identifier()
+                + " serverSession=current"
+                + " base=" + manifest.base.toShortString()
+                + " facing=" + manifest.facing.getName()
+                + " page=" + pageText
+                + " reserved=" + manifest.reservedCells.size()
+                + " authored=" + manifest.authoredStates.size()
+                + " attachments=" + manifest.attachmentCells.size()
+                + " subjects=" + manifest.subjectSlots.size()
+                + " clearOwned=" + manifest.clearOwnedCells.size()
+                + " present=" + present + " missing=" + missing + " wrong=" + wrong
+                + " bounds=" + manifest.bounds()
+                + " structural=" + (completeNow ? "complete" : "incomplete")
+                + " note=" + manifest.structuralNote
+                + " provenance=" + LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY.wireName();
+    }
+
+    public static int trackedSubjectSlotCountForTests(CommandSourceStack source) {
+        RigManifest manifest = LAST_MANIFEST.get(keyFor(source));
+        return manifest == null ? 0 : manifest.subjectSlots.size();
+    }
+
+    private static void clearServerSession(MinecraftServer server) {
+        LAST_MANIFEST.keySet().removeIf(key -> key.server == server);
     }
 
     // ── footprint safety ──────────────────────────────────────────────────────
@@ -1014,6 +1530,22 @@ public final class SlabRigCommand {
             return true;
         }
         return false;
+    }
+
+    /** Player-backed proxy builders must never split scenery/source level from the useOn player's level. */
+    private static Player proxyPlayerOrRefuse(CommandSourceStack source, String preset) {
+        Player player = source.getEntity() instanceof Player p ? p : null;
+        if (player == null) {
+            source.sendFailure(Component.literal(
+                    "[slabrig] " + preset + " auto-places via your hand — run it as a player, not the console."));
+            return null;
+        }
+        if (player.level() != source.getLevel()) {
+            source.sendFailure(Component.literal(
+                    "[slabrig] " + preset + " refused: command source level and player level differ; no cells changed."));
+            return null;
+        }
+        return player;
     }
 
     /**
@@ -1034,24 +1566,25 @@ public final class SlabRigCommand {
         return false;
     }
 
-    /**
-     * F2/F3: scan the full footprint box (planned cells + {@link #HEADROOM} above the top). If any cell
-     * is non-air and {@code force} is not set, refuse and report the count + a sample position.
-     */
-    private static boolean refuseIfFootprintOccupied(CommandSourceStack source, ServerLevel world,
-                                                     Bounds bounds, boolean force) {
+    /** Refuses or installs a planned exact manifest before the first write. */
+    private static boolean prepareManifest(CommandSourceStack source, ServerLevel world,
+                                           RigManifest manifest, boolean force) {
+        RigKey key = manifest.key;
+        RigManifest previous = LAST_MANIFEST.get(key);
+        if (previous != null && !force) {
+            source.sendFailure(Component.literal(
+                    "[slabrig] preset=" + previous.preset + " is still tracked at "
+                            + previous.base.toShortString() + " — clear it or add 'force'; no cells changed."));
+            return false;
+        }
+
         int occupied = 0;
         BlockPos sample = null;
-        for (int x = bounds.minX; x <= bounds.maxX; x++) {
-            for (int y = bounds.minY; y <= bounds.maxY; y++) {
-                for (int z = bounds.minZ; z <= bounds.maxZ; z++) {
-                    BlockPos pos = new BlockPos(x, y, z);
-                    if (!world.getBlockState(pos).isAir()) {
-                        occupied++;
-                        if (sample == null) {
-                            sample = pos;
-                        }
-                    }
+        for (BlockPos pos : manifest.reservedCells) {
+            if (!world.getBlockState(pos).isAir()) {
+                occupied++;
+                if (sample == null) {
+                    sample = pos;
                 }
             }
         }
@@ -1059,37 +1592,52 @@ public final class SlabRigCommand {
             final int count = occupied;
             final BlockPos at = sample;
             source.sendFailure(Component.literal(
-                    "[slabrig] footprint not empty (" + count + " blocks at " + at.toShortString()
-                            + ") — add 'force' to overwrite."));
-            return true;
+                    "[slabrig] exact reserved cells not empty (" + count + " blocks; sample "
+                            + at.toShortString() + ") — add 'force'; no cells or prior manifest changed."));
+            return false;
         }
-        return false;
+
+        if (previous != null) {
+            clearExact(world, previous);
+            LAST_MANIFEST.remove(key, previous);
+        }
+
+        // The plan becomes discoverable BEFORE force-claim/preclean/build writes. A partial build is
+        // therefore always exactly clearable.
+        LAST_MANIFEST.put(key, manifest);
+
+        if (force) {
+            clearCellsTopDown(world, manifest.clearOwnedCells);
+        }
+        for (BlockPos pos : manifest.clearOwnedCells) {
+            SlabAnchorAttachment.removeAnchor(world, pos);
+            manifest.touchAttachment(pos);
+        }
+        return true;
     }
 
-    /**
-     * Pre-clean EVERY footprint cell's Slabbed attachments before authoring. The RegistrySweep worker
-     * proved empirically that flag-2 {@code setBlock} does NOT fire the attachment-removal hook, so a
-     * rig authored over a previous rig's stale markers would be "haunted" — its sign would lie about the
-     * dy. removeAnchor clears every marker type + the stored-dy entry.
-     */
-    private static void precleanFootprint(ServerLevel world, Bounds bounds) {
-        for (int x = bounds.minX; x <= bounds.maxX; x++) {
-            for (int y = bounds.minY; y <= bounds.maxY; y++) {
-                for (int z = bounds.minZ; z <= bounds.maxZ; z++) {
-                    SlabAnchorAttachment.removeAnchor(world, new BlockPos(x, y, z));
-                }
+    private static int clearExact(ServerLevel world, RigManifest manifest) {
+        for (BlockPos pos : manifest.attachmentCells) {
+            // Always clear recorded attachments, even if another action already made the block air.
+            SlabAnchorAttachment.removeAnchor(world, pos);
+        }
+        return clearCellsTopDown(world, manifest.clearOwnedCells);
+    }
+
+    private static int clearCellsTopDown(ServerLevel world, Set<BlockPos> cells) {
+        List<BlockPos> ordered = new ArrayList<>(cells);
+        ordered.sort(Comparator.<BlockPos>comparingInt(pos -> pos.getY()).reversed()
+                .thenComparingInt(pos -> pos.getX())
+                .thenComparingInt(pos -> pos.getZ()));
+        int cleared = 0;
+        for (BlockPos pos : ordered) {
+            SlabAnchorAttachment.removeAnchor(world, pos);
+            if (!world.getBlockState(pos).isAir()) {
+                world.setBlock(pos, Blocks.AIR.defaultBlockState(), CLEAR_FLAG);
+                cleared++;
             }
         }
-    }
-
-    /** Inclusive footprint box of {@code cells}, expanded {@link #HEADROOM} cells upward. */
-    private static Bounds footprintBounds(Set<BlockPos> cells, ResourceKey<Level> dimension) {
-        Bounds bounds = new Bounds(dimension);
-        for (BlockPos pos : cells) {
-            bounds.include(pos);
-        }
-        bounds.includeHeadroom(HEADROOM);
-        return bounds;
+        return cleared;
     }
 
     // ── self-verification (F4) ─────────────────────────────────────────────────
@@ -1111,46 +1659,41 @@ public final class SlabRigCommand {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static void setStone(ServerLevel world, BlockPos pos, Bounds bounds) {
-        world.setBlock(pos, Blocks.STONE.defaultBlockState(), FLAG);
-        bounds.include(pos);
+    private static void setStone(ServerLevel world, BlockPos pos, RigManifest manifest) {
+        setPlannedBlock(world, pos, Blocks.STONE.defaultBlockState(), manifest);
     }
 
-    private static void bottomSlab(ServerLevel world, BlockPos pos, Bounds bounds) {
-        world.setBlock(pos, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), FLAG);
-        bounds.include(pos);
+    private static void bottomSlab(ServerLevel world, BlockPos pos, RigManifest manifest) {
+        setPlannedBlock(world, pos,
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), manifest);
     }
 
-    /** F7: remembers {@code bounds}; if a record already existed for this (player, dimension), warns it is orphaned. */
-    private static void rememberBounds(CommandSourceStack source, Bounds bounds) {
-        if (bounds.isEmpty()) {
-            return;
-        }
-        RigKey key = keyFor(source);
-        Bounds previous = LAST_BOUNDS.get(key);
-        if (previous != null && !previous.isEmpty()) {
-            final Bounds orphan = previous;
-            source.sendSuccess(() -> Component.literal(
-                    "[slabrig] previous rig at " + orphan + " is now untracked (clear it manually if needed)."),
-                    false);
-        }
-        LAST_BOUNDS.put(key, bounds);
+    private static void setPlannedBlock(ServerLevel world, BlockPos pos, BlockState state,
+                                        RigManifest manifest) {
+        BlockState before = world.getBlockState(pos);
+        world.setBlock(pos, state, FLAG);
+        manifest.recordAuthored(pos, before, world.getBlockState(pos));
     }
 
     private static RigKey keyFor(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
-        UUID id = player != null ? player.getUUID() : CONSOLE_KEY;
-        return new RigKey(id, source.getLevel().dimension());
+        UUID id = player != null
+                ? player.getUUID()
+                : source.getEntity() instanceof Player p ? p.getUUID() : CONSOLE_KEY;
+        return new RigKey(source.getServer(), id, source.getLevel().dimension());
     }
 
-    /** Growable inclusive AABB of the cells a build touched, tagged with its dimension. */
+    /** Derived inclusive display AABB. It has no mutation methods and is never used for ownership. */
     private static final class Bounds {
-        private final ResourceKey<Level> dimension;
         private boolean empty = true;
         private int minX, minY, minZ, maxX, maxY, maxZ;
 
-        Bounds(ResourceKey<Level> dimension) {
-            this.dimension = dimension;
+        private static Bounds of(Set<BlockPos> cells) {
+            Bounds bounds = new Bounds();
+            for (BlockPos pos : cells) {
+                bounds.include(pos);
+            }
+            return bounds;
         }
 
         void include(BlockPos pos) {
@@ -1169,28 +1712,12 @@ public final class SlabRigCommand {
             maxZ = Math.max(maxZ, pos.getZ());
         }
 
-        /** Extends the box {@code cells} layers upward so hand-placed subjects sit inside it. */
-        void includeHeadroom(int cells) {
-            if (!empty) {
-                maxY += cells;
-            }
-        }
-
-        boolean isEmpty() {
-            return empty;
-        }
-
-        String dimensionName() {
-            return dimension.identifier().toString();
-        }
-
         @Override
         public String toString() {
             if (empty) {
                 return "<empty>";
             }
-            return "[" + minX + "," + minY + "," + minZ + "]..[" + maxX + "," + maxY + "," + maxZ + "] in "
-                    + dimensionName();
+            return "[" + minX + "," + minY + "," + minZ + "]..[" + maxX + "," + maxY + "," + maxZ + "]";
         }
     }
 }
