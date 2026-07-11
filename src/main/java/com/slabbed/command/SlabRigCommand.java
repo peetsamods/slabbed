@@ -476,6 +476,9 @@ public final class SlabRigCommand {
                                                                 IntegerArgumentType.getInteger(ctx, "page"), true))))))
                         .then(Commands.literal("catalog")
                                 .executes(SlabRigCommand::catalog))
+                        .then(Commands.literal("hangs")
+                                .then(Commands.literal("catalog")
+                                        .executes(SlabRigCommand::hangsCatalog)))
                         .then(Commands.literal("cases")
                                 .executes(ctx -> cases(ctx, 1, false))
                                 .then(Commands.literal("force")
@@ -601,7 +604,7 @@ public final class SlabRigCommand {
         source.sendSuccess(() -> Component.literal(
                 "[slabrig] usage: /slabrig <tower [force]|tower <n> [height] [force]|rows [n] [force]"
                         + "|mega [n] [force]|platform [y] [force]|stacks [max_length] [page] [force]"
-                        + "|catalog|cases [page|resume] [force]|status|clear>\n"
+                        + "|catalog|hangs catalog|cases [page|resume] [force]|status|clear>\n"
                         + "  tower [force]           — compound-visible -1.0 marked tower\n"
                         + "  tower <n> [h] [force]   — n alternating deep-stack towers (default n="
                         + DEFAULT_TOWER_COUNT + ", height=" + DEFAULT_TOWER_HEIGHT + ", cap " + MAX_TOWER_HEIGHT
@@ -612,6 +615,7 @@ public final class SlabRigCommand {
                         + "  platform [y] [force]    — the mega rig on a floating platform at absolute Y (default your Y)\n"
                         + "  stacks [m] [p] [force]  — exact 4x4 page of all S/B words through length m (default 5)\n"
                         + "  catalog                 — write the exact runtime item/category/topology catalog\n"
+                        + "  hangs catalog           — world-free exact hanging catalog + live painting registry export\n"
                         + "  cases [p|resume] [force]— 4 items x 4 topologies from the exhaustive BlockItem case space\n"
                         + "  status                  — show the exact tracked manifest and structural state\n"
                         + "  clear                   — remove exact owned cells only\n"
@@ -1570,6 +1574,42 @@ public final class SlabRigCommand {
         } catch (IOException e) {
             source.sendFailure(Component.literal("[slabrig] catalog write failed before world mutation: "
                     + e.getMessage()));
+            return 0;
+        }
+    }
+
+    /** RIG-3B1: content-addressed catalog/registry evidence only; no player or world write path. */
+    private static int hangsCatalog(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        try {
+            SlabRigHangingCatalog.Snapshot catalog = SlabRigHangingCatalog.snapshot();
+            SlabRigHangingArtifacts.RuntimeSnapshot runtime = SlabRigHangingArtifacts.snapshot(
+                    catalog, source.getServer().registryAccess());
+            SlabRigHangingArtifacts.WrittenArtifact artifact =
+                    SlabRigHangingArtifacts.write(runtime);
+            source.sendSuccess(() -> Component.literal(
+                    "[slabrig] hangs catalog runtimeItems=" + catalog.runtimeItemCount()
+                            + " subjects=" + catalog.items().size()
+                            + " routes=" + catalog.routes().size()
+                            + " cases=" + catalog.totalCases()
+                            + " catalogHash=" + catalog.catalogHash()
+                            + " minecraft=" + runtime.minecraftVersion()
+                            + " runtimeContentSha256=" + runtime.runtimeContentSha256()
+                            + " paintingVariants=" + runtime.paintingVariantCount()
+                            + " randomPlaceable=" + runtime.randomPlaceableCount()
+                            + " paintingRegistry=" + runtime.paintingRegistryId()
+                            + " placeableTag=" + runtime.placeableTagId()
+                            + " paintingComponent=" + runtime.paintingComponentId()
+                            + " paintingHash=" + runtime.paintingRegistryHash()
+                            + " executionIdentity=" + runtime.executionIdentity()
+                            + " artifactSha256=" + artifact.fileSha256()
+                            + " playerProof=" + runtime.playerProof()
+                            + " worldMutation=" + runtime.worldMutation()
+                            + " artifact=" + artifact.path()), false);
+            return 1;
+        } catch (IOException | RuntimeException failure) {
+            source.sendFailure(Component.literal(
+                    "[slabrig] hangs catalog failed before world mutation: " + failure.getMessage()));
             return 0;
         }
     }

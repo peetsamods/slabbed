@@ -1,15 +1,31 @@
 package com.slabbed.test;
 
 import com.slabbed.command.SlabRigHangingCatalog;
+import com.slabbed.command.SlabRigHangingArtifacts;
+import com.slabbed.util.BuildStamp;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.PaintingVariantTags;
+import net.minecraft.world.entity.decoration.painting.PaintingVariant;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HexFormat;
 import java.util.HashSet;
@@ -17,12 +33,193 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
+import java.io.IOException;
 
-/** Pure RIG-3A catalog contract: no command execution and no world mutation. */
+/** Pure RIG-3A catalog plus RIG-3B1 registry/artifact contracts; no world execution. */
 public final class SlabRigHangingCatalogTest {
 
     private static final String EXPECTED_26_2_CATALOG_HASH =
             "db61c584f0f70c1120ec6cf631964cad96f71389dbc23e0b7e20e2c2f3685454";
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingRuntimeSnapshotBindsFullPaintingRegistry(GameTestHelper helper) {
+        SlabRigHangingCatalog.Snapshot catalog = SlabRigHangingCatalog.snapshot();
+        SlabRigHangingArtifacts.RuntimeSnapshot first = SlabRigHangingArtifacts.snapshot(
+                catalog, helper.getLevel().registryAccess());
+        SlabRigHangingArtifacts.RuntimeSnapshot second = SlabRigHangingArtifacts.snapshot(
+                catalog, helper.getLevel().registryAccess());
+        if (!first.equals(second) || !first.canonicalTsv().equals(second.canonicalTsv())) {
+            throw helper.assertionException("RIG-3B1 runtime snapshot/order/hash changed across repeats");
+        }
+        if (first.paintingVariantCount() != 51 || first.randomPlaceableCount() != 47) {
+            throw helper.assertionException("26.2 painting registry expected full=51 #placeable=47, got full="
+                    + first.paintingVariantCount() + " placeable=" + first.randomPlaceableCount());
+        }
+        if (!first.runtimeContentSha256().equals(BuildStamp.RUNTIME_CONTENT_SHA256)
+                || !first.minecraftVersion().equals(SharedConstants.getCurrentVersion().id())
+                || !"minecraft:painting_variant".equals(first.paintingRegistryId())
+                || !"minecraft:placeable".equals(first.placeableTagId())
+                || !"minecraft:painting/variant".equals(first.paintingComponentId())) {
+            throw helper.assertionException("RIG-3B1 omitted exact runtime/version/registry identities");
+        }
+        Registry<PaintingVariant> registry = helper.getLevel().registryAccess()
+                .lookupOrThrow(Registries.PAINTING_VARIANT);
+        HolderSet.Named<PaintingVariant> livePlaceable = registry.get(PaintingVariantTags.PLACEABLE)
+                .orElseThrow(() -> helper.assertionException("live #placeable painting tag is absent"));
+        List<Holder.Reference<PaintingVariant>> liveRows = registry.listElements()
+                .sorted(Comparator.comparing(ref -> ref.key().identifier().toString())).toList();
+        if (liveRows.size() != first.paintings().size()) {
+            throw helper.assertionException("runtime artifact did not snapshot every live painting holder");
+        }
+        Set<String> untagged = new HashSet<>();
+        String previous = "";
+        for (int index = 0; index < first.paintings().size(); index++) {
+            SlabRigHangingArtifacts.PaintingEntry entry = first.paintings().get(index);
+            Holder.Reference<PaintingVariant> liveHolder = liveRows.get(index);
+            PaintingVariant liveVariant = liveHolder.value();
+            if (entry.index() != index || entry.id().compareTo(previous) <= 0 && index > 0) {
+                throw helper.assertionException("painting rows are not unique namespace:path order at " + entry);
+            }
+            previous = entry.id();
+            if (!entry.randomPlaceable()) {
+                untagged.add(entry.id());
+            }
+            if (!"minecraft:painting/variant".equals(entry.componentType())
+                    || !entry.id().equals(entry.componentValue())
+                    || !"north,east,south,west".equals(entry.wallDirections())
+                    || entry.backingCellCount() != entry.areaBlocks()
+                    || entry.lateralMin() != -((entry.widthBlocks() - 1) / 2)
+                    || entry.lateralMax() != entry.widthBlocks() / 2
+                    || entry.verticalMin() != -((entry.heightBlocks() - 1) / 2)
+                    || entry.verticalMax() != entry.heightBlocks() / 2
+                    || entry.lateralMax() - entry.lateralMin() + 1 != entry.widthBlocks()
+                    || entry.verticalMax() - entry.verticalMin() + 1 != entry.heightBlocks()
+                    || !entry.id().equals(liveHolder.key().identifier().toString())
+                    || entry.randomPlaceable() != livePlaceable.contains(liveHolder)
+                    || entry.widthBlocks() != liveVariant.width()
+                    || entry.heightBlocks() != liveVariant.height()
+                    || entry.areaBlocks() != liveVariant.area()
+                    || !entry.assetId().equals(liveVariant.assetId().toString())) {
+                throw helper.assertionException("painting component/footprint contract collapsed for " + entry.id());
+            }
+            ItemStack configured = new ItemStack(Items.PAINTING);
+            configured.set(DataComponents.PAINTING_VARIANT, liveHolder);
+            Holder<PaintingVariant> roundTrip = configured.get(DataComponents.PAINTING_VARIANT);
+            if (roundTrip == null || !roundTrip.is(liveHolder.key())) {
+                throw helper.assertionException("painting component did not round-trip live holder " + entry.id());
+            }
+        }
+        Set<String> expectedUntagged = Set.of(
+                "minecraft:earth", "minecraft:fire", "minecraft:water", "minecraft:wind");
+        if (!untagged.equals(expectedUntagged)) {
+            throw helper.assertionException("26.2 exact non-random painting set changed: " + untagged);
+        }
+        SlabRigHangingArtifacts.PaintingEntry kebab = painting(first, "minecraft:kebab");
+        SlabRigHangingArtifacts.PaintingEntry burningSkull = painting(first, "minecraft:burning_skull");
+        if (kebab.widthBlocks() != 1 || kebab.heightBlocks() != 1
+                || burningSkull.widthBlocks() != 4 || burningSkull.heightBlocks() != 4
+                || !"minecraft:kebab".equals(kebab.assetId())
+                || !"minecraft:burning_skull".equals(burningSkull.assetId())) {
+            throw helper.assertionException("known 1x1/4x4 painting footprint or asset mapping changed");
+        }
+        String tsv = first.canonicalTsv();
+        String identityLine = "execution_identity\t" + first.executionIdentity() + "\n";
+        String withoutIdentity = tsv.replace(identityLine, "");
+        if (tsv.indexOf(identityLine) != tsv.lastIndexOf(identityLine)
+                || !first.executionIdentity().equals(sha256(withoutIdentity))
+                || !tsv.contains("catalog_tsv_begin\n" + SlabRigHangingCatalog.catalogTsv(catalog))
+                || !tsv.contains("player_proof\tABSENT\n")
+                || !tsv.contains("proof_scope\tCATALOG_ONLY\n")
+                || !tsv.contains("world_mutation\tNONE\n")
+                || !tsv.contains("runtime_content_sha256\t" + BuildStamp.RUNTIME_CONTENT_SHA256 + "\n")
+                || !tsv.contains("painting_selection_contract\t"
+                + SlabRigHangingArtifacts.SELECTION_CONTRACT + "\n")
+                || !tsv.contains("painting_support_box_deflate\t0.0000001\n")
+                || !tsv.contains("painting_tooltip_fields\texcluded_non_execution_metadata\n")) {
+            throw helper.assertionException("RIG-3B1 canonical bytes omit identity/proof/catalog boundaries");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void hangingRuntimeArtifactIsAtomicIdempotentAndCollisionSafe(GameTestHelper helper) {
+        SlabRigHangingArtifacts.RuntimeSnapshot snapshot = SlabRigHangingArtifacts.snapshot(
+                SlabRigHangingCatalog.snapshot(), helper.getLevel().registryAccess());
+        Path root = null;
+        try {
+            root = Files.createTempDirectory("slabbed-rig3b1-");
+            SlabRigHangingArtifacts.WrittenArtifact first =
+                    SlabRigHangingArtifacts.write(root, snapshot);
+            byte[] expected = snapshot.canonicalTsv().getBytes(StandardCharsets.UTF_8);
+            if (!MessageDigest.isEqual(Files.readAllBytes(first.path()), expected)
+                    || !first.path().getParent().equals(root.resolve("hanging-catalogs"))
+                    || !first.path().getFileName().toString().equals(
+                    "hanging-catalog-" + snapshot.executionIdentity() + ".tsv")
+                    || !first.fileSha256().equals(sha256(expected))) {
+                throw helper.assertionException("first RIG-3B1 publication bytes/path/hash are not exact");
+            }
+
+            FileTime sentinelTime = FileTime.fromMillis(1_234_567_890_000L);
+            Files.setLastModifiedTime(first.path(), sentinelTime);
+            SlabRigHangingArtifacts.WrittenArtifact repeat =
+                    SlabRigHangingArtifacts.write(root, snapshot);
+            if (!repeat.equals(new SlabRigHangingArtifacts.WrittenArtifact(first.path(),
+                    first.executionIdentity(), first.fileSha256(), first.byteCount()))
+                    || !Files.getLastModifiedTime(first.path()).equals(sentinelTime)) {
+                throw helper.assertionException("identical RIG-3B1 rerun rewrote bytes or changed identity");
+            }
+
+            Files.delete(first.path());
+            byte[] collision = "preexisting unrelated evidence\n".getBytes(StandardCharsets.UTF_8);
+            Files.write(first.path(), collision);
+            boolean refused = false;
+            try {
+                SlabRigHangingArtifacts.write(root, snapshot);
+            } catch (IOException expectedRefusal) {
+                refused = true;
+            }
+            if (!refused || !MessageDigest.isEqual(Files.readAllBytes(first.path()), collision)
+                    || hasTemporary(first.path().getParent())) {
+                throw helper.assertionException("RIG-3B1 collision was replaced or left partial evidence");
+            }
+
+            Files.delete(first.path());
+            Path symlinkDestination = root.resolve("outside-evidence.tsv");
+            byte[] outside = "outside evidence must remain untouched\n".getBytes(StandardCharsets.UTF_8);
+            Files.write(symlinkDestination, outside);
+            Files.createSymbolicLink(first.path(), symlinkDestination);
+            refused = false;
+            try {
+                SlabRigHangingArtifacts.write(root, snapshot);
+            } catch (IOException expectedRefusal) {
+                refused = true;
+            }
+            if (!refused || !Files.isSymbolicLink(first.path())
+                    || !MessageDigest.isEqual(Files.readAllBytes(symlinkDestination), outside)) {
+                throw helper.assertionException("RIG-3B1 followed/replaced a symlinked target");
+            }
+
+            Files.delete(first.path());
+            Files.delete(first.path().getParent());
+            Path redirected = root.resolve("redirected-directory");
+            Files.createDirectory(redirected);
+            Files.createSymbolicLink(root.resolve("hanging-catalogs"), redirected);
+            refused = false;
+            try {
+                SlabRigHangingArtifacts.write(root, snapshot);
+            } catch (IOException expectedRefusal) {
+                refused = true;
+            }
+            if (!refused || !Files.isSymbolicLink(root.resolve("hanging-catalogs"))) {
+                throw helper.assertionException("RIG-3B1 followed/replaced a symlinked artifact directory");
+            }
+        } catch (IOException e) {
+            throw helper.assertionException("RIG-3B1 artifact proof failed: " + e);
+        } finally {
+            deleteTree(root);
+        }
+        helper.succeed();
+    }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void runtimeItemPartitionIsTotalAndExact(GameTestHelper helper) {
@@ -1039,11 +1236,40 @@ public final class SlabRigHangingCatalogTest {
     }
 
     private static String sha256(String value) {
+        return sha256(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String sha256(byte[] value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+                    .digest(value));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
+        }
+    }
+
+    private static SlabRigHangingArtifacts.PaintingEntry painting(
+            SlabRigHangingArtifacts.RuntimeSnapshot snapshot, String id) {
+        return snapshot.paintings().stream().filter(entry -> entry.id().equals(id)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("missing painting " + id));
+    }
+
+    private static boolean hasTemporary(Path directory) throws IOException {
+        try (var paths = Files.list(directory)) {
+            return paths.anyMatch(path -> path.getFileName().toString().contains(".tmp-"));
+        }
+    }
+
+    private static void deleteTree(Path root) {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        } catch (IOException ignored) {
+            // Test-owned temporary evidence is best-effort cleanup after assertions have completed.
         }
     }
 }
