@@ -69,6 +69,7 @@
       "com.slabbed.test.RegistrySweepTest",
       "com.slabbed.test.SlabRigCommandSmokeTest",
       "com.slabbed.test.SlabRigCaseCatalogTest",
+      "com.slabbed.test.SlabRigHangingCatalogTest",
       "com.slabbed.test.SlabTestKitPaletteTest",
       "com.slabbed.test.SlabTestKitCommandsTest"
     ],

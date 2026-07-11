@@ -188,6 +188,7 @@ sourceSets {
             include("com/slabbed/test/RegistrySweepArtifacts.java")
             include("com/slabbed/test/SlabRigCommandSmokeTest.java")
             include("com/slabbed/test/SlabRigCaseCatalogTest.java")
+            include("com/slabbed/test/SlabRigHangingCatalogTest.java")
             include("com/slabbed/test/SlabTestKitPaletteTest.java")
             include("com/slabbed/test/SlabTestKitCommandsTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
@@ -196,7 +197,7 @@ sourceSets {
     }
 }
 
-// RIG-2 must be present on both truth surfaces: compiled gametest sources and Fabric entrypoints.
+// RIG catalog tests must be present on both truth surfaces: compiled sources and Fabric entrypoints.
 // This explicit pre-compile gate makes deleting either registration a deterministic red.
 tasks.register("verifyRig2GametestRegistration") {
     inputs.file(layout.projectDirectory.file("build.gradle"))
@@ -210,11 +211,12 @@ tasks.register("verifyRig2GametestRegistration") {
                 "RegistrySweepArtifacts.java",
                 "RegistrySweepTest.java",
                 "SlabRigCommandSmokeTest.java",
-                "SlabRigCaseCatalogTest.java"
+                "SlabRigCaseCatalogTest.java",
+                "SlabRigHangingCatalogTest.java"
         ].each { sourceName ->
             def suffix = "/com/slabbed/test/${sourceName}"
             if (!configuredSources.any { it.endsWith(suffix) }) {
-                throw new GradleException("RIG-2 gametest source registration missing: ${sourceName}")
+                throw new GradleException("RIG catalog gametest source registration missing: ${sourceName}")
             }
         }
         def metadata = new groovy.json.JsonSlurper().parse(
@@ -223,10 +225,11 @@ tasks.register("verifyRig2GametestRegistration") {
         [
                 "com.slabbed.test.RegistrySweepTest",
                 "com.slabbed.test.SlabRigCommandSmokeTest",
-                "com.slabbed.test.SlabRigCaseCatalogTest"
+                "com.slabbed.test.SlabRigCaseCatalogTest",
+                "com.slabbed.test.SlabRigHangingCatalogTest"
         ].each { className ->
             if (!entrypoints.contains(className)) {
-                throw new GradleException("RIG-2 Fabric gametest entrypoint missing: ${className}")
+                throw new GradleException("RIG catalog Fabric gametest entrypoint missing: ${className}")
             }
         }
     }
