@@ -168,6 +168,7 @@ sourceSets {
             include("com/slabbed/test/ChainCeilingBridgeTextureTest.java")
             include("com/slabbed/test/ModelStaleSentinelContractTest.java")
             include("com/slabbed/test/ModelStaleSentinelAllocationGateTest.java")
+            include("com/slabbed/test/FrozenStoreCollisionAllocationGateTest.java")
             include("com/slabbed/test/ModelStaleSentinelSelfCheckClientGameTest.java")
             include("com/slabbed/test/RecorderUpgradeContractTest.java")
             include("com/slabbed/test/EnsembleCoherenceContractTest.java")

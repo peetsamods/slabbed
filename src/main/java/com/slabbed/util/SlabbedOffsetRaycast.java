@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
@@ -180,7 +181,23 @@ public final class SlabbedOffsetRaycast {
             BlockPos pos = new BlockPos(x, y, z);
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) {
-                return false;
+                // A-1 (design amendment A-1, review finding #1): a SIDE-seated deep owner produced by the
+                // unified rule can float over an AIR gap — its grid cell sits ABOVE air, and its deep
+                // visible body overflows DOWN through that air into the marched cell. Air-terminating
+                // blindly here (the old contiguous-column INVARIANT) makes such a body untargetable: you
+                // could place it but never aim at it again. STORE-AWARE crossing: if a frozen owner exists
+                // higher within the bounded window whose stored dy overflows into the marched cell, keep
+                // probing across the gap. Store lookups are O(1) map hits and bounded by
+                // MAX_DEEP_PROBE_CELLS, so the shallow (no deep-store) case still stops at the first gap —
+                // no new per-frame cost for ordinary terrain. Only active under the frozen store (the
+                // stored dy is the authority for these deep seats); with frozen off, behaviour is the
+                // original air-termination. PERF (fix-round MAJOR-2): the probe resolves the chunk's
+                // PLACEMENT_DY map ONCE for the whole remaining column (anyStoredOwnerOverflowsInto)
+                // and early-outs when the chunk carries no store entries at all — never a per-cell
+                // getChunk+getAttached loop on this per-frame path.
+                return SlabAnchorAttachment.FROZEN_DY_ENABLED
+                        && SlabAnchorAttachment.anyStoredOwnerOverflowsInto(
+                                world, new BlockPos(x, y - k, z), k + 1, MAX_DEEP_PROBE_CELLS + 1);
             }
             double dy = dyMemo.get(key);
             if (Double.isNaN(dy)) {

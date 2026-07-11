@@ -289,6 +289,70 @@ public final class SlabAnchorAttachment {
             return;
         }
         double dy = SlabSupport.getYOffset(world, pos, state);
+        writePlacementDyInternal(world, pos, dy);
+    }
+
+    /**
+     * GOES landing resolver (design C2, {@code docs/design/GOES-UNIFIED-LANDING-RULE.md} §3): writes an
+     * explicit landing height at {@code pos}, computed once at placement from the aim by
+     * {@link com.slabbed.placement.LandingResolver}, verbatim — the single-writer capture point that
+     * OVERWRITES the earlier live-lane {@link #capturePlacementDy} write (the double-capture window
+     * disclosed in design §3 / review §3: the {@code setPlacedBy}-HEAD capture still runs first for
+     * slabs in C2, this RETURN write replaces it; the old call is removed in C3). Server-side only.
+     */
+    public static void writePlacementDy(Level world, BlockPos pos, double dy) {
+        if (world == null || world.isClientSide() || pos == null || Double.isNaN(dy)) {
+            return;
+        }
+        writePlacementDyInternal(world, pos, dy);
+    }
+
+    /**
+     * Client mirror (design §3 / R2): writes the resolver's client-PREDICTED landing height so the
+     * placed block renders at the aimed depth before the server's authoritative value syncs back and
+     * replaces it. Client-side only; no-op on server.
+     */
+    public static void writeClientPredictedPlacementDy(Level world, BlockPos pos, double dy) {
+        if (world == null || !world.isClientSide() || pos == null || Double.isNaN(dy)) {
+            return;
+        }
+        writePlacementDyInternal(world, pos, dy);
+    }
+
+    /**
+     * Rollback of a client-PREDICTED entry (design §3 / review §5): when the server refuses a placement
+     * the client map is unchanged (no sync packet), so the predicted entry would ghost. Mirror vanilla's
+     * block-correction and drop it. Client-side only.
+     *
+     * <p><b>DEFERRED-to-C3 — NO CALLERS YET (fix-round MAJOR-1, disclosed).</b> The refusal is only
+     * observable client-side at the block-correction packet ({@code ClientPacketListener.handleBlockUpdate}
+     * reverting the predicted state), which needs a new client-only mixin that this server-only gametest
+     * harness cannot exercise — C3 (the capture-relocation commit, which owns the client mirror work)
+     * wires it. A useOn/place-RETURN hook CANNOT stand in: the predicted entry is only written when the
+     * client place SUCCEEDED ({@code consumesAction}), so at RETURN-with-refusal there is no entry to
+     * roll back. Interim behaviour: a ghost predicted entry is replaced by the next full-map chunk
+     * attachment sync (the PLACEMENT_DY packet codec ships the whole map), so the mis-render self-heals
+     * on the next sync rather than persisting indefinitely.
+     */
+    public static void rollbackClientPredictedPlacementDy(Level world, BlockPos pos) {
+        if (world == null || !world.isClientSide() || pos == null) {
+            return;
+        }
+        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return;
+        }
+        Long2DoubleOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
+        if (existing == null || !existing.containsKey(pos.asLong())) {
+            return;
+        }
+        Long2DoubleOpenHashMap map = new Long2DoubleOpenHashMap(existing);
+        map.defaultReturnValue(Double.NaN);
+        map.remove(pos.asLong());
+        chunk.setAttached(PLACEMENT_DY_TYPE, map);
+    }
+
+    private static void writePlacementDyInternal(Level world, BlockPos pos, double dy) {
         LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return;
@@ -298,6 +362,53 @@ public final class SlabAnchorAttachment {
         map.defaultReturnValue(Double.NaN);
         map.put(pos.asLong(), dy);
         chunk.setAttached(PLACEMENT_DY_TYPE, map);
+    }
+
+    /**
+     * PERF-gated column probe for the A-1 store-aware air-gap crossings (raycast deep probe +
+     * collision walk): is there a stored owner in the vertical window {@code base.above(fromK)} ..
+     * {@code base.above(maxK)} whose stored dy overflows down into {@code base}'s cell
+     * ({@code storedDy < (1 - k) - eps})?
+     *
+     * <p>PERF (fix-round MAJOR-2, the shipped-lag-twice class): a naive per-cell
+     * {@link #storedPlacementDy} loop re-does getChunk + getAttached + map lookup up to 15× for ONE
+     * x,z column, on the entity-collision and per-frame ray paths, under the now-default-ON flag.
+     * This helper resolves the chunk and its PLACEMENT_DY map ONCE (the whole vertical window shares
+     * one chunk — same x,z), then iterates y with plain O(1) map hits — and early-outs immediately
+     * when the chunk carries no PLACEMENT_DY attachment at all (the overwhelming common case:
+     * ordinary terrain pays one getChunk + one getAttached total, zero allocation).
+     *
+     * <p>Non-{@link Level} views (client render regions) fall back to the per-pos
+     * {@link #storedPlacementDy} client lookup — that path has no chunk handle to hoist.
+     */
+    public static boolean anyStoredOwnerOverflowsInto(BlockGetter world, BlockPos base, int fromK, int maxK) {
+        if (world == null || base == null || fromK > maxK) {
+            return false;
+        }
+        if (world instanceof Level w) {
+            LevelChunk chunk = w.getChunk(base.getX() >> 4, base.getZ() >> 4);
+            if (chunk == null) {
+                return false;
+            }
+            Long2DoubleOpenHashMap map = chunk.getAttached(PLACEMENT_DY_TYPE);
+            if (map == null || map.isEmpty()) {
+                return false; // common case: no frozen entries anywhere in this chunk
+            }
+            for (int k = fromK; k <= maxK; k++) {
+                long key = BlockPos.asLong(base.getX(), base.getY() + k, base.getZ());
+                if (map.containsKey(key) && map.get(key) < (1.0 - k) - 1.0e-6d) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        for (int k = fromK; k <= maxK; k++) {
+            double sd = storedPlacementDy(world, base.above(k));
+            if (!Double.isNaN(sd) && sd < (1.0 - k) - 1.0e-6d) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The frozen placement height at {@code pos}, or {@link Double#NaN} if none was stored. */

@@ -6,6 +6,7 @@ import com.slabbed.util.SlabSupport;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -19,6 +20,8 @@ import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * L11 — the {@code floorTorchBottomSlabSupportDy} DOUBLE-only + TS-guard gaps (ported from the sibling
@@ -78,6 +81,53 @@ public final class FloorTorchSupportDyTest {
 
     private static double signDy(ServerLevel w, BlockPos abs) {
         return SlabSupport.getYOffset(w, abs, w.getBlockState(abs));
+    }
+
+    /**
+     * GOES C2 (TEST 18 finding, ledger 2026-07-10): the SLAB torch-comfort OVERLAY is removed. A bottom
+     * slab with a lowered floor torch directly above it must return a SLAB-ONLY outline — no torch post
+     * unioned into the slab's own selection shape. Pre-C2 the overlay unioned {@code SLABBED$COMFORT_TORCH_
+     * SHAPE.move(0, 1+torchDy, 0)} into the slab outline (so DDA produced a slab hit the dead legacy
+     * retargeter would bounce to the torch), which under the shipping offset raycast only made the slab
+     * STEAL torch clicks and MERGE the two outlines.
+     *
+     * <p>Scene: a bottom slab and a floor torch above it, both force-stored lowered (-0.5) with the frozen
+     * store ON so the removed overlay's precondition (torchDy &lt; 0 directly above a slab) is satisfied.
+     * The slab's own lowered outline tops out at world-relative Y=0.0 (slab maxY 0.5 shifted by -0.5); the
+     * removed torch overlay would have pushed the outline up past Y=1.0. Asserting the outline stays at or
+     * below the slab's own top proves the overlay is gone.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabUnderLoweredTorchReturnsSlabOnlyOutline(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos slab = helper.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos torch = slab.above();
+        w.setBlock(slab.below(), Blocks.STONE.defaultBlockState(), 2);
+        w.setBlock(slab, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+        w.setBlock(torch, Blocks.TORCH.defaultBlockState(), 2);
+        SlabAnchorAttachment.writePlacementDy(w, slab, -0.5);
+        SlabAnchorAttachment.writePlacementDy(w, torch, -0.5);
+
+        boolean prev = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            if (SlabSupport.getYOffset(w, torch, w.getBlockState(torch)) >= 0.0) {
+                throw helper.assertionException(helper.relativePos(torch),
+                        "setup: the floor torch above the slab must read lowered (< 0)");
+            }
+            VoxelShape outline = w.getBlockState(slab).getShape(w, slab, CollisionContext.empty());
+            double maxY = outline.max(Direction.Axis.Y);
+            // slab lowered -0.5 -> its own outline maxY = 0.5 + (-0.5) = 0.0; the REMOVED torch overlay would
+            // have unioned a post reaching ~Y=1.125. Anything above the slab's own top means the overlay leaked.
+            if (maxY > 0.5 + EPS) {
+                throw helper.assertionException(helper.relativePos(slab),
+                        "GOES C2 (TEST 18): a slab under a lowered floor torch must return a SLAB-ONLY outline; "
+                                + "outline maxY=" + maxY + " (the removed torch comfort overlay leaked back in)");
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = prev;
+        }
+        helper.succeed();
     }
 
     /**

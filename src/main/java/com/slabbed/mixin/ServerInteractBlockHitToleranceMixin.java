@@ -79,7 +79,16 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                     + " decision=LOWERED_SAME_CELL_SLAB_MERGE");
         }
         double beforeDy = traceEnabled ? SlabSupport.getYOffset(world, pos, state) : 0.0;
+        // GOES C2 (design §1.3.4 / §3): re-store the owner's landing dy for the merged DOUBLE at the
+        // server-direct merge finalization (the other DOUBLE-merge site besides the vanilla place-RETURN
+        // path). The bottom->DOUBLE state swap is a same-block-KIND change, so the removal hook does not
+        // fire and the stored value already survives — this makes the re-store EXPLICIT (single-rule),
+        // robust to any future change in the removal-hook semantics.
+        double ownerStoredDy = SlabAnchorAttachment.storedPlacementDy(world, pos);
         boolean changed = world.setBlock(pos, mergedState, Block.UPDATE_ALL);
+        if (changed && !Double.isNaN(ownerStoredDy)) {
+            SlabAnchorAttachment.writePlacementDy(world, pos, ownerStoredDy);
+        }
         if (traceEnabled) {
             System.out.println("[SLABBED_BETA4_REPEAT_SEAM_PLACEMENT_EXIT]"
                     + " phase=server-direct-finalization"
@@ -122,13 +131,28 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (beta35ShiftedCenter != null) {
             return beta35ShiftedCenter;
         }
-        if (!(blockPos instanceof BlockPos pos)
-                || player == null
-                || packet == null
-                || !slabbed$isLegalCompoundFullBlockVisualHit(pos, packet)) {
+        if (!(blockPos instanceof BlockPos pos) || player == null || packet == null) {
             return center;
         }
-        return center.add(0.0d, COMPOUND_DY, 0.0d);
+        // GOES C2 (design §1.4 row 4 / R6, review Mismatch B): the server use-packet distance check must
+        // recognise a deep visible full-block body at ANY depth, not only exactly -1.0 — else the deepest
+        // aims (owners past ~-2.0) are silently swallowed server-side even when the honest raycast targets
+        // them. Shift the validation center by the OWNER'S OWN stored/live dy (stored-first authority),
+        // parametric to any depth, gated by the same vanilla per-axis tolerance. This SUBSUMES the old
+        // -1.0-pinned compound lane. LANE OVERLAP (fix-round MINOR-3, corrected — the prior "no two lanes
+        // claim the same target" claim was FALSE): the beta35 lane above is NOT strictly disjoint from
+        // this one — its trigger (isBeta35ShiftedHitTarget) also matches a NEIGHBOR-ABOVE contact object
+        // and the HELD item, so a deep FULL BLOCK with e.g. a fence on top, or aimed with a fence in
+        // hand, is claimed by beta35 FIRST (it pre-empts by ordering). That is benign, not a two-answer
+        // disease: both lanes shift the center by the same owner's stored-first depth authority
+        // (getBeta35ShiftedServerValidationYOffset reads the store first via getYOffset, exactly as
+        // slabbed$ownerVisibleDy below does), so whichever lane fires produces the same shifted center.
+        // This lane is the ANY-DEPTH backstop for ordinary full blocks the beta35 trigger does not match.
+        double compoundDy = slabbed$legalCompoundFullBlockVisualHitDy(pos, packet, center);
+        if (Double.isNaN(compoundDy)) {
+            return center;
+        }
+        return center.add(0.0d, compoundDy, 0.0d);
     }
 
     private Vec3 slabbed$beta35ShiftedValidationCenter(
@@ -263,58 +287,59 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         return hitPos;
     }
 
-    private boolean slabbed$isLegalCompoundFullBlockVisualHit(BlockPos pos, ServerboundUseItemOnPacket packet) {
+    /**
+     * GOES C2 depth-parametric successor of the old {@code isLegalCompoundFullBlockVisualHit} boolean:
+     * returns the OWNER's own lowering dy (stored-first, else live) to shift the validation center by, or
+     * {@link Double#NaN} when the hit is not a legal deep-full-block visual hit. Generalises the old
+     * exact-{@code -1.0} gate to any depth (R6); the center is shifted by the true depth, and the visual
+     * bounds are parametric in that depth.
+     */
+    private double slabbed$legalCompoundFullBlockVisualHitDy(BlockPos pos, ServerboundUseItemOnPacket packet, Vec3 center) {
         ServerLevel world = player.level();
         BlockHitResult hit = packet.getHitResult();
         if (world == null || hit == null || !pos.equals(hit.getBlockPos())) {
-            slabbed$logHitValidityBridge(world, pos, hit, null, false, false, false,
-                    false, "wrong_block_pos_or_missing_hit");
-            return false;
+            return Double.NaN;
         }
         Direction face = hit.getDirection();
         BlockState state = world.getBlockState(pos);
         if (!slabbed$isOrdinaryFullBlock(world, pos, state)) {
-            slabbed$logHitValidityBridge(world, pos, hit, player.getItemInHand(packet.getHand()), false, false,
-                    slabbed$isInsideCompoundVisualBounds(pos, hit.getLocation()), false, "target_not_ordinary_full_block");
-            return false;
+            return Double.NaN;
         }
-        if (!SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)) {
-            slabbed$logHitValidityBridge(world, pos, hit, player.getItemInHand(packet.getHand()), true, false,
-                    slabbed$isInsideCompoundVisualBounds(pos, hit.getLocation()), false, "not_compound_anchor");
-            return false;
+        double ownerDy = slabbed$ownerVisibleDy(world, pos, state);
+        // Any-depth: lowered by the compound path (marker OR a store-frozen deep owner), not just -1.0.
+        if (!(ownerDy < -EPSILON)
+                && !SlabAnchorAttachment.isCompoundFullBlockAnchor(world, pos)) {
+            return Double.NaN;
         }
-        if (Double.compare(SlabSupport.getYOffset(world, pos, state), COMPOUND_DY) != 0) {
-            slabbed$logHitValidityBridge(world, pos, hit, player.getItemInHand(packet.getHand()), true, true,
-                    slabbed$isInsideCompoundVisualBounds(pos, hit.getLocation()), false, "dy_not_minus_one");
-            return false;
+        if (!(ownerDy < -EPSILON)) {
+            return Double.NaN;
         }
         ItemStack heldStack = player.getItemInHand(packet.getHand());
         boolean heldOrdinaryFullBlock = slabbed$isHeldOrdinaryFullBlock(world, pos, heldStack);
         boolean heldLegalCompoundSlabRemap = slabbed$isHeldLegalCompoundSlabRemap(world, pos, state, hit, heldStack);
         if ((face == Direction.UP || face == Direction.DOWN) && !heldLegalCompoundSlabRemap) {
-            slabbed$logHitValidityBridge(world, pos, hit, heldStack, true, true,
-                    slabbed$isInsideCompoundVisualBounds(pos, hit.getLocation()), false, "face_vertical");
-            return false;
+            return Double.NaN;
         }
         if (!heldOrdinaryFullBlock && !heldLegalCompoundSlabRemap) {
-            slabbed$logHitValidityBridge(world, pos, hit, heldStack, true, true,
-                    slabbed$isInsideCompoundVisualBounds(pos, hit.getLocation()), false,
-                    slabbed$heldRejectionReason(heldStack));
-            return false;
+            return Double.NaN;
         }
-        Vec3 hitPos = hit.getLocation();
-        boolean insideVisualBounds = slabbed$isInsideCompoundVisualBounds(pos, hitPos);
-        slabbed$logHitValidityBridge(world, pos, hit, heldStack, true, true,
-                insideVisualBounds, insideVisualBounds,
-                insideVisualBounds ? "accepted" : "hit_outside_visual_bounds");
-        return insideVisualBounds;
+        return slabbed$isInsideCompoundVisualBounds(pos, hit.getLocation(), ownerDy) ? ownerDy : Double.NaN;
     }
 
-    private static boolean slabbed$isInsideCompoundVisualBounds(BlockPos pos, Vec3 hitPos) {
+    /** Owner's visible lowering dy: the frozen store first (any depth), else the live lane. */
+    private static double slabbed$ownerVisibleDy(ServerLevel world, BlockPos pos, BlockState state) {
+        double stored = SlabAnchorAttachment.storedPlacementDy(world, pos);
+        if (!Double.isNaN(stored)) {
+            return stored;
+        }
+        return SlabSupport.getYOffset(world, pos, state);
+    }
+
+    private static boolean slabbed$isInsideCompoundVisualBounds(BlockPos pos, Vec3 hitPos, double ownerDy) {
         return hitPos != null
                 && hitPos.x >= pos.getX() - EPSILON
                 && hitPos.x <= pos.getX() + 1.0d + EPSILON
-                && hitPos.y >= pos.getY() + COMPOUND_DY - EPSILON
+                && hitPos.y >= pos.getY() + ownerDy - EPSILON
                 && hitPos.y <= pos.getY() + EPSILON
                 && hitPos.z >= pos.getZ() - EPSILON
                 && hitPos.z <= pos.getZ() + 1.0d + EPSILON;

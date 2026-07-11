@@ -29,10 +29,13 @@ import net.minecraft.world.phys.shapes.CollisionContext;
  * crossing only that band never tested the owner. The dy-triad law says model, outline, and raycast
  * move together; the marker phases moved the first two and owed this leg.
  *
- * <p>SUBJECT CHOICE (learned RED-first): floor TORCHES are the wrong subject — the support slab
- * deliberately unions a torch COMFORT OVERLAY into its own outline (slabbed$slabTorchComfortOverlay),
- * so deep-torch aims already resolve to the SUPPORT as a designed proxy (pinned below). The genuine
- * untargetable class is every deep object WITHOUT a proxy — fence gates here.
+ * <p>SUBJECT CHOICE: fence gates are the genuine deep-untargetable class (no comfort proxy). Floor
+ * TORCHES resolve DIRECTLY to the torch via the torch's OWN comfort shape (SLABBED$COMFORT_TORCH_SHAPE
+ * applied when the subject itself is the lowered floor torch). HISTORY (GOES C2, TEST 18): the slab
+ * previously ALSO unioned a torch comfort OVERLAY into its own outline so deep-torch aims resolved to
+ * the SUPPORT as a proxy — that overlay was REMOVED (it made the slab steal torch clicks and merged the
+ * outlines; its legacy rescue-retarget partner is dead under the shipping offset raycast). The
+ * deep-torch aim now resolves to the torch itself (pinned below).
  *
  * <p>Tests call {@link SlabbedOffsetRaycast#raycast} directly — the exact unit the client pick
  * mixins consume (server {@code Level.clip} is deliberately vanilla).
@@ -133,19 +136,20 @@ public final class OffsetRaycastDeepLaneTest {
     }
 
     /**
-     * Documentation pin (green before AND after): deep-torch aims resolve to the SUPPORT — the
-     * designed comfort proxy (the slab unions the torch comfort box into its own outline). The
-     * window widening must not flip this: ties keep the first-recorded hit (the support).
+     * GOES C2 (TEST 18) — RE-SPEC'D: with the slab torch-comfort OVERLAY removed, a deep-torch aim now
+     * resolves DIRECTLY to the TORCH (via the torch's own retained comfort shape), not to the support
+     * slab as a proxy. This is the evaluation item 8 asked for: the offset raycast targets the lowered
+     * torch fine WITHOUT the slab overlay — the slab no longer steals the click. (Pre-C2 this asserted the
+     * SUPPORT; the overlay that produced that proxy hit was pure harm under the shipping offset raycast.)
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void deepTorchRayResolvesToTheComfortProxySupport(GameTestHelper helper) {
+    public void deepTorchRayResolvesToTheTorchDirectly(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
         BlockPos torch = buildDeepSubject(helper, w, new ItemStack(Items.TORCH));
-        BlockPos support = torch.below();
         BlockHitResult hit = clipAlongX(w, torch, torch.getY() - 1.25, torch.getZ() + 0.5);
-        if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(support)) {
-            throw helper.assertionException("comfort-proxy pin: the deep-torch ray must resolve to the "
-                    + "SUPPORT at " + support.toShortString() + ", got type=" + hit.getType()
+        if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(torch)) {
+            throw helper.assertionException("direct-torch pin (overlay removed): the deep-torch ray must "
+                    + "resolve to the TORCH at " + torch.toShortString() + ", got type=" + hit.getType()
                     + " pos=" + hit.getBlockPos().toShortString());
         }
         helper.succeed();

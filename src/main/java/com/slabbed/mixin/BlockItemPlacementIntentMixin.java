@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.PlacementIntentState;
 import com.slabbed.util.SlabEnsembleCoherence;
@@ -1560,6 +1561,44 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos placePos = context.getClickedPos();
         BlockState placedState = world.getBlockState(placePos);
         slabbed$traceRepeatFinalization(context, cir.getReturnValue(), placedState);
+
+        // ── GOES landing resolver capture (design C2, docs/design/GOES-UNIFIED-LANDING-RULE.md §3) ──
+        // Single-writer capture at place-RETURN: OVERWRITE the earlier setPlacedBy-HEAD live-lane write
+        // (the disclosed C2 double-capture window, design §3 / review §3 — the old call is removed in C3)
+        // with the aim-derived landing height for resolver-owned families (slabs + ordinary full blocks,
+        // rows 1-4). AIMED placements only; AIMLESS routes (dispenser/null player) keep today's capture
+        // (design §2 row 16). On the client this writes the PREDICTED entry (R2) that the synced server
+        // value replaces. Predicted rollback-on-server-refusal is NOT wired yet (fix-round MAJOR-1):
+        // SlabAnchorAttachment.rollbackClientPredictedPlacementDy exists but is DEFERRED-to-C3 — the
+        // refusal is only observable at the client block-correction packet, which needs a client-only
+        // mixin C3 owns (a useOn/place-RETURN hook cannot stand in: the predicted entry is only written
+        // on client-side SUCCESS, so at RETURN-with-refusal there is nothing to roll back). Until then a
+        // ghost predicted entry self-heals on the next full-map chunk attachment sync.
+        //
+        // ORDERING (fix-round MINOR-5): this capture runs BEFORE the marker authoring below — deliberate
+        // and safe for C2, because the markers only touch their own presence attachments (LongOpenHashSet
+        // types), never PLACEMENT_DY_TYPE, so the write order cannot corrupt either side. C3 TRAP, read
+        // before relocating capture: once the setPlacedBy-HEAD capture is removed, any marker QUALIFIER
+        // below that calls SlabSupport.getYOffset(placePos) will — under frozen-ON — read back the value
+        // THIS capture just wrote (the store short-circuit), not the live-lane value those qualifiers
+        // were tuned against. Audit every qualifier's dy read when C3 reorders this.
+        if (context.getPlayer() != null) {
+            LandingResolver.Family slabbed$family = LandingResolver.classify(placedState);
+            if (slabbed$family != LandingResolver.Family.UNSUPPORTED) {
+                LandingResolver.PlacementResolution slabbed$res = LandingResolver.resolve(
+                        world, placePos, placedState, context.getClickedFace(), slabbed$family);
+                if (slabbed$res != null) {
+                    if (world.isClientSide()) {
+                        SlabAnchorAttachment.writeClientPredictedPlacementDy(
+                                world, slabbed$res.targetCell(), slabbed$res.landingDy());
+                    } else {
+                        SlabAnchorAttachment.writePlacementDy(
+                                world, slabbed$res.targetCell(), slabbed$res.landingDy());
+                    }
+                }
+            }
+        }
+
         if (heldIsSlab) {
             if (slabbed$isCompoundVisibleSideLowerSlabResult(context, placePos, placedState)) {
                 BlockPos sourcePos = placePos.relative(context.getClickedFace().getOpposite());

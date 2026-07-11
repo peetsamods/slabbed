@@ -540,7 +540,8 @@ public final class Slabbed2612UseOnPlacementTest {
         helper.succeed();
     }
 
-    // ── A7: a slab placed via useOn on TOP of a compound -1.0 stack follows it to -1.0. ─────────────
+    // ── A7 (RE-SPEC'D — GOES C2, design §5, the maintainer-ruled D1): a slab placed via useOn on the visible top
+    //         of a compound -1.0 owner lands FLUSH at -1.0. ──────────────────────────────────────────
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void useOnSlabOnTopOfCompoundFollowsToMinusOne(GameTestHelper helper) {
@@ -551,12 +552,27 @@ public final class Slabbed2612UseOnPlacementTest {
 
         BlockPos placed = placeSlabVia(player, top, Direction.UP, upHit(top));
         log("a7_slab_on_compound_top", level, placed);
-        // OBSERVED: a slab placed on TOP of a compound -1.0 block follows by ONE step to -0.5 (it rests
-        // flush on the compound block's top, which is itself a full block down), NOT a further -1.0. This
-        // is the on-top single-step follow; checklist L5's "-1.0" was the ideal-full-follow — locked to the
-        // observed -0.5, flagged as a possible deeper-follow gap (same family as the on-top edge cases).
-        assertSlabDy(helper, level, placed, new BlockPos(2, 6, 2), -0.5,
-                "A7 useOn: slab on top of a compound -1.0 stack follows ONE step to -0.5 (rests flush on its top)");
+        // GOES unified rule (design §1.3.1 + §5): the placement lands on the owner's VISIBLE top. Over a
+        // -1.0 full-block owner that visible top coincides with the owner's grid floor, so the slab seats
+        // FLUSH at -1.0. This is the LANDING (the value the resolver freezes at placement) — asserted on
+        // the STORED dy, the authority under the shipping frozen-ON config.
+        //
+        // PRE-RESPEC HISTORY: this test asserted the LIVE-lane -0.5 ("single-step on-top follow") and its
+        // old comment ("locked to the observed -0.5") was exactly the A7 prop-up the design names (§5) —
+        // an aim-blind read of a fixture whose hit the honest raycast never produces. Under frozen-OFF the
+        // live lane STILL reads -0.5 at exactly -1.0 (the deep-rest threshold is unchanged; SlabSupport
+        // deep-rest comment); that frozen-OFF -0.5 is a DISCLOSED divergence, not a regression.
+        double stored = SlabAnchorAttachment.storedPlacementDy(level, placed);
+        BlockState s = level.getBlockState(placed);
+        if (!(s.getBlock() instanceof SlabBlock)) {
+            throw helper.assertionException(new BlockPos(2, 6, 2),
+                    "A7 useOn: no slab placed (got " + s.getBlock() + ")");
+        }
+        if (Math.abs(stored + 1.0) > EPS) {
+            throw helper.assertionException(new BlockPos(2, 6, 2),
+                    "A7 useOn (re-spec, D1): a slab on the visible top of a -1.0 owner must LAND flush -1.0; "
+                    + "stored=" + stored);
+        }
         helper.succeed();
     }
 
