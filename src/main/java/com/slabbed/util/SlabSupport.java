@@ -1135,6 +1135,17 @@ public final class SlabSupport {
             BlockPos abovePos = pos.above(k);
             BlockState above = getter.getBlockState(abovePos);
             if (above.isAir()) {
+                // A-1 store-aware crossing (same air-termination hole as the raycast deep probe,
+                // SlabbedOffsetRaycast#testDeepAbove): a cantilevered deep owner can float over an AIR
+                // gap and still overflow its collision DOWN into this cell. Don't air-terminate blindly —
+                // if a frozen owner higher within the window overflows here, keep walking across the gap
+                // to reach it. Store lookups are O(1) map hits, MAX_CHAIN_DEPTH-bounded; frozen-OFF keeps
+                // the original air-termination. INVARIANT (updated): the deep-collision guarantee now
+                // covers contiguous stacks AND store-frozen cantilevers, not contiguous stacks only.
+                if (SlabAnchorAttachment.FROZEN_DY_ENABLED
+                        && deepFrozenOwnerOverflowsAcrossGap(getter, pos, k)) {
+                    continue;
+                }
                 break;
             }
             if (!above.getFluidState().isEmpty() || above.getBlock() instanceof ScaffoldingBlock) {
@@ -1155,6 +1166,22 @@ public final class SlabSupport {
             result = result.isEmpty() ? hanging : Shapes.or(result, hanging);
         }
         return result;
+    }
+
+    /**
+     * A-1 store-aware air-gap probe (companion to {@link SlabbedOffsetRaycast}'s deep-probe fix): from a
+     * cell at depth {@code k} that is AIR, is there a FROZEN owner higher within {@link #MAX_CHAIN_DEPTH}
+     * whose stored dy overflows down into the base cell?
+     *
+     * <p>PERF (fix-round MAJOR-2): delegates to
+     * {@link SlabAnchorAttachment#anyStoredOwnerOverflowsInto}, which resolves the chunk's PLACEMENT_DY
+     * map ONCE per probe and early-outs on chunks carrying no store entries — the entity-collision path
+     * never pays a per-cell getChunk+getAttached loop. On ordinary terrain the first air cell costs a
+     * single chunk-map check and the walk terminates.
+     */
+    private static boolean deepFrozenOwnerOverflowsAcrossGap(CollisionGetter getter, BlockPos base, int gapK) {
+        return getter instanceof BlockGetter view
+                && SlabAnchorAttachment.anyStoredOwnerOverflowsInto(view, base, gapK + 1, MAX_CHAIN_DEPTH);
     }
 
     /**
@@ -2534,8 +2561,14 @@ public final class SlabSupport {
                 // below and is stable under side edits. If the support is later removed the read
                 // falls back to the -0.5 floor below (never pops UP to flush). The -1.0 boundary is
                 // deliberate: a slab resting on a -1.0 support without the owner-top placement marker
-                // stays at the single-step -0.5 (the WYSIWYG on-top rule, A7); the true -1.0 case is
-                // handled earlier by the owner-top marker when the player aimed the compound top face.
+                // stays at the single-step -0.5 on THIS live (frozen-OFF) lane. NOTE (GOES C2, A7
+                // re-spec, design §5, Maintainer-ruled D1): under the shipping frozen-ON config the aimed
+                // LANDING on a -1.0 owner's visible top is FLUSH -1.0 (the landing resolver freezes it at
+                // placement; useOnSlabOnTopOfCompoundFollowsToMinusOne now pins -1.0 on the stored value).
+                // This live-lane -0.5 at exactly -1.0 is the DISCLOSED frozen-OFF divergence — the
+                // threshold semantics here are LEFT UNCHANGED (frozen-OFF divergences are disclosed, not
+                // patched; design R5). The true -1.0 case is otherwise handled by the owner-top marker
+                // when the player aimed the compound top face.
                 // isSolidRender() restricts this lane to genuine opaque full cubes (the "lowered full
                 // block" the comment above describes) — LIVE CRASH FIX (StackOverflowError, TEST 16):
                 // an unrestricted non-air/non-slab match also caught ceiling-attached objects (chains,

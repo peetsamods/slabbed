@@ -211,30 +211,10 @@ public abstract class SlabSupportStateMixin {
                 || state.is(Blocks.FURNACE);
     }
 
-    /**
-     * Builds the torch comfort overlay in {@code slabPos}'s voxel frame, or returns
-     * {@code null} if the block above {@code slabPos} is not a lowered floor torch.
-     *
-     * <p>Torch comfort shape is voxel-relative Y=0–1 in the torch's frame. Translated
-     * to the slab's frame the comfort shape sits at Y=(1+torchDy) to (2+torchDy),
-     * so we offset {@link #SLABBED$COMFORT_TORCH_SHAPE} by {@code 1.0 + torchDy}.
-     */
-    private static VoxelShape slabbed$slabTorchComfortOverlay(BlockGetter world, BlockPos slabPos) {
-        if (world == null || slabPos == null) {
-            return null;
-        }
-        BlockPos abovePos = slabPos.above();
-        BlockState above = world.getBlockState(abovePos);
-        Block aboveBlock = above.getBlock();
-        if (!(aboveBlock instanceof TorchBlock) || aboveBlock instanceof WallTorchBlock) {
-            return null;
-        }
-        double torchDy = SlabSupport.getYOffset(world, abovePos, above);
-        if (torchDy >= 0.0) {
-            return null;
-        }
-        return SLABBED$COMFORT_TORCH_SHAPE.move(0.0, 1.0 + torchDy, 0.0);
-    }
+    // GOES C2 (TEST 18): slabbed$slabTorchComfortOverlay REMOVED — it built the slab-overlay half of the
+    // torch comfort shape (a torch post unioned into the slab's outline). See the removal note in
+    // slabbed$offsetOutline. The torch's OWN comfort shape (SLABBED$COMFORT_TORCH_SHAPE, applied when the
+    // subject itself is the lowered floor torch) is retained.
 
     // ── placement / survival support ──────────────────────────────────
 
@@ -435,13 +415,15 @@ public abstract class SlabSupportStateMixin {
             changed = true;
         }
 
-        if (block instanceof SlabBlock) {
-            VoxelShape overlay = slabbed$slabTorchComfortOverlay(world, pos);
-            if (overlay != null) {
-                shape = Shapes.or(shape, overlay);
-                changed = true;
-            }
-        }
+        // GOES C2 (TEST 18 finding, ledger 2026-07-10): the SLAB torch-comfort OVERLAY is removed. It
+        // unioned a torch post into the slab's own outline so vanilla DDA would produce a slab hit that
+        // the legacy rescue-retargeter then bounced up to the torch above. Under the shipping offset
+        // raycast (SlabbedOffsetRaycast, default ON) that retarget partner is DEAD, so the overlay only
+        // made the slab STEAL torch clicks and MERGE the two outlines. The offset raycast targets the
+        // lowered torch directly via its own comfort shape (below, lines that build SLABBED$COMFORT_TORCH_
+        // SHAPE for the torch itself), so the slab overlay is pure harm. slabUnderLoweredTorchReturns
+        // SlabOnlyOutline pins the slab-only result. (The torch's OWN comfort shape is KEPT: the offset
+        // raycast still needs the fuller post to enter the torch's tiny native voxel from natural angles.)
 
         if (changed) {
             cir.setReturnValue(shape);
