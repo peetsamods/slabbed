@@ -52,7 +52,9 @@ import net.minecraft.world.WorldView;
 
 import java.util.ArrayDeque;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Central helper for slab support semantics.
@@ -60,8 +62,18 @@ import java.util.Set;
 public final class SlabSupport {
     private static final Long2DoubleOpenHashMap CLIENT_VISUAL_Y_OFFSETS = new Long2DoubleOpenHashMap();
     private static final Object CLIENT_VISUAL_Y_OFFSETS_LOCK = new Object();
+    private static volatile Predicate<BlockView> CHUNK_RENDERER_REGION_DETECTOR = ignored -> false;
 
     private SlabSupport() {
+    }
+
+    /**
+     * Registers the client-only renderer-region type check without linking this common class to
+     * client-only Minecraft classes. The client supplies an {@code instanceof} predicate, whose
+     * class reference Loom remaps for the active runtime namespace.
+     */
+    public static void registerChunkRendererRegionDetector(Predicate<BlockView> detector) {
+        CHUNK_RENDERER_REGION_DETECTOR = Objects.requireNonNull(detector, "detector");
     }
 
     /**
@@ -1730,7 +1742,6 @@ public final class SlabSupport {
     }
 
     private static boolean isChunkRendererRegion(BlockView world) {
-        return world != null
-                && "net.minecraft.client.render.chunk.ChunkRendererRegion".equals(world.getClass().getName());
+        return world != null && CHUNK_RENDERER_REGION_DETECTOR.test(world);
     }
 }

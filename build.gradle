@@ -102,6 +102,8 @@ jar {
     // SlabbedAuditBridge's reflection layer, not a hard import, so they load fine with
     // this package absent.
     exclude("com/slabbed/dev/audit/**")
+    exclude("com/slabbed/dev/SlabbedLab.class")
+    exclude("com/slabbed/dev/SlabbedLabFixtures*.class")
     exclude("com/slabbed/debug/**")
     exclude("com/slabbed/client/debug/**")
     exclude("com/slabbed/mixin/debug/**")

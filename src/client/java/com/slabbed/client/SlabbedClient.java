@@ -1,14 +1,17 @@
 package com.slabbed.client;
 
 import com.slabbed.Slabbed;
+import com.slabbed.util.SlabSupport;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.render.chunk.ChunkRendererRegion;
 
 import java.lang.reflect.InvocationTargetException;
 
 public final class SlabbedClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        SlabSupport.registerChunkRendererRegionDetector(view -> view instanceof ChunkRendererRegion);
         SlabbedModelLoadingPlugin.init();
         SlabAnchorClientSync.init();
         SlabdyClientCommands.register();

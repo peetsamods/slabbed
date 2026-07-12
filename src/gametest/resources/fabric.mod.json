@@ -44,6 +44,7 @@
       "com.slabbed.test.TerrainSlabsChainAnchorTest",
       "com.slabbed.test.SlabHeightStepCullTest",
       "com.slabbed.test.SlabOnSlabVerticalAnchorTest",
+      "com.slabbed.test.RendererRegionBoundsGuardTest",
       "com.slabbed.client.BetaNoticeDismissedWorldsTest",
       "com.slabbed.client.BetaNoticeSessionGateTest"
     ],

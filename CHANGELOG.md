@@ -5,6 +5,16 @@ Minecraft version; entries note which versions/loaders a change applies to. For 
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 
+## [0.5.0-beta.8] — 1.21.11 (Fabric) — 2026-07-12
+
+### Fixed
+- **Fixed a client crash while rebuilding chunk meshes near a renderer-region boundary.** A
+  bounded support-column lookup correctly caught the renderer's out-of-range read, but recognized
+  the renderer view using a development-only mapped class-name string. Production uses an
+  intermediary runtime name, so the exception was rethrown instead of ending the bounded scan.
+  The check now uses a client-only class reference that Fabric Loom remaps for the running
+  environment. ([#35](https://github.com/peetsamods/slabbed/issues/35))
+
 ## [0.5.0-beta.7] — 1.21.11 (Fabric) — 2026-07-04 — **published on Modrinth and CurseForge**
 
 > Consolidates what was internally iterated as beta.2 through beta.7 in a single day of live-test
