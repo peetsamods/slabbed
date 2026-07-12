@@ -21,6 +21,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.gametest.framework.GameTestServer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -398,6 +399,7 @@ public final class SlabRigCommand {
             if (!lifecycleHookRegistered) {
                 lifecycleHookRegistered = true;
                 ServerLifecycleEvents.SERVER_STOPPED.register(SlabRigCommand::clearServerSession);
+                SlabRigHangingDirectExecutor.register();
             }
         }
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
@@ -478,7 +480,27 @@ public final class SlabRigCommand {
                                 .executes(SlabRigCommand::catalog))
                         .then(Commands.literal("hangs")
                                 .then(Commands.literal("catalog")
-                                        .executes(SlabRigCommand::hangsCatalog)))
+                                        .executes(SlabRigCommand::hangsCatalog))
+                                .then(Commands.literal("direct")
+                                        .then(Commands.literal("status")
+                                                .executes(SlabRigHangingDirectExecutor::status))
+                                        .then(Commands.literal("resume")
+                                                .executes(SlabRigHangingDirectExecutor::resume))
+                                        .then(Commands.literal("clear")
+                                                .executes(SlabRigHangingDirectExecutor::clear))
+                                        .then(Commands.argument("route_index",
+                                                        IntegerArgumentType.integer(6143, 6143))
+                                                .then(Commands.literal("topology")
+                                                        .then(Commands.argument("topology_index",
+                                                                        IntegerArgumentType.integer(42, 42))
+                                                                .then(Commands.literal("paintings")
+                                                                        .then(Commands.argument("selector_page",
+                                                                                        IntegerArgumentType.integer(1, 1))
+                                                                                .executes(ctx ->
+                                                                                        SlabRigHangingDirectExecutor.start(ctx, false))
+                                                                                .then(Commands.literal("force")
+                                                                                        .executes(ctx ->
+                                                                                                SlabRigHangingDirectExecutor.start(ctx, true))))))))))
                         .then(Commands.literal("cases")
                                 .executes(ctx -> cases(ctx, 1, false))
                                 .then(Commands.literal("force")
@@ -604,7 +626,8 @@ public final class SlabRigCommand {
         source.sendSuccess(() -> Component.literal(
                 "[slabrig] usage: /slabrig <tower [force]|tower <n> [height] [force]|rows [n] [force]"
                         + "|mega [n] [force]|platform [y] [force]|stacks [max_length] [page] [force]"
-                        + "|catalog|hangs catalog|cases [page|resume] [force]|status|clear>\n"
+                        + "|catalog|hangs catalog|hangs direct <6143 topology 42 paintings 1 [force]"
+                        + "|status|resume|clear>|cases [page|resume] [force]|status|clear>\n"
                         + "  tower [force]           — compound-visible -1.0 marked tower\n"
                         + "  tower <n> [h] [force]   — n alternating deep-stack towers (default n="
                         + DEFAULT_TOWER_COUNT + ", height=" + DEFAULT_TOWER_HEIGHT + ", cap " + MAX_TOWER_HEIGHT
@@ -616,6 +639,9 @@ public final class SlabRigCommand {
                         + "  stacks [m] [p] [force]  — exact 4x4 page of all S/B words through length m (default 5)\n"
                         + "  catalog                 — write the exact runtime item/category/topology catalog\n"
                         + "  hangs catalog           — world-free exact hanging catalog + live painting registry export\n"
+                        + "  hangs direct 6143 topology 42 paintings 1 [force]\n"
+                        + "                          — durable TEST 19 SBSBS/painting page; exact lifecycle evidence\n"
+                        + "  hangs direct <status|resume|clear> — inspect, continue, or exact-clear that page\n"
                         + "  cases [p|resume] [force]— 4 items x 4 topologies from the exhaustive BlockItem case space\n"
                         + "  status                  — show the exact tracked manifest and structural state\n"
                         + "  clear                   — remove exact owned cells only\n"
@@ -2850,6 +2876,34 @@ public final class SlabRigCommand {
                 ? player.getUUID()
                 : source.getEntity() instanceof Player p ? p.getUUID() : CONSOLE_KEY;
         return new RigKey(source.getServer(), id, source.getLevel().dimension());
+    }
+
+    /** Read-only cross-tool allocation guard for the durable direct-hanging executor. */
+    static boolean hasTrackedManifestInLevel(MinecraftServer server, ResourceKey<Level> dimension) {
+        return LAST_MANIFEST.keySet().stream()
+                .anyMatch(key -> key.server == server && key.dimension.equals(dimension));
+    }
+
+    /**
+     * GameTest-only batch reset for a dedicated serial test environment. The headless runner keeps
+     * static Java state after earlier environments finish, so their completed volatile manifests would
+     * otherwise contaminate a later production-command integration test. This never clears world cells,
+     * attachments, durable state, or a live production command surface.
+     */
+    public static int clearStaleManifestsForSerialGameTest(
+            MinecraftServer server, ResourceKey<Level> dimension) {
+        Objects.requireNonNull(server, "server");
+        Objects.requireNonNull(dimension, "dimension");
+        if (!(server instanceof GameTestServer)) {
+            throw new IllegalStateException(
+                    "serial GameTest manifest reset is unavailable outside GameTestServer");
+        }
+        int before = LAST_MANIFEST.size();
+        LAST_MANIFEST.keySet().removeIf(
+                key -> key.server == server && key.dimension.equals(dimension));
+        CASE_POST_USE_TEST_HOOKS.keySet().removeIf(
+                key -> key.server == server && key.dimension.equals(dimension));
+        return before - LAST_MANIFEST.size();
     }
 
     /** Derived inclusive display AABB. It has no mutation methods and is never used for ownership. */

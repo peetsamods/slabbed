@@ -2,6 +2,7 @@ package com.slabbed.anchor;
 
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
+import java.util.Objects;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.slabbed.Slabbed;
@@ -26,6 +27,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -909,6 +911,36 @@ public final class SlabAnchorAttachment {
                 }
             }
         }
+    }
+
+    /**
+     * Raw persistence-only probe for exact cleanup/evidence code. Unlike the gameplay carrier reads,
+     * this never infers support from neighboring geometry; it reports only entries actually stored in
+     * Slabbed chunk attachments at {@code pos}.
+     */
+    public static boolean hasStoredAttachmentEvidence(ServerLevel world, BlockPos pos) {
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(pos, "pos");
+        LevelChunk chunk = world.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            throw new IllegalStateException(
+                    "refusing raw attachment probe for unloaded chunk at " + pos.toShortString());
+        }
+        long key = pos.asLong();
+        Long2DoubleOpenHashMap dyMap = chunk.getAttached(PLACEMENT_DY_TYPE);
+        return contains(chunk.getAttached(ANCHOR_TYPE), key)
+                || contains(chunk.getAttached(FROZEN_FLAT_TYPE), key)
+                || contains(chunk.getAttached(COMPOUND_FULL_BLOCK_ANCHOR_TYPE), key)
+                || contains(chunk.getAttached(COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE), key)
+                || contains(chunk.getAttached(COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE), key)
+                || contains(chunk.getAttached(COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE), key)
+                || contains(chunk.getAttached(COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE), key)
+                || contains(chunk.getAttached(LOWERED_SLAB_CARRIER_TYPE), key)
+                || dyMap != null && dyMap.containsKey(key);
+    }
+
+    private static boolean contains(LongOpenHashSet set, long key) {
+        return set != null && set.contains(key);
     }
 
     public static void removePersistentLoweredSlabCarrier(Level world, BlockPos pos) {
