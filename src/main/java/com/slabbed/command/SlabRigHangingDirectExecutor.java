@@ -26,6 +26,8 @@ import net.minecraft.world.phys.AABB;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,20 +43,20 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Crash-reconstructible production executor for the one reviewed RIG-3B2B1 witness page.
+ * Crash-reconstructible production executor for the four reviewed painting-selector pages at the
+ * fixed RIG-3 route and topology.
  *
  * <p>The executor never discovers mutation targets from an area, proximity, entity class, or current
  * bounds. Every authored cell and entity UUID comes from the immutable page or a synchronous
  * pre-insertion claim. State publication is write-ahead for fixture/case actions; exact evidence is
- * content-addressed before the state that links it. Fixture receipts are committed in sixteen
- * dependency-complete 52-cell batches so the append-only store remains usable while preserving exact
- * confirmed authorship.
+ * content-addressed before the state that links it. Fixture receipts are committed in one
+ * dependency-complete 52-cell batch per validated page case so the append-only store remains usable
+ * while preserving exact confirmed authorship.
  */
 public final class SlabRigHangingDirectExecutor {
 
     private static final int ROUTE = SlabRigHangingDirectState.ROUTE_INDEX;
     private static final int TOPOLOGY = SlabRigHangingDirectState.TOPOLOGY_INDEX;
-    private static final int PAGE = SlabRigHangingDirectState.SELECTOR_PAGE;
     private static final String FACING = "west";
     private static final int CLEAR_FLAGS = Block.UPDATE_ALL;
     private static final int CLEAR_BATCH_SIZE = 64;
@@ -71,9 +73,12 @@ public final class SlabRigHangingDirectExecutor {
 
     private static boolean registered;
     private static boolean testStoreOverrideOpen;
+    private static FixedOwnerOverride fixedOwnerOverride;
     private static MinecraftServer activeServer;
     private static MinecraftServer stoppingServer;
     private static String processEpoch = SlabRigHangingDirectState.NO_VALUE;
+    private static String startupRefusal = SlabRigHangingDirectState.NO_VALUE;
+    private static String startupMutationRefusal = SlabRigHangingDirectState.NO_VALUE;
 
     private SlabRigHangingDirectExecutor() {
     }
@@ -82,7 +87,7 @@ public final class SlabRigHangingDirectExecutor {
     public static StoreOverride openTestStoreOverride(Path root) {
         Objects.requireNonNull(root, "root");
         synchronized (SlabRigHangingDirectExecutor.class) {
-            if (testStoreOverrideOpen || !RUNS_BY_ID.isEmpty()) {
+            if (testStoreOverrideOpen || fixedOwnerOverride != null || !processMapsEmpty()) {
                 throw new IllegalStateException("direct test store override requires an idle executor");
             }
             SlabRigHangingDirectStateStore replacement =
@@ -102,6 +107,26 @@ public final class SlabRigHangingDirectExecutor {
         synchronized (SlabRigHangingDirectExecutor.class) {
             requireTestRestart(server);
             serverStarted(server);
+        }
+    }
+
+    /** Read-only blocking receipt for the last simulated production startup boundary. */
+    public static String startupRefusalForSerialGameTest(MinecraftServer server) {
+        synchronized (SlabRigHangingDirectExecutor.class) {
+            requireTestRestart(server);
+            return startupMutationRefusal;
+        }
+    }
+
+    /** Exact read-only world-identity classifier used by the serialized startup regression. */
+    public static Optional<String> classifyStartupWorldKeyForSerialGameTest(
+            Path worldRoot, boolean activeLedgerPresent) throws IOException {
+        synchronized (SlabRigHangingDirectExecutor.class) {
+            if (!testStoreOverrideOpen) {
+                throw new IllegalStateException(
+                        "startup world-key classifier requires the isolated test store");
+            }
+            return startupWorldKey(worldRoot, activeLedgerPresent);
         }
     }
 
@@ -129,8 +154,9 @@ public final class SlabRigHangingDirectExecutor {
         }
     }
 
-    /** Starts the exact production address 6143/42/1; no caller-supplied address can widen it. */
-    public static int start(CommandContext<CommandSourceStack> context, boolean force) {
+    /** Starts one validated painting selector page at the fixed production route/topology. */
+    public static int start(CommandContext<CommandSourceStack> context,
+                            int selectorPage, boolean force) {
         Objects.requireNonNull(context, "context");
         CommandSourceStack source = context.getSource();
         ActiveRun startedRun = null;
@@ -139,16 +165,20 @@ public final class SlabRigHangingDirectExecutor {
             ServerPlayer player = source.getPlayerOrException();
             ServerLevel level = source.getLevel();
             requireExactPlayerLevel(player, level);
+            if (selectorPage < SlabRigHangingDirectState.MIN_SELECTOR_PAGE
+                    || selectorPage > SlabRigHangingDirectState.MAX_SELECTOR_PAGE) {
+                throw new IllegalArgumentException("direct selector page must be 1..4");
+            }
             if (SlabRigCommand.hasTrackedManifestInLevel(level.getServer(), level.dimension())) {
                 throw new IllegalStateException("a volatile /slabrig manifest is active in this level; "
                         + "clear it with the legacy /slabrig clear command first");
             }
             ensureProcess(level.getServer());
+            requireStartupMutationAllowed();
 
-            Path worldRoot = worldRoot(level.getServer());
-            String worldKey = SlabRigHangingDirectStateStore.createWorldKey(worldRoot);
-            SlabRigHangingDirectState.Owner owner = owner(worldKey, level, player.getUUID());
-            SlabRigHangingDirectStateStore.Reconstruction prior = STORE.reconstruct(owner);
+            SlabRigHangingDirectStateStore.Reconstruction prior =
+                    reconstructOwner(level, player, true);
+            SlabRigHangingDirectState.Owner owner = prior.owner();
             SlabRigHangingDirectState.State previous = prior.latestOrNull();
             if (previous != null && previous.phase() != SlabRigHangingDirectState.Phase.CLEARED) {
                 if (!force) {
@@ -174,38 +204,43 @@ public final class SlabRigHangingDirectExecutor {
             }
             BlockPos groundAtFeet = player.blockPosition().below();
             BlockPos origin = groundAtFeet.east(6).north(12).immutable();
-            Planning planning = plan(level, origin);
+            Planning planning = plan(level, origin, selectorPage);
             validateReservation(level, planning.page());
 
             UUID nonce = UUID.randomUUID();
             String runId = SlabRigHangingDirectState.sha256(
-                    SlabRigHangingDirectState.EXECUTION_CONTRACT + '\0' + worldKey + '\0'
-                            + level.dimension().identifier() + '\0' + player.getUUID() + '\0'
+                    SlabRigHangingDirectState.EXECUTION_CONTRACT + '\0' + owner.worldKey() + '\0'
+                            + owner.dimension() + '\0' + owner.playerUuid() + '\0'
                             + nonce + '\0' + planning.plan().planHash() + '\0' + origin.toShortString());
             SlabRigHangingDirectState.RunIdentity identity = new SlabRigHangingDirectState.RunIdentity(
                     runId, nonce, BuildStamp.GIT_SHA, planning.runtime().runtimeContentSha256(),
                     planning.runtime().minecraftVersion(), planning.catalog().catalogHash(),
                     planning.catalog().topologyCatalogHash(), planning.runtime().executionIdentity(),
                     planning.runtime().paintingRegistryHash(), planning.universe().universeHash(),
-                    planning.plan().planHash(), planning.plan().semanticPageId(), ROUTE, TOPOLOGY, PAGE,
+                    planning.plan().planHash(), planning.plan().semanticPageId(), ROUTE, TOPOLOGY,
+                    selectorPage,
+                    planning.page().cases().size(),
                     SlabAnchorAttachment.FROZEN_DY_ENABLED,
                     SlabRigHangingDirectState.Position.of(origin), FACING);
             List<SlabRigHangingDirectState.CaseState> cases = initialCases(planning.page());
             String plannedText = plannedArtifact(owner, identity, planning, force, cases);
             SlabRigHangingDirectStateStore.WrittenArtifact plannedArtifact =
                     writeAndReadArtifact(plannedText);
-            SlabRigHangingDirectState.State planned = previous == null
+            SlabRigHangingDirectState.State previousV2 = previous != null
+                    && previous.format() == SlabRigHangingDirectState.Format.VARIABLE_V2
+                    ? previous : null;
+            SlabRigHangingDirectState.State planned = previousV2 == null
                     ? SlabRigHangingDirectState.State.initial(owner, identity,
                     positions(planning.page().reservedCells()),
                     positions(planning.page().clearOwnedCells().stream()
                             .map(SlabRigHangingDirectFixture.AbsoluteCell::pos).toList()),
                     cases, plannedArtifact.hash(), "planned;force=" + force)
-                    : SlabRigHangingDirectState.State.afterCleared(previous, identity,
+                    : SlabRigHangingDirectState.State.afterCleared(previousV2, identity,
                     positions(planning.page().reservedCells()),
                     positions(planning.page().clearOwnedCells().stream()
                             .map(SlabRigHangingDirectFixture.AbsoluteCell::pos).toList()),
                     cases, plannedArtifact.hash(), "planned;force=" + force);
-            appendChecked(previous, planned);
+            appendChecked(previousV2, planned);
 
             ActiveRun run = new ActiveRun(level.getServer(), level, owner, planning, planned,
                     force, false);
@@ -219,7 +254,7 @@ public final class SlabRigHangingDirectExecutor {
                 try {
                     quarantine(startedRun, "start command failure: " + describe(failure));
                 } catch (Throwable quarantineFailure) {
-                    Slabbed.LOGGER.error("RIG-3B2B1 start quarantine append failed",
+                    Slabbed.LOGGER.error("RIG-3B3A start quarantine append failed",
                             quarantineFailure);
                 }
             }
@@ -262,11 +297,16 @@ public final class SlabRigHangingDirectExecutor {
                 return 0;
             }
             ensureProcess(level.getServer());
+            requireStartupMutationAllowed();
             SlabRigHangingDirectStateStore.Reconstruction reconstruction =
                     reconstructOwner(level, player, false);
             SlabRigHangingDirectState.State state = reconstruction.latestOrNull();
             if (state == null) {
                 throw new IllegalStateException("no direct state to resume");
+            }
+            if (state.format() == SlabRigHangingDirectState.Format.LEGACY_V1) {
+                throw new IllegalStateException(
+                        "legacy-v1 direct ledger is exact-clear-only; resume/finalize is forbidden");
             }
             if (state.phase() == SlabRigHangingDirectState.Phase.CLEARED) {
                 throw new IllegalStateException("latest direct state is already cleared; start a new run");
@@ -313,6 +353,8 @@ public final class SlabRigHangingDirectExecutor {
                         + "level; clear it with the legacy /slabrig clear command before direct clear."));
                 return 0;
             }
+            ensureProcess(level.getServer());
+            requireStartupMutationAllowed();
             SlabRigHangingDirectStateStore.Reconstruction reconstruction =
                     reconstructOwner(level, player, false);
             SlabRigHangingDirectState.State state = reconstruction.latestOrNull();
@@ -556,8 +598,8 @@ public final class SlabRigHangingDirectExecutor {
 
     private static void executeNextCase(ActiveRun run, ServerPlayer player) throws Exception {
         int ordinal = run.head.nextCaseOrdinal();
-        if (ordinal < 0 || ordinal >= SlabRigHangingDirectState.CASE_COUNT) {
-            throw new IllegalStateException("direct case cursor escaped 0..15: " + ordinal);
+        if (ordinal < 0 || ordinal >= run.head.run().caseCount()) {
+            throw new IllegalStateException("direct case cursor escaped persisted caseCount: " + ordinal);
         }
         List<SlabRigHangingDirectState.CaseState> inFlightCases = new ArrayList<>(run.head.cases());
         SlabRigHangingDirectState.CaseState plannedCase = inFlightCases.get(ordinal);
@@ -606,7 +648,7 @@ public final class SlabRigHangingDirectExecutor {
         completed.set(ordinal, current.immediate(caseOutcome, observation.hash()));
         SlabRigHangingDirectState.Phase nextPhase;
         SlabRigHangingDirectState.ArtifactLinks artifacts = run.head.artifacts();
-        if (ordinal + 1 == SlabRigHangingDirectState.CASE_COUNT) {
+        if (ordinal + 1 == run.head.run().caseCount()) {
             String immediateText = immediateArtifact(run.head, completed);
             SlabRigHangingDirectStateStore.WrittenArtifact immediate =
                     writeAndReadArtifact(immediateText);
@@ -718,7 +760,7 @@ public final class SlabRigHangingDirectExecutor {
                 }
             } catch (Throwable failure) {
                 run.driver = null;
-                Slabbed.LOGGER.error("RIG-3B2B1 lifecycle tick failed run={}",
+                Slabbed.LOGGER.error("RIG-3B3A lifecycle tick failed run={}",
                         run.head.run().runId(), failure);
                 if (isClearingPhase(run.head.phase())) {
                     // Preserve the exact durable cursor and require an explicit clear command to
@@ -729,7 +771,7 @@ public final class SlabRigHangingDirectExecutor {
                 try {
                     quarantine(run, "lifecycle tick failed: " + describe(failure));
                 } catch (Throwable quarantineFailure) {
-                    Slabbed.LOGGER.error("RIG-3B2B1 quarantine append also failed run={}",
+                    Slabbed.LOGGER.error("RIG-3B3A quarantine append also failed run={}",
                             run.head.run().runId(), quarantineFailure);
                 }
             }
@@ -859,24 +901,51 @@ public final class SlabRigHangingDirectExecutor {
         activeServer = server;
         stoppingServer = null;
         processEpoch = UUID.randomUUID().toString();
+        startupRefusal = SlabRigHangingDirectState.NO_VALUE;
+        startupMutationRefusal = SlabRigHangingDirectState.NO_VALUE;
         try {
-            String worldKey = SlabRigHangingDirectStateStore.readWorldKey(worldRoot(server));
+            List<SlabRigHangingDirectStateStore.Reconstruction> reconstructions =
+                    STORE.reconstructAll();
             Map<String, ServerLevel> levels = new HashMap<>();
             server.getAllLevels().forEach(level ->
                     levels.put(level.dimension().identifier().toString(), level));
-            for (SlabRigHangingDirectStateStore.Reconstruction reconstruction : STORE.reconstructAll()) {
+            List<StartupCandidate> active = new ArrayList<>();
+            for (SlabRigHangingDirectStateStore.Reconstruction reconstruction : reconstructions) {
                 SlabRigHangingDirectState.State state = reconstruction.latestOrNull();
-                if (state == null || state.phase() == SlabRigHangingDirectState.Phase.CLEARED
-                        || !state.owner().worldKey().equals(worldKey)) {
+                if (state == null) {
+                    continue;
+                }
+                if (state.phase() == SlabRigHangingDirectState.Phase.CLEARED) {
+                    continue;
+                }
+                active.add(new StartupCandidate(reconstruction, state));
+            }
+            // Audit the complete durable allocation set before installing or arming even one run.
+            // This catches out-of-band dual-schema ledgers and cross-owner UUID reuse before an
+            // IMMEDIATE/WAITING v2 ledger can receive a lifecycle callback.
+            auditStartupAllocations(active);
+            // No identity is benign only when no active profile-global row could be an orphaned
+            // ledger for this save. Cleared-only history remains inert; any active row makes the
+            // missing identity ambiguous and therefore blocking. Existing malformed/non-regular/
+            // symlink identity always fails strict read below.
+            Optional<String> startupWorldKey = startupWorldKey(
+                    worldRoot(server), !active.isEmpty());
+            if (startupWorldKey.isEmpty()) {
+                return;
+            }
+            String worldKey = startupWorldKey.orElseThrow();
+            for (StartupCandidate candidate : active) {
+                SlabRigHangingDirectState.State state = candidate.state();
+                if (!state.owner().worldKey().equals(worldKey)) {
                     continue;
                 }
                 ServerLevel level = levels.get(state.owner().dimension());
                 if (level == null) {
                     continue;
                 }
-                ActiveRun run = rebuild(level, state, reconstruction);
+                ActiveRun run = rebuild(level, state, candidate.reconstruction());
                 if (run == null) {
-                    Slabbed.LOGGER.warn("RIG-3B2B1 active state is clear-only after runtime mismatch owner={}",
+                    Slabbed.LOGGER.warn("RIG-3B3A active state is clear-only after runtime mismatch owner={}",
                             state.ownerKey());
                     run = new ActiveRun(level.getServer(), level, state.owner(), null, state,
                             false, true);
@@ -894,10 +963,63 @@ public final class SlabRigHangingDirectExecutor {
                 }
             }
         } catch (IOException missingOrCorrupt) {
-            Slabbed.LOGGER.info("RIG-3B2B1 startup reconstruction unavailable: {}",
+            startupRefusal = describe(missingOrCorrupt);
+            startupMutationRefusal = startupRefusal;
+            clearProcessMaps();
+            Slabbed.LOGGER.info("RIG-3B3A startup reconstruction unavailable: {}",
                     missingOrCorrupt.getMessage());
         } catch (Throwable failure) {
-            Slabbed.LOGGER.error("RIG-3B2B1 startup reconstruction failed", failure);
+            startupRefusal = describe(failure);
+            startupMutationRefusal = startupRefusal;
+            clearProcessMaps();
+            Slabbed.LOGGER.error("RIG-3B3A startup reconstruction failed", failure);
+        }
+    }
+
+    private static Optional<String> startupWorldKey(
+            Path worldRoot, boolean activeLedgerPresent) throws IOException {
+        Path worldIdentity = worldRoot.toAbsolutePath().normalize().resolve("data")
+                .resolve("slabbed-rig-world-id.tsv");
+        if (!Files.exists(worldIdentity, LinkOption.NOFOLLOW_LINKS)) {
+            if (activeLedgerPresent) {
+                throw new IOException(
+                        "missing Slabbed world identity while active direct ledgers exist "
+                                + worldIdentity);
+            }
+            return Optional.empty();
+        }
+        return Optional.of(SlabRigHangingDirectStateStore.readWorldKey(worldRoot));
+    }
+
+    private static void auditStartupAllocations(List<StartupCandidate> active) throws IOException {
+        Map<AllocationKey, SlabRigHangingDirectState.State> pages = new HashMap<>();
+        Map<UUID, SlabRigHangingDirectState.State> entities = new HashMap<>();
+        Map<String, SlabRigHangingDirectState.State> runs = new HashMap<>();
+        for (StartupCandidate candidate : active) {
+            SlabRigHangingDirectState.State state = candidate.state();
+            SlabRigHangingDirectState.State runConflict =
+                    runs.putIfAbsent(state.run().runId(), state);
+            if (runConflict != null) {
+                throw new IOException("startup refused duplicate active direct run id "
+                        + state.run().runId() + " ownerKeys=" + runConflict.ownerKey() + ","
+                        + state.ownerKey());
+            }
+            AllocationKey allocation = new AllocationKey(
+                    state.owner().worldKey(), state.owner().dimension());
+            SlabRigHangingDirectState.State pageConflict = pages.putIfAbsent(allocation, state);
+            if (pageConflict != null) {
+                throw new IOException("startup refused multiple active direct pages in one "
+                        + "world/dimension ownerKeys=" + pageConflict.ownerKey() + ","
+                        + state.ownerKey());
+            }
+            for (UUID uuid : state.entityUuidSet()) {
+                SlabRigHangingDirectState.State entityConflict = entities.putIfAbsent(uuid, state);
+                if (entityConflict != null) {
+                    throw new IOException("startup refused cross-ledger entity UUID collision "
+                            + uuid + " ownerKeys=" + entityConflict.ownerKey() + ","
+                            + state.ownerKey());
+                }
+            }
         }
     }
 
@@ -916,6 +1038,8 @@ public final class SlabRigHangingDirectExecutor {
             activeServer = null;
             stoppingServer = null;
             processEpoch = SlabRigHangingDirectState.NO_VALUE;
+            startupRefusal = SlabRigHangingDirectState.NO_VALUE;
+            startupMutationRefusal = SlabRigHangingDirectState.NO_VALUE;
         }
     }
 
@@ -1394,7 +1518,7 @@ public final class SlabRigHangingDirectExecutor {
                 quarantineHandlerFailure(run, source, level,
                         "begin painting drop callback failure", failure);
             } catch (Throwable quarantineFailure) {
-                Slabbed.LOGGER.error("RIG-3B2B1 beginFailure quarantine failed run={}",
+                Slabbed.LOGGER.error("RIG-3B3A beginFailure quarantine failed run={}",
                         run.head.run().runId(), quarantineFailure);
             }
             return true;
@@ -1621,14 +1745,14 @@ public final class SlabRigHangingDirectExecutor {
         }
     }
 
-    private static Planning plan(ServerLevel level, BlockPos origin) {
+    private static Planning plan(ServerLevel level, BlockPos origin, int selectorPage) {
         SlabRigHangingCatalog.Snapshot catalog = SlabRigHangingCatalog.snapshot();
         SlabRigHangingArtifacts.RuntimeSnapshot runtime =
                 SlabRigHangingArtifacts.snapshot(catalog, level.registryAccess());
         SlabRigHangingPaintingPlan.Universe universe =
                 SlabRigHangingPaintingPlan.snapshot(catalog, runtime);
         SlabRigHangingPaintingPlan.PagePlan pagePlan =
-                SlabRigHangingPaintingPlan.page(universe, ROUTE, TOPOLOGY, PAGE);
+                SlabRigHangingPaintingPlan.page(universe, ROUTE, TOPOLOGY, selectorPage);
         SlabRigHangingDirectFixture.AbsolutePage page =
                 SlabRigHangingDirectFixture.adapt(universe, pagePlan, origin);
         return new Planning(catalog, runtime, universe, pagePlan, page);
@@ -1637,12 +1761,22 @@ public final class SlabRigHangingDirectExecutor {
     private static ActiveRun rebuild(ServerLevel level, SlabRigHangingDirectState.State state,
                                      SlabRigHangingDirectStateStore.Reconstruction reconstruction) {
         try {
-            if (!FACING.equals(state.run().facing())
+            if (state.format() != SlabRigHangingDirectState.Format.VARIABLE_V2
+                    || reconstruction.format() != state.format()
+                    || !reconstruction.ownerKey().equals(state.ownerKey())
+                    || !FACING.equals(state.run().facing())
                     || !state.run().buildGitSha().equals(BuildStamp.GIT_SHA)) {
                 return null;
             }
-            Planning planning = plan(level, state.run().base().toBlockPos());
-            if (!runtimeMatches(state.run(), planning)) {
+            Planning planning = plan(level, state.run().base().toBlockPos(),
+                    state.run().selectorPage());
+            if (!runtimeMatches(state.run(), planning)
+                    || !state.reservedCells().equals(sortedPositions(
+                    positions(planning.page().reservedCells())))
+                    || !state.plannedAuthoredCells().equals(sortedPositions(
+                    positions(planning.page().clearOwnedCells().stream()
+                            .map(SlabRigHangingDirectFixture.AbsoluteCell::pos).toList())))
+                    || !caseEnvelopeMatches(state.cases(), initialCases(planning.page()))) {
                 return null;
             }
             boolean force = reconstruction.states().stream()
@@ -1653,7 +1787,7 @@ public final class SlabRigHangingDirectExecutor {
             return new ActiveRun(level.getServer(), level, state.owner(), planning, state,
                     force, false);
         } catch (Throwable mismatch) {
-            Slabbed.LOGGER.warn("RIG-3B2B1 runtime reconstruction refused run={}: {}",
+            Slabbed.LOGGER.warn("RIG-3B3A runtime reconstruction refused run={}: {}",
                     state.run().runId(), mismatch.getMessage());
             return null;
         }
@@ -1672,8 +1806,28 @@ public final class SlabRigHangingDirectExecutor {
                 && run.planHash().equals(planning.plan().planHash())
                 && run.semanticPageId().equals(planning.plan().semanticPageId())
                 && run.routeIndex() == ROUTE && run.topologyIndex() == TOPOLOGY
-                && run.selectorPage() == PAGE
+                && run.selectorPage() == planning.plan().selectorPage()
+                && run.caseCount() == planning.page().cases().size()
                 && run.frozenDyEnabled() == SlabAnchorAttachment.FROZEN_DY_ENABLED;
+    }
+
+    private static boolean caseEnvelopeMatches(
+            List<SlabRigHangingDirectState.CaseState> persisted,
+            List<SlabRigHangingDirectState.CaseState> planned) {
+        if (persisted.size() != planned.size()) {
+            return false;
+        }
+        for (int ordinal = 0; ordinal < persisted.size(); ordinal++) {
+            SlabRigHangingDirectState.CaseState actual = persisted.get(ordinal);
+            SlabRigHangingDirectState.CaseState expected = planned.get(ordinal);
+            if (actual.ordinal() != expected.ordinal()
+                    || !actual.attemptId().equals(expected.attemptId())
+                    || !actual.selectorId().equals(expected.selectorId())
+                    || !actual.componentFingerprint().equals(expected.componentFingerprint())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static ActiveRun activeOrRebuild(ServerLevel level,
@@ -1692,20 +1846,46 @@ public final class SlabRigHangingDirectExecutor {
     }
 
     private static void installRun(ActiveRun run) {
-        RUNS_BY_ID.put(run.head.run().runId(), run);
-        RUNS_BY_OWNER_LEVEL.put(new OwnerLevelKey(run.level, run.owner.key()), run);
-        for (SlabRigHangingDirectState.EntityOwnership ownership : run.head.entities()) {
-            if (ownership.role() == SlabRigHangingDirectState.EntityRole.PAINTING
-                    && ownership.disposition()
-                    != SlabRigHangingDirectState.EntityDisposition.REMOVED) {
-                RUNS_BY_ENTITY.put(new EntityLevelKey(run.level, ownership.uuid()), run);
+        synchronized (SlabRigHangingDirectExecutor.class) {
+            String runId = run.head.run().runId();
+            OwnerLevelKey ownerKey = new OwnerLevelKey(run.level, run.head.ownerKey());
+            ActiveRun runCollision = RUNS_BY_ID.get(runId);
+            ActiveRun ownerCollision = RUNS_BY_OWNER_LEVEL.get(ownerKey);
+            if (runCollision != null && runCollision != run) {
+                throw new IllegalStateException("direct run-id is already installed " + runId);
+            }
+            if (ownerCollision != null && ownerCollision != run) {
+                throw new IllegalStateException(
+                        "direct owner/schema is already installed " + run.head.ownerKey());
+            }
+            List<EntityLevelKey> entityKeys = new ArrayList<>();
+            if (!run.clearOnly) {
+                for (SlabRigHangingDirectState.EntityOwnership ownership : run.head.entities()) {
+                    if (ownership.role() == SlabRigHangingDirectState.EntityRole.PAINTING
+                            && ownership.disposition()
+                            != SlabRigHangingDirectState.EntityDisposition.REMOVED) {
+                        EntityLevelKey entityKey = new EntityLevelKey(run.level, ownership.uuid());
+                        ActiveRun entityCollision = RUNS_BY_ENTITY.get(entityKey);
+                        if (entityCollision != null && entityCollision != run) {
+                            throw new IllegalStateException(
+                                    "direct entity UUID is already installed " + ownership.uuid());
+                        }
+                        entityKeys.add(entityKey);
+                    }
+                }
+            }
+            // Publish only after every global index key has passed collision preflight.
+            RUNS_BY_ID.put(runId, run);
+            RUNS_BY_OWNER_LEVEL.put(ownerKey, run);
+            for (EntityLevelKey entityKey : entityKeys) {
+                RUNS_BY_ENTITY.put(entityKey, run);
             }
         }
     }
 
     private static void uninstallRun(ActiveRun run) {
         RUNS_BY_ID.remove(run.head.run().runId(), run);
-        RUNS_BY_OWNER_LEVEL.remove(new OwnerLevelKey(run.level, run.owner.key()), run);
+        RUNS_BY_OWNER_LEVEL.remove(new OwnerLevelKey(run.level, run.head.ownerKey()), run);
         RUNS_BY_ENTITY.entrySet().removeIf(entry -> entry.getValue() == run);
     }
 
@@ -1777,12 +1957,14 @@ public final class SlabRigHangingDirectExecutor {
     }
 
     private static void quarantineOwnedIfPossible(CommandSourceStack source, Throwable failure) {
+        if (!SlabRigHangingDirectState.NO_VALUE.equals(startupMutationRefusal)) {
+            return;
+        }
         try {
             ServerPlayer player = source.getPlayerOrException();
             ServerLevel level = source.getLevel();
-            String worldKey = SlabRigHangingDirectStateStore.readWorldKey(worldRoot(level.getServer()));
-            SlabRigHangingDirectState.Owner owner = owner(worldKey, level, player.getUUID());
-            ActiveRun run = RUNS_BY_OWNER_LEVEL.get(new OwnerLevelKey(level, owner.key()));
+            SlabRigHangingDirectState.Owner owner = commandOwner(level, player, false);
+            ActiveRun run = activeForOwner(level, owner);
             if (run != null && !run.clearOnly) {
                 run.driver = null;
                 quarantine(run, "command failure: " + describe(failure));
@@ -1794,11 +1976,11 @@ public final class SlabRigHangingDirectExecutor {
 
     private static void lifecycleFailure(ActiveRun run, String lane, Throwable failure) {
         run.driver = null;
-        Slabbed.LOGGER.error("RIG-3B2B1 {} failed run={}", lane, run.head.run().runId(), failure);
+        Slabbed.LOGGER.error("RIG-3B3A {} failed run={}", lane, run.head.run().runId(), failure);
         try {
             quarantine(run, lane + " failed: " + describe(failure));
         } catch (Throwable quarantineFailure) {
-            Slabbed.LOGGER.error("RIG-3B2B1 quarantine append failed after {}", lane,
+            Slabbed.LOGGER.error("RIG-3B3A quarantine append failed after {}", lane,
                     quarantineFailure);
         }
     }
@@ -1836,7 +2018,7 @@ public final class SlabRigHangingDirectExecutor {
             }
             quarantine(run, lane + ":" + describe(failure));
         } catch (Throwable quarantineFailure) {
-            Slabbed.LOGGER.error("RIG-3B2B1 handler quarantine failed lane={} run={}", lane,
+            Slabbed.LOGGER.error("RIG-3B3A handler quarantine failed lane={} run={}", lane,
                     run.head.run().runId(), quarantineFailure);
         }
     }
@@ -1850,21 +2032,87 @@ public final class SlabRigHangingDirectExecutor {
         }
     }
 
+    private static void requireStartupMutationAllowed() {
+        if (!SlabRigHangingDirectState.NO_VALUE.equals(startupMutationRefusal)) {
+            throw new IllegalStateException(
+                    "direct mutation is blocked by startup audit: " + startupMutationRefusal);
+        }
+    }
+
     private static SlabRigHangingDirectStateStore.Reconstruction reconstructOwner(
             ServerLevel level, ServerPlayer player, boolean createWorldIdentity) throws IOException {
+        SlabRigHangingDirectState.Owner owner = commandOwner(
+                level, player, createWorldIdentity);
+        ActiveRun active = activeForOwner(level, owner);
+        // An in-process head is only an expected CAS identity. Always inspect both schema
+        // namespaces so a second active ledger cannot hide behind an already-installed run.
+        SlabRigHangingDirectStateStore.Reconstruction variable = active != null
+                && active.head.format() == SlabRigHangingDirectState.Format.VARIABLE_V2
+                ? STORE.verifyCurrent(owner, active.head) : STORE.reconstruct(owner);
+        SlabRigHangingDirectStateStore.Reconstruction legacy = active != null
+                && active.head.format() == SlabRigHangingDirectState.Format.LEGACY_V1
+                ? STORE.verifyCurrent(owner, active.head) : STORE.reconstructLegacy(owner);
+        return selectOwnerReconstruction(variable, legacy);
+    }
+
+    private static ActiveRun activeForOwner(ServerLevel level,
+                                            SlabRigHangingDirectState.Owner owner) {
+        ActiveRun variable = RUNS_BY_OWNER_LEVEL.get(
+                new OwnerLevelKey(level, owner.key()));
+        ActiveRun legacy = RUNS_BY_OWNER_LEVEL.get(
+                new OwnerLevelKey(level, owner.legacyKey()));
+        if (variable != null && legacy != null && variable != legacy) {
+            throw new IllegalStateException(
+                    "both variable and legacy direct runs are active for one owner");
+        }
+        return variable != null ? variable : legacy;
+    }
+
+    private static SlabRigHangingDirectStateStore.Reconstruction selectOwnerReconstruction(
+            SlabRigHangingDirectStateStore.Reconstruction variable,
+            SlabRigHangingDirectStateStore.Reconstruction legacy) throws IOException {
+        SlabRigHangingDirectState.State variableHead = variable.latestOrNull();
+        SlabRigHangingDirectState.State legacyHead = legacy.latestOrNull();
+        boolean variableActive = variableHead != null
+                && variableHead.phase() != SlabRigHangingDirectState.Phase.CLEARED;
+        boolean legacyActive = legacyHead != null
+                && legacyHead.phase() != SlabRigHangingDirectState.Phase.CLEARED;
+        if (variableActive && legacyActive) {
+            throw new IOException(
+                    "both v2 and legacy-v1 direct ledgers are active for one command owner");
+        }
+        if (variableActive) {
+            return variable;
+        }
+        if (legacyActive) {
+            return legacy;
+        }
+        if (variableHead != null || legacyHead == null) {
+            return variable;
+        }
+        return legacy;
+    }
+
+    private static SlabRigHangingDirectState.Owner commandOwner(
+            ServerLevel level, ServerPlayer player, boolean createWorldIdentity) throws IOException {
+        FixedOwnerOverride fixed = fixedOwnerOverride;
+        if (fixed != null) {
+            if (fixed.closed || fixed.server != level.getServer()
+                    || activeServer != fixed.server || stoppingServer != null
+                    || fixed.parent.closed || !testStoreOverrideOpen
+                    || STORE != fixed.parent.replacement
+                    || !fixed.owner.dimension().equals(
+                    level.dimension().identifier().toString())) {
+                throw new IOException(
+                        "fixed legacy command owner does not match the exact server/dimension");
+            }
+            return fixed.owner;
+        }
         Path root = worldRoot(level.getServer());
         String worldKey = createWorldIdentity
                 ? SlabRigHangingDirectStateStore.createWorldKey(root)
                 : SlabRigHangingDirectStateStore.readWorldKey(root);
-        SlabRigHangingDirectState.Owner owner = owner(worldKey, level, player.getUUID());
-        ActiveRun active = RUNS_BY_OWNER_LEVEL.get(new OwnerLevelKey(level, owner.key()));
-        if (active != null) {
-            // The in-process head is only an expected CAS identity. verifyCurrent still checks the
-            // complete immutable ledger shape and cached evidence metadata, and falls back to full
-            // reconstruction if any authoritative file changed.
-            return STORE.verifyCurrent(owner, active.head);
-        }
-        return STORE.reconstruct(owner);
+        return owner(worldKey, level, player.getUUID());
     }
 
     private static Path worldRoot(MinecraftServer server) {
@@ -1892,6 +2140,12 @@ public final class SlabRigHangingDirectExecutor {
         CLEARING_ENTITIES.clear();
     }
 
+    private static boolean processMapsEmpty() {
+        return RUNS_BY_ID.isEmpty() && RUNS_BY_OWNER_LEVEL.isEmpty()
+                && RUNS_BY_ENTITY.isEmpty() && PENDING_REMOVALS.isEmpty()
+                && DEFERRED_REMOVALS.isEmpty() && CLEARING_ENTITIES.isEmpty();
+    }
+
     private static int fail(CommandSourceStack source, String lane, Throwable failure) {
         source.sendFailure(Component.literal("Slabbed " + lane + " failed: " + describe(failure)));
         Slabbed.LOGGER.error("Slabbed {} failed", lane, failure);
@@ -1908,11 +2162,19 @@ public final class SlabRigHangingDirectExecutor {
                 .filter(SlabRigHangingDirectState.TickCredit::loaded)
                 .mapToInt(SlabRigHangingDirectState.TickCredit::observedEntityTicks)
                 .min().orElse(0);
-        return "Slabbed direct 6143/42/1 phase=" + state.phase()
+        return "Slabbed direct 6143/42/" + state.run().selectorPage()
+                + " schema=" + (state.format().legacy() ? "legacy-v1-clear-only" : "v2")
+                + " phase=" + state.phase()
                 + " run=" + state.run().runId().substring(0, 12)
-                + " cases=" + state.nextCaseOrdinal() + "/16"
+                + " cases=" + state.nextCaseOrdinal() + "/" + state.run().caseCount()
                 + " cells=" + state.authoredCells().size() + "/" + state.plannedAuthoredCells().size()
                 + " entities=" + state.entities().size() + " delayedMin=" + minTicks + "/102"
+                + " clearEntities=" + state.clear().entityCursor() + "/"
+                + state.clear().requestedEntities().size()
+                + " clearAttachments=" + state.clear().attachmentCursor() + "/"
+                + state.clear().requestedAttachments().size()
+                + " clearCells=" + state.clear().cellCursor() + "/"
+                + state.clear().requestedCells().size()
                 + " detail=" + state.detail();
     }
 
@@ -1936,14 +2198,19 @@ public final class SlabRigHangingDirectExecutor {
         return positions.stream().map(SlabRigHangingDirectState.Position::of).toList();
     }
 
+    private static List<SlabRigHangingDirectState.Position> sortedPositions(
+            List<SlabRigHangingDirectState.Position> positions) {
+        return positions.stream().sorted().toList();
+    }
+
     private static String plannedArtifact(SlabRigHangingDirectState.Owner owner,
                                           SlabRigHangingDirectState.RunIdentity run,
                                           Planning planning, boolean force,
                                           List<SlabRigHangingDirectState.CaseState> cases) {
-        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-planned-v1\n");
+        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-planned-v2\n");
         field(out, "player_proof", SlabRigHangingDirectState.PLAYER_PROOF);
         field(out, "execution_contract", SlabRigHangingDirectState.EXECUTION_CONTRACT);
-        field(out, "owner_key", owner.key());
+        field(out, "owner_key", owner.key(SlabRigHangingDirectState.Format.VARIABLE_V2));
         field(out, "world_key", owner.worldKey());
         field(out, "dimension", owner.dimension());
         field(out, "player_uuid", owner.playerUuid().toString());
@@ -1958,7 +2225,8 @@ public final class SlabRigHangingDirectExecutor {
         field(out, "universe_hash", run.universeHash());
         field(out, "plan_hash", run.planHash());
         field(out, "semantic_page_id", run.semanticPageId());
-        field(out, "address", ROUTE + "/" + TOPOLOGY + "/" + PAGE);
+        field(out, "address", ROUTE + "/" + TOPOLOGY + "/" + run.selectorPage());
+        field(out, "case_count", Integer.toString(run.caseCount()));
         field(out, "origin", run.base().toString());
         field(out, "facing", run.facing());
         field(out, "force", Boolean.toString(force));
@@ -1979,8 +2247,10 @@ public final class SlabRigHangingDirectExecutor {
 
     private static String observationArtifact(SlabRigHangingDirectState.State state, int ordinal,
                                               SlabRigHangingDirectActions.PaintingAttempt attempt) {
-        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-observation-v1\n");
+        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-observation-v2\n");
         field(out, "run_id", state.run().runId());
+        field(out, "selector_page", Integer.toString(state.run().selectorPage()));
+        field(out, "case_count", Integer.toString(state.run().caseCount()));
         field(out, "ordinal", Integer.toString(ordinal));
         field(out, "attempt_id", attempt.attemptId());
         field(out, "interaction", attempt.interactionResult());
@@ -2010,8 +2280,10 @@ public final class SlabRigHangingDirectExecutor {
 
     private static String immediateArtifact(SlabRigHangingDirectState.State state,
                                             List<SlabRigHangingDirectState.CaseState> cases) {
-        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-immediate-v1\n");
+        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-immediate-v2\n");
         field(out, "run_id", state.run().runId());
+        field(out, "selector_page", Integer.toString(state.run().selectorPage()));
+        field(out, "case_count", Integer.toString(state.run().caseCount()));
         for (SlabRigHangingDirectState.CaseState entry : cases) {
             out.append("case\t").append(entry.ordinal()).append('\t')
                     .append(entry.immediateObservationId()).append('\n');
@@ -2024,9 +2296,11 @@ public final class SlabRigHangingDirectExecutor {
 
     private static String finalArtifact(ActiveRun run, SlabRigHangingDirectState.State state,
                                         SlabRigHangingDirectState.Scheduler scheduler) {
-        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-final-v1\n");
+        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-final-v2\n");
         field(out, "player_proof", SlabRigHangingDirectState.PLAYER_PROOF);
         field(out, "run_id", state.run().runId());
+        field(out, "selector_page", Integer.toString(state.run().selectorPage()));
+        field(out, "case_count", Integer.toString(state.run().caseCount()));
         field(out, "process_epoch", scheduler.processEpoch());
         field(out, "generation", Long.toString(scheduler.generation()));
         for (SlabRigHangingDirectState.TickCredit credit : scheduler.credits()) {
@@ -2140,8 +2414,15 @@ public final class SlabRigHangingDirectExecutor {
     }
 
     private static String clearedArtifact(SlabRigHangingDirectState.State state) {
-        StringBuilder out = new StringBuilder("schema\tslabbed-rig-hanging-direct-cleared-v1\n");
+        boolean legacy = state.format() == SlabRigHangingDirectState.Format.LEGACY_V1;
+        StringBuilder out = new StringBuilder(legacy
+                ? "schema\tslabbed-rig-hanging-direct-cleared-v1\n"
+                : "schema\tslabbed-rig-hanging-direct-cleared-v2\n");
         field(out, "run_id", state.run().runId());
+        if (!legacy) {
+            field(out, "selector_page", Integer.toString(state.run().selectorPage()));
+            field(out, "case_count", Integer.toString(state.run().caseCount()));
+        }
         SlabRigHangingDirectState.ClearProgress clear = state.clear();
         field(out, "entity_cursor", Integer.toString(clear.entityCursor()));
         field(out, "attachment_cursor", Integer.toString(clear.attachmentCursor()));
@@ -2206,14 +2487,14 @@ public final class SlabRigHangingDirectExecutor {
                         SlabRigHangingDirectEvidence.cell(level, write.pos());
                 if (!SlabRigHangingDirectEvidence.cellIdentityFingerprint(live).equals(
                         SlabRigHangingDirectEvidence.cellIdentityFingerprint(write.evidence()))) {
-                    Slabbed.LOGGER.error("RIG-3B2B1 rollback refused changed current-batch cell {}",
+                    Slabbed.LOGGER.error("RIG-3B3A rollback refused changed current-batch cell {}",
                             write.pos());
                     continue;
                 }
                 SlabAnchorAttachment.removeAnchor(level, write.pos());
                 level.setBlock(write.pos(), write.before(), CLEAR_FLAGS);
             } catch (Throwable rollbackFailure) {
-                Slabbed.LOGGER.error("RIG-3B2B1 rollback failed at {}", write.pos(), rollbackFailure);
+                Slabbed.LOGGER.error("RIG-3B3A rollback failed at {}", write.pos(), rollbackFailure);
             }
         }
     }
@@ -2404,6 +2685,14 @@ public final class SlabRigHangingDirectExecutor {
     private record OwnerLevelKey(ServerLevel level, String ownerKey) {
     }
 
+    private record AllocationKey(String worldKey, String dimension) {
+    }
+
+    private record StartupCandidate(
+            SlabRigHangingDirectStateStore.Reconstruction reconstruction,
+            SlabRigHangingDirectState.State state) {
+    }
+
     private record EntityLevelKey(ServerLevel level, UUID uuid) {
     }
 
@@ -2454,18 +2743,85 @@ public final class SlabRigHangingDirectExecutor {
             this.replacement = replacement;
         }
 
+        /** Nested LIFO test identity; valid only for one frozen legacy-v1 owner. */
+        public FixedOwnerOverride openFixedLegacyOwner(
+                MinecraftServer server, SlabRigHangingDirectState.Owner owner,
+                String expectedLegacyOwnerKey) {
+            Objects.requireNonNull(server, "server");
+            Objects.requireNonNull(owner, "owner");
+            Objects.requireNonNull(expectedLegacyOwnerKey, "expectedLegacyOwnerKey");
+            synchronized (SlabRigHangingDirectExecutor.class) {
+                if (closed || STORE != replacement || !testStoreOverrideOpen
+                        || activeServer != server || stoppingServer != null
+                        || fixedOwnerOverride != null || !processMapsEmpty()) {
+                    throw new IllegalStateException(
+                            "fixed legacy owner requires the current idle store/server parent");
+                }
+                if (!expectedLegacyOwnerKey.matches("[0-9a-f]{64}")
+                        || !owner.legacyKey().equals(expectedLegacyOwnerKey)) {
+                    throw new IllegalArgumentException(
+                            "fixed legacy owner key disagrees with the exact v1 owner tuple");
+                }
+                FixedOwnerOverride child = new FixedOwnerOverride(
+                        this, server, owner, expectedLegacyOwnerKey);
+                fixedOwnerOverride = child;
+                return child;
+            }
+        }
+
         @Override
         public void close() {
             synchronized (SlabRigHangingDirectExecutor.class) {
                 if (closed) {
                     return;
                 }
-                if (STORE != replacement || !RUNS_BY_ID.isEmpty()
-                        || !PENDING_REMOVALS.isEmpty() || !DEFERRED_REMOVALS.isEmpty()) {
+                if (fixedOwnerOverride != null || STORE != replacement || !processMapsEmpty()) {
                     throw new IllegalStateException("direct test store override closed while in use");
                 }
                 STORE = previous;
                 testStoreOverrideOpen = false;
+                closed = true;
+            }
+        }
+    }
+
+    /** Exact child token; closing restores normal live owner derivation. */
+    public static final class FixedOwnerOverride implements AutoCloseable {
+        private final StoreOverride parent;
+        private final MinecraftServer server;
+        private final SlabRigHangingDirectState.Owner owner;
+        private final String expectedLegacyOwnerKey;
+        private boolean closed;
+
+        private FixedOwnerOverride(StoreOverride parent, MinecraftServer server,
+                                   SlabRigHangingDirectState.Owner owner,
+                                   String expectedLegacyOwnerKey) {
+            this.parent = parent;
+            this.server = server;
+            this.owner = owner;
+            this.expectedLegacyOwnerKey = expectedLegacyOwnerKey;
+        }
+
+        public SlabRigHangingDirectState.Owner owner() {
+            return owner;
+        }
+
+        public String expectedLegacyOwnerKey() {
+            return expectedLegacyOwnerKey;
+        }
+
+        @Override
+        public void close() {
+            synchronized (SlabRigHangingDirectExecutor.class) {
+                if (closed) {
+                    return;
+                }
+                if (fixedOwnerOverride != this || parent.closed
+                        || STORE != parent.replacement || !processMapsEmpty()) {
+                    throw new IllegalStateException(
+                            "fixed legacy owner child must close LIFO while executor is idle");
+                }
+                fixedOwnerOverride = null;
                 closed = true;
             }
         }

@@ -25,7 +25,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Immutable, self-hashed active-state model for the one production RIG-3B2B1 painting page.
+ * Immutable, self-hashed active-state model for production RIG-3B3A painting pages.
  *
  * <p>This class deliberately models transient write-ahead states as well as user-visible evidence
  * phases. A fixture reservation is never clear authority: only a confirmed authored-cell or
@@ -41,9 +41,12 @@ import java.util.UUID;
  */
 public final class SlabRigHangingDirectState {
 
-    public static final String SCHEMA = "slabbed-rig-hanging-direct-state-v1";
-    public static final String EXECUTION_CONTRACT =
+    public static final String LEGACY_SCHEMA = "slabbed-rig-hanging-direct-state-v1";
+    public static final String SCHEMA = "slabbed-rig-hanging-direct-state-v2";
+    public static final String LEGACY_EXECUTION_CONTRACT =
             "rig3b2b1-route6143-topology42-selectorpage1-v1";
+    public static final String EXECUTION_CONTRACT =
+            "rig3b3a-route6143-topology42-selectorpages1-4-v2";
     public static final String NO_PREDECESSOR = "NONE";
     public static final String NO_VALUE = "NONE";
     public static final String PROVENANCE =
@@ -52,8 +55,10 @@ public final class SlabRigHangingDirectState {
     public static final String CLIENT_PROOF = "ABSENT";
     public static final int ROUTE_INDEX = 6143;
     public static final int TOPOLOGY_INDEX = 42;
-    public static final int SELECTOR_PAGE = 1;
-    public static final int CASE_COUNT = 16;
+    public static final int MIN_SELECTOR_PAGE = 1;
+    public static final int MAX_SELECTOR_PAGE = 4;
+    public static final int LEGACY_SELECTOR_PAGE = 1;
+    public static final int LEGACY_CASE_COUNT = 16;
     public static final int REQUIRED_ENTITY_TICKS = 102;
 
     private static final Comparator<Position> POSITION_ORDER = Comparator.naturalOrder();
@@ -61,6 +66,43 @@ public final class SlabRigHangingDirectState {
             Comparator.comparing(EntityOwnership::uuid);
 
     private SlabRigHangingDirectState() {
+    }
+
+    /** Exact on-disk grammar and owner-key namespace. Legacy bytes remain clear-only. */
+    public enum Format {
+        LEGACY_V1(LEGACY_SCHEMA, LEGACY_EXECUTION_CONTRACT, true),
+        VARIABLE_V2(SCHEMA, EXECUTION_CONTRACT, false);
+
+        private final String schema;
+        private final String executionContract;
+        private final boolean legacy;
+
+        Format(String schema, String executionContract, boolean legacy) {
+            this.schema = schema;
+            this.executionContract = executionContract;
+            this.legacy = legacy;
+        }
+
+        public String schema() {
+            return schema;
+        }
+
+        public String executionContract() {
+            return executionContract;
+        }
+
+        public boolean legacy() {
+            return legacy;
+        }
+
+        private static Format fromSchema(String schema) {
+            for (Format format : values()) {
+                if (format.schema.equals(schema)) {
+                    return format;
+                }
+            }
+            throw new IllegalArgumentException("unsupported schema");
+        }
     }
 
     /** Durable execution phases. IMMEDIATE and FINAL are named evidence boundaries, not aliases. */
@@ -186,7 +228,16 @@ public final class SlabRigHangingDirectState {
         }
 
         public String key() {
-            return sha256(SCHEMA + '\0' + worldKey + '\0' + dimension + '\0' + playerUuid);
+            return key(Format.VARIABLE_V2);
+        }
+
+        public String key(Format format) {
+            Objects.requireNonNull(format, "format");
+            return sha256(format.schema + '\0' + worldKey + '\0' + dimension + '\0' + playerUuid);
+        }
+
+        public String legacyKey() {
+            return key(Format.LEGACY_V1);
         }
     }
 
@@ -196,7 +247,7 @@ public final class SlabRigHangingDirectState {
                               String rig3aCatalogHash, String topologyCatalogHash,
                               String rig3b1ExecutionIdentity, String paintingRegistryHash,
                               String universeHash, String planHash, String semanticPageId,
-                              int routeIndex, int topologyIndex, int selectorPage,
+                              int routeIndex, int topologyIndex, int selectorPage, int caseCount,
                               boolean frozenDyEnabled, Position base, String facing) {
         public RunIdentity {
             requireSha256(runId, "runId");
@@ -215,21 +266,26 @@ public final class SlabRigHangingDirectState {
             requireSha256(planHash, "planHash");
             requireText(semanticPageId, "semanticPageId");
             if (routeIndex != ROUTE_INDEX || topologyIndex != TOPOLOGY_INDEX
-                    || selectorPage != SELECTOR_PAGE) {
-                throw new IllegalArgumentException("production direct state accepts only 6143/42/1");
+                    || selectorPage < MIN_SELECTOR_PAGE || selectorPage > MAX_SELECTOR_PAGE) {
+                throw new IllegalArgumentException(
+                        "production direct state accepts only route 6143/topology 42/pages 1..4");
+            }
+            if (caseCount <= 0 || caseCount > SlabRigHangingPaintingPlan.PAGE_SIZE) {
+                throw new IllegalArgumentException(
+                        "persisted caseCount must fit one validated painting-plan page");
             }
             Objects.requireNonNull(base, "base");
             requireText(facing, "facing");
         }
     }
 
-    /** Stable semantic identity plus current no-replay execution status for one of the sixteen cases. */
+    /** Stable semantic identity plus current no-replay execution status for one persisted page case. */
     public record CaseState(int ordinal, String attemptId, String selectorId,
                             String componentFingerprint, CasePhase phase, CaseOutcome outcome,
                             String immediateObservationId) {
         public CaseState {
-            if (ordinal < 0 || ordinal >= CASE_COUNT) {
-                throw new IllegalArgumentException("case ordinal must be 0..15");
+            if (ordinal < 0) {
+                throw new IllegalArgumentException("case ordinal must be non-negative");
             }
             requireText(attemptId, "attemptId");
             requireText(selectorId, "selectorId");
@@ -285,7 +341,7 @@ public final class SlabRigHangingDirectState {
 
     /**
      * Exact typed UUID ownership. Fingerprints bind the full role-specific evidence; sourcePaintingUuid
-     * is mandatory only for a dropped item. Transfer fields remain explicit even though B2B1 normally
+     * is mandatory only for a dropped item. Transfer fields remain explicit even though this executor normally
      * vetoes the drop before insertion, so a future unexpected transfer cannot be silently treated as
      * exact-clearable.
      */
@@ -299,8 +355,8 @@ public final class SlabRigHangingDirectState {
             Objects.requireNonNull(uuid, "uuid");
             Objects.requireNonNull(role, "role");
             requireText(expectedType, "expectedType");
-            if (caseOrdinal < 0 || caseOrdinal >= CASE_COUNT) {
-                throw new IllegalArgumentException("entity case ordinal must be 0..15");
+            if (caseOrdinal < 0) {
+                throw new IllegalArgumentException("entity case ordinal must be non-negative");
             }
             requireText(attemptId, "attemptId");
             Objects.requireNonNull(acquisition, "acquisition");
@@ -510,7 +566,7 @@ public final class SlabRigHangingDirectState {
     }
 
     /** One immutable ledger record. Use the factories so sequence/predecessor/hash cannot drift. */
-    public record State(String stateHash, long sequence, String predecessorHash,
+    public record State(Format format, String stateHash, long sequence, String predecessorHash,
                         Owner owner, RunIdentity run, Phase phase, int nextCaseOrdinal,
                         List<Position> reservedCells, List<Position> plannedAuthoredCells,
                         List<CellOwnership> authoredCells,
@@ -519,6 +575,7 @@ public final class SlabRigHangingDirectState {
                         Scheduler scheduler, ClearProgress clear, ArtifactLinks artifacts,
                         String detail) {
         public State {
+            Objects.requireNonNull(format, "format");
             requireText(stateHash, "stateHash");
             if (sequence < 0) {
                 throw new IllegalArgumentException("state sequence must be non-negative");
@@ -546,7 +603,8 @@ public final class SlabRigHangingDirectState {
                                     Collection<Position> plannedAuthoredCells,
                                     Collection<CaseState> cases, String plannedArtifactId,
                                     String detail) {
-            State seed = new State("PENDING", 0, NO_PREDECESSOR, owner, run, Phase.PLANNED, 0,
+            State seed = new State(Format.VARIABLE_V2, "PENDING", 0, NO_PREDECESSOR,
+                    owner, run, Phase.PLANNED, 0,
                     List.copyOf(reservedCells), List.copyOf(plannedAuthoredCells), List.of(), List.of(),
                     List.copyOf(cases), List.of(), Scheduler.inactive(), ClearProgress.none(),
                     ArtifactLinks.planned(plannedArtifactId), detail);
@@ -562,10 +620,12 @@ public final class SlabRigHangingDirectState {
                                          Collection<CaseState> cases, String plannedArtifactId,
                                          String detail) {
             validateSelf(previous);
-            if (previous.phase != Phase.CLEARED) {
-                throw new IllegalArgumentException("a new run requires a CLEARED predecessor");
+            if (previous.format != Format.VARIABLE_V2 || previous.phase != Phase.CLEARED) {
+                throw new IllegalArgumentException(
+                        "a new variable-page run requires a v2 CLEARED predecessor");
             }
-            State seed = new State("PENDING", Math.addExact(previous.sequence, 1),
+            State seed = new State(Format.VARIABLE_V2, "PENDING",
+                    Math.addExact(previous.sequence, 1),
                     previous.stateHash, previous.owner, run, Phase.PLANNED, 0,
                     List.copyOf(reservedCells), List.copyOf(plannedAuthoredCells), List.of(), List.of(),
                     List.copyOf(cases), List.of(), Scheduler.inactive(), ClearProgress.none(),
@@ -583,13 +643,13 @@ public final class SlabRigHangingDirectState {
                                Collection<EntityOwnership> nextEntities,
                                Scheduler nextScheduler, ClearProgress nextClear,
                                ArtifactLinks nextArtifacts, String nextDetail) {
-            State seed = new State("PENDING", Math.addExact(sequence, 1), stateHash,
+            State seed = new State(format, "PENDING", Math.addExact(sequence, 1), stateHash,
                     owner, run, nextPhase, nextCaseOrdinal, reservedCells, plannedAuthoredCells,
                     List.copyOf(nextAuthoredCells), List.copyOf(nextAttachments),
                     List.copyOf(nextCases), List.copyOf(nextEntities), nextScheduler,
                     nextClear, nextArtifacts, nextDetail);
             State result = withComputedHash(seed);
-            validateTransition(this, result);
+            validateAppendTransition(this, result);
             return result;
         }
 
@@ -625,7 +685,7 @@ public final class SlabRigHangingDirectState {
         }
 
         public String ownerKey() {
-            return owner.key();
+            return owner.key(format);
         }
 
         public Set<Position> reservationSet() {
@@ -663,20 +723,23 @@ public final class SlabRigHangingDirectState {
         }
         List<String[]> rows = canonicalTsv.lines().map(line -> line.split("\t", -1)).toList();
         RowReader reader = new RowReader(rows);
-        reader.singleton("schema", SCHEMA);
+        Format format = Format.fromSchema(reader.singleton("schema"));
         String stateHash = reader.singleton("state_hash");
         long sequence = parseLong(reader.singleton("sequence"), "sequence");
         String predecessor = reader.singleton("predecessor_hash");
-        reader.singleton("execution_contract", EXECUTION_CONTRACT);
+        reader.singleton("execution_contract", format.executionContract);
         reader.singleton("provenance", PROVENANCE);
         reader.singleton("player_proof", PLAYER_PROOF);
         reader.singleton("client_proof", CLIENT_PROOF);
         String ownerKey = reader.singleton("owner_key");
         Owner owner = new Owner(reader.singleton("world_key"), unescape(reader.singleton("dimension")),
                 parseUuid(reader.singleton("player_uuid"), "player_uuid"));
-        if (!owner.key().equals(ownerKey)) {
+        if (!owner.key(format).equals(ownerKey)) {
             throw new IllegalArgumentException("owner_key does not match owner tuple");
         }
+        int selectorPage = parseInt(reader.singleton("selector_page"), "selector_page");
+        int caseCount = format.legacy ? LEGACY_CASE_COUNT
+                : parseInt(reader.singleton("case_count"), "case_count");
         RunIdentity run = new RunIdentity(reader.singleton("run_id"),
                 parseUuid(reader.singleton("run_nonce"), "run_nonce"),
                 reader.singleton("build_git_sha"), reader.singleton("runtime_content_sha256"),
@@ -686,7 +749,7 @@ public final class SlabRigHangingDirectState {
                 reader.singleton("plan_hash"), unescape(reader.singleton("semantic_page_id")),
                 parseInt(reader.singleton("route_index"), "route_index"),
                 parseInt(reader.singleton("topology_index"), "topology_index"),
-                parseInt(reader.singleton("selector_page"), "selector_page"),
+                selectorPage, caseCount,
                 parseBoolean(reader.singleton("frozen_dy_enabled"), "frozen_dy_enabled"),
                 parsePosition(reader.singleton("base")), unescape(reader.singleton("facing")));
         Phase phase = parseEnum(Phase.class, reader.singleton("phase"), "phase");
@@ -745,7 +808,7 @@ public final class SlabRigHangingDirectState {
                 parsePositionRows(reader, "clear_refused_cell"));
         reader.rejectUnknown();
 
-        State state = new State(stateHash, sequence, predecessor, owner, run, phase, nextCase,
+        State state = new State(format, stateHash, sequence, predecessor, owner, run, phase, nextCase,
                 reserved, planned, authored, attachments, cases, entities, scheduler, clear,
                 artifacts, detail);
         validateSelf(state);
@@ -778,8 +841,13 @@ public final class SlabRigHangingDirectState {
         if (state.sequence == 0 && state.phase != Phase.PLANNED) {
             throw new IllegalArgumentException("ledger genesis must be PLANNED");
         }
-        if (!state.owner.key().equals(state.ownerKey())) {
+        if (!state.owner.key(state.format).equals(state.ownerKey())) {
             throw new IllegalArgumentException("owner key mismatch");
+        }
+        if (state.format.legacy && (state.run.selectorPage != LEGACY_SELECTOR_PAGE
+                || state.run.caseCount != LEGACY_CASE_COUNT)) {
+            throw new IllegalArgumentException(
+                    "legacy v1 state must remain selector page 1 with exactly 16 cases");
         }
         requireUnique(state.reservedCells, "reserved cell");
         requireUnique(state.plannedAuthoredCells, "planned authored cell");
@@ -817,8 +885,10 @@ public final class SlabRigHangingDirectState {
         validateSelf(current);
         if (current.sequence != previous.sequence + 1
                 || !current.predecessorHash.equals(previous.stateHash)
-                || !current.owner.equals(previous.owner)) {
-            throw new IllegalArgumentException("state successor sequence/predecessor/owner mismatch");
+                || !current.owner.equals(previous.owner)
+                || current.format != previous.format) {
+            throw new IllegalArgumentException(
+                    "state successor sequence/predecessor/owner/format mismatch");
         }
         if (previous.phase == Phase.CLEARED && current.phase == Phase.PLANNED) {
             if (previous.run.runId.equals(current.run.runId)) {
@@ -906,6 +976,15 @@ public final class SlabRigHangingDirectState {
         }
     }
 
+    /** Store publication gate: old chains reconstruct fully, but new v1 writes are exact-clear-only. */
+    public static void validateAppendTransition(State previous, State current) {
+        validateTransition(previous, current);
+        if (previous.format.legacy && !legacyClearOnlySuccessor(previous, current)) {
+            throw new IllegalArgumentException(
+                    "legacy v1 ledgers permit only exact-clear successors");
+        }
+    }
+
     private static boolean allowedPhase(Phase from, Phase to) {
         if (from == to) {
             return from == Phase.FIXTURE_AUTHORING || from == Phase.CASE_IN_FLIGHT
@@ -938,13 +1017,26 @@ public final class SlabRigHangingDirectState {
         };
     }
 
-    private static void validateCases(State state) {
-        if (state.cases.size() != CASE_COUNT) {
-            throw new IllegalArgumentException("direct page must contain exactly 16 cases");
+    private static boolean legacyClearOnlySuccessor(State previous, State current) {
+        if (isClearPhase(previous.phase)) {
+            return isClearPhase(current.phase) || current.phase == Phase.QUARANTINED;
         }
-        for (int ordinal = 0; ordinal < CASE_COUNT; ordinal++) {
+        if (previous.phase == Phase.QUARANTINED) {
+            return current.phase == Phase.CLEARING_ENTITIES;
+        }
+        return current.phase == Phase.CLEARING_ENTITIES;
+    }
+
+    private static void validateCases(State state) {
+        int caseCount = state.run.caseCount;
+        if (state.cases.size() != caseCount) {
+            throw new IllegalArgumentException(
+                    "direct page case list must equal persisted caseCount " + caseCount);
+        }
+        for (int ordinal = 0; ordinal < caseCount; ordinal++) {
             if (state.cases.get(ordinal).ordinal != ordinal) {
-                throw new IllegalArgumentException("case ordinals must be contiguous 0..15");
+                throw new IllegalArgumentException(
+                        "case ordinals must be contiguous within persisted caseCount");
             }
         }
         requireUnique(state.cases.stream().map(CaseState::attemptId).toList(), "attempt ID");
@@ -972,6 +1064,7 @@ public final class SlabRigHangingDirectState {
     }
 
     private static void validatePhasePayload(State state) {
+        int caseCount = state.run.caseCount;
         int immediate = (int) state.cases.stream().filter(c -> c.phase == CasePhase.IMMEDIATE).count();
         long inFlight = state.cases.stream().filter(c -> c.phase == CasePhase.IN_FLIGHT).count();
         boolean fixtureComplete = state.authoredCells.size() == state.plannedAuthoredCells.size();
@@ -985,16 +1078,16 @@ public final class SlabRigHangingDirectState {
             case CASE_IN_FLIGHT -> requirePhase(fixtureComplete && inFlight == 1,
                     "CASE_IN_FLIGHT requires exactly one in-flight case");
             case IMMEDIATE_PARTIAL -> requirePhase(fixtureComplete && inFlight == 0
-                            && immediate > 0 && immediate < CASE_COUNT,
+                            && immediate > 0 && immediate < caseCount,
                     "IMMEDIATE_PARTIAL requires a non-terminal immediate prefix");
-            case IMMEDIATE -> requirePhase(fixtureComplete && inFlight == 0 && immediate == CASE_COUNT
+            case IMMEDIATE -> requirePhase(fixtureComplete && inFlight == 0 && immediate == caseCount
                             && !NO_VALUE.equals(state.artifacts.immediate)
                             && state.scheduler.equals(Scheduler.inactive()),
-                    "IMMEDIATE requires all 16 cases and an explicit artifact");
-            case WAITING_DELAYED -> requirePhase(immediate == CASE_COUNT
+                    "IMMEDIATE requires every persisted case and an explicit artifact");
+            case WAITING_DELAYED -> requirePhase(immediate == caseCount
                             && !NO_VALUE.equals(state.scheduler.processEpoch),
                     "WAITING_DELAYED requires all immediate cases and an armed scheduler");
-            case FINAL -> requirePhase(immediate == CASE_COUNT
+            case FINAL -> requirePhase(immediate == caseCount
                             && !NO_VALUE.equals(state.artifacts.finalArtifact)
                             && finalTickGateSatisfied(state),
                     "FINAL requires a final artifact and per-survivor 102-tick proof");
@@ -1397,10 +1490,10 @@ public final class SlabRigHangingDirectState {
 
     private static String canonicalBody(State state) {
         StringBuilder out = new StringBuilder(32_000);
-        append(out, "schema", SCHEMA);
+        append(out, "schema", state.format.schema);
         append(out, "sequence", state.sequence);
         append(out, "predecessor_hash", state.predecessorHash);
-        append(out, "execution_contract", EXECUTION_CONTRACT);
+        append(out, "execution_contract", state.format.executionContract);
         append(out, "provenance", PROVENANCE);
         append(out, "player_proof", PLAYER_PROOF);
         append(out, "client_proof", CLIENT_PROOF);
@@ -1423,6 +1516,9 @@ public final class SlabRigHangingDirectState {
         append(out, "route_index", state.run.routeIndex);
         append(out, "topology_index", state.run.topologyIndex);
         append(out, "selector_page", state.run.selectorPage);
+        if (!state.format.legacy) {
+            append(out, "case_count", state.run.caseCount);
+        }
         append(out, "frozen_dy_enabled", state.run.frozenDyEnabled);
         append(out, "base", position(state.run.base));
         append(out, "facing", escape(state.run.facing));
@@ -1490,7 +1586,7 @@ public final class SlabRigHangingDirectState {
     }
 
     private static State withComputedHash(State seed) {
-        return new State(sha256(canonicalBody(seed)), seed.sequence, seed.predecessorHash,
+        return new State(seed.format, sha256(canonicalBody(seed)), seed.sequence, seed.predecessorHash,
                 seed.owner, seed.run, seed.phase, seed.nextCaseOrdinal, seed.reservedCells,
                 seed.plannedAuthoredCells, seed.authoredCells, seed.authoredAttachments,
                 seed.cases, seed.entities, seed.scheduler, seed.clear, seed.artifacts, seed.detail);

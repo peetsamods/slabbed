@@ -20,45 +20,60 @@ public final class SlabRigHangingDirectFixtureTest {
                 catalog, helper.getLevel().registryAccess());
         SlabRigHangingPaintingPlan.Universe universe =
                 SlabRigHangingPaintingPlan.snapshot(catalog, runtime);
-        SlabRigHangingPaintingPlan.PagePlan page = SlabRigHangingPaintingPlan.page(universe,
-                SlabRigHangingDirectFixture.ROUTE_INDEX,
-                SlabRigHangingDirectFixture.TOPOLOGY_INDEX,
-                SlabRigHangingDirectFixture.SELECTOR_PAGE);
-        BlockPos origin = helper.absolutePos(new BlockPos(8, 3, 8));
-        SlabRigHangingDirectFixture.AbsolutePage adapted =
-                SlabRigHangingDirectFixture.adapt(universe, page, origin);
-
-        if (adapted.cases().size() != 16 || adapted.reservedCells().size() != 16 * 68
-                || adapted.clearOwnedCells().size() != 16 * 52
-                || adapted.entityAirCells().size() != 16 * 16
-                || adapted.bounds().xSize() > 40 || adapted.bounds().ySize() > 20
-                || adapted.bounds().zSize() > 40) {
-            throw helper.assertionException("absolute direct fixture lost reviewed counts/bounds: "
-                    + adapted);
-        }
-        LinkedHashSet<BlockPos> clear = new LinkedHashSet<>();
-        adapted.clearOwnedCells().forEach(cell -> {
-            if (!clear.add(cell.pos())
-                    || !SlabRigHangingDirectFixture.expectedState(cell.plan().stateRecipe())
-                    .getBlock().asItem().equals(
-                    SlabRigHangingDirectFixture.itemForRecipe(cell.plan().stateRecipe()))) {
-                throw helper.assertionException("invalid/duplicate authored cell " + cell);
+        LinkedHashSet<String> selectorIds = new LinkedHashSet<>();
+        for (int selectorPage = 1; selectorPage <= 4; selectorPage++) {
+            SlabRigHangingPaintingPlan.PagePlan page = SlabRigHangingPaintingPlan.page(universe,
+                    SlabRigHangingDirectFixture.ROUTE_INDEX,
+                    SlabRigHangingDirectFixture.TOPOLOGY_INDEX, selectorPage);
+            BlockPos origin = helper.absolutePos(new BlockPos(8 + selectorPage * 48, 3, 8));
+            SlabRigHangingDirectFixture.AbsolutePage adapted =
+                    SlabRigHangingDirectFixture.adapt(universe, page, origin);
+            int caseCount = page.cases().size();
+            int expectedCases = selectorPage == 4 ? 4 : 16;
+            if (caseCount != expectedCases || adapted.cases().size() != caseCount
+                    || adapted.reservedCells().size() != caseCount * 68
+                    || adapted.clearOwnedCells().size() != caseCount * 52
+                    || adapted.entityAirCells().size() != caseCount * 16
+                    || adapted.bounds().xSize() > 40 || adapted.bounds().ySize() > 20
+                    || adapted.bounds().zSize() > 40) {
+                throw helper.assertionException(
+                        "absolute direct fixture lost page/cardinality counts: " + adapted);
             }
-        });
-        LinkedHashSet<BlockPos> reserved = new LinkedHashSet<>(adapted.reservedCells());
-        LinkedHashSet<BlockPos> airOnly = new LinkedHashSet<>(reserved);
-        airOnly.removeAll(clear);
-        if (!airOnly.equals(new LinkedHashSet<>(adapted.entityAirCells()))
-                || !reserved.containsAll(clear)) {
-            throw helper.assertionException("reserved/clear/entity-air ownership is not an exact partition");
-        }
-        for (SlabRigHangingDirectFixture.AbsoluteCase entry : adapted.cases()) {
-            if (entry.plan().foundations().size() != 4 || entry.topologyCells().size() != 36
-                    || entry.backingCells().size() != 16 || entry.supportCells().size() < 1
-                    || !entry.anchor().equals(entry.clicked().relative(entry.plan().clickedFace()))) {
-                throw helper.assertionException("absolute case lost repeated SBSBS/4x4 semantics: "
-                        + entry.plan().attemptId());
+            LinkedHashSet<BlockPos> clear = new LinkedHashSet<>();
+            adapted.clearOwnedCells().forEach(cell -> {
+                if (!clear.add(cell.pos())
+                        || !SlabRigHangingDirectFixture.expectedState(cell.plan().stateRecipe())
+                        .getBlock().asItem().equals(
+                        SlabRigHangingDirectFixture.itemForRecipe(cell.plan().stateRecipe()))) {
+                    throw helper.assertionException("invalid/duplicate authored cell " + cell);
+                }
+            });
+            LinkedHashSet<BlockPos> reserved = new LinkedHashSet<>(adapted.reservedCells());
+            LinkedHashSet<BlockPos> airOnly = new LinkedHashSet<>(reserved);
+            airOnly.removeAll(clear);
+            if (!airOnly.equals(new LinkedHashSet<>(adapted.entityAirCells()))
+                    || !reserved.containsAll(clear)) {
+                throw helper.assertionException(
+                        "reserved/clear/entity-air ownership is not an exact partition");
             }
+            for (SlabRigHangingDirectFixture.AbsoluteCase entry : adapted.cases()) {
+                if (!selectorIds.add(entry.plan().selector().semanticId())
+                        || entry.plan().foundations().size() != 4
+                        || entry.topologyCells().size() != 36
+                        || entry.backingCells().size() != 16 || entry.supportCells().size() < 1
+                        || !entry.anchor().equals(
+                        entry.clicked().relative(entry.plan().clickedFace()))) {
+                    throw helper.assertionException(
+                            "absolute case lost unique selector/SBSBS semantics: "
+                                    + entry.plan().attemptId());
+                }
+            }
+        }
+        LinkedHashSet<String> expectedSelectors = new LinkedHashSet<>();
+        universe.selectors().forEach(selector -> expectedSelectors.add(selector.semanticId()));
+        if (selectorIds.size() != 52 || !selectorIds.equals(expectedSelectors)) {
+            throw helper.assertionException(
+                    "pages 1..4 did not cover the exact 52-selector universe");
         }
         helper.succeed();
     }
@@ -79,8 +94,6 @@ public final class SlabRigHangingDirectFixtureTest {
                 SlabRigHangingPaintingPlan.page(universe, otherRoute, 42, 1), origin);
         assertRejected(helper, universe,
                 SlabRigHangingPaintingPlan.page(universe, 6143, 41, 1), origin);
-        assertRejected(helper, universe,
-                SlabRigHangingPaintingPlan.page(universe, 6143, 42, 2), origin);
         helper.succeed();
     }
 
