@@ -192,6 +192,11 @@ sourceSets {
             include("com/slabbed/test/SlabRigHangingPaintingPlanTest.java")
             include("com/slabbed/test/SlabRigHangingKernelArtifactsTest.java")
             include("com/slabbed/test/SlabRigHangingPaintingKernelTest.java")
+            include("com/slabbed/test/SlabRigHangingDirectEntityGateTest.java")
+            include("com/slabbed/test/SlabRigHangingDirectFixtureTest.java")
+            include("com/slabbed/test/SlabRigHangingDirectActionsTest.java")
+            include("com/slabbed/test/SlabRigHangingDirectStateStoreTest.java")
+            include("com/slabbed/test/SlabRigHangingDirectExecutorTest.java")
             include("com/slabbed/test/SlabTestKitPaletteTest.java")
             include("com/slabbed/test/SlabTestKitCommandsTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
@@ -218,7 +223,12 @@ tasks.register("verifyRig2GametestRegistration") {
                 "SlabRigHangingCatalogTest.java",
                 "SlabRigHangingPaintingPlanTest.java",
                 "SlabRigHangingKernelArtifactsTest.java",
-                "SlabRigHangingPaintingKernelTest.java"
+                "SlabRigHangingPaintingKernelTest.java",
+                "SlabRigHangingDirectEntityGateTest.java",
+                "SlabRigHangingDirectFixtureTest.java",
+                "SlabRigHangingDirectActionsTest.java",
+                "SlabRigHangingDirectStateStoreTest.java",
+                "SlabRigHangingDirectExecutorTest.java"
         ].each { sourceName ->
             def suffix = "/com/slabbed/test/${sourceName}"
             if (!configuredSources.any { it.endsWith(suffix) }) {
@@ -235,7 +245,12 @@ tasks.register("verifyRig2GametestRegistration") {
                 "com.slabbed.test.SlabRigHangingCatalogTest",
                 "com.slabbed.test.SlabRigHangingPaintingPlanTest",
                 "com.slabbed.test.SlabRigHangingKernelArtifactsTest",
-                "com.slabbed.test.SlabRigHangingPaintingKernelTest"
+                "com.slabbed.test.SlabRigHangingPaintingKernelTest",
+                "com.slabbed.test.SlabRigHangingDirectEntityGateTest",
+                "com.slabbed.test.SlabRigHangingDirectFixtureTest",
+                "com.slabbed.test.SlabRigHangingDirectActionsTest",
+                "com.slabbed.test.SlabRigHangingDirectStateStoreTest",
+                "com.slabbed.test.SlabRigHangingDirectExecutorTest"
         ].each { className ->
             if (!entrypoints.contains(className)) {
                 throw new GradleException("RIG catalog Fabric gametest entrypoint missing: ${className}")

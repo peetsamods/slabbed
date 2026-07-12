@@ -161,7 +161,7 @@ public final class SlabRigCommandSmokeTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void slabrigHangsDirectRemainsUnavailableDuringRig3B2AKernelPass(GameTestHelper h) {
+    public void slabrigHangsDirectProductionGrammarIsExact(GameTestHelper h) {
         ServerLevel world = h.getLevel();
         CommandSourceStack source = sourceAt(world, h.absolutePos(new BlockPos(1, 2, 1)));
         String before = noWorldFingerprint(h, world, source);
@@ -170,22 +170,44 @@ public final class SlabRigCommandSmokeTest {
         var slabrig = live.getRoot().getChild("slabrig");
         var hangs = slabrig == null ? null : slabrig.getChild("hangs");
         if (hangs == null || hangs.getChild("catalog") == null) {
-            throw h.assertionException("RIG-3B2A boundary test lost the existing hangs catalog node");
+            throw h.assertionException("RIG-3B2B1 grammar test lost the existing hangs catalog node");
         }
-        if (hangs.getChild("direct") != null) {
-            throw h.assertionException(
-                    "RIG-3B2A must not expose a production world-writing hangs direct command");
+        var direct = hangs.getChild("direct");
+        if (direct == null || direct.getChild("status") == null || direct.getChild("resume") == null
+                || direct.getChild("clear") == null || direct.getChild("route_index") == null) {
+            throw h.assertionException("RIG-3B2B1 production dispatcher lacks exact hangs direct nodes");
         }
 
         CommandDispatcher<CommandSourceStack> isolated = new CommandDispatcher<>();
         SlabRigCommand.register(isolated);
-        if (tryExec(isolated, source,
-                "slabrig hangs direct 6143 topology 42 paintings 1 force") != -1) {
-            throw h.assertionException("RIG-3B2A dispatcher accepted its B2B-reserved grammar");
+        var valid = isolated.parse(
+                "slabrig hangs direct 6143 topology 42 paintings 1 force", source);
+        if (valid.getReader().canRead() || !valid.getExceptions().isEmpty()
+                || valid.getContext().getCommand() == null) {
+            throw h.assertionException("exact RIG-3B2B1 direct grammar did not parse: "
+                    + valid.getExceptions());
+        }
+        for (String invalid : List.of(
+                "slabrig hangs direct",
+                "slabrig hangs direct force",
+                "slabrig hangs direct 6143 42 1",
+                "slabrig hangs direct 6143 topology 42 paintings",
+                "slabrig hangs direct 6143 topology 42 paintings 1 force junk")) {
+            var parsed = isolated.parse(invalid, source);
+            if (!parsed.getReader().canRead() && parsed.getExceptions().isEmpty()
+                    && parsed.getContext().getCommand() != null) {
+                throw h.assertionException("invalid RIG-3B2B1 grammar parsed fully: /" + invalid);
+            }
+        }
+        var denied = isolated.parse("slabrig hangs direct status",
+                source.withPermission(PermissionSet.NO_PERMISSIONS));
+        if (!denied.getReader().canRead() && denied.getExceptions().isEmpty()
+                && denied.getContext().getCommand() != null) {
+            throw h.assertionException("hangs direct bypassed the inherited GAMEMASTERS permission gate");
         }
         String after = noWorldFingerprint(h, world, source);
         if (!before.equals(after)) {
-            throw h.assertionException("rejected RIG-3B2B grammar changed world/session state\nbefore="
+            throw h.assertionException("parse-only RIG-3B2B1 grammar check changed world/session state\nbefore="
                     + before + "\nafter=" + after);
         }
         h.succeed();
