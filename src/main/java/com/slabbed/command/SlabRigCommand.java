@@ -495,12 +495,14 @@ public final class SlabRigCommand {
                                                                         IntegerArgumentType.integer(42, 42))
                                                                 .then(Commands.literal("paintings")
                                                                         .then(Commands.argument("selector_page",
-                                                                                        IntegerArgumentType.integer(1, 1))
+                                                                                        IntegerArgumentType.integer(1, 4))
                                                                                 .executes(ctx ->
-                                                                                        SlabRigHangingDirectExecutor.start(ctx, false))
+                                                                                        SlabRigHangingDirectExecutor.start(ctx,
+                                                                                                IntegerArgumentType.getInteger(ctx, "selector_page"), false))
                                                                                 .then(Commands.literal("force")
                                                                                         .executes(ctx ->
-                                                                                                SlabRigHangingDirectExecutor.start(ctx, true))))))))))
+                                                                                                SlabRigHangingDirectExecutor.start(ctx,
+                                                                                                        IntegerArgumentType.getInteger(ctx, "selector_page"), true))))))))))
                         .then(Commands.literal("cases")
                                 .executes(ctx -> cases(ctx, 1, false))
                                 .then(Commands.literal("force")
@@ -626,7 +628,7 @@ public final class SlabRigCommand {
         source.sendSuccess(() -> Component.literal(
                 "[slabrig] usage: /slabrig <tower [force]|tower <n> [height] [force]|rows [n] [force]"
                         + "|mega [n] [force]|platform [y] [force]|stacks [max_length] [page] [force]"
-                        + "|catalog|hangs catalog|hangs direct <6143 topology 42 paintings 1 [force]"
+                        + "|catalog|hangs catalog|hangs direct <6143 topology 42 paintings <1..4> [force]"
                         + "|status|resume|clear>|cases [page|resume] [force]|status|clear>\n"
                         + "  tower [force]           — compound-visible -1.0 marked tower\n"
                         + "  tower <n> [h] [force]   — n alternating deep-stack towers (default n="
@@ -639,8 +641,8 @@ public final class SlabRigCommand {
                         + "  stacks [m] [p] [force]  — exact 4x4 page of all S/B words through length m (default 5)\n"
                         + "  catalog                 — write the exact runtime item/category/topology catalog\n"
                         + "  hangs catalog           — world-free exact hanging catalog + live painting registry export\n"
-                        + "  hangs direct 6143 topology 42 paintings 1 [force]\n"
-                        + "                          — durable TEST 19 SBSBS/painting page; exact lifecycle evidence\n"
+                        + "  hangs direct 6143 topology 42 paintings <1..4> [force]\n"
+                        + "                          — durable TEST 19 SBSBS/painting pages; exact lifecycle evidence\n"
                         + "  hangs direct <status|resume|clear> — inspect, continue, or exact-clear that page\n"
                         + "  cases [p|resume] [force]— 4 items x 4 topologies from the exhaustive BlockItem case space\n"
                         + "  status                  — show the exact tracked manifest and structural state\n"

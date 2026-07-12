@@ -170,33 +170,48 @@ public final class SlabRigCommandSmokeTest {
         var slabrig = live.getRoot().getChild("slabrig");
         var hangs = slabrig == null ? null : slabrig.getChild("hangs");
         if (hangs == null || hangs.getChild("catalog") == null) {
-            throw h.assertionException("RIG-3B2B1 grammar test lost the existing hangs catalog node");
+            throw h.assertionException("RIG-3B3A grammar test lost the existing hangs catalog node");
         }
         var direct = hangs.getChild("direct");
         if (direct == null || direct.getChild("status") == null || direct.getChild("resume") == null
                 || direct.getChild("clear") == null || direct.getChild("route_index") == null) {
-            throw h.assertionException("RIG-3B2B1 production dispatcher lacks exact hangs direct nodes");
+            throw h.assertionException("RIG-3B3A production dispatcher lacks exact hangs direct nodes");
         }
 
         CommandDispatcher<CommandSourceStack> isolated = new CommandDispatcher<>();
         SlabRigCommand.register(isolated);
-        var valid = isolated.parse(
-                "slabrig hangs direct 6143 topology 42 paintings 1 force", source);
-        if (valid.getReader().canRead() || !valid.getExceptions().isEmpty()
-                || valid.getContext().getCommand() == null) {
-            throw h.assertionException("exact RIG-3B2B1 direct grammar did not parse: "
-                    + valid.getExceptions());
+        for (int page = 1; page <= 4; page++) {
+            for (String suffix : List.of("", " force")) {
+                var valid = isolated.parse(
+                        "slabrig hangs direct 6143 topology 42 paintings " + page + suffix,
+                        source);
+                if (valid.getReader().canRead() || !valid.getExceptions().isEmpty()
+                        || valid.getContext().getCommand() == null) {
+                    throw h.assertionException("exact RIG-3B3A page " + page
+                            + " direct grammar did not parse: " + valid.getExceptions());
+                }
+            }
         }
         for (String invalid : List.of(
                 "slabrig hangs direct",
                 "slabrig hangs direct force",
+                "slabrig hangs direct 6142 topology 42 paintings 1",
+                "slabrig hangs direct 6144 topology 42 paintings 1",
+                "slabrig hangs direct 6143 topology 41 paintings 1",
+                "slabrig hangs direct 6143 topology 43 paintings 1",
                 "slabrig hangs direct 6143 42 1",
+                "slabrig hangs direct 6143 42 paintings 1",
+                "slabrig hangs direct 6143 topology 42 1",
                 "slabrig hangs direct 6143 topology 42 paintings",
+                "slabrig hangs direct 6143 topology 42 paintings 0",
+                "slabrig hangs direct 6143 topology 42 paintings 5",
+                "slabrig hangs direct 6143 paintings 1 topology 42",
+                "slabrig hangs direct 6143 topology 42 paintings 1 junk",
                 "slabrig hangs direct 6143 topology 42 paintings 1 force junk")) {
             var parsed = isolated.parse(invalid, source);
             if (!parsed.getReader().canRead() && parsed.getExceptions().isEmpty()
                     && parsed.getContext().getCommand() != null) {
-                throw h.assertionException("invalid RIG-3B2B1 grammar parsed fully: /" + invalid);
+                throw h.assertionException("invalid RIG-3B3A grammar parsed fully: /" + invalid);
             }
         }
         var denied = isolated.parse("slabrig hangs direct status",
@@ -207,7 +222,7 @@ public final class SlabRigCommandSmokeTest {
         }
         String after = noWorldFingerprint(h, world, source);
         if (!before.equals(after)) {
-            throw h.assertionException("parse-only RIG-3B2B1 grammar check changed world/session state\nbefore="
+            throw h.assertionException("parse-only RIG-3B3A grammar check changed world/session state\nbefore="
                     + before + "\nafter=" + after);
         }
         h.succeed();

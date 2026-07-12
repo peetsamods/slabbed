@@ -91,11 +91,17 @@ public final class SlabRigHangingDirectStateStore {
     }
 
     public Path ledgerPath(SlabRigHangingDirectState.Owner owner) {
-        return root.resolve(LEDGERS).resolve(owner.key());
+        return ledgerPath(owner, SlabRigHangingDirectState.Format.VARIABLE_V2);
+    }
+
+    public Path ledgerPath(SlabRigHangingDirectState.Owner owner,
+                           SlabRigHangingDirectState.Format format) {
+        return root.resolve(LEDGERS).resolve(owner.key(format));
     }
 
     public Path statePath(SlabRigHangingDirectState.State state) {
-        return ledgerPath(state.owner()).resolve(stateFileName(state.sequence(), state.stateHash()));
+        return ledgerPath(state.owner(), state.format())
+                .resolve(stateFileName(state.sequence(), state.stateHash()));
     }
 
     public Path artifactPath(String hash) {
@@ -195,7 +201,8 @@ public final class SlabRigHangingDirectStateStore {
         try (LockedFile ignoredGlobal = lockFile(globalLockPath());
              LockedFile ignoredOwner = lockFile(ownerLockPath(candidate.ownerKey()))) {
             try {
-                CachedOwner verifiedOwner = loadForExpected(candidate.owner(), expectedPrevious);
+                CachedOwner verifiedOwner = loadForExpected(
+                        candidate.owner(), expectedPrevious, candidate.format());
                 Reconstruction reconstruction = verifiedOwner.reconstruction();
                 Set<String> verifiedArtifacts = new HashSet<>(verifiedOwner.verifiedArtifacts());
                 Map<String, VerifiedCell> verifiedCells =
@@ -211,6 +218,11 @@ public final class SlabRigHangingDirectStateStore {
                     forceStoreDirectory(statePath(candidate).getParent());
                     return writtenState(candidate, true);
                 }
+                if (candidate.format() == SlabRigHangingDirectState.Format.LEGACY_V1
+                        && latest == null) {
+                    throw new IOException(
+                            "legacy v1 genesis publication is forbidden; frozen ledgers are clear-only");
+                }
                 if (expectedPrevious == null) {
                     if (latest != null || candidate.sequence() != 0
                             || !SlabRigHangingDirectState.NO_PREDECESSOR.equals(
@@ -224,7 +236,7 @@ public final class SlabRigHangingDirectStateStore {
                                 + expectedPrevious.stateHash() + " actual="
                                 + (latest == null ? "NONE" : latest.stateHash()));
                     }
-                    SlabRigHangingDirectState.validateTransition(latest, candidate);
+                    SlabRigHangingDirectState.validateAppendTransition(latest, candidate);
                 }
                 verifyLinkedArtifacts(candidate, verifiedArtifacts, verifiedCells);
                 validateGlobalAllocation(candidate, reconstruction);
@@ -240,7 +252,8 @@ public final class SlabRigHangingDirectStateStore {
                 if (!semanticReadback.equals(candidate)) {
                     throw new IOException("direct-state candidate changes under UTF-8 semantic readback");
                 }
-                Path directory = prepareOwnedDirectory(ledgerPath(candidate.owner()),
+                Path directory = prepareOwnedDirectory(
+                        ledgerPath(candidate.owner(), candidate.format()),
                         root.resolve(LEDGERS).toRealPath());
                 Path target = statePath(candidate);
                 publishStoreNoReplace(directory, target, bytes, STATE_TEMP);
@@ -248,7 +261,8 @@ public final class SlabRigHangingDirectStateStore {
                 List<SlabRigHangingDirectState.State> states =
                         new ArrayList<>(reconstruction.states());
                 states.add(candidate);
-                rememberExtended(verifiedOwner, new Reconstruction(candidate.owner(), states,
+                rememberExtended(verifiedOwner, new Reconstruction(candidate.ownerKey(),
+                        candidate.format(), candidate.owner(), states,
                         reconstruction.ignoredTemporaryFiles()), verifiedArtifacts, verifiedCells);
                 return writtenState(candidate, false);
             } catch (IOException | RuntimeException | Error failure) {
@@ -263,23 +277,35 @@ public final class SlabRigHangingDirectStateStore {
 
     /** Convenience append whose predecessor is encoded by the candidate and rechecked under lock. */
     public WrittenState append(SlabRigHangingDirectState.State candidate) throws IOException {
-        Reconstruction current = reconstruct(candidate.owner());
+        Reconstruction current = reconstruct(candidate.owner(), candidate.format());
         return append(current.latestOrNull(), candidate);
     }
 
     /** Full authoritative-chain reconstruction in a fresh object/process context. */
     public Reconstruction reconstruct(SlabRigHangingDirectState.Owner owner) throws IOException {
+        return reconstruct(owner, SlabRigHangingDirectState.Format.VARIABLE_V2);
+    }
+
+    public Reconstruction reconstructLegacy(SlabRigHangingDirectState.Owner owner) throws IOException {
+        return reconstruct(owner, SlabRigHangingDirectState.Format.LEGACY_V1);
+    }
+
+    public Reconstruction reconstruct(SlabRigHangingDirectState.Owner owner,
+                                      SlabRigHangingDirectState.Format format) throws IOException {
         Objects.requireNonNull(owner, "owner");
-        Path directory = ledgerPath(owner);
+        Objects.requireNonNull(format, "format");
+        String ownerKey = owner.key(format);
+        Path directory = ledgerPath(owner, format);
         if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) {
-            Reconstruction empty = new Reconstruction(owner, List.of(), List.of());
+            Reconstruction empty = new Reconstruction(ownerKey, format, owner,
+                    List.of(), List.of());
             rememberVerified(empty, Set.of(), Map.of());
             return empty;
         }
         if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(directory)) {
             throw new IOException("direct owner ledger is not a real directory " + directory);
         }
-        return reconstructDirectory(owner.key(), owner, directory);
+        return reconstructDirectory(ownerKey, format, owner, directory);
     }
 
     /**
@@ -289,14 +315,15 @@ public final class SlabRigHangingDirectStateStore {
     public Reconstruction verifyCurrent(SlabRigHangingDirectState.Owner owner,
                                         SlabRigHangingDirectState.State expected) throws IOException {
         Objects.requireNonNull(owner, "owner");
+        Objects.requireNonNull(expected, "expected");
         prepareRoot();
         ReentrantLock globalJvm = jvmLock("global");
-        ReentrantLock ownerJvm = jvmLock(owner.key());
+        ReentrantLock ownerJvm = jvmLock(expected.ownerKey());
         globalJvm.lock();
         ownerJvm.lock();
         try (LockedFile ignoredGlobal = lockFile(globalLockPath());
-             LockedFile ignoredOwner = lockFile(ownerLockPath(owner.key()))) {
-            return loadForExpected(owner, expected).reconstruction();
+             LockedFile ignoredOwner = lockFile(ownerLockPath(expected.ownerKey()))) {
+            return loadForExpected(owner, expected, expected.format()).reconstruction();
         } finally {
             ownerJvm.unlock();
             globalJvm.unlock();
@@ -331,8 +358,7 @@ public final class SlabRigHangingDirectStateStore {
                     || Files.isSymbolicLink(directory)) {
                 throw new IOException("invalid direct owner ledger entry " + directory);
             }
-            if (knownOwner != null && knownOwner.owner() != null
-                    && knownOwner.owner().key().equals(key)) {
+            if (knownOwner != null && knownOwner.ownerKey().equals(key)) {
                 result.add(knownOwner);
             } else {
                 CachedOwner cached = verifiedOwnerCache.get(key);
@@ -344,7 +370,7 @@ public final class SlabRigHangingDirectStateStore {
                         continue;
                     }
                 }
-                result.add(reconstructDirectory(key, null, directory));
+                result.add(reconstructDirectory(key, null, null, directory));
             }
         }
         return List.copyOf(result);
@@ -398,6 +424,7 @@ public final class SlabRigHangingDirectStateStore {
     }
 
     private Reconstruction reconstructDirectory(String ownerKey,
+                                                SlabRigHangingDirectState.Format expectedFormat,
                                                 SlabRigHangingDirectState.Owner expectedOwner,
                                                 Path directory) throws IOException {
         List<Path> files;
@@ -411,7 +438,7 @@ public final class SlabRigHangingDirectStateStore {
             if (STATE_TEMP.matcher(name).matches()) {
                 if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                     throw corrupt("temporary-looking ledger entry is not a regular file " + path,
-                            expectedOwner, List.of(), ignoredTemps);
+                            ownerKey, expectedFormat, expectedOwner, List.of(), ignoredTemps);
                 }
                 ignoredTemps.add(path);
                 continue;
@@ -420,7 +447,7 @@ public final class SlabRigHangingDirectStateStore {
             if (!matcher.matches() || Files.isSymbolicLink(path)
                     || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                 throw corrupt("unknown/non-regular authoritative ledger entry " + path,
-                        expectedOwner, List.of(), ignoredTemps);
+                        ownerKey, expectedFormat, expectedOwner, List.of(), ignoredTemps);
             }
             long sequence;
             try {
@@ -430,7 +457,7 @@ public final class SlabRigHangingDirectStateStore {
             }
             if (authoritative.put(sequence, path) != null) {
                 throw corrupt("duplicate direct-state sequence " + sequence,
-                        expectedOwner, List.of(), ignoredTemps);
+                        ownerKey, expectedFormat, expectedOwner, List.of(), ignoredTemps);
             }
         }
 
@@ -438,11 +465,12 @@ public final class SlabRigHangingDirectStateStore {
         Set<String> verifiedArtifactHashes = new HashSet<>();
         Map<String, VerifiedCell> verifiedCells = new HashMap<>();
         SlabRigHangingDirectState.Owner owner = expectedOwner;
+        SlabRigHangingDirectState.Format format = expectedFormat;
         for (long expectedSequence = 0; expectedSequence < authoritative.size(); expectedSequence++) {
             Path path = authoritative.get(expectedSequence);
             if (path == null) {
                 throw corrupt("missing direct-state sequence " + expectedSequence,
-                        owner, verified, ignoredTemps);
+                        ownerKey, format, owner, verified, ignoredTemps);
             }
             try {
                 SlabRigHangingDirectState.State state = SlabRigHangingDirectState.parse(
@@ -458,6 +486,11 @@ public final class SlabRigHangingDirectStateStore {
                 } else if (!owner.equals(state.owner())) {
                     throw new IllegalArgumentException("owner tuple changed inside ledger");
                 }
+                if (format == null) {
+                    format = state.format();
+                } else if (format != state.format()) {
+                    throw new IllegalArgumentException("state format changed inside ledger");
+                }
                 if (!verified.isEmpty()) {
                     SlabRigHangingDirectState.validateTransition(verified.getLast(), state);
                 }
@@ -467,17 +500,27 @@ public final class SlabRigHangingDirectStateStore {
                 throw failure;
             } catch (IOException | RuntimeException failure) {
                 throw corrupt("invalid direct-state entry " + path + ": " + failure.getMessage(),
-                        owner, verified, ignoredTemps, failure);
+                        ownerKey, format, owner, verified, ignoredTemps, failure);
             }
         }
         if (owner == null) {
             if (!authoritative.isEmpty()) {
-                throw corrupt("could not derive owner from non-empty ledger", expectedOwner,
-                        verified, ignoredTemps);
+                throw corrupt("could not derive owner from non-empty ledger",
+                        ownerKey, format, expectedOwner, verified, ignoredTemps);
+            }
+            if (expectedOwner == null) {
+                return new Reconstruction(ownerKey, null, null, List.of(), ignoredTemps);
             }
             owner = expectedOwner;
         }
-        Reconstruction reconstruction = new Reconstruction(owner, verified, ignoredTemps);
+        if (format == null) {
+            format = expectedFormat;
+        }
+        if (owner == null || format == null) {
+            throw new IOException("empty direct ledger reconstruction lacks exact owner/format");
+        }
+        Reconstruction reconstruction = new Reconstruction(ownerKey, format, owner,
+                verified, ignoredTemps);
         rememberVerified(reconstruction, verifiedArtifactHashes, verifiedCells);
         return reconstruction;
     }
@@ -500,6 +543,7 @@ public final class SlabRigHangingDirectStateStore {
                 if (Files.isSymbolicLink(path)
                         || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                     throw corrupt("temporary-looking ledger entry is not a regular file " + path,
+                            ownerKey, cached.reconstruction().format(),
                             cached.reconstruction().owner(), cached.reconstruction().states(),
                             ignoredTemps);
                 }
@@ -510,6 +554,7 @@ public final class SlabRigHangingDirectStateStore {
             if (!matcher.matches() || Files.isSymbolicLink(path)
                     || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                 throw corrupt("unknown/non-regular authoritative ledger entry " + path,
+                        ownerKey, cached.reconstruction().format(),
                         cached.reconstruction().owner(), cached.reconstruction().states(),
                         ignoredTemps);
             }
@@ -521,6 +566,7 @@ public final class SlabRigHangingDirectStateStore {
             }
             if (authoritative.put(sequence, path) != null) {
                 throw corrupt("duplicate direct-state sequence " + sequence,
+                        ownerKey, cached.reconstruction().format(),
                         cached.reconstruction().owner(), cached.reconstruction().states(),
                         ignoredTemps);
             }
@@ -594,7 +640,8 @@ public final class SlabRigHangingDirectStateStore {
             Path path = parsed.path();
             if (parsed.failure() != null) {
                 throw corrupt("invalid appended direct-state entry " + path + ": "
-                                + parsed.failure().getMessage(), owner, verified, ignoredTemps,
+                                + parsed.failure().getMessage(), ownerKey,
+                        cached.reconstruction().format(), owner, verified, ignoredTemps,
                         parsed.failure());
             }
             try {
@@ -602,7 +649,8 @@ public final class SlabRigHangingDirectStateStore {
                 Matcher name = STATE_FILE.matcher(path.getFileName().toString());
                 if (!name.matches() || state.sequence() != expectedSequence
                         || !state.stateHash().equals(name.group(2))
-                        || !state.ownerKey().equals(ownerKey) || !owner.equals(state.owner())) {
+                        || !state.ownerKey().equals(ownerKey) || !owner.equals(state.owner())
+                        || state.format() != cached.reconstruction().format()) {
                     throw new IllegalArgumentException("appended state filename/owner identity mismatch");
                 }
                 if (!verified.isEmpty()) {
@@ -614,25 +662,30 @@ public final class SlabRigHangingDirectStateStore {
                 throw failure;
             } catch (IOException | RuntimeException failure) {
                 throw corrupt("invalid appended direct-state entry " + path + ": "
-                                + failure.getMessage(), owner, verified, ignoredTemps, failure);
+                                + failure.getMessage(), ownerKey,
+                        cached.reconstruction().format(), owner, verified, ignoredTemps, failure);
             }
         }
-        Reconstruction reconstruction = new Reconstruction(owner, verified, ignoredTemps);
+        Reconstruction reconstruction = new Reconstruction(ownerKey,
+                cached.reconstruction().format(), owner, verified, ignoredTemps);
         rememberExtended(cached, reconstruction, verifiedArtifactHashes, verifiedCells);
         return verifiedOwnerCache.get(ownerKey);
     }
 
     private CachedOwner loadForExpected(SlabRigHangingDirectState.Owner owner,
-                                        SlabRigHangingDirectState.State expected) throws IOException {
-        CachedOwner cached = verifiedOwnerCache.get(owner.key());
+                                        SlabRigHangingDirectState.State expected,
+                                        SlabRigHangingDirectState.Format format) throws IOException {
+        String ownerKey = owner.key(format);
+        CachedOwner cached = verifiedOwnerCache.get(ownerKey);
         if (cached != null && cached.reconstruction().owner().equals(owner)
+                && cached.reconstruction().format() == format
                 && sameHead(cached.reconstruction().latestOrNull(), expected)
                 && cachedShapeMatches(cached)) {
             verifiedPrefixReuseCount.incrementAndGet();
             return cached;
         }
-        Reconstruction reconstructed = reconstruct(owner);
-        CachedOwner refreshed = verifiedOwnerCache.get(owner.key());
+        Reconstruction reconstructed = reconstruct(owner, format);
+        CachedOwner refreshed = verifiedOwnerCache.get(ownerKey);
         if (refreshed == null || !refreshed.reconstruction().equals(reconstructed)) {
             throw new IOException("direct owner verification cache was not established");
         }
@@ -641,7 +694,7 @@ public final class SlabRigHangingDirectStateStore {
 
     private boolean cachedShapeMatches(CachedOwner cached) {
         Reconstruction reconstruction = cached.reconstruction();
-        Path directory = ledgerPath(reconstruction.owner());
+        Path directory = root.resolve(LEDGERS).resolve(reconstruction.ownerKey());
         try {
             if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) {
                 return reconstruction.states().isEmpty();
@@ -729,7 +782,7 @@ public final class SlabRigHangingDirectStateStore {
         for (String hash : verifiedArtifacts) {
             artifactFiles.put(hash, fileStamp(artifactPath(hash)));
         }
-        verifiedOwnerCache.put(reconstruction.owner().key(), new CachedOwner(reconstruction,
+        verifiedOwnerCache.put(reconstruction.ownerKey(), new CachedOwner(reconstruction,
                 Set.copyOf(verifiedArtifacts), Map.copyOf(stateFiles), Map.copyOf(artifactFiles),
                 Map.copyOf(verifiedCells)));
     }
@@ -751,7 +804,7 @@ public final class SlabRigHangingDirectStateStore {
                 artifactFiles.put(hash, fileStamp(artifactPath(hash)));
             }
         }
-        verifiedOwnerCache.put(reconstruction.owner().key(), new CachedOwner(reconstruction,
+        verifiedOwnerCache.put(reconstruction.ownerKey(), new CachedOwner(reconstruction,
                 Set.copyOf(verifiedArtifacts), Map.copyOf(stateFiles), Map.copyOf(artifactFiles),
                 Map.copyOf(verifiedCells)));
     }
@@ -1184,17 +1237,23 @@ public final class SlabRigHangingDirectStateStore {
     }
 
     private static CorruptLedgerException corrupt(String message,
+                                                  String ownerKey,
+                                                  SlabRigHangingDirectState.Format format,
                                                   SlabRigHangingDirectState.Owner owner,
                                                   List<SlabRigHangingDirectState.State> verified,
                                                   List<Path> ignored) {
-        return new CorruptLedgerException(message, new Reconstruction(owner, verified, ignored));
+        return new CorruptLedgerException(message,
+                new Reconstruction(ownerKey, format, owner, verified, ignored));
     }
 
     private static CorruptLedgerException corrupt(String message,
+                                                  String ownerKey,
+                                                  SlabRigHangingDirectState.Format format,
                                                   SlabRigHangingDirectState.Owner owner,
                                                   List<SlabRigHangingDirectState.State> verified,
                                                   List<Path> ignored, Throwable cause) {
-        return new CorruptLedgerException(message, new Reconstruction(owner, verified, ignored), cause);
+        return new CorruptLedgerException(message,
+                new Reconstruction(ownerKey, format, owner, verified, ignored), cause);
     }
 
     public record WrittenState(Path path, String stateHash, long byteCount, boolean alreadyExisted) {
@@ -1203,12 +1262,24 @@ public final class SlabRigHangingDirectStateStore {
     public record WrittenArtifact(Path path, String hash, long byteCount) {
     }
 
-    public record Reconstruction(SlabRigHangingDirectState.Owner owner,
+    public record Reconstruction(String ownerKey, SlabRigHangingDirectState.Format format,
+                                 SlabRigHangingDirectState.Owner owner,
                                  List<SlabRigHangingDirectState.State> states,
                                  List<Path> ignoredTemporaryFiles) {
         public Reconstruction {
+            if (ownerKey != null) {
+                requireSha256(ownerKey, "reconstruction owner key");
+            }
             states = List.copyOf(states);
             ignoredTemporaryFiles = List.copyOf(ignoredTemporaryFiles);
+            if (!states.isEmpty()) {
+                SlabRigHangingDirectState.State first = states.getFirst();
+                if (!first.ownerKey().equals(ownerKey) || first.format() != format
+                        || !first.owner().equals(owner)) {
+                    throw new IllegalArgumentException(
+                            "reconstruction identity disagrees with its verified state chain");
+                }
+            }
         }
 
         public SlabRigHangingDirectState.State latestOrNull() {
