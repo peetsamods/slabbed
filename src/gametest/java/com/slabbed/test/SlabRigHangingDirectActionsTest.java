@@ -198,7 +198,7 @@ public final class SlabRigHangingDirectActionsTest {
         SlabRigHangingPaintingPlan.PagePlan plan = SlabRigHangingPaintingPlan.page(universe,
                 SlabRigHangingDirectFixture.ROUTE_INDEX,
                 SlabRigHangingDirectFixture.TOPOLOGY_INDEX,
-                SlabRigHangingDirectFixture.SELECTOR_PAGE);
+                1);
         return SlabRigHangingDirectFixture.adapt(universe, plan,
                 helper.absolutePos(new BlockPos(8, 3, 8)));
     }

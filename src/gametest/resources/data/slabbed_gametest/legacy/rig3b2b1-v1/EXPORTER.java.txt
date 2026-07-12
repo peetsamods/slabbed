@@ -1,0 +1,182 @@
+    // BEGIN RIG3B3A_LEGACY_EXPORTER
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void legacyFixtureExportTest(GameTestHelper helper) {
+        String configured = System.getProperty("slabbed.rig3b3a.fixtureExportRoot");
+        if (configured == null || configured.isBlank()) {
+            throw helper.assertionException("legacy fixture exporter requires its exact output property");
+        }
+        Path configuredPath = Path.of(configured);
+        if (configuredPath.isAbsolute()) {
+            throw helper.assertionException("legacy fixture exporter requires a repo-relative path");
+        }
+        Path projectRoot = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        while (projectRoot != null && (!Files.exists(projectRoot.resolve(".git"),
+                java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                || !Files.isRegularFile(projectRoot.resolve("gradlew"))
+                || !Files.isRegularFile(projectRoot.resolve("settings.gradle")))) {
+            projectRoot = projectRoot.getParent();
+        }
+        if (projectRoot == null) {
+            throw helper.assertionException("legacy fixture exporter could not locate the project root");
+        }
+        Path exportRoot = projectRoot.resolve(configuredPath).normalize();
+        if (!exportRoot.startsWith(projectRoot.resolve("tmp").normalize())) {
+            throw helper.assertionException("legacy fixture exporter path escaped project tmp");
+        }
+        try {
+            if (!Files.isDirectory(exportRoot)) {
+                throw helper.assertionException("legacy fixture export root does not exist: " + exportRoot);
+            }
+            try (var entries = Files.list(exportRoot)) {
+                if (entries.findAny().isPresent()) {
+                    throw helper.assertionException("legacy fixture export root must start empty");
+                }
+            }
+            SlabRigHangingDirectState.Owner activeOwner = new SlabRigHangingDirectState.Owner(
+                    sha("rig3b3a-legacy-v1-world"), "minecraft:overworld",
+                    UUID.fromString("316f2c48-8754-5f9d-975d-984e406f8ea3"));
+            SlabRigHangingDirectState.Owner partialOwner = new SlabRigHangingDirectState.Owner(
+                    sha("rig3b3a-legacy-v1-world"), "minecraft:overworld",
+                    UUID.fromString("bc6fda81-b928-54c7-8b48-34eadba544a9"));
+            exportLegacyV1Scenario(exportRoot.resolve("active-owned"), activeOwner,
+                    "active-owned", false);
+            exportLegacyV1Scenario(exportRoot.resolve("partial-clear"), partialOwner,
+                    "partial-clear", true);
+        } catch (IOException failure) {
+            throw helper.assertionException("legacy fixture export failed: " + failure);
+        }
+        helper.succeed();
+    }
+
+    private static void exportLegacyV1Scenario(Path root,
+                                                SlabRigHangingDirectState.Owner owner,
+                                                String scenario,
+                                                boolean partialClear) throws IOException {
+        if (Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("legacy fixture scenario already exists: " + root);
+        }
+        Files.createDirectories(root);
+        SlabRigHangingDirectStateStore store = new SlabRigHangingDirectStateStore(root);
+        String planned = store.writeArtifact("rig3b3a-legacy-v1-planned").hash();
+        SlabRigHangingDirectState.State initial = legacyExporterInitial(planned, owner, scenario);
+        store.append(null, initial);
+        SlabRigHangingDirectState.State authoring = fixtureAuthoring(initial);
+        store.append(initial, authoring);
+        for (SlabRigHangingDirectState.Position pos : authoring.plannedAuthoredCells()) {
+            store.writeArtifact(SlabRigHangingDirectEvidence.cellIdentityCanonical(syntheticCell(pos)));
+        }
+        SlabRigHangingDirectState.State ready = fixtureReadyFromAuthoring(authoring);
+        store.append(authoring, ready);
+        SlabRigHangingDirectState.State inFlight = beginCase(ready, 0);
+        store.append(ready, inFlight);
+        SlabRigHangingDirectState.EntityOwnership painting = paintingPreclaim(inFlight, 0);
+        SlabRigHangingDirectStateStore.WrittenArtifact entityEvidence = store.writeArtifact(
+                "painting-evidence-" + painting.uuid());
+        if (!entityEvidence.hash().equals(painting.evidenceArtifact())) {
+            throw new IOException("legacy fixture entity evidence identity drifted");
+        }
+        SlabRigHangingDirectState.State preclaimed = inFlight.withPreclaimedEntity(
+                painting, "legacy fixture painting preclaim");
+        store.append(inFlight, preclaimed);
+        SlabRigHangingDirectState.State confirmed = preclaimed.withConfirmedEntity(
+                painting.uuid(), "legacy fixture painting loaded");
+        store.append(preclaimed, confirmed);
+        SlabRigHangingDirectStateStore.WrittenArtifact observation = store.writeArtifact(
+                "rig3b3a-legacy-v1-case-zero-observation");
+        SlabRigHangingDirectState.State active = completeCase(
+                confirmed, 0, observation.hash());
+        store.append(confirmed, active);
+        if (!partialClear) {
+            return;
+        }
+
+        List<UUID> requestedEntities = active.entities().stream()
+                .map(SlabRigHangingDirectState.EntityOwnership::uuid).toList();
+        List<SlabRigHangingDirectState.Position> requestedAttachments = active.authoredAttachments()
+                .stream().map(SlabRigHangingDirectState.AttachmentOwnership::pos).toList();
+        List<SlabRigHangingDirectState.Position> requestedCells = active.authoredCells()
+                .stream().map(SlabRigHangingDirectState.CellOwnership::pos).toList();
+        SlabRigHangingDirectState.ClearProgress started = new SlabRigHangingDirectState.ClearProgress(
+                true, requestedEntities, 0, List.of(), List.of(), List.of(),
+                requestedAttachments, 0, List.of(), List.of(), List.of(),
+                requestedCells, 0, List.of(), List.of(), List.of());
+        SlabRigHangingDirectState.State clearingEntities = active.successor(
+                SlabRigHangingDirectState.Phase.CLEARING_ENTITIES, active.nextCaseOrdinal(),
+                active.authoredCells(), active.authoredAttachments(), active.cases(), active.entities(),
+                active.scheduler(), started, active.artifacts(), "legacy fixture clear entities");
+        store.append(active, clearingEntities);
+        SlabRigHangingDirectState.ClearProgress entitiesDone =
+                new SlabRigHangingDirectState.ClearProgress(
+                        true, requestedEntities, requestedEntities.size(), requestedEntities,
+                        List.of(), List.of(), requestedAttachments, 0, List.of(), List.of(), List.of(),
+                        requestedCells, 0, List.of(), List.of(), List.of());
+        SlabRigHangingDirectState.State entityReceipts = clearingEntities.successor(
+                SlabRigHangingDirectState.Phase.CLEARING_ENTITIES,
+                clearingEntities.nextCaseOrdinal(), clearingEntities.authoredCells(),
+                clearingEntities.authoredAttachments(), clearingEntities.cases(),
+                clearingEntities.entities(), clearingEntities.scheduler(), entitiesDone,
+                clearingEntities.artifacts(), "legacy fixture entity clear receipt");
+        store.append(clearingEntities, entityReceipts);
+        SlabRigHangingDirectState.State clearingAttachments = entityReceipts.successor(
+                SlabRigHangingDirectState.Phase.CLEARING_ATTACHMENTS,
+                entityReceipts.nextCaseOrdinal(), entityReceipts.authoredCells(),
+                entityReceipts.authoredAttachments(), entityReceipts.cases(), entityReceipts.entities(),
+                entityReceipts.scheduler(), entitiesDone, entityReceipts.artifacts(),
+                "legacy fixture clear attachments");
+        store.append(entityReceipts, clearingAttachments);
+        SlabRigHangingDirectState.ClearProgress attachmentsDone =
+                new SlabRigHangingDirectState.ClearProgress(
+                        true, requestedEntities, requestedEntities.size(), requestedEntities,
+                        List.of(), List.of(), requestedAttachments, requestedAttachments.size(),
+                        requestedAttachments, List.of(), List.of(), requestedCells, 0,
+                        List.of(), List.of(), List.of());
+        SlabRigHangingDirectState.State attachmentReceipts = clearingAttachments.successor(
+                SlabRigHangingDirectState.Phase.CLEARING_ATTACHMENTS,
+                clearingAttachments.nextCaseOrdinal(), clearingAttachments.authoredCells(),
+                clearingAttachments.authoredAttachments(), clearingAttachments.cases(),
+                clearingAttachments.entities(), clearingAttachments.scheduler(), attachmentsDone,
+                clearingAttachments.artifacts(), "legacy fixture attachment clear receipt");
+        store.append(clearingAttachments, attachmentReceipts);
+        SlabRigHangingDirectState.State clearingCells = attachmentReceipts.successor(
+                SlabRigHangingDirectState.Phase.CLEARING_CELLS,
+                attachmentReceipts.nextCaseOrdinal(), attachmentReceipts.authoredCells(),
+                attachmentReceipts.authoredAttachments(), attachmentReceipts.cases(),
+                attachmentReceipts.entities(), attachmentReceipts.scheduler(), attachmentsDone,
+                attachmentReceipts.artifacts(), "legacy fixture clear cells");
+        store.append(attachmentReceipts, clearingCells);
+        SlabRigHangingDirectState.ClearProgress oneCellDone =
+                new SlabRigHangingDirectState.ClearProgress(
+                        true, requestedEntities, requestedEntities.size(), requestedEntities,
+                        List.of(), List.of(), requestedAttachments, requestedAttachments.size(),
+                        requestedAttachments, List.of(), List.of(), requestedCells, 1,
+                        List.of(started.requestedCells().getFirst()), List.of(), List.of());
+        SlabRigHangingDirectState.State partial = clearingCells.successor(
+                SlabRigHangingDirectState.Phase.CLEARING_CELLS, clearingCells.nextCaseOrdinal(),
+                clearingCells.authoredCells(), clearingCells.authoredAttachments(), clearingCells.cases(),
+                clearingCells.entities(), clearingCells.scheduler(), oneCellDone,
+                clearingCells.artifacts(), "legacy fixture one cell already cleared");
+        store.append(clearingCells, partial);
+    }
+
+    private static SlabRigHangingDirectState.State legacyExporterInitial(
+            String planned, SlabRigHangingDirectState.Owner owner, String scenario) {
+        List<SlabRigHangingDirectState.Position> plannedCells = List.of(
+                new SlabRigHangingDirectState.Position(8, 64, 8),
+                new SlabRigHangingDirectState.Position(8, 65, 8));
+        List<SlabRigHangingDirectState.Position> reserved = List.of(
+                plannedCells.get(0), plannedCells.get(1),
+                new SlabRigHangingDirectState.Position(9, 65, 8));
+        SlabRigHangingDirectState.RunIdentity run = new SlabRigHangingDirectState.RunIdentity(
+                sha("rig3b3a-legacy-v1-run-" + scenario),
+                UUID.nameUUIDFromBytes(("rig3b3a-legacy-v1-nonce-" + scenario)
+                        .getBytes(StandardCharsets.UTF_8)),
+                "unknown", sha("rig3b3a-legacy-v1-runtime"), "26.2",
+                sha("rig3b3a-legacy-v1-catalog"), sha("rig3b3a-legacy-v1-topologies"),
+                sha("rig3b3a-legacy-v1-rig3b1"), sha("rig3b3a-legacy-v1-paintings"),
+                sha("rig3b3a-legacy-v1-universe"), sha("rig3b3a-legacy-v1-plan"),
+                "painting-page-v1:sha256:" + sha("rig3b3a-legacy-v1-semantic-page"),
+                6143, 42, 1, true, new SlabRigHangingDirectState.Position(8, 64, 8), "west");
+        return SlabRigHangingDirectState.State.initial(owner, run, reserved, plannedCells,
+                pendingCases(), planned, "legacy fixture " + scenario + " planned");
+    }
+    // END RIG3B3A_LEGACY_EXPORTER
