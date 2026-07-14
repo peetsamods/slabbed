@@ -1,6 +1,12 @@
 package com.slabbed.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatHooks;
+import com.slabbed.network.PlacementDyCorrectionServer;
+import com.slabbed.network.PlacementDyPredictionBridge;
 import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.PlacementIntentState;
@@ -8,6 +14,8 @@ import com.slabbed.util.SlabEnsembleCoherence;
 import com.slabbed.util.SlabModelStaleSentinel;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.CraftingTableBlock;
@@ -15,7 +23,9 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -28,13 +38,21 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
@@ -60,6 +78,425 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private record CompoundVisibleOwnerTopIntent(BlockPos sourcePos, BlockPos candidatePos) {
+    }
+
+    private static final ThreadLocal<Integer> C3_USE_ON_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<RootAim> C3_ROOT_AIM = new ThreadLocal<>();
+    private static final ThreadLocal<Deque<PlacementFrame>> C3_PLACE_FRAMES =
+            ThreadLocal.withInitial(ArrayDeque::new);
+
+    private record RootAim(
+            LandingResolver.PlacementAim resolverAim,
+            Level level,
+            net.minecraft.world.InteractionHand hand,
+            String heldItemId
+    ) {
+    }
+
+    private record CellSnapshot(
+            BlockState priorState,
+            SlabAnchorAttachment.PlacementDyFact priorBacking
+    ) {
+    }
+
+    private record PendingCapture(Map<BlockPos, Long> rawBitsByPos) {
+        private PendingCapture {
+            rawBitsByPos = Map.copyOf(rawBitsByPos);
+        }
+    }
+
+    private static final class PlacementFrame {
+        final RootAim rootAim;
+        final boolean aimless;
+        final LinkedHashMap<BlockPos, CellSnapshot> snapshots = new LinkedHashMap<>();
+        BlockPlaceContext actualContext;
+        BlockState placementState;
+        PendingCapture pending;
+        boolean actualTargetSeen;
+        boolean pendingComputed;
+        boolean markerAuthorsCompleted;
+        boolean setPlacedBySeen;
+        boolean published;
+        boolean recordAllowed;
+
+        PlacementFrame(RootAim rootAim) {
+            this.rootAim = rootAim;
+            this.aimless = rootAim == null;
+        }
+    }
+
+    private static PlacementFrame slabbed$c3Frame() {
+        Deque<PlacementFrame> frames = C3_PLACE_FRAMES.get();
+        return frames.isEmpty() ? null : frames.peek();
+    }
+
+    @WrapMethod(method = "useOn")
+    private InteractionResult slabbed$c3RootAimScope(
+            UseOnContext context,
+            Operation<InteractionResult> original
+    ) {
+        int depth = C3_USE_ON_DEPTH.get();
+        if (depth == 0) {
+            C3_ROOT_AIM.set(slabbed$c3CaptureRootAim(context));
+        }
+        C3_USE_ON_DEPTH.set(depth + 1);
+        try {
+            return original.call(context);
+        } finally {
+            int remaining = C3_USE_ON_DEPTH.get() - 1;
+            if (remaining <= 0) {
+                C3_USE_ON_DEPTH.remove();
+                C3_ROOT_AIM.remove();
+                COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
+                COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
+                COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
+                COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
+            } else {
+                C3_USE_ON_DEPTH.set(remaining);
+            }
+        }
+    }
+
+    @WrapMethod(method = "place")
+    private InteractionResult slabbed$c3PlaceScope(
+            BlockPlaceContext context,
+            Operation<InteractionResult> original
+    ) {
+        PlacementFrame frame = new PlacementFrame(C3_ROOT_AIM.get());
+        Deque<PlacementFrame> frames = C3_PLACE_FRAMES.get();
+        frames.push(frame);
+        try {
+            InteractionResult result = original.call(context);
+            BlockPlaceContext evidenceContext = frame.actualContext == null ? context : frame.actualContext;
+            PriorPlaceState prior = slabbed$placePriorState.get();
+            slabbed$placePriorState.remove();
+            frame.recordAllowed = true;
+            boolean deferredClientRecorder = false;
+            if (result != null && result.consumesAction()) {
+                if (frame.actualTargetSeen && frame.pendingComputed && frame.markerAuthorsCompleted) {
+                    deferredClientRecorder = slabbed$c3Publish(frame,
+                            () -> slabbed$recordLiveCursorIntentPlacementAction(
+                                    evidenceContext, result, frame, prior));
+                } else {
+                    com.slabbed.Slabbed.LOGGER.warn(
+                            "[C3] successful place had incomplete capture state target={} pending={} markers={}",
+                            frame.actualTargetSeen, frame.pendingComputed, frame.markerAuthorsCompleted);
+                }
+            }
+            if (!deferredClientRecorder) {
+                slabbed$recordLiveCursorIntentPlacementAction(evidenceContext, result, frame, prior);
+            }
+            return result;
+        } finally {
+            frames.pop();
+            if (frames.isEmpty()) {
+                C3_PLACE_FRAMES.remove();
+                slabbed$placePriorState.remove();
+                COMPOUND_VISIBLE_SIDE_LOWER_INTENT.remove();
+                COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
+                COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
+                COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
+            }
+        }
+    }
+
+    @WrapOperation(
+            method = "place",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/world/item/BlockItem;updatePlacementContext(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/item/context/BlockPlaceContext;")
+    )
+    private BlockPlaceContext slabbed$c3CaptureActualContext(
+            BlockItem instance,
+            BlockPlaceContext context,
+            Operation<BlockPlaceContext> original
+    ) {
+        BlockPlaceContext actual = PlacementDyPredictionBridge.testFixturePlacementContext(instance, context);
+        if (actual == null) {
+            actual = original.call(instance, context);
+        }
+        PlacementFrame frame = slabbed$c3Frame();
+        if (frame != null && actual != null) {
+            frame.actualContext = actual;
+            frame.actualTargetSeen = true;
+            PlacementDyCorrectionServer.observe(actual.getClickedPos());
+        }
+        return actual;
+    }
+
+    @WrapOperation(
+            method = "place",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/world/item/BlockItem;getPlacementState(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/level/block/state/BlockState;")
+    )
+    private BlockState slabbed$c3CapturePlacementState(
+            BlockItem instance,
+            BlockPlaceContext context,
+            Operation<BlockState> original
+    ) {
+        BlockState placementState = PlacementDyPredictionBridge.testFixturePlacementState(instance, context);
+        if (placementState == null) {
+            placementState = original.call(instance, context);
+        }
+        PlacementFrame frame = slabbed$c3Frame();
+        if (frame != null && placementState != null) {
+            frame.actualContext = context;
+            frame.actualTargetSeen = true;
+            frame.placementState = placementState;
+            slabbed$c3SnapshotCandidates(frame, context, placementState);
+            slabbed$armModelStaleSentinelAtActualTarget(context);
+        }
+        return placementState;
+    }
+
+    @WrapOperation(
+            method = "place",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/world/item/BlockItem;placeBlock(Lnet/minecraft/world/item/context/BlockPlaceContext;Lnet/minecraft/world/level/block/state/BlockState;)Z")
+    )
+    private boolean slabbed$c3RunTestFixturePlaceBlock(
+            BlockItem instance,
+            BlockPlaceContext context,
+            BlockState state,
+            Operation<Boolean> original
+    ) {
+        Boolean fixtureResult = PlacementDyPredictionBridge.testFixturePlaceBlock(instance, context, state);
+        return fixtureResult == null ? original.call(instance, context, state) : fixtureResult;
+    }
+
+    @WrapOperation(
+            method = "place",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/world/level/block/Block;setPlacedBy(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;)V")
+    )
+    private void slabbed$c3ObserveSetPlacedBy(
+            Block block,
+            Level level,
+            BlockPos pos,
+            BlockState state,
+            LivingEntity placer,
+            ItemStack stack,
+            Operation<Void> original
+    ) {
+        original.call(block, level, pos, state, placer, stack);
+        PlacementFrame frame = slabbed$c3Frame();
+        if (frame != null) {
+            frame.setPlacedBySeen = true;
+        }
+    }
+
+    @WrapOperation(
+            method = "place",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/world/item/ItemStack;consume(ILnet/minecraft/world/entity/LivingEntity;)V")
+    )
+    private void slabbed$c3ComputeBeforeConsume(
+            ItemStack stack,
+            int amount,
+            LivingEntity entity,
+            Operation<Void> original
+    ) {
+        PlacementFrame frame = slabbed$c3Frame();
+        if (frame != null) {
+            try {
+                slabbed$c3ComputePending(frame);
+            } catch (Throwable t) {
+                frame.pending = new PendingCapture(Map.of());
+                frame.pendingComputed = true;
+                com.slabbed.Slabbed.LOGGER.warn("[C3] capture computation failed closed", t);
+            }
+        }
+        original.call(stack, amount, entity);
+    }
+
+    private static RootAim slabbed$c3CaptureRootAim(UseOnContext context) {
+        LandingResolver.PlacementAim aim = LandingResolver.captureAim(context);
+        return new RootAim(
+                aim,
+                context.getLevel(),
+                context.getHand(),
+                BuiltInRegistries.ITEM.getKey(context.getItemInHand().getItem()).toString());
+    }
+
+    private static void slabbed$c3SnapshotCandidates(
+            PlacementFrame frame,
+            BlockPlaceContext context,
+            BlockState placementState
+    ) {
+        Level world = context.getLevel();
+        BlockPos primary = context.getClickedPos().immutable();
+        ArrayList<BlockPos> positions = new ArrayList<>();
+        positions.add(primary);
+        if (placementState.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            positions.add(primary.above());
+            positions.add(primary.below());
+        }
+        if (placementState.getBlock() instanceof BedBlock
+                || placementState.hasProperty(BlockStateProperties.BED_PART)) {
+            positions.add(primary.north());
+            positions.add(primary.south());
+            positions.add(primary.west());
+            positions.add(primary.east());
+        }
+        for (BlockPos pos : positions) {
+            BlockPos immutable = pos.immutable();
+            frame.snapshots.putIfAbsent(immutable, new CellSnapshot(
+                    world.getBlockState(immutable),
+                    SlabAnchorAttachment.rawPlacementDyFact(world, immutable)));
+            PlacementDyCorrectionServer.observe(immutable);
+        }
+    }
+
+    private static void slabbed$c3ComputePending(PlacementFrame frame) {
+        frame.pendingComputed = true;
+        if (!frame.actualTargetSeen || frame.actualContext == null) {
+            frame.pending = new PendingCapture(Map.of());
+            return;
+        }
+        Level world = frame.actualContext.getLevel();
+        BlockPos primary = frame.actualContext.getClickedPos().immutable();
+        BlockState finalState = world.getBlockState(primary);
+        if (finalState.isAir() || slabbed$c3CompatOwns(finalState)) {
+            frame.pending = new PendingCapture(Map.of());
+            return;
+        }
+        List<BlockPos> group = slabbed$c3ValidatedGroup(frame, world, primary, finalState);
+        boolean paired = finalState.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                || (finalState.getBlock() instanceof BedBlock
+                && finalState.hasProperty(BlockStateProperties.BED_PART));
+        if (paired && group.isEmpty()) {
+            frame.pending = new PendingCapture(Map.of());
+            com.slabbed.Slabbed.LOGGER.warn("[C3] malformed reciprocal pair at {}; publishing no dy", primary);
+            return;
+        }
+        if (group.isEmpty()) {
+            group = List.of(primary);
+        }
+
+        long rawBits;
+        CellSnapshot primarySnapshot = frame.snapshots.get(primary);
+        if (finalState.getBlock() instanceof SlabBlock
+                && finalState.hasProperty(SlabBlock.TYPE)
+                && finalState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
+                && primarySnapshot != null
+                && primarySnapshot.priorBacking().present()) {
+            rawBits = primarySnapshot.priorBacking().rawBits();
+        } else {
+            LandingResolver.Family family = LandingResolver.classify(finalState);
+            LandingResolver.PlacementResolution resolution = frame.rootAim == null
+                    || family == LandingResolver.Family.UNSUPPORTED
+                    ? null
+                    : LandingResolver.resolve(frame.rootAim.resolverAim(), primary, finalState, family);
+            if (family == LandingResolver.Family.PAIRED_FLOOR_SEAT && resolution == null) {
+                frame.pending = new PendingCapture(Map.of());
+                return;
+            }
+            double dy = resolution == null
+                    ? SlabSupport.getUnstoredYOffset(world, primary, finalState)
+                    : resolution.landingDy();
+            if (!Double.isFinite(dy)) {
+                frame.pending = new PendingCapture(Map.of());
+                return;
+            }
+            rawBits = Double.doubleToRawLongBits(dy);
+        }
+        LinkedHashMap<BlockPos, Long> facts = new LinkedHashMap<>();
+        for (BlockPos pos : group) {
+            facts.put(pos.immutable(), rawBits);
+            PlacementDyCorrectionServer.observe(pos);
+        }
+        frame.pending = new PendingCapture(facts);
+    }
+
+    private static List<BlockPos> slabbed$c3ValidatedGroup(
+            PlacementFrame frame,
+            Level world,
+            BlockPos primary,
+            BlockState state
+    ) {
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            DoubleBlockHalf half = state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF);
+            BlockPos partnerPos = half == DoubleBlockHalf.LOWER ? primary.above() : primary.below();
+            BlockState partner = world.getBlockState(partnerPos);
+            if (!frame.snapshots.containsKey(partnerPos)
+                    || partner.getBlock() != state.getBlock()
+                    || !partner.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    || partner.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == half) {
+                return List.of();
+            }
+            return primary.asLong() <= partnerPos.asLong()
+                    ? List.of(primary, partnerPos)
+                    : List.of(partnerPos, primary);
+        }
+        if (state.getBlock() instanceof BedBlock
+                && state.hasProperty(BlockStateProperties.BED_PART)) {
+            BlockPos partnerPos = primary.relative(BedBlock.getConnectedDirection(state));
+            BlockState partner = world.getBlockState(partnerPos);
+            if (!frame.snapshots.containsKey(partnerPos)
+                    || partner.getBlock() != state.getBlock()
+                    || !partner.hasProperty(BlockStateProperties.BED_PART)
+                    || partner.getValue(BlockStateProperties.BED_PART)
+                    == state.getValue(BlockStateProperties.BED_PART)
+                    || !primary.equals(partnerPos.relative(BedBlock.getConnectedDirection(partner)))) {
+                return List.of();
+            }
+            return primary.asLong() <= partnerPos.asLong()
+                    ? List.of(primary, partnerPos)
+                    : List.of(partnerPos, primary);
+        }
+        return List.of(primary);
+    }
+
+    private static boolean slabbed$c3Publish(PlacementFrame frame, Runnable postInstallAction) {
+        frame.published = true;
+        PlacementDyPredictionBridge.markTestPhase("publish:setPlacedBy=" + frame.setPlacedBySeen);
+        if (frame.pending == null || frame.pending.rawBitsByPos().isEmpty() || frame.actualContext == null) {
+            return false;
+        }
+        Level world = frame.actualContext.getLevel();
+        if (!world.isClientSide()) {
+            SlabAnchorAttachment.writePlacementDyBatch(world, frame.pending.rawBitsByPos());
+            return false;
+        }
+        int sequence = PlacementDyPredictionBridge.currentSequence();
+        if (sequence < 0 || frame.rootAim == null) {
+            return false;
+        }
+        try {
+            LandingResolver.PlacementAim aim = frame.rootAim.resolverAim();
+            PlacementDyPredictionBridge.GroupSignature signature =
+                    new PlacementDyPredictionBridge.GroupSignature(
+                            world.dimension().toString(),
+                            sequence,
+                            frame.rootAim.hand(),
+                            frame.rootAim.heldItemId(),
+                            aim.ownerPos().asLong(),
+                            aim.clickedFace());
+            ArrayList<PlacementDyPredictionBridge.PredictedCell> cells = new ArrayList<>();
+            for (Map.Entry<BlockPos, Long> entry : frame.pending.rawBitsByPos().entrySet()) {
+                CellSnapshot snapshot = frame.snapshots.get(entry.getKey());
+                if (snapshot == null) {
+                    snapshot = new CellSnapshot(
+                            world.getBlockState(entry.getKey()),
+                            SlabAnchorAttachment.rawPlacementDyFact(world, entry.getKey()));
+                }
+                cells.add(new PlacementDyPredictionBridge.PredictedCell(
+                        entry.getKey(),
+                        snapshot.priorState(),
+                        snapshot.priorBacking(),
+                        world.getBlockState(entry.getKey()),
+                        entry.getValue()));
+            }
+            PlacementDyPredictionBridge.publishClientBatch(
+                    new PlacementDyPredictionBridge.PredictedBatch(signature, cells, postInstallAction));
+        } catch (RuntimeException exception) {
+            com.slabbed.Slabbed.LOGGER.warn(
+                    "[C3] client prediction batch construction failed; recorder action dropped", exception);
+        }
+        return true;
+    }
+
+    private static boolean slabbed$c3CompatOwns(BlockState state) {
+        return CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state);
     }
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(UseOnContext context, BlockPos pos, BlockState state) {
@@ -1499,25 +1936,16 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     /**
-     * MODEL_STALE sentinel arming — MUST be at HEAD (pre-mutation): the sentinel's absence rule compares
-     * live dy against the PRE-placement baseline of each armed neighbor; sampled after the world mutates,
-     * the baseline would already include the placement's effect and the rule would be vacuous (the exact
-     * gap the design's adversarial refuters flagged). Client side only; no-ops in one volatile read
-     * unless a recorder session is active.
+     * Arms the recorder/sentinel from vanilla's transformed placement target, after
+     * {@code updatePlacementContext} and {@code getPlacementState} but before world mutation.
      */
-    @Inject(method = "place", at = @At("HEAD"))
-    private void slabbed$armModelStaleSentinel(
-            BlockPlaceContext context,
-            CallbackInfoReturnable<net.minecraft.world.InteractionResult> cir
-    ) {
+    private void slabbed$armModelStaleSentinelAtActualTarget(BlockPlaceContext context) {
         // Diagnostic-only: must NEVER interfere with placement (BuildStamp precedent). armPlacement runs
         // up to 124 dy reads under a recorder session; any exotic throw is swallowed and warned once.
         try {
             Level world = context.getLevel();
-            // Recorder upgrade (TEST (3) triage): capture the placement cell's PRIOR state + dy here,
-            // pre-mutation, on BOTH sides — the action row samples only post-place, which is why the
-            // candle-cap and dripstone false alarms took real digging to clear (and why one stayed
-            // ambiguous). Consumed by slabbed$recordLiveCursorIntentPlacementAction at RETURN.
+            // Capture the transformed target's prior state and dy on both logical sides. The outer
+            // C3 place frame consumes it once, after marker publication and dy publication.
             if (LiveCursorIntentRecorder.enabled() && world != null) {
                 BlockPos priorPos = context.getClickedPos();
                 BlockState prior = world.getBlockState(priorPos);
@@ -1540,12 +1968,26 @@ public abstract class BlockItemPlacementIntentMixin {
     private record PriorPlaceState(String state, String dy) {
     }
 
-    /** Per-thread (client/server logical sides are distinct threads) pre-place snapshot of the
-     *  placement cell, set at place-HEAD, consumed at place-RETURN by the recorder row. */
+    /** Per-thread transformed-target pre-place snapshot, consumed by the outer C3 place frame. */
     private static final ThreadLocal<PriorPlaceState> slabbed$placePriorState = new ThreadLocal<>();
 
     @Inject(method = "place", at = @At("RETURN"))
-    private void slabbed$anchorLoweredFullBlockSidePlacement(
+    private void slabbed$c3RunLegacyMarkerAuthors(
+            BlockPlaceContext context,
+            CallbackInfoReturnable<net.minecraft.world.InteractionResult> cir
+    ) {
+        PlacementFrame frame = slabbed$c3Frame();
+        BlockPlaceContext actualContext = frame == null || frame.actualContext == null
+                ? context
+                : frame.actualContext;
+        slabbed$runLegacyMarkerAuthors(actualContext, cir);
+        PlacementDyPredictionBridge.markTestPhase("markers_complete");
+        if (frame != null) {
+            frame.markerAuthorsCompleted = true;
+        }
+    }
+
+    private void slabbed$runLegacyMarkerAuthors(
             BlockPlaceContext context,
             CallbackInfoReturnable<net.minecraft.world.InteractionResult> cir
     ) {
@@ -1561,43 +2003,6 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos placePos = context.getClickedPos();
         BlockState placedState = world.getBlockState(placePos);
         slabbed$traceRepeatFinalization(context, cir.getReturnValue(), placedState);
-
-        // ── GOES landing resolver capture (design C2, docs/design/GOES-UNIFIED-LANDING-RULE.md §3) ──
-        // Single-writer capture at place-RETURN: OVERWRITE the earlier setPlacedBy-HEAD live-lane write
-        // (the disclosed C2 double-capture window, design §3 / review §3 — the old call is removed in C3)
-        // with the aim-derived landing height for resolver-owned families (slabs + ordinary full blocks,
-        // rows 1-4). AIMED placements only; AIMLESS routes (dispenser/null player) keep today's capture
-        // (design §2 row 16). On the client this writes the PREDICTED entry (R2) that the synced server
-        // value replaces. Predicted rollback-on-server-refusal is NOT wired yet (fix-round MAJOR-1):
-        // SlabAnchorAttachment.rollbackClientPredictedPlacementDy exists but is DEFERRED-to-C3 — the
-        // refusal is only observable at the client block-correction packet, which needs a client-only
-        // mixin C3 owns (a useOn/place-RETURN hook cannot stand in: the predicted entry is only written
-        // on client-side SUCCESS, so at RETURN-with-refusal there is nothing to roll back). Until then a
-        // ghost predicted entry self-heals on the next full-map chunk attachment sync.
-        //
-        // ORDERING (fix-round MINOR-5): this capture runs BEFORE the marker authoring below — deliberate
-        // and safe for C2, because the markers only touch their own presence attachments (LongOpenHashSet
-        // types), never PLACEMENT_DY_TYPE, so the write order cannot corrupt either side. C3 TRAP, read
-        // before relocating capture: once the setPlacedBy-HEAD capture is removed, any marker QUALIFIER
-        // below that calls SlabSupport.getYOffset(placePos) will — under frozen-ON — read back the value
-        // THIS capture just wrote (the store short-circuit), not the live-lane value those qualifiers
-        // were tuned against. Audit every qualifier's dy read when C3 reorders this.
-        if (context.getPlayer() != null) {
-            LandingResolver.Family slabbed$family = LandingResolver.classify(placedState);
-            if (slabbed$family != LandingResolver.Family.UNSUPPORTED) {
-                LandingResolver.PlacementResolution slabbed$res = LandingResolver.resolve(
-                        world, placePos, placedState, context.getClickedFace(), slabbed$family);
-                if (slabbed$res != null) {
-                    if (world.isClientSide()) {
-                        SlabAnchorAttachment.writeClientPredictedPlacementDy(
-                                world, slabbed$res.targetCell(), slabbed$res.landingDy());
-                    } else {
-                        SlabAnchorAttachment.writePlacementDy(
-                                world, slabbed$res.targetCell(), slabbed$res.landingDy());
-                    }
-                }
-            }
-        }
 
         if (heldIsSlab) {
             if (slabbed$isCompoundVisibleSideLowerSlabResult(context, placePos, placedState)) {
@@ -1706,43 +2111,176 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPlaceContext context,
             InteractionResult result
     ) {
+        PlacementFrame frame = slabbed$c3Frame();
+        if (frame != null && !frame.recordAllowed) {
+            return;
+        }
         // Consume the HEAD snapshot unconditionally so a mid-placement toggle can't leak it.
         PriorPlaceState prior = slabbed$placePriorState.get();
         slabbed$placePriorState.remove();
+        slabbed$recordLiveCursorIntentPlacementAction(context, result, frame, prior);
+    }
+
+    private static void slabbed$recordLiveCursorIntentPlacementAction(
+            BlockPlaceContext context,
+            InteractionResult result,
+            PlacementFrame frame,
+            PriorPlaceState prior
+    ) {
         if (!LiveCursorIntentRecorder.enabled() || context == null || context.getLevel() == null) {
             return;
         }
         Level world = context.getLevel();
-        BlockPos placePos = context.getClickedPos();
-        Direction clickedFace = context.getClickedFace();
-        BlockPos clickedOwnerPos = placePos.relative(clickedFace.getOpposite());
-        BlockState beforeState = world.getBlockState(clickedOwnerPos);
-        BlockState afterState = world.getBlockState(placePos);
+        boolean transformedTargetPresent = frame == null || frame.actualTargetSeen;
+        BlockPos placePos = transformedTargetPresent ? context.getClickedPos() : null;
+        RootAim rootAim = frame == null ? null : frame.rootAim;
+        LandingResolver.PlacementAim resolverAim = rootAim == null ? null : rootAim.resolverAim();
+        Direction clickedFace = resolverAim == null ? context.getClickedFace() : resolverAim.clickedFace();
+        BlockPos clickedOwnerPos = resolverAim == null
+                ? context.getClickedPos().relative(clickedFace.getOpposite())
+                : resolverAim.ownerPos();
+        Vec3 clickedHit = resolverAim == null ? context.getClickLocation() : resolverAim.hitLocation();
+        BlockState beforeState = resolverAim == null
+                ? world.getBlockState(clickedOwnerPos)
+                : resolverAim.ownerState();
+        BlockState afterState = placePos == null ? null : world.getBlockState(placePos);
         LinkedHashMap<String, String> row = new LinkedHashMap<>();
         row.put("actionType", result != null && result.consumesAction() ? "place_block" : "use_block");
         // Side + player disambiguate the interleaved client/server row pairs an integrated-SP session
         // writes (schema-5 capability the TEST (3) triage had to reconstruct from millisecond pairing).
         row.put("side", world.isClientSide() ? "client" : "server");
         row.put("player", context.getPlayer() == null ? "none" : context.getPlayer().getName().getString());
-        row.put("heldItem", BuiltInRegistries.ITEM.getKey(context.getItemInHand().getItem()).toString());
+        row.put("heldItem", rootAim == null
+                ? BuiltInRegistries.ITEM.getKey(context.getItemInHand().getItem()).toString()
+                : rootAim.heldItemId());
         row.put("clickedOwnerPos", clickedOwnerPos.toShortString());
         row.put("clickedFace", clickedFace.toString());
-        row.put("clickedHitVec", slabbed$placementIntentVec(context.getClickLocation()));
-        row.put("placementPos", placePos.toShortString());
-        row.put("placeBeforeState", prior == null ? "unrecorded" : prior.state());
-        row.put("placeBeforeDy", prior == null ? "unrecorded" : prior.dy());
+        row.put("clickedHitVec", slabbed$placementIntentVec(clickedHit));
+        row.put("placementPos", placePos == null ? "none" : placePos.toShortString());
+        row.put("placeBeforeState", placePos == null ? "none" : prior == null ? "unrecorded" : prior.state());
+        row.put("placeBeforeDy", placePos == null ? "none" : prior == null ? "unrecorded" : prior.dy());
         row.put("beforeState", beforeState.toString());
-        row.put("beforeDy", String.format("%.6f", SlabSupport.getYOffset(world, clickedOwnerPos, beforeState)));
+        row.put("beforeDy", String.format("%.6f", resolverAim == null
+                ? SlabSupport.getYOffset(world, clickedOwnerPos, beforeState)
+                : resolverAim.ownerVisibleDy()));
         row.put("beforeLaneKind", slabbed$liveCursorLaneKind(world, clickedOwnerPos, beforeState));
         row.put("beforeAttachments", slabbed$liveCursorAttachmentFacts(world, clickedOwnerPos, beforeState));
         row.put("clickedOwnerLaneKind", slabbed$liveCursorLaneKind(world, clickedOwnerPos, beforeState));
-        row.put("afterState", afterState.toString());
-        row.put("afterDy", String.format("%.6f", SlabSupport.getYOffset(world, placePos, afterState)));
-        row.put("afterLaneKind", slabbed$liveCursorLaneKind(world, placePos, afterState));
-        row.put("afterPersistentLoweredSlabCarrier",
-                Boolean.toString(SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, afterState)));
+        row.put("afterState", afterState == null ? "none" : afterState.toString());
+        row.put("afterDy", afterState == null
+                ? "none"
+                : String.format("%.6f", SlabSupport.getYOffset(world, placePos, afterState)));
+        row.put("afterLaneKind", afterState == null
+                ? "none"
+                : slabbed$liveCursorLaneKind(world, placePos, afterState));
+        row.put("afterPersistentLoweredSlabCarrier", afterState == null
+                ? "none"
+                : Boolean.toString(SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, afterState)));
+        slabbed$c3AppendRecorderPairFacts(row, world, placePos, afterState);
         row.put("actualResult", result == null ? "null" : result.toString());
         LiveCursorIntentRecorder.recordAction(row);
+    }
+
+    private static void slabbed$c3AppendRecorderPairFacts(
+            LinkedHashMap<String, String> row,
+            Level world,
+            BlockPos primary,
+            BlockState primaryState
+    ) {
+        if (primary == null || primaryState == null) {
+            slabbed$c3PutRecorderFact(row, "afterStoredDy", "afterStoredDyBits",
+                    SlabAnchorAttachment.PlacementDyFact.absent());
+            slabbed$c3PutNoRecorderPair(row);
+            return;
+        }
+        slabbed$c3PutRecorderFact(row, "afterStoredDy", "afterStoredDyBits",
+                slabbed$c3RecorderFact(world, primary));
+        BlockPos pair = slabbed$c3RecorderPair(world, primary, primaryState);
+        if (pair == null) {
+            slabbed$c3PutNoRecorderPair(row);
+            return;
+        }
+        BlockState pairState = world.getBlockState(pair);
+        row.put("pairPos", pair.toShortString());
+        row.put("pairPart", slabbed$c3RecorderPart(pairState));
+        row.put("pairState", pairState.toString());
+        row.put("pairAfterDy", Double.toString(SlabSupport.getYOffset(world, pair, pairState)));
+        slabbed$c3PutRecorderFact(row, "pairStoredDy", "pairStoredDyBits",
+                slabbed$c3RecorderFact(world, pair));
+    }
+
+    private static SlabAnchorAttachment.PlacementDyFact slabbed$c3RecorderFact(
+            Level world,
+            BlockPos pos
+    ) {
+        double effective = SlabAnchorAttachment.storedPlacementDy(world, pos);
+        return Double.isFinite(effective)
+                ? SlabAnchorAttachment.PlacementDyFact.present(effective)
+                : SlabAnchorAttachment.PlacementDyFact.absent();
+    }
+
+    private static BlockPos slabbed$c3RecorderPair(Level world, BlockPos primary, BlockState state) {
+        BlockPos pair;
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            pair = state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
+                    ? primary.above()
+                    : primary.below();
+            BlockState pairState = world.getBlockState(pair);
+            return pairState.getBlock() == state.getBlock()
+                    && pairState.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    && pairState.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    != state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    ? pair
+                    : null;
+        }
+        if (state.getBlock() instanceof BedBlock && state.hasProperty(BlockStateProperties.BED_PART)) {
+            pair = primary.relative(BedBlock.getConnectedDirection(state));
+            BlockState pairState = world.getBlockState(pair);
+            return pairState.getBlock() == state.getBlock()
+                    && pairState.hasProperty(BlockStateProperties.BED_PART)
+                    && pairState.getValue(BlockStateProperties.BED_PART)
+                    != state.getValue(BlockStateProperties.BED_PART)
+                    && primary.equals(pair.relative(BedBlock.getConnectedDirection(pairState)))
+                    ? pair
+                    : null;
+        }
+        return null;
+    }
+
+    private static String slabbed$c3RecorderPart(BlockState state) {
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            return state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    .toString().toLowerCase(java.util.Locale.ROOT);
+        }
+        if (state.hasProperty(BlockStateProperties.BED_PART)) {
+            return state.getValue(BlockStateProperties.BED_PART)
+                    .toString().toLowerCase(java.util.Locale.ROOT);
+        }
+        return "none";
+    }
+
+    private static void slabbed$c3PutRecorderFact(
+            LinkedHashMap<String, String> row,
+            String valueField,
+            String bitsField,
+            SlabAnchorAttachment.PlacementDyFact fact
+    ) {
+        if (fact == null || !fact.present()) {
+            row.put(valueField, "none");
+            row.put(bitsField, "none");
+            return;
+        }
+        row.put(valueField, Double.toString(Double.longBitsToDouble(fact.rawBits())));
+        row.put(bitsField, String.format(java.util.Locale.ROOT, "%016x", fact.rawBits()));
+    }
+
+    private static void slabbed$c3PutNoRecorderPair(LinkedHashMap<String, String> row) {
+        row.put("pairPos", "none");
+        row.put("pairPart", "none");
+        row.put("pairState", "none");
+        row.put("pairAfterDy", "none");
+        row.put("pairStoredDy", "none");
+        row.put("pairStoredDyBits", "none");
     }
 
     private static String slabbed$liveCursorAttachmentFacts(Level world, BlockPos pos, BlockState state) {

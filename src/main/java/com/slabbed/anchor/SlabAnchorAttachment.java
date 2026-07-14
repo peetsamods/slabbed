@@ -1,7 +1,10 @@
 package com.slabbed.anchor;
 
 import java.util.function.Predicate;
-import java.util.function.ToDoubleFunction;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -72,13 +75,18 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
 
-    /**
-     * FROZEN-DY (LAW.md restoration, Step 0): client-side mirror for the placement-height value store,
-     * matching the {@code clientAnchorLookup} pattern for chunk render paths that get a non-{@link Level}
-     * view. Returns {@link Double#NaN} when no height was stored at {@code pos}. Set by the client
-     * entrypoint; null on a dedicated server.
-     */
-    public static ToDoubleFunction<BlockPos> clientPlacementDyLookup = null;
+    @FunctionalInterface
+    public interface ClientPlacementDyFactLookup {
+        PlacementDyFact lookup(BlockGetter view, BlockPos pos);
+    }
+
+    /** Overlay-aware client lookup used by every client frozen-dy consumer. */
+    public static ClientPlacementDyFactLookup clientEffectivePlacementDyLookup = null;
+    /** Non-overlaying client backing lookup used by CAS and effective-read fallback. */
+    public static ClientPlacementDyFactLookup clientBackingPlacementDyLookup = null;
+
+    private static long c3NextPublicationProbeToken = 1L;
+    private static final Map<Long, Map<Long, Integer>> C3_PUBLICATION_PROBES = new HashMap<>();
 
     private static final Identifier ANCHOR_ID = Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "slab_anchors");
     private static final Identifier FROZEN_FLAT_ID = Identifier.fromNamespaceAndPath(Slabbed.MOD_ID, "frozen_flat");
@@ -204,6 +212,24 @@ public final class SlabAnchorAttachment {
     private record DyEntry(long pos, double dy) {
     }
 
+    /** Presence and raw bits are one indivisible C3 authority fact. */
+    public record PlacementDyFact(boolean present, long rawBits) {
+        public static PlacementDyFact absent() {
+            return new PlacementDyFact(false, 0L);
+        }
+
+        public static PlacementDyFact present(double value) {
+            if (!Double.isFinite(value)) {
+                throw new IllegalArgumentException("placement dy must be finite");
+            }
+            return new PlacementDyFact(true, Double.doubleToRawLongBits(value));
+        }
+
+        public double valueOrNaN() {
+            return present ? Double.longBitsToDouble(rawBits) : Double.NaN;
+        }
+    }
+
     private static final Codec<DyEntry> DY_ENTRY_CODEC = RecordCodecBuilder.create(inst -> inst.group(
             Codec.LONG.fieldOf("p").forGetter(DyEntry::pos),
             Codec.DOUBLE.fieldOf("d").forGetter(DyEntry::dy)
@@ -309,61 +335,130 @@ public final class SlabAnchorAttachment {
         writePlacementDyInternal(world, pos, dy);
     }
 
-    /**
-     * Client mirror (design §3 / R2): writes the resolver's client-PREDICTED landing height so the
-     * placed block renders at the aimed depth before the server's authoritative value syncs back and
-     * replaces it. Client-side only; no-op on server.
-     */
-    public static void writeClientPredictedPlacementDy(Level world, BlockPos pos, double dy) {
-        if (world == null || !world.isClientSide() || pos == null || Double.isNaN(dy)) {
-            return;
+    /** Writes a server-authoritative C3 batch with at most one attachment publication per chunk. */
+    public static int writePlacementDyBatch(Level world, Map<BlockPos, Long> rawBitsByPos) {
+        if (world == null || world.isClientSide() || rawBitsByPos == null || rawBitsByPos.isEmpty()) {
+            return 0;
         }
-        writePlacementDyInternal(world, pos, dy);
+        LinkedHashMap<BlockPos, PlacementDyFact> facts = new LinkedHashMap<>();
+        for (Map.Entry<BlockPos, Long> entry : rawBitsByPos.entrySet()) {
+            double value = Double.longBitsToDouble(entry.getValue());
+            if (!Double.isFinite(value)) {
+                throw new IllegalArgumentException("non-finite placement dy batch value");
+            }
+            facts.put(entry.getKey().immutable(), new PlacementDyFact(true, entry.getValue()));
+        }
+        return writePlacementDyFactsInternal(world, facts);
     }
 
-    /**
-     * Rollback of a client-PREDICTED entry (design §3 / review §5): when the server refuses a placement
-     * the client map is unchanged (no sync packet), so the predicted entry would ghost. Mirror vanilla's
-     * block-correction and drop it. Client-side only.
-     *
-     * <p><b>DEFERRED-to-C3 — NO CALLERS YET (fix-round MAJOR-1, disclosed).</b> The refusal is only
-     * observable client-side at the block-correction packet ({@code ClientPacketListener.handleBlockUpdate}
-     * reverting the predicted state), which needs a new client-only mixin that this server-only gametest
-     * harness cannot exercise — C3 (the capture-relocation commit, which owns the client mirror work)
-     * wires it. A useOn/place-RETURN hook CANNOT stand in: the predicted entry is only written when the
-     * client place SUCCEEDED ({@code consumesAction}), so at RETURN-with-refusal there is no entry to
-     * roll back. Interim behaviour: a ghost predicted entry is replaced by the next full-map chunk
-     * attachment sync (the PLACEMENT_DY packet codec ships the whole map), so the mis-render self-heals
-     * on the next sync rather than persisting indefinitely.
-     */
-    public static void rollbackClientPredictedPlacementDy(Level world, BlockPos pos) {
-        if (world == null || !world.isClientSide() || pos == null) {
-            return;
+    /** Applies only validated author-only correction facts on a client. Prediction never calls this. */
+    public static int applyClientAuthoritativePlacementDy(
+            Level world,
+            Map<BlockPos, PlacementDyFact> facts
+    ) {
+        if (world == null || !world.isClientSide() || facts == null || facts.isEmpty()) {
+            return 0;
         }
-        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-        if (chunk == null) {
-            return;
-        }
-        Long2DoubleOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
-        if (existing == null || !existing.containsKey(pos.asLong())) {
-            return;
-        }
-        Long2DoubleOpenHashMap map = new Long2DoubleOpenHashMap(existing);
-        map.defaultReturnValue(Double.NaN);
-        map.remove(pos.asLong());
-        chunk.setAttached(PLACEMENT_DY_TYPE, map);
+        return writePlacementDyFactsInternal(world, facts);
     }
 
     private static void writePlacementDyInternal(Level world, BlockPos pos, double dy) {
-        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-        if (chunk == null) {
+        writePlacementDyFactsInternal(world, Map.of(pos.immutable(), PlacementDyFact.present(dy)));
+    }
+
+    private static int writePlacementDyFactsInternal(Level world, Map<BlockPos, PlacementDyFact> facts) {
+        IdentityHashMap<LevelChunk, Long2DoubleOpenHashMap> copies = new IdentityHashMap<>();
+        IdentityHashMap<LevelChunk, Boolean> changedChunks = new IdentityHashMap<>();
+        int writes = 0;
+        for (Map.Entry<BlockPos, PlacementDyFact> entry : facts.entrySet()) {
+            BlockPos pos = entry.getKey();
+            PlacementDyFact desired = entry.getValue();
+            if (pos == null || desired == null) {
+                continue;
+            }
+            LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk == null) {
+                continue;
+            }
+            Long2DoubleOpenHashMap map = copies.computeIfAbsent(chunk, ignored -> {
+                Long2DoubleOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
+                Long2DoubleOpenHashMap copy = existing == null
+                        ? newDyMap()
+                        : new Long2DoubleOpenHashMap(existing);
+                copy.defaultReturnValue(Double.NaN);
+                return copy;
+            });
+            long key = pos.asLong();
+            PlacementDyFact current = map.containsKey(key)
+                    ? new PlacementDyFact(true, Double.doubleToRawLongBits(map.get(key)))
+                    : PlacementDyFact.absent();
+            if (current.equals(desired)) {
+                continue;
+            }
+            if (desired.present()) {
+                double value = Double.longBitsToDouble(desired.rawBits());
+                if (!Double.isFinite(value)) {
+                    throw new IllegalArgumentException("non-finite authoritative placement dy");
+                }
+                map.put(key, value);
+            } else {
+                map.remove(key);
+            }
+            changedChunks.put(chunk, Boolean.TRUE);
+            writes++;
+        }
+        for (LevelChunk chunk : changedChunks.keySet()) {
+            chunk.setAttached(PLACEMENT_DY_TYPE, copies.get(chunk));
+            recordC3PublicationForTests(chunk);
+        }
+        return writes;
+    }
+
+    public static synchronized long beginC3PublicationProbeForTests(BlockPos... cells) {
+        Map<Long, Integer> publicationsByChunk = new HashMap<>();
+        if (cells != null) {
+            for (BlockPos cell : cells) {
+                if (cell != null) {
+                    publicationsByChunk.put(
+                            net.minecraft.world.level.ChunkPos.pack(cell.getX() >> 4, cell.getZ() >> 4), 0);
+                }
+            }
+        }
+        if (publicationsByChunk.isEmpty()) {
+            throw new IllegalArgumentException("C3 publication probe requires at least one cell");
+        }
+        long token = c3NextPublicationProbeToken++;
+        C3_PUBLICATION_PROBES.put(token, publicationsByChunk);
+        return token;
+    }
+
+    public static synchronized int c3PublicationCountForTests(long token) {
+        Map<Long, Integer> publicationsByChunk = C3_PUBLICATION_PROBES.get(token);
+        return publicationsByChunk == null
+                ? 0
+                : publicationsByChunk.values().stream().mapToInt(Integer::intValue).sum();
+    }
+
+    public static synchronized int c3PublicationCountForTests(long token, int chunkX, int chunkZ) {
+        Map<Long, Integer> publicationsByChunk = C3_PUBLICATION_PROBES.get(token);
+        return publicationsByChunk == null ? 0 : publicationsByChunk.getOrDefault(
+                net.minecraft.world.level.ChunkPos.pack(chunkX, chunkZ), 0);
+    }
+
+    public static synchronized void stopC3PublicationProbeForTests(long token) {
+        C3_PUBLICATION_PROBES.remove(token);
+    }
+
+    private static synchronized void recordC3PublicationForTests(LevelChunk chunk) {
+        if (C3_PUBLICATION_PROBES.isEmpty()) {
             return;
         }
-        Long2DoubleOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
-        Long2DoubleOpenHashMap map = existing == null ? newDyMap() : new Long2DoubleOpenHashMap(existing);
-        map.defaultReturnValue(Double.NaN);
-        map.put(pos.asLong(), dy);
-        chunk.setAttached(PLACEMENT_DY_TYPE, map);
+        long key = chunk.getPos().pack();
+        for (Map<Long, Integer> publicationsByChunk : C3_PUBLICATION_PROBES.values()) {
+            if (publicationsByChunk.containsKey(key)) {
+                publicationsByChunk.merge(key, 1, Integer::sum);
+            }
+        }
     }
 
     /**
@@ -387,7 +482,7 @@ public final class SlabAnchorAttachment {
         if (world == null || base == null || fromK > maxK) {
             return false;
         }
-        if (world instanceof Level w) {
+        if (world instanceof Level w && !w.isClientSide()) {
             LevelChunk chunk = w.getChunk(base.getX() >> 4, base.getZ() >> 4);
             if (chunk == null) {
                 return false;
@@ -418,16 +513,37 @@ public final class SlabAnchorAttachment {
         if (pos == null) {
             return Double.NaN;
         }
+        boolean clientView = !(world instanceof Level) || ((Level) world).isClientSide();
+        if (clientView && clientEffectivePlacementDyLookup != null) {
+            PlacementDyFact effective = clientEffectivePlacementDyLookup.lookup(world, pos);
+            if (effective != null) {
+                return effective.valueOrNaN();
+            }
+        }
+        return rawPlacementDyFact(world, pos).valueOrNaN();
+    }
+
+    /** Direct authoritative backing read. This never invokes the overlay/effective lookup. */
+    public static PlacementDyFact rawPlacementDyFact(BlockGetter world, BlockPos pos) {
+        if (pos == null) {
+            return PlacementDyFact.absent();
+        }
         if (!(world instanceof Level w)) {
-            return clientPlacementDyLookup != null ? clientPlacementDyLookup.applyAsDouble(pos) : Double.NaN;
+            if (clientBackingPlacementDyLookup != null) {
+                PlacementDyFact fact = clientBackingPlacementDyLookup.lookup(world, pos);
+                return fact == null ? PlacementDyFact.absent() : fact;
+            }
+            return PlacementDyFact.absent();
         }
         LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
-            return Double.NaN;
+            return PlacementDyFact.absent();
         }
         Long2DoubleOpenHashMap map = chunk.getAttached(PLACEMENT_DY_TYPE);
         long key = pos.asLong();
-        return (map != null && map.containsKey(key)) ? map.get(key) : Double.NaN;
+        return (map != null && map.containsKey(key))
+                ? new PlacementDyFact(true, Double.doubleToRawLongBits(map.get(key)))
+                : PlacementDyFact.absent();
     }
 
     /**

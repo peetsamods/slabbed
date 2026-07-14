@@ -1,10 +1,12 @@
 package com.slabbed.test;
 
+import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -12,11 +14,15 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.BlockItemStateProperties;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -49,8 +55,17 @@ public final class NeighborUpdateInvarianceTest {
 
     // ── real-useOn placement ────────────────────────────────────────────────
     private static void place(GameTestHelper h, Item item, BlockPos clicked, Direction face, double yNudge) {
+        placeStack(h, new ItemStack(item), clicked, face, yNudge);
+    }
+
+    private static void placeStack(
+            GameTestHelper h,
+            ItemStack stack,
+            BlockPos clicked,
+            Direction face,
+            double yNudge
+    ) {
         Player player = h.makeMockPlayer(GameType.SURVIVAL);
-        ItemStack stack = new ItemStack(item);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         Vec3 hit = Vec3.atCenterOf(clicked)
                 .add(face.getStepX() * 0.5, face.getStepY() * 0.5 + yNudge, face.getStepZ() * 0.5);
@@ -316,5 +331,91 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabOnDeepLoweredFullBlockSurvivesNeighborEdits(GameTestHelper h) {
         runSubject(h, SUBJECTS.get(8));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c3_pair_door_toggle_and_neighbor_invariance(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 3, 3));
+        world.setBlock(owner, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        PlacementCaptureBoundaryGameTest.forceStore(world, owner, -1.0d);
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            place(h, Items.OAK_DOOR, owner, Direction.UP, 0.0d);
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        BlockPos lower = owner.above();
+        BlockPos upper = lower.above();
+        long lowerBits = requiredBits(h, world, lower);
+        long upperBits = requiredBits(h, world, upper);
+
+        world.setBlock(lower.east(), Blocks.GLASS.defaultBlockState(), Block.UPDATE_ALL);
+        world.removeBlock(lower.east(), false);
+        BlockState toggledLower = world.getBlockState(lower)
+                .setValue(BlockStateProperties.OPEN, true)
+                .setValue(BlockStateProperties.POWERED, true);
+        BlockState toggledUpper = world.getBlockState(upper)
+                .setValue(BlockStateProperties.OPEN, true)
+                .setValue(BlockStateProperties.POWERED, true);
+        world.setBlock(lower, toggledLower, Block.UPDATE_ALL);
+        world.setBlock(upper, toggledUpper, Block.UPDATE_ALL);
+
+        if (world.getBlockState(lower).isAir()
+                || world.getBlockState(upper).isAir()
+                || requiredBits(h, world, lower) != lowerBits
+                || requiredBits(h, world, upper) != upperBits) {
+            throw h.assertionException(lower, "door pair moved/lost raw dy after toggle and neighbor edits");
+        }
+        c3Pass(h, "neighbor_update_invariance_test_c3_pair_door_toggle_and_neighbor_invariance");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c3_pair_bed_neighbor_invariance(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos support = h.absolutePos(new BlockPos(3, 3, 3));
+        world.setBlock(support, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(support.east(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        PlacementCaptureBoundaryGameTest.forceStore(world, support, -1.0d);
+        PlacementCaptureBoundaryGameTest.forceStore(world, support.east(), -1.0d);
+        ItemStack bed = new ItemStack(Items.BED.red());
+        bed.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY.with(
+                BlockStateProperties.HORIZONTAL_FACING, Direction.EAST));
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            placeStack(h, bed, support, Direction.UP, 0.0d);
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        BlockPos foot = support.above();
+        BlockPos head = foot.east();
+        long footBits = requiredBits(h, world, foot);
+        long headBits = requiredBits(h, world, head);
+        world.setBlock(foot.north(), Blocks.GLASS.defaultBlockState(), Block.UPDATE_ALL);
+        world.removeBlock(foot.north(), false);
+        world.setBlock(head.south(), Blocks.GLASS.defaultBlockState(), Block.UPDATE_ALL);
+        world.removeBlock(head.south(), false);
+        if (world.getBlockState(foot).getValue(BlockStateProperties.BED_PART) != BedPart.FOOT
+                || world.getBlockState(head).getValue(BlockStateProperties.BED_PART) != BedPart.HEAD
+                || requiredBits(h, world, foot) != footBits
+                || requiredBits(h, world, head) != headBits) {
+            throw h.assertionException(foot, "bed pair moved/lost raw dy after non-support neighbor edits");
+        }
+        c3Pass(h, "neighbor_update_invariance_test_c3_pair_bed_neighbor_invariance");
+    }
+
+    private static long requiredBits(GameTestHelper h, ServerLevel world, BlockPos pos) {
+        SlabAnchorAttachment.PlacementDyFact fact = SlabAnchorAttachment.rawPlacementDyFact(world, pos);
+        if (!fact.present()) {
+            throw h.assertionException(pos, "required pair store missing");
+        }
+        return fact.rawBits();
+    }
+
+    private static void c3Pass(GameTestHelper h, String id) {
+        Slabbed.LOGGER.info("C3_FOCUSED | slabbed_gametest:{} | PASS", id);
+        h.succeed();
     }
 }

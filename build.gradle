@@ -184,6 +184,7 @@ sourceSets {
             include("com/slabbed/test/NeighborUpdateInvarianceTest.java")
             include("com/slabbed/test/DeepCompoundTowerLawTest.java")
             include("com/slabbed/test/LandingRuleLawTest.java")
+            include("com/slabbed/test/PlacementCaptureBoundaryGameTest.java")
             include("com/slabbed/test/RegistrySweepTest.java")
             include("com/slabbed/test/RegistrySweepArtifacts.java")
             include("com/slabbed/test/SlabRigCommandSmokeTest.java")
@@ -200,6 +201,7 @@ sourceSets {
             include("com/slabbed/test/SlabTestKitPaletteTest.java")
             include("com/slabbed/test/SlabTestKitCommandsTest.java")
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
+            include("com/slabbed/test/PlacementDyPredictionClientGameTest.java")
             include("com/slabbed/client/SlabModelStaleSentinelClientThrottleClientGameTest.java")
         }
     }

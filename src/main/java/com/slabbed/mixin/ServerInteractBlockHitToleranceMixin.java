@@ -1,7 +1,11 @@
 package com.slabbed.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.network.PlacementDyCorrectionServer;
 import com.slabbed.placement.LandingHitValidationPolicy;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
@@ -35,6 +39,41 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
 
     @Shadow @Final public ServerPlayer player;
+
+    /**
+     * Carries only the current handler argument to the post-reschedule ack seam. It is not an armed
+     * correction scope: the off-thread pass clears it when vanilla reschedules by throwing.
+     */
+    private static final ThreadLocal<ServerboundUseItemOnPacket> SLABBED_C3_PACKET = new ThreadLocal<>();
+
+    @WrapMethod(method = "handleUseItemOn")
+    private void slabbed$c3FinalizeAuthorCorrection(
+            ServerboundUseItemOnPacket packet,
+            Operation<Void> original
+    ) {
+        SLABBED_C3_PACKET.set(packet);
+        try {
+            original.call(packet);
+            PlacementDyCorrectionServer.finishNormalReturn();
+        } finally {
+            PlacementDyCorrectionServer.clearScope();
+            SLABBED_C3_PACKET.remove();
+        }
+    }
+
+    @WrapOperation(
+            method = "handleUseItemOn",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;ackBlockChangesUpTo(I)V")
+    )
+    private void slabbed$c3ArmAuthorCorrectionAfterAck(
+            ServerGamePacketListenerImpl listener,
+            int sequence,
+            Operation<Void> original
+    ) {
+        original.call(listener, sequence);
+        PlacementDyCorrectionServer.arm(player, SLABBED_C3_PACKET.get());
+    }
 
     @Inject(
             method = "handleUseItemOn",
