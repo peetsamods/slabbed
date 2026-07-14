@@ -40,6 +40,19 @@ ACTIONS_HEADER = [
     "marker",
 ]
 
+C3_PAIR_FIELDS = [
+    "afterStoredDy",
+    "afterStoredDyBits",
+    "pairPos",
+    "pairPart",
+    "pairState",
+    "pairAfterDy",
+    "pairStoredDy",
+    "pairStoredDyBits",
+]
+C3_ACTIONS_HEADER = ACTIONS_HEADER + C3_PAIR_FIELDS
+C3_RECORDER_VERSION = "26.2-recorder-truth-v3-origin-c3-pair-fields"
+
 MISMATCH_HEADER = ["type", "rowOrActionId", "marker", "pos", "heldItem"]
 
 OUTLINE_HEADER = [
@@ -136,6 +149,112 @@ def action(
         "expectedResult": "lowered_side_lane_continuation" if expected_dy != "unknown" else "unknown",
         "marker": marker,
     }
+
+
+def c3_action(
+    action_id,
+    side,
+    *,
+    family="door",
+    at="2026-07-11T07:00:00.000000Z",
+    placement="10, 64, 11",
+    pair_pos="10, 65, 11",
+):
+    if family == "door":
+        held = "minecraft:oak_door"
+        owner = "10, 64, 10"
+        hit = "10.500000,65.000000,10.500000"
+        after_state = (
+            "Block{minecraft:oak_door}[facing=south,half=lower,hinge=left,open=false,powered=false]"
+        )
+        pair_part = "upper"
+        pair_state = (
+            "Block{minecraft:oak_door}[facing=south,half=upper,hinge=left,open=false,powered=false]"
+        )
+    elif family == "bed":
+        held = "minecraft:red_bed"
+        owner = "20, 64, 20"
+        hit = "20.500000,65.000000,20.500000"
+        after_state = "Block{minecraft:red_bed}[facing=east,occupied=false,part=foot]"
+        pair_part = "head"
+        pair_state = "Block{minecraft:red_bed}[facing=east,occupied=false,part=head]"
+    else:
+        raise ValueError("unknown C3 fixture family: %s" % family)
+    row = action(
+        action_id,
+        side,
+        at=at,
+        held=held,
+        owner=owner,
+        hit=hit,
+        placement=placement,
+        expected_dy="-1.0",
+        after_dy="-1.0",
+        after_lane="anchored_full_block",
+    )
+    row.update({
+        "afterState": after_state,
+        "afterStoredDy": "-1.0",
+        "afterStoredDyBits": "bff0000000000000",
+        "pairPos": pair_pos,
+        "pairPart": pair_part,
+        "pairState": pair_state,
+        "pairAfterDy": "-1.0",
+        "pairStoredDy": "-1.0",
+        "pairStoredDyBits": "bff0000000000000",
+    })
+    return row
+
+
+def early_none_action(*, success=False):
+    row = action(
+        1,
+        "server",
+        held="minecraft:stone",
+        owner="30, 64, 30",
+        hit="30.500000,65.000000,30.500000",
+        placement="none",
+        expected_dy="unknown",
+        after_dy="none",
+        expected_lane="unknown",
+        after_lane="none",
+        marker="none",
+        result="Success[swingSource=CLIENT]" if success else "Fail[]",
+    )
+    row.update({
+        "actionType": "place_block" if success else "use_block",
+        "placeBeforeState": "none",
+        "placeBeforeDy": "none",
+        "afterState": "none",
+        "afterDy": "none",
+        "afterLaneKind": "none",
+        "afterPersistentLoweredSlabCarrier": "none",
+        **{field: "none" for field in C3_PAIR_FIELDS},
+    })
+    return row
+
+
+def c3_door_and_bed_rows():
+    return [
+        c3_action(1, "client", at="2026-07-11T07:00:00.000000Z"),
+        c3_action(2, "server", at="2026-07-11T07:00:00.050000Z"),
+        c3_action(
+            3,
+            "client",
+            family="bed",
+            at="2026-07-11T07:00:00.100000Z",
+            placement="20, 64, 21",
+            pair_pos="21, 64, 21",
+        ),
+        c3_action(
+            4,
+            "server",
+            family="bed",
+            at="2026-07-11T07:00:00.150000Z",
+            placement="20, 64, 21",
+            pair_pos="21, 64, 21",
+        ),
+    ]
 
 
 def sentinel(row_id, *, marker="LIVE_ENSEMBLE_GAP", severity="red"):
@@ -282,6 +401,7 @@ def write_fixture(
     summary_overrides=None,
     actions_header=None,
     java_command="launcher --accessToken [REDACTED] --uuid [REDACTED]",
+    recorder_version="26.2-recorder-truth-v3-origin",
 ):
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
@@ -292,7 +412,7 @@ def write_fixture(
         "schemaVersion": schema,
         "runId": run_id,
         "recorder": "LiveCursorIntentRecorder",
-        "recorderVersion": "26.2-recorder-truth-v3-origin",
+        "recorderVersion": recorder_version,
         "actionOriginContract": "PLAYER_AUTHORED|AUTO_USEON_PROXY",
         "enabled": "true",
         "createdAt": "2026-07-11T06:59:59.000000Z",
@@ -901,6 +1021,151 @@ class AdapterTest(unittest.TestCase):
         result = subprocess.run([str(capsule), str(legacy)], text=True, capture_output=True, check=False)
         self.assertEqual(4, result.returncode)
         self.assertEqual("", result.stdout)
+
+
+class C3PairFieldTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+
+    def write_c3(self, name, rows):
+        return write_fixture(
+            self.root / name,
+            rows=rows,
+            actions_header=C3_ACTIONS_HEADER,
+            recorder_version=C3_RECORDER_VERSION,
+        )
+
+    def marker_pair(self, marker, mutate):
+        rows = c3_door_and_bed_rows()[:2]
+        mutate(rows)
+        triage = adapter.analyze(self.write_c3(marker.lower(), rows))
+        pair = triage["playerAuthored"]["pairs"][0]
+        self.assertEqual("RED", triage["verdict"]["status"])
+        self.assertIn(marker, pair["redMarkers"])
+        self.assertEqual(1, triage["counters"]["adapter"][marker])
+        return triage, pair
+
+    def test_legacy_schema3_accepted_without_strict_gate(self):
+        triage = adapter.analyze(write_fixture(self.root / "legacy"))
+        self.assertEqual(0, adapter.exit_code_for(triage))
+        self.assertEqual(7, adapter.exit_code_for(triage, require_c3_pair_fields=True))
+        self.assertFalse(triage["c3PairFields"]["capable"])
+
+    def test_complete_door_and_bed_pair_fields_satisfy_gate(self):
+        triage = adapter.analyze(self.write_c3("green", c3_door_and_bed_rows()))
+        self.assertEqual(0, adapter.exit_code_for(triage, require_c3_pair_fields=True))
+        self.assertEqual({"bed": 1, "door": 1}, triage["c3PairFields"]["qualifyingFamilies"])
+        self.assertEqual({
+            "ADAPTER_C3_PAIR_FIELDS_MISSING": 0,
+            "ADAPTER_C3_PAIR_ONE_CELL": 0,
+            "ADAPTER_C3_PRIMARY_PAIR_BITS_SPLIT": 0,
+            "ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT": 0,
+        }, triage["counters"]["adapter"])
+
+    def test_partial_extended_header_is_integrity_exit_five(self):
+        recorder = write_fixture(
+            self.root / "partial-header",
+            rows=c3_door_and_bed_rows(),
+            actions_header=C3_ACTIONS_HEADER[:-1],
+            recorder_version=C3_RECORDER_VERSION,
+        )
+        with self.assertRaises(adapter.IntegrityError):
+            adapter.analyze(recorder)
+
+    def test_legacy_header_with_extended_json_is_integrity_error(self):
+        with self.assertRaises(adapter.IntegrityError):
+            adapter.analyze(write_fixture(
+                self.root / "mixed-json",
+                rows=c3_door_and_bed_rows(),
+                actions_header=ACTIONS_HEADER,
+                recorder_version=C3_RECORDER_VERSION,
+            ))
+
+    def test_store_decimal_hex_mismatch_is_integrity_error(self):
+        rows = c3_door_and_bed_rows()
+        rows[0]["afterStoredDyBits"] = "0000000000000000"
+        with self.assertRaises(adapter.IntegrityError):
+            adapter.analyze(self.write_c3("bits-mismatch", rows))
+
+    def test_uppercase_or_short_store_hex_is_integrity_error(self):
+        for index, bits in enumerate(("BFF0000000000000", "bff000000000000")):
+            rows = c3_door_and_bed_rows()
+            rows[0]["pairStoredDyBits"] = bits
+            with self.subTest(bits=bits), self.assertRaises(adapter.IntegrityError):
+                adapter.analyze(self.write_c3("bad-bits-%d" % index, rows))
+
+    def test_pair_fields_missing_marker_counter_and_markdown(self):
+        triage, _ = self.marker_pair(
+            "ADAPTER_C3_PAIR_FIELDS_MISSING",
+            lambda rows: [row.__setitem__("pairState", "none") for row in rows],
+        )
+        self.assertIn("ADAPTER_C3_PAIR_FIELDS_MISSING", adapter.render_markdown(triage))
+
+    def test_pair_one_cell_marker_counter(self):
+        self.marker_pair(
+            "ADAPTER_C3_PAIR_ONE_CELL",
+            lambda rows: [row.__setitem__("pairPos", row["placementPos"]) for row in rows],
+        )
+
+    def test_primary_pair_bits_split_marker_counter(self):
+        def split_bits(rows):
+            for row in rows:
+                row["pairAfterDy"] = "0.0"
+                row["pairStoredDy"] = "0.0"
+                row["pairStoredDyBits"] = "0000000000000000"
+
+        self.marker_pair("ADAPTER_C3_PRIMARY_PAIR_BITS_SPLIT", split_bits)
+
+    def test_client_server_pair_field_split_marker_counter(self):
+        def split_side(rows):
+            rows[1]["pairState"] = rows[1]["pairState"].replace("open=false", "open=true")
+
+        triage, pair = self.marker_pair("ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT", split_side)
+        self.assertIn("pairState", pair["c3PairFieldDifferences"])
+        self.assertIn("ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT", adapter.render_json(triage))
+
+    def test_extended_nonpair_explicit_none_is_valid(self):
+        row = action(1, "server", marker="none", expected_dy="unknown", expected_lane="unknown")
+        row.update({
+            "afterStoredDy": "-1.0",
+            "afterStoredDyBits": "bff0000000000000",
+            **{field: "none" for field in C3_PAIR_FIELDS[2:]},
+        })
+        triage = adapter.analyze(self.write_c3("nonpair", [row]))
+        self.assertEqual(0, adapter.exit_code_for(triage))
+
+    def test_extended_gate_without_bed_family_exits_seven(self):
+        triage = adapter.analyze(self.write_c3("door-only", c3_door_and_bed_rows()[:2]))
+        self.assertEqual(7, adapter.exit_code_for(triage, require_c3_pair_fields=True))
+
+    def test_early_non_success_none_shape_accepted(self):
+        triage = adapter.analyze(self.write_c3("early-none", [early_none_action()]))
+        self.assertEqual(0, adapter.exit_code_for(triage))
+
+    def test_success_place_block_none_shape_rejected(self):
+        with self.assertRaises(adapter.IntegrityError):
+            adapter.analyze(self.write_c3("success-none", [early_none_action(success=True)]))
+
+    def test_cli_require_c3_pair_fields_implies_player_pairs_and_families(self):
+        green = self.write_c3("cli-green", c3_door_and_bed_rows())
+        result = subprocess.run(
+            [sys.executable, str(ADAPTER_PATH), str(green), "--require-c3-pair-fields"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
+        legacy = write_fixture(self.root / "cli-legacy")
+        result = subprocess.run(
+            [sys.executable, str(ADAPTER_PATH), str(legacy), "--require-c3-pair-fields"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(7, result.returncode, result.stderr)
 
 
 if __name__ == "__main__":

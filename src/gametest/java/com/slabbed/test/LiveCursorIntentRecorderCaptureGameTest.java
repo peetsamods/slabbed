@@ -1,8 +1,21 @@
 package com.slabbed.test;
 
+import com.slabbed.Slabbed;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -24,6 +37,76 @@ import java.util.LinkedHashMap;
  * asserted files would ever be written — this test fails RED. After the revival it goes GREEN.
  */
 public final class LiveCursorIntentRecorderCaptureGameTest {
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c3_early_non_success_none_shape(GameTestHelper helper) {
+        Path dir = Path.of("build", "c3-recorder-early-none", "run-" + System.nanoTime());
+        System.setProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY, "true");
+        System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, dir.toString());
+        try {
+            LiveCursorIntentRecorder.resetForTests();
+            BlockPos owner = helper.absolutePos(new BlockPos(3, 3, 3));
+            BlockPos blocked = owner.above();
+            helper.getLevel().setBlock(owner, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            helper.getLevel().setBlock(blocked, Blocks.OBSIDIAN.defaultBlockState(), Block.UPDATE_ALL);
+            Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+            ItemStack stack = new ItemStack(Items.STONE);
+            player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+            Vec3 hit = Vec3.atCenterOf(owner).add(0.0d, 0.5d, 0.0d);
+            stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                    new BlockHitResult(hit, Direction.UP, owner, false)));
+            LiveCursorIntentRecorder.flushSummaryForTests();
+
+            String json = Files.readString(dir.resolve("session.jsonl"));
+            String tsv = Files.readString(dir.resolve("actions.tsv"));
+            for (String needle : new String[]{
+                    "\"clickedOwnerPos\":\"" + owner.toShortString() + "\"",
+                    "\"clickedFace\":\"up\"",
+                    "\"placementPos\":\"none\"",
+                    "\"afterState\":\"none\"",
+                    "\"afterDy\":\"none\"",
+                    "\"afterStoredDy\":\"none\"",
+                    "\"afterStoredDyBits\":\"none\"",
+                    "\"pairPos\":\"none\"",
+                    "\"pairPart\":\"none\"",
+                    "\"pairState\":\"none\"",
+                    "\"pairAfterDy\":\"none\"",
+                    "\"pairStoredDy\":\"none\"",
+                    "\"pairStoredDyBits\":\"none\""
+            }) {
+                if (!json.contains(needle)) {
+                    throw helper.assertionException("real early non-success action missing " + needle);
+                }
+            }
+            String expectedHeader = "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem"
+                    + "\tclickedOwnerPos\tclickedFace\tplacementPos\texpectedAfterDy\tafterDy"
+                    + "\texpectedAfterLaneKind\tafterLaneKind\tmarker\tafterStoredDy"
+                    + "\tafterStoredDyBits\tpairPos\tpairPart\tpairState\tpairAfterDy"
+                    + "\tpairStoredDy\tpairStoredDyBits";
+            String[] tsvLines = tsv.strip().split("\\R");
+            String[] actionColumns = tsvLines.length == 2 ? tsvLines[1].split("\t", -1) : new String[0];
+            if (tsvLines.length != 2
+                    || !tsvLines[0].equals(expectedHeader)
+                    || actionColumns.length != 21
+                    || !actionColumns[5].equals(owner.toShortString())
+                    || !actionColumns[6].equals("up")
+                    || !actionColumns[7].equals("none")
+                    || !actionColumns[8].equals("unknown")
+                    || !actionColumns[9].equals("none")
+                    || !actionColumns[10].equals("unknown")
+                    || !java.util.Arrays.stream(actionColumns, 11, 21).allMatch("none"::equals)) {
+                throw helper.assertionException("real early non-success TSV did not preserve root plus exact none shape");
+            }
+            Slabbed.LOGGER.info("C3_FOCUSED | slabbed_gametest:live_cursor_intent_recorder_capture_game_test_c3_early_non_success_none_shape | PASS");
+            helper.succeed();
+        } catch (IOException exception) {
+            throw helper.assertionException("C3 early non-success recorder proof failed: " + exception);
+        } finally {
+            System.clearProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY);
+            System.clearProperty(LiveCursorIntentRecorder.DIR_PROPERTY);
+            LiveCursorIntentRecorder.resetForTests();
+        }
+    }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void recorderWritesSessionAndSummaryWhenEnabled(GameTestHelper helper) {
