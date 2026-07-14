@@ -15,6 +15,15 @@ public class Slabbed implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("Slabbed initialized");
         com.slabbed.anchor.SlabAnchorAttachment.register();
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.serverboundPlay().register(
+                com.slabbed.network.PlacementDyPredictionEnvelopePayload.TYPE,
+                com.slabbed.network.PlacementDyPredictionEnvelopePayload.CODEC);
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay().register(
+                com.slabbed.network.PlacementDyCorrectionPayload.TYPE,
+                com.slabbed.network.PlacementDyCorrectionPayload.CODEC);
+        com.slabbed.network.PlacementDyCorrectionServer.registerReceiver();
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register(
+                (handler, server) -> com.slabbed.network.PlacementDyCorrectionServer.clearPlayer(handler.player));
         // /slabrig — the standard live-test rig builder. Dev tooling that SHIPS in every jar (present,
         // behaviour-neutral until invoked, op-gated). Server command: it authors real block state and
         // genuine anchor attachments, so it registers unconditionally here (mirrors the always-on

@@ -6,6 +6,7 @@
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
+    "ClientLevelBlockChangedAckMixin",
     "ClientLevelBlockChangeRemeshMixin",
     "ClientLevelLevelExtractorAccessor",
     "GameRendererCrosshairRetargetMixin",
@@ -13,6 +14,7 @@
     "LevelExtractorImportantDirtyAccessor",
     "LocalPlayerPickOffsetRaycastMixin",
     "MinecartRenderOffsetMixin",
+    "MultiPlayerGameModePredictionSequenceMixin",
     "TargetDyHudMixin"
   ],
   "injectors": {

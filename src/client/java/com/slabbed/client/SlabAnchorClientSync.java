@@ -13,6 +13,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Schedules a client-side block rerender for every anchored/lowered-carrier
  * position when synced chunk attachments change on the client.
@@ -29,6 +32,11 @@ import net.minecraft.world.level.chunk.LevelChunk;
  */
 @Environment(EnvType.CLIENT)
 public final class SlabAnchorClientSync {
+
+    private static final ThreadLocal<Integer> JOURNAL_AUTHORITATIVE_APPLY_DEPTH =
+            ThreadLocal.withInitial(() -> 0);
+    private static boolean c3RerenderProbeEnabled;
+    private static final Map<Long, Integer> C3_RERENDERS_FOR_TESTS = new HashMap<>();
 
     private SlabAnchorClientSync() {
     }
@@ -87,22 +95,8 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
             return set != null && set.contains(pos.asLong());
         };
-        // FROZEN-DY (Step 0): client-world mirror for the placement-height value store, so the model
-        // render path returns the frozen height (not a client-side geometric guess). NaN = none stored.
-        SlabAnchorAttachment.clientPlacementDyLookup = pos -> {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.level == null) {
-                return Double.NaN;
-            }
-            LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-            if (chunk == null) {
-                return Double.NaN;
-            }
-            it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap map =
-                    chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
-            long key = pos.asLong();
-            return (map != null && map.containsKey(key)) ? map.get(key) : Double.NaN;
-        };
+        SlabAnchorAttachment.clientBackingPlacementDyLookup = PlacementDyPredictionJournal::backingFact;
+        SlabAnchorAttachment.clientEffectivePlacementDyLookup = PlacementDyPredictionJournal::effectiveFact;
 
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
@@ -146,6 +140,10 @@ public final class SlabAnchorClientSync {
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.levelRenderer != null) {
+            scheduleRerendersForDyMap(mc, chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE));
+        }
     }
 
     private static LongOpenHashSet clientAttachmentSet(
@@ -179,13 +177,93 @@ public final class SlabAnchorClientSync {
     private static void registerDyRerenderListener(LevelChunk chunk) {
         chunk.<it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap>onAttachedSet(SlabAnchorAttachment.PLACEMENT_DY_TYPE)
                 .register((oldMap, newMap) -> {
+                    if (JOURNAL_AUTHORITATIVE_APPLY_DEPTH.get() > 0) {
+                        return;
+                    }
                     Minecraft mc = Minecraft.getInstance();
                     if (mc.levelRenderer == null) {
                         return;
                     }
-                    scheduleRerendersForDyMap(mc, oldMap);
-                    scheduleRerendersForDyMap(mc, newMap);
+                    scheduleRerendersForDyDiff(mc, oldMap, newMap);
                 });
+    }
+
+    static void beginJournalAuthoritativeApply() {
+        JOURNAL_AUTHORITATIVE_APPLY_DEPTH.set(JOURNAL_AUTHORITATIVE_APPLY_DEPTH.get() + 1);
+    }
+
+    static void endJournalAuthoritativeApply() {
+        int remaining = JOURNAL_AUTHORITATIVE_APPLY_DEPTH.get() - 1;
+        if (remaining <= 0) {
+            JOURNAL_AUTHORITATIVE_APPLY_DEPTH.remove();
+        } else {
+            JOURNAL_AUTHORITATIVE_APPLY_DEPTH.set(remaining);
+        }
+    }
+
+    public static void scheduleExactPlacementDyRerender(BlockPos pos) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.level == null || mc.levelRenderer == null || pos == null
+                || !mc.level.getChunkSource().hasChunk(pos.getX() >> 4, pos.getZ() >> 4)) {
+            return;
+        }
+        recordC3RerenderForTests(pos);
+        scheduleAnchorAttachmentRenderRefresh(mc, pos);
+    }
+
+    public static synchronized void beginC3RerenderProbeForTests() {
+        c3RerenderProbeEnabled = true;
+        C3_RERENDERS_FOR_TESTS.clear();
+    }
+
+    public static synchronized void resetC3RerenderProbeCountsForTests() {
+        C3_RERENDERS_FOR_TESTS.clear();
+    }
+
+    public static synchronized int c3RerenderCountForTests(BlockPos pos) {
+        return pos == null ? 0 : C3_RERENDERS_FOR_TESTS.getOrDefault(pos.asLong(), 0);
+    }
+
+    public static synchronized int c3RerenderCountForTests() {
+        return C3_RERENDERS_FOR_TESTS.values().stream().mapToInt(Integer::intValue).sum();
+    }
+
+    public static synchronized void stopC3RerenderProbeForTests() {
+        c3RerenderProbeEnabled = false;
+        C3_RERENDERS_FOR_TESTS.clear();
+    }
+
+    private static synchronized void recordC3RerenderForTests(BlockPos pos) {
+        if (c3RerenderProbeEnabled && pos != null) {
+            C3_RERENDERS_FOR_TESTS.merge(pos.asLong(), 1, Integer::sum);
+        }
+    }
+
+    private static void scheduleRerendersForDyDiff(
+            Minecraft mc,
+            it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap oldMap,
+            it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap newMap
+    ) {
+        LongOpenHashSet keys = new LongOpenHashSet();
+        if (oldMap != null) {
+            for (long key : oldMap.keySet()) {
+                keys.add(key);
+            }
+        }
+        if (newMap != null) {
+            for (long key : newMap.keySet()) {
+                keys.add(key);
+            }
+        }
+        for (long key : keys) {
+            boolean oldPresent = oldMap != null && oldMap.containsKey(key);
+            boolean newPresent = newMap != null && newMap.containsKey(key);
+            long oldBits = oldPresent ? Double.doubleToRawLongBits(oldMap.get(key)) : 0L;
+            long newBits = newPresent ? Double.doubleToRawLongBits(newMap.get(key)) : 0L;
+            if (oldPresent != newPresent || oldBits != newBits) {
+                scheduleExactPlacementDyRerender(BlockPos.of(key));
+            }
+        }
     }
 
     private static void scheduleRerendersForDyMap(Minecraft mc, it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap map) {

@@ -15,6 +15,14 @@ import java.lang.reflect.InvocationTargetException;
 public final class SlabbedClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        PlacementDyPredictionJournal.init();
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+                com.slabbed.network.PlacementDyCorrectionPayload.TYPE,
+                (payload, context) -> {
+                    com.slabbed.network.PlacementDyPredictionBridge.traceCorrectionWire(
+                            "RECEIVE", payload.signature());
+                    PlacementDyPredictionJournal.onCorrection(context.client().level, payload);
+                });
         initRuntimeDiagnostics("logInspectSessionStart", "inspect diagnostics",
                 Boolean.getBoolean("slabbed.inspect") || Boolean.getBoolean("slabbed.b2.live.trace"));
         SlabbedModelLoadingPlugin.init();

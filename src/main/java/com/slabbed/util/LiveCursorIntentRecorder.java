@@ -51,11 +51,17 @@ public final class LiveCursorIntentRecorder {
     // else in Slabbed's debug surface: a slash command (/slabdev record), never a JVM flag.
     private static volatile boolean enabled = Boolean.getBoolean(ENABLE_PROPERTY);
     private static final String SCHEMA_VERSION = "3";
-    private static final String RECORDER_VERSION = "26.2-recorder-truth-v3-origin";
+    private static final String RECORDER_VERSION = "26.2-recorder-truth-v3-origin-c3-pair-fields";
     private static final String RUN_ID = UUID.randomUUID().toString();
     private static final String ACTIONS_HEADER =
             "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem\tclickedOwnerPos\tclickedFace\tplacementPos"
-                    + "\texpectedAfterDy\tafterDy\texpectedAfterLaneKind\tafterLaneKind\tmarker";
+                    + "\texpectedAfterDy\tafterDy\texpectedAfterLaneKind\tafterLaneKind\tmarker"
+                    + "\tafterStoredDy\tafterStoredDyBits\tpairPos\tpairPart\tpairState"
+                    + "\tpairAfterDy\tpairStoredDy\tpairStoredDyBits";
+    private static final String[] C3_ACTION_FIELDS = {
+            "afterStoredDy", "afterStoredDyBits", "pairPos", "pairPart", "pairState",
+            "pairAfterDy", "pairStoredDy", "pairStoredDyBits"
+    };
 
     /** Machine-readable authorship boundary for placement action rows. */
     public enum ActionOrigin {
@@ -369,6 +375,9 @@ public final class LiveCursorIntentRecorder {
         // action as player-authored (or invent an unknown origin that falls through counter routing).
         ActionOrigin actionOrigin = currentActionOrigin();
         row.put("actionOrigin", actionOrigin.wireName());
+        for (String field : C3_ACTION_FIELDS) {
+            row.putIfAbsent(field, "none");
+        }
         appendActionExpectations(row);
         String markers = actionMarkers(row);
         row.put("marker", markers);
@@ -726,7 +735,15 @@ public final class LiveCursorIntentRecorder {
                         + '\t' + tsv(row.get("afterDy"))
                         + '\t' + tsv(row.get("expectedAfterLaneKind"))
                         + '\t' + tsv(row.get("afterLaneKind"))
-                        + '\t' + tsv(row.get("marker")));
+                        + '\t' + tsv(row.get("marker"))
+                        + '\t' + tsv(row.get("afterStoredDy"))
+                        + '\t' + tsv(row.get("afterStoredDyBits"))
+                        + '\t' + tsv(row.get("pairPos"))
+                        + '\t' + tsv(row.get("pairPart"))
+                        + '\t' + tsv(row.get("pairState"))
+                        + '\t' + tsv(row.get("pairAfterDy"))
+                        + '\t' + tsv(row.get("pairStoredDy"))
+                        + '\t' + tsv(row.get("pairStoredDyBits")));
     }
 
     private static void writeRenderedOutlineTsv(LinkedHashMap<String, String> row) {

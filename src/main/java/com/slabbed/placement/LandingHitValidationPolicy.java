@@ -3,6 +3,8 @@ package com.slabbed.placement;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -43,12 +45,31 @@ public final class LandingHitValidationPolicy {
                 || !Double.isFinite(ownerDy)
                 || !(ownerDy < -EPSILON)
                 || CompatHooks.shouldSkipOffset(ownerState)
+                || CompatHooks.shouldSkipSlabSupport(ownerState)
                 || CompatHooks.shouldSkipOffset(heldState)
-                || LandingResolver.classify(ownerState) != LandingResolver.Family.FULL_BLOCK) {
+                || CompatHooks.shouldSkipSlabSupport(heldState)) {
             return Double.NaN;
         }
 
         LandingResolver.Family heldFamily = LandingResolver.classify(heldState);
+        if (heldFamily == LandingResolver.Family.PAIRED_FLOOR_SEAT) {
+            boolean supportedOwner = ownerState.getBlock() instanceof SlabBlock
+                    || ownerState.getBlock() instanceof EntityBlock
+                    || ownerState.isSolidRender();
+            if (hitFace != Direction.UP || !supportedOwner) {
+                return Double.NaN;
+            }
+            boolean insidePairEnvelope = hitPos.x >= ownerPos.getX() - EPSILON
+                    && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
+                    && hitPos.y >= ownerPos.getY() + ownerDy - EPSILON
+                    && hitPos.y <= ownerPos.getY() + 1.0d + EPSILON
+                    && hitPos.z >= ownerPos.getZ() - EPSILON
+                    && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
+            return insidePairEnvelope ? ownerDy : Double.NaN;
+        }
+        if (LandingResolver.classify(ownerState) != LandingResolver.Family.FULL_BLOCK) {
+            return Double.NaN;
+        }
         if (heldFamily != LandingResolver.Family.SLAB
                 && heldFamily != LandingResolver.Family.FULL_BLOCK) {
             return Double.NaN;

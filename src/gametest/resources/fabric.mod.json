@@ -15,6 +15,7 @@
       "com.slabbed.test.SlabLaneConduitTerrainSlabsGuardTest$TerrainSlabsSlabLaneConduitGuardTestEntrypoint",
       "com.slabbed.test.BlockEntityCantileverTerrainSlabsGuardTest$TerrainSlabsBlockEntityCantileverGuardTestEntrypoint",
       "com.slabbed.test.GeometricRemeshSchedulerTest$GeometricRemeshSchedulerTestEntrypoint",
+      "com.slabbed.test.PlacementCaptureBoundaryGameTest$TestContentEntrypoint",
       "com.slabbed.test.SlabRigHangingDirectExecutorTest$StoreBootstrap"
     ],
     "fabric-gametest": [
@@ -67,6 +68,7 @@
       "com.slabbed.test.NeighborUpdateInvarianceTest",
       "com.slabbed.test.DeepCompoundTowerLawTest",
       "com.slabbed.test.LandingRuleLawTest",
+      "com.slabbed.test.PlacementCaptureBoundaryGameTest",
       "com.slabbed.test.RegistrySweepTest",
       "com.slabbed.test.SlabRigCommandSmokeTest",
       "com.slabbed.test.SlabRigCaseCatalogTest",
@@ -83,6 +85,7 @@
       "com.slabbed.test.SlabTestKitCommandsTest"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.PlacementDyPredictionClientGameTest",
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
       "com.slabbed.test.ModelStaleSentinelSelfCheckClientGameTest",
       "com.slabbed.client.SlabModelStaleSentinelClientThrottleClientGameTest"

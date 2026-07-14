@@ -5,8 +5,10 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import re
+import struct
 import sys
 import tempfile
 import uuid
@@ -24,7 +26,7 @@ PLAYER_ORIGIN = "PLAYER_AUTHORED"
 PROXY_ORIGIN = "AUTO_USEON_PROXY"
 PAIR_WINDOW_MICROSECONDS = 1_000_000
 
-ACTIONS_HEADER = [
+LEGACY_ACTIONS_HEADER = [
     "actionId",
     "cursorRowId",
     "actionType",
@@ -39,6 +41,26 @@ ACTIONS_HEADER = [
     "afterLaneKind",
     "marker",
 ]
+C3_PAIR_FIELDS = [
+    "afterStoredDy",
+    "afterStoredDyBits",
+    "pairPos",
+    "pairPart",
+    "pairState",
+    "pairAfterDy",
+    "pairStoredDy",
+    "pairStoredDyBits",
+]
+C3_ACTIONS_HEADER = LEGACY_ACTIONS_HEADER + C3_PAIR_FIELDS
+C3_RECORDER_VERSION = "26.2-recorder-truth-v3-origin-c3-pair-fields"
+C3_ADAPTER_MARKERS = [
+    "ADAPTER_C3_PAIR_FIELDS_MISSING",
+    "ADAPTER_C3_PAIR_ONE_CELL",
+    "ADAPTER_C3_PRIMARY_PAIR_BITS_SPLIT",
+    "ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT",
+]
+# Compatibility alias for callers that imported the original schema-3 header constant.
+ACTIONS_HEADER = LEGACY_ACTIONS_HEADER
 MISMATCH_HEADER = ["type", "rowOrActionId", "marker", "pos", "heldItem"]
 OUTLINE_HEADER = [
     "outlineRenderId",
@@ -381,7 +403,7 @@ def _parse_summary(path):
     return counters
 
 
-def _parse_tsv(path, expected_header):
+def _parse_tsv_headers(path, expected_headers):
     try:
         with path.open("r", encoding="utf-8", newline="") as handle:
             rows = list(csv.reader(handle, delimiter="\t"))
@@ -389,21 +411,35 @@ def _parse_tsv(path, expected_header):
         raise IntegrityError("cannot parse %s: %s" % (path.name, exc))
     if not rows:
         raise IntegrityError("%s is empty" % path.name)
-    if rows[0] != expected_header:
+    matched_header = next((header for header in expected_headers if rows[0] == header), None)
+    if matched_header is None:
         raise IntegrityError(
-            "%s header mismatch: expected %s, got %s"
-            % (path.name, "\t".join(expected_header), "\t".join(rows[0]))
+            "%s header mismatch: expected one of [%s], got %s"
+            % (
+                path.name,
+                "] or [".join("\t".join(header) for header in expected_headers),
+                "\t".join(rows[0]),
+            )
         )
     result = []
     for index, values in enumerate(rows[1:], start=2):
         if not values or values == [""]:
             continue
-        if len(values) != len(expected_header):
+        if len(values) != len(matched_header):
             raise IntegrityError("%s line %d has %d columns, expected %d" % (
-                path.name, index, len(values), len(expected_header)
+                path.name, index, len(values), len(matched_header)
             ))
-        result.append(dict(zip(expected_header, values)))
-    return result
+        result.append(dict(zip(matched_header, values)))
+    return result, matched_header
+
+
+def _parse_tsv(path, expected_header):
+    rows, _ = _parse_tsv_headers(path, [expected_header])
+    return rows
+
+
+def _parse_actions_tsv(path):
+    return _parse_tsv_headers(path, [LEGACY_ACTIONS_HEADER, C3_ACTIONS_HEADER])
 
 
 def _parse_instant(value, label):
@@ -511,6 +547,191 @@ def _finite_decimal(value, label):
     if not number.is_finite():
         raise IntegrityError("%s is not a finite decimal: %s" % (label, value))
     return number
+
+
+def _validate_store_fact(row, value_field, bits_field, label, allow_missing_pair=False):
+    value = row.get(value_field)
+    bits = row.get(bits_field)
+    if value == "none" and bits == "none":
+        return {"present": False, "value": "none", "bits": "none"}
+    if value == "none" or bits == "none":
+        if allow_missing_pair:
+            return None
+        raise IntegrityError("%s must use both decimal and raw bits or two explicit none values" % label)
+    if not isinstance(bits, str) or not re.fullmatch(r"[0-9a-f]{16}", bits):
+        raise IntegrityError("%s raw bits must be exactly 16 lowercase hexadecimal digits" % label)
+    decimal = _finite_decimal(value, "%s decimal" % label)
+    try:
+        double_value = float(value)
+    except (OverflowError, ValueError):
+        raise IntegrityError("%s is not a finite double: %s" % (label, value))
+    if not math.isfinite(double_value):
+        raise IntegrityError("%s is not a finite double: %s" % (label, value))
+    actual_bits = struct.pack(">d", double_value).hex()
+    if actual_bits != bits:
+        raise IntegrityError(
+            "%s decimal/raw-bits mismatch: %s encodes %s, not %s"
+            % (label, value, actual_bits, bits)
+        )
+    return {"present": True, "value": value, "decimal": decimal, "bits": bits}
+
+
+def _position_tuple(value, label):
+    canonical = _canonical_int_pos(value, label)
+    return tuple(int(part) for part in canonical.split(","))
+
+
+def _block_state_id(value):
+    if not isinstance(value, str):
+        return None
+    match = re.match(r"^Block\{([^}]+)\}", value)
+    return match.group(1) if match else None
+
+
+def _state_property(value, key):
+    if not isinstance(value, str):
+        return None
+    match = re.search(r"(?:\[|,)" + re.escape(key) + r"=([^,\]]+)", value)
+    return match.group(1).lower() if match else None
+
+
+def _c3_pair_family(row, pair_pos):
+    primary_state = row.get("afterState")
+    pair_state = row.get("pairState")
+    primary_id = _block_state_id(primary_state)
+    pair_id = _block_state_id(pair_state)
+    primary_pos = _position_tuple(row.get("placementPos"), "C3 primary placementPos")
+    pair_part = str(row.get("pairPart", "")).lower()
+    errors = []
+
+    primary_half = _state_property(primary_state, "half")
+    pair_half = _state_property(pair_state, "half")
+    if primary_half in {"lower", "upper"} or pair_half in {"lower", "upper"}:
+        family = "door" if primary_id and primary_id.endswith("_door") else "double_block"
+        expected = "upper" if primary_half == "lower" else "lower"
+        if primary_id is None or pair_id != primary_id:
+            errors.append("state_block")
+        if primary_half not in {"lower", "upper"} or pair_half != expected or pair_part != expected:
+            errors.append("state_part")
+        if not (
+            primary_pos[0] == pair_pos[0]
+            and primary_pos[2] == pair_pos[2]
+            and abs(primary_pos[1] - pair_pos[1]) == 1
+        ):
+            errors.append("position")
+        return family, errors
+
+    primary_bed_part = _state_property(primary_state, "part")
+    pair_bed_part = _state_property(pair_state, "part")
+    if primary_bed_part in {"foot", "head"} or pair_bed_part in {"foot", "head"}:
+        expected = "head" if primary_bed_part == "foot" else "foot"
+        if primary_id is None or not primary_id.endswith("_bed") or pair_id != primary_id:
+            errors.append("state_block")
+        if primary_bed_part not in {"foot", "head"} or pair_bed_part != expected or pair_part != expected:
+            errors.append("state_part")
+        if not (
+            primary_pos[1] == pair_pos[1]
+            and abs(primary_pos[0] - pair_pos[0]) + abs(primary_pos[2] - pair_pos[2]) == 1
+        ):
+            errors.append("position")
+        return "bed", errors
+
+    return None, ["state_family"]
+
+
+def _validate_c3_action_fields(row):
+    action_id = row.get("actionId", "unknown")
+    label = "action %s C3 primary store" % action_id
+    primary_fact = _validate_store_fact(
+        row, "afterStoredDy", "afterStoredDyBits", label
+    )
+    pair_values = [row.get(field) for field in C3_PAIR_FIELDS[2:]]
+    pair_claim = any(value != "none" for value in pair_values)
+    pair_complete = all(value != "none" for value in pair_values)
+    markers = set()
+    details = {}
+    pair_fact = {"present": False, "value": "none", "bits": "none"}
+    family = None
+
+    if not pair_claim:
+        return {
+            "pairClaim": False,
+            "pairComplete": False,
+            "primaryFact": primary_fact,
+            "pairFact": pair_fact,
+            "family": None,
+            "markers": [],
+            "details": {},
+        }
+
+    if not pair_complete:
+        markers.add("ADAPTER_C3_PAIR_FIELDS_MISSING")
+        details["missingFields"] = [
+            field for field in C3_PAIR_FIELDS[2:] if row.get(field) == "none"
+        ]
+
+    pair_pos = None
+    if row.get("pairPos") != "none":
+        pair_pos = _position_tuple(row.get("pairPos"), "action %s pairPos" % action_id)
+    if row.get("pairAfterDy") != "none":
+        _finite_decimal(row.get("pairAfterDy"), "action %s pairAfterDy" % action_id)
+
+    pair_value = row.get("pairStoredDy")
+    pair_bits = row.get("pairStoredDyBits")
+    if pair_value != "none" and pair_bits != "none":
+        pair_fact = _validate_store_fact(
+            row,
+            "pairStoredDy",
+            "pairStoredDyBits",
+            "action %s C3 pair store" % action_id,
+        )
+    elif pair_value != "none" or pair_bits != "none":
+        markers.add("ADAPTER_C3_PAIR_FIELDS_MISSING")
+
+    one_cell = pair_pos is not None and _canonical_int_pos(
+        row.get("pairPos"), "action %s pairPos" % action_id
+    ) == _canonical_int_pos(row.get("placementPos"), "action %s placementPos" % action_id)
+    if one_cell:
+        markers.add("ADAPTER_C3_PAIR_ONE_CELL")
+
+    if pair_complete and pair_pos is not None:
+        family, semantic_errors = _c3_pair_family(row, pair_pos)
+        if semantic_errors:
+            details["semanticDifferences"] = semantic_errors
+            if not (one_cell and semantic_errors == ["position"]):
+                markers.add("ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT")
+
+    if pair_complete and (not primary_fact["present"] or not pair_fact["present"]):
+        markers.add("ADAPTER_C3_PAIR_FIELDS_MISSING")
+    elif pair_complete and primary_fact["present"] and pair_fact["present"]:
+        primary_live = _finite_decimal(row.get("afterDy"), "action %s afterDy" % action_id)
+        pair_live = _finite_decimal(row.get("pairAfterDy"), "action %s pairAfterDy" % action_id)
+        exact_pair = (
+            primary_fact["bits"] == pair_fact["bits"]
+            and primary_live == primary_fact["decimal"]
+            and pair_live == pair_fact["decimal"]
+            and primary_live == pair_live
+        )
+        if not exact_pair:
+            markers.add("ADAPTER_C3_PRIMARY_PAIR_BITS_SPLIT")
+            details["primaryPairAuthority"] = {
+                "primaryLive": row.get("afterDy"),
+                "primaryStored": primary_fact["value"],
+                "primaryBits": primary_fact["bits"],
+                "pairLive": row.get("pairAfterDy"),
+                "pairStored": pair_fact["value"],
+                "pairBits": pair_fact["bits"],
+            }
+
+    return {
+        "pairClaim": pair_claim,
+        "pairComplete": pair_complete,
+        "primaryFact": primary_fact,
+        "pairFact": pair_fact,
+        "family": family if not details.get("semanticDifferences") else None,
+        "markers": sorted(markers),
+        "details": details,
+    }
 
 
 def _validate_explicit_green_action(row):
@@ -772,10 +993,11 @@ def _derived_summary(rows):
     return counters
 
 
-def _validate_actions(session_rows, action_tsv, summary):
+def _validate_actions(session_rows, action_tsv, summary, action_header):
     session_actions = [row for row in session_rows if row["type"] == "action"]
     if len(session_actions) != len(action_tsv):
         raise IntegrityError("actions.tsv/session action count mismatch")
+    extended = action_header == C3_ACTIONS_HEADER
     tsv_by_id = {}
     for row in action_tsv:
         raw_id = row.get("actionId")
@@ -789,9 +1011,19 @@ def _validate_actions(session_rows, action_tsv, summary):
         origin = row.get("actionOrigin")
         if origin not in (PLAYER_ORIGIN, PROXY_ORIGIN):
             raise IntegrityError("unknown actionOrigin at action %s: %r" % (row.get("actionId"), origin))
+        present_c3_fields = [field for field in C3_PAIR_FIELDS if field in row]
+        if present_c3_fields and len(present_c3_fields) != len(C3_PAIR_FIELDS):
+            raise IntegrityError(
+                "action %s has partial extended JSON fields: %s"
+                % (row.get("actionId"), ", ".join(present_c3_fields))
+            )
+        if extended and len(present_c3_fields) != len(C3_PAIR_FIELDS):
+            raise IntegrityError("extended actions.tsv requires complete extended JSON action rows")
+        if not extended and present_c3_fields:
+            raise IntegrityError("legacy actions.tsv cannot accompany extended JSON action rows")
         for key in [
             "side", "player", "actionType", "heldItem", "clickedOwnerPos", "clickedFace",
-            "clickedHitVec", "placementPos", "recordedAt", "actualResult", "afterDy",
+            "clickedHitVec", "recordedAt", "actualResult",
         ]:
             _require_string(row, key, "action %s" % row.get("actionId"), allow_none=False)
         action_id = row.get("actionId")
@@ -799,19 +1031,48 @@ def _validate_actions(session_rows, action_tsv, summary):
             raise IntegrityError("action %s has invalid side %r" % (action_id, row.get("side")))
         _canonical_int_pos(row.get("clickedOwnerPos"), "action %s clickedOwnerPos" % action_id)
         _canonical_hit_vec(row.get("clickedHitVec"), "action %s clickedHitVec" % action_id)
-        _canonical_int_pos(row.get("placementPos"), "action %s placementPos" % action_id)
         if row.get("clickedFace").lower() not in {"up", "down", "north", "south", "east", "west"}:
             raise IntegrityError("action %s has invalid clickedFace %r" % (action_id, row.get("clickedFace")))
-        _require_string(row, "afterLaneKind", "action %s" % row.get("actionId"), allow_none=True)
+        placement_pos = _require_string(
+            row, "placementPos", "action %s" % row.get("actionId"), allow_none=True
+        )
         _require_string(row, "marker", "action %s" % row.get("actionId"), allow_none=True)
-        if row.get("actionType") == "place_block":
-            _require_string(row, "afterState", "action %s" % row.get("actionId"), allow_none=False)
-            _finite_decimal(row.get("afterDy"), "action %s afterDy" % row.get("actionId"))
-        _validate_explicit_green_action(row)
+        if placement_pos == "none":
+            if row.get("actionType") == "place_block" or row.get("actualResult", "").startswith("Success["):
+                raise IntegrityError(
+                    "successful place_block action %s cannot use the early non-success none shape"
+                    % action_id
+                )
+            none_fields = [
+                "placeBeforeState",
+                "placeBeforeDy",
+                "afterState",
+                "afterDy",
+                "afterLaneKind",
+                "afterPersistentLoweredSlabCarrier",
+            ]
+            if any(row.get(field) != "none" for field in none_fields):
+                raise IntegrityError(
+                    "early non-success action %s has non-none transformed/final fields" % action_id
+                )
+            if extended and any(row.get(field) != "none" for field in C3_PAIR_FIELDS):
+                raise IntegrityError(
+                    "early non-success action %s has non-none store/pair fields" % action_id
+                )
+        else:
+            _canonical_int_pos(placement_pos, "action %s placementPos" % action_id)
+            _require_string(row, "afterDy", "action %s" % action_id, allow_none=False)
+            _require_string(row, "afterLaneKind", "action %s" % action_id, allow_none=True)
+            if row.get("actionType") == "place_block":
+                _require_string(row, "afterState", "action %s" % action_id, allow_none=False)
+                _finite_decimal(row.get("afterDy"), "action %s afterDy" % action_id)
+            _validate_explicit_green_action(row)
+        if extended:
+            row["_c3"] = _validate_c3_action_fields(row)
         mirror = tsv_by_id.get(int(row["actionId"]))
         if mirror is None:
             raise IntegrityError("session action missing from actions.tsv: %s" % row["actionId"])
-        for field in ACTIONS_HEADER:
+        for field in action_header:
             if row.get(field, "") != mirror.get(field, ""):
                 raise IntegrityError("actions.tsv/session mismatch action %s field %s" % (
                     row["actionId"], field
@@ -1105,6 +1366,31 @@ def _pair_record(run_id, client, server, signature):
         red_markers.append("ADAPTER_SIDE_RESULT_DETAIL_SPLIT")
     if client.get("afterState") != server.get("afterState"):
         red_markers.append("ADAPTER_SIDE_STATE_SPLIT")
+    client_c3 = client.get("_c3")
+    server_c3 = server.get("_c3")
+    c3_markers = set()
+    c3_field_differences = {}
+    c3_family = None
+    c3_capable = client_c3 is not None and server_c3 is not None
+    if c3_capable:
+        c3_markers.update(client_c3["markers"])
+        c3_markers.update(server_c3["markers"])
+        c3_field_differences = {
+            field: {"client": client.get(field), "server": server.get(field)}
+            for field in C3_PAIR_FIELDS if client.get(field) != server.get(field)
+        }
+        if c3_field_differences:
+            c3_markers.add("ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT")
+        if client_c3["family"] == server_c3["family"]:
+            c3_family = client_c3["family"]
+        else:
+            c3_markers.add("ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT")
+    elif client_c3 is not None or server_c3 is not None:
+        c3_markers.update({
+            "ADAPTER_C3_PAIR_FIELDS_MISSING",
+            "ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT",
+        })
+    red_markers.extend(c3_markers)
     red_markers = sorted(set(red_markers))
     explicit_green = (
         "LIVE_GREEN_PLACEMENT_AUTHORING" in client_tokens
@@ -1143,6 +1429,32 @@ def _pair_record(run_id, client, server, signature):
         "redMarkers": red_markers,
         "verdict": verdict,
         "differences": differences,
+        "c3PairFieldDifferences": c3_field_differences,
+        "c3PairFields": {
+            "capable": c3_capable,
+            "family": c3_family,
+            "qualifying": (
+                c3_capable
+                and c3_family in {"door", "bed"}
+                and client_c3["pairComplete"]
+                and server_c3["pairComplete"]
+                and not c3_markers
+            ),
+            "client": None if client_c3 is None else {
+                "pairClaim": client_c3["pairClaim"],
+                "pairComplete": client_c3["pairComplete"],
+                "family": client_c3["family"],
+                "markers": client_c3["markers"],
+                "details": client_c3["details"],
+            },
+            "server": None if server_c3 is None else {
+                "pairClaim": server_c3["pairClaim"],
+                "pairComplete": server_c3["pairComplete"],
+                "family": server_c3["family"],
+                "markers": server_c3["markers"],
+                "details": server_c3["details"],
+            },
+        },
         "clientRow": _public_row(client),
         "serverRow": _public_row(server),
     }
@@ -1344,11 +1656,11 @@ def analyze(input_path, run_id=None):
             )
         session_rows = []
         session_state = "absent_valid_zero_row_bootstrap"
-    action_tsv = _parse_tsv(recorder_dir / "actions.tsv", ACTIONS_HEADER)
+    action_tsv, action_header = _parse_actions_tsv(recorder_dir / "actions.tsv")
     mismatch_tsv = _parse_tsv(recorder_dir / "mismatches.tsv", MISMATCH_HEADER)
     outline_tsv = _parse_tsv(recorder_dir / "rendered-outlines.tsv", OUTLINE_HEADER)
 
-    actions = _validate_actions(session_rows, action_tsv, summary)
+    actions = _validate_actions(session_rows, action_tsv, summary, action_header)
     derived = _derived_summary(session_rows)
     for key in SUMMARY_KEYS:
         if key in ("sentinelArmedTotal", "sentinelSamplePasses"):
@@ -1371,6 +1683,20 @@ def analyze(input_path, run_id=None):
     player = _pair_player_actions(actions, manifest["runId"])
     proxy = _proxy_report(actions)
     verdict = _verdict(player, proxy, mismatch_rows)
+    adapter_counters = {
+        marker: sum(
+            marker in pair["redMarkers"] for pair in player["pairs"]
+        )
+        for marker in C3_ADAPTER_MARKERS
+    }
+    qualifying_families = Counter(
+        pair["c3PairFields"]["family"]
+        for pair in player["pairs"] if pair["c3PairFields"]["qualifying"]
+    )
+    c3_capable = (
+        action_header == C3_ACTIONS_HEADER
+        and manifest.get("recorderVersion") == C3_RECORDER_VERSION
+    )
     return {
         "triageSchemaVersion": TRIAGE_SCHEMA_VERSION,
         "verdict": verdict,
@@ -1385,6 +1711,7 @@ def analyze(input_path, run_id=None):
         "counters": {
             "producer": summary,
             "derived": derived,
+            "adapter": adapter_counters,
         },
         "liveness": {
             "sessionJsonl": session_state,
@@ -1396,6 +1723,19 @@ def analyze(input_path, run_id=None):
             "runCompletion": "unknown_no_session_end_event",
         },
         "playerAuthored": player,
+        "c3PairFields": {
+            "capable": c3_capable,
+            "actionHeader": "extended" if action_header == C3_ACTIONS_HEADER else "legacy",
+            "recorderVersion": manifest.get("recorderVersion"),
+            "qualifyingFamilies": {
+                "bed": qualifying_families.get("bed", 0),
+                "door": qualifying_families.get("door", 0),
+            },
+            "missingRequiredFamilies": [
+                family for family in ("door", "bed")
+                if qualifying_families.get(family, 0) == 0
+            ],
+        },
         "autoUseOnProxy": proxy,
         "mismatches": mismatch_rows,
         "breaks": {
@@ -1473,20 +1813,37 @@ def render_markdown(triage):
             triage["liveness"]["sentinelSamplePasses"],
         ),
         "",
+        "## C3 Pair Fields",
+        "",
+        "- capable: `%s`" % str(triage["c3PairFields"]["capable"]).lower(),
+        "- actions header: `%s`" % triage["c3PairFields"]["actionHeader"],
+        "- qualifying families: `%s`" % json.dumps(
+            triage["c3PairFields"]["qualifyingFamilies"], sort_keys=True
+        ),
+        "- missing required families: `%s`" % json.dumps(
+            triage["c3PairFields"]["missingRequiredFamilies"]
+        ),
+        "- adapter counters: `%s`" % json.dumps(
+            triage["counters"]["adapter"], sort_keys=True
+        ),
+        "",
         "## Player-Authored Placement Pairs",
         "",
     ])
     if triage["playerAuthored"]["pairs"]:
         lines.extend([
-            "| client | server | item | placement | latency ms | dy | verdict |",
-            "|---:|---:|---|---|---:|---|---|",
+            "| client | server | item | placement | latency ms | dy | C3 family | markers | verdict |",
+            "|---:|---:|---|---|---:|---|---|---|---|",
         ])
         for pair in triage["playerAuthored"]["pairs"][:50]:
-            lines.append("| %d | %d | %s | %s | %s | %s/%s | %s |" % (
+            lines.append("| %d | %d | %s | %s | %s | %s/%s | %s | %s | %s |" % (
                 pair["clientActionId"], pair["serverActionId"],
                 _markdown_cell(pair["signature"]["heldItem"]),
                 _markdown_cell(pair["signature"]["placementPos"]), pair["latencyMs"],
-                pair["clientAfterDy"], pair["serverAfterDy"], pair["verdict"],
+                pair["clientAfterDy"], pair["serverAfterDy"],
+                pair["c3PairFields"]["family"] or "none",
+                _markdown_cell(",".join(pair["redMarkers"]) or "none"),
+                pair["verdict"],
             ))
         if len(triage["playerAuthored"]["pairs"]) > 50:
             lines.append("\nomitted %d pairs; full rows are in triage.json" % (
@@ -1546,13 +1903,18 @@ def render_markdown(triage):
     return "\n".join(lines)
 
 
-def exit_code_for(triage, require_player_pairs=False):
+def exit_code_for(triage, require_player_pairs=False, require_c3_pair_fields=False):
     if triage["verdict"]["status"] == "RED":
         return 1
-    if require_player_pairs and (
+    if (require_player_pairs or require_c3_pair_fields) and (
         triage["playerAuthored"]["pairCount"] == 0
         or triage["playerAuthored"]["unpairedRows"]
         or triage["playerAuthored"]["ambiguousRows"]
+    ):
+        return 7
+    if require_c3_pair_fields and (
+        not triage["c3PairFields"]["capable"]
+        or triage["c3PairFields"]["missingRequiredFamilies"]
     ):
         return 7
     return 0
@@ -1596,6 +1958,11 @@ def main(argv=None):
     parser.add_argument("input", help="recorder directory, evidence root, or recorder parent")
     parser.add_argument("--run-id", help="select one schema-3 run id")
     parser.add_argument("--require-player-pairs", action="store_true")
+    parser.add_argument(
+        "--require-c3-pair-fields",
+        action="store_true",
+        help="require complete door and bed C3 pair fields; implies --require-player-pairs",
+    )
     parser.add_argument("--format", choices=("json", "markdown"), default="json")
     parser.add_argument("--output", help="atomically write report instead of stdout")
     try:
@@ -1607,7 +1974,11 @@ def main(argv=None):
             _atomic_write(args.output, text)
         else:
             sys.stdout.write(text)
-        return exit_code_for(triage, require_player_pairs=args.require_player_pairs)
+        return exit_code_for(
+            triage,
+            require_player_pairs=args.require_player_pairs,
+            require_c3_pair_fields=args.require_c3_pair_fields,
+        )
     except AdapterError as exc:
         sys.stderr.write("slabbed-recorder-adapter: %s\n" % exc)
         return exc.exit_code

@@ -5,12 +5,18 @@ import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * THE LANDING RESOLVER — the pure landing computation of the unified GOES rule
@@ -43,12 +49,46 @@ public final class LandingResolver {
         SLAB,
         /** An ordinary opaque full cube (design row 4; excludes powder snow / thin layers / entity blocks). */
         FULL_BLOCK,
+        /** A reciprocal DOUBLE_BLOCK_HALF or BED_PART pair owned by C3. */
+        PAIRED_FLOOR_SEAT,
         /** Everything the resolver does not own yet in C2 (doors, beds, objects, carpets, snow, ...). */
         UNSUPPORTED
     }
 
     /** The resolver's decision for a single placement: the height to freeze at {@code targetCell}. */
     public record PlacementResolution(BlockPos targetCell, double landingDy, boolean merge) {
+    }
+
+    /** Immutable root aim captured before recursive remaps and vanilla context transformation. */
+    public record PlacementAim(
+            BlockPos ownerPos,
+            BlockState ownerState,
+            double ownerVisibleDy,
+            Direction clickedFace,
+            Vec3 hitLocation,
+            boolean replacementSameCell
+    ) {
+        public PlacementAim {
+            ownerPos = ownerPos.immutable();
+        }
+    }
+
+    public static PlacementAim captureAim(UseOnContext context) {
+        Level level = context.getLevel();
+        BlockPos ownerPos = context.getClickedPos().immutable();
+        BlockState ownerState = level.getBlockState(ownerPos);
+        double ownerVisibleDy = ownerState.isAir()
+                || CompatHooks.shouldSkipOffset(ownerState)
+                || CompatHooks.shouldSkipSlabSupport(ownerState)
+                ? 0.0d
+                : visibleOwnerDy(level, ownerPos, ownerState);
+        return new PlacementAim(
+                ownerPos,
+                ownerState,
+                ownerVisibleDy,
+                context.getClickedFace(),
+                context.getClickLocation(),
+                ownerState.canBeReplaced(new BlockPlaceContext(context)));
     }
 
     /**
@@ -62,6 +102,11 @@ public final class LandingResolver {
         }
         if (placedState.getBlock() instanceof SlabBlock) {
             return Family.SLAB;
+        }
+        if (placedState.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                || (placedState.getBlock() instanceof BedBlock
+                && placedState.hasProperty(BlockStateProperties.BED_PART))) {
+            return Family.PAIRED_FLOOR_SEAT;
         }
         if (placedState.getBlock() instanceof PowderSnowBlock
                 || SlabSupport.isThinTopLayer(placedState)
@@ -102,13 +147,13 @@ public final class LandingResolver {
                 && placedState.getBlock() instanceof SlabBlock
                 && placedState.hasProperty(SlabBlock.TYPE)
                 && placedState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE) {
-            double dy = ownerVisibleDy(world, placedPos, placedState);
+            double dy = visibleOwnerDy(world, placedPos, placedState);
             return new PlacementResolution(placedPos, dy, true);
         }
 
         BlockPos ownerPos = placedPos.relative(clickedFace.getOpposite());
         BlockState ownerState = world.getBlockState(ownerPos);
-        double ownerVisibleDy = ownerVisibleDy(world, ownerPos, ownerState);
+        double ownerVisibleDy = visibleOwnerDy(world, ownerPos, ownerState);
 
         double landingDy;
         if (clickedFace == Direction.UP) {
@@ -126,20 +171,58 @@ public final class LandingResolver {
         return new PlacementResolution(placedPos, landingDy, false);
     }
 
+    /** C3 resolver using the frozen root aim rather than reconstructing an owner from the target. */
+    public static PlacementResolution resolve(
+            PlacementAim aim,
+            BlockPos actualTarget,
+            BlockState finalState,
+            Family family
+    ) {
+        if (aim == null || actualTarget == null || finalState == null || finalState.isAir()
+                || family == Family.UNSUPPORTED
+                || CompatHooks.shouldSkipOffset(finalState)
+                || CompatHooks.shouldSkipSlabSupport(finalState)) {
+            return null;
+        }
+        if (family == Family.PAIRED_FLOOR_SEAT && aim.clickedFace() != Direction.UP) {
+            return null;
+        }
+        if (family == Family.SLAB
+                && finalState.getBlock() instanceof SlabBlock
+                && finalState.hasProperty(SlabBlock.TYPE)
+                && finalState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
+                && aim.ownerPos().equals(actualTarget)) {
+            return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
+        }
+        double landingDy;
+        if (aim.clickedFace() == Direction.UP) {
+            landingDy = aim.ownerPos().getY() + aim.ownerVisibleDy() + topPlaneOffset(aim.ownerState())
+                    - actualTarget.getY();
+        } else if (aim.clickedFace() == Direction.DOWN) {
+            landingDy = aim.ownerPos().getY() + aim.ownerVisibleDy() + bottomPlaneOffset(aim.ownerState())
+                    - (actualTarget.getY() + 1.0d);
+        } else {
+            landingDy = aim.ownerVisibleDy() + aim.ownerPos().getY() - actualTarget.getY();
+        }
+        return Double.isFinite(landingDy)
+                ? new PlacementResolution(actualTarget, landingDy, false)
+                : null;
+    }
+
     /**
      * The single "how deep is the surface I clicked" authority (design §1.2): the frozen store first,
      * then the PUBLIC live read. TS-owned owners render flush ⇒ 0.0.
      */
-    private static double ownerVisibleDy(BlockGetter world, BlockPos ownerPos, BlockState ownerState) {
+    public static double visibleOwnerDy(BlockGetter world, BlockPos ownerPos, BlockState ownerState) {
         if (ownerState == null || ownerState.isAir() || CompatHooks.shouldSkipOffset(ownerState)) {
             return 0.0;
         }
         double stored = SlabAnchorAttachment.storedPlacementDy(world, ownerPos);
-        if (!Double.isNaN(stored)) {
+        if (Double.isFinite(stored)) {
             return stored;
         }
         double live = SlabSupport.getYOffset(world, ownerPos, ownerState);
-        return Double.isNaN(live) ? 0.0 : live;
+        return Double.isFinite(live) ? live : 0.0;
     }
 
     /** Visible top-plane offset within the owner's cell: bottom slab 0.5; full / TOP / DOUBLE 1.0. */

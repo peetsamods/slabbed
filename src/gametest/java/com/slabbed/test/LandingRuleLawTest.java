@@ -3,12 +3,14 @@ package com.slabbed.test;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.placement.LandingHitValidationPolicy;
+import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedOffsetRaycast;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -16,14 +18,17 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.BlockItemStateProperties;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.BlockHitResult;
@@ -62,11 +67,22 @@ import java.util.List;
 public final class LandingRuleLawTest {
 
     private static final double EPS = 1.0e-6;
+    private static final String C3_CROSS_CHUNK_STRUCTURE = "slabbed_gametest:c3_cross_chunk";
+    private static final int C3_CROSS_CHUNK_FIXTURE_SIZE = 20;
 
     // ── real-useOn placement (matches NeighborUpdateInvarianceTest / DeepCompoundTowerLawTest) ──
     private static void place(GameTestHelper h, Item item, BlockPos clicked, Direction face, double yNudge) {
+        placeStack(h, new ItemStack(item), clicked, face, yNudge);
+    }
+
+    private static void placeStack(
+            GameTestHelper h,
+            ItemStack stack,
+            BlockPos clicked,
+            Direction face,
+            double yNudge
+    ) {
         Player player = h.makeMockPlayer(GameType.SURVIVAL);
-        ItemStack stack = new ItemStack(item);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         Vec3 hit = Vec3.atCenterOf(clicked)
                 .add(face.getStepX() * 0.5, face.getStepY() * 0.5 + yNudge, face.getStepZ() * 0.5);
@@ -383,7 +399,7 @@ public final class LandingRuleLawTest {
             throw h.assertionException(lower, "GOES row 7: both door cells must store -1.0; " + bad
                     + " (TODAY NaN/NaN, setPlacedBy no-super capture hole). Flipped green by C3.");
         }
-        h.succeed();
+        c3Pass(h, "landing_rule_law_test_door_both_cells_stored_on_lowered_owner");
     }
 
     /**
@@ -437,8 +453,345 @@ public final class LandingRuleLawTest {
         if (!(Math.abs(headStored[0] + 1.0) <= EPS)) bad.add("HEAD=" + headStored[0]);
         if (!bad.isEmpty()) {
             throw h.assertionException(parts[0], "GOES row 8: both bed cells must store exactly -1.0; " + bad
-                    + " (TODAY FOOT -0.5 on half-formed bed, HEAD NaN never captured). Flipped green by C3.");
+                    + " (TODAY FOOT 0.0 on half-formed bed, HEAD NaN never captured). Flipped green by C3.");
         }
+        c3Pass(h, "landing_rule_law_test_bed_both_cells_stored_at_exactly_minus1");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void doorToggleKeepsBothStoreBits(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos owner = minus1FullBlockOwner(h, world);
+        place(h, Items.OAK_DOOR, owner, Direction.UP, 0.0d);
+        BlockPos lower = owner.above();
+        BlockPos upper = lower.above();
+        long lowerBits = requiredStoredBits(h, world, lower);
+        long upperBits = requiredStoredBits(h, world, upper);
+        world.setBlock(lower, world.getBlockState(lower)
+                .setValue(BlockStateProperties.OPEN, true)
+                .setValue(BlockStateProperties.POWERED, true), 3);
+        world.setBlock(upper, world.getBlockState(upper)
+                .setValue(BlockStateProperties.OPEN, true)
+                .setValue(BlockStateProperties.POWERED, true), 3);
+        if (requiredStoredBits(h, world, lower) != lowerBits
+                || requiredStoredBits(h, world, upper) != upperBits) {
+            throw h.assertionException(lower, "door toggle changed frozen pair raw bits");
+        }
+        c3Pass(h, "landing_rule_law_test_door_toggle_keeps_both_store_bits");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void doorPairNormalizesFromEitherHalf(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos owner = minus1FullBlockOwner(h, world);
+        place(h, Items.OAK_DOOR, owner, Direction.UP, 0.0d);
+        BlockPos lower = owner.above();
+        BlockPos upper = lower.above();
+        if (!normalizeDoubleHalf(world, lower).equals(List.of(lower, upper))
+                || !normalizeDoubleHalf(world, upper).equals(List.of(lower, upper))
+                || requiredStoredBits(h, world, lower) != requiredStoredBits(h, world, upper)) {
+            throw h.assertionException(lower, "door pair did not normalize identically from LOWER and UPPER");
+        }
+        c3Pass(h, "landing_rule_law_test_door_pair_normalizes_from_either_half");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void doorMalformedPairWritesNeitherCell(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 3, 3));
+        world.setBlock(owner, Blocks.STONE.defaultBlockState(), 3);
+        ItemStack malformed = new ItemStack(Items.OAK_DOOR);
+        malformed.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY.with(
+                BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER));
+        placeStack(h, malformed, owner, Direction.UP, 0.0d);
+        BlockPos primary = owner.above();
+        BlockPos secondary = primary.above();
+        if (!(world.getBlockState(primary).getBlock() instanceof DoorBlock)
+                || !(world.getBlockState(secondary).getBlock() instanceof DoorBlock)
+                || world.getBlockState(primary).getValue(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                != DoubleBlockHalf.UPPER
+                || world.getBlockState(secondary).getValue(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                != DoubleBlockHalf.UPPER
+                || !Double.isNaN(storedDy(world, primary))
+                || !Double.isNaN(storedDy(world, secondary))) {
+            throw h.assertionException(primary, "malformed same-half door must write neither cell");
+        }
+        c3Pass(h, "landing_rule_law_test_door_malformed_pair_writes_neither_cell");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void bedNormalizesFromEitherPartAndBlockStateFacingOverride(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos support = h.absolutePos(new BlockPos(3, 4, 3));
+        world.setBlock(support, Blocks.STONE.defaultBlockState(), 3);
+        world.setBlock(support.east(), Blocks.STONE.defaultBlockState(), 3);
+        forceStore(world, support, -1.0d);
+        forceStore(world, support.east(), -1.0d);
+        ItemStack overridden = new ItemStack(Items.BED.red());
+        overridden.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY.with(
+                BlockStateProperties.HORIZONTAL_FACING, Direction.EAST));
+        withFrozen(() -> placeStack(h, overridden, support, Direction.UP, 0.0d));
+        BlockPos foot = support.above();
+        BlockPos head = foot.east();
+        if (!world.getBlockState(foot).hasProperty(BlockStateProperties.BED_PART)
+                || world.getBlockState(foot).getValue(BlockStateProperties.BED_PART) != BedPart.FOOT
+                || !world.getBlockState(head).hasProperty(BlockStateProperties.BED_PART)
+                || world.getBlockState(head).getValue(BlockStateProperties.BED_PART) != BedPart.HEAD
+                || world.getBlockState(foot).getValue(BlockStateProperties.HORIZONTAL_FACING) != Direction.EAST
+                || !normalizeBed(world, foot).equals(List.of(foot, head))
+                || !normalizeBed(world, head).equals(List.of(foot, head))
+                || requiredStoredBits(h, world, foot) != requiredStoredBits(h, world, head)) {
+            throw h.assertionException(foot, "bed final-facing override did not select/normalize EAST head");
+        }
+        c3Pass(h, "landing_rule_law_test_bed_normalizes_from_either_part_and_block_state_facing_override");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void bedMalformedPairWritesNeitherCell(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos support = h.absolutePos(new BlockPos(3, 4, 3));
+        world.setBlock(support, Blocks.STONE.defaultBlockState(), 3);
+        world.setBlock(support.east(), Blocks.STONE.defaultBlockState(), 3);
+        ItemStack malformed = new ItemStack(Items.BED.red());
+        malformed.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY
+                .with(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST)
+                .with(BlockStateProperties.BED_PART, BedPart.HEAD));
+        placeStack(h, malformed, support, Direction.UP, 0.0d);
+        BlockPos primary = support.above();
+        BlockPos secondary = primary.east();
+        if (!(world.getBlockState(primary).getBlock() instanceof BedBlock)
+                || !(world.getBlockState(secondary).getBlock() instanceof BedBlock)
+                || world.getBlockState(primary).getValue(BlockStateProperties.BED_PART) != BedPart.HEAD
+                || world.getBlockState(secondary).getValue(BlockStateProperties.BED_PART) != BedPart.HEAD
+                || !Double.isNaN(storedDy(world, primary))
+                || !Double.isNaN(storedDy(world, secondary))) {
+            throw h.assertionException(primary, "malformed same-part bed must write neither cell");
+        }
+        c3Pass(h, "landing_rule_law_test_bed_malformed_pair_writes_neither_cell");
+    }
+
+    @GameTest(structure = C3_CROSS_CHUNK_STRUCTURE)
+    public void bedCrossChunkPairCopiesRawBits(GameTestHelper h) {
+        PairScene scene = crossChunkBed(h, false);
+        if ((scene.primary().getX() >> 4) == (scene.partner().getX() >> 4)
+                || requiredStoredBits(h, scene.world(), scene.primary())
+                != requiredStoredBits(h, scene.world(), scene.partner())) {
+            throw h.assertionException(scene.primary(), "cross-chunk bed did not copy one exact raw dy");
+        }
+        c3Pass(h, "landing_rule_law_test_bed_cross_chunk_pair_copies_raw_bits");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c3_pair_generic_double_block_copies_raw_bits(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 3, 3));
+        world.setBlock(owner, Blocks.STONE.defaultBlockState(), 3);
+        forceStore(world, owner, -1.0d);
+        withFrozen(() -> PlacementCaptureBoundaryGameTest.withPairFixture(() -> placeStack(h,
+                new ItemStack(Items.STONE), owner, Direction.UP, 0.0d)));
+        BlockPos lower = owner.above();
+        BlockPos upper = lower.above();
+        if (!world.getBlockState(lower).is(PlacementCaptureBoundaryGameTest.PAIR_BLOCK)
+                || !world.getBlockState(upper).is(PlacementCaptureBoundaryGameTest.PAIR_BLOCK)
+                || requiredStoredBits(h, world, lower) != requiredStoredBits(h, world, upper)) {
+            throw h.assertionException(lower, "generic DOUBLE_BLOCK_HALF pair did not copy primary raw bits");
+        }
+        c3Pass(h, "landing_rule_law_test_c3_pair_generic_double_block_copies_raw_bits");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c3_pair_same_chunk_one_publication(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 3, 3));
+        world.setBlock(owner, Blocks.STONE.defaultBlockState(), 3);
+        forceStore(world, owner, -1.0d);
+        BlockPos lower = owner.above();
+        long publicationProbe = SlabAnchorAttachment.beginC3PublicationProbeForTests(lower, lower.above());
+        try {
+            withFrozen(() -> PlacementCaptureBoundaryGameTest.withPairFixture(() -> placeStack(h,
+                    new ItemStack(Items.STONE), owner, Direction.UP, 0.0d)));
+            if (SlabAnchorAttachment.c3PublicationCountForTests(publicationProbe) != 1
+                    || requiredStoredBits(h, world, lower) != requiredStoredBits(h, world, lower.above())) {
+                throw h.assertionException(lower, "same-chunk pair must publish one complete dy map; count="
+                        + SlabAnchorAttachment.c3PublicationCountForTests(publicationProbe));
+            }
+        } finally {
+            SlabAnchorAttachment.stopC3PublicationProbeForTests(publicationProbe);
+        }
+        c3Pass(h, "landing_rule_law_test_c3_pair_same_chunk_one_publication");
+    }
+
+    @GameTest(structure = C3_CROSS_CHUNK_STRUCTURE)
+    public void c3_pair_cross_chunk_one_publication_per_chunk(GameTestHelper h) {
+        PairScene scene = crossChunkBed(h, true);
+        int firstX = scene.primary().getX() >> 4;
+        int firstZ = scene.primary().getZ() >> 4;
+        int secondX = scene.partner().getX() >> 4;
+        int secondZ = scene.partner().getZ() >> 4;
+        try {
+            if (SlabAnchorAttachment.c3PublicationCountForTests(scene.publicationProbe()) != 2
+                    || SlabAnchorAttachment.c3PublicationCountForTests(
+                            scene.publicationProbe(), firstX, firstZ) != 1
+                    || SlabAnchorAttachment.c3PublicationCountForTests(
+                            scene.publicationProbe(), secondX, secondZ) != 1) {
+                throw h.assertionException(scene.primary(), "cross-chunk pair must publish once per chunk; total="
+                        + SlabAnchorAttachment.c3PublicationCountForTests(scene.publicationProbe()));
+            }
+        } finally {
+            SlabAnchorAttachment.stopC3PublicationProbeForTests(scene.publicationProbe());
+        }
+        c3Pass(h, "landing_rule_law_test_c3_pair_cross_chunk_one_publication_per_chunk");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c3_pair_owner_shape_depth_placement_and_validation_matrix(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 6, 3));
+        BlockState[] owners = {
+                Blocks.STONE.defaultBlockState(),
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP),
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE),
+                Blocks.CHEST.defaultBlockState()
+        };
+        BlockState[] heldPairs = {Blocks.OAK_DOOR.defaultBlockState(), Blocks.BED.red().defaultBlockState()};
+        for (BlockState ownerState : owners) {
+            for (double depth : new double[]{-1.0d, -2.0d}) {
+                for (BlockState held : heldPairs) {
+                    Vec3 hit = new Vec3(owner.getX() + 0.5d, owner.getY() + depth + 0.25d,
+                            owner.getZ() + 0.5d);
+                    LandingResolver.PlacementAim aim = new LandingResolver.PlacementAim(
+                            owner, ownerState, depth, Direction.UP, hit, false);
+                    LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
+                            aim, owner.above(), held, LandingResolver.Family.PAIRED_FLOOR_SEAT);
+                    double expected = depth + ((ownerState.getBlock() instanceof SlabBlock
+                            && ownerState.getValue(SlabBlock.TYPE) == SlabType.BOTTOM) ? -0.5d : 0.0d);
+                    double validation = LandingHitValidationPolicy.shiftedCenterDy(
+                            owner, ownerState, depth, Direction.UP, hit, held);
+                    if (resolution == null
+                            || Double.doubleToRawLongBits(resolution.landingDy())
+                            != Double.doubleToRawLongBits(expected)
+                            || Double.doubleToRawLongBits(validation) != Double.doubleToRawLongBits(depth)) {
+                        throw h.assertionException(owner, "C3 owner/depth matrix failed owner=" + ownerState
+                                + " depth=" + depth + " held=" + held + " resolution=" + resolution
+                                + " validation=" + validation + " expected=" + expected);
+                    }
+                }
+            }
+        }
+        c3Pass(h, "landing_rule_law_test_c3_pair_owner_shape_depth_placement_and_validation_matrix");
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c3_pair_validation_negative_controls(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 5, 3));
+        Vec3 inside = new Vec3(owner.getX() + 0.5d, owner.getY() - 1.5d, owner.getZ() + 0.5d);
+        BlockState door = Blocks.OAK_DOOR.defaultBlockState();
+        double positive = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.UP, inside, door);
+        double nonUp = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.NORTH, inside, door);
+        double partial = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.OAK_FENCE.defaultBlockState(), -2.0d, Direction.UP, inside, door);
+        double outside = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.UP,
+                new Vec3(owner.getX() + 1.5d, owner.getY() - 1.5d, owner.getZ() + 0.5d), door);
+        double air = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.AIR.defaultBlockState(), -2.0d, Direction.UP, inside, door);
+        java.util.function.Predicate<BlockState> previous =
+                com.slabbed.compat.CompatHooks.shouldSkipSlabSupportTestOverride;
+        double compat;
+        try {
+            com.slabbed.compat.CompatHooks.shouldSkipSlabSupportTestOverride =
+                    state -> state.getBlock() == PlacementCaptureBoundaryGameTest.PAIR_BLOCK;
+            compat = LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.UP, inside,
+                    PlacementCaptureBoundaryGameTest.PAIR_BLOCK.defaultBlockState());
+        } finally {
+            com.slabbed.compat.CompatHooks.shouldSkipSlabSupportTestOverride = previous;
+        }
+        if (Double.doubleToRawLongBits(positive) != Double.doubleToRawLongBits(-2.0d)
+                || !Double.isNaN(nonUp)
+                || !Double.isNaN(partial)
+                || !Double.isNaN(outside)
+                || !Double.isNaN(air)
+                || !Double.isNaN(compat)) {
+            throw h.assertionException(owner, "C3 validation widened: positive=" + positive + " nonUp=" + nonUp
+                    + " partial=" + partial + " outside=" + outside + " air=" + air + " compat=" + compat);
+        }
+        c3Pass(h, "landing_rule_law_test_c3_pair_validation_negative_controls");
+    }
+
+    private record PairScene(ServerLevel world, BlockPos primary, BlockPos partner, long publicationProbe) {
+    }
+
+    private static PairScene crossChunkBed(GameTestHelper h, boolean trackPublications) {
+        ServerLevel world = h.getLevel();
+        BlockPos firstCorner = h.absolutePos(BlockPos.ZERO);
+        BlockPos oppositeCorner = h.absolutePos(new BlockPos(
+                C3_CROSS_CHUNK_FIXTURE_SIZE - 1,
+                7,
+                C3_CROSS_CHUNK_FIXTURE_SIZE - 1));
+        int minX = Math.min(firstCorner.getX(), oppositeCorner.getX());
+        int minY = Math.min(firstCorner.getY(), oppositeCorner.getY());
+        int minZ = Math.min(firstCorner.getZ(), oppositeCorner.getZ());
+        int boundaryX = minX + Math.floorMod(15 - minX, 16);
+        BlockPos support = new BlockPos(boundaryX, minY + 4, minZ + 2);
+        world.setBlock(support, Blocks.STONE.defaultBlockState(), 3);
+        world.setBlock(support.east(), Blocks.STONE.defaultBlockState(), 3);
+        forceStore(world, support, -1.0d);
+        forceStore(world, support.east(), -1.0d);
+        BlockPos primary = support.above();
+        BlockPos partner = primary.east();
+        long publicationProbe = trackPublications
+                ? SlabAnchorAttachment.beginC3PublicationProbeForTests(primary, partner)
+                : -1L;
+        ItemStack bed = new ItemStack(Items.BED.red());
+        bed.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY.with(
+                BlockStateProperties.HORIZONTAL_FACING, Direction.EAST));
+        try {
+            withFrozen(() -> placeStack(h, bed, support, Direction.UP, 0.0d));
+        } catch (RuntimeException | Error failure) {
+            if (publicationProbe >= 0L) {
+                SlabAnchorAttachment.stopC3PublicationProbeForTests(publicationProbe);
+            }
+            throw failure;
+        }
+        return new PairScene(world, primary, partner, publicationProbe);
+    }
+
+    private static List<BlockPos> normalizeDoubleHalf(ServerLevel world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        if (!state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            return List.of();
+        }
+        BlockPos lower = state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
+                ? pos : pos.below();
+        return List.of(lower, lower.above());
+    }
+
+    private static List<BlockPos> normalizeBed(ServerLevel world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof BedBlock)
+                || !state.hasProperty(BlockStateProperties.BED_PART)) {
+            return List.of();
+        }
+        BlockPos foot = state.getValue(BlockStateProperties.BED_PART) == BedPart.FOOT
+                ? pos
+                : pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getOpposite());
+        return List.of(foot, foot.relative(world.getBlockState(foot)
+                .getValue(BlockStateProperties.HORIZONTAL_FACING)));
+    }
+
+    private static long requiredStoredBits(GameTestHelper h, ServerLevel world, BlockPos pos) {
+        SlabAnchorAttachment.PlacementDyFact fact = SlabAnchorAttachment.rawPlacementDyFact(world, pos);
+        if (!fact.present()) {
+            throw h.assertionException(pos, "required C3 stored fact is absent");
+        }
+        return fact.rawBits();
+    }
+
+    private static void c3Pass(GameTestHelper h, String methodId) {
+        Slabbed.LOGGER.info("C3_FOCUSED | slabbed_gametest:{} | PASS", methodId);
         h.succeed();
     }
 
