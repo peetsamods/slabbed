@@ -31,6 +31,11 @@ public final class PlacementDyCorrectionServer {
     private static final Map<UUID, Map<PlacementDyPredictionBridge.GroupSignature,
             PlacementDyPredictionEnvelopePayload>> DECLARATIONS = new HashMap<>();
     private static final ThreadLocal<PacketScope> ACTIVE_SCOPE = new ThreadLocal<>();
+    private static final ThreadLocal<String> TEST_ACTIVE_ARM_OUTCOME = new ThreadLocal<>();
+    private static final ArrayList<PlacementDyPredictionBridge.GroupSignature> TEST_CORRECTION_SENDS =
+            new ArrayList<>();
+    private static final ArrayList<String> TEST_CORRECTION_FINISH_OUTCOMES = new ArrayList<>();
+    private static volatile boolean testCorrectionSendTraceEnabled;
 
     private PlacementDyCorrectionServer() {
     }
@@ -94,10 +99,14 @@ public final class PlacementDyCorrectionServer {
                 BuiltInRegistries.ITEM.getKey(held.getItem()).toString(),
                 hit.getBlockPos().asLong(),
                 hit.getDirection());
-        PacketScope scope = new PacketScope(player, signature);
         Map<PlacementDyPredictionBridge.GroupSignature, PlacementDyPredictionEnvelopePayload> entries =
                 DECLARATIONS.get(player.getUUID());
         PlacementDyPredictionEnvelopePayload declared = entries == null ? null : entries.remove(signature);
+        traceArmOutcomeForTests(declared == null ? "UNDECLARED" : "DECLARED");
+        if (declared == null) {
+            return;
+        }
+        PacketScope scope = new PacketScope(player, signature);
         BlockState clickedState = player.level().getBlockState(hit.getBlockPos());
         boolean clickedIsHeldScaffolding = held.getItem() instanceof ScaffoldingBlockItem scaffolding
                 && clickedState.is(scaffolding.getBlock());
@@ -111,7 +120,7 @@ public final class PlacementDyCorrectionServer {
                 player.isSecondaryUseActive(),
                 hit.isInside(),
                 player.getDirection(),
-                declared == null ? List.of() : declared.positions());
+                declared.positions());
         ACTIVE_SCOPE.set(scope);
     }
 
@@ -124,8 +133,13 @@ public final class PlacementDyCorrectionServer {
 
     public static void finishNormalReturn() {
         PacketScope scope = ACTIVE_SCOPE.get();
-        if (scope == null || scope.sent || scope.cells.isEmpty()
+        if (scope == null) {
+            traceCorrectionFinishForTests("NO_SCOPE");
+            return;
+        }
+        if (scope.sent || scope.cells.isEmpty()
                 || !ServerPlayNetworking.canSend(scope.player, PlacementDyCorrectionPayload.TYPE)) {
+            traceCorrectionFinishForTests("SKIPPED");
             return;
         }
         ArrayList<PlacementDyCorrectionPayload.CellFact> facts = new ArrayList<>(scope.cells.size());
@@ -135,17 +149,74 @@ public final class PlacementDyCorrectionServer {
             facts.add(new PlacementDyCorrectionPayload.CellFact(packed, fact.present(), fact.rawBits()));
         }
         ServerPlayNetworking.send(scope.player, new PlacementDyCorrectionPayload(scope.signature, facts));
+        traceCorrectionSendForTests(scope.signature);
         PlacementDyPredictionBridge.traceCorrectionWire("SEND", scope.signature);
         scope.sent = true;
+        traceCorrectionFinishForTests("SENT");
     }
 
     public static void clearScope() {
         ACTIVE_SCOPE.remove();
+        TEST_ACTIVE_ARM_OUTCOME.remove();
     }
 
     public static void clearPlayer(ServerPlayer player) {
         if (player != null) {
             DECLARATIONS.remove(player.getUUID());
+        }
+    }
+
+    public static synchronized void beginCorrectionSendTraceForTests() {
+        TEST_CORRECTION_SENDS.clear();
+        TEST_CORRECTION_FINISH_OUTCOMES.clear();
+        testCorrectionSendTraceEnabled = true;
+    }
+
+    public static synchronized int correctionSendCountForTests() {
+        return TEST_CORRECTION_SENDS.size();
+    }
+
+    public static synchronized List<String> correctionFinishOutcomesForTests() {
+        return List.copyOf(TEST_CORRECTION_FINISH_OUTCOMES);
+    }
+
+    public static synchronized void endCorrectionSendTraceForTests() {
+        testCorrectionSendTraceEnabled = false;
+        TEST_CORRECTION_SENDS.clear();
+        TEST_CORRECTION_FINISH_OUTCOMES.clear();
+        TEST_ACTIVE_ARM_OUTCOME.remove();
+    }
+
+    private static void traceCorrectionSendForTests(
+            PlacementDyPredictionBridge.GroupSignature signature
+    ) {
+        if (!testCorrectionSendTraceEnabled) {
+            return;
+        }
+        synchronized (PlacementDyCorrectionServer.class) {
+            if (testCorrectionSendTraceEnabled) {
+                TEST_CORRECTION_SENDS.add(signature);
+            }
+        }
+    }
+
+    private static void traceArmOutcomeForTests(String outcome) {
+        if (testCorrectionSendTraceEnabled) {
+            TEST_ACTIVE_ARM_OUTCOME.set(outcome);
+        }
+    }
+
+    private static void traceCorrectionFinishForTests(String outcome) {
+        if (!testCorrectionSendTraceEnabled) {
+            return;
+        }
+        String armOutcome = TEST_ACTIVE_ARM_OUTCOME.get();
+        if (armOutcome != null) {
+            synchronized (PlacementDyCorrectionServer.class) {
+                if (testCorrectionSendTraceEnabled) {
+                    TEST_CORRECTION_FINISH_OUTCOMES.add(armOutcome + "_" + outcome);
+                }
+            }
         }
     }
 

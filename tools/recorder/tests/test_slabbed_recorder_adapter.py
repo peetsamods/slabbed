@@ -257,6 +257,18 @@ def c3_door_and_bed_rows():
     ]
 
 
+def live_c3_door_and_bed_rows():
+    rows = c3_door_and_bed_rows()
+    for row in rows:
+        row.update({
+            "expectedAfterDy": "unknown",
+            "expectedAfterLaneKind": "unknown",
+            "expectedResult": "unknown",
+            "marker": "none",
+        })
+    return rows
+
+
 def sentinel(row_id, *, marker="LIVE_ENSEMBLE_GAP", severity="red"):
     return {
         "kind": "ENSEMBLE_GAP" if marker == "LIVE_ENSEMBLE_GAP" else "ENSEMBLE_OCCLUDED_OCCUPANCY",
@@ -1063,6 +1075,28 @@ class C3PairFieldTests(unittest.TestCase):
             "ADAPTER_C3_PRIMARY_PAIR_BITS_SPLIT": 0,
             "ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT": 0,
         }, triage["counters"]["adapter"])
+
+    def test_live_shaped_pairs_pass_c3_gate_without_generic_green_oracle(self):
+        triage = adapter.analyze(self.write_c3("live-shaped", live_c3_door_and_bed_rows()))
+        self.assertEqual(0, adapter.exit_code_for(triage, require_c3_pair_fields=True))
+        self.assertEqual("OBSERVED_UNCLASSIFIED", triage["verdict"]["status"])
+        self.assertFalse(triage["verdict"]["hasRed"])
+        self.assertTrue(triage["c3PairFields"]["capable"])
+        self.assertEqual([], triage["c3PairFields"]["missingRequiredFamilies"])
+        self.assertEqual({"bed": 1, "door": 1}, triage["c3PairFields"]["qualifyingFamilies"])
+        self.assertTrue(all(value == 0 for value in triage["counters"]["adapter"].values()))
+        for pair in triage["playerAuthored"]["pairs"]:
+            self.assertEqual("OBSERVED_UNCLASSIFIED", pair["verdict"])
+            self.assertTrue(pair["c3PairFields"]["qualifying"])
+            self.assertIn(pair["c3PairFields"]["family"], {"door", "bed"})
+            self.assertEqual("-1.0", pair["clientAfterDy"])
+            self.assertEqual("-1.0", pair["serverAfterDy"])
+            for side in ("clientRow", "serverRow"):
+                self.assertEqual("-1.0", pair[side]["afterStoredDy"])
+                self.assertEqual("-1.0", pair[side]["pairAfterDy"])
+                self.assertEqual("-1.0", pair[side]["pairStoredDy"])
+                self.assertEqual("bff0000000000000", pair[side]["afterStoredDyBits"])
+                self.assertEqual("bff0000000000000", pair[side]["pairStoredDyBits"])
 
     def test_partial_extended_header_is_integrity_exit_five(self):
         recorder = write_fixture(
