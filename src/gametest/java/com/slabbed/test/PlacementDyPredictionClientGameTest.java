@@ -29,6 +29,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -132,6 +133,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                     Slabbed.LOGGER.info("C3_CLIENT_CASE | {} | PASS", testCase.name());
                 } finally {
                     PlacementDyPredictionBridge.endTestWireTrace();
+                    PlacementDyCorrectionServer.endCorrectionSendTraceForTests();
                     context.runOnClient(client ->
                             PlacementDyPredictionJournal.endTestProbe(client.level));
                 }
@@ -285,6 +287,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
     private static void actualNetworkRoundTrip(
             ClientGameTestContext context, TestSingleplayerContext singleplayer, int ignored
     ) throws Exception {
+        PlacementDyCorrectionServer.beginCorrectionSendTraceForTests();
         BlockPos owner = singleplayer.getServer().computeOnServer(server -> {
             ServerPlayer player = server.getPlayerList().getPlayers().getFirst();
             BlockPos pos = player.blockPosition().relative(player.getDirection(), 2).below().immutable();
@@ -322,6 +325,12 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                     false, 0L, "real refusal correction removed stale client backing");
             expect(!PlacementDyPredictionJournal.debugCell(target).groupPresent(),
                     "real wire group was not retired after correction and ack");
+            expect(PlacementDyCorrectionServer.correctionSendCountForTests() == 1,
+                    "declared refusal did not send exactly one correction");
+            expect(PlacementDyCorrectionServer.correctionFinishOutcomesForTests().equals(
+                            List.of("DECLARED_SENT")),
+                    "declared refusal did not finish as one declaration-owned correction");
+            Slabbed.LOGGER.info("C3_DECLARATION_GATE | declared_refusal | corrections=1 | PASS");
         });
     }
 
@@ -592,6 +601,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, recorderDir.toString());
             LiveCursorIntentRecorder.resetForTests();
         });
+        PlacementDyCorrectionServer.beginCorrectionSendTraceForTests();
         try {
             RecorderFixture fixture = singleplayer.getServer().computeOnServer(server -> {
                 ServerPlayer player = server.getPlayerList().getPlayers().getFirst();
@@ -622,6 +632,37 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             context.runOnClient(client -> expect(recorderActionCount(
                             recorderDir, "client", "minecraft:oak_door", fixture.doorOwner()) == 1,
                     "real client door recorder action was duplicated"));
+            context.waitFor(client -> PlacementDyCorrectionServer.correctionFinishOutcomesForTests().size() >= 1,
+                    400);
+            context.runOnClient(client -> expect(
+                    PlacementDyCorrectionServer.correctionFinishOutcomesForTests().equals(
+                            List.of("DECLARED_SENT")),
+                    "real door placement did not finish as one declaration-owned correction"));
+
+            BlockPos door = fixture.doorOwner().above();
+            useOnDoor(context, door);
+            context.waitFor(client -> client.level.getBlockState(door).hasProperty(BlockStateProperties.OPEN)
+                    && client.level.getBlockState(door).getValue(BlockStateProperties.OPEN), 400);
+            context.waitFor(client -> PlacementDyCorrectionServer.correctionFinishOutcomesForTests().size() >= 2,
+                    400);
+            context.runOnClient(client -> expect(
+                    PlacementDyCorrectionServer.correctionFinishOutcomesForTests().equals(
+                            List.of("DECLARED_SENT", "UNDECLARED_NO_SCOPE")),
+                    "held-door open sent a correction without a client declaration: "
+                            + PlacementDyCorrectionServer.correctionFinishOutcomesForTests()));
+            useOnDoor(context, door);
+            context.waitFor(client -> client.level.getBlockState(door).hasProperty(BlockStateProperties.OPEN)
+                    && !client.level.getBlockState(door).getValue(BlockStateProperties.OPEN), 400);
+            context.waitFor(client -> PlacementDyCorrectionServer.correctionFinishOutcomesForTests().size() >= 3,
+                    400);
+            context.runOnClient(client -> {
+                expect(PlacementDyCorrectionServer.correctionFinishOutcomesForTests().equals(List.of(
+                                "DECLARED_SENT", "UNDECLARED_NO_SCOPE", "UNDECLARED_NO_SCOPE")),
+                        "held-door close sent a correction without a client declaration: "
+                                + PlacementDyCorrectionServer.correctionFinishOutcomesForTests());
+                Slabbed.LOGGER.info(
+                        "C3_DECLARATION_GATE | held_door_open_close | corrections_unchanged=1 | PASS");
+            });
 
             singleplayer.getServer().computeOnServer(server -> {
                 ServerPlayer player = server.getPlayerList().getPlayers().getFirst();
@@ -640,6 +681,13 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             context.runOnClient(client -> expect(recorderActionCount(
                             recorderDir, "client", "minecraft:red_bed", fixture.bedOwner()) == 1,
                     "real client bed recorder action was duplicated"));
+            context.waitFor(client -> PlacementDyCorrectionServer.correctionFinishOutcomesForTests().size() >= 4,
+                    400);
+            context.runOnClient(client -> expect(
+                    PlacementDyCorrectionServer.correctionFinishOutcomesForTests().equals(List.of(
+                            "DECLARED_SENT", "UNDECLARED_NO_SCOPE", "UNDECLARED_NO_SCOPE", "DECLARED_SENT")),
+                    "real bed placement did not finish as the second declaration-owned correction: "
+                            + PlacementDyCorrectionServer.correctionFinishOutcomesForTests()));
 
             singleplayer.getServer().computeOnServer(server -> {
                 ServerPlayer player = server.getPlayerList().getPlayers().getFirst();
@@ -652,6 +700,8 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             useOnRecorderOwner(context, fixture.failedOwner());
             context.waitFor(client -> recorderAction(
                     recorderDir, "server", "minecraft:oak_door", fixture.failedOwner()) != null, 400);
+            context.waitFor(client -> PlacementDyCorrectionServer.correctionFinishOutcomesForTests().size() >= 5,
+                    400);
             context.runOnClient(client -> {
                 assertRecorderPair(
                         recorderAction(recorderDir, "server", "minecraft:oak_door", fixture.failedOwner()),
@@ -663,6 +713,15 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 expect(recorderActionCount(
                                 recorderDir, "server", "minecraft:oak_door", fixture.failedOwner()) == 1,
                         "server recorder action after client declaration failure was duplicated");
+                expect(PlacementDyCorrectionServer.correctionSendCountForTests() == 2,
+                        "failed client declaration still armed an unsolicited correction");
+                expect(PlacementDyCorrectionServer.correctionFinishOutcomesForTests().equals(List.of(
+                                "DECLARED_SENT", "UNDECLARED_NO_SCOPE", "UNDECLARED_NO_SCOPE",
+                                "DECLARED_SENT", "UNDECLARED_NO_SCOPE")),
+                        "failed client declaration did not finish without a correction scope: "
+                                + PlacementDyCorrectionServer.correctionFinishOutcomesForTests());
+                Slabbed.LOGGER.info(
+                        "C3_DECLARATION_GATE | no_declaration | corrections_unchanged=2 | PASS");
             });
         } finally {
             context.runOnClient(client -> {
@@ -697,6 +756,13 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 InteractionHand.MAIN_HAND,
                 new BlockHitResult(Vec3.atCenterOf(owner).add(0.0d, -0.5d, 0.0d),
                         Direction.UP, owner, false)));
+    }
+
+    private static void useOnDoor(ClientGameTestContext context, BlockPos door) throws Exception {
+        context.runOnClient(client -> client.gameMode.useItemOn(
+                client.player,
+                InteractionHand.MAIN_HAND,
+                new BlockHitResult(Vec3.atCenterOf(door), Direction.NORTH, door, false)));
     }
 
     private static JsonObject recorderAction(
