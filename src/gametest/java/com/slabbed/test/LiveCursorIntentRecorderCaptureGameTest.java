@@ -94,13 +94,92 @@ public final class LiveCursorIntentRecorderCaptureGameTest {
                     || !actionColumns[8].equals("unknown")
                     || !actionColumns[9].equals("none")
                     || !actionColumns[10].equals("unknown")
-                    || !java.util.Arrays.stream(actionColumns, 11, 21).allMatch("none"::equals)) {
+                    || !actionColumns[11].equals("none")
+                    || !actionColumns[12].equals("LIVE_PLACEMENT_UNCLASSIFIED_FAILURE")
+                    || !java.util.Arrays.stream(actionColumns, 13, 21).allMatch("none"::equals)) {
                 throw helper.assertionException("real early non-success TSV did not preserve root plus exact none shape");
             }
+            if (!json.contains("\"marker\":\"LIVE_PLACEMENT_UNCLASSIFIED_FAILURE\"")) {
+                throw helper.assertionException("real early non-success action was not marked red");
+            }
+            assertContains(helper, dir.resolve("mismatches.tsv"),
+                    "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE");
+            assertContains(helper, dir.resolve("summary.md"),
+                    "placementUnclassifiedFailureRows=1");
             Slabbed.LOGGER.info("C3_FOCUSED | slabbed_gametest:live_cursor_intent_recorder_capture_game_test_c3_early_non_success_none_shape | PASS");
             helper.succeed();
         } catch (IOException exception) {
             throw helper.assertionException("C3 early non-success recorder proof failed: " + exception);
+        } finally {
+            System.clearProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY);
+            System.clearProperty(LiveCursorIntentRecorder.DIR_PROPERTY);
+            LiveCursorIntentRecorder.resetForTests();
+        }
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void recorderExposesOrdinaryNumericHeightFailures(GameTestHelper helper) {
+        Path dir = Path.of("build", "c4-recorder-truth", "run-" + System.nanoTime());
+        System.setProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY, "true");
+        System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, dir.toString());
+        try {
+            LiveCursorIntentRecorder.resetForTests();
+            LiveCursorIntentRecorder.recordAction(ordinaryAction(
+                    "minecraft:bamboo_button", "10,64,10", "10,65,10",
+                    "-1.500000", "-0.500000", "SUCCESS"));
+            LiveCursorIntentRecorder.recordAction(ordinaryAction(
+                    "minecraft:flower_pot", "20,64,20", "20,65,20",
+                    "-1.500000", "-1.000000", "SUCCESS"));
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> LiveCursorIntentRecorder.recordAction(ordinaryAction(
+                            "minecraft:oak_fence", "30,64,30", "30,65,30",
+                            "0.000000", "-0.500000", "SUCCESS")));
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> LiveCursorIntentRecorder.recordAction(ordinaryAction(
+                            "minecraft:conduit", "40,64,40", "40,65,40",
+                            "-0.500000", "0.000000", "SUCCESS")));
+
+            LinkedHashMap<String, String> unknown = ordinaryAction(
+                    "minecraft:lantern", "50,64,50", "50,65,50",
+                    "unknown", "-1.000000", "SUCCESS");
+            unknown.remove("expectedAfterDy");
+            LiveCursorIntentRecorder.recordAction(unknown);
+
+            LinkedHashMap<String, String> failed = ordinaryAction(
+                    "minecraft:stone", "60,64,60", "none",
+                    "unknown", "none", "Fail[]");
+            failed.put("actionType", "use_block");
+            failed.put("afterState", "none");
+            failed.put("afterLaneKind", "none");
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> LiveCursorIntentRecorder.recordAction(failed));
+            LiveCursorIntentRecorder.flushSummaryForTests();
+
+            assertContains(helper, dir.resolve("actions.tsv"),
+                    "minecraft:bamboo_button\t10,64,10\tUP\t10,65,10\t-1.500000\t-0.500000");
+            assertContains(helper, dir.resolve("actions.tsv"),
+                    "minecraft:flower_pot\t20,64,20\tUP\t20,65,20\t-1.500000\t-1.000000");
+            assertContains(helper, dir.resolve("actions.tsv"),
+                    "minecraft:oak_fence\t30,64,30\tUP\t30,65,30\t0.000000\t-0.500000");
+            assertContains(helper, dir.resolve("actions.tsv"),
+                    "minecraft:conduit\t40,64,40\tUP\t40,65,40\t-0.500000\t0.000000");
+            assertContains(helper, dir.resolve("actions.tsv"),
+                    "minecraft:lantern\t50,64,50\tUP\t50,65,50\tunknown\t-1.000000"
+                            + "\tunknown\tanchored_full_block\tnone");
+            assertContains(helper, dir.resolve("mismatches.tsv"),
+                    "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
+            assertContains(helper, dir.resolve("mismatches.tsv"),
+                    "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE");
+            assertContains(helper, dir.resolve("summary.md"),
+                    "placementExpectedDyMismatchRows=4");
+            assertContains(helper, dir.resolve("summary.md"),
+                    "placementUnclassifiedFailureRows=1");
+            assertContains(helper, dir.resolve("summary.md"), "playerAuthoredActionRows=3");
+            assertContains(helper, dir.resolve("summary.md"), "autoUseOnProxyActionRows=3");
+            helper.succeed();
         } finally {
             System.clearProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY);
             System.clearProperty(LiveCursorIntentRecorder.DIR_PROPERTY);
@@ -250,5 +329,30 @@ public final class LiveCursorIntentRecorderCaptureGameTest {
         if (!text.contains(needle)) {
             throw helper.assertionException("missing '" + needle + "' in " + path);
         }
+    }
+
+    private static LinkedHashMap<String, String> ordinaryAction(
+            String heldItem,
+            String ownerPos,
+            String placementPos,
+            String expectedDy,
+            String afterDy,
+            String actualResult) {
+        LinkedHashMap<String, String> action = new LinkedHashMap<>();
+        action.put("actionType", "place_block");
+        action.put("side", "server");
+        action.put("heldItem", heldItem);
+        action.put("clickedOwnerPos", ownerPos);
+        action.put("clickedFace", "UP");
+        action.put("clickedOwnerLaneKind", "anchored_full_block");
+        action.put("beforeDy", "-1.500000");
+        action.put("placementPos", placementPos);
+        action.put("expectedAfterDy", expectedDy);
+        action.put("expectedAfterLaneKind", "unknown");
+        action.put("afterState", "Block{" + heldItem + "}");
+        action.put("afterDy", afterDy);
+        action.put("afterLaneKind", "anchored_full_block");
+        action.put("actualResult", actualResult);
+        return action;
     }
 }
