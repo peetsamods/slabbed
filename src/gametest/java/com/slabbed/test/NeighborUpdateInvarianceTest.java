@@ -283,6 +283,17 @@ public final class NeighborUpdateInvarianceTest {
         h.succeed();
     }
 
+    /** Runs a law row under the shipped frozen-store mode while preserving the suite's compatibility floor. */
+    private void runSubjectWithFrozenStore(GameTestHelper h, NamedSubject subject) {
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            runSubject(h, subject);
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void torchOnMarkedSlabSurvivesNeighborEdits(GameTestHelper h) {
         runSubject(h, SUBJECTS.get(0));
@@ -290,7 +301,7 @@ public final class NeighborUpdateInvarianceTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void fenceGateOnMarkedSlabSurvivesNeighborEdits(GameTestHelper h) {
-        runSubject(h, SUBJECTS.get(1));
+        runSubjectWithFrozenStore(h, SUBJECTS.get(1));
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -324,13 +335,12 @@ public final class NeighborUpdateInvarianceTest {
     }
 
     /**
-     * EXPECTED RED with frozen OFF (see the subject comment): break_directly_below moves the deep-rest
-     * slab -1.5 -> -0.5, the same documented never-pop-on-direct-support-removal hole class the
-     * fence_gate subject pins. Do not "fix" by adding a lane; it goes green with the frozen-dy store on.
+     * The suite's global compatibility floor is frozen OFF, so this C4 law row explicitly runs under
+     * the shipped frozen-store mode. Breaking the support must leave the exact authored -1.5 value.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabOnDeepLoweredFullBlockSurvivesNeighborEdits(GameTestHelper h) {
-        runSubject(h, SUBJECTS.get(8));
+        runSubjectWithFrozenStore(h, SUBJECTS.get(8));
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")

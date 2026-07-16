@@ -13,10 +13,9 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p>This does not widen Minecraft's distance tolerance. It only says when an already-lowered,
  * ordinary full-block owner may move that validation center by its frozen visible depth: the held
- * block must belong to one of the two families {@link LandingResolver} owns in C2 (slab or ordinary
- * full block), and the packet hit must remain inside the pre-existing compound-owner envelope.
- * Unsupported C3+ families, flat owners, partial-block owners and out-of-envelope hits fall through
- * to vanilla validation.
+ * block must belong to a family {@link LandingResolver} owns through C4, and the packet hit must
+ * remain inside the pre-existing compound-owner envelope. C5 families, flat owners, partial-block
+ * owners and out-of-envelope hits fall through to vanilla validation.
  */
 public final class LandingHitValidationPolicy {
 
@@ -70,15 +69,14 @@ public final class LandingHitValidationPolicy {
         if (LandingResolver.classify(ownerState) != LandingResolver.Family.FULL_BLOCK) {
             return Double.NaN;
         }
-        if (heldFamily != LandingResolver.Family.SLAB
-                && heldFamily != LandingResolver.Family.FULL_BLOCK) {
+        if (heldFamily == LandingResolver.Family.UNSUPPORTED) {
             return Double.NaN;
         }
 
-        // No face branch is intentional: C2's resolver owns these two families on all six faces.
+        // No face branch is intentional: the placement resolver owns these families on all six faces.
 
         // Preserve the existing compound-owner envelope exactly; the redirect changes only which
-        // C2 held families qualify, while Minecraft's own 1.0000001 component tolerance stays intact.
+        // resolver-held families qualify, while Minecraft's own 1.0000001 tolerance stays intact.
         boolean insideOwnerEnvelope = hitPos.x >= ownerPos.getX() - EPSILON
                 && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
                 && hitPos.y >= ownerPos.getY() + ownerDy - EPSILON
