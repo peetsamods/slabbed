@@ -798,6 +798,62 @@ public final class LandingRuleLawTest {
     // ══════════════════════════════ C4 family — objects ══════════════════════════════
 
     /**
+     * C4 shared-cause discriminator: unrelated ordinary object families must enter the same
+     * placement-time aim authority and the same deep-hit validation authority. C5 thin layers stay
+     * explicitly unsupported.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c4ObjectsShareLandingAndHitValidationAuthority(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 5, 3));
+        BlockState ownerState = Blocks.STONE.defaultBlockState();
+        double ownerDy = -1.5d;
+        Vec3 hit = new Vec3(owner.getX() + 0.5d, owner.getY() + ownerDy + 0.25d,
+                owner.getZ() + 0.5d);
+        LandingResolver.PlacementAim aim = new LandingResolver.PlacementAim(
+                owner, ownerState, ownerDy, Direction.UP, hit, false);
+        BlockState[] c4Objects = {
+                Blocks.FLOWER_POT.defaultBlockState(),
+                Blocks.OAK_FENCE_GATE.defaultBlockState(),
+                Blocks.ACACIA_BUTTON.defaultBlockState(),
+                Blocks.CONDUIT.defaultBlockState(),
+                Blocks.LADDER.defaultBlockState(),
+                Blocks.OAK_HANGING_SIGN.defaultBlockState()
+        };
+
+        LandingResolver.Family sharedFamily = LandingResolver.classify(c4Objects[0]);
+        List<String> violations = new ArrayList<>();
+        for (BlockState object : c4Objects) {
+            LandingResolver.Family family = LandingResolver.classify(object);
+            LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
+                    aim, owner.above(), object, family);
+            double validation = LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, ownerState, ownerDy, Direction.UP, hit, object);
+            if (family == LandingResolver.Family.UNSUPPORTED
+                    || family != sharedFamily
+                    || resolution == null
+                    || Double.doubleToRawLongBits(resolution.landingDy())
+                    != Double.doubleToRawLongBits(ownerDy)
+                    || Double.doubleToRawLongBits(validation)
+                    != Double.doubleToRawLongBits(ownerDy)) {
+                violations.add(object.getBlock() + ": family=" + family
+                        + " resolution=" + resolution + " validation=" + validation);
+            }
+        }
+
+        if (LandingResolver.classify(Blocks.MOSS_CARPET.defaultBlockState())
+                != LandingResolver.Family.UNSUPPORTED
+                || LandingResolver.classify(Blocks.POWDER_SNOW.defaultBlockState())
+                != LandingResolver.Family.UNSUPPORTED) {
+            violations.add("C5 carpet/powder-snow boundary widened");
+        }
+        if (!violations.isEmpty()) {
+            throw h.assertionException(owner, "C4 ordinary objects do not share one landing/hit authority:\n  "
+                    + String.join("\n  ", violations));
+        }
+        h.succeed();
+    }
+
+    /**
      * §1.3.1 / family row 9 (C4). A flower pot on a -1.0 owner must seat FLUSH at -1.0. TODAY it
      * lands -0.5 — the deliberate exactly--1.0 deep-rest exclusion leaks for objects (TEST-17 GAP:
      * "flower_pot at -0.5 on EXACTLY -1.0 supports"). EXPECTED RED (stored -0.5, want -1.0).
@@ -1001,7 +1057,7 @@ public final class LandingRuleLawTest {
         h.succeed();
     }
 
-    /** Negative controls for the C2 server policy: no global tolerance or family widening. */
+    /** Negative controls for the shared server policy: no global tolerance or C5 widening. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void deepServerValidationRejectsUnsupportedAndOutOfEnvelopeHits(GameTestHelper h) {
         BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
@@ -1014,12 +1070,18 @@ public final class LandingRuleLawTest {
             throw h.assertionException(owner, "C2 full-block control must retain the exact -2.0 center shift");
         }
 
+        double objectPositive = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
+                Blocks.FLOWER_POT.defaultBlockState());
+        double entityObjectPositive = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
+                Blocks.CONDUIT.defaultBlockState());
         double unsupportedHeld = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
-                Blocks.TORCH.defaultBlockState());
-        double entityBlockHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                Blocks.MOSS_CARPET.defaultBlockState());
+        double powderSnowHeld = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
-                Blocks.CHEST.defaultBlockState());
+                Blocks.POWDER_SNOW.defaultBlockState());
         double flatOwner = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE.defaultBlockState(), 0.0d, Direction.SOUTH, inside,
                 Blocks.STONE_SLAB.defaultBlockState());
@@ -1031,13 +1093,16 @@ public final class LandingRuleLawTest {
                 owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, outside,
                 Blocks.STONE_SLAB.defaultBlockState());
 
-        if (!Double.isNaN(unsupportedHeld)
-                || !Double.isNaN(entityBlockHeld)
+        if (Double.doubleToRawLongBits(objectPositive) != Double.doubleToRawLongBits(-2.0d)
+                || Double.doubleToRawLongBits(entityObjectPositive) != Double.doubleToRawLongBits(-2.0d)
+                || !Double.isNaN(unsupportedHeld)
+                || !Double.isNaN(powderSnowHeld)
                 || !Double.isNaN(flatOwner)
                 || !Double.isNaN(partialOwner)
                 || !Double.isNaN(outsideEnvelope)) {
-            throw h.assertionException(owner, "server validation policy widened outside C2: unsupported="
-                    + unsupportedHeld + " entityBlock=" + entityBlockHeld + " flatOwner=" + flatOwner
+            throw h.assertionException(owner, "server validation policy boundary failed: object="
+                    + objectPositive + " entityObject=" + entityObjectPositive + " unsupported="
+                    + unsupportedHeld + " powderSnow=" + powderSnowHeld + " flatOwner=" + flatOwner
                     + " partialOwner=" + partialOwner + " outsideEnvelope=" + outsideEnvelope);
         }
         h.succeed();

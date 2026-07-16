@@ -25,13 +25,13 @@ import net.minecraft.world.phys.Vec3;
  * placed block's family attachment plane exactly on the owner's visible plane — for every owner
  * shape and every depth, on all six faces — computed ONCE at placement and frozen (LAW.md).
  *
- * <p><b>C2 scope</b> ({@code §4.4} row C2): wired for SLAB items and ordinary FULL-BLOCK items only
+ * <p><b>C2-C4 scope</b> ({@code §4.4} rows C2-C4): wired for slabs, ordinary full blocks,
+ * reciprocal floor-seated pairs, and ordinary object blocks. C5 thin layers and powder snow remain
+ * explicitly outside this authority.
  * NOTE (reviewer amendment A2, disclosed deviation): the design's §1.3.5 occlusion REFUSAL is NOT in
  * C2 — PlacementResolution has no refusal field and this resolver never cancels a placement, so a
  * deep DOWN-face placement can mint a body intersecting an existing visible body until the refusal
  * lands (C3+). The design signature's {@code refusal?} output is deferred with it.
- * (family rows 1-4). Other families (doors/beds/objects/thin-layers) keep today's live-lane paths
- * until C3-C5, so this resolver deliberately declines to author them ({@link Family#UNSUPPORTED}).
  *
  * <p>Recursion-safe (design R3): {@code ownerVisibleDy} reads the frozen store first and only falls
  * back to the PUBLIC {@link SlabSupport#getYOffset} (never the {@code getYOffsetInner} internals),
@@ -51,7 +51,9 @@ public final class LandingResolver {
         FULL_BLOCK,
         /** A reciprocal DOUBLE_BLOCK_HALF or BED_PART pair owned by C3. */
         PAIRED_FLOOR_SEAT,
-        /** Everything the resolver does not own yet in C2 (doors, beds, objects, carpets, snow, ...). */
+        /** An ordinary C4 object block, including partial shapes and block entities. */
+        OBJECT,
+        /** C5 thin layers, powder snow, air, and invalid states. */
         UNSUPPORTED
     }
 
@@ -92,9 +94,8 @@ public final class LandingResolver {
     }
 
     /**
-     * Classifies the held/placed block into a C2 resolver family. Powder snow, carpets and other thin
-     * layers are excluded (they are the AIM-KEYED C5 family and must keep flush today), as are entity
-     * blocks (structurally excluded from the compound path, design §1.4).
+     * Classifies the held/placed block into its placement-time resolver family. Powder snow, carpets
+     * and other thin layers remain excluded as the separate C5 family.
      */
     public static Family classify(BlockState placedState) {
         if (placedState == null || placedState.isAir()) {
@@ -109,11 +110,13 @@ public final class LandingResolver {
             return Family.PAIRED_FLOOR_SEAT;
         }
         if (placedState.getBlock() instanceof PowderSnowBlock
-                || SlabSupport.isThinTopLayer(placedState)
-                || placedState.getBlock() instanceof EntityBlock) {
+                || SlabSupport.isThinTopLayer(placedState)) {
             return Family.UNSUPPORTED;
         }
-        return placedState.isSolidRender() ? Family.FULL_BLOCK : Family.UNSUPPORTED;
+        if (placedState.getBlock() instanceof EntityBlock) {
+            return Family.OBJECT;
+        }
+        return placedState.isSolidRender() ? Family.FULL_BLOCK : Family.OBJECT;
     }
 
     /**

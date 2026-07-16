@@ -198,10 +198,9 @@ public final class PlacementCaptureBoundaryGameTest {
         BlockPos placed = owner.above();
         double dy = stored(world, placed);
         if (!world.getBlockState(placed).is(Blocks.FLOWER_POT)
-                || !Double.isFinite(dy)
-                || Math.abs(dy + 1.0d) <= EPS) {
-            throw h.assertionException(placed, "unsupported no-super route must capture a finite unstored "
-                    + "legacy value without gaining C4 TOP-SEAT; dy=" + dy);
+                || Double.doubleToRawLongBits(dy) != Double.doubleToRawLongBits(-1.0d)) {
+            throw h.assertionException(placed, "resolver-owned no-super route must publish exact "
+                    + "C4 TOP-SEAT dy=-1.0; dy=" + dy);
         }
         pass(h, "no_super_uses_unstored_fallback");
     }
