@@ -52,6 +52,7 @@ C3_PAIR_FIELDS = [
 ]
 C3_ACTIONS_HEADER = ACTIONS_HEADER + C3_PAIR_FIELDS
 C3_RECORDER_VERSION = "26.2-recorder-truth-v3-origin-c3-pair-fields"
+C4_RECORDER_VERSION = "26.2-recorder-truth-v4-c4-action-failure-audit"
 
 MISMATCH_HEADER = ["type", "rowOrActionId", "marker", "pos", "heldItem"]
 
@@ -82,6 +83,7 @@ SUMMARY_KEYS = [
     "renderedOutlineReplayBoundsSplitRows",
     "renderedOutlineTargetSplitRows",
     "placementExpectedDyMismatchRows",
+    "placementUnclassifiedFailureRows",
     "placementExpectedLaneMismatchRows",
     "loweredSideSlabPlacementVanillaDyRows",
     "collisionIteratorTargetMissRows",
@@ -206,10 +208,11 @@ def c3_action(
     return row
 
 
-def early_none_action(*, success=False):
+def early_none_action(action_id=1, *, origin="PLAYER_AUTHORED", success=False):
     row = action(
-        1,
+        action_id,
         "server",
+        origin=origin,
         held="minecraft:stone",
         owner="30, 64, 30",
         hit="30.500000,65.000000,30.500000",
@@ -388,6 +391,8 @@ def summary_for(rows, extra_rows=(), overrides=None):
             )
         if "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH" in marker:
             counters["placementExpectedDyMismatchRows"] += 1
+        if "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE" in marker:
+            counters["placementUnclassifiedFailureRows"] += 1
         if "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH" in marker:
             counters["placementExpectedLaneMismatchRows"] += 1
         if "LIVE_PLACEMENT_SIDE_DY_SPLIT" in marker:
@@ -414,6 +419,7 @@ def write_fixture(
     actions_header=None,
     java_command="launcher --accessToken [REDACTED] --uuid [REDACTED]",
     recorder_version="26.2-recorder-truth-v3-origin",
+    omit_summary_keys=None,
 ):
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
@@ -467,8 +473,9 @@ def write_fixture(
     )
 
     counters = summary_for(rows, extra_rows, summary_overrides)
+    omitted = set(omit_summary_keys or ())
     summary = "# Slabbed Live Cursor Intent Recorder Summary\n\n" + "".join(
-        f"{key}={counters[key]}\n" for key in SUMMARY_KEYS
+        f"{key}={counters[key]}\n" for key in SUMMARY_KEYS if key not in omitted
     )
     (root / "summary.md").write_text(summary, encoding="utf-8")
     return root
@@ -591,6 +598,144 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(0, triage["playerAuthored"]["pairCount"])
         self.assertEqual([1], [row["actionId"] for row in triage["autoUseOnProxy"]["redRows"]])
         self.assertEqual("10,64,11", triage["mismatches"][0]["context"]["placementPos"])
+
+    def test_live_shaped_numeric_height_and_unclassified_failure_rows_are_adapter_red(self):
+        rows = [
+            action(
+                1,
+                "server",
+                origin="AUTO_USEON_PROXY",
+                held="minecraft:bamboo_button",
+                expected_dy="-1.500000",
+                after_dy="-0.500000",
+                marker="none",
+            ),
+            action(
+                2,
+                "server",
+                origin="AUTO_USEON_PROXY",
+                held="minecraft:flower_pot",
+                expected_dy="-1.500000",
+                after_dy="-1.000000",
+                marker="none",
+            ),
+            action(
+                3,
+                "server",
+                origin="AUTO_USEON_PROXY",
+                held="minecraft:oak_fence",
+                expected_dy="0.000000",
+                after_dy="-0.500000",
+                marker="none",
+            ),
+            action(
+                4,
+                "server",
+                origin="AUTO_USEON_PROXY",
+                held="minecraft:conduit",
+                expected_dy="-0.500000",
+                after_dy="0.000000",
+                marker="none",
+            ),
+            action(
+                5,
+                "server",
+                origin="AUTO_USEON_PROXY",
+                held="minecraft:stone",
+                expected_dy="unknown",
+                expected_lane="unknown",
+                marker="none",
+                result="Fail[]",
+            ),
+        ]
+        triage = adapter.analyze(write_fixture(self.root / "recorder", rows=rows))
+        self.assertEqual("RED", triage["verdict"]["status"])
+        self.assertTrue(triage["verdict"]["hasAdapterRed"])
+        self.assertEqual(
+            4,
+            triage["counters"]["adapter"]["ADAPTER_EXPECTED_DY_MISMATCH"],
+        )
+        self.assertEqual(
+            1,
+            triage["counters"]["adapter"]["ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE"],
+        )
+        self.assertEqual(
+            [1, 2, 3, 4, 5],
+            [row["actionId"] for row in triage["autoUseOnProxy"]["redRows"]],
+        )
+        self.assertEqual([], triage["autoUseOnProxy"]["sample"])
+
+    def test_producer_unclassified_failure_marker_reconciles_and_is_red(self):
+        row = action(
+            1,
+            "server",
+            origin="AUTO_USEON_PROXY",
+            expected_dy="unknown",
+            expected_lane="unknown",
+            marker="LIVE_PLACEMENT_UNCLASSIFIED_FAILURE",
+            result="Fail[]",
+        )
+        mismatch = [(
+            "action",
+            "1",
+            "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE",
+            "10, 64, 10",
+            "minecraft:stone_slab",
+        )]
+        triage = adapter.analyze(write_fixture(
+            self.root / "recorder",
+            rows=[row],
+            mismatches=mismatch,
+            recorder_version=C4_RECORDER_VERSION,
+        ))
+        self.assertEqual("RED", triage["verdict"]["status"])
+        self.assertEqual(1, triage["counters"]["producer"]["placementUnclassifiedFailureRows"])
+        self.assertEqual(1, triage["counters"]["derived"]["placementUnclassifiedFailureRows"])
+        self.assertEqual(
+            0,
+            triage["counters"]["adapter"]["ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE"],
+        )
+
+    def test_producer_early_none_failure_mismatch_is_valid_red(self):
+        row = early_none_action()
+        row["marker"] = "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE"
+        mismatch = [(
+            "action",
+            "1",
+            "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE",
+            "30, 64, 30",
+            "minecraft:stone",
+        )]
+        triage = adapter.analyze(write_fixture(
+            self.root / "recorder",
+            rows=[row],
+            mismatches=mismatch,
+            actions_header=C3_ACTIONS_HEADER,
+            recorder_version=C4_RECORDER_VERSION,
+        ))
+        self.assertEqual("RED", triage["verdict"]["status"])
+        self.assertEqual("none", triage["mismatches"][0]["context"]["placementPos"])
+        self.assertEqual(1, triage["counters"]["producer"]["placementUnclassifiedFailureRows"])
+
+    def test_legacy_summary_without_failure_counter_is_accepted_and_identified(self):
+        triage = adapter.analyze(write_fixture(
+            self.root / "recorder",
+            omit_summary_keys={"placementUnclassifiedFailureRows"},
+        ))
+        self.assertEqual(
+            ["placementUnclassifiedFailureRows"],
+            triage["counters"]["compatibility"]["legacyMissingProducerCounters"],
+        )
+        self.assertEqual(0, triage["counters"]["producer"]["placementUnclassifiedFailureRows"])
+
+    def test_c4_summary_requires_failure_counter(self):
+        recorder = write_fixture(
+            self.root / "recorder",
+            recorder_version=C4_RECORDER_VERSION,
+            omit_summary_keys={"placementUnclassifiedFailureRows"},
+        )
+        with self.assertRaises(adapter.IntegrityError):
+            adapter.analyze(recorder)
 
     def test_paired_failed_results_are_adapter_red(self):
         rows = [
@@ -1074,7 +1219,19 @@ class C3PairFieldTests(unittest.TestCase):
             "ADAPTER_C3_PAIR_ONE_CELL": 0,
             "ADAPTER_C3_PRIMARY_PAIR_BITS_SPLIT": 0,
             "ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT": 0,
+            "ADAPTER_EXPECTED_DY_MISMATCH": 0,
+            "ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE": 0,
         }, triage["counters"]["adapter"])
+
+    def test_c4_recorder_version_preserves_c3_pair_capability(self):
+        triage = adapter.analyze(write_fixture(
+            self.root / "c4-green",
+            rows=c3_door_and_bed_rows(),
+            actions_header=C3_ACTIONS_HEADER,
+            recorder_version=C4_RECORDER_VERSION,
+        ))
+        self.assertTrue(triage["c3PairFields"]["capable"])
+        self.assertEqual(0, adapter.exit_code_for(triage, require_c3_pair_fields=True))
 
     def test_live_shaped_pairs_pass_c3_gate_without_generic_green_oracle(self):
         triage = adapter.analyze(self.write_c3("live-shaped", live_c3_door_and_bed_rows()))
@@ -1174,9 +1331,14 @@ class C3PairFieldTests(unittest.TestCase):
         triage = adapter.analyze(self.write_c3("door-only", c3_door_and_bed_rows()[:2]))
         self.assertEqual(7, adapter.exit_code_for(triage, require_c3_pair_fields=True))
 
-    def test_early_non_success_none_shape_accepted(self):
+    def test_early_non_success_none_shape_is_unclassified_failure_red(self):
         triage = adapter.analyze(self.write_c3("early-none", [early_none_action()]))
-        self.assertEqual(0, adapter.exit_code_for(triage))
+        self.assertEqual(1, adapter.exit_code_for(triage))
+        self.assertEqual("RED", triage["verdict"]["status"])
+        self.assertEqual(
+            1,
+            triage["counters"]["adapter"]["ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE"],
+        )
 
     def test_success_place_block_none_shape_rejected(self):
         with self.assertRaises(adapter.IntegrityError):

@@ -53,11 +53,20 @@ C3_PAIR_FIELDS = [
 ]
 C3_ACTIONS_HEADER = LEGACY_ACTIONS_HEADER + C3_PAIR_FIELDS
 C3_RECORDER_VERSION = "26.2-recorder-truth-v3-origin-c3-pair-fields"
+C4_RECORDER_VERSION = "26.2-recorder-truth-v4-c4-action-failure-audit"
+C3_CAPABLE_RECORDER_VERSIONS = {
+    C3_RECORDER_VERSION,
+    C4_RECORDER_VERSION,
+}
 C3_ADAPTER_MARKERS = [
     "ADAPTER_C3_PAIR_FIELDS_MISSING",
     "ADAPTER_C3_PAIR_ONE_CELL",
     "ADAPTER_C3_PRIMARY_PAIR_BITS_SPLIT",
     "ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT",
+]
+ACTION_ADAPTER_MARKERS = [
+    "ADAPTER_EXPECTED_DY_MISMATCH",
+    "ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE",
 ]
 # Compatibility alias for callers that imported the original schema-3 header constant.
 ACTIONS_HEADER = LEGACY_ACTIONS_HEADER
@@ -88,6 +97,7 @@ SUMMARY_KEYS = [
     "renderedOutlineReplayBoundsSplitRows",
     "renderedOutlineTargetSplitRows",
     "placementExpectedDyMismatchRows",
+    "placementUnclassifiedFailureRows",
     "placementExpectedLaneMismatchRows",
     "loweredSideSlabPlacementVanillaDyRows",
     "collisionIteratorTargetMissRows",
@@ -130,6 +140,7 @@ CURSOR_RED_MARKERS = {
 ACTION_RED_MARKERS = {
     "LIVE_PLACEMENT_HIDDEN_OWNER",
     "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH",
+    "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE",
     "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH",
     "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER",
     "LIVE_PLACEMENT_SIDE_DY_SPLIT",
@@ -378,7 +389,7 @@ def _artifact_info(path):
     }
 
 
-def _parse_summary(path):
+def _parse_summary(path, recorder_version):
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
@@ -398,9 +409,20 @@ def _parse_summary(path):
             raise IntegrityError("summary counter must be nonnegative integer: %s=%s" % (key, value))
         counters[key] = int(value)
     missing = [key for key in SUMMARY_KEYS if key not in counters]
-    if missing:
-        raise IntegrityError("summary.md missing counters: %s" % ", ".join(missing))
-    return counters
+    allowed_legacy_missing = (
+        {"placementUnclassifiedFailureRows"}
+        if isinstance(recorder_version, str)
+        and recorder_version.startswith("26.2-recorder-truth-v3-")
+        else set()
+    )
+    disallowed_missing = [key for key in missing if key not in allowed_legacy_missing]
+    if disallowed_missing:
+        raise IntegrityError(
+            "summary.md missing counters: %s" % ", ".join(disallowed_missing)
+        )
+    for key in missing:
+        counters[key] = 0
+    return counters, missing
 
 
 def _parse_tsv_headers(path, expected_headers):
@@ -743,6 +765,8 @@ def _validate_explicit_green_action(row):
         raise IntegrityError("explicit-green action %s has combined marker %s" % (action_id, marker))
     if row.get("actionOrigin") != PLAYER_ORIGIN or row.get("actionType") != "place_block":
         raise IntegrityError("explicit-green action %s is not player-authored placement" % action_id)
+    if row.get("actualResult", "").startswith("Fail["):
+        raise IntegrityError("explicit-green action %s has an unclassified Fail[] result" % action_id)
     expected = _finite_decimal(row.get("expectedAfterDy"), "action %s expectedAfterDy" % action_id)
     after = _finite_decimal(row.get("afterDy"), "action %s afterDy" % action_id)
     if expected >= Decimal("-0.000001") or expected != after:
@@ -962,6 +986,9 @@ def _derived_summary(rows):
             counters["placementExpectedDyMismatchRows"] += int(
                 "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH" in tokens
             )
+            counters["placementUnclassifiedFailureRows"] += int(
+                "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE" in tokens
+            )
             counters["placementExpectedLaneMismatchRows"] += int(
                 "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH" in tokens
             )
@@ -1136,6 +1163,7 @@ def _mismatch_context(row):
     row_type = row["type"]
     if row_type == "action":
         action_id = row.get("actionId", "unknown")
+        placement_pos = row.get("placementPos")
         return {
             "clickedOwnerPos": _canonical_int_pos(
                 row.get("clickedOwnerPos"), "action %s clickedOwnerPos" % action_id
@@ -1146,8 +1174,12 @@ def _mismatch_context(row):
             "clickedFace": _require_string(
                 row, "clickedFace", "action %s" % action_id
             ).lower(),
-            "placementPos": _canonical_int_pos(
-                row.get("placementPos"), "action %s placementPos" % action_id
+            "placementPos": (
+                "none"
+                if placement_pos == "none"
+                else _canonical_int_pos(
+                    placement_pos, "action %s placementPos" % action_id
+                )
             ),
         }
     if row_type == "cursor":
@@ -1345,6 +1377,69 @@ def _decimal_equal(left, right):
     )
 
 
+def _optional_finite_decimal(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        number = Decimal(value)
+    except InvalidOperation:
+        return None
+    return number if number.is_finite() else None
+
+
+def _adapter_action_markers(row):
+    producer_tokens = set(_marker_tokens(row.get("marker", "none")))
+    markers = []
+    expected = _optional_finite_decimal(row.get("expectedAfterDy"))
+    after = _optional_finite_decimal(row.get("afterDy"))
+    if (
+        expected is not None
+        and after is not None
+        and abs(expected - after) > Decimal("0.000001")
+        and "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH" not in producer_tokens
+    ):
+        markers.append("ADAPTER_EXPECTED_DY_MISMATCH")
+    if (
+        row.get("actualResult", "").startswith("Fail[")
+        and "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE" not in producer_tokens
+    ):
+        markers.append("ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE")
+    return markers
+
+
+def _action_audit(actions):
+    marker_counts = Counter()
+    red_rows = []
+    for row in actions:
+        markers = _adapter_action_markers(row)
+        marker_counts.update(markers)
+        if not markers:
+            continue
+        placement = row.get("placementPos", "none")
+        red_rows.append({
+            "actionId": int(row["actionId"]),
+            "actionOrigin": row.get("actionOrigin"),
+            "side": row.get("side"),
+            "heldItem": row.get("heldItem"),
+            "placementPos": (
+                "none"
+                if placement == "none"
+                else _canonical_int_pos(placement, "adapter action audit placementPos")
+            ),
+            "expectedAfterDy": row.get("expectedAfterDy"),
+            "afterDy": row.get("afterDy"),
+            "actualResult": row.get("actualResult"),
+            "markers": markers,
+        })
+    return {
+        "rowCount": len(actions),
+        "redRows": sorted(red_rows, key=lambda row: row["actionId"]),
+        "markerCounts": {
+            marker: marker_counts.get(marker, 0) for marker in ACTION_ADAPTER_MARKERS
+        },
+    }
+
+
 def _pair_record(run_id, client, server, signature):
     delta = server["_recordedAtParsed"] - client["_recordedAtParsed"]
     latency_micros = int(delta.total_seconds() * 1_000_000)
@@ -1353,6 +1448,8 @@ def _pair_record(run_id, client, server, signature):
     red_markers = sorted(set(
         token for token in client_tokens + server_tokens if _is_red_marker(token)
     ))
+    red_markers.extend(_adapter_action_markers(client))
+    red_markers.extend(_adapter_action_markers(server))
     dy_match = _decimal_equal(client.get("afterDy", ""), server.get("afterDy", ""))
     if not dy_match:
         red_markers.append("ADAPTER_SIDE_DY_SPLIT")
@@ -1533,16 +1630,28 @@ def _proxy_report(actions):
     proxy = [row for row in actions if row["actionOrigin"] == PROXY_ORIGIN]
     marker_counts = Counter()
     red_rows = []
+    producer_red_row_count = 0
+    adapter_red_row_count = 0
     for row in proxy:
-        tokens = _marker_tokens(row.get("marker", "none")) or ["none"]
-        marker_counts.update(tokens)
-        red_tokens = [token for token in tokens if _is_red_marker(token)]
+        producer_tokens = _marker_tokens(row.get("marker", "none"))
+        adapter_tokens = _adapter_action_markers(row)
+        marker_counts.update(producer_tokens or ["none"])
+        marker_counts.update(adapter_tokens)
+        producer_red_tokens = [token for token in producer_tokens if _is_red_marker(token)]
+        red_tokens = producer_red_tokens + adapter_tokens
         if red_tokens:
+            producer_red_row_count += int(bool(producer_red_tokens))
+            adapter_red_row_count += int(bool(adapter_tokens))
             red_rows.append({
                 "actionId": int(row["actionId"]),
                 "markers": sorted(red_tokens),
+                "sourceMarker": row.get("marker", "none"),
                 "heldItem": row.get("heldItem"),
-                "placementPos": _canonical_int_pos(row.get("placementPos"), "proxy placementPos"),
+                "placementPos": (
+                    "none"
+                    if row.get("placementPos") == "none"
+                    else _canonical_int_pos(row.get("placementPos"), "proxy placementPos")
+                ),
             })
     sample = [
         {
@@ -1552,19 +1661,23 @@ def _proxy_report(actions):
             "heldItem": row.get("heldItem"),
             "marker": row.get("marker", "none"),
         }
-        for row in proxy if not any(_is_red_marker(token) for token in _marker_tokens(row.get("marker", "none")))
+        for row in proxy
+        if not any(_is_red_marker(token) for token in _marker_tokens(row.get("marker", "none")))
+        and not _adapter_action_markers(row)
     ][:12]
     return {
         "rowCount": len(proxy),
         "actionTypeCounts": dict(sorted(Counter(row["actionType"] for row in proxy).items())),
         "markerCounts": dict(sorted(marker_counts.items())),
         "redRows": sorted(red_rows, key=lambda row: row["actionId"]),
+        "producerRedRowCount": producer_red_row_count,
+        "adapterRedRowCount": adapter_red_row_count,
         "sample": sample,
         "omittedCleanSampleRows": max(0, len(proxy) - len(red_rows) - len(sample)),
     }
 
 
-def _verdict(player, proxy, mismatches):
+def _verdict(player, proxy, mismatches, action_audit):
     pair_red = any(pair["verdict"] == "RED" for pair in player["pairs"])
     pair_adapter_red = any(
         marker.startswith("ADAPTER_")
@@ -1574,10 +1687,15 @@ def _verdict(player, proxy, mismatches):
         not marker.startswith("ADAPTER_")
         for pair in player["pairs"] for marker in pair["redMarkers"]
     )
-    has_producer_red = bool(mismatches or proxy["redRows"] or pair_producer_red)
-    has_adapter_red = pair_adapter_red
+    player_action_red = any(
+        row["actionOrigin"] == PLAYER_ORIGIN for row in action_audit["redRows"]
+    )
+    has_producer_red = bool(
+        mismatches or proxy["producerRedRowCount"] or pair_producer_red
+    )
+    has_adapter_red = bool(pair_adapter_red or action_audit["redRows"])
     has_red = has_producer_red or has_adapter_red
-    if pair_red:
+    if pair_red or player_action_red:
         player_proof = "RED"
     elif player["unpairedRows"] or player["ambiguousRows"]:
         player_proof = "INCOMPLETE"
@@ -1592,6 +1710,8 @@ def _verdict(player, proxy, mismatches):
         reasons.append("producer red mismatch rows present")
     if proxy["redRows"]:
         reasons.append("proxy red action rows present")
+    if action_audit["redRows"]:
+        reasons.append("adapter-derived action red rows present")
     if pair_red:
         reasons.append("player pair has producer or adapter-derived red")
     if has_red:
@@ -1639,7 +1759,10 @@ def analyze(input_path, run_id=None):
     if manifest != discovered_manifest:
         raise IntegrityError("manifest.json changed during discovery/analysis")
     _validate_manifest(manifest)
-    summary = _parse_summary(recorder_dir / "summary.md")
+    summary, legacy_missing_summary_keys = _parse_summary(
+        recorder_dir / "summary.md",
+        manifest.get("recorderVersion"),
+    )
     if session_present:
         session_rows = _parse_session(session_path)
         for row in session_rows:
@@ -1681,21 +1804,23 @@ def analyze(input_path, run_id=None):
         raise IntegrityError("recorder artifacts changed during analysis")
 
     player = _pair_player_actions(actions, manifest["runId"])
+    action_audit = _action_audit(actions)
     proxy = _proxy_report(actions)
-    verdict = _verdict(player, proxy, mismatch_rows)
+    verdict = _verdict(player, proxy, mismatch_rows, action_audit)
     adapter_counters = {
         marker: sum(
             marker in pair["redMarkers"] for pair in player["pairs"]
         )
         for marker in C3_ADAPTER_MARKERS
     }
+    adapter_counters.update(action_audit["markerCounts"])
     qualifying_families = Counter(
         pair["c3PairFields"]["family"]
         for pair in player["pairs"] if pair["c3PairFields"]["qualifying"]
     )
     c3_capable = (
         action_header == C3_ACTIONS_HEADER
-        and manifest.get("recorderVersion") == C3_RECORDER_VERSION
+        and manifest.get("recorderVersion") in C3_CAPABLE_RECORDER_VERSIONS
     )
     return {
         "triageSchemaVersion": TRIAGE_SCHEMA_VERSION,
@@ -1712,6 +1837,9 @@ def analyze(input_path, run_id=None):
             "producer": summary,
             "derived": derived,
             "adapter": adapter_counters,
+            "compatibility": {
+                "legacyMissingProducerCounters": legacy_missing_summary_keys,
+            },
         },
         "liveness": {
             "sessionJsonl": session_state,
@@ -1737,6 +1865,7 @@ def analyze(input_path, run_id=None):
             ],
         },
         "autoUseOnProxy": proxy,
+        "adapterActionAudit": action_audit,
         "mismatches": mismatch_rows,
         "breaks": {
             "rowCount": summary["breakRows"],
@@ -1748,7 +1877,9 @@ def analyze(input_path, run_id=None):
         },
         "evidenceBoundary": (
             "Only uniquely paired schema-3 PLAYER_AUTHORED placement rows are player evidence; "
-            "AUTO_USEON_PROXY is diagnostic only, and no category completeness is inferred."
+            "AUTO_USEON_PROXY is diagnostic only. Adapter action reds require a finite numeric "
+            "expectedAfterDy disagreement or an untyped Fail[] result; unknown expectations stay "
+            "unclassified, and no category completeness is inferred."
         ),
     }
 
@@ -1808,6 +1939,17 @@ def render_markdown(triage):
             triage["counters"]["producer"]["autoUseOnProxyActionRows"],
         ),
         "- mismatches: `%d`" % len(triage["mismatches"]),
+        "- producer expected-dy / unclassified-failure rows: `%d` / `%d`" % (
+            triage["counters"]["producer"]["placementExpectedDyMismatchRows"],
+            triage["counters"]["producer"]["placementUnclassifiedFailureRows"],
+        ),
+        "- adapter expected-dy / unclassified-failure rows: `%d` / `%d`" % (
+            triage["counters"]["adapter"]["ADAPTER_EXPECTED_DY_MISMATCH"],
+            triage["counters"]["adapter"]["ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE"],
+        ),
+        "- legacy missing producer counters: `%s`" % json.dumps(
+            triage["counters"]["compatibility"]["legacyMissingProducerCounters"]
+        ),
         "- sentinel armed/samples: `%d` / `%d`" % (
             triage["liveness"]["sentinelArmedTotal"],
             triage["liveness"]["sentinelSamplePasses"],
@@ -1869,6 +2011,14 @@ def render_markdown(triage):
             triage["autoUseOnProxy"]["omittedCleanSampleRows"]
         ))
     lines.extend([
+        "",
+        "## Adapter Action Audit",
+        "",
+        "- rows inspected: `%d`" % triage["adapterActionAudit"]["rowCount"],
+        "- adapter red rows: `%d`" % len(triage["adapterActionAudit"]["redRows"]),
+        "- marker counts: `%s`" % json.dumps(
+            triage["adapterActionAudit"]["markerCounts"], sort_keys=True
+        ),
         "",
         "## Red Mismatches",
         "",

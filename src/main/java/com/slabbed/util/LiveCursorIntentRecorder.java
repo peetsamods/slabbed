@@ -51,7 +51,8 @@ public final class LiveCursorIntentRecorder {
     // else in Slabbed's debug surface: a slash command (/slabdev record), never a JVM flag.
     private static volatile boolean enabled = Boolean.getBoolean(ENABLE_PROPERTY);
     private static final String SCHEMA_VERSION = "3";
-    private static final String RECORDER_VERSION = "26.2-recorder-truth-v3-origin-c3-pair-fields";
+    private static final String RECORDER_VERSION =
+            "26.2-recorder-truth-v4-c4-action-failure-audit";
     private static final String RUN_ID = UUID.randomUUID().toString();
     private static final String ACTIONS_HEADER =
             "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem\tclickedOwnerPos\tclickedFace\tplacementPos"
@@ -96,6 +97,7 @@ public final class LiveCursorIntentRecorder {
     private static long renderedOutlineReplayBoundsSplitRows;
     private static long renderedOutlineTargetSplitRows;
     private static long placementExpectedDyMismatchRows;
+    private static long placementUnclassifiedFailureRows;
     private static long placementExpectedLaneMismatchRows;
     private static long loweredSideSlabPlacementVanillaDyRows;
     private static long collisionIteratorTargetMissRows;
@@ -413,6 +415,9 @@ public final class LiveCursorIntentRecorder {
             if (markers.contains("LIVE_PLACEMENT_EXPECTED_DY_MISMATCH")) {
                 placementExpectedDyMismatchRows++;
             }
+            if (markers.contains("LIVE_PLACEMENT_UNCLASSIFIED_FAILURE")) {
+                placementUnclassifiedFailureRows++;
+            }
             if (markers.contains("LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH")) {
                 placementExpectedLaneMismatchRows++;
             }
@@ -461,6 +466,7 @@ public final class LiveCursorIntentRecorder {
             renderedOutlineReplayBoundsSplitRows = 0L;
             renderedOutlineTargetSplitRows = 0L;
             placementExpectedDyMismatchRows = 0L;
+            placementUnclassifiedFailureRows = 0L;
             placementExpectedLaneMismatchRows = 0L;
             loweredSideSlabPlacementVanillaDyRows = 0L;
             collisionIteratorTargetMissRows = 0L;
@@ -546,11 +552,16 @@ public final class LiveCursorIntentRecorder {
         String afterDy = row.getOrDefault("afterDy", "unknown");
         String afterLane = row.getOrDefault("afterLaneKind", "unknown");
         boolean placementAction = "place_block".equals(row.get("actionType"));
-        // Any lowered expectation (not just -0.5): a deep side-lane continuation legitimately expects
-        // the owner's true depth. Comparing against the derived expected dy keeps the mismatch marker
-        // honest for compound owners past -1.0.
+        // Every finite expectation is an explicit oracle, including ordinary zero. The old negative-
+        // only guard hid wrong-height successes whenever a live-shaped row expected 0 or another
+        // non-lowered value. Unknown/non-numeric expectations remain honestly unclassified.
         boolean loweredExpected = isLoweredDyString(expectedDy);
-        boolean dyMismatch = loweredExpected && !sameDy(expectedDy, afterDy);
+        boolean dyMismatch = isFiniteDyString(expectedDy)
+                && isFiniteDyString(afterDy)
+                && !sameDy(expectedDy, afterDy);
+        // Minecraft's current failure result has no typed "expected refusal" contract. Until such a
+        // contract is introduced and tested, every Fail[...] row is unclassified failure evidence.
+        boolean unclassifiedFailure = row.getOrDefault("actualResult", "").startsWith("Fail[");
         // The client prediction may not yet have the server's persistent attachment and can therefore
         // report the generic slab lane. Exempt only that exact client-side, dy-correct transition; an
         // authoritative server row without lawful lowered ownership remains a real lane mismatch.
@@ -564,6 +575,7 @@ public final class LiveCursorIntentRecorder {
         appendMarker(markers, Boolean.parseBoolean(row.getOrDefault("hiddenOwner", "false")),
                 "LIVE_PLACEMENT_HIDDEN_OWNER");
         appendMarker(markers, dyMismatch, "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
+        appendMarker(markers, unclassifiedFailure, "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE");
         appendMarker(markers, laneMismatch, "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH");
         appendMarker(markers, loweredExpected && sameDy("0.000000", afterDy),
                 "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER");
@@ -642,6 +654,15 @@ public final class LiveCursorIntentRecorder {
     private static boolean isLoweredDyString(String s) {
         try {
             return Double.parseDouble(s) < -1.0e-6d;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
+    /** True only for a parseable finite dy value; unknown/none/NaN/infinity are not oracles. */
+    private static boolean isFiniteDyString(String s) {
+        try {
+            return Double.isFinite(Double.parseDouble(s));
         } catch (NumberFormatException ignored) {
             return false;
         }
@@ -793,6 +814,8 @@ public final class LiveCursorIntentRecorder {
                 .append(renderedOutlineReplayBoundsSplitRows).append('\n');
         text.append("renderedOutlineTargetSplitRows=").append(renderedOutlineTargetSplitRows).append('\n');
         text.append("placementExpectedDyMismatchRows=").append(placementExpectedDyMismatchRows).append('\n');
+        text.append("placementUnclassifiedFailureRows=")
+                .append(placementUnclassifiedFailureRows).append('\n');
         text.append("placementExpectedLaneMismatchRows=").append(placementExpectedLaneMismatchRows).append('\n');
         text.append("loweredSideSlabPlacementVanillaDyRows=")
                 .append(loweredSideSlabPlacementVanillaDyRows).append('\n');

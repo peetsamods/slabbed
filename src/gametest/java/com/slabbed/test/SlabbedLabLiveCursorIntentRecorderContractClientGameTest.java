@@ -90,6 +90,44 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             refused.put("actualResult", "PASS");
             LiveCursorIntentRecorder.recordAction(refused);
 
+            // Live-shaped C4 truth rows. The recorder must honor any trustworthy finite numeric
+            // expectation, including zero, instead of limiting mismatch detection to negative dy.
+            LiveCursorIntentRecorder.recordAction(ordinaryAction(
+                    "minecraft:bamboo_button", "164,-39,30", "164,-38,30",
+                    "-1.500000", "-0.500000", "SUCCESS"));
+            LiveCursorIntentRecorder.recordAction(ordinaryAction(
+                    "minecraft:flower_pot", "174,-39,30", "174,-38,30",
+                    "-1.500000", "-1.000000", "SUCCESS"));
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> LiveCursorIntentRecorder.recordAction(ordinaryAction(
+                            "minecraft:oak_fence", "184,-39,30", "184,-38,30",
+                            "0.000000", "-0.500000", "SUCCESS")));
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> LiveCursorIntentRecorder.recordAction(ordinaryAction(
+                            "minecraft:conduit", "194,-39,30", "194,-38,30",
+                            "-0.500000", "0.000000", "SUCCESS")));
+
+            // Unknown expectations stay unknown and cannot be promoted to a generic green.
+            LinkedHashMap<String, String> unknown = ordinaryAction(
+                    "minecraft:lantern", "204,-39,30", "204,-38,30",
+                    "unknown", "-1.000000", "SUCCESS");
+            unknown.remove("expectedAfterDy");
+            LiveCursorIntentRecorder.recordAction(unknown);
+
+            // Until a future typed expected-refusal contract exists, Fail[] is unclassified failure
+            // evidence and must be red even when no placement snapshot exists.
+            LinkedHashMap<String, String> failed = ordinaryAction(
+                    "minecraft:stone", "214,-39,30", "none",
+                    "unknown", "none", "Fail[]");
+            failed.put("actionType", "use_block");
+            failed.put("afterState", "none");
+            failed.put("afterLaneKind", "none");
+            LiveCursorIntentRecorder.withActionOrigin(
+                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                    () -> LiveCursorIntentRecorder.recordAction(failed));
+
             LiveCursorIntentRecorder.recordSentinel(sentinel(
                     "ENSEMBLE_OCCLUDED_OCCUPANCY", "200 -39 30"));
             LiveCursorIntentRecorder.recordSentinel(sentinel("ENSEMBLE_GAP", "210 -39 30"));
@@ -107,6 +145,8 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("rendered-outlines.tsv"), "LIVE_RENDERED_OUTLINE_LARGE_BOUNDS");
             assertContains(evidenceDir.resolve("rendered-outlines.tsv"), "LIVE_RENDERED_OUTLINE_REPLAY_BOUNDS_SPLIT");
             assertContains(evidenceDir.resolve("manifest.json"), "\"schemaVersion\":\"3\"");
+            assertContains(evidenceDir.resolve("manifest.json"),
+                    "\"recorderVersion\":\"26.2-recorder-truth-v4-c4-action-failure-audit\"");
             assertContains(evidenceDir.resolve("manifest.json"),
                     "\"actionOriginContract\":\"PLAYER_AUTHORED|AUTO_USEON_PROXY\"");
             assertContains(evidenceDir.resolve("actions.tsv"),
@@ -130,9 +170,24 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
                     "135,-39,30\t-2.000000\t-1.500000\tlawful_lowered_lane\tanchored_full_block\tLIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "155,-39,30\tunknown\t-2.000000\tunknown\tunnamed_or_vanilla_slab\tnone");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "minecraft:bamboo_button\t164,-39,30\tUP\t164,-38,30\t-1.500000\t-0.500000");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "minecraft:flower_pot\t174,-39,30\tUP\t174,-38,30\t-1.500000\t-1.000000");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "minecraft:oak_fence\t184,-39,30\tUP\t184,-38,30\t0.000000\t-0.500000");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "minecraft:conduit\t194,-39,30\tUP\t194,-38,30\t-0.500000\t0.000000");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "minecraft:lantern\t204,-39,30\tUP\t204,-38,30\tunknown\t-1.000000"
+                            + "\tunknown\tanchored_full_block\tnone");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "minecraft:stone\t214,-39,30\tUP\tnone\tunknown\tnone\tunknown\tnone"
+                            + "\tLIVE_PLACEMENT_UNCLASSIFIED_FAILURE");
             assertContains(evidenceDir.resolve("actions.tsv"), "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH");
+            assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE");
             assertNotContains(evidenceDir.resolve("mismatches.tsv"), "116,-39,30");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "118,-39,30");
             assertNotContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_GREEN_PLACEMENT_AUTHORING");
@@ -149,12 +204,13 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("summary.md"), "renderedOutlineRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "renderedOutlineLargeBoundsRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "renderedOutlineReplayBoundsSplitRows=1");
-            assertContains(evidenceDir.resolve("summary.md"), "loweredSideSlabPlacementVanillaDyRows=1");
-            assertContains(evidenceDir.resolve("summary.md"), "placementExpectedDyMismatchRows=3");
+            assertContains(evidenceDir.resolve("summary.md"), "loweredSideSlabPlacementVanillaDyRows=2");
+            assertContains(evidenceDir.resolve("summary.md"), "placementExpectedDyMismatchRows=7");
+            assertContains(evidenceDir.resolve("summary.md"), "placementUnclassifiedFailureRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "placementExpectedLaneMismatchRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "liveGreenPlacementRows=2");
-            assertContains(evidenceDir.resolve("summary.md"), "playerAuthoredActionRows=6");
-            assertContains(evidenceDir.resolve("summary.md"), "autoUseOnProxyActionRows=2");
+            assertContains(evidenceDir.resolve("summary.md"), "playerAuthoredActionRows=9");
+            assertContains(evidenceDir.resolve("summary.md"), "autoUseOnProxyActionRows=5");
             assertContains(evidenceDir.resolve("summary.md"), "modelStaleDivergentRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "modelStaleAbsentRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "ensembleOccludedOccupancyInfoRows=1");
@@ -197,6 +253,31 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         action.put("afterDy", afterDy);
         action.put("afterLaneKind", afterLane);
         action.put("actualResult", "SUCCESS");
+        return action;
+    }
+
+    private static LinkedHashMap<String, String> ordinaryAction(
+            String heldItem,
+            String ownerPos,
+            String placementPos,
+            String expectedDy,
+            String afterDy,
+            String actualResult) {
+        LinkedHashMap<String, String> action = new LinkedHashMap<>();
+        action.put("actionType", "place_block");
+        action.put("side", "server");
+        action.put("heldItem", heldItem);
+        action.put("clickedOwnerPos", ownerPos);
+        action.put("clickedFace", "UP");
+        action.put("clickedOwnerLaneKind", "anchored_full_block");
+        action.put("beforeDy", "-1.500000");
+        action.put("placementPos", placementPos);
+        action.put("expectedAfterDy", expectedDy);
+        action.put("expectedAfterLaneKind", "unknown");
+        action.put("afterState", "Block{" + heldItem + "}");
+        action.put("afterDy", afterDy);
+        action.put("afterLaneKind", "anchored_full_block");
+        action.put("actualResult", actualResult);
         return action;
     }
 
