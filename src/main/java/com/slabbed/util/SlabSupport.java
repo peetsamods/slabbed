@@ -216,6 +216,7 @@ public final class SlabSupport {
     public static boolean isVerticalChainDirectlyUnderCeilingSupport(BlockGetter world, BlockPos pos, BlockState state) {
         return world != null
                 && pos != null
+                && !CompatHooks.shouldSkipOffsetView(world)
                 && isBeta35VerticalChainVisibleOwnerObject(state)
                 && isCeilingSupportBottomSurface(world, pos.above());
     }
@@ -246,7 +247,10 @@ public final class SlabSupport {
     }
 
     public static boolean isCeilingBridgedVerticalChainColumnMember(BlockGetter world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || !isBeta35VerticalChainVisibleOwnerObject(state)) {
+        if (world == null
+                || pos == null
+                || CompatHooks.shouldSkipOffsetView(world)
+                || !isBeta35VerticalChainVisibleOwnerObject(state)) {
             return false;
         }
         BlockPos cursor = pos;
@@ -1240,6 +1244,9 @@ public final class SlabSupport {
      */
     public static double getYOffset(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null) {
+            return 0.0;
+        }
+        if (CompatHooks.shouldSkipOffsetView(world)) {
             return 0.0;
         }
         if (state == null || state.isAir()) {

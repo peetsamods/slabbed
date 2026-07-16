@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.ChainCeilingGeometry;
 import com.slabbed.client.model.OffsetBlockStateModel;
+import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.resources.model.BakedModel;
@@ -33,6 +34,9 @@ public class BlockModelDyTranslateMixin {
     }
 
     private static double slabbed$modelDy(BakedModel model, BlockAndTintGetter world, BlockPos pos, BlockState state) {
+        if (CompatHooks.shouldSkipOffsetView(world)) {
+            return 0.0d;
+        }
         if (model instanceof OffsetBlockStateModel) {
             return 0.0d;
         }

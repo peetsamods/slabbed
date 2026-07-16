@@ -2,6 +2,7 @@ package com.slabbed.client.model;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
+import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.client.renderer.RenderType;
@@ -295,7 +296,9 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
     ) {
         List<BakedQuad> baseQuads = super.getQuads(state, side, random, modelData, renderType);
         RenderContextInfo renderContext = slabbed$renderContext(modelData);
-        if (renderContext == null || state == null) {
+        if (renderContext == null
+                || state == null
+                || CompatHooks.shouldSkipOffsetView(renderContext.view())) {
             return baseQuads;
         }
         return slabbed$neoForgeQuads(

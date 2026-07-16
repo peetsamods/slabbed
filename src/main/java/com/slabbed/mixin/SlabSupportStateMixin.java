@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -279,6 +280,9 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetRaycast(BlockGetter world, BlockPos pos,
                                        CallbackInfoReturnable<VoxelShape> cir) {
+        if (CompatHooks.shouldSkipOffsetView(world)) {
+            return;
+        }
         BlockState self = (BlockState) (Object) this;
         VoxelShape shape = cir.getReturnValue();
         if (slabbed$isTopHalfTrapdoor(self) && (shape == null || shape.isEmpty())) {
@@ -415,6 +419,10 @@ public abstract class SlabSupportStateMixin {
 
         if (Boolean.TRUE.equals(SLABBED$IN_COLLISION_QUERY.get())) {
             SLABBED$IN_COLLISION_QUERY.set(Boolean.FALSE);
+            return;
+        }
+
+        if (CompatHooks.shouldSkipOffsetView(world)) {
             return;
         }
 
