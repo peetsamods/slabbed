@@ -1405,7 +1405,7 @@ public final class SlabSupport {
     }
 
     /**
-     * Redstone dust support surface — treat slab tops like valid ground for downward stepping.
+     * Redstone dust support surface — treat slab tops like valid ground for placement/survival.
      */
     public static boolean isRedstoneSupportTopSurface(BlockView world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);

@@ -3,10 +3,7 @@ package com.slabbed.mixin;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.RedstoneWireBlock;
-import net.minecraft.block.enums.WireConnection;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.BlockView;
 import net.minecraft.world.WorldView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,8 +11,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Redstone wire: allow slab top faces to count as valid ground for placement/survival and
- * down-step connectivity checks by treating them as solid UP surfaces.
+ * Redstone wire: allow slab top faces to count as valid ground for placement and survival.
+ *
+ * <p>Connection shape and redstone direction remain vanilla-owned. Slabbed's top-face solidity
+ * hooks already let vanilla discover dust above supported slabs through its normal rise/drop
+ * checks; overriding a vanilla {@code NONE} result here would bypass component and obstruction
+ * rules (GH #37).
  */
 @Mixin(RedstoneWireBlock.class)
 public abstract class RedstoneWireBlockMixin {
@@ -25,32 +26,6 @@ public abstract class RedstoneWireBlockMixin {
     private void slabbed$canPlaceAt(BlockState state, WorldView world, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
         if (SlabSupport.isRedstoneSupportTopSurface(world, pos.down())) {
             cir.setReturnValue(true);
-        }
-    }
-
-    @Inject(method = "getRenderConnectionType(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/math/Direction;)Lnet/minecraft/block/enums/WireConnection;",
-            at = @At("RETURN"), cancellable = true)
-    private void slabbed$getRenderConnectionType3(BlockView world, BlockPos pos, Direction direction,
-                                                  CallbackInfoReturnable<WireConnection> cir) {
-        WireConnection current = cir.getReturnValue();
-        if (current == WireConnection.NONE) {
-            BlockPos sidePos = pos.offset(direction);
-            if (SlabSupport.isRedstoneSupportTopSurface(world, sidePos)) {
-                cir.setReturnValue(WireConnection.SIDE);
-            }
-        }
-    }
-
-    @Inject(method = "getRenderConnectionType(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/math/Direction;Z)Lnet/minecraft/block/enums/WireConnection;",
-            at = @At("RETURN"), cancellable = true)
-    private void slabbed$getRenderConnectionType4(BlockView world, BlockPos pos, Direction direction, boolean canRise,
-                                                  CallbackInfoReturnable<WireConnection> cir) {
-        WireConnection current = cir.getReturnValue();
-        if (current == WireConnection.NONE) {
-            BlockPos sidePos = pos.offset(direction);
-            if (SlabSupport.isRedstoneSupportTopSurface(world, sidePos)) {
-                cir.setReturnValue(WireConnection.SIDE);
-            }
         }
     }
 }

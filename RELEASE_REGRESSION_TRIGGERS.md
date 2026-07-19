@@ -70,7 +70,8 @@ Legend: ✅ fixed + covered · ⚠️ known-open · 🔁 recurs-on-port (verify 
 | Trigger | Expected | Status | Test |
 |---|---|---|---|
 | Redstone wire over/across slabs | propagates normally | ⚠️ (deferred) | LIVE |
-| Redstone over air after support removed | survives / pops per vanilla | ✅ | AUTO `RedstoneWireBlockMixin` tests |
+| Redstone connection shape and directional output beside full blocks, components, slab steps, and obstructions | ordinary solids never create phantom arms/power; same-level, rise, drop, occlusion, headroom, and directional-component facing remain vanilla-correct | ✅ | AUTO `RedstoneWireConnectionTest` (GH #37) |
+| Redstone over air after support removed | rejects air as support / pops per vanilla | ✅ | AUTO `RedstoneWireConnectionTest#dustPopsWhenItsSupportIsRemoved` |
 
 ---
 
