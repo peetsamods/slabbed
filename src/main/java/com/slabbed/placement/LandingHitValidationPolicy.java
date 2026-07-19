@@ -13,9 +13,9 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p>This does not widen Minecraft's distance tolerance. It only says when an already-lowered,
  * ordinary full-block owner may move that validation center by its frozen visible depth: the held
- * block must belong to a family {@link LandingResolver} owns through C4, and the packet hit must
- * remain inside the pre-existing compound-owner envelope. C5 families, flat owners, partial-block
- * owners and out-of-envelope hits fall through to vanilla validation.
+ * block must belong to a family {@link LandingResolver} owns, and the packet hit must remain inside
+ * the pre-existing compound-owner envelope. C5 thin layers and powder snow qualify only for UP-face
+ * aims; flat owners, partial-block owners and out-of-envelope hits fall through to vanilla.
  */
 public final class LandingHitValidationPolicy {
 
@@ -45,26 +45,26 @@ public final class LandingHitValidationPolicy {
                 || !(ownerDy < -EPSILON)
                 || CompatHooks.shouldSkipOffset(ownerState)
                 || CompatHooks.shouldSkipSlabSupport(ownerState)
-                || CompatHooks.shouldSkipOffset(heldState)
-                || CompatHooks.shouldSkipSlabSupport(heldState)) {
+                || LandingResolver.compatOwnsFinalState(heldState)) {
             return Double.NaN;
         }
 
         LandingResolver.Family heldFamily = LandingResolver.classify(heldState);
-        if (heldFamily == LandingResolver.Family.PAIRED_FLOOR_SEAT) {
+        if (heldFamily == LandingResolver.Family.PAIRED_FLOOR_SEAT
+                || heldFamily == LandingResolver.Family.AIM_KEYED_FLOOR_SEAT) {
             boolean supportedOwner = ownerState.getBlock() instanceof SlabBlock
                     || ownerState.getBlock() instanceof EntityBlock
                     || ownerState.isSolidRender();
             if (hitFace != Direction.UP || !supportedOwner) {
                 return Double.NaN;
             }
-            boolean insidePairEnvelope = hitPos.x >= ownerPos.getX() - EPSILON
+            boolean insideFloorSeatEnvelope = hitPos.x >= ownerPos.getX() - EPSILON
                     && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
                     && hitPos.y >= ownerPos.getY() + ownerDy - EPSILON
                     && hitPos.y <= ownerPos.getY() + 1.0d + EPSILON
                     && hitPos.z >= ownerPos.getZ() - EPSILON
                     && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
-            return insidePairEnvelope ? ownerDy : Double.NaN;
+            return insideFloorSeatEnvelope ? ownerDy : Double.NaN;
         }
         if (LandingResolver.classify(ownerState) != LandingResolver.Family.FULL_BLOCK) {
             return Double.NaN;

@@ -3,13 +3,12 @@ package com.slabbed.client;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.CarpetBlock;
-import net.minecraft.world.level.block.MossyCarpetBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * Client-only dy policy for visual alignment of thin carpet layers on bottom slabs.
+ * Client adapter for the canonical logical dy. Carpet no longer owns a separate render courtesy:
+ * aimed C5 placements render from their stored dy, while natural/aimless carpet remains flush.
  */
 public final class ClientDy {
     private ClientDy() {
@@ -19,14 +18,17 @@ public final class ClientDy {
         if (world == null || pos == null || state == null) {
             return 0.0;
         }
-
-        Block block = state.getBlock();
-        if (block instanceof CarpetBlock || block instanceof MossyCarpetBlock) {
-            // Carpet special case: simple geometric check without anchor logic
-            return SlabSupport.hasBottomSlabBelow(world, pos) ? -0.5 : 0.0;
-        }
-
-        // For all other blocks, use the full SlabSupport policy including persistent anchors
         return SlabSupport.getYOffset(world, pos, state);
+    }
+
+    /** Applies the canonical logical dy to a client-only outline/raycast adapter. */
+    public static VoxelShape offsetShape(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state,
+            VoxelShape shape
+    ) {
+        double dy = dyFor(world, pos, state);
+        return dy == 0.0 ? shape : shape.move(0.0, dy, 0.0);
     }
 }
