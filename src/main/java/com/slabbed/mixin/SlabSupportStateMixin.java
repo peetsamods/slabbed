@@ -8,6 +8,7 @@ import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SideShapeType;
 import net.minecraft.block.TorchBlock;
 import net.minecraft.block.WallTorchBlock;
+import net.minecraft.entity.EntityType;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
@@ -121,6 +122,26 @@ public abstract class SlabSupportStateMixin {
         BlockState self = (BlockState) (Object) this;
         if (direction == Direction.UP && SlabSupport.canTreatAsSolidTopFace(world, pos)) {
             cir.setReturnValue(true);
+        }
+    }
+
+    /**
+     * Preserve vanilla's bottom-slab mob-proofing after the full-square support
+     * override above has done its separate placement/survival job.
+     *
+     * <p>Running at RETURN makes this strictly subtractive: custom block predicates,
+     * luminance checks, and every already-false result stay false.
+     */
+    @Inject(method = "allowsSpawning", at = @At("RETURN"), cancellable = true)
+    private void slabbed$bottomSlabSpawnProofing(
+            BlockView world,
+            BlockPos pos,
+            EntityType<?> entityType,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        BlockState self = (BlockState) (Object) this;
+        if (cir.getReturnValue() && SlabSupport.isSpawnProofBottomLikeSurface(self)) {
+            cir.setReturnValue(false);
         }
     }
 
