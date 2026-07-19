@@ -19,9 +19,6 @@ public class CarpetDyShapeMixin {
     @Inject(method = "getShape", at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetCarpetOutline(BlockState state, BlockGetter world, BlockPos pos, CollisionContext ctx,
                                              CallbackInfoReturnable<VoxelShape> cir) {
-        double dy = ClientDy.dyFor(world, pos, state);
-        if (dy != 0.0) {
-            cir.setReturnValue(cir.getReturnValue().move(0.0, dy, 0.0));
-        }
+        cir.setReturnValue(ClientDy.offsetShape(world, pos, state, cir.getReturnValue()));
     }
 }

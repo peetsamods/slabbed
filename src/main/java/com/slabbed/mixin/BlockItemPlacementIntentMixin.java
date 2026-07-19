@@ -496,7 +496,7 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private static boolean slabbed$c3CompatOwns(BlockState state) {
-        return CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state);
+        return LandingResolver.compatOwnsFinalState(state);
     }
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(UseOnContext context, BlockPos pos, BlockState state) {

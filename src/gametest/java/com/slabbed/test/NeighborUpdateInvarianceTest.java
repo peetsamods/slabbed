@@ -130,6 +130,23 @@ public final class NeighborUpdateInvarianceTest {
         return base.above(3);
     }
 
+    /** Real-useOn SBSB tower whose top stone is the C5 -1.0 clicked owner. */
+    private static BlockPos minusOneLoweredStoneRig(GameTestHelper h, ServerLevel w) {
+        BlockPos ground = h.absolutePos(new BlockPos(3, 1, 3));
+        w.setBlock(ground, Blocks.STONE.defaultBlockState(), 2);
+        Item[] tower = {Items.STONE_SLAB, Items.STONE, Items.STONE_SLAB, Items.STONE};
+        BlockPos cursor = ground;
+        for (Item item : tower) {
+            place(h, item, cursor, Direction.UP, 0.0d);
+            cursor = cursor.above();
+        }
+        double topDy = dy(w, cursor);
+        if (Math.abs(topDy + 1.0d) > 1.0e-6d) {
+            throw h.assertionException(cursor, "premise: C5 owner should read -1.0, got " + topDy);
+        }
+        return cursor;
+    }
+
     /**
      * Deep-rest rig (depth-cap-removal, PKG-20260710): a real-useOn SBSB tower (ground stone, then
      * slab/stone alternating, 6 placements) whose TOP stone reads the uncapped accumulated -1.5.
@@ -220,6 +237,26 @@ public final class NeighborUpdateInvarianceTest {
                 BlockPos deepStone = deepLoweredStoneRig(h, w);
                 place(h, Items.STONE_SLAB, deepStone, Direction.UP, 0.0);
                 return deepStone.above();
+            }),
+            new NamedSubject("aimed_carpet_on_minus_one_owner", (h, w) -> {
+                BlockPos owner = minusOneLoweredStoneRig(h, w);
+                place(h, Items.MOSS_CARPET, owner, Direction.UP, 0.0d);
+                BlockPos subject = owner.above();
+                if (Math.abs(dy(w, subject) + 1.0d) > 1.0e-6d) {
+                    throw h.assertionException(subject, "premise: aimed C5 carpet should read -1.0, got "
+                            + dy(w, subject));
+                }
+                return subject;
+            }),
+            new NamedSubject("aimed_powder_snow_on_minus_one_owner", (h, w) -> {
+                BlockPos owner = minusOneLoweredStoneRig(h, w);
+                place(h, Items.POWDER_SNOW_BUCKET, owner, Direction.UP, 0.0d);
+                BlockPos subject = owner.above();
+                if (Math.abs(dy(w, subject) + 1.0d) > 1.0e-6d) {
+                    throw h.assertionException(subject, "premise: aimed C5 powder snow should read -1.0, got "
+                            + dy(w, subject));
+                }
+                return subject;
             })
     );
 
@@ -341,6 +378,16 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabOnDeepLoweredFullBlockSurvivesNeighborEdits(GameTestHelper h) {
         runSubjectWithFrozenStore(h, SUBJECTS.get(8));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aimedCarpetOnMinusOneOwnerSurvivesNeighborEdits(GameTestHelper h) {
+        runSubjectWithFrozenStore(h, SUBJECTS.get(9));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aimedPowderSnowOnMinusOneOwnerSurvivesNeighborEdits(GameTestHelper h) {
+        runSubjectWithFrozenStore(h, SUBJECTS.get(10));
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")

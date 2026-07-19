@@ -36,9 +36,8 @@ public final class SlabModelStaleSentinelClient {
     }
 
     public static void init() {
-        // The judge/baseline dy MUST be the render-intent twin, not raw getYOffset — carpets render at
-        // ClientDy.dyFor (-0.5 on a slab) while logical dy holds them at 0.0; a mixed policy falsely
-        // reds healthy scenes (adversarial review finding #1). Non-client views fall back to logical dy.
+        // The judge/baseline dy MUST be the same model-twin the mesher captures. C5 makes that twin
+        // consume the canonical logical dy for carpet too; non-client views use that same authority.
         SlabModelStaleSentinel.setLiveDyPolicy((level, pos, state) ->
                 level instanceof BlockAndTintGetter view
                         ? OffsetBlockStateModel.liveModelDy(view, pos, state)

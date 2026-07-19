@@ -18,6 +18,8 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.function.Predicate;
+
 /**
  * THE LANDING RESOLVER — the pure landing computation of the unified GOES rule
  * ({@code docs/design/GOES-UNIFIED-LANDING-RULE.md} §1.2-1.3): a placement lands on the clicked
@@ -25,9 +27,9 @@ import net.minecraft.world.phys.Vec3;
  * placed block's family attachment plane exactly on the owner's visible plane — for every owner
  * shape and every depth, on all six faces — computed ONCE at placement and frozen (LAW.md).
  *
- * <p><b>C2-C4 scope</b> ({@code §4.4} rows C2-C4): wired for slabs, ordinary full blocks,
- * reciprocal floor-seated pairs, and ordinary object blocks. C5 thin layers and powder snow remain
- * explicitly outside this authority.
+ * <p><b>C2-C5 scope</b> ({@code §4.4} rows C2-C5): wired for slabs, ordinary full blocks,
+ * reciprocal floor-seated pairs, ordinary object blocks, and UP-face AIM-KEYED thin layers /
+ * powder snow.
  * NOTE (reviewer amendment A2, disclosed deviation): the design's §1.3.5 occlusion REFUSAL is NOT in
  * C2 — PlacementResolution has no refusal field and this resolver never cancels a placement, so a
  * deep DOWN-face placement can mint a body intersecting an existing visible body until the refusal
@@ -43,7 +45,7 @@ public final class LandingResolver {
     private LandingResolver() {
     }
 
-    /** The item families the resolver authors in C2. */
+    /** The item families the resolver authors through C5. */
     public enum Family {
         /** A vanilla slab item (any {@link SlabBlock}). */
         SLAB,
@@ -53,9 +55,17 @@ public final class LandingResolver {
         PAIRED_FLOOR_SEAT,
         /** An ordinary C4 object block, including partial shapes and block entities. */
         OBJECT,
-        /** C5 thin layers, powder snow, air, and invalid states. */
+        /** A C5 thin layer or powder-snow placement, seated only by a captured UP-face aim. */
+        AIM_KEYED_FLOOR_SEAT,
+        /** Air and invalid states. */
         UNSUPPORTED
     }
+
+    /**
+     * Test-only compat seam. Terrain Slabs is absent from the headless game-test classpath, so a
+     * focused test may stand in for its runtime on-top registry. Null in production.
+     */
+    public static volatile Predicate<BlockState> compatFinalStateTestOverride = null;
 
     /** The resolver's decision for a single placement: the height to freeze at {@code targetCell}. */
     public record PlacementResolution(BlockPos targetCell, double landingDy, boolean merge) {
@@ -94,8 +104,7 @@ public final class LandingResolver {
     }
 
     /**
-     * Classifies the held/placed block into its placement-time resolver family. Powder snow, carpets
-     * and other thin layers remain excluded as the separate C5 family.
+     * Classifies the held/placed block into its placement-time resolver family.
      */
     public static Family classify(BlockState placedState) {
         if (placedState == null || placedState.isAir()) {
@@ -111,12 +120,28 @@ public final class LandingResolver {
         }
         if (placedState.getBlock() instanceof PowderSnowBlock
                 || SlabSupport.isThinTopLayer(placedState)) {
-            return Family.UNSUPPORTED;
+            return Family.AIM_KEYED_FLOOR_SEAT;
         }
         if (placedState.getBlock() instanceof EntityBlock) {
             return Family.OBJECT;
         }
         return placedState.isSolidRender() ? Family.FULL_BLOCK : Family.OBJECT;
+    }
+
+    /**
+     * One final-state ownership gate shared by capture, landing, and hit validation. Terrain Slabs'
+     * on-top registry already owns model, outline, and raycast for its members, so Slabbed must not
+     * author a second stored dy for them.
+     */
+    public static boolean compatOwnsFinalState(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        Predicate<BlockState> override = compatFinalStateTestOverride;
+        return (override != null && override.test(state))
+                || CompatHooks.shouldSkipOffset(state)
+                || CompatHooks.shouldSkipSlabSupport(state)
+                || CompatHooks.terrainSlabsHandlesObjectOffset(state);
     }
 
     /**
@@ -137,9 +162,10 @@ public final class LandingResolver {
                 || family == Family.UNSUPPORTED) {
             return null;
         }
-        // TS gate (design §1.2 capture exclusion 3): a Terrain-Slabs-owned surface renders flush and is
-        // never a lowering support — the resolver does not author it.
-        if (CompatHooks.shouldSkipOffset(placedState)) {
+        if (compatOwnsFinalState(placedState)) {
+            return null;
+        }
+        if (family == Family.AIM_KEYED_FLOOR_SEAT && clickedFace != Direction.UP) {
             return null;
         }
 
@@ -183,17 +209,22 @@ public final class LandingResolver {
     ) {
         if (aim == null || actualTarget == null || finalState == null || finalState.isAir()
                 || family == Family.UNSUPPORTED
-                || CompatHooks.shouldSkipOffset(finalState)
-                || CompatHooks.shouldSkipSlabSupport(finalState)) {
+                || compatOwnsFinalState(finalState)) {
             return null;
         }
-        if (family == Family.PAIRED_FLOOR_SEAT && aim.clickedFace() != Direction.UP) {
+        if ((family == Family.PAIRED_FLOOR_SEAT || family == Family.AIM_KEYED_FLOOR_SEAT)
+                && aim.clickedFace() != Direction.UP) {
             return null;
         }
         if (family == Family.SLAB
                 && finalState.getBlock() instanceof SlabBlock
                 && finalState.hasProperty(SlabBlock.TYPE)
                 && finalState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
+                && aim.ownerPos().equals(actualTarget)) {
+            return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
+        }
+        if (family == Family.AIM_KEYED_FLOOR_SEAT
+                && aim.replacementSameCell()
                 && aim.ownerPos().equals(actualTarget)) {
             return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
         }
