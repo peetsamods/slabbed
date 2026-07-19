@@ -21,6 +21,8 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             System.setProperty("slabbed.liveCursorIntentRecorderDir", evidenceDir.toString());
             LiveCursorIntentRecorder.resetForTests();
 
+            // This fixture writes recorder API rows directly. It checks serialization and reduction,
+            // not whether the production raycast or rendered-outline hooks are active.
             LinkedHashMap<String, String> cursor = new LinkedHashMap<>();
             cursor.put("tick", "1");
             cursor.put("time", "contract");
@@ -116,8 +118,8 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             unknown.remove("expectedAfterDy");
             LiveCursorIntentRecorder.recordAction(unknown);
 
-            // Until a future typed expected-refusal contract exists, Fail[] is unclassified failure
-            // evidence and must be red even when no placement snapshot exists.
+            // Schema 5 has a typed verdict contract, but this Fail[] row declares no expected refusal.
+            // It therefore remains UNCLASSIFIED_FAILURE when no placement snapshot exists.
             LinkedHashMap<String, String> failed = ordinaryAction(
                     "minecraft:stone", "214,-39,30", "none",
                     "unknown", "none", "Fail[]");
@@ -144,13 +146,19 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("session.jsonl"), "LIVE_CURSOR_GHOST_SURFACE");
             assertContains(evidenceDir.resolve("rendered-outlines.tsv"), "LIVE_RENDERED_OUTLINE_LARGE_BOUNDS");
             assertContains(evidenceDir.resolve("rendered-outlines.tsv"), "LIVE_RENDERED_OUTLINE_REPLAY_BOUNDS_SPLIT");
-            assertContains(evidenceDir.resolve("manifest.json"), "\"schemaVersion\":\"3\"");
+            assertContains(evidenceDir.resolve("manifest.json"), "\"schemaVersion\":\"6\"");
             assertContains(evidenceDir.resolve("manifest.json"),
-                    "\"recorderVersion\":\"26.2-recorder-truth-v4-c4-action-failure-audit\"");
+                    "\"recorderVersion\":\"26.2-recorder-truth-v8-logical-attempts\"");
             assertContains(evidenceDir.resolve("manifest.json"),
                     "\"actionOriginContract\":\"PLAYER_AUTHORED|AUTO_USEON_PROXY\"");
+            assertContains(evidenceDir.resolve("manifest.json"),
+                    "\"placementVerdictContract\":\"PlacementVerificationVerdict-v3\"");
+            assertContains(evidenceDir.resolve("manifest.json"),
+                    "\"logicalAttemptContract\":\"LogicalPlacementAttempt-v1\"");
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem");
+            assertContains(evidenceDir.resolve("actions.tsv"),
+                    "logicalAttemptId\tphase\tplayerProof");
             assertContains(evidenceDir.resolve("actions.tsv"), "3\t1\tplace_block\tPLAYER_AUTHORED");
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "place_block\tAUTO_USEON_PROXY\tminecraft:stone_slab\t116,-39,30");
@@ -161,13 +169,16 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "119,-39,30\t-2.000000\t-1.500000\tlawful_lowered_lane\tanchored_full_block\tLIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
             assertContains(evidenceDir.resolve("actions.tsv"),
-                    "105,-39,30\t-2.000000\t-2.000000\tlawful_lowered_lane\tunnamed_or_vanilla_slab\tLIVE_GREEN_PLACEMENT_AUTHORING");
+                    "105,-39,30\t-2.000000\t-2.000000\tlawful_lowered_lane\tunnamed_or_vanilla_slab\tnone");
             assertContains(evidenceDir.resolve("actions.tsv"),
-                    "115,-39,30\t-2.000000\t-2.000000\tlawful_lowered_lane\tanchored_full_block\tLIVE_GREEN_PLACEMENT_AUTHORING");
+                    "115,-39,30\t-2.000000\t-2.000000\tlawful_lowered_lane\tanchored_full_block\tnone");
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "125,-39,30\t-2.000000\t-2.000000\tlawful_lowered_lane\tunnamed_or_vanilla_slab\tLIVE_PLACEMENT_EXPECTED_LANE_MISMATCH");
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "135,-39,30\t-2.000000\t-1.500000\tlawful_lowered_lane\tanchored_full_block\tLIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
+            assertActionOnlyInconclusive(evidenceDir.resolve("session.jsonl"), "3");
+            assertActionOnlyInconclusive(evidenceDir.resolve("session.jsonl"), "4");
+            assertActionOnlyInconclusive(evidenceDir.resolve("session.jsonl"), "5");
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "155,-39,30\tunknown\t-2.000000\tunknown\tunnamed_or_vanilla_slab\tnone");
             assertContains(evidenceDir.resolve("actions.tsv"),
@@ -184,13 +195,26 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("actions.tsv"),
                     "minecraft:stone\t214,-39,30\tUP\tnone\tunknown\tnone\tunknown\tnone"
                             + "\tLIVE_PLACEMENT_UNCLASSIFIED_FAILURE");
+            assertLineContains(evidenceDir.resolve("session.jsonl"), "\"actionId\":\"16\"",
+                    "\"finalVerdict\":\"UNCLASSIFIED_FAILURE\"",
+                    "\"placedVerdict\":\"FAIL\"",
+                    "\"anchorVerdict\":\"NOT_APPLICABLE\"",
+                    "\"failureClasses\":\"UNDECLARED_PLACEMENT_FAILURE\"",
+                    "\"verdictMarker\":\"LIVE_PLACEMENT_VERDICT_UNCLASSIFIED_FAILURE\"");
             assertContains(evidenceDir.resolve("actions.tsv"), "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER");
+            assertOccurrences(evidenceDir.resolve("actions.tsv"), "LIVE_PLACEMENT_VERDICT_RED", 7);
+            assertNotContains(evidenceDir.resolve("actions.tsv"), "LIVE_GREEN_PLACEMENT_AUTHORING");
+            assertContains(evidenceDir.resolve("mismatches.tsv"),
+                    "type\trowOrActionId\tmarker\tpos\theldItem\tfailureClasses");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_EXPECTED_DY_MISMATCH");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE");
+            assertOccurrences(evidenceDir.resolve("mismatches.tsv"), "LIVE_PLACEMENT_VERDICT_RED", 14);
             assertNotContains(evidenceDir.resolve("mismatches.tsv"), "116,-39,30");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "118,-39,30");
             assertNotContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_GREEN_PLACEMENT_AUTHORING");
+            assertOccurrences(evidenceDir.resolve("session.jsonl"), "\"finalVerdict\":\"RED\"", 14);
+            assertNotContains(evidenceDir.resolve("session.jsonl"), "LIVE_GREEN_PLACEMENT_AUTHORING");
             assertContains(evidenceDir.resolve("session.jsonl"),
                     "\"severity\":\"info\",\"marker\":\"INFO_ENSEMBLE_OCCLUDED_OCCUPANCY\"");
             assertContains(evidenceDir.resolve("mismatches.tsv"), "LIVE_ENSEMBLE_GAP");
@@ -208,7 +232,28 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("summary.md"), "placementExpectedDyMismatchRows=7");
             assertContains(evidenceDir.resolve("summary.md"), "placementUnclassifiedFailureRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "placementExpectedLaneMismatchRows=1");
-            assertContains(evidenceDir.resolve("summary.md"), "liveGreenPlacementRows=2");
+            assertContains(evidenceDir.resolve("summary.md"), "liveGreenPlacementRows=0");
+            assertContains(evidenceDir.resolve("summary.md"), "placementVerdictGreenRows=0");
+            assertContains(evidenceDir.resolve("summary.md"), "placementVerdictRedRows=7");
+            assertContains(evidenceDir.resolve("summary.md"), "placementVerdictInconclusiveRows=6");
+            assertContains(evidenceDir.resolve("summary.md"), "placementVerdictExpectedRefusalRows=0");
+            assertContains(evidenceDir.resolve("summary.md"), "placementVerdictUnclassifiedFailureRows=1");
+            assertContains(evidenceDir.resolve("summary.md"), "logicalAttemptRows=14");
+            assertContains(evidenceDir.resolve("summary.md"), "mergedClientServerAttemptRows=0");
+            assertContains(evidenceDir.resolve("summary.md"), "autoProxyLogicalAttemptRows=5");
+            assertContains(evidenceDir.resolve("summary.md"), "serverOnlyLogicalAttemptRows=7");
+            assertContains(evidenceDir.resolve("summary.md"), "clientOnlyLogicalAttemptRows=2");
+            assertContains(evidenceDir.resolve("summary.md"), "playerProofLogicalAttemptRows=9");
+            assertContains(evidenceDir.resolve("summary.md"), "logicalAttemptVerdictGreenRows=0");
+            assertContains(evidenceDir.resolve("summary.md"), "logicalAttemptVerdictRedRows=7");
+            assertContains(evidenceDir.resolve("summary.md"),
+                    "logicalAttemptVerdictInconclusiveRows=6");
+            assertContains(evidenceDir.resolve("summary.md"),
+                    "logicalAttemptVerdictExpectedRefusalRows=0");
+            assertContains(evidenceDir.resolve("summary.md"),
+                    "logicalAttemptVerdictUnclassifiedFailureRows=1");
+            assertContains(evidenceDir.resolve("summary.md"),
+                    "playerProofGreenLogicalAttemptRows=0");
             assertContains(evidenceDir.resolve("summary.md"), "playerAuthoredActionRows=9");
             assertContains(evidenceDir.resolve("summary.md"), "autoUseOnProxyActionRows=5");
             assertContains(evidenceDir.resolve("summary.md"), "modelStaleDivergentRows=1");
@@ -235,6 +280,62 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         String text = Files.readString(path);
         if (text.contains(needle)) {
             throw new RuntimeException("unexpected '" + needle + "' in " + path);
+        }
+    }
+
+    private static void assertActionOnlyInconclusive(Path path, String actionId) throws Exception {
+        assertLineContains(path, "\"actionId\":\"" + actionId + "\"",
+                "\"finalVerdict\":\"INCONCLUSIVE\"",
+                "\"placedVerdict\":\"PASS\"",
+                "\"anchorVerdict\":\"MISSING\"",
+                "\"modelVerdict\":\"MISSING\"",
+                "\"collisionVerdict\":\"MISSING\"",
+                "\"raycastVerdict\":\"MISSING\"",
+                "\"outlineVerdict\":\"MISSING\"",
+                "\"stabilityVerdict\":\"NOT_RUN\"",
+                "\"intentDy\":\"-2.000000\"",
+                "\"storedDy\":\"unknown\"",
+                "\"modelDy\":\"unknown\"",
+                "\"collisionDy\":\"unknown\"",
+                "\"raycastDy\":\"unknown\"",
+                "\"outlineDy\":\"unknown\"",
+                "\"expectedSupportPlane\":\"unknown\"",
+                "\"actualContactPlane\":\"unknown\"",
+                "\"seatError\":\"unknown\"",
+                "\"placementRoute\":\"unknown\"",
+                "\"landingAuthority\":\"unknown\"",
+                "\"rigCaseId\":\"unknown\"",
+                "\"expectedRefusalReason\":\"unknown\"",
+                "\"actualRefusalReason\":\"unknown\"",
+                "\"missingRequiredComponents\":\"ANCHOR,MODEL,COLLISION,RAYCAST,OUTLINE,STABILITY\"",
+                "\"failureClasses\":\"none\"",
+                "\"verdictMarker\":\"LIVE_PLACEMENT_VERDICT_INCONCLUSIVE\"",
+                "\"marker\":\"none\"");
+    }
+
+    private static void assertLineContains(Path path, String rowNeedle, String... needles) throws Exception {
+        String row = Files.readString(path).lines()
+                .filter(line -> line.contains(rowNeedle))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("missing row '" + rowNeedle + "' in " + path));
+        for (String needle : needles) {
+            if (!row.contains(needle)) {
+                throw new RuntimeException("row '" + rowNeedle + "' missing '" + needle + "' in " + path);
+            }
+        }
+    }
+
+    private static void assertOccurrences(Path path, String needle, int expected) throws Exception {
+        String text = Files.readString(path);
+        int actual = 0;
+        int index = 0;
+        while ((index = text.indexOf(needle, index)) >= 0) {
+            actual++;
+            index += needle.length();
+        }
+        if (actual != expected) {
+            throw new RuntimeException(
+                    "expected " + expected + " occurrences of '" + needle + "' in " + path + " but found " + actual);
         }
     }
 

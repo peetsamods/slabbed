@@ -53,8 +53,18 @@ C3_PAIR_FIELDS = [
 C3_ACTIONS_HEADER = ACTIONS_HEADER + C3_PAIR_FIELDS
 C3_RECORDER_VERSION = "26.2-recorder-truth-v3-origin-c3-pair-fields"
 C4_RECORDER_VERSION = "26.2-recorder-truth-v4-c4-action-failure-audit"
+SCHEMA6_RECORDER_VERSION = "26.2-recorder-truth-v8-logical-attempts"
+PLACEMENT_VERDICT_CONTRACT = "PlacementVerificationVerdict-v3"
+LOGICAL_ATTEMPT_CONTRACT = "LogicalPlacementAttempt-v1"
+SCHEMA6_run_id="redacted"
+SCHEMA6_ACTIONS_HEADER = C3_ACTIONS_HEADER + [
+    "logicalAttemptId",
+    "phase",
+    "playerProof",
+]
 
 MISMATCH_HEADER = ["type", "rowOrActionId", "marker", "pos", "heldItem"]
+SCHEMA6_MISMATCH_HEADER = MISMATCH_HEADER + ["failureClasses"]
 
 OUTLINE_HEADER = [
     "outlineRenderId",
@@ -99,6 +109,34 @@ SUMMARY_KEYS = [
     "ensembleOccludedOccupancyInfoRows",
     "sentinelArmedTotal",
     "sentinelSamplePasses",
+]
+SCHEMA6_SUMMARY_KEYS = SUMMARY_KEYS[:19] + [
+    "placementVerdictGreenRows",
+    "placementVerdictRedRows",
+    "placementVerdictInconclusiveRows",
+    "placementVerdictExpectedRefusalRows",
+    "placementVerdictUnclassifiedFailureRows",
+    "logicalAttemptRows",
+    "mergedClientServerAttemptRows",
+    "autoProxyLogicalAttemptRows",
+    "serverOnlyLogicalAttemptRows",
+    "clientOnlyLogicalAttemptRows",
+    "playerProofLogicalAttemptRows",
+    "logicalAttemptVerdictGreenRows",
+    "logicalAttemptVerdictRedRows",
+    "logicalAttemptVerdictInconclusiveRows",
+    "logicalAttemptVerdictExpectedRefusalRows",
+    "logicalAttemptVerdictUnclassifiedFailureRows",
+    "playerProofGreenLogicalAttemptRows",
+] + SUMMARY_KEYS[19:]
+COMPONENT_VERDICT_FIELDS = [
+    "placedVerdict",
+    "anchorVerdict",
+    "modelVerdict",
+    "collisionVerdict",
+    "raycastVerdict",
+    "outlineVerdict",
+    "stabilityVerdict",
 ]
 
 
@@ -407,6 +445,50 @@ def summary_for(rows, extra_rows=(), overrides=None):
     return counters
 
 
+def schema6_summary_for(rows, terminal):
+    counters = summary_for(
+        rows,
+        overrides={
+            "sentinelArmedTotal": 0,
+            "sentinelSamplePasses": 0,
+        },
+    )
+    counters.update({
+        key: 0 for key in SCHEMA6_SUMMARY_KEYS if key not in counters
+    })
+    for row in rows:
+        verdict_key = {
+            "GREEN": "placementVerdictGreenRows",
+            "RED": "placementVerdictRedRows",
+            "INCONCLUSIVE": "placementVerdictInconclusiveRows",
+            "EXPECTED_REFUSAL": "placementVerdictExpectedRefusalRows",
+            "UNCLASSIFIED_FAILURE": "placementVerdictUnclassifiedFailureRows",
+        }[row["finalVerdict"]]
+        counters[verdict_key] += 1
+
+    counters["logicalAttemptRows"] = 1
+    status_key = {
+        "MERGED_CLIENT_SERVER": "mergedClientServerAttemptRows",
+        "AUTO_PROXY": "autoProxyLogicalAttemptRows",
+        "SERVER_ONLY": "serverOnlyLogicalAttemptRows",
+        "CLIENT_ONLY": "clientOnlyLogicalAttemptRows",
+    }[terminal["attemptStatus"]]
+    counters[status_key] = 1
+    if terminal["playerProof"] == "PRESENT":
+        counters["playerProofLogicalAttemptRows"] = 1
+    verdict_key = {
+        "GREEN": "logicalAttemptVerdictGreenRows",
+        "RED": "logicalAttemptVerdictRedRows",
+        "INCONCLUSIVE": "logicalAttemptVerdictInconclusiveRows",
+        "EXPECTED_REFUSAL": "logicalAttemptVerdictExpectedRefusalRows",
+        "UNCLASSIFIED_FAILURE": "logicalAttemptVerdictUnclassifiedFailureRows",
+    }[terminal["finalVerdict"]]
+    counters[verdict_key] = 1
+    if terminal["playerProof"] == "PRESENT" and terminal["finalVerdict"] == "GREEN":
+        counters["playerProofGreenLogicalAttemptRows"] = 1
+    return counters
+
+
 def write_fixture(
     root,
     *,
@@ -417,6 +499,7 @@ def write_fixture(
     run_id="redacted",
     summary_overrides=None,
     actions_header=None,
+    mismatch_header=None,
     java_command="launcher --accessToken [REDACTED] --uuid [REDACTED]",
     recorder_version="26.2-recorder-truth-v3-origin",
     omit_summary_keys=None,
@@ -459,7 +542,7 @@ def write_fixture(
         action_lines.append("\t".join(row.get(field, "") for field in header))
     (root / "actions.tsv").write_text("\n".join(action_lines) + "\n", encoding="utf-8")
 
-    mismatch_lines = ["\t".join(MISMATCH_HEADER)]
+    mismatch_lines = ["\t".join(mismatch_header or MISMATCH_HEADER)]
     mismatch_lines.extend("\t".join(row) for row in mismatches)
     (root / "mismatches.tsv").write_text("\n".join(mismatch_lines) + "\n", encoding="utf-8")
     outline_lines = ["\t".join(OUTLINE_HEADER)]
@@ -479,6 +562,204 @@ def write_fixture(
     )
     (root / "summary.md").write_text(summary, encoding="utf-8")
     return root
+
+
+def schema6_action(
+    action_id,
+    side,
+    *,
+    logical_attempt_id,
+    phase,
+    player_proof,
+    origin="PLAYER_AUTHORED",
+    at="2026-07-11T07:00:00.000000Z",
+):
+    row = action(
+        action_id,
+        side,
+        origin=origin,
+        at=at,
+        expected_dy="-1.000000",
+        expected_lane="unknown",
+        marker="none",
+        result="SUCCESS",
+    )
+    row.update({
+        "afterStoredDy": "none",
+        "afterStoredDyBits": "none",
+        "pairPos": "none",
+        "pairPart": "none",
+        "pairState": "none",
+        "pairAfterDy": "none",
+        "pairStoredDy": "none",
+        "pairStoredDyBits": "none",
+        "logicalAttemptId": logical_attempt_id,
+        "phase": phase,
+        "playerProof": player_proof,
+        "expectedResult": "unknown",
+        "placementRoute": "TOP_SEAT",
+        "landingAuthority": "CANONICAL_STORED_DY",
+        "rigCaseId": "schema6-adapter-fixture",
+        "intentDy": "-1.000000",
+        "expectedRefusalReason": "unknown",
+        "actualRefusalReason": "unknown",
+        "failureClasses": "none",
+        "marker": "none",
+    })
+    if phase == "CLIENT_PREDICTION":
+        row.update({
+            "modelDy": "-1.000000",
+            "collisionDy": "-1.000000",
+            "raycastDy": "-1.000000",
+            "outlineDy": "-1.000000",
+            "expectedSupportPlane": "64.000000",
+            "actualContactPlane": "64.000000",
+            "seatError": "0.000000",
+            "finalVerdict": "INCONCLUSIVE",
+            "placedVerdict": "PASS",
+            "anchorVerdict": "MISSING",
+            "modelVerdict": "PASS",
+            "collisionVerdict": "PASS",
+            "raycastVerdict": "PASS",
+            "outlineVerdict": "PASS",
+            "stabilityVerdict": "NOT_RUN",
+            "storedDy": "unknown",
+            "missingRequiredComponents": "ANCHOR,STABILITY",
+            "verdictMarker": "LIVE_PLACEMENT_VERDICT_INCONCLUSIVE",
+        })
+    elif phase == "SERVER_AUTHORITY":
+        row.update({
+            "afterStoredDy": "-1.000000",
+            "finalVerdict": "INCONCLUSIVE",
+            "placedVerdict": "PASS",
+            "anchorVerdict": "PASS",
+            "modelVerdict": "MISSING",
+            "collisionVerdict": "MISSING",
+            "raycastVerdict": "MISSING",
+            "outlineVerdict": "MISSING",
+            "stabilityVerdict": "PASS",
+            "storedDy": "-1.000000",
+            "modelDy": "unknown",
+            "collisionDy": "unknown",
+            "raycastDy": "unknown",
+            "outlineDy": "unknown",
+            "expectedSupportPlane": "unknown",
+            "actualContactPlane": "unknown",
+            "seatError": "unknown",
+            "missingRequiredComponents": "MODEL,COLLISION,RAYCAST,OUTLINE",
+            "verdictMarker": "LIVE_PLACEMENT_VERDICT_INCONCLUSIVE",
+        })
+    elif phase == "AUTO_PROXY":
+        row.update({
+            "afterStoredDy": "-1.000000",
+            "modelDy": "-1.000000",
+            "collisionDy": "-1.000000",
+            "raycastDy": "-1.000000",
+            "outlineDy": "-1.000000",
+            "expectedSupportPlane": "64.000000",
+            "actualContactPlane": "64.000000",
+            "seatError": "0.000000",
+            "finalVerdict": "GREEN",
+            **{field: "PASS" for field in COMPONENT_VERDICT_FIELDS},
+            "storedDy": "-1.000000",
+            "missingRequiredComponents": "none",
+            "verdictMarker": "LIVE_PLACEMENT_VERDICT_GREEN",
+        })
+    else:
+        raise ValueError("unknown schema-6 phase: %s" % phase)
+    return row
+
+
+def placement_attempt(
+    logical_attempt_id,
+    *,
+    attempt_status,
+    client_action_id,
+    server_action_id,
+    player_proof,
+    at,
+):
+    return {
+        "type": "placement_attempt",
+        "rowId": "attempt:" + logical_attempt_id,
+        "recordedAt": at,
+        "logicalAttemptId": logical_attempt_id,
+        "attemptStatus": attempt_status,
+        "terminal": "true",
+        "clientActionId": client_action_id,
+        "serverActionId": server_action_id,
+        "actionCount": "2" if client_action_id != "none" and server_action_id != "none" else "1",
+        "playerProof": player_proof,
+        "actionType": "place_block",
+        "heldItem": "minecraft:stone_slab",
+        "clickedOwnerPos": "10, 64, 10",
+        "clickedFace": "south",
+        "placementPos": "10, 64, 11",
+        "rigCaseId": "schema6-adapter-fixture",
+        "placementRoute": "TOP_SEAT",
+        "landingAuthority": "CANONICAL_STORED_DY",
+        "expectedAfterDy": "-1.000000",
+        "intentDy": "-1.000000",
+        "clickedOwnerLaneKind": "anchored_full_block",
+        "beforeDy": "-1.000000",
+        "actualResult": "SUCCESS",
+        "afterDy": "-1.000000",
+        "afterState": "Block{minecraft:stone_slab}[type=top,waterlogged=false]",
+        "afterLaneKind": "anchored_full_block",
+        "stabilityVerdict": "PASS",
+        "afterStoredDy": "-1.000000",
+        "modelDy": "-1.000000",
+        "collisionDy": "-1.000000",
+        "raycastDy": "-1.000000",
+        "outlineDy": "-1.000000",
+        "expectedSupportPlane": "64.000000",
+        "actualContactPlane": "64.000000",
+        "seatError": "0.000000",
+        "finalVerdict": "GREEN",
+        "placedVerdict": "PASS",
+        "anchorVerdict": "PASS",
+        "modelVerdict": "PASS",
+        "collisionVerdict": "PASS",
+        "raycastVerdict": "PASS",
+        "outlineVerdict": "PASS",
+        "storedDy": "-1.000000",
+        "expectedRefusalReason": "unknown",
+        "actualRefusalReason": "unknown",
+        "missingRequiredComponents": "none",
+        "failureClasses": "none",
+        "verdictMarker": "LIVE_PLACEMENT_VERDICT_GREEN",
+        "marker": "LIVE_PLACEMENT_VERDICT_GREEN",
+    }
+
+
+def write_schema6_fixture(root, *, rows, terminal, mismatches=None):
+    recorder = write_fixture(
+        root,
+        rows=rows,
+        mismatches=mismatches,
+        schema="6",
+        run_id=SCHEMA6_RUN_ID,
+        actions_header=SCHEMA6_ACTIONS_HEADER,
+        mismatch_header=SCHEMA6_MISMATCH_HEADER,
+        recorder_version=SCHEMA6_RECORDER_VERSION,
+    )
+    manifest_path = recorder / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    exact_manifest = {}
+    for key, value in manifest.items():
+        exact_manifest[key] = value
+        if key == "actionOriginContract":
+            exact_manifest["placementVerdictContract"] = PLACEMENT_VERDICT_CONTRACT
+            exact_manifest["logicalAttemptContract"] = LOGICAL_ATTEMPT_CONTRACT
+    manifest_path.write_text(json.dumps(exact_manifest) + "\n", encoding="utf-8")
+    with (recorder / "session.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(terminal, separators=(",", ":")) + "\n")
+    counters = schema6_summary_for(rows, terminal)
+    summary = "# Slabbed Live Cursor Intent Recorder Summary\n\n" + "".join(
+        f"{key}={counters[key]}\n" for key in SCHEMA6_SUMMARY_KEYS
+    )
+    (recorder / "summary.md").write_text(summary, encoding="utf-8")
+    return recorder
 
 
 class AdapterTest(unittest.TestCase):
@@ -1178,6 +1459,996 @@ class AdapterTest(unittest.TestCase):
         result = subprocess.run([str(capsule), str(legacy)], text=True, capture_output=True, check=False)
         self.assertEqual(4, result.returncode)
         self.assertEqual("", result.stdout)
+
+
+class Schema6LogicalAttemptTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+
+    @staticmethod
+    def _set_absent_representation(row, field, representation):
+        if representation == "present":
+            return
+        if representation == "omitted":
+            row.pop(field, None)
+        else:
+            row[field] = representation
+
+    def _schema6_after_evidence_fixture(
+        self,
+        *,
+        final_verdict,
+        field,
+        client_representation,
+        server_representation,
+        suffix,
+    ):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        if final_verdict == "EXPECTED_REFUSAL":
+            for row in rows:
+                row.update({
+                    "expectedResult": "MUST_REFUSE_VANILLA",
+                    "actualResult": "Fail[BLOCKED_BY_VANILLA]",
+                    "expectedRefusalReason": "BLOCKED_BY_VANILLA",
+                    "actualRefusalReason": "BLOCKED_BY_VANILLA",
+                    "finalVerdict": "EXPECTED_REFUSAL",
+                    **{
+                        component_field: "NOT_APPLICABLE"
+                        for component_field in COMPONENT_VERDICT_FIELDS
+                    },
+                    "missingRequiredComponents": "none",
+                    "failureClasses": "none",
+                    "verdictMarker": "LIVE_PLACEMENT_VERDICT_EXPECTED_REFUSAL",
+                    "marker": "none",
+                })
+            terminal.update({
+                "expectedResult": "MUST_REFUSE_VANILLA",
+                "actualResult": "Fail[BLOCKED_BY_VANILLA]",
+                "expectedRefusalReason": "BLOCKED_BY_VANILLA",
+                "actualRefusalReason": "BLOCKED_BY_VANILLA",
+                "finalVerdict": "EXPECTED_REFUSAL",
+                **{
+                    component_field: "NOT_APPLICABLE"
+                    for component_field in COMPONENT_VERDICT_FIELDS
+                },
+                "missingRequiredComponents": "none",
+                "failureClasses": "none",
+                "verdictMarker": "LIVE_PLACEMENT_VERDICT_EXPECTED_REFUSAL",
+                "marker": "LIVE_PLACEMENT_VERDICT_EXPECTED_REFUSAL",
+            })
+
+        self._set_absent_representation(
+            rows[0], field, client_representation
+        )
+        self._set_absent_representation(
+            rows[1], field, server_representation
+        )
+        both_absent = (
+            client_representation in {"omitted", "none", "unknown"}
+            and server_representation in {"omitted", "none", "unknown"}
+        )
+        if both_absent:
+            terminal.pop(field, None)
+
+        return adapter.analyze(write_schema6_fixture(
+            self.root / suffix,
+            rows=rows,
+            terminal=terminal,
+        ))
+
+    def _assert_schema6_absent_after_evidence_parity(self, final_verdict):
+        absent_pairs = [
+            ("omitted", "none"),
+            ("none", "omitted"),
+            ("omitted", "unknown"),
+            ("unknown", "omitted"),
+            ("none", "unknown"),
+            ("unknown", "none"),
+        ]
+        expected_status = (
+            "EXPLICIT_GREEN"
+            if final_verdict == "GREEN"
+            else "OBSERVED_UNCLASSIFIED"
+        )
+        for field, split_marker in (
+            ("afterDy", "ADAPTER_SIDE_DY_SPLIT"),
+            ("afterState", "ADAPTER_SIDE_STATE_SPLIT"),
+        ):
+            for client_representation, server_representation in absent_pairs:
+                label = (
+                    f"{final_verdict.lower()}-{field}-"
+                    f"{client_representation}-{server_representation}"
+                )
+                with self.subTest(
+                    verdict=final_verdict,
+                    field=field,
+                    client=client_representation,
+                    server=server_representation,
+                ):
+                    triage = self._schema6_after_evidence_fixture(
+                        final_verdict=final_verdict,
+                        field=field,
+                        client_representation=client_representation,
+                        server_representation=server_representation,
+                        suffix=label,
+                    )
+                    pair = triage["playerAuthored"]["pairs"][0]
+                    self.assertEqual(expected_status, triage["verdict"]["status"])
+                    self.assertNotIn(split_marker, pair["redMarkers"])
+
+            for absent_representation in ("omitted", "none", "unknown"):
+                label = (
+                    f"{final_verdict.lower()}-{field}-"
+                    f"{absent_representation}-present"
+                )
+                with self.subTest(
+                    verdict=final_verdict,
+                    field=field,
+                    client=absent_representation,
+                    server="present",
+                ):
+                    triage = self._schema6_after_evidence_fixture(
+                        final_verdict=final_verdict,
+                        field=field,
+                        client_representation=absent_representation,
+                        server_representation="present",
+                        suffix=label,
+                    )
+                    pair = triage["playerAuthored"]["pairs"][0]
+                    self.assertEqual("RED", triage["verdict"]["status"])
+                    self.assertIn(split_marker, pair["redMarkers"])
+
+    def test_schema6_green_absent_after_evidence_representation_parity(self):
+        self._assert_schema6_absent_after_evidence_parity("GREEN")
+
+    def test_schema6_expected_refusal_absent_after_evidence_representation_parity(self):
+        self._assert_schema6_absent_after_evidence_parity("EXPECTED_REFUSAL")
+
+    def test_schema6_v8_player_terminal_merges_client_server_attempt(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "player",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["status"])
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["playerProof"])
+        self.assertEqual(1, triage["playerAuthored"]["pairCount"])
+        pair = triage["playerAuthored"]["pairs"][0]
+        self.assertEqual([1, 2], [pair["clientActionId"], pair["serverActionId"]])
+        self.assertEqual("EXPLICIT_GREEN", pair["verdict"])
+        self.assertNotIn("ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT", pair["redMarkers"])
+        self.assertEqual(
+            [logical_attempt_id, logical_attempt_id],
+            [
+                pair["clientRow"]["logicalAttemptId"],
+                pair["serverRow"]["logicalAttemptId"],
+            ],
+        )
+        self.assertEqual(
+            ["CLIENT_PREDICTION", "SERVER_AUTHORITY"],
+            [pair["clientRow"]["phase"], pair["serverRow"]["phase"]],
+        )
+        self.assertEqual(
+            ["PRESENT", "PRESENT"],
+            [pair["clientRow"]["playerProof"], pair["serverRow"]["playerProof"]],
+        )
+        self.assertTrue(all(
+            row["marker"] == "none" and row["expectedAfterDy"] == "-1.000000"
+            for row in (pair["clientRow"], pair["serverRow"])
+        ))
+        self.assertEqual(
+            ["INCONCLUSIVE", "INCONCLUSIVE"],
+            [
+                pair["clientRow"]["finalVerdict"],
+                pair["serverRow"]["finalVerdict"],
+            ],
+        )
+        self.assertEqual(logical_attempt_id, pair["logicalAttemptId"])
+        self.assertEqual(
+            "attempt:" + logical_attempt_id,
+            pair["terminalRowId"],
+        )
+        attempt = triage["logicalAttempts"]["rows"][0]
+        self.assertEqual("MERGED_CLIENT_SERVER", attempt["attemptStatus"])
+        self.assertEqual("GREEN", attempt["finalVerdict"])
+        self.assertEqual("PRESENT", attempt["playerProof"])
+        self.assertTrue(attempt["rawActionsCrossChecked"])
+        self.assertTrue(all(
+            attempt[field] == "PASS" for field in COMPONENT_VERDICT_FIELDS
+        ))
+        self.assertEqual(0, triage["autoUseOnProxy"]["rowCount"])
+
+    def test_schema6_accepts_java_rows_without_optional_player_or_hit_vector(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        for row in rows:
+            row.pop("player")
+            row.pop("clickedHitVec")
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "missing-optional-player-hit",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["status"])
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["playerProof"])
+        pair = triage["playerAuthored"]["pairs"][0]
+        self.assertNotIn("player", pair["clientRow"])
+        self.assertNotIn("clickedHitVec", pair["clientRow"])
+        self.assertNotIn("player", pair["serverRow"])
+        self.assertNotIn("clickedHitVec", pair["serverRow"])
+
+    def test_schema6_expected_refusal_pair_is_not_adapter_red(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        for row in rows:
+            row.update({
+                "expectedResult": "MUST_REFUSE_VANILLA",
+                "actualResult": "Fail[BLOCKED_BY_VANILLA]",
+                "expectedRefusalReason": "BLOCKED_BY_VANILLA",
+                "actualRefusalReason": "BLOCKED_BY_VANILLA",
+                "finalVerdict": "EXPECTED_REFUSAL",
+                **{field: "NOT_APPLICABLE" for field in COMPONENT_VERDICT_FIELDS},
+                "missingRequiredComponents": "none",
+                "failureClasses": "none",
+                "verdictMarker": "LIVE_PLACEMENT_VERDICT_EXPECTED_REFUSAL",
+                "marker": "none",
+            })
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        terminal.update({
+            "expectedResult": "MUST_REFUSE_VANILLA",
+            "actualResult": "Fail[BLOCKED_BY_VANILLA]",
+            "expectedRefusalReason": "BLOCKED_BY_VANILLA",
+            "actualRefusalReason": "BLOCKED_BY_VANILLA",
+            "finalVerdict": "EXPECTED_REFUSAL",
+            **{field: "NOT_APPLICABLE" for field in COMPONENT_VERDICT_FIELDS},
+            "missingRequiredComponents": "none",
+            "failureClasses": "none",
+            "verdictMarker": "LIVE_PLACEMENT_VERDICT_EXPECTED_REFUSAL",
+            "marker": "LIVE_PLACEMENT_VERDICT_EXPECTED_REFUSAL",
+        })
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "expected-refusal",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        self.assertEqual("OBSERVED_UNCLASSIFIED", triage["verdict"]["status"])
+        self.assertEqual("OBSERVED_UNCLASSIFIED", triage["verdict"]["playerProof"])
+        self.assertFalse(triage["verdict"]["hasRed"])
+        pair = triage["playerAuthored"]["pairs"][0]
+        self.assertEqual("OBSERVED_UNCLASSIFIED", pair["verdict"])
+        self.assertNotIn("ADAPTER_PLACEMENT_FAILED", pair["redMarkers"])
+        self.assertNotIn(
+            "ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE",
+            pair["redMarkers"],
+        )
+
+    def test_schema6_green_allows_missing_after_dy_and_after_state(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        for row in rows:
+            row.pop("afterDy")
+            row.pop("afterState")
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        terminal.pop("afterDy")
+        terminal.pop("afterState")
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "green-without-after-dy-or-state",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["status"])
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["playerProof"])
+        attempt = triage["logicalAttempts"]["rows"][0]
+        self.assertEqual("GREEN", attempt["finalVerdict"])
+        self.assertEqual("PASS", attempt["placedVerdict"])
+        self.assertNotIn("afterDy", attempt)
+        self.assertNotIn("afterState", attempt)
+
+    def test_schema6_uses_java_attempt_key_when_hit_vectors_differ(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        rows[1]["clickedHitVec"] = "10.750000,64.500000,11.000000"
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "producer-key-ignores-hit-vector",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["status"])
+        self.assertEqual(1, triage["playerAuthored"]["pairCount"])
+        pair = triage["playerAuthored"]["pairs"][0]
+        self.assertNotEqual(
+            pair["clientRow"]["clickedHitVec"],
+            pair["serverRow"]["clickedHitVec"],
+        )
+
+    def test_schema6_java_numeric_tolerance_does_not_invent_a_raw_conflict(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        rows[0]["expectedAfterDy"] = "-1.0"
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "numeric-equivalent-evidence",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["status"])
+        self.assertEqual("GREEN", triage["logicalAttempts"]["rows"][0]["finalVerdict"])
+
+    def test_schema6_accepts_partial_valid_collision_green_without_route_metadata(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        for row in rows:
+            row["placementRoute"] = "unknown"
+            row["landingAuthority"] = "unknown"
+            row["rigCaseId"] = "none"
+        rows[0]["collisionDy"] = "unknown"
+        rows[0]["expectedSupportPlane"] = "unknown"
+        rows[0]["actualContactPlane"] = "unknown"
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        terminal.update({
+            "collisionDy": "unknown",
+            "expectedSupportPlane": "unknown",
+            "actualContactPlane": "unknown",
+            "placementRoute": "unknown",
+            "landingAuthority": "unknown",
+            "rigCaseId": "unknown",
+        })
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "partial-collision-green",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        self.assertEqual("EXPLICIT_GREEN", triage["verdict"]["status"])
+        attempt = triage["logicalAttempts"]["rows"][0]
+        self.assertEqual("PASS", attempt["collisionVerdict"])
+        self.assertEqual("0.000000", attempt["seatError"])
+        self.assertEqual("unknown", attempt["collisionDy"])
+
+    def test_schema6_rejects_forged_red_without_evidence_backed_failure(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        terminal.update({
+            "finalVerdict": "RED",
+            "placedVerdict": "FAIL",
+            "failureClasses": "PLACED_ACTION_DY_MISMATCH",
+            "verdictMarker": "LIVE_PLACEMENT_VERDICT_RED",
+            "marker": "LIVE_PLACEMENT_VERDICT_RED",
+        })
+        mismatch = [[
+            "placement_attempt",
+            "attempt:" + logical_attempt_id,
+            "LIVE_PLACEMENT_VERDICT_RED",
+            "10, 64, 10",
+            "minecraft:stone_slab",
+            "PLACED_ACTION_DY_MISMATCH",
+        ]]
+
+        with self.assertRaisesRegex(
+            adapter.IntegrityError,
+            "evidence-backed|derived terminal verdict",
+        ):
+            adapter.analyze(write_schema6_fixture(
+                self.root / "forged-red",
+                rows=rows,
+                terminal=terminal,
+                mismatches=mismatch,
+            ))
+
+    def test_schema6_v8_green_auto_proxy_terminal_keeps_player_proof_absent(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="AUTO_PROXY",
+                player_proof="ABSENT",
+                origin="AUTO_USEON_PROXY",
+            ),
+        ]
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="AUTO_PROXY",
+            client_action_id="none",
+            server_action_id="1",
+            player_proof="ABSENT",
+            at="2026-07-11T07:00:00.010000Z",
+        )
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "auto-proxy",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        self.assertEqual("NO_PLAYER_EVIDENCE", triage["verdict"]["status"])
+        self.assertEqual("ABSENT", triage["verdict"]["playerProof"])
+        self.assertFalse(triage["verdict"]["hasRed"])
+        self.assertEqual(0, triage["playerAuthored"]["pairCount"])
+        self.assertEqual(1, triage["autoUseOnProxy"]["rowCount"])
+        attempt = triage["logicalAttempts"]["rows"][0]
+        self.assertEqual("AUTO_PROXY", attempt["attemptStatus"])
+        self.assertEqual("GREEN", attempt["finalVerdict"])
+        self.assertEqual("ABSENT", attempt["playerProof"])
+        self.assertTrue(attempt["rawActionsCrossChecked"])
+
+    def test_schema6_rejects_terminal_evidence_missing_from_selected_raw_rows(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        rows[0]["outlineDy"] = "unknown"
+        rows[0]["outlineVerdict"] = "MISSING"
+        rows[0]["missingRequiredComponents"] = "ANCHOR,OUTLINE,STABILITY"
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+
+        with self.assertRaisesRegex(
+            adapter.IntegrityError,
+            "derived terminal verdict/evidence mismatch|terminal/raw evidence mismatch outlineDy",
+        ):
+            adapter.analyze(write_schema6_fixture(
+                self.root / "invented-terminal-outline",
+                rows=rows,
+                terminal=terminal,
+            ))
+
+    def test_schema6_rejects_all_pass_dy_evidence_that_disagrees_with_intent(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        for field in ("modelDy", "collisionDy", "raycastDy", "outlineDy"):
+            rows[0][field] = "-0.750000"
+        rows[1]["afterStoredDy"] = "-0.750000"
+        rows[1]["storedDy"] = "-0.750000"
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        terminal["afterStoredDy"] = "-0.750000"
+        terminal["storedDy"] = "-0.750000"
+        for field in ("modelDy", "collisionDy", "raycastDy", "outlineDy"):
+            terminal[field] = "-0.750000"
+
+        with self.assertRaisesRegex(
+            adapter.IntegrityError,
+            "PASS evidence disagrees with intentDy",
+        ):
+            adapter.analyze(write_schema6_fixture(
+                self.root / "forged-pass-dy",
+                rows=rows,
+                terminal=terminal,
+            ))
+
+    def test_schema6_accepts_java_red_terminal_conflict_outside_attempt_key(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        rows[0]["placementRoute"] = "CLIENT_ROUTE"
+        rows[1]["placementRoute"] = "SERVER_ROUTE"
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        terminal.update({
+            "placementRoute": "SERVER_ROUTE",
+            "finalVerdict": "RED",
+            "placedVerdict": "FAIL",
+            "failureClasses": "LOGICAL_ATTEMPT_PLACEMENT_ROUTE_CONFLICT",
+            "verdictMarker": "LIVE_PLACEMENT_VERDICT_RED",
+            "marker": "LIVE_PLACEMENT_VERDICT_RED",
+        })
+        mismatch = [[
+            "placement_attempt",
+            "attempt:" + logical_attempt_id,
+            "LIVE_PLACEMENT_VERDICT_RED",
+            "10, 64, 10",
+            "minecraft:stone_slab",
+            "LOGICAL_ATTEMPT_PLACEMENT_ROUTE_CONFLICT",
+        ]]
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "java-red-terminal",
+            rows=rows,
+            terminal=terminal,
+            mismatches=mismatch,
+        ))
+
+        self.assertEqual("RED", triage["verdict"]["status"])
+        self.assertTrue(triage["verdict"]["hasRed"])
+        self.assertEqual(1, len(triage["mismatches"]))
+        self.assertEqual(
+            "10,64,10",
+            triage["mismatches"][0]["context"]["clickedOwnerPos"],
+        )
+        self.assertEqual(
+            "none",
+            triage["mismatches"][0]["context"]["clickedHitVec"],
+        )
+
+    def test_schema6_java_collision_conflict_rebuilds_missing_components(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        for row, actual_contact_plane in zip(
+            rows,
+            ("64.500000", "64.750000"),
+        ):
+            row.update({
+                "afterStoredDy": "none",
+                "storedDy": "unknown",
+                "modelDy": "unknown",
+                "collisionDy": "unknown",
+                "raycastDy": "unknown",
+                "outlineDy": "unknown",
+                "expectedSupportPlane": "unknown",
+                "actualContactPlane": actual_contact_plane,
+                "seatError": "unknown",
+                "finalVerdict": "INCONCLUSIVE",
+                "placedVerdict": "PASS",
+                "anchorVerdict": "MISSING",
+                "modelVerdict": "MISSING",
+                "collisionVerdict": "UNKNOWN",
+                "raycastVerdict": "MISSING",
+                "outlineVerdict": "MISSING",
+                "stabilityVerdict": "NOT_RUN",
+                "missingRequiredComponents": (
+                    "ANCHOR,MODEL,COLLISION,RAYCAST,OUTLINE,STABILITY"
+                ),
+                "failureClasses": "none",
+                "verdictMarker": "LIVE_PLACEMENT_VERDICT_INCONCLUSIVE",
+                "marker": "none",
+            })
+
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        terminal.pop("afterStoredDy")
+        terminal.update({
+            "storedDy": "unknown",
+            "modelDy": "unknown",
+            "collisionDy": "unknown",
+            "raycastDy": "unknown",
+            "outlineDy": "unknown",
+            "expectedSupportPlane": "unknown",
+            "actualContactPlane": "64.500000",
+            "seatError": "unknown",
+            "finalVerdict": "RED",
+            "placedVerdict": "PASS",
+            "anchorVerdict": "MISSING",
+            "modelVerdict": "MISSING",
+            "collisionVerdict": "FAIL",
+            "raycastVerdict": "MISSING",
+            "outlineVerdict": "MISSING",
+            "stabilityVerdict": "NOT_RUN",
+            "missingRequiredComponents": "ANCHOR,MODEL,RAYCAST,OUTLINE,STABILITY",
+            "failureClasses": "LOGICAL_ATTEMPT_ACTUAL_CONTACT_PLANE_CONFLICT",
+            "verdictMarker": "LIVE_PLACEMENT_VERDICT_RED",
+            "marker": "LIVE_PLACEMENT_VERDICT_RED",
+        })
+        mismatch = [[
+            "placement_attempt",
+            "attempt:" + logical_attempt_id,
+            "LIVE_PLACEMENT_VERDICT_RED",
+            "10, 64, 10",
+            "minecraft:stone_slab",
+            "LOGICAL_ATTEMPT_ACTUAL_CONTACT_PLANE_CONFLICT",
+        ]]
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "java-collision-conflict-missing",
+            rows=rows,
+            terminal=terminal,
+            mismatches=mismatch,
+        ))
+
+        self.assertEqual("RED", triage["verdict"]["status"])
+        self.assertTrue(triage["verdict"]["hasRed"])
+        self.assertEqual(1, triage["playerAuthored"]["pairCount"])
+        attempt = triage["logicalAttempts"]["rows"][0]
+        self.assertEqual("FAIL", attempt["collisionVerdict"])
+        self.assertEqual(
+            "ANCHOR,MODEL,RAYCAST,OUTLINE,STABILITY",
+            attempt["missingRequiredComponents"],
+        )
+        self.assertEqual(
+            "LOGICAL_ATTEMPT_ACTUAL_CONTACT_PLANE_CONFLICT",
+            attempt["failureClasses"],
+        )
+
+    def test_schema6_c3_pair_red_reaches_top_level_verdict(self):
+        logical_attempt_id = SCHEMA6_RUN_ID + "-attempt-1"
+        rows = [
+            schema6_action(
+                1,
+                "client",
+                logical_attempt_id=logical_attempt_id,
+                phase="CLIENT_PREDICTION",
+                player_proof="PRESENT",
+            ),
+            schema6_action(
+                2,
+                "server",
+                logical_attempt_id=logical_attempt_id,
+                phase="SERVER_AUTHORITY",
+                player_proof="PRESENT",
+                at="2026-07-11T07:00:00.050000Z",
+            ),
+        ]
+        c3_rows = [
+            c3_action(1, "client"),
+            c3_action(2, "server", at="2026-07-11T07:00:00.050000Z"),
+        ]
+        copied_fields = [
+            "heldItem",
+            "clickedOwnerPos",
+            "clickedFace",
+            "clickedHitVec",
+            "placementPos",
+            "afterState",
+            "afterStoredDy",
+            "afterStoredDyBits",
+            *C3_PAIR_FIELDS,
+        ]
+        for row, c3_row in zip(rows, c3_rows):
+            row.update({field: c3_row[field] for field in copied_fields})
+            row.update({
+                "anchorVerdict": "PASS",
+                "storedDy": "-1.000000",
+                "missingRequiredComponents": (
+                    "STABILITY"
+                    if row["phase"] == "CLIENT_PREDICTION"
+                    else "MODEL,COLLISION,RAYCAST,OUTLINE"
+                ),
+            })
+        rows[1]["pairState"] = rows[1]["pairState"].replace(
+            "open=false",
+            "open=true",
+        )
+        terminal = placement_attempt(
+            logical_attempt_id,
+            attempt_status="MERGED_CLIENT_SERVER",
+            client_action_id="1",
+            server_action_id="2",
+            player_proof="PRESENT",
+            at="2026-07-11T07:00:00.060000Z",
+        )
+        terminal.update({
+            "heldItem": rows[0]["heldItem"],
+            "clickedOwnerPos": rows[0]["clickedOwnerPos"],
+            "clickedFace": rows[0]["clickedFace"],
+            "placementPos": rows[0]["placementPos"],
+            "afterState": rows[0]["afterState"],
+        })
+
+        triage = adapter.analyze(write_schema6_fixture(
+            self.root / "c3-pair-red",
+            rows=rows,
+            terminal=terminal,
+        ))
+
+        pair = triage["playerAuthored"]["pairs"][0]
+        self.assertEqual("RED", pair["verdict"])
+        self.assertIn(
+            "ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT",
+            pair["redMarkers"],
+        )
+        self.assertEqual("RED", triage["verdict"]["status"])
+        self.assertEqual("RED", triage["verdict"]["playerProof"])
+        self.assertTrue(triage["verdict"]["hasAdapterRed"])
+        self.assertIn(
+            "player pair has producer or adapter-derived red",
+            triage["verdict"]["reasons"],
+        )
 
 
 class C3PairFieldTests(unittest.TestCase):
