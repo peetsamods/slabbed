@@ -86,6 +86,67 @@ public final class Slabbed2612CollisionDepthTest {
     }
 
     /**
+     * C5 carpet collision consumes the same stored -1.0 authority as its model and outline. The
+     * hanging helper must expose the carpet's vanilla-thin collision in the cell where it is drawn.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aimedCarpetMinusOneCollisionFollowsStoredSeat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos belowRel = new BlockPos(2, 2, 2);
+        BlockPos carpetRel = belowRel.above();
+        helper.setBlock(carpetRel, Blocks.MOSS_CARPET.defaultBlockState());
+        BlockPos carpetAbs = helper.absolutePos(carpetRel);
+        SlabAnchorAttachment.writePlacementDy(level, carpetAbs, -1.0d);
+
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            double dy = SlabSupport.getYOffset(level, carpetAbs, level.getBlockState(carpetAbs));
+            VoxelShape hanging = SlabSupport.withHangingLoweredCollisionFromAbove(
+                    Shapes.empty(), level, helper.absolutePos(belowRel));
+            if (Math.abs(dy + 1.0d) > EPS
+                    || hanging.isEmpty()
+                    || Math.abs(hanging.bounds().minY) > EPS
+                    || Math.abs(hanging.bounds().maxY - 0.0625d) > EPS) {
+                throw helper.assertionException(carpetRel, "C5 carpet collision authority mismatch: dy="
+                        + dy + " hanging=" + hanging);
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Powder snow keeps vanilla's contextual collision policy. A stored -1.0 seat moves its logical
+     * body/outline, but Slabbed must not invent an unconditional solid hanging shape.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aimedPowderSnowMinusOneDoesNotInventSolidCollision(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos belowRel = new BlockPos(2, 2, 2);
+        BlockPos powderRel = belowRel.above();
+        helper.setBlock(powderRel, Blocks.POWDER_SNOW.defaultBlockState());
+        BlockPos powderAbs = helper.absolutePos(powderRel);
+        SlabAnchorAttachment.writePlacementDy(level, powderAbs, -1.0d);
+
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            double dy = SlabSupport.getYOffset(level, powderAbs, level.getBlockState(powderAbs));
+            VoxelShape hanging = SlabSupport.withHangingLoweredCollisionFromAbove(
+                    Shapes.empty(), level, helper.absolutePos(belowRel));
+            if (Math.abs(dy + 1.0d) > EPS || !hanging.isEmpty()) {
+                throw helper.assertionException(powderRel, "C5 powder snow must retain contextual collision: dy="
+                        + dy + " unconditionalHanging=" + hanging);
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        helper.succeed();
+    }
+
+    /**
      * P26-1 guard: lowered scaffolding must stay pass-through in its side/interior movement region.
      * This does not prove climb feel or rendered VIS, but it catches the server collision failure that
      * would make scaffolding behave like a solid wall after its visual body lowers onto a slab.

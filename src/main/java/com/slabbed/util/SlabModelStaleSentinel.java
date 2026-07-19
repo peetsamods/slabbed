@@ -129,12 +129,10 @@ public final class SlabModelStaleSentinel {
 
     /**
      * The dy function used for BOTH arming baselines and sampler live reads. This MUST be the same
-     * policy the capture path records, or healthy scenes red falsely: the mesher's dy is NOT raw
-     * {@link SlabSupport#getYOffset} — carpets deliberately render at {@code ClientDy.dyFor} (-0.5 on a
-     * bottom slab) while the logical policy holds them at 0.0 (adversarial review finding #1: judging
-     * with getYOffset while capturing the render policy guaranteed a false DIVERGENT on any placement
-     * near a carpet-on-slab). The client driver injects the render-twin at init; headless defaults to
-     * getYOffset, which is self-consistent because headless tests also feed bakes synthetically.
+     * policy the capture path records, or healthy scenes red falsely. C5 unifies carpet model and
+     * logical dy, but the client driver still injects the exact model-twin at init so future render
+     * adapters cannot silently diverge. Headless defaults to getYOffset, which is self-consistent
+     * because headless tests also feed bakes synthetically.
      */
     @FunctionalInterface
     public interface LiveDyPolicy {

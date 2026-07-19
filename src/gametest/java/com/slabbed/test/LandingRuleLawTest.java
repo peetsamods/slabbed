@@ -14,11 +14,14 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.BlockItemStateProperties;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.BedBlock;
@@ -35,6 +38,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -88,6 +92,26 @@ public final class LandingRuleLawTest {
                 .add(face.getStepX() * 0.5, face.getStepY() * 0.5 + yNudge, face.getStepZ() * 0.5);
         stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(hit, face, clicked, false)));
+    }
+
+    /** Direct BlockItem.place call with no outer useOn scope: the explicit AIMLESS capture route. */
+    private static void placeAimless(GameTestHelper h, Item item, BlockPos clicked, Direction face) {
+        if (!(item instanceof BlockItem blockItem)) {
+            throw h.assertionException(clicked, "premise: AIMLESS C5 item is not a BlockItem: " + item);
+        }
+        ItemStack stack = new ItemStack(item);
+        Vec3 hit = Vec3.atCenterOf(clicked)
+                .add(face.getStepX() * 0.5, face.getStepY() * 0.5, face.getStepZ() * 0.5);
+        InteractionResult result = blockItem.place(new BlockPlaceContext(
+                h.getLevel(),
+                null,
+                InteractionHand.MAIN_HAND,
+                stack,
+                new BlockHitResult(hit, face, clicked, false)));
+        if (result == null || !result.consumesAction()) {
+            throw h.assertionException(clicked, "premise: AIMLESS C5 placement failed for " + item
+                    + "; result=" + result);
+        }
     }
 
     private static double storedDy(ServerLevel w, BlockPos p) {
@@ -799,8 +823,8 @@ public final class LandingRuleLawTest {
 
     /**
      * C4 shared-cause discriminator: unrelated ordinary object families must enter the same
-     * placement-time aim authority and the same deep-hit validation authority. C5 thin layers stay
-     * explicitly unsupported.
+     * placement-time aim authority and the same deep-hit validation authority. C5 remains a distinct
+     * AIM-KEYED family.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void c4ObjectsShareLandingAndHitValidationAuthority(GameTestHelper h) {
@@ -840,11 +864,15 @@ public final class LandingRuleLawTest {
             }
         }
 
-        if (LandingResolver.classify(Blocks.MOSS_CARPET.defaultBlockState())
-                != LandingResolver.Family.UNSUPPORTED
-                || LandingResolver.classify(Blocks.POWDER_SNOW.defaultBlockState())
-                != LandingResolver.Family.UNSUPPORTED) {
-            violations.add("C5 carpet/powder-snow boundary widened");
+        LandingResolver.Family carpetFamily =
+                LandingResolver.classify(Blocks.MOSS_CARPET.defaultBlockState());
+        LandingResolver.Family powderFamily =
+                LandingResolver.classify(Blocks.POWDER_SNOW.defaultBlockState());
+        if (carpetFamily != LandingResolver.Family.AIM_KEYED_FLOOR_SEAT
+                || powderFamily != LandingResolver.Family.AIM_KEYED_FLOOR_SEAT
+                || carpetFamily == sharedFamily) {
+            violations.add("C4/C5 family boundary collapsed: C4=" + sharedFamily
+                    + " carpet=" + carpetFamily + " powder=" + powderFamily);
         }
         if (!violations.isEmpty()) {
             throw h.assertionException(owner, "C4 ordinary objects do not share one landing/hit authority:\n  "
@@ -899,6 +927,74 @@ public final class LandingRuleLawTest {
     // ══════════════════════════════ C5 family — thin layers / powder snow ══════════════════════════════
 
     /**
+     * C5 shared authority: carpet and powder snow use one UP-only landing/validation family, and the
+     * same final-state compat gate preserves Terrain Slabs' on-top ownership.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c5AimKeyedFamilySharesLandingValidationAndCompatAuthority(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockState ownerState = Blocks.STONE.defaultBlockState();
+        double ownerDy = -1.0d;
+        Vec3 hit = new Vec3(owner.getX() + 0.5d, owner.getY() - 0.5d, owner.getZ() + 0.5d);
+        LandingResolver.PlacementAim upAim = new LandingResolver.PlacementAim(
+                owner, ownerState, ownerDy, Direction.UP, hit, false);
+        LandingResolver.PlacementAim sideAim = new LandingResolver.PlacementAim(
+                owner, ownerState, ownerDy, Direction.SOUTH, hit, false);
+        BlockState[] c5States = {
+                Blocks.MOSS_CARPET.defaultBlockState(),
+                Blocks.POWDER_SNOW.defaultBlockState()
+        };
+        List<String> violations = new ArrayList<>();
+        for (BlockState state : c5States) {
+            LandingResolver.Family family = LandingResolver.classify(state);
+            LandingResolver.PlacementResolution up =
+                    LandingResolver.resolve(upAim, owner.above(), state, family);
+            LandingResolver.PlacementResolution side =
+                    LandingResolver.resolve(sideAim, owner.south(), state, family);
+            double validationUp = LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, ownerState, ownerDy, Direction.UP, hit, state);
+            double validationSide = LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, ownerState, ownerDy, Direction.SOUTH, hit, state);
+            if (family != LandingResolver.Family.AIM_KEYED_FLOOR_SEAT
+                    || up == null
+                    || Double.doubleToRawLongBits(up.landingDy())
+                    != Double.doubleToRawLongBits(ownerDy)
+                    || side != null
+                    || Double.doubleToRawLongBits(validationUp)
+                    != Double.doubleToRawLongBits(ownerDy)
+                    || !Double.isNaN(validationSide)) {
+                violations.add(state.getBlock() + ": family=" + family + " up=" + up + " side=" + side
+                        + " validationUp=" + validationUp + " validationSide=" + validationSide);
+            }
+        }
+
+        java.util.function.Predicate<BlockState> previous = LandingResolver.compatFinalStateTestOverride;
+        try {
+            LandingResolver.compatFinalStateTestOverride =
+                    state -> state.is(Blocks.MOSS_CARPET) || state.is(Blocks.POWDER_SNOW);
+            for (BlockState state : c5States) {
+                LandingResolver.Family family = LandingResolver.classify(state);
+                LandingResolver.PlacementResolution resolution =
+                        LandingResolver.resolve(upAim, owner.above(), state, family);
+                double validation = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, ownerState, ownerDy, Direction.UP, hit, state);
+                if (resolution != null || !Double.isNaN(validation)) {
+                    violations.add("compat-owned " + state.getBlock() + " authored C5 dy: resolution="
+                            + resolution + " validation=" + validation);
+                }
+            }
+        } finally {
+            LandingResolver.compatFinalStateTestOverride = previous;
+        }
+
+        if (!violations.isEmpty()) {
+            throw h.assertionException(owner, "C5 AIM-KEYED authority boundary failed:\n  "
+                    + String.join("\n  ", violations));
+        }
+        h.succeed();
+    }
+
+    /**
      * §1.3.1 / family row 5 (C5). A carpet AIMED at a lowered owner's visible top must become
      * logically seated (stored -1.0), not render-only courtesy. TODAY {@code isThinTopLayer} vetoes
      * all lowering, so the carpet stores flush 0.0. EXPECTED RED (stored 0.0, want -1.0). Flipped
@@ -919,6 +1015,12 @@ public final class LandingRuleLawTest {
         if (Math.abs(stored + 1.0) > EPS) {
             throw h.assertionException(placed, "GOES row 5: an aimed carpet must logically seat -1.0; stored="
                     + stored + " (TODAY 0.0, isThinTopLayer veto). Flipped green by C5.");
+        }
+        double[] logical = new double[1];
+        withFrozen(() -> logical[0] = liveDy(w, placed));
+        if (Math.abs(logical[0] + 1.0) > EPS) {
+            throw h.assertionException(placed, "C5 carpet stored/model/shape authority must read logical -1.0; got "
+                    + logical[0]);
         }
         h.succeed();
     }
@@ -943,6 +1045,77 @@ public final class LandingRuleLawTest {
         if (Math.abs(stored + 1.0) > EPS) {
             throw h.assertionException(placed, "GOES row 6: aimed powder snow must seat -1.0; stored=" + stored
                     + " (TODAY 0.0, name guard). Flipped green by C5.");
+        }
+        withFrozen(() -> {
+            double logical = liveDy(w, placed);
+            VoxelShape outline = w.getBlockState(placed).getShape(w, placed, CollisionContext.empty());
+            if (Math.abs(logical + 1.0) > EPS
+                    || outline.isEmpty()
+                    || Math.abs(outline.bounds().minY + 1.0d) > EPS
+                    || Math.abs(outline.bounds().maxY) > EPS) {
+                throw h.assertionException(placed, "C5 powder logical/outline authority mismatch: dy="
+                        + logical + " outline=" + outline);
+            }
+            Vec3 start = new Vec3(placed.getX() - 0.5d, placed.getY() - 0.5d, placed.getZ() + 0.5d);
+            Vec3 end = new Vec3(placed.getX() + 1.5d, placed.getY() - 0.5d, placed.getZ() + 0.5d);
+            BlockHitResult ray = SlabbedOffsetRaycast.raycast(w, start, end, CollisionContext.empty());
+            if (ray.getType() != HitResult.Type.BLOCK || !ray.getBlockPos().equals(placed)) {
+                throw h.assertionException(placed, "C5 powder raycast did not consume the lowered outline; hit="
+                        + ray.getType() + "@" + ray.getBlockPos());
+            }
+        });
+        h.succeed();
+    }
+
+    /**
+     * AIM is the discriminator: direct BlockItem.place and natural/setBlock routes have no captured
+     * root aim, so carpet and powder snow stay exactly flush even beside slab geometry.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void c5AimlessAndSetBlockRoutesStayFlush(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos carpetOwner = h.absolutePos(new BlockPos(1, 3, 1));
+        BlockPos powderOwner = h.absolutePos(new BlockPos(4, 3, 1));
+        w.setBlock(carpetOwner, Blocks.STONE.defaultBlockState(), 2);
+        w.setBlock(powderOwner, Blocks.STONE.defaultBlockState(), 2);
+        forceStore(w, carpetOwner, -1.0d);
+        forceStore(w, powderOwner, -1.0d);
+        double[] aimless = new double[4];
+        withFrozen(() -> {
+            placeAimless(h, Items.MOSS_CARPET, carpetOwner, Direction.UP);
+            placeAimless(h, Items.POWDER_SNOW_BUCKET, powderOwner, Direction.UP);
+            aimless[0] = storedDy(w, carpetOwner.above());
+            aimless[1] = liveDy(w, carpetOwner.above());
+            aimless[2] = storedDy(w, powderOwner.above());
+            aimless[3] = liveDy(w, powderOwner.above());
+        });
+
+        BlockPos naturalCarpet = h.absolutePos(new BlockPos(1, 3, 4));
+        BlockPos naturalPowder = h.absolutePos(new BlockPos(4, 3, 4));
+        bslab(w, naturalCarpet.below());
+        bslab(w, naturalPowder.below());
+        w.setBlock(naturalCarpet, Blocks.MOSS_CARPET.defaultBlockState(), 2);
+        w.setBlock(naturalPowder, Blocks.POWDER_SNOW.defaultBlockState(), 2);
+        double[] natural = new double[2];
+        withFrozen(() -> {
+            natural[0] = liveDy(w, naturalCarpet);
+            natural[1] = liveDy(w, naturalPowder);
+        });
+
+        if (!w.getBlockState(carpetOwner.above()).is(Blocks.MOSS_CARPET)
+                || !w.getBlockState(powderOwner.above()).is(Blocks.POWDER_SNOW)
+                || Double.doubleToRawLongBits(aimless[0]) != Double.doubleToRawLongBits(0.0d)
+                || Double.doubleToRawLongBits(aimless[1]) != Double.doubleToRawLongBits(0.0d)
+                || Double.doubleToRawLongBits(aimless[2]) != Double.doubleToRawLongBits(0.0d)
+                || Double.doubleToRawLongBits(aimless[3]) != Double.doubleToRawLongBits(0.0d)
+                || !Double.isNaN(storedDy(w, naturalCarpet))
+                || !Double.isNaN(storedDy(w, naturalPowder))
+                || Double.doubleToRawLongBits(natural[0]) != Double.doubleToRawLongBits(0.0d)
+                || Double.doubleToRawLongBits(natural[1]) != Double.doubleToRawLongBits(0.0d)) {
+            throw h.assertionException(naturalCarpet, "C5 aimless/natural routes must remain dy=0.0: aimless="
+                    + java.util.Arrays.toString(aimless) + " natural=" + java.util.Arrays.toString(natural)
+                    + " naturalStores=[" + storedDy(w, naturalCarpet) + ", "
+                    + storedDy(w, naturalPowder) + "]");
         }
         h.succeed();
     }
@@ -1057,7 +1230,7 @@ public final class LandingRuleLawTest {
         h.succeed();
     }
 
-    /** Negative controls for the shared server policy: no global tolerance or C5 widening. */
+    /** Negative controls for the shared server policy: no global tolerance or non-UP C5 widening. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void deepServerValidationRejectsUnsupportedAndOutOfEnvelopeHits(GameTestHelper h) {
         BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
@@ -1076,7 +1249,7 @@ public final class LandingRuleLawTest {
         double entityObjectPositive = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
                 Blocks.CONDUIT.defaultBlockState());
-        double unsupportedHeld = LandingHitValidationPolicy.shiftedCenterDy(
+        double carpetSideHeld = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
                 Blocks.MOSS_CARPET.defaultBlockState());
         double powderSnowHeld = LandingHitValidationPolicy.shiftedCenterDy(
@@ -1095,14 +1268,14 @@ public final class LandingRuleLawTest {
 
         if (Double.doubleToRawLongBits(objectPositive) != Double.doubleToRawLongBits(-2.0d)
                 || Double.doubleToRawLongBits(entityObjectPositive) != Double.doubleToRawLongBits(-2.0d)
-                || !Double.isNaN(unsupportedHeld)
+                || !Double.isNaN(carpetSideHeld)
                 || !Double.isNaN(powderSnowHeld)
                 || !Double.isNaN(flatOwner)
                 || !Double.isNaN(partialOwner)
                 || !Double.isNaN(outsideEnvelope)) {
             throw h.assertionException(owner, "server validation policy boundary failed: object="
                     + objectPositive + " entityObject=" + entityObjectPositive + " unsupported="
-                    + unsupportedHeld + " powderSnow=" + powderSnowHeld + " flatOwner=" + flatOwner
+                    + carpetSideHeld + " powderSnow=" + powderSnowHeld + " flatOwner=" + flatOwner
                     + " partialOwner=" + partialOwner + " outsideEnvelope=" + outsideEnvelope);
         }
         h.succeed();

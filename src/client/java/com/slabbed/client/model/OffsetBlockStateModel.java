@@ -1,7 +1,6 @@
 package com.slabbed.client.model;
 
 import com.slabbed.Slabbed;
-import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabEnsembleCoherence;
 import com.slabbed.util.SlabModelStaleSentinel;
 import com.slabbed.util.SlabSupport;
@@ -14,10 +13,8 @@ import net.minecraft.client.resources.model.sprite.Material;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.block.CarpetBlock;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.IronBarsBlock;
-import net.minecraft.world.level.block.MossyCarpetBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -145,9 +142,8 @@ public final class OffsetBlockStateModel implements BlockStateModel {
 
     /**
      * The render-intent dy policy, publicly callable so the MODEL_STALE sentinel judges live dy with the
-     * SAME function the capture records (adversarial review finding #1: judging with raw
-     * {@code SlabSupport.getYOffset} while capturing this policy guaranteed false DIVERGENT reds on
-     * carpets, whose render dy deliberately differs from their logical dy).
+     * SAME function the capture records. C5 retires carpet's separate render courtesy, so model and
+     * logical dy now share the stored {@link SlabSupport#getYOffset} authority.
      */
     public static float liveModelDy(BlockAndTintGetter view, BlockPos pos, BlockState state) {
         return slabbed$modelDy(view, pos, state);
@@ -181,10 +177,6 @@ public final class OffsetBlockStateModel implements BlockStateModel {
     }
 
     private static float slabbed$modelDyUnguarded(BlockAndTintGetter view, BlockPos pos, BlockState state) {
-        if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof MossyCarpetBlock) {
-            return (float) ClientDy.dyFor(view, pos, state);
-        }
-
         float dy = (float) SlabSupport.getYOffset(view, pos, state);
         if (dy == 0.0f) {
             return 0.0f;
