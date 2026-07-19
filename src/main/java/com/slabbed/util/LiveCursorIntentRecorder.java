@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -45,20 +46,22 @@ public final class LiveCursorIntentRecorder {
 
     private static final Object LOCK = new Object();
     private static final AtomicLong ROW_IDS = new AtomicLong();
+    private static final AtomicLong LOGICAL_ATTEMPT_IDS = new AtomicLong();
 
     // Runtime-toggleable (see toggle()/enabled()) — the JVM property only sets the INITIAL value, so a
     // dev/CI launch can start already-enabled, but a player reaches this the same way as everything
     // else in Slabbed's debug surface: a slash command (/slabdev record), never a JVM flag.
     private static volatile boolean enabled = Boolean.getBoolean(ENABLE_PROPERTY);
-    private static final String SCHEMA_VERSION = "3";
+    private static final String SCHEMA_VERSION = "6";
     private static final String RECORDER_VERSION =
-            "26.2-recorder-truth-v4-c4-action-failure-audit";
+            "26.2-recorder-truth-v8-logical-attempts";
     private static final String RUN_ID = UUID.randomUUID().toString();
     private static final String ACTIONS_HEADER =
             "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem\tclickedOwnerPos\tclickedFace\tplacementPos"
                     + "\texpectedAfterDy\tafterDy\texpectedAfterLaneKind\tafterLaneKind\tmarker"
                     + "\tafterStoredDy\tafterStoredDyBits\tpairPos\tpairPart\tpairState"
-                    + "\tpairAfterDy\tpairStoredDy\tpairStoredDyBits";
+                    + "\tpairAfterDy\tpairStoredDy\tpairStoredDyBits"
+                    + "\tlogicalAttemptId\tphase\tplayerProof";
     private static final String[] C3_ACTION_FIELDS = {
             "afterStoredDy", "afterStoredDyBits", "pairPos", "pairPart", "pairState",
             "pairAfterDy", "pairStoredDy", "pairStoredDyBits"
@@ -104,6 +107,23 @@ public final class LiveCursorIntentRecorder {
     private static long collisionIteratorTargetPresentRows;
     private static long greenCursorTriadRows;
     private static long greenPlacementAuthoringRows;
+    private static long placementVerdictGreenRows;
+    private static long placementVerdictRedRows;
+    private static long placementVerdictInconclusiveRows;
+    private static long placementVerdictExpectedRefusalRows;
+    private static long placementVerdictUnclassifiedFailureRows;
+    private static long logicalAttemptRows;
+    private static long mergedClientServerAttemptRows;
+    private static long autoProxyLogicalAttemptRows;
+    private static long serverOnlyLogicalAttemptRows;
+    private static long clientOnlyLogicalAttemptRows;
+    private static long playerProofLogicalAttemptRows;
+    private static long logicalAttemptVerdictGreenRows;
+    private static long logicalAttemptVerdictRedRows;
+    private static long logicalAttemptVerdictInconclusiveRows;
+    private static long logicalAttemptVerdictExpectedRefusalRows;
+    private static long logicalAttemptVerdictUnclassifiedFailureRows;
+    private static long playerProofGreenLogicalAttemptRows;
     private static long modelStaleDivergentRows;
     private static long modelStaleAbsentRows;
     private static long modelStaleYellowRows;
@@ -111,14 +131,30 @@ public final class LiveCursorIntentRecorder {
     private static long placementSideDySplitRows;
     private static long ensembleClashRows;
     private static long ensembleOccludedOccupancyInfoRows;
-    // Same-instant client/server pair rule state (guarded by LOCK): the TEST (3) triage found the L3
-    // first-frame split only by hand-mining millisecond row pairs — "data but no rule". Now a rule.
-    private static String lastClientPlacementKey;
-    private static String lastClientAfterDy;
-    private static long lastClientActionNanos;
     private static final long PAIR_WINDOW_NANOS = 1_000_000_000L;
+    private static final int MAX_PENDING_CLIENT_ATTEMPTS = 256;
+    private static final LinkedHashMap<PlacementAttemptKey, ArrayDeque<PendingClientAttempt>>
+            PENDING_CLIENT_ATTEMPTS = new LinkedHashMap<>();
+    private static int pendingClientAttemptCount;
     private static long lastCursorRowId;
     private static LinkedHashMap<String, String> lastCursorRow;
+
+    private record PlacementAttemptKey(
+            String actionType,
+            String heldItem,
+            String clickedOwnerPos,
+            String clickedFace,
+            String placementPos,
+            String rigCaseId,
+            String playerId,
+            String dimensionId) {
+    }
+
+    private record PendingClientAttempt(
+            String logicalAttemptId,
+            long recordedNanos,
+            LinkedHashMap<String, String> row) {
+    }
 
     private LiveCursorIntentRecorder() {
     }
@@ -207,12 +243,15 @@ public final class LiveCursorIntentRecorder {
             return;
         }
         synchronized (LOCK) {
+            finalizeAllPendingClientAttempts();
             writeSummary();
         }
     }
 
     public static long lastCursorRowId() {
-        return Math.max(0L, lastCursorRowId);
+        synchronized (LOCK) {
+            return Math.max(0L, lastCursorRowId);
+        }
     }
 
     public static void recordCursor(LinkedHashMap<String, String> fields) {
@@ -221,11 +260,11 @@ public final class LiveCursorIntentRecorder {
         }
         LinkedHashMap<String, String> row = copy(fields);
         row.putIfAbsent("type", "cursor");
-        row.putIfAbsent("rowId", Long.toString(ROW_IDS.incrementAndGet()));
-        row.putIfAbsent("recordedAt", Instant.now().toString());
-        String markers = cursorMarkers(row);
-        row.put("mismatchMarker", markers);
         synchronized (LOCK) {
+            row.put("rowId", Long.toString(ROW_IDS.incrementAndGet()));
+            row.put("recordedAt", Instant.now().toString());
+            String markers = cursorMarkers(row);
+            row.put("mismatchMarker", markers);
             cursorRows++;
             if (markers.contains("LIVE_CURSOR_GHOST_SURFACE")) {
                 ghostSurfaceRows++;
@@ -259,14 +298,13 @@ public final class LiveCursorIntentRecorder {
         }
         LinkedHashMap<String, String> row = copy(fields);
         row.putIfAbsent("type", "rendered_outline");
-        long cursorRowId = lastCursorRowId();
-        row.putIfAbsent("outlineRenderId", Long.toString(ROW_IDS.incrementAndGet()));
-        row.putIfAbsent("cursorRowId", Long.toString(cursorRowId));
-        row.putIfAbsent("recordedAt", Instant.now().toString());
-        appendLastCursorFields(row);
-        String markers = renderedOutlineMarkers(row);
-        row.put("marker", markers);
         synchronized (LOCK) {
+            row.put("outlineRenderId", Long.toString(ROW_IDS.incrementAndGet()));
+            row.put("cursorRowId", Long.toString(Math.max(0L, lastCursorRowId)));
+            row.put("recordedAt", Instant.now().toString());
+            appendLastCursorFields(row);
+            String markers = renderedOutlineMarkers(row);
+            row.put("marker", markers);
             renderedOutlineRows++;
             if (markers.contains("LIVE_RENDERED_OUTLINE_LARGE_BOUNDS")) {
                 renderedOutlineLargeBoundsRows++;
@@ -294,17 +332,17 @@ public final class LiveCursorIntentRecorder {
         }
         LinkedHashMap<String, String> row = copy(fields);
         row.putIfAbsent("type", "model_stale_sentinel");
-        row.putIfAbsent("rowId", Long.toString(ROW_IDS.incrementAndGet()));
-        row.putIfAbsent("recordedAt", Instant.now().toString());
-        String kind = row.getOrDefault("kind", "unknown");
-        SlabModelStaleSentinel.DiagnosticSeverity severity =
-                SlabModelStaleSentinel.diagnosticSeverity(kind);
-        String marker = severity == SlabModelStaleSentinel.DiagnosticSeverity.INFO
-                ? "INFO_" + kind
-                : "LIVE_" + kind;
-        row.put("severity", severity.wireName());
-        row.put("marker", marker);
         synchronized (LOCK) {
+            row.put("rowId", Long.toString(ROW_IDS.incrementAndGet()));
+            row.put("recordedAt", Instant.now().toString());
+            String kind = row.getOrDefault("kind", "unknown");
+            SlabModelStaleSentinel.DiagnosticSeverity severity =
+                    SlabModelStaleSentinel.diagnosticSeverity(kind);
+            String marker = severity == SlabModelStaleSentinel.DiagnosticSeverity.INFO
+                    ? "INFO_" + kind
+                    : "LIVE_" + kind;
+            row.put("severity", severity.wireName());
+            row.put("marker", marker);
             switch (severity) {
                 case RED -> {
                     if (kind.startsWith("ENSEMBLE_")) {
@@ -354,9 +392,9 @@ public final class LiveCursorIntentRecorder {
         row.put("aboveDy", String.format("%.6f", SlabSupport.getYOffset(world, above, aboveState)));
         row.put("belowState", belowState.toString());
         row.put("belowDy", String.format("%.6f", SlabSupport.getYOffset(world, below, belowState)));
-        row.put("rowId", Long.toString(ROW_IDS.incrementAndGet()));
-        row.put("recordedAt", Instant.now().toString());
         synchronized (LOCK) {
+            row.put("rowId", Long.toString(ROW_IDS.incrementAndGet()));
+            row.put("recordedAt", Instant.now().toString());
             breakRows++;
             writeSession(row);
             writeSummary();
@@ -369,21 +407,28 @@ public final class LiveCursorIntentRecorder {
         }
         LinkedHashMap<String, String> row = copy(fields);
         row.putIfAbsent("type", "action");
-        long cursorRowId = lastCursorRowId();
-        row.putIfAbsent("actionId", Long.toString(ROW_IDS.incrementAndGet()));
-        row.putIfAbsent("cursorRowId", Long.toString(cursorRowId));
-        row.putIfAbsent("recordedAt", Instant.now().toString());
-        // Trusted scope is authoritative. A caller-provided field must never spoof a synthetic command
-        // action as player-authored (or invent an unknown origin that falls through counter routing).
-        ActionOrigin actionOrigin = currentActionOrigin();
-        row.put("actionOrigin", actionOrigin.wireName());
         for (String field : C3_ACTION_FIELDS) {
             row.putIfAbsent(field, "none");
         }
-        appendActionExpectations(row);
-        String markers = actionMarkers(row);
-        row.put("marker", markers);
         synchronized (LOCK) {
+            long nowNanos = System.nanoTime();
+            finalizeExpiredClientAttempts(nowNanos);
+            // Identity, timestamp, and shared cursor reference are one write-ordered recorder
+            // transaction. Caller values are intentionally overwritten.
+            row.put("actionId", Long.toString(ROW_IDS.incrementAndGet()));
+            row.put("cursorRowId", Long.toString(Math.max(0L, lastCursorRowId)));
+            row.put("recordedAt", Instant.now().toString());
+            // Trusted scope is authoritative. A caller-provided field must never spoof a synthetic
+            // command action as player-authored.
+            ActionOrigin actionOrigin = currentActionOrigin();
+            row.put("actionOrigin", actionOrigin.wireName());
+            appendActionExpectations(row);
+            PlacementVerificationVerdict.Result verdict =
+                    PlacementVerificationVerdict.reduce(row);
+            row.putAll(verdict.canonicalFields());
+            row.put("verdictMarker", verdict.finalVerdict().marker());
+            String markers = actionMarkers(row);
+            row.put("marker", markers);
             actionRows++;
             boolean playerAuthored = actionOrigin == ActionOrigin.PLAYER_AUTHORED;
             if (playerAuthored) {
@@ -391,25 +436,53 @@ public final class LiveCursorIntentRecorder {
             } else {
                 autoUseOnProxyActionRows++;
             }
-            // Same-instant client/server afterDy pair rule (the measured L3 first-frame split, ~4% of
-            // TEST (3) placements): a server row matching the immediately-preceding client row's
-            // placement but disagreeing on afterDy is flagged — the player SAW a snap.
+            switch (verdict.finalVerdict()) {
+                case GREEN -> placementVerdictGreenRows++;
+                case RED -> placementVerdictRedRows++;
+                case INCONCLUSIVE -> placementVerdictInconclusiveRows++;
+                case EXPECTED_REFUSAL -> placementVerdictExpectedRefusalRows++;
+                case UNCLASSIFIED_FAILURE -> placementVerdictUnclassifiedFailureRows++;
+            }
             String side = row.getOrDefault("side", "");
-            String pairKey = row.getOrDefault("placementPos", "") + "|" + row.getOrDefault("heldItem", "");
-            if (playerAuthored && "client".equals(side)) {
-                lastClientPlacementKey = pairKey;
-                lastClientAfterDy = row.get("afterDy");
-                lastClientActionNanos = System.nanoTime();
-            } else if (playerAuthored && "server".equals(side)
-                    && pairKey.equals(lastClientPlacementKey)
-                    && System.nanoTime() - lastClientActionNanos < PAIR_WINDOW_NANOS
-                    && lastClientAfterDy != null
-                    && !lastClientAfterDy.equals(row.get("afterDy"))) {
+            PlacementAttemptKey attemptKey = placementAttemptKey(row);
+            PendingClientAttempt matchedClient = null;
+            String logicalAttemptId;
+            String phase;
+            String playerProof;
+            String terminalStatus = null;
+            if (!playerAuthored) {
+                logicalAttemptId = nextLogicalAttemptId();
+                phase = "AUTO_PROXY";
+                playerProof = "ABSENT";
+                terminalStatus = "AUTO_PROXY";
+            } else if ("client".equals(side)) {
+                logicalAttemptId = nextLogicalAttemptId();
+                phase = "CLIENT_PREDICTION";
+                playerProof = "PRESENT";
+            } else {
+                matchedClient = removeMatchingClientAttempt(attemptKey, nowNanos);
+                logicalAttemptId = matchedClient == null
+                        ? nextLogicalAttemptId()
+                        : matchedClient.logicalAttemptId();
+                phase = "SERVER_AUTHORITY";
+                playerProof = "PRESENT";
+                terminalStatus = matchedClient == null
+                        ? "SERVER_ONLY"
+                        : "MERGED_CLIENT_SERVER";
+            }
+            // Trusted recorder state is authoritative; caller-provided correlation fields are never
+            // accepted, including on synthetic proxy rows.
+            row.put("logicalAttemptId", logicalAttemptId);
+            row.put("phase", phase);
+            row.put("playerProof", playerProof);
+
+            if (matchedClient != null
+                    && hasEvidence(matchedClient.row().get("afterDy"))
+                    && hasEvidence(row.get("afterDy"))
+                    && !sameEvidence(matchedClient.row().get("afterDy"), row.get("afterDy"))) {
                 placementSideDySplitRows++;
-                row.put("clientAfterDy", lastClientAfterDy);
-                markers = markers == null || markers.isEmpty() || "none".equals(markers)
-                        ? "LIVE_PLACEMENT_SIDE_DY_SPLIT"
-                        : "LIVE_PLACEMENT_SIDE_DY_SPLIT|" + markers;
+                row.put("clientAfterDy", matchedClient.row().get("afterDy"));
+                markers = appendMarkerToken(markers, "LIVE_PLACEMENT_SIDE_DY_SPLIT");
                 row.put("marker", markers);
             }
             if (markers.contains("LIVE_PLACEMENT_EXPECTED_DY_MISMATCH")) {
@@ -430,6 +503,25 @@ public final class LiveCursorIntentRecorder {
             writeSession(row);
             writeActionTsv(row);
             writeMismatchRows(row, markers);
+            if (playerAuthored && "client".equals(side)) {
+                addPendingClientAttempt(
+                        attemptKey,
+                        new PendingClientAttempt(logicalAttemptId, nowNanos, copy(row)));
+            } else if (matchedClient != null) {
+                writeLogicalAttempt(
+                        matchedClient.row(),
+                        row,
+                        logicalAttemptId,
+                        terminalStatus,
+                        playerProof);
+            } else {
+                writeLogicalAttempt(
+                        null,
+                        row,
+                        logicalAttemptId,
+                        terminalStatus,
+                        playerProof);
+            }
             writeSummary();
         }
     }
@@ -439,6 +531,7 @@ public final class LiveCursorIntentRecorder {
             return;
         }
         synchronized (LOCK) {
+            finalizeAllPendingClientAttempts();
             writeSummary();
         }
     }
@@ -454,6 +547,7 @@ public final class LiveCursorIntentRecorder {
             startLogged = false;
             manifestWritten = false;
             ROW_IDS.set(0L);
+            LOGICAL_ATTEMPT_IDS.set(0L);
             cursorRows = 0L;
             actionRows = 0L;
             playerAuthoredActionRows = 0L;
@@ -473,6 +567,23 @@ public final class LiveCursorIntentRecorder {
             collisionIteratorTargetPresentRows = 0L;
             greenCursorTriadRows = 0L;
             greenPlacementAuthoringRows = 0L;
+            placementVerdictGreenRows = 0L;
+            placementVerdictRedRows = 0L;
+            placementVerdictInconclusiveRows = 0L;
+            placementVerdictExpectedRefusalRows = 0L;
+            placementVerdictUnclassifiedFailureRows = 0L;
+            logicalAttemptRows = 0L;
+            mergedClientServerAttemptRows = 0L;
+            autoProxyLogicalAttemptRows = 0L;
+            serverOnlyLogicalAttemptRows = 0L;
+            clientOnlyLogicalAttemptRows = 0L;
+            playerProofLogicalAttemptRows = 0L;
+            logicalAttemptVerdictGreenRows = 0L;
+            logicalAttemptVerdictRedRows = 0L;
+            logicalAttemptVerdictInconclusiveRows = 0L;
+            logicalAttemptVerdictExpectedRefusalRows = 0L;
+            logicalAttemptVerdictUnclassifiedFailureRows = 0L;
+            playerProofGreenLogicalAttemptRows = 0L;
             modelStaleDivergentRows = 0L;
             modelStaleAbsentRows = 0L;
             modelStaleYellowRows = 0L;
@@ -480,9 +591,8 @@ public final class LiveCursorIntentRecorder {
             placementSideDySplitRows = 0L;
             ensembleClashRows = 0L;
             ensembleOccludedOccupancyInfoRows = 0L;
-            lastClientPlacementKey = null;
-            lastClientAfterDy = null;
-            lastClientActionNanos = 0L;
+            PENDING_CLIENT_ATTEMPTS.clear();
+            pendingClientAttemptCount = 0;
             lastCursorRowId = 0L;
             lastCursorRow = null;
             ACTION_ORIGINS.remove();
@@ -495,6 +605,399 @@ public final class LiveCursorIntentRecorder {
             out.putAll(fields);
         }
         return out;
+    }
+
+    private static String nextLogicalAttemptId() {
+        return RUN_ID + "-attempt-" + LOGICAL_ATTEMPT_IDS.incrementAndGet();
+    }
+
+    private static PlacementAttemptKey placementAttemptKey(Map<String, String> row) {
+        return new PlacementAttemptKey(
+                correlationValue(row, "actionType"),
+                correlationValue(row, "heldItem"),
+                correlationValue(row, "clickedOwnerPos"),
+                correlationValue(row, "clickedFace"),
+                correlationValue(row, "placementPos"),
+                correlationValue(row, "rigCaseId"),
+                firstCorrelationValue(row, "playerUuid", "playerId", "player", "playerName"),
+                firstCorrelationValue(row, "dimensionId", "dimension", "level", "world"));
+    }
+
+    private static String correlationValue(Map<String, String> row, String key) {
+        String value = row.get(key);
+        return hasEvidence(value) ? value.trim() : "none";
+    }
+
+    private static String firstCorrelationValue(Map<String, String> row, String... keys) {
+        for (String key : keys) {
+            String value = row.get(key);
+            if (hasEvidence(value)) {
+                return value.trim();
+            }
+        }
+        return "none";
+    }
+
+    private static void addPendingClientAttempt(
+            PlacementAttemptKey key,
+            PendingClientAttempt attempt) {
+        while (pendingClientAttemptCount >= MAX_PENDING_CLIENT_ATTEMPTS) {
+            finalizeOldestPendingClientAttempt();
+        }
+        PENDING_CLIENT_ATTEMPTS
+                .computeIfAbsent(key, ignored -> new ArrayDeque<>())
+                .addLast(attempt);
+        pendingClientAttemptCount++;
+    }
+
+    private static PendingClientAttempt removeMatchingClientAttempt(
+            PlacementAttemptKey key,
+            long nowNanos) {
+        ArrayDeque<PendingClientAttempt> attempts = PENDING_CLIENT_ATTEMPTS.get(key);
+        if (attempts == null || attempts.isEmpty()) {
+            return null;
+        }
+        PendingClientAttempt attempt = attempts.peekFirst();
+        if (nowNanos - attempt.recordedNanos() >= PAIR_WINDOW_NANOS) {
+            return null;
+        }
+        attempts.removeFirst();
+        pendingClientAttemptCount--;
+        if (attempts.isEmpty()) {
+            PENDING_CLIENT_ATTEMPTS.remove(key);
+        }
+        return attempt;
+    }
+
+    private static void finalizeExpiredClientAttempts(long nowNanos) {
+        Iterator<Map.Entry<PlacementAttemptKey, ArrayDeque<PendingClientAttempt>>> entries =
+                PENDING_CLIENT_ATTEMPTS.entrySet().iterator();
+        while (entries.hasNext()) {
+            ArrayDeque<PendingClientAttempt> attempts = entries.next().getValue();
+            while (!attempts.isEmpty()
+                    && nowNanos - attempts.peekFirst().recordedNanos() >= PAIR_WINDOW_NANOS) {
+                PendingClientAttempt expired = attempts.removeFirst();
+                pendingClientAttemptCount--;
+                writeLogicalAttempt(
+                        expired.row(),
+                        null,
+                        expired.logicalAttemptId(),
+                        "CLIENT_ONLY",
+                        "PRESENT");
+            }
+            if (attempts.isEmpty()) {
+                entries.remove();
+            }
+        }
+    }
+
+    private static void finalizeOldestPendingClientAttempt() {
+        PlacementAttemptKey oldestKey = null;
+        PendingClientAttempt oldest = null;
+        for (Map.Entry<PlacementAttemptKey, ArrayDeque<PendingClientAttempt>> entry
+                : PENDING_CLIENT_ATTEMPTS.entrySet()) {
+            PendingClientAttempt candidate = entry.getValue().peekFirst();
+            if (candidate != null
+                    && (oldest == null || candidate.recordedNanos() < oldest.recordedNanos())) {
+                oldestKey = entry.getKey();
+                oldest = candidate;
+            }
+        }
+        if (oldest == null || oldestKey == null) {
+            pendingClientAttemptCount = 0;
+            PENDING_CLIENT_ATTEMPTS.clear();
+            return;
+        }
+        ArrayDeque<PendingClientAttempt> attempts = PENDING_CLIENT_ATTEMPTS.get(oldestKey);
+        attempts.removeFirst();
+        pendingClientAttemptCount--;
+        if (attempts.isEmpty()) {
+            PENDING_CLIENT_ATTEMPTS.remove(oldestKey);
+        }
+        writeLogicalAttempt(
+                oldest.row(),
+                null,
+                oldest.logicalAttemptId(),
+                "CLIENT_ONLY",
+                "PRESENT");
+    }
+
+    private static void finalizeAllPendingClientAttempts() {
+        for (ArrayDeque<PendingClientAttempt> attempts : PENDING_CLIENT_ATTEMPTS.values()) {
+            for (PendingClientAttempt attempt : attempts) {
+                writeLogicalAttempt(
+                        attempt.row(),
+                        null,
+                        attempt.logicalAttemptId(),
+                        "CLIENT_ONLY",
+                        "PRESENT");
+            }
+        }
+        PENDING_CLIENT_ATTEMPTS.clear();
+        pendingClientAttemptCount = 0;
+    }
+
+    private static void writeLogicalAttempt(
+            LinkedHashMap<String, String> clientRow,
+            LinkedHashMap<String, String> serverRow,
+            String logicalAttemptId,
+            String attemptStatus,
+            String playerProof) {
+        LinkedHashMap<String, PlacementVerificationVerdict.Component> conflicts =
+                new LinkedHashMap<>();
+        LinkedHashMap<String, String> evidence =
+                logicalAttemptEvidence(clientRow, serverRow, conflicts);
+        PlacementVerificationVerdict.Result verdict =
+                PlacementVerificationVerdict.reduce(evidence);
+
+        LinkedHashMap<String, String> terminal = new LinkedHashMap<>();
+        terminal.put("type", "placement_attempt");
+        terminal.put("rowId", "attempt:" + logicalAttemptId);
+        terminal.put("recordedAt", Instant.now().toString());
+        terminal.put("logicalAttemptId", logicalAttemptId);
+        terminal.put("attemptStatus", attemptStatus);
+        terminal.put("terminal", "true");
+        terminal.put("clientActionId", actionIdOrNone(clientRow));
+        terminal.put("serverActionId", actionIdOrNone(serverRow));
+        terminal.put("actionCount", clientRow != null && serverRow != null ? "2" : "1");
+        terminal.put("playerProof", playerProof);
+        terminal.putAll(evidence);
+        terminal.putAll(verdict.canonicalFields());
+        applyLogicalAttemptConflicts(terminal, conflicts);
+
+        PlacementVerificationVerdict.FinalVerdict finalVerdict =
+                PlacementVerificationVerdict.FinalVerdict.valueOf(terminal.get("finalVerdict"));
+        terminal.put("verdictMarker", finalVerdict.marker());
+        terminal.put("marker", finalVerdict.marker());
+        writeSession(terminal);
+        if (finalVerdict == PlacementVerificationVerdict.FinalVerdict.RED
+                || finalVerdict == PlacementVerificationVerdict.FinalVerdict.UNCLASSIFIED_FAILURE) {
+            writeMismatchRows(terminal, finalVerdict.marker());
+        }
+        countLogicalAttempt(attemptStatus, playerProof, finalVerdict);
+    }
+
+    private static LinkedHashMap<String, String> logicalAttemptEvidence(
+            LinkedHashMap<String, String> clientRow,
+            LinkedHashMap<String, String> serverRow,
+            LinkedHashMap<String, PlacementVerificationVerdict.Component> conflicts) {
+        LinkedHashMap<String, String> evidence = new LinkedHashMap<>();
+
+        for (String field : new String[]{
+                "actionType", "heldItem", "clickedOwnerPos", "clickedFace", "placementPos",
+                "rigCaseId", "placementRoute", "landingAuthority", "expectedAfterDy", "intentDy",
+                "expectedAfterLaneKind", "expectedResult", "placementContract", "refusalContract",
+                "expectedRefusalReason", "clickedOwnerLaneKind", "beforeDy"
+        }) {
+            selectAttemptEvidence(
+                    evidence,
+                    field,
+                    serverRow,
+                    clientRow,
+                    PlacementVerificationVerdict.Component.PLACED,
+                    conflicts);
+        }
+
+        for (String field : new String[]{
+                "actualResult", "actualRefusalReason", "afterDy", "afterState", "afterLaneKind",
+                "stabilityVerdict"
+        }) {
+            PlacementVerificationVerdict.Component component =
+                    "stabilityVerdict".equals(field)
+                            ? PlacementVerificationVerdict.Component.STABILITY
+                            : PlacementVerificationVerdict.Component.PLACED;
+            selectAttemptEvidence(evidence, field, serverRow, clientRow, component, conflicts);
+        }
+
+        String serverStoredDy = firstAttemptEvidence(serverRow, "storedDy", "afterStoredDy");
+        String clientStoredDy = firstAttemptEvidence(clientRow, "storedDy", "afterStoredDy");
+        detectAttemptConflict(
+                "storedDy",
+                serverStoredDy,
+                clientStoredDy,
+                PlacementVerificationVerdict.Component.ANCHOR,
+                conflicts);
+        String storedDy = hasEvidence(serverStoredDy) ? serverStoredDy : clientStoredDy;
+        if (hasEvidence(storedDy)) {
+            evidence.put("afterStoredDy", storedDy);
+        }
+
+        for (String field : new String[]{
+                "modelDy", "collisionDy", "raycastDy", "outlineDy",
+                "expectedSupportPlane", "actualContactPlane", "seatError"
+        }) {
+            PlacementVerificationVerdict.Component component = switch (field) {
+                case "modelDy" -> PlacementVerificationVerdict.Component.MODEL;
+                case "raycastDy" -> PlacementVerificationVerdict.Component.RAYCAST;
+                case "outlineDy" -> PlacementVerificationVerdict.Component.OUTLINE;
+                default -> PlacementVerificationVerdict.Component.COLLISION;
+            };
+            selectAttemptEvidence(evidence, field, clientRow, serverRow, component, conflicts);
+        }
+        return evidence;
+    }
+
+    private static void selectAttemptEvidence(
+            LinkedHashMap<String, String> target,
+            String field,
+            Map<String, String> preferred,
+            Map<String, String> alternate,
+            PlacementVerificationVerdict.Component component,
+            LinkedHashMap<String, PlacementVerificationVerdict.Component> conflicts) {
+        String preferredValue = attemptEvidence(preferred, field);
+        String alternateValue = attemptEvidence(alternate, field);
+        detectAttemptConflict(field, preferredValue, alternateValue, component, conflicts);
+        String selected = hasEvidence(preferredValue) ? preferredValue : alternateValue;
+        if (hasEvidence(selected)) {
+            target.put(field, selected);
+        }
+    }
+
+    private static String attemptEvidence(Map<String, String> row, String field) {
+        if (row == null) {
+            return null;
+        }
+        return row.get(field);
+    }
+
+    private static String firstAttemptEvidence(Map<String, String> row, String... fields) {
+        if (row == null) {
+            return null;
+        }
+        for (String field : fields) {
+            String value = row.get(field);
+            if (hasEvidence(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static void detectAttemptConflict(
+            String field,
+            String preferredValue,
+            String alternateValue,
+            PlacementVerificationVerdict.Component component,
+            LinkedHashMap<String, PlacementVerificationVerdict.Component> conflicts) {
+        if (hasEvidence(preferredValue)
+                && hasEvidence(alternateValue)
+                && !sameEvidence(preferredValue, alternateValue)) {
+            conflicts.put(
+                    "LOGICAL_ATTEMPT_" + field.replaceAll("([a-z])([A-Z])", "$1_$2").toUpperCase()
+                            + "_CONFLICT",
+                    component);
+        }
+    }
+
+    private static void applyLogicalAttemptConflicts(
+            LinkedHashMap<String, String> terminal,
+            LinkedHashMap<String, PlacementVerificationVerdict.Component> conflicts) {
+        if (conflicts.isEmpty()) {
+            return;
+        }
+        terminal.put("finalVerdict", PlacementVerificationVerdict.FinalVerdict.RED.name());
+        for (PlacementVerificationVerdict.Component component : conflicts.values()) {
+            terminal.put(component.fieldName(), PlacementVerificationVerdict.ComponentStatus.FAIL.name());
+        }
+        StringBuilder missingComponents = new StringBuilder();
+        for (PlacementVerificationVerdict.Component component
+                : PlacementVerificationVerdict.Component.values()) {
+            String status = terminal.get(component.fieldName());
+            if (PlacementVerificationVerdict.ComponentStatus.UNKNOWN.name().equals(status)
+                    || PlacementVerificationVerdict.ComponentStatus.MISSING.name().equals(status)
+                    || PlacementVerificationVerdict.ComponentStatus.NOT_RUN.name().equals(status)) {
+                if (!missingComponents.isEmpty()) {
+                    missingComponents.append(',');
+                }
+                missingComponents.append(component.name());
+            }
+        }
+        terminal.put(
+                "missingRequiredComponents",
+                missingComponents.isEmpty() ? "none" : missingComponents.toString());
+        String failureClasses = terminal.getOrDefault("failureClasses", "none");
+        StringBuilder combined = new StringBuilder();
+        if (hasEvidence(failureClasses)) {
+            combined.append(failureClasses);
+        }
+        for (String conflict : conflicts.keySet()) {
+            if (!combined.isEmpty()) {
+                combined.append(',');
+            }
+            combined.append(conflict);
+        }
+        terminal.put("failureClasses", combined.toString());
+    }
+
+    private static String actionIdOrNone(Map<String, String> row) {
+        if (row == null) {
+            return "none";
+        }
+        String actionId = row.get("actionId");
+        return hasEvidence(actionId) ? actionId : "none";
+    }
+
+    private static void countLogicalAttempt(
+            String attemptStatus,
+            String playerProof,
+            PlacementVerificationVerdict.FinalVerdict finalVerdict) {
+        logicalAttemptRows++;
+        switch (attemptStatus) {
+            case "MERGED_CLIENT_SERVER" -> mergedClientServerAttemptRows++;
+            case "AUTO_PROXY" -> autoProxyLogicalAttemptRows++;
+            case "SERVER_ONLY" -> serverOnlyLogicalAttemptRows++;
+            case "CLIENT_ONLY" -> clientOnlyLogicalAttemptRows++;
+            default -> throw new IllegalArgumentException(
+                    "unknown logical placement-attempt status " + attemptStatus);
+        }
+        boolean hasPlayerProof = "PRESENT".equals(playerProof);
+        if (hasPlayerProof) {
+            playerProofLogicalAttemptRows++;
+        }
+        switch (finalVerdict) {
+            case GREEN -> {
+                logicalAttemptVerdictGreenRows++;
+                if (hasPlayerProof) {
+                    playerProofGreenLogicalAttemptRows++;
+                }
+            }
+            case RED -> logicalAttemptVerdictRedRows++;
+            case INCONCLUSIVE -> logicalAttemptVerdictInconclusiveRows++;
+            case EXPECTED_REFUSAL -> logicalAttemptVerdictExpectedRefusalRows++;
+            case UNCLASSIFIED_FAILURE -> logicalAttemptVerdictUnclassifiedFailureRows++;
+        }
+    }
+
+    private static boolean hasEvidence(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String normalized = value.trim().toLowerCase();
+        return !normalized.equals("unknown")
+                && !normalized.equals("none")
+                && !normalized.equals("missing")
+                && !normalized.equals("not_run")
+                && !normalized.equals("not_applicable")
+                && !normalized.equals("null");
+    }
+
+    private static boolean sameEvidence(String left, String right) {
+        if (isFiniteDyString(left) && isFiniteDyString(right)) {
+            return sameDy(left, right);
+        }
+        return left.equals(right);
+    }
+
+    private static String appendMarkerToken(String markers, String marker) {
+        if (markers == null || markers.isEmpty() || "none".equals(markers)) {
+            return marker;
+        }
+        for (String token : markers.split("\\|", -1)) {
+            if (token.equals(marker)) {
+                return markers;
+            }
+        }
+        return marker + "|" + markers;
     }
 
     private static String cursorMarkers(Map<String, String> row) {
@@ -548,7 +1051,9 @@ public final class LiveCursorIntentRecorder {
     }
 
     private static String actionMarkers(Map<String, String> row) {
-        String expectedDy = row.getOrDefault("expectedAfterDy", "unknown");
+        // recordAction has already appended the reducer's canonical fields. Marker routing must use
+        // the same single intent authority rather than independently preferring a legacy alias.
+        String expectedDy = row.getOrDefault("intentDy", "unknown");
         String afterDy = row.getOrDefault("afterDy", "unknown");
         String afterLane = row.getOrDefault("afterLaneKind", "unknown");
         boolean placementAction = "place_block".equals(row.get("actionType"));
@@ -559,9 +1064,8 @@ public final class LiveCursorIntentRecorder {
         boolean dyMismatch = isFiniteDyString(expectedDy)
                 && isFiniteDyString(afterDy)
                 && !sameDy(expectedDy, afterDy);
-        // Minecraft's current failure result has no typed "expected refusal" contract. Until such a
-        // contract is introduced and tested, every Fail[...] row is unclassified failure evidence.
-        boolean unclassifiedFailure = row.getOrDefault("actualResult", "").startsWith("Fail[");
+        boolean unclassifiedFailure = PlacementVerificationVerdict.FinalVerdict.UNCLASSIFIED_FAILURE.name()
+                .equals(row.get("finalVerdict"));
         // The client prediction may not yet have the server's persistent attachment and can therefore
         // report the generic slab lane. Exempt only that exact client-side, dy-correct transition; an
         // authoritative server row without lawful lowered ownership remains a real lane mismatch.
@@ -579,9 +1083,15 @@ public final class LiveCursorIntentRecorder {
         appendMarker(markers, laneMismatch, "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH");
         appendMarker(markers, loweredExpected && sameDy("0.000000", afterDy),
                 "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER");
+        appendMarker(
+                markers,
+                PlacementVerificationVerdict.FinalVerdict.RED.name().equals(row.get("finalVerdict")),
+                PlacementVerificationVerdict.FinalVerdict.RED.marker());
         boolean playerAuthored = ActionOrigin.PLAYER_AUTHORED.wireName()
                 .equals(row.getOrDefault("actionOrigin", ActionOrigin.PLAYER_AUTHORED.wireName()));
-        if (markers.isEmpty() && loweredExpected && placementAction && playerAuthored) {
+        boolean reducerGreen = PlacementVerificationVerdict.FinalVerdict.GREEN.name()
+                .equals(row.get("finalVerdict"));
+        if (markers.isEmpty() && loweredExpected && placementAction && playerAuthored && reducerGreen) {
             markers.append("LIVE_GREEN_PLACEMENT_AUTHORING");
         }
         return markers.isEmpty() ? "none" : markers.toString();
@@ -590,20 +1100,20 @@ public final class LiveCursorIntentRecorder {
     private static void appendLastCursorFields(LinkedHashMap<String, String> row) {
         LinkedHashMap<String, String> cursor = lastCursorRow;
         if (cursor == null) {
-            row.putIfAbsent("cursorOutlineBounds", "none");
-            row.putIfAbsent("cursorFinalHitPos", "none");
-            row.putIfAbsent("cursorFinalHitState", "none");
-            row.putIfAbsent("cursorFinalHitVec", "none");
-            row.putIfAbsent("cursorFinalHitFace", "none");
-            row.putIfAbsent("cursorHeldItem", "none");
+            row.put("cursorOutlineBounds", "none");
+            row.put("cursorFinalHitPos", "none");
+            row.put("cursorFinalHitState", "none");
+            row.put("cursorFinalHitVec", "none");
+            row.put("cursorFinalHitFace", "none");
+            row.put("cursorHeldItem", "none");
             return;
         }
-        row.putIfAbsent("cursorOutlineBounds", cursor.getOrDefault("outlineBounds", "none"));
-        row.putIfAbsent("cursorFinalHitPos", cursor.getOrDefault("finalHitPos", "none"));
-        row.putIfAbsent("cursorFinalHitState", cursor.getOrDefault("finalHitState", "none"));
-        row.putIfAbsent("cursorFinalHitVec", cursor.getOrDefault("finalHitVec", "none"));
-        row.putIfAbsent("cursorFinalHitFace", cursor.getOrDefault("finalHitFace", "none"));
-        row.putIfAbsent("cursorHeldItem", cursor.getOrDefault("heldItem", "none"));
+        row.put("cursorOutlineBounds", cursor.getOrDefault("outlineBounds", "none"));
+        row.put("cursorFinalHitPos", cursor.getOrDefault("finalHitPos", "none"));
+        row.put("cursorFinalHitState", cursor.getOrDefault("finalHitState", "none"));
+        row.put("cursorFinalHitVec", cursor.getOrDefault("finalHitVec", "none"));
+        row.put("cursorFinalHitFace", cursor.getOrDefault("finalHitFace", "none"));
+        row.put("cursorHeldItem", cursor.getOrDefault("heldItem", "none"));
     }
 
     private static String renderedOutlineMarkers(Map<String, String> row) {
@@ -764,7 +1274,10 @@ public final class LiveCursorIntentRecorder {
                         + '\t' + tsv(row.get("pairState"))
                         + '\t' + tsv(row.get("pairAfterDy"))
                         + '\t' + tsv(row.get("pairStoredDy"))
-                        + '\t' + tsv(row.get("pairStoredDyBits")));
+                        + '\t' + tsv(row.get("pairStoredDyBits"))
+                        + '\t' + tsv(row.get("logicalAttemptId"))
+                        + '\t' + tsv(row.get("phase"))
+                        + '\t' + tsv(row.get("playerProof")));
     }
 
     private static void writeRenderedOutlineTsv(LinkedHashMap<String, String> row) {
@@ -795,7 +1308,8 @@ public final class LiveCursorIntentRecorder {
                         + '\t' + tsv(row.getOrDefault(
                                 "finalHitPos",
                                 row.getOrDefault("clickedOwnerPos", row.getOrDefault("renderedOutlinePos", "none"))))
-                        + '\t' + tsv(row.getOrDefault("heldItem", row.getOrDefault("cursorHeldItem", "none"))));
+                        + '\t' + tsv(row.getOrDefault("heldItem", row.getOrDefault("cursorHeldItem", "none")))
+                        + '\t' + tsv(row.getOrDefault("failureClasses", "none")));
     }
 
     private static void writeSummary() {
@@ -823,6 +1337,34 @@ public final class LiveCursorIntentRecorder {
         text.append("collisionIteratorTargetPresentRows=").append(collisionIteratorTargetPresentRows).append('\n');
         text.append("liveGreenCursorTriadRows=").append(greenCursorTriadRows).append('\n');
         text.append("liveGreenPlacementRows=").append(greenPlacementAuthoringRows).append('\n');
+        text.append("placementVerdictGreenRows=").append(placementVerdictGreenRows).append('\n');
+        text.append("placementVerdictRedRows=").append(placementVerdictRedRows).append('\n');
+        text.append("placementVerdictInconclusiveRows=")
+                .append(placementVerdictInconclusiveRows).append('\n');
+        text.append("placementVerdictExpectedRefusalRows=")
+                .append(placementVerdictExpectedRefusalRows).append('\n');
+        text.append("placementVerdictUnclassifiedFailureRows=")
+                .append(placementVerdictUnclassifiedFailureRows).append('\n');
+        text.append("logicalAttemptRows=").append(logicalAttemptRows).append('\n');
+        text.append("mergedClientServerAttemptRows=")
+                .append(mergedClientServerAttemptRows).append('\n');
+        text.append("autoProxyLogicalAttemptRows=").append(autoProxyLogicalAttemptRows).append('\n');
+        text.append("serverOnlyLogicalAttemptRows=").append(serverOnlyLogicalAttemptRows).append('\n');
+        text.append("clientOnlyLogicalAttemptRows=").append(clientOnlyLogicalAttemptRows).append('\n');
+        text.append("playerProofLogicalAttemptRows=")
+                .append(playerProofLogicalAttemptRows).append('\n');
+        text.append("logicalAttemptVerdictGreenRows=")
+                .append(logicalAttemptVerdictGreenRows).append('\n');
+        text.append("logicalAttemptVerdictRedRows=")
+                .append(logicalAttemptVerdictRedRows).append('\n');
+        text.append("logicalAttemptVerdictInconclusiveRows=")
+                .append(logicalAttemptVerdictInconclusiveRows).append('\n');
+        text.append("logicalAttemptVerdictExpectedRefusalRows=")
+                .append(logicalAttemptVerdictExpectedRefusalRows).append('\n');
+        text.append("logicalAttemptVerdictUnclassifiedFailureRows=")
+                .append(logicalAttemptVerdictUnclassifiedFailureRows).append('\n');
+        text.append("playerProofGreenLogicalAttemptRows=")
+                .append(playerProofGreenLogicalAttemptRows).append('\n');
         text.append("modelStaleDivergentRows=").append(modelStaleDivergentRows).append('\n');
         text.append("modelStaleAbsentRows=").append(modelStaleAbsentRows).append('\n');
         text.append("modelStaleYellowRows=").append(modelStaleYellowRows).append('\n');
@@ -877,16 +1419,16 @@ public final class LiveCursorIntentRecorder {
                             + "\trenderedOutlineBounds\tcursorOutlineBounds\trenderedOutlineWorldBounds"
                             + "\trenderedOutlineCameraRelativeBounds\trenderedOutlineHitVec\tmarker\n");
             writeHeaderIfMissing(sessionDir.resolve("mismatches.tsv"),
-                    "type\trowOrActionId\tmarker\tpos\theldItem\n");
+                    "type\trowOrActionId\tmarker\tpos\theldItem\tfailureClasses\n");
             writeManifest();
         }
         return sessionDir;
     }
 
     /**
-     * Never append a new run beneath a recognized old recorder schema/header. Any non-empty v2/v3
+     * Never append a new run beneath a recognized old recorder schema/header. Any non-empty v2-v6
      * manifest/session/TSV/summary artifact is left byte-for-byte in place and the new run starts in a
-     * uniquely named child directory. This also keeps two schema-3 process runs distinct instead of
+     * uniquely named child directory. This also keeps two schema-6 process runs distinct instead of
      * silently mixing different run ids.
      */
     private static Path isolateFromExistingSession(Path requested) throws IOException {
@@ -946,6 +1488,8 @@ public final class LiveCursorIntentRecorder {
                 + jsonPair("recorder", "LiveCursorIntentRecorder") + ","
                 + jsonPair("recorderVersion", RECORDER_VERSION) + ","
                 + jsonPair("actionOriginContract", "PLAYER_AUTHORED|AUTO_USEON_PROXY") + ","
+                + jsonPair("placementVerdictContract", "PlacementVerificationVerdict-v3") + ","
+                + jsonPair("logicalAttemptContract", "LogicalPlacementAttempt-v1") + ","
                 + jsonPair("enabled", Boolean.toString(enabled)) + ","
                 + jsonPair("createdAt", Instant.now().toString()) + ","
                 + jsonPair("dir", sessionDir.toAbsolutePath().toString()) + ","
