@@ -28,6 +28,7 @@
       "com.slabbed.test.StateChangeAnchorTest",
       "com.slabbed.test.NeverPopMatrixTest",
       "com.slabbed.test.BlockEntityNeverPopTest",
+      "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest",
       "com.slabbed.test.SmooshUnderTerrainSlabsTest",
       "com.slabbed.test.DySpecificationTest",
       "com.slabbed.test.AuditFixesTest",

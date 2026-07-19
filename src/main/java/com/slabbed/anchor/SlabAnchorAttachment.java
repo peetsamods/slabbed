@@ -80,26 +80,24 @@ public final class SlabAnchorAttachment {
     );
 
     /**
-     * Packet codec for client sync. {@link AttachmentSyncPredicate#all()} is used at
+     * Compact packet codec for client sync. {@link AttachmentSyncPredicate#all()} is used at
      * registration so anchors travel with the chunk packet automatically.
+     *
+     * <p>The persistent {@link #SET_CODEC} intentionally remains the legacy long-array format
+     * for world compatibility. Only the synchronized representation is compacted.
      */
-    private static final PacketCodec<RegistryByteBuf, LongOpenHashSet> PACKET_CODEC = PacketCodec.of(
-            (set, buf) -> {
-                long[] arr = set.toLongArray();
-                buf.writeVarInt(arr.length);
-                for (long v : arr) {
-                    buf.writeLong(v);
-                }
-            },
-            buf -> {
-                int n = buf.readVarInt();
-                LongOpenHashSet s = new LongOpenHashSet(n);
-                for (int i = 0; i < n; i++) {
-                    s.add(buf.readLong());
-                }
-                return s;
-            }
-    );
+    private static final PacketCodec<RegistryByteBuf, LongOpenHashSet> PACKET_CODEC =
+            ChunkPositionSetPacketCodec.INSTANCE;
+
+    /**
+     * Package-private proof seam for the attachment-capacity regression tests.
+     *
+     * <p>This returns the exact codec registered below, so the test cannot accidentally
+     * exercise a duplicate approximation of the production sync path.
+     */
+    static PacketCodec<RegistryByteBuf, LongOpenHashSet> packetCodecForTesting() {
+        return PACKET_CODEC;
+    }
 
     public static final AttachmentType<LongOpenHashSet> ANCHOR_TYPE =
             AttachmentRegistry.<LongOpenHashSet>create(ANCHOR_ID, builder -> builder
