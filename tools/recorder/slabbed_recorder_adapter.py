@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict, deterministic adapter for Slabbed 26.2 recorder schema 3."""
+"""Strict, deterministic adapter for Slabbed 26.2 recorder schemas 3 and 6."""
 
 import argparse
 import csv
@@ -20,6 +20,8 @@ from pathlib import Path
 
 TRIAGE_SCHEMA_VERSION = 1
 SCHEMA_VERSION = "3"
+SCHEMA6_VERSION = "6"
+SUPPORTED_SCHEMA_VERSIONS = {SCHEMA_VERSION, SCHEMA6_VERSION}
 RECORDER_NAME = "LiveCursorIntentRecorder"
 ORIGIN_CONTRACT = "PLAYER_AUTHORED|AUTO_USEON_PROXY"
 PLAYER_ORIGIN = "PLAYER_AUTHORED"
@@ -54,9 +56,19 @@ C3_PAIR_FIELDS = [
 C3_ACTIONS_HEADER = LEGACY_ACTIONS_HEADER + C3_PAIR_FIELDS
 C3_RECORDER_VERSION = "26.2-recorder-truth-v3-origin-c3-pair-fields"
 C4_RECORDER_VERSION = "26.2-recorder-truth-v4-c4-action-failure-audit"
+SCHEMA6_RECORDER_VERSION = "26.2-recorder-truth-v8-logical-attempts"
+PLACEMENT_VERDICT_CONTRACT = "PlacementVerificationVerdict-v3"
+LOGICAL_ATTEMPT_CONTRACT = "LogicalPlacementAttempt-v1"
+SCHEMA6_ACTION_FIELDS = [
+    "logicalAttemptId",
+    "phase",
+    "playerProof",
+]
+SCHEMA6_ACTIONS_HEADER = C3_ACTIONS_HEADER + SCHEMA6_ACTION_FIELDS
 C3_CAPABLE_RECORDER_VERSIONS = {
     C3_RECORDER_VERSION,
     C4_RECORDER_VERSION,
+    SCHEMA6_RECORDER_VERSION,
 }
 C3_ADAPTER_MARKERS = [
     "ADAPTER_C3_PAIR_FIELDS_MISSING",
@@ -71,6 +83,7 @@ ACTION_ADAPTER_MARKERS = [
 # Compatibility alias for callers that imported the original schema-3 header constant.
 ACTIONS_HEADER = LEGACY_ACTIONS_HEADER
 MISMATCH_HEADER = ["type", "rowOrActionId", "marker", "pos", "heldItem"]
+SCHEMA6_MISMATCH_HEADER = MISMATCH_HEADER + ["failureClasses"]
 OUTLINE_HEADER = [
     "outlineRenderId",
     "cursorRowId",
@@ -114,6 +127,120 @@ SUMMARY_KEYS = [
     "sentinelArmedTotal",
     "sentinelSamplePasses",
 ]
+SCHEMA6_SUMMARY_KEYS = SUMMARY_KEYS[:19] + [
+    "placementVerdictGreenRows",
+    "placementVerdictRedRows",
+    "placementVerdictInconclusiveRows",
+    "placementVerdictExpectedRefusalRows",
+    "placementVerdictUnclassifiedFailureRows",
+    "logicalAttemptRows",
+    "mergedClientServerAttemptRows",
+    "autoProxyLogicalAttemptRows",
+    "serverOnlyLogicalAttemptRows",
+    "clientOnlyLogicalAttemptRows",
+    "playerProofLogicalAttemptRows",
+    "logicalAttemptVerdictGreenRows",
+    "logicalAttemptVerdictRedRows",
+    "logicalAttemptVerdictInconclusiveRows",
+    "logicalAttemptVerdictExpectedRefusalRows",
+    "logicalAttemptVerdictUnclassifiedFailureRows",
+    "playerProofGreenLogicalAttemptRows",
+] + SUMMARY_KEYS[19:]
+FINAL_VERDICTS = {
+    "GREEN",
+    "RED",
+    "INCONCLUSIVE",
+    "EXPECTED_REFUSAL",
+    "UNCLASSIFIED_FAILURE",
+}
+FINAL_VERDICT_MARKERS = {
+    "GREEN": "LIVE_PLACEMENT_VERDICT_GREEN",
+    "RED": "LIVE_PLACEMENT_VERDICT_RED",
+    "INCONCLUSIVE": "LIVE_PLACEMENT_VERDICT_INCONCLUSIVE",
+    "EXPECTED_REFUSAL": "LIVE_PLACEMENT_VERDICT_EXPECTED_REFUSAL",
+    "UNCLASSIFIED_FAILURE": "LIVE_PLACEMENT_VERDICT_UNCLASSIFIED_FAILURE",
+}
+COMPONENT_VERDICT_FIELDS = [
+    "placedVerdict",
+    "anchorVerdict",
+    "modelVerdict",
+    "collisionVerdict",
+    "raycastVerdict",
+    "outlineVerdict",
+    "stabilityVerdict",
+]
+COMPONENT_NAMES = [
+    "PLACED",
+    "ANCHOR",
+    "MODEL",
+    "COLLISION",
+    "RAYCAST",
+    "OUTLINE",
+    "STABILITY",
+]
+COMPONENT_STATUSES = {
+    "PASS",
+    "FAIL",
+    "UNKNOWN",
+    "MISSING",
+    "NOT_RUN",
+    "NOT_APPLICABLE",
+}
+MISSING_COMPONENT_STATUSES = {
+    "UNKNOWN",
+    "MISSING",
+    "NOT_RUN",
+    "NOT_APPLICABLE",
+}
+CANONICAL_EVIDENCE_FIELDS = [
+    "intentDy",
+    "storedDy",
+    "modelDy",
+    "collisionDy",
+    "raycastDy",
+    "outlineDy",
+    "expectedSupportPlane",
+    "actualContactPlane",
+    "seatError",
+    "placementRoute",
+    "landingAuthority",
+    "rigCaseId",
+    "expectedRefusalReason",
+    "actualRefusalReason",
+    "missingRequiredComponents",
+    "failureClasses",
+]
+CANONICAL_NUMERIC_EVIDENCE_FIELDS = {
+    "intentDy",
+    "storedDy",
+    "modelDy",
+    "collisionDy",
+    "raycastDy",
+    "outlineDy",
+    "expectedSupportPlane",
+    "actualContactPlane",
+    "seatError",
+}
+LOGICAL_ATTEMPT_STATUSES = {
+    "MERGED_CLIENT_SERVER",
+    "AUTO_PROXY",
+    "SERVER_ONLY",
+    "CLIENT_ONLY",
+}
+RAW_PHASES = {
+    "CLIENT_PREDICTION",
+    "SERVER_AUTHORITY",
+    "AUTO_PROXY",
+}
+TERMINAL_FORBIDDEN_FIELDS = {
+    "attemptRowId",
+    "actionOrigin",
+    "phase",
+    "componentCount",
+    "componentActionIds",
+    "componentPhases",
+    "componentVerdicts",
+}
 ARTIFACT_NAMES = [
     "manifest.json",
     "session.jsonl",
@@ -144,6 +271,7 @@ ACTION_RED_MARKERS = {
     "LIVE_PLACEMENT_EXPECTED_LANE_MISMATCH",
     "LIVE_PLACEMENT_VANILLA_DY_FROM_LOWERED_OWNER",
     "LIVE_PLACEMENT_SIDE_DY_SPLIT",
+    "LIVE_PLACEMENT_VERDICT_RED",
 }
 OUTLINE_RED_MARKERS = {
     "LIVE_RENDERED_OUTLINE_LARGE_BOUNDS",
@@ -165,6 +293,10 @@ RED_MARKERS_BY_TYPE = {
     "cursor": CURSOR_RED_MARKERS,
     "action": ACTION_RED_MARKERS,
     "rendered_outline": OUTLINE_RED_MARKERS,
+    "placement_attempt": {
+        FINAL_VERDICT_MARKERS["RED"],
+        FINAL_VERDICT_MARKERS["UNCLASSIFIED_FAILURE"],
+    },
 }
 ID_FIELD_BY_TYPE = {
     "action": "actionId",
@@ -178,6 +310,7 @@ MARKER_FIELD_BY_TYPE = {
     "cursor": "mismatchMarker",
     "rendered_outline": "marker",
     "model_stale_sentinel": "marker",
+    "placement_attempt": "marker",
 }
 SENSITIVE_ARG_RE = re.compile(
     r"--(?:accessToken|uuid|xuid|clientId|session)(?:\s+|=)(\"[^\"]*\"|'[^']*'|\S+)",
@@ -279,17 +412,21 @@ def discover(input_path, run_id=None):
             continue
         seen.add(root)
         schema = _manifest_schema(root)
-        if schema == SCHEMA_VERSION:
+        if schema in SUPPORTED_SCHEMA_VERSIONS:
             candidates.append(_candidate(root, mode, requested, evidence_dir))
         try:
             children = sorted(
                 child for child in root.iterdir()
-                if child.is_dir() and child.name.startswith("schema-3-")
+                if child.is_dir()
+                and (
+                    child.name.startswith("schema-3-")
+                    or child.name.startswith("schema-6-")
+                )
             )
         except OSError as exc:
             raise DiscoveryError("cannot inspect %s: %s" % (root, exc))
         for child in children:
-            if _manifest_schema(child) == SCHEMA_VERSION:
+            if _manifest_schema(child) in SUPPORTED_SCHEMA_VERSIONS:
                 child_mode = mode + "-schema-child"
                 candidates.append(_candidate(child, child_mode, requested, evidence_dir))
 
@@ -308,8 +445,15 @@ def discover(input_path, run_id=None):
     if len(candidates) == 1:
         item = candidates[0]
         path = Path(item["recorderDir"])
-        if path.name.startswith("schema-3-"):
-            basename_id = path.name[len("schema-3-"):]
+        child_match = re.fullmatch(r"schema-(3|6)-(.+)", path.name)
+        if child_match is not None:
+            child_schema, basename_id = child_match.groups()
+            manifest_schema = item["manifest"].get("schemaVersion")
+            if child_schema != manifest_schema:
+                raise IntegrityError(
+                    "schema child dirname/manifest schema mismatch: %s vs %s"
+                    % (child_schema, manifest_schema)
+                )
             if basename_id != item["manifest"].get("runId"):
                 raise IntegrityError(
                     "schema child basename/runId mismatch: %s vs %s"
@@ -322,10 +466,10 @@ def discover(input_path, run_id=None):
             "%s [%s]" % (item["recorderDir"], item["manifest"].get("runId", "missing"))
             for item in candidates
         )
-        raise DiscoveryError("multiple schema-3 recorder sessions; use --run-id: %s" % details)
+        raise DiscoveryError("multiple supported recorder sessions; use --run-id: %s" % details)
 
     if run_id is not None:
-        raise DiscoveryError("no schema-3 recorder session matched --run-id %s" % run_id)
+        raise DiscoveryError("no supported recorder session matched --run-id %s" % run_id)
     schemas = []
     if direct_schema:
         schemas.append(direct_schema)
@@ -337,7 +481,7 @@ def discover(input_path, run_id=None):
                 schemas.append(schema)
     if schemas:
         raise UnsupportedSchemaError("unsupported recorder schema(s): %s" % ", ".join(sorted(set(schemas))))
-    raise DiscoveryError("no schema-3 recorder session found beneath %s" % requested)
+    raise DiscoveryError("no supported recorder session found beneath %s" % requested)
 
 
 def _require_string(mapping, key, label, allow_none=False):
@@ -354,7 +498,7 @@ def _validate_manifest(manifest):
         if not isinstance(key, str) or not isinstance(value, str):
             raise IntegrityError("manifest values must be strings: %s" % key)
     schema = _require_string(manifest, "schemaVersion", "manifest")
-    if schema != SCHEMA_VERSION:
+    if schema not in SUPPORTED_SCHEMA_VERSIONS:
         raise UnsupportedSchemaError("unsupported recorder schema: %s" % schema)
     if _require_string(manifest, "recorder", "manifest") != RECORDER_NAME:
         raise IntegrityError("unexpected recorder implementation")
@@ -371,6 +515,19 @@ def _validate_manifest(manifest):
         "javaCommand",
     ]:
         _require_string(manifest, key, "manifest", allow_none=False)
+    if schema == SCHEMA6_VERSION:
+        if manifest["recorderVersion"] != SCHEMA6_RECORDER_VERSION:
+            raise IntegrityError(
+                "unexpected schema-6 recorderVersion: %s" % manifest["recorderVersion"]
+            )
+        if _require_string(
+            manifest, "placementVerdictContract", "manifest"
+        ) != PLACEMENT_VERDICT_CONTRACT:
+            raise IntegrityError("unexpected placementVerdictContract")
+        if _require_string(
+            manifest, "logicalAttemptContract", "manifest"
+        ) != LOGICAL_ATTEMPT_CONTRACT:
+            raise IntegrityError("unexpected logicalAttemptContract")
     java_command = manifest.get("javaCommand", "")
     for match in SENSITIVE_ARG_RE.finditer(java_command):
         if match.group(1).strip("\"'") != "[REDACTED]":
@@ -389,11 +546,14 @@ def _artifact_info(path):
     }
 
 
-def _parse_summary(path, recorder_version):
+def _parse_summary(path, schema, recorder_version):
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
         raise IntegrityError("cannot read summary.md: %s" % exc)
+    expected_keys = (
+        SCHEMA6_SUMMARY_KEYS if schema == SCHEMA6_VERSION else SUMMARY_KEYS
+    )
     counters = {}
     for line in lines:
         if not line or line.startswith("#"):
@@ -403,15 +563,16 @@ def _parse_summary(path, recorder_version):
         key, value = line.split("=", 1)
         if key in counters:
             raise IntegrityError("duplicate summary counter: %s" % key)
-        if key not in SUMMARY_KEYS:
+        if key not in expected_keys:
             raise IntegrityError("unknown summary counter: %s" % key)
         if not re.fullmatch(r"[0-9]+", value):
             raise IntegrityError("summary counter must be nonnegative integer: %s=%s" % (key, value))
         counters[key] = int(value)
-    missing = [key for key in SUMMARY_KEYS if key not in counters]
+    missing = [key for key in expected_keys if key not in counters]
     allowed_legacy_missing = (
         {"placementUnclassifiedFailureRows"}
-        if isinstance(recorder_version, str)
+        if schema == SCHEMA_VERSION
+        and isinstance(recorder_version, str)
         and recorder_version.startswith("26.2-recorder-truth-v3-")
         else set()
     )
@@ -460,7 +621,9 @@ def _parse_tsv(path, expected_header):
     return rows
 
 
-def _parse_actions_tsv(path):
+def _parse_actions_tsv(path, schema):
+    if schema == SCHEMA6_VERSION:
+        return _parse_tsv_headers(path, [SCHEMA6_ACTIONS_HEADER])
     return _parse_tsv_headers(path, [LEGACY_ACTIONS_HEADER, C3_ACTIONS_HEADER])
 
 
@@ -491,13 +654,14 @@ def _row_id(row):
     return int(raw)
 
 
-def _parse_session(path):
+def _parse_session(path, schema):
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
         raise IntegrityError("cannot read session.jsonl: %s" % exc)
     rows = []
     previous_time = None
+    next_numeric_id = 1
     for line_number, line in enumerate(lines, start=1):
         if not line:
             raise IntegrityError("blank session.jsonl line %d" % line_number)
@@ -512,17 +676,34 @@ def _parse_session(path):
         for key, value in row.items():
             if not isinstance(key, str) or not isinstance(value, str):
                 raise IntegrityError("session row %d values must be strings" % line_number)
-        row_id = _row_id(row)
-        if row_id != line_number:
-            raise IntegrityError(
-                "session global ids must be contiguous in file order: line %d has id %d"
-                % (line_number, row_id)
+        terminal = (
+            schema == SCHEMA6_VERSION
+            and row.get("type") == "placement_attempt"
+        )
+        if terminal:
+            row_id = _require_string(
+                row,
+                "rowId",
+                "session placement_attempt line %d" % line_number,
             )
-        recorded = _parse_instant(row.get("recordedAt"), "session row %d" % row_id)
+        else:
+            row_id = _row_id(row)
+            if row_id != next_numeric_id:
+                raise IntegrityError(
+                    "session numeric ids must be contiguous independent of terminal rows: "
+                    "line %d has id %d, expected %d"
+                    % (line_number, row_id, next_numeric_id)
+                )
+            next_numeric_id += 1
+        recorded = _parse_instant(
+            row.get("recordedAt"),
+            "session row %s" % row_id,
+        )
         if previous_time is not None and recorded < previous_time:
-            raise IntegrityError("session recordedAt decreases at global id %d" % row_id)
+            raise IntegrityError("session recordedAt decreases at row %s" % row_id)
         previous_time = recorded
         row["_globalId"] = row_id
+        row["_sessionIndex"] = line_number
         row["_recordedAtParsed"] = recorded
         rows.append(row)
     return rows
@@ -569,6 +750,567 @@ def _finite_decimal(value, label):
     if not number.is_finite():
         raise IntegrityError("%s is not a finite decimal: %s" % (label, value))
     return number
+
+
+def _has_evidence(value):
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value not in {"none", "unknown", "NaN"}
+    )
+
+
+def _java_has_evidence(value):
+    if not isinstance(value, str) or not value.strip():
+        return False
+    return value.strip().lower() not in {
+        "unknown",
+        "none",
+        "missing",
+        "not_run",
+        "not_applicable",
+        "null",
+    }
+
+
+def _java_finite_number(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _java_same_number(left, right):
+    left_number = _java_finite_number(left)
+    right_number = _java_finite_number(right)
+    return (
+        left_number is not None
+        and right_number is not None
+        and abs(left_number - right_number) <= 1.0e-6
+    )
+
+
+def _java_same_evidence(left, right):
+    left_present = _java_has_evidence(left)
+    right_present = _java_has_evidence(right)
+    if not left_present or not right_present:
+        return left_present == right_present
+    if _java_finite_number(left) is not None and _java_finite_number(right) is not None:
+        return _java_same_number(left, right)
+    return left == right
+
+
+def _java_first_evidence(row, *keys):
+    for key in keys:
+        value = row.get(key)
+        if _java_has_evidence(value):
+            return value.strip()
+    return "unknown"
+
+
+def _comma_tokens(value, label, allowed=None):
+    if value == "none":
+        return []
+    if not isinstance(value, str) or not value:
+        raise IntegrityError("%s must be a nonempty string" % label)
+    tokens = value.split(",")
+    if (
+        any(not token for token in tokens)
+        or len(tokens) != len(set(tokens))
+    ):
+        raise IntegrityError("%s has malformed or duplicate comma tokens: %s" % (label, value))
+    if allowed is not None:
+        unknown = [token for token in tokens if token not in allowed]
+        if unknown:
+            raise IntegrityError("%s has unknown token(s): %s" % (label, ", ".join(unknown)))
+    elif any(re.fullmatch(r"[A-Z][A-Z0-9_]*", token) is None for token in tokens):
+        raise IntegrityError("%s has malformed token(s): %s" % (label, value))
+    return tokens
+
+
+def _logical_attempt_number(value, run_id, label):
+    if not isinstance(value, str):
+        raise IntegrityError("%s logicalAttemptId is not a string" % label)
+    match = re.fullmatch(
+        re.escape(run_id) + r"-attempt-([1-9][0-9]*)",
+        value,
+    )
+    if match is None:
+        raise IntegrityError("%s has malformed logicalAttemptId: %r" % (label, value))
+    return int(match.group(1))
+
+
+def _validate_pass_component_evidence(row, label, statuses):
+    tolerance = Decimal("0.000001")
+
+    def require_intent_match(status_field, evidence_field):
+        if statuses[status_field] != "PASS":
+            return
+        intent = _finite_decimal(row.get("intentDy"), "%s intentDy" % label)
+        actual = _finite_decimal(
+            row.get(evidence_field),
+            "%s %s" % (label, evidence_field),
+        )
+        if abs(actual - intent) > tolerance:
+            raise IntegrityError(
+                "%s %s PASS evidence disagrees with intentDy"
+                % (label, evidence_field)
+            )
+
+    if statuses["placedVerdict"] == "PASS":
+        actual_result = str(row.get("actualResult", "")).strip().lower()
+        if not (
+            actual_result == "success"
+            or actual_result.startswith("success[")
+            or actual_result == "consume"
+            or actual_result.startswith("consume[")
+        ):
+            raise IntegrityError("%s placed PASS lacks a successful actualResult" % label)
+        if _java_finite_number(row.get("afterDy")) is not None:
+            require_intent_match("placedVerdict", "afterDy")
+
+    require_intent_match("anchorVerdict", "storedDy")
+    require_intent_match("modelVerdict", "modelDy")
+    require_intent_match("raycastVerdict", "raycastDy")
+    require_intent_match("outlineVerdict", "outlineDy")
+
+    if statuses["collisionVerdict"] == "PASS":
+        passed_observable = False
+        if _has_evidence(row.get("collisionDy")):
+            require_intent_match("collisionVerdict", "collisionDy")
+            passed_observable = True
+
+        expected_plane_present = _has_evidence(row.get("expectedSupportPlane"))
+        actual_plane_present = _has_evidence(row.get("actualContactPlane"))
+        if expected_plane_present or actual_plane_present:
+            if not (expected_plane_present and actual_plane_present):
+                raise IntegrityError(
+                    "%s collision PASS has incomplete contact-plane evidence" % label
+                )
+            expected_plane = _finite_decimal(
+                row["expectedSupportPlane"],
+                "%s expectedSupportPlane" % label,
+            )
+            actual_plane = _finite_decimal(
+                row["actualContactPlane"],
+                "%s actualContactPlane" % label,
+            )
+            if abs(expected_plane - actual_plane) > tolerance:
+                raise IntegrityError(
+                    "%s collision PASS contact planes disagree" % label
+                )
+            passed_observable = True
+
+        if _has_evidence(row.get("seatError")):
+            seat_error = _finite_decimal(
+                row["seatError"],
+                "%s seatError" % label,
+            )
+            if abs(seat_error) > tolerance:
+                raise IntegrityError(
+                    "%s collision PASS has nonzero seatError" % label
+                )
+            passed_observable = True
+
+        if not passed_observable:
+            raise IntegrityError("%s collision PASS lacks primitive evidence" % label)
+
+
+def _java_explicit_component_status(row, component_name):
+    field = COMPONENT_VERDICT_FIELDS[COMPONENT_NAMES.index(component_name)]
+    value = row.get(field)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value.strip().upper().replace("-", "_").replace(" ", "_")
+    if normalized == "UNKNOWN/MISSING":
+        return "MISSING"
+    return normalized if normalized in COMPONENT_STATUSES else None
+
+
+def _java_successful_result(value):
+    normalized = value.strip().lower() if isinstance(value, str) else ""
+    return (
+        normalized == "success"
+        or normalized.startswith("success[")
+        or normalized == "consume"
+        or normalized.startswith("consume[")
+    )
+
+
+def _java_actual_refusal_reason(actual_result):
+    if (
+        not isinstance(actual_result, str)
+        or not actual_result.startswith("Fail[")
+        or not actual_result.endswith("]")
+    ):
+        return "unknown"
+    captured = actual_result[len("Fail["):-1]
+    return captured.strip() if _java_has_evidence(captured) else "unknown"
+
+
+def _java_unavailable_status(explicit, actual):
+    if explicit in {"UNKNOWN", "MISSING", "NOT_RUN"}:
+        return explicit
+    return "MISSING" if actual == "unknown" else "UNKNOWN"
+
+
+def _append_unique(values, value):
+    if value not in values:
+        values.append(value)
+
+
+def _derive_java_placement_verdict(row):
+    explicit_intent_dy = _java_first_evidence(row, "intentDy")
+    expected_after_dy = _java_first_evidence(row, "expectedAfterDy")
+    intent_alias_conflict = (
+        explicit_intent_dy != "unknown"
+        and expected_after_dy != "unknown"
+        and not _java_same_evidence(explicit_intent_dy, expected_after_dy)
+    )
+    intent_dy = (
+        "unknown"
+        if intent_alias_conflict
+        else explicit_intent_dy
+        if explicit_intent_dy != "unknown"
+        else expected_after_dy
+    )
+    stored_dy = _java_first_evidence(row, "storedDy", "afterStoredDy")
+    model_dy = _java_first_evidence(row, "modelDy")
+    collision_dy = _java_first_evidence(row, "collisionDy")
+    raycast_dy = _java_first_evidence(row, "raycastDy")
+    outline_dy = _java_first_evidence(row, "outlineDy")
+    expected_support_plane = _java_first_evidence(row, "expectedSupportPlane")
+    actual_contact_plane = _java_first_evidence(row, "actualContactPlane")
+    seat_error = _java_first_evidence(row, "seatError")
+    placement_route = _java_first_evidence(row, "placementRoute")
+    landing_authority = _java_first_evidence(row, "landingAuthority")
+    rig_case_id = _java_first_evidence(row, "rigCaseId")
+    expected_refusal_reason = _java_first_evidence(row, "expectedRefusalReason")
+    actual_result = row.get("actualResult")
+    if not isinstance(actual_result, str):
+        actual_result = ""
+    explicit_actual_refusal_reason = _java_first_evidence(row, "actualRefusalReason")
+    parsed_actual_refusal_reason = _java_actual_refusal_reason(actual_result)
+    actual_refusal_reason_conflict = (
+        explicit_actual_refusal_reason != "unknown"
+        and parsed_actual_refusal_reason != "unknown"
+        and explicit_actual_refusal_reason != parsed_actual_refusal_reason
+    )
+    actual_refusal_reason = (
+        "unknown"
+        if actual_refusal_reason_conflict
+        else explicit_actual_refusal_reason
+        if explicit_actual_refusal_reason != "unknown"
+        else parsed_actual_refusal_reason
+    )
+
+    statuses = {}
+    failure_classes = []
+    expected_refusal = any(
+        row.get(field) == "MUST_REFUSE_VANILLA"
+        for field in ("expectedResult", "placementContract", "refusalContract")
+    )
+    refusal_occurred = actual_result.startswith("Fail[")
+
+    def canonical_result(final_verdict, missing_components):
+        result = {
+            "finalVerdict": final_verdict,
+            **{
+                field: statuses[name]
+                for name, field in zip(COMPONENT_NAMES, COMPONENT_VERDICT_FIELDS)
+            },
+            "intentDy": intent_dy,
+            "storedDy": stored_dy,
+            "modelDy": model_dy,
+            "collisionDy": collision_dy,
+            "raycastDy": raycast_dy,
+            "outlineDy": outline_dy,
+            "expectedSupportPlane": expected_support_plane,
+            "actualContactPlane": actual_contact_plane,
+            "seatError": seat_error,
+            "placementRoute": placement_route,
+            "landingAuthority": landing_authority,
+            "rigCaseId": rig_case_id,
+            "expectedRefusalReason": expected_refusal_reason,
+            "actualRefusalReason": actual_refusal_reason,
+            "missingRequiredComponents": (
+                "none" if not missing_components else ",".join(missing_components)
+            ),
+            "failureClasses": (
+                "none" if not failure_classes else ",".join(failure_classes)
+            ),
+        }
+        return result
+
+    def all_status(status):
+        for component_name in COMPONENT_NAMES:
+            statuses[component_name] = status
+
+    if refusal_occurred and actual_refusal_reason_conflict:
+        all_status("NOT_APPLICABLE")
+        statuses["PLACED"] = "FAIL"
+        _append_unique(failure_classes, "ACTUAL_REFUSAL_REASON_CONFLICT")
+        if not expected_refusal:
+            _append_unique(failure_classes, "UNDECLARED_PLACEMENT_FAILURE")
+        return canonical_result("UNCLASSIFIED_FAILURE", [])
+
+    if expected_refusal and refusal_occurred:
+        all_status("NOT_APPLICABLE")
+        if (
+            expected_refusal_reason == "unknown"
+            or actual_refusal_reason == "unknown"
+        ):
+            statuses["PLACED"] = "FAIL"
+            _append_unique(failure_classes, "EXPECTED_REFUSAL_REASON_MISSING")
+            return canonical_result("UNCLASSIFIED_FAILURE", [])
+        if expected_refusal_reason != actual_refusal_reason:
+            statuses["PLACED"] = "FAIL"
+            _append_unique(failure_classes, "EXPECTED_REFUSAL_REASON_MISMATCH")
+            return canonical_result("UNCLASSIFIED_FAILURE", [])
+        return canonical_result("EXPECTED_REFUSAL", [])
+
+    if not expected_refusal and refusal_occurred:
+        all_status("NOT_APPLICABLE")
+        statuses["PLACED"] = "FAIL"
+        _append_unique(failure_classes, "UNDECLARED_PLACEMENT_FAILURE")
+        return canonical_result("UNCLASSIFIED_FAILURE", [])
+
+    placement_succeeded = (
+        row.get("actionType") == "place_block"
+        and _java_successful_result(actual_result)
+    )
+    placed_failure = False
+    if intent_alias_conflict:
+        _append_unique(failure_classes, "INTENT_DY_ALIAS_CONFLICT")
+        placed_failure = True
+    if expected_refusal and placement_succeeded:
+        _append_unique(failure_classes, "EXPECTED_REFUSAL_DID_NOT_OCCUR")
+        placed_failure = True
+    elif (
+        not intent_alias_conflict
+        and placement_succeeded
+        and _java_finite_number(intent_dy) is not None
+        and _java_finite_number(row.get("afterDy")) is not None
+        and not _java_same_number(intent_dy, row.get("afterDy"))
+    ):
+        _append_unique(failure_classes, "PLACED_ACTION_DY_MISMATCH")
+        placed_failure = True
+    statuses["PLACED"] = (
+        "FAIL" if placed_failure else "PASS" if placement_succeeded else "MISSING"
+    )
+
+    def dy_component(component_name, actual_dy):
+        explicit = _java_explicit_component_status(row, component_name)
+        if explicit == "FAIL":
+            _append_unique(
+                failure_classes,
+                "%s_COMPONENT_FAILURE" % component_name,
+            )
+            return explicit
+        if actual_dy == "unknown" and (
+            explicit == "NOT_APPLICABLE"
+            or component_name in {"MODEL", "RAYCAST", "OUTLINE"}
+        ):
+            return "MISSING"
+        if actual_dy != "unknown":
+            if (
+                _java_finite_number(actual_dy) is not None
+                and _java_finite_number(intent_dy) is not None
+            ):
+                if _java_same_number(actual_dy, intent_dy):
+                    return "PASS"
+                _append_unique(
+                    failure_classes,
+                    (
+                        "ANCHOR_STORED_DY_MISMATCH"
+                        if component_name == "ANCHOR"
+                        else "%s_DY_MISMATCH" % component_name
+                    ),
+                )
+                return "FAIL"
+            return "UNKNOWN"
+        if explicit == "NOT_APPLICABLE":
+            return explicit
+        return _java_unavailable_status(explicit, actual_dy)
+
+    statuses["ANCHOR"] = dy_component("ANCHOR", stored_dy)
+    statuses["MODEL"] = dy_component("MODEL", model_dy)
+
+    explicit_collision = _java_explicit_component_status(row, "COLLISION")
+    if explicit_collision == "FAIL":
+        _append_unique(failure_classes, "COLLISION_COMPONENT_FAILURE")
+        collision_status = "FAIL"
+    else:
+        actual_observable = (
+            collision_dy != "unknown"
+            or actual_contact_plane != "unknown"
+            or seat_error != "unknown"
+        )
+        passed_observable = False
+        unresolved_observable = False
+        collision_status = None
+        if _java_finite_number(collision_dy) is not None:
+            if _java_finite_number(intent_dy) is not None:
+                if not _java_same_number(intent_dy, collision_dy):
+                    _append_unique(failure_classes, "COLLISION_DY_MISMATCH")
+                    collision_status = "FAIL"
+                else:
+                    passed_observable = True
+            else:
+                unresolved_observable = True
+        elif collision_dy != "unknown":
+            unresolved_observable = True
+
+        if collision_status is None:
+            if (
+                _java_finite_number(expected_support_plane) is not None
+                and _java_finite_number(actual_contact_plane) is not None
+            ):
+                if not _java_same_number(
+                    expected_support_plane,
+                    actual_contact_plane,
+                ):
+                    _append_unique(
+                        failure_classes,
+                        "COLLISION_CONTACT_PLANE_MISMATCH",
+                    )
+                    collision_status = "FAIL"
+                else:
+                    passed_observable = True
+            elif (
+                expected_support_plane != "unknown"
+                or actual_contact_plane != "unknown"
+            ):
+                unresolved_observable = True
+
+        if collision_status is None:
+            if _java_finite_number(seat_error) is not None:
+                if abs(float(seat_error)) > 1.0e-6:
+                    _append_unique(failure_classes, "COLLISION_SEAT_ERROR")
+                    collision_status = "FAIL"
+                else:
+                    passed_observable = True
+            elif seat_error != "unknown":
+                unresolved_observable = True
+
+        if collision_status is None:
+            if actual_observable:
+                collision_status = (
+                    "UNKNOWN"
+                    if unresolved_observable
+                    else "PASS"
+                    if passed_observable
+                    else "UNKNOWN"
+                )
+            elif explicit_collision == "NOT_APPLICABLE":
+                collision_status = "MISSING"
+            elif unresolved_observable:
+                collision_status = "UNKNOWN"
+            else:
+                collision_status = _java_unavailable_status(
+                    explicit_collision,
+                    collision_dy,
+                )
+    statuses["COLLISION"] = collision_status
+
+    statuses["RAYCAST"] = dy_component("RAYCAST", raycast_dy)
+    statuses["OUTLINE"] = dy_component("OUTLINE", outline_dy)
+    explicit_stability = _java_explicit_component_status(row, "STABILITY")
+    if explicit_stability == "FAIL":
+        _append_unique(failure_classes, "STABILITY_COMPONENT_FAILURE")
+    statuses["STABILITY"] = (
+        "MISSING"
+        if explicit_stability == "NOT_APPLICABLE"
+        else "NOT_RUN"
+        if explicit_stability is None
+        else explicit_stability
+    )
+
+    missing_components = [
+        component_name
+        for component_name in COMPONENT_NAMES
+        if statuses[component_name] in MISSING_COMPONENT_STATUSES
+    ]
+    final_verdict = (
+        "RED"
+        if "FAIL" in statuses.values()
+        else "GREEN"
+        if not missing_components
+        else "INCONCLUSIVE"
+    )
+    return canonical_result(final_verdict, missing_components)
+
+
+def _validate_canonical_verdict(row, label):
+    final_verdict = _require_string(row, "finalVerdict", label)
+    if final_verdict not in FINAL_VERDICTS:
+        raise IntegrityError("%s has invalid finalVerdict %r" % (label, final_verdict))
+
+    statuses = {}
+    for field in COMPONENT_VERDICT_FIELDS:
+        status = _require_string(row, field, label)
+        if status not in COMPONENT_STATUSES:
+            raise IntegrityError("%s has invalid %s=%r" % (label, field, status))
+        statuses[field] = status
+
+    for field in CANONICAL_EVIDENCE_FIELDS:
+        value = _require_string(row, field, label, allow_none=True)
+        if field in CANONICAL_NUMERIC_EVIDENCE_FIELDS and _has_evidence(value):
+            _finite_decimal(value, "%s %s" % (label, field))
+
+    expected_marker = FINAL_VERDICT_MARKERS[final_verdict]
+    if _require_string(row, "verdictMarker", label) != expected_marker:
+        raise IntegrityError("%s verdictMarker disagrees with finalVerdict" % label)
+
+    missing_tokens = _comma_tokens(
+        row["missingRequiredComponents"],
+        "%s missingRequiredComponents" % label,
+        allowed=set(COMPONENT_NAMES),
+    )
+    missing_by_status = [
+        component
+        for component, field in zip(COMPONENT_NAMES, COMPONENT_VERDICT_FIELDS)
+        if statuses[field] in MISSING_COMPONENT_STATUSES
+    ]
+    if final_verdict == "INCONCLUSIVE" and missing_tokens != missing_by_status:
+        raise IntegrityError(
+            "%s missingRequiredComponents disagrees with component statuses: %s vs %s"
+            % (label, missing_tokens, missing_by_status)
+        )
+    if any(
+        statuses[COMPONENT_VERDICT_FIELDS[COMPONENT_NAMES.index(component)]]
+        not in MISSING_COMPONENT_STATUSES
+        for component in missing_tokens
+    ):
+        raise IntegrityError("%s names a non-missing required component" % label)
+
+    failure_classes = _comma_tokens(
+        row["failureClasses"],
+        "%s failureClasses" % label,
+    )
+    _validate_pass_component_evidence(row, label, statuses)
+    has_fail = any(status == "FAIL" for status in statuses.values())
+    if final_verdict == "GREEN":
+        if missing_tokens or failure_classes or any(
+            status != "PASS"
+            for status in statuses.values()
+        ):
+            raise IntegrityError("%s GREEN verdict does not have PASS for every component" % label)
+    elif final_verdict == "RED":
+        if not has_fail or not failure_classes:
+            raise IntegrityError("%s RED verdict lacks failed component/failure class" % label)
+    elif final_verdict == "INCONCLUSIVE":
+        if has_fail or not missing_tokens or failure_classes:
+            raise IntegrityError("%s INCONCLUSIVE verdict has contradictory component evidence" % label)
+    return {
+        "finalVerdict": final_verdict,
+        "componentStatuses": statuses,
+        "missingRequiredComponents": missing_tokens,
+        "failureClasses": failure_classes,
+    }
 
 
 def _validate_store_fact(row, value_field, bits_field, label, allow_missing_pair=False):
@@ -661,11 +1403,31 @@ def _c3_pair_family(row, pair_pos):
     return None, ["state_family"]
 
 
-def _validate_c3_action_fields(row):
+def _schema6_store_fact(row, value_field, bits_field, label):
+    value = row.get(value_field)
+    bits = row.get(bits_field)
+    if _has_evidence(value) and bits == "none":
+        decimal = _finite_decimal(value, "%s decimal" % label)
+        return {
+            "present": True,
+            "value": value,
+            "decimal": decimal,
+            "bits": "none",
+        }
+    return _validate_store_fact(row, value_field, bits_field, label)
+
+
+def _validate_c3_action_fields(row, schema6=False):
     action_id = row.get("actionId", "unknown")
     label = "action %s C3 primary store" % action_id
-    primary_fact = _validate_store_fact(
-        row, "afterStoredDy", "afterStoredDyBits", label
+    primary_fact = (
+        _schema6_store_fact(
+            row, "afterStoredDy", "afterStoredDyBits", label
+        )
+        if schema6
+        else _validate_store_fact(
+            row, "afterStoredDy", "afterStoredDyBits", label
+        )
     )
     pair_values = [row.get(field) for field in C3_PAIR_FIELDS[2:]]
     pair_claim = any(value != "none" for value in pair_values)
@@ -707,6 +1469,13 @@ def _validate_c3_action_fields(row):
             "pairStoredDyBits",
             "action %s C3 pair store" % action_id,
         )
+    elif schema6 and _has_evidence(pair_value) and pair_bits == "none":
+        pair_fact = _schema6_store_fact(
+            row,
+            "pairStoredDy",
+            "pairStoredDyBits",
+            "action %s C3 pair store" % action_id,
+        )
     elif pair_value != "none" or pair_bits != "none":
         markers.add("ADAPTER_C3_PAIR_FIELDS_MISSING")
 
@@ -729,7 +1498,9 @@ def _validate_c3_action_fields(row):
         primary_live = _finite_decimal(row.get("afterDy"), "action %s afterDy" % action_id)
         pair_live = _finite_decimal(row.get("pairAfterDy"), "action %s pairAfterDy" % action_id)
         exact_pair = (
-            primary_fact["bits"] == pair_fact["bits"]
+            primary_fact["bits"] != "none"
+            and pair_fact["bits"] != "none"
+            and primary_fact["bits"] == pair_fact["bits"]
             and primary_live == primary_fact["decimal"]
             and pair_live == pair_fact["decimal"]
             and primary_live == pair_live
@@ -793,6 +1564,15 @@ def _validate_marker_contract(row):
     marker = row[marker_field]
     if not isinstance(marker, str) or not marker:
         raise IntegrityError("%s row has missing marker" % row_type)
+    if row_type == "placement_attempt":
+        final_verdict = _require_string(row, "finalVerdict", "placement_attempt")
+        expected = FINAL_VERDICT_MARKERS.get(final_verdict)
+        if expected is None or marker != expected:
+            raise IntegrityError(
+                "placement_attempt marker/finalVerdict contradiction: %s/%s"
+                % (marker, final_verdict)
+            )
+        return
     if row_type == "model_stale_sentinel":
         kind = _require_string(row, "kind", "sentinel")
         severity = _require_string(row, "severity", "sentinel")
@@ -950,13 +1730,14 @@ def _expected_mismatch(row):
     marker = _source_marker(row)
     if row_type == "model_stale_sentinel":
         return row.get("severity") == "red"
-    if row_type in ("action", "cursor", "rendered_outline"):
+    if row_type in RED_MARKERS_BY_TYPE:
         return any(token in RED_MARKERS_BY_TYPE[row_type] for token in _marker_tokens(marker))
     return False
 
 
-def _derived_summary(rows):
-    counters = {key: 0 for key in SUMMARY_KEYS}
+def _derived_summary(rows, schema):
+    keys = SCHEMA6_SUMMARY_KEYS if schema == SCHEMA6_VERSION else SUMMARY_KEYS
+    counters = {key: 0 for key in keys}
     for row in rows:
         row_type = row["type"]
         marker = _source_marker(row)
@@ -997,6 +1778,55 @@ def _derived_summary(rows):
             )
             counters["liveGreenPlacementRows"] += int(marker == "LIVE_GREEN_PLACEMENT_AUTHORING")
             counters["placementSideDySplitRows"] += int("LIVE_PLACEMENT_SIDE_DY_SPLIT" in tokens)
+            if schema == SCHEMA6_VERSION:
+                verdict_counter = {
+                    "GREEN": "placementVerdictGreenRows",
+                    "RED": "placementVerdictRedRows",
+                    "INCONCLUSIVE": "placementVerdictInconclusiveRows",
+                    "EXPECTED_REFUSAL": "placementVerdictExpectedRefusalRows",
+                    "UNCLASSIFIED_FAILURE": "placementVerdictUnclassifiedFailureRows",
+                }.get(row.get("finalVerdict"))
+                if verdict_counter is None:
+                    raise IntegrityError(
+                        "schema-6 action %s has invalid finalVerdict for summary"
+                        % row.get("actionId")
+                    )
+                counters[verdict_counter] += 1
+        elif row_type == "placement_attempt":
+            if schema != SCHEMA6_VERSION:
+                raise IntegrityError("placement_attempt row is not valid in schema 3")
+            counters["logicalAttemptRows"] += 1
+            status_counter = {
+                "MERGED_CLIENT_SERVER": "mergedClientServerAttemptRows",
+                "AUTO_PROXY": "autoProxyLogicalAttemptRows",
+                "SERVER_ONLY": "serverOnlyLogicalAttemptRows",
+                "CLIENT_ONLY": "clientOnlyLogicalAttemptRows",
+            }.get(row.get("attemptStatus"))
+            if status_counter is None:
+                raise IntegrityError(
+                    "placement_attempt has invalid status for summary: %r"
+                    % row.get("attemptStatus")
+                )
+            counters[status_counter] += 1
+            if row.get("playerProof") == "PRESENT":
+                counters["playerProofLogicalAttemptRows"] += 1
+            verdict_counter = {
+                "GREEN": "logicalAttemptVerdictGreenRows",
+                "RED": "logicalAttemptVerdictRedRows",
+                "INCONCLUSIVE": "logicalAttemptVerdictInconclusiveRows",
+                "EXPECTED_REFUSAL": "logicalAttemptVerdictExpectedRefusalRows",
+                "UNCLASSIFIED_FAILURE": "logicalAttemptVerdictUnclassifiedFailureRows",
+            }.get(row.get("finalVerdict"))
+            if verdict_counter is None:
+                raise IntegrityError(
+                    "placement_attempt has invalid finalVerdict for summary"
+                )
+            counters[verdict_counter] += 1
+            if (
+                row.get("playerProof") == "PRESENT"
+                and row.get("finalVerdict") == "GREEN"
+            ):
+                counters["playerProofGreenLogicalAttemptRows"] += 1
         elif row_type == "break":
             counters["breakRows"] += 1
         elif row_type == "model_stale_sentinel":
@@ -1020,11 +1850,21 @@ def _derived_summary(rows):
     return counters
 
 
-def _validate_actions(session_rows, action_tsv, summary, action_header):
+def _validate_actions(
+    session_rows,
+    action_tsv,
+    summary,
+    action_header,
+    schema,
+    run_id,
+):
     session_actions = [row for row in session_rows if row["type"] == "action"]
     if len(session_actions) != len(action_tsv):
         raise IntegrityError("actions.tsv/session action count mismatch")
-    extended = action_header == C3_ACTIONS_HEADER
+    schema6 = schema == SCHEMA6_VERSION
+    extended = action_header in (C3_ACTIONS_HEADER, SCHEMA6_ACTIONS_HEADER)
+    if schema6 != (action_header == SCHEMA6_ACTIONS_HEADER):
+        raise IntegrityError("actions.tsv header does not match manifest schema")
     tsv_by_id = {}
     for row in action_tsv:
         raw_id = row.get("actionId")
@@ -1048,16 +1888,46 @@ def _validate_actions(session_rows, action_tsv, summary, action_header):
             raise IntegrityError("extended actions.tsv requires complete extended JSON action rows")
         if not extended and present_c3_fields:
             raise IntegrityError("legacy actions.tsv cannot accompany extended JSON action rows")
-        for key in [
-            "side", "player", "actionType", "heldItem", "clickedOwnerPos", "clickedFace",
-            "clickedHitVec", "recordedAt", "actualResult",
-        ]:
+        present_schema6_fields = [
+            field for field in SCHEMA6_ACTION_FIELDS if field in row
+        ]
+        if schema6 and len(present_schema6_fields) != len(SCHEMA6_ACTION_FIELDS):
+            raise IntegrityError(
+                "schema-6 actions.tsv requires complete logical-attempt JSON fields"
+            )
+        if not schema6 and present_schema6_fields:
+            raise IntegrityError(
+                "schema-3 action row cannot contain schema-6 logical-attempt fields"
+            )
+        required_action_fields = [
+            "side",
+            "actionType",
+            "heldItem",
+            "clickedOwnerPos",
+            "clickedFace",
+            "recordedAt",
+            "actualResult",
+        ]
+        if not schema6:
+            required_action_fields.extend(["player", "clickedHitVec"])
+        for key in required_action_fields:
             _require_string(row, key, "action %s" % row.get("actionId"), allow_none=False)
         action_id = row.get("actionId")
         if row.get("side") not in ("client", "server"):
             raise IntegrityError("action %s has invalid side %r" % (action_id, row.get("side")))
         _canonical_int_pos(row.get("clickedOwnerPos"), "action %s clickedOwnerPos" % action_id)
-        _canonical_hit_vec(row.get("clickedHitVec"), "action %s clickedHitVec" % action_id)
+        if schema6:
+            player = row.get("player")
+            if player is not None and not isinstance(player, str):
+                raise IntegrityError("action %s player is not a string" % action_id)
+            clicked_hit_vec = row.get("clickedHitVec")
+            if _java_has_evidence(clicked_hit_vec):
+                _canonical_hit_vec(
+                    clicked_hit_vec,
+                    "action %s clickedHitVec" % action_id,
+                )
+        else:
+            _canonical_hit_vec(row.get("clickedHitVec"), "action %s clickedHitVec" % action_id)
         if row.get("clickedFace").lower() not in {"up", "down", "north", "south", "east", "west"}:
             raise IntegrityError("action %s has invalid clickedFace %r" % (action_id, row.get("clickedFace")))
         placement_pos = _require_string(
@@ -1088,14 +1958,63 @@ def _validate_actions(session_rows, action_tsv, summary, action_header):
                 )
         else:
             _canonical_int_pos(placement_pos, "action %s placementPos" % action_id)
-            _require_string(row, "afterDy", "action %s" % action_id, allow_none=False)
             _require_string(row, "afterLaneKind", "action %s" % action_id, allow_none=True)
-            if row.get("actionType") == "place_block":
-                _require_string(row, "afterState", "action %s" % action_id, allow_none=False)
-                _finite_decimal(row.get("afterDy"), "action %s afterDy" % action_id)
+            if not schema6:
+                _require_string(row, "afterDy", "action %s" % action_id, allow_none=False)
+                if row.get("actionType") == "place_block":
+                    _require_string(row, "afterState", "action %s" % action_id, allow_none=False)
+                    _finite_decimal(row.get("afterDy"), "action %s afterDy" % action_id)
             _validate_explicit_green_action(row)
         if extended:
-            row["_c3"] = _validate_c3_action_fields(row)
+            row["_c3"] = _validate_c3_action_fields(row, schema6=schema6)
+        if schema6:
+            label = "schema-6 action %s" % action_id
+            logical_attempt_id = _require_string(
+                row, "logicalAttemptId", label
+            )
+            row["_logicalAttemptNumber"] = _logical_attempt_number(
+                logical_attempt_id,
+                run_id,
+                label,
+            )
+            phase = _require_string(row, "phase", label)
+            player_proof = _require_string(row, "playerProof", label)
+            if phase not in RAW_PHASES:
+                raise IntegrityError("%s has invalid phase %r" % (label, phase))
+            expected_phase = (
+                "AUTO_PROXY"
+                if origin == PROXY_ORIGIN
+                else "CLIENT_PREDICTION"
+                if row["side"] == "client"
+                else "SERVER_AUTHORITY"
+            )
+            expected_proof = "ABSENT" if origin == PROXY_ORIGIN else "PRESENT"
+            if phase != expected_phase or player_proof != expected_proof:
+                raise IntegrityError(
+                    "%s origin/side/phase/playerProof contradiction: %s/%s/%s/%s"
+                    % (
+                        label,
+                        origin,
+                        row["side"],
+                        phase,
+                        player_proof,
+                    )
+                )
+            if origin == PROXY_ORIGIN and row["side"] != "server":
+                raise IntegrityError("%s AUTO_PROXY must be a server action row" % label)
+            row["_canonicalVerdict"] = _validate_canonical_verdict(row, label)
+            if (
+                _has_evidence(row.get("storedDy"))
+                and _has_evidence(row.get("afterStoredDy"))
+                and _finite_decimal(row["storedDy"], "%s storedDy" % label)
+                != _finite_decimal(row["afterStoredDy"], "%s afterStoredDy" % label)
+            ):
+                raise IntegrityError("%s storedDy disagrees with afterStoredDy" % label)
+            if (
+                row["finalVerdict"] == "RED"
+                and row["verdictMarker"] not in _marker_tokens(row["marker"])
+            ):
+                raise IntegrityError("%s RED verdict marker is absent from action marker" % label)
         mirror = tsv_by_id.get(int(row["actionId"]))
         if mirror is None:
             raise IntegrityError("session action missing from actions.tsv: %s" % row["actionId"])
@@ -1113,6 +2032,418 @@ def _validate_actions(session_rows, action_tsv, summary, action_header):
     if summary["autoUseOnProxyActionRows"] != proxy:
         raise IntegrityError("summary autoUseOnProxyActionRows disagrees with session")
     return session_actions
+
+
+def _has_attempt_evidence(value):
+    return _java_has_evidence(value)
+
+
+def _logical_conflict_name(field):
+    snake = re.sub(r"([a-z])([A-Z])", r"\1_\2", field).upper()
+    return "LOGICAL_ATTEMPT_%s_CONFLICT" % snake
+
+
+def _attempt_evidence(row, field):
+    return None if row is None else row.get(field)
+
+
+def _first_attempt_evidence(row, *fields):
+    if row is None:
+        return None
+    for field in fields:
+        value = row.get(field)
+        if _has_attempt_evidence(value):
+            return value
+    return None
+
+
+def _logical_attempt_evidence(client, server):
+    evidence = {}
+    conflicts = []
+
+    def detect_conflict(field, preferred_value, alternate_value, component):
+        if (
+            _has_attempt_evidence(preferred_value)
+            and _has_attempt_evidence(alternate_value)
+            and not _java_same_evidence(preferred_value, alternate_value)
+        ):
+            conflict_name = _logical_conflict_name(field)
+            if not any(name == conflict_name for name, _ in conflicts):
+                conflicts.append((conflict_name, component))
+
+    def select(field, preferred, alternate, component):
+        preferred_value = _attempt_evidence(preferred, field)
+        alternate_value = _attempt_evidence(alternate, field)
+        detect_conflict(
+            field,
+            preferred_value,
+            alternate_value,
+            component,
+        )
+        selected = (
+            preferred_value
+            if _has_attempt_evidence(preferred_value)
+            else alternate_value
+            if _has_attempt_evidence(alternate_value)
+            else None
+        )
+        if _has_attempt_evidence(selected):
+            evidence[field] = selected
+
+    for field in [
+        "actionType",
+        "heldItem",
+        "clickedOwnerPos",
+        "clickedFace",
+        "placementPos",
+        "rigCaseId",
+        "placementRoute",
+        "landingAuthority",
+        "expectedAfterDy",
+        "intentDy",
+        "expectedAfterLaneKind",
+        "expectedResult",
+        "placementContract",
+        "refusalContract",
+        "expectedRefusalReason",
+        "clickedOwnerLaneKind",
+        "beforeDy",
+    ]:
+        select(field, server, client, "PLACED")
+
+    for field in [
+        "actualResult",
+        "actualRefusalReason",
+        "afterDy",
+        "afterState",
+        "afterLaneKind",
+        "stabilityVerdict",
+    ]:
+        component = "STABILITY" if field == "stabilityVerdict" else "PLACED"
+        select(field, server, client, component)
+
+    server_stored_dy = _first_attempt_evidence(
+        server,
+        "storedDy",
+        "afterStoredDy",
+    )
+    client_stored_dy = _first_attempt_evidence(
+        client,
+        "storedDy",
+        "afterStoredDy",
+    )
+    detect_conflict(
+        "storedDy",
+        server_stored_dy,
+        client_stored_dy,
+        "ANCHOR",
+    )
+    stored_dy = (
+        server_stored_dy
+        if _has_attempt_evidence(server_stored_dy)
+        else client_stored_dy
+    )
+    if _has_attempt_evidence(stored_dy):
+        evidence["afterStoredDy"] = stored_dy
+
+    for field in [
+        "modelDy",
+        "collisionDy",
+        "raycastDy",
+        "outlineDy",
+        "expectedSupportPlane",
+        "actualContactPlane",
+        "seatError",
+    ]:
+        component = {
+            "modelDy": "MODEL",
+            "raycastDy": "RAYCAST",
+            "outlineDy": "OUTLINE",
+        }.get(field, "COLLISION")
+        select(field, client, server, component)
+    return evidence, conflicts
+
+
+def _apply_java_logical_conflicts(derived, conflicts):
+    if not conflicts:
+        return derived
+    expected = dict(derived)
+    expected["finalVerdict"] = "RED"
+    for _, component in conflicts:
+        field = COMPONENT_VERDICT_FIELDS[COMPONENT_NAMES.index(component)]
+        expected[field] = "FAIL"
+    missing_components = [
+        component
+        for component, field in zip(COMPONENT_NAMES, COMPONENT_VERDICT_FIELDS)
+        if expected[field] in {"UNKNOWN", "MISSING", "NOT_RUN"}
+    ]
+    expected["missingRequiredComponents"] = (
+        "none" if not missing_components else ",".join(missing_components)
+    )
+    failure_classes = (
+        []
+        if expected["failureClasses"] == "none"
+        else expected["failureClasses"].split(",")
+    )
+    for conflict_name, _ in conflicts:
+        _append_unique(failure_classes, conflict_name)
+    expected["failureClasses"] = (
+        "none" if not failure_classes else ",".join(failure_classes)
+    )
+    return expected
+
+
+def _crosscheck_terminal_evidence(terminal, client, server):
+    label = "placement_attempt %s" % terminal["logicalAttemptId"]
+    evidence, conflicts = _logical_attempt_evidence(client, server)
+    derived = _apply_java_logical_conflicts(
+        _derive_java_placement_verdict(evidence),
+        conflicts,
+    )
+
+    direct_evidence_fields = [
+        "actionType",
+        "heldItem",
+        "clickedOwnerPos",
+        "clickedFace",
+        "placementPos",
+        "expectedAfterDy",
+        "expectedAfterLaneKind",
+        "expectedResult",
+        "placementContract",
+        "refusalContract",
+        "clickedOwnerLaneKind",
+        "beforeDy",
+        "actualResult",
+        "afterDy",
+        "afterState",
+        "afterLaneKind",
+        "afterStoredDy",
+    ]
+    for field in direct_evidence_fields:
+        expected_value = evidence.get(field)
+        if expected_value is None:
+            if field in terminal:
+                raise IntegrityError(
+                    "%s terminal invents raw evidence field %s" % (label, field)
+                )
+            continue
+        if terminal.get(field) != expected_value:
+            raise IntegrityError(
+                "%s terminal/raw evidence mismatch %s: %r != %r"
+                % (label, field, terminal.get(field), expected_value)
+            )
+
+    for field, expected_value in derived.items():
+        if terminal.get(field) != expected_value:
+            raise IntegrityError(
+                "%s derived terminal verdict/evidence mismatch %s: %r != %r"
+                % (label, field, terminal.get(field), expected_value)
+            )
+    terminal["_derivedCanonicalVerdict"] = derived
+    terminal["_logicalConflicts"] = [name for name, _ in conflicts]
+
+
+def _java_correlation_value(row, key):
+    value = row.get(key)
+    return value.strip() if _java_has_evidence(value) else "none"
+
+
+def _java_first_correlation_value(row, *keys):
+    for key in keys:
+        value = row.get(key)
+        if _java_has_evidence(value):
+            return value.strip()
+    return "none"
+
+
+def _schema6_attempt_key(row):
+    return (
+        _java_correlation_value(row, "actionType"),
+        _java_correlation_value(row, "heldItem"),
+        _java_correlation_value(row, "clickedOwnerPos"),
+        _java_correlation_value(row, "clickedFace"),
+        _java_correlation_value(row, "placementPos"),
+        _java_correlation_value(row, "rigCaseId"),
+        _java_first_correlation_value(
+            row,
+            "playerUuid",
+            "playerId",
+            "player",
+            "playerName",
+        ),
+        _java_first_correlation_value(
+            row,
+            "dimensionId",
+            "dimension",
+            "level",
+            "world",
+        ),
+    )
+
+
+def _validate_logical_attempts(session_rows, actions, manifest):
+    terminals = [
+        row for row in session_rows if row["type"] == "placement_attempt"
+    ]
+    actions_by_id = {row["actionId"]: row for row in actions}
+    actions_by_logical = defaultdict(list)
+    for row in actions:
+        actions_by_logical[row["logicalAttemptId"]].append(row)
+
+    terminals_by_logical = {}
+    referenced_action_ids = set()
+    run_id = manifest["runId"]
+    for terminal in terminals:
+        label = "placement_attempt line %s" % terminal["_sessionIndex"]
+        forbidden = sorted(TERMINAL_FORBIDDEN_FIELDS.intersection(terminal))
+        if forbidden:
+            raise IntegrityError(
+                "%s contains forbidden invented fields: %s"
+                % (label, ", ".join(forbidden))
+            )
+        logical_attempt_id = _require_string(
+            terminal,
+            "logicalAttemptId",
+            label,
+        )
+        terminal["_logicalAttemptNumber"] = _logical_attempt_number(
+            logical_attempt_id,
+            run_id,
+            label,
+        )
+        if terminal.get("rowId") != "attempt:" + logical_attempt_id:
+            raise IntegrityError("%s has invalid terminal rowId" % label)
+        if terminal.get("terminal") != "true":
+            raise IntegrityError("%s must use terminal=true" % label)
+        if logical_attempt_id in terminals_by_logical:
+            raise IntegrityError(
+                "duplicate placement_attempt terminal for %s" % logical_attempt_id
+            )
+        terminals_by_logical[logical_attempt_id] = terminal
+
+        attempt_status = _require_string(terminal, "attemptStatus", label)
+        if attempt_status not in LOGICAL_ATTEMPT_STATUSES:
+            raise IntegrityError("%s has invalid attemptStatus %r" % (label, attempt_status))
+        player_proof = _require_string(terminal, "playerProof", label)
+        client_action_id = _require_string(
+            terminal, "clientActionId", label, allow_none=True
+        )
+        server_action_id = _require_string(
+            terminal, "serverActionId", label, allow_none=True
+        )
+        action_count = _require_nonnegative_integer(
+            terminal,
+            "actionCount",
+            label,
+        )
+        expected_shape = {
+            "MERGED_CLIENT_SERVER": ("PRESENT", True, True, 2),
+            "AUTO_PROXY": ("ABSENT", False, True, 1),
+            "SERVER_ONLY": ("PRESENT", False, True, 1),
+            "CLIENT_ONLY": ("PRESENT", True, False, 1),
+        }[attempt_status]
+        expected_proof, has_client, has_server, expected_count = expected_shape
+        if (
+            player_proof != expected_proof
+            or (client_action_id != "none") != has_client
+            or (server_action_id != "none") != has_server
+            or action_count != expected_count
+        ):
+            raise IntegrityError(
+                "%s status/action-reference/playerProof shape is inconsistent" % label
+            )
+        referenced_ids = [
+            action_id
+            for action_id in (client_action_id, server_action_id)
+            if action_id != "none"
+        ]
+        if len(referenced_ids) != len(set(referenced_ids)):
+            raise IntegrityError("%s references the same raw action twice" % label)
+        for action_id in referenced_ids:
+            if not re.fullmatch(r"[1-9][0-9]*", action_id):
+                raise IntegrityError("%s has malformed action reference %r" % (label, action_id))
+            if action_id in referenced_action_ids:
+                raise IntegrityError(
+                    "raw action %s is referenced by multiple terminals" % action_id
+                )
+            referenced_action_ids.add(action_id)
+            source = actions_by_id.get(action_id)
+            if source is None:
+                raise IntegrityError(
+                    "%s references missing raw action %s" % (label, action_id)
+                )
+            if source["logicalAttemptId"] != logical_attempt_id:
+                raise IntegrityError(
+                    "%s action reference has mismatched logicalAttemptId" % label
+                )
+            if source["_sessionIndex"] >= terminal["_sessionIndex"]:
+                raise IntegrityError(
+                    "%s appears before its referenced raw action" % label
+                )
+
+        raw_rows = actions_by_logical.get(logical_attempt_id, [])
+        if {row["actionId"] for row in raw_rows} != set(referenced_ids):
+            raise IntegrityError(
+                "%s does not reference exactly its logical raw action rows" % label
+            )
+        phase_rows = {row["phase"]: row for row in raw_rows}
+        if len(phase_rows) != len(raw_rows):
+            raise IntegrityError("%s has duplicate raw phases" % label)
+        expected_phases = {
+            "MERGED_CLIENT_SERVER": {"CLIENT_PREDICTION", "SERVER_AUTHORITY"},
+            "AUTO_PROXY": {"AUTO_PROXY"},
+            "SERVER_ONLY": {"SERVER_AUTHORITY"},
+            "CLIENT_ONLY": {"CLIENT_PREDICTION"},
+        }[attempt_status]
+        if set(phase_rows) != expected_phases:
+            raise IntegrityError("%s raw phases disagree with attemptStatus" % label)
+        origins = {row["actionOrigin"] for row in raw_rows}
+        expected_origin = PROXY_ORIGIN if attempt_status == "AUTO_PROXY" else PLAYER_ORIGIN
+        if origins != {expected_origin}:
+            raise IntegrityError("%s terminal/raw origin conflict" % label)
+        client = phase_rows.get("CLIENT_PREDICTION")
+        server = (
+            phase_rows.get("SERVER_AUTHORITY")
+            or phase_rows.get("AUTO_PROXY")
+        )
+        if (
+            attempt_status == "MERGED_CLIENT_SERVER"
+            and _schema6_attempt_key(client) != _schema6_attempt_key(server)
+        ):
+            raise IntegrityError(
+                "%s terminal-linked rows disagree on Java PlacementAttemptKey"
+                % label
+            )
+
+        terminal["_canonicalVerdict"] = _validate_canonical_verdict(
+            terminal,
+            "placement_attempt %s" % logical_attempt_id,
+        )
+        if terminal["marker"] != terminal["verdictMarker"]:
+            raise IntegrityError("%s marker disagrees with verdictMarker" % label)
+        _crosscheck_terminal_evidence(terminal, client, server)
+        terminal["_rawActionsCrossChecked"] = True
+
+    if set(actions_by_logical) != set(terminals_by_logical):
+        missing = sorted(set(actions_by_logical) - set(terminals_by_logical))
+        extra = sorted(set(terminals_by_logical) - set(actions_by_logical))
+        raise IntegrityError(
+            "logical action/terminal coverage mismatch; missing=%s extra=%s"
+            % (missing, extra)
+        )
+    if referenced_action_ids != set(actions_by_id):
+        raise IntegrityError("not every schema-6 raw action is referenced by one terminal")
+
+    attempt_numbers = sorted(
+        terminal["_logicalAttemptNumber"] for terminal in terminals
+    )
+    if attempt_numbers != list(range(1, len(attempt_numbers) + 1)):
+        raise IntegrityError(
+            "logicalAttemptId sequence must be contiguous from attempt-1: %s"
+            % attempt_numbers
+        )
+    return sorted(terminals, key=lambda row: row["_logicalAttemptNumber"])
 
 
 def _validate_outlines(session_rows, outline_tsv):
@@ -1148,6 +2479,7 @@ def _authoritative_pos(row):
     row_type = row["type"]
     candidates = {
         "action": ["clickedOwnerPos"],
+        "placement_attempt": ["clickedOwnerPos"],
         "cursor": ["finalHitPos"],
         "rendered_outline": ["renderedOutlinePos"],
         "model_stale_sentinel": ["pos"],
@@ -1164,12 +2496,18 @@ def _mismatch_context(row):
     if row_type == "action":
         action_id = row.get("actionId", "unknown")
         placement_pos = row.get("placementPos")
+        clicked_hit_vec = row.get("clickedHitVec")
         return {
             "clickedOwnerPos": _canonical_int_pos(
                 row.get("clickedOwnerPos"), "action %s clickedOwnerPos" % action_id
             ),
-            "clickedHitVec": _canonical_hit_vec(
-                row.get("clickedHitVec"), "action %s clickedHitVec" % action_id
+            "clickedHitVec": (
+                "none"
+                if not _java_has_evidence(clicked_hit_vec)
+                else _canonical_hit_vec(
+                    clicked_hit_vec,
+                    "action %s clickedHitVec" % action_id,
+                )
             ),
             "clickedFace": _require_string(
                 row, "clickedFace", "action %s" % action_id
@@ -1179,6 +2517,37 @@ def _mismatch_context(row):
                 if placement_pos == "none"
                 else _canonical_int_pos(
                     placement_pos, "action %s placementPos" % action_id
+                )
+            ),
+        }
+    if row_type == "placement_attempt":
+        row_id = row.get("rowId", "unknown")
+        placement_pos = row.get("placementPos")
+        clicked_hit_vec = row.get("clickedHitVec")
+        return {
+            "clickedOwnerPos": _canonical_int_pos(
+                row.get("clickedOwnerPos"),
+                "placement_attempt %s clickedOwnerPos" % row_id,
+            ),
+            "clickedHitVec": (
+                "none"
+                if not _has_evidence(clicked_hit_vec)
+                else _canonical_hit_vec(
+                    clicked_hit_vec,
+                    "placement_attempt %s clickedHitVec" % row_id,
+                )
+            ),
+            "clickedFace": _require_string(
+                row,
+                "clickedFace",
+                "placement_attempt %s" % row_id,
+            ).lower(),
+            "placementPos": (
+                "none"
+                if placement_pos == "none"
+                else _canonical_int_pos(
+                    placement_pos,
+                    "placement_attempt %s placementPos" % row_id,
                 )
             ),
         }
@@ -1210,14 +2579,20 @@ def _mismatch_context(row):
     return {}
 
 
-def _validate_mismatches(session_rows, mismatch_rows):
+def _mismatch_join_id(row):
+    if row["type"] == "placement_attempt":
+        return row["rowId"]
+    return str(row["_globalId"])
+
+
+def _validate_mismatches(session_rows, mismatch_rows, schema):
     index = {}
     expected = {}
     for row in session_rows:
         row_type = row["type"]
         if row_type not in MARKER_FIELD_BY_TYPE:
             continue
-        key = (row_type, str(row["_globalId"]))
+        key = (row_type, _mismatch_join_id(row))
         if key in index:
             raise IntegrityError("duplicate mismatch join key: %s/%s" % key)
         index[key] = row
@@ -1240,6 +2615,12 @@ def _validate_mismatches(session_rows, mismatch_rows):
         expected_held = source.get("heldItem", source.get("cursorHeldItem", "none"))
         if mirror["heldItem"] != expected_held:
             raise IntegrityError("mismatch heldItem disagrees with session row %s/%s" % key)
+        if schema == SCHEMA6_VERSION:
+            expected_failures = source.get("failureClasses", "none")
+            if mirror.get("failureClasses") != expected_failures:
+                raise IntegrityError(
+                    "mismatch failureClasses disagrees with session row %s/%s" % key
+                )
         resolved_pos, source_name = _authoritative_pos(source)
         if mirror["pos"] != "none":
             tsv_pos = _canonical_int_pos(mirror["pos"], "mismatches.tsv pos")
@@ -1258,7 +2639,11 @@ def _validate_mismatches(session_rows, mismatch_rows):
             pair_pos = _canonical_int_pos(source["pairPos"], "session pairPos")
         resolved.append({
             "type": mirror["type"],
-            "rowOrActionId": int(mirror["rowOrActionId"]),
+            "rowOrActionId": (
+                int(mirror["rowOrActionId"])
+                if re.fullmatch(r"[1-9][0-9]*", mirror["rowOrActionId"])
+                else mirror["rowOrActionId"]
+            ),
             "marker": mirror["marker"],
             "heldItem": mirror["heldItem"],
             "tsvPos": mirror["pos"],
@@ -1275,7 +2660,14 @@ def _validate_mismatches(session_rows, mismatch_rows):
         raise IntegrityError("mismatch mirror does not equal red session set; missing=%s extra=%s" % (
             missing, extra
         ))
-    return sorted(resolved, key=lambda row: (row["rowOrActionId"], row["type"]))
+    return sorted(
+        resolved,
+        key=lambda row: (
+            0 if isinstance(row["rowOrActionId"], int) else 1,
+            str(row["rowOrActionId"]),
+            row["type"],
+        ),
+    )
 
 
 def _action_signature(row):
@@ -1291,6 +2683,20 @@ def _action_signature(row):
 
 
 def _signature_dict(signature):
+    if len(signature) == 8:
+        return dict(zip(
+            [
+                "actionType",
+                "heldItem",
+                "clickedOwnerPos",
+                "clickedFace",
+                "placementPos",
+                "rigCaseId",
+                "playerId",
+                "dimensionId",
+            ],
+            signature,
+        ))
     return dict(zip(
         ["player", "actionType", "heldItem", "clickedOwnerPos", "clickedFace", "clickedHitVec", "placementPos"],
         signature,
@@ -1387,7 +2793,7 @@ def _optional_finite_decimal(value):
     return number if number.is_finite() else None
 
 
-def _adapter_action_markers(row):
+def _adapter_action_markers(row, schema6=False):
     producer_tokens = set(_marker_tokens(row.get("marker", "none")))
     markers = []
     expected = _optional_finite_decimal(row.get("expectedAfterDy"))
@@ -1401,17 +2807,21 @@ def _adapter_action_markers(row):
         markers.append("ADAPTER_EXPECTED_DY_MISMATCH")
     if (
         row.get("actualResult", "").startswith("Fail[")
+        and not (
+            schema6
+            and row.get("finalVerdict") == "EXPECTED_REFUSAL"
+        )
         and "LIVE_PLACEMENT_UNCLASSIFIED_FAILURE" not in producer_tokens
     ):
         markers.append("ADAPTER_UNCLASSIFIED_PLACEMENT_FAILURE")
     return markers
 
 
-def _action_audit(actions):
+def _action_audit(actions, schema6=False):
     marker_counts = Counter()
     red_rows = []
     for row in actions:
-        markers = _adapter_action_markers(row)
+        markers = _adapter_action_markers(row, schema6=schema6)
         marker_counts.update(markers)
         if not markers:
             continue
@@ -1440,7 +2850,7 @@ def _action_audit(actions):
     }
 
 
-def _pair_record(run_id, client, server, signature):
+def _pair_record(run_id, client, server, signature, schema6=False):
     delta = server["_recordedAtParsed"] - client["_recordedAtParsed"]
     latency_micros = int(delta.total_seconds() * 1_000_000)
     client_tokens = _marker_tokens(client.get("marker", "none"))
@@ -1448,20 +2858,44 @@ def _pair_record(run_id, client, server, signature):
     red_markers = sorted(set(
         token for token in client_tokens + server_tokens if _is_red_marker(token)
     ))
-    red_markers.extend(_adapter_action_markers(client))
-    red_markers.extend(_adapter_action_markers(server))
-    dy_match = _decimal_equal(client.get("afterDy", ""), server.get("afterDy", ""))
+    red_markers.extend(_adapter_action_markers(client, schema6=schema6))
+    red_markers.extend(_adapter_action_markers(server, schema6=schema6))
+    dy_match = (
+        _java_same_evidence(client.get("afterDy", ""), server.get("afterDy", ""))
+        if schema6
+        else _decimal_equal(client.get("afterDy", ""), server.get("afterDy", ""))
+    )
     if not dy_match:
         red_markers.append("ADAPTER_SIDE_DY_SPLIT")
-    client_success = client.get("actualResult", "").startswith("Success[")
-    server_success = server.get("actualResult", "").startswith("Success[")
+    client_success = (
+        _java_successful_result(client.get("actualResult", ""))
+        if schema6
+        else client.get("actualResult", "").startswith("Success[")
+    )
+    server_success = (
+        _java_successful_result(server.get("actualResult", ""))
+        if schema6
+        else server.get("actualResult", "").startswith("Success[")
+    )
     if client_success != server_success:
         red_markers.append("ADAPTER_SIDE_RESULT_SPLIT")
-    elif not client_success:
+    elif (
+        not client_success
+        and not (
+            schema6
+            and client.get("finalVerdict") == "EXPECTED_REFUSAL"
+            and server.get("finalVerdict") == "EXPECTED_REFUSAL"
+        )
+    ):
         red_markers.append("ADAPTER_PLACEMENT_FAILED")
     elif client.get("actualResult") != server.get("actualResult"):
         red_markers.append("ADAPTER_SIDE_RESULT_DETAIL_SPLIT")
-    if client.get("afterState") != server.get("afterState"):
+    state_match = (
+        _java_same_evidence(client.get("afterState"), server.get("afterState"))
+        if schema6
+        else client.get("afterState") == server.get("afterState")
+    )
+    if not state_match:
         red_markers.append("ADAPTER_SIDE_STATE_SPLIT")
     client_c3 = client.get("_c3")
     server_c3 = server.get("_c3")
@@ -1474,7 +2908,19 @@ def _pair_record(run_id, client, server, signature):
         c3_markers.update(server_c3["markers"])
         c3_field_differences = {
             field: {"client": client.get(field), "server": server.get(field)}
-            for field in C3_PAIR_FIELDS if client.get(field) != server.get(field)
+            for field in C3_PAIR_FIELDS
+            if (
+                (
+                    _java_has_evidence(client.get(field))
+                    and _java_has_evidence(server.get(field))
+                    and not _java_same_evidence(
+                        client.get(field),
+                        server.get(field),
+                    )
+                )
+                if schema6
+                else client.get(field) != server.get(field)
+            )
         }
         if c3_field_differences:
             c3_markers.add("ADAPTER_C3_SIDE_PAIR_FIELD_SPLIT")
@@ -1626,7 +3072,80 @@ def _pair_player_actions(actions, run_id):
     }
 
 
-def _proxy_report(actions):
+def _player_actions_from_logical_attempts(actions, terminals, run_id):
+    actions_by_id = {row["actionId"]: row for row in actions}
+    pairs = []
+    unpaired = []
+    for terminal in terminals:
+        if terminal["playerProof"] != "PRESENT":
+            continue
+        if terminal["attemptStatus"] == "MERGED_CLIENT_SERVER":
+            client = actions_by_id[terminal["clientActionId"]]
+            server = actions_by_id[terminal["serverActionId"]]
+            attempt_key = _schema6_attempt_key(client)
+            if attempt_key != _schema6_attempt_key(server):
+                raise IntegrityError(
+                    "terminal-linked client/server rows disagree on Java PlacementAttemptKey for %s"
+                    % terminal["logicalAttemptId"]
+                )
+            if (
+                client["actionType"] == "place_block"
+                and server["actionType"] == "place_block"
+            ):
+                pair = _pair_record(
+                    run_id,
+                    client,
+                    server,
+                    attempt_key,
+                    schema6=True,
+                )
+                pair.update({
+                    "logicalAttemptId": terminal["logicalAttemptId"],
+                    "terminalRowId": terminal["rowId"],
+                    "terminalFinalVerdict": terminal["finalVerdict"],
+                    "terminalPlayerProof": terminal["playerProof"],
+                    "terminalRawActionsCrossChecked": terminal[
+                        "_rawActionsCrossChecked"
+                    ],
+                })
+                if terminal["finalVerdict"] in {"RED", "UNCLASSIFIED_FAILURE"}:
+                    pair["redMarkers"] = sorted(set(
+                        pair["redMarkers"] + [terminal["verdictMarker"]]
+                    ))
+                pair["verdict"] = (
+                    "RED"
+                    if pair["redMarkers"]
+                    else "EXPLICIT_GREEN"
+                    if terminal["finalVerdict"] == "GREEN"
+                    else "OBSERVED_UNCLASSIFIED"
+                )
+                pairs.append(pair)
+                continue
+        for field in ("clientActionId", "serverActionId"):
+            action_id = terminal[field]
+            if action_id == "none":
+                continue
+            row = actions_by_id[action_id]
+            unpaired.append({
+                "actionId": int(action_id),
+                "side": row["side"],
+                "reason": terminal["attemptStatus"],
+                "logicalAttemptId": terminal["logicalAttemptId"],
+            })
+    pairs.sort(key=lambda pair: (pair["clientActionId"], pair["serverActionId"]))
+    unpaired.sort(key=lambda row: row["actionId"])
+    return {
+        "rowCount": sum(
+            row["actionOrigin"] == PLAYER_ORIGIN for row in actions
+        ),
+        "pairCount": len(pairs),
+        "pairs": pairs,
+        "unpairedRows": unpaired,
+        "ambiguousRows": [],
+    }
+
+
+def _proxy_report(actions, schema6=False):
     proxy = [row for row in actions if row["actionOrigin"] == PROXY_ORIGIN]
     marker_counts = Counter()
     red_rows = []
@@ -1634,7 +3153,7 @@ def _proxy_report(actions):
     adapter_red_row_count = 0
     for row in proxy:
         producer_tokens = _marker_tokens(row.get("marker", "none"))
-        adapter_tokens = _adapter_action_markers(row)
+        adapter_tokens = _adapter_action_markers(row, schema6=schema6)
         marker_counts.update(producer_tokens or ["none"])
         marker_counts.update(adapter_tokens)
         producer_red_tokens = [token for token in producer_tokens if _is_red_marker(token)]
@@ -1663,7 +3182,7 @@ def _proxy_report(actions):
         }
         for row in proxy
         if not any(_is_red_marker(token) for token in _marker_tokens(row.get("marker", "none")))
-        and not _adapter_action_markers(row)
+        and not _adapter_action_markers(row, schema6=schema6)
     ][:12]
     return {
         "rowCount": len(proxy),
@@ -1737,6 +3256,125 @@ def _verdict(player, proxy, mismatches, action_audit):
     }
 
 
+def _verdict_schema6(
+    player,
+    proxy,
+    mismatches,
+    action_audit,
+    actions,
+    terminals,
+):
+    terminal_red = any(
+        row["finalVerdict"] in {"RED", "UNCLASSIFIED_FAILURE"}
+        for row in terminals
+    )
+    raw_canonical_red = any(
+        row["finalVerdict"] in {"RED", "UNCLASSIFIED_FAILURE"}
+        for row in actions
+    )
+    pair_red = any(pair["verdict"] == "RED" for pair in player["pairs"])
+    pair_adapter_red = any(
+        marker.startswith("ADAPTER_")
+        for pair in player["pairs"] for marker in pair["redMarkers"]
+    )
+    pair_producer_red = any(
+        not marker.startswith("ADAPTER_")
+        for pair in player["pairs"] for marker in pair["redMarkers"]
+    )
+    has_producer_red = bool(
+        terminal_red
+        or raw_canonical_red
+        or mismatches
+        or proxy["producerRedRowCount"]
+        or pair_producer_red
+    )
+    has_adapter_red = bool(
+        proxy["adapterRedRowCount"]
+        or action_audit["redRows"]
+        or pair_adapter_red
+    )
+    has_red = has_producer_red or has_adapter_red
+
+    player_terminals = [
+        row for row in terminals if row["playerProof"] == "PRESENT"
+    ]
+    explicit_green_terminals = [
+        row
+        for row in player_terminals
+        if (
+            row["attemptStatus"] == "MERGED_CLIENT_SERVER"
+            and row["finalVerdict"] == "GREEN"
+            and row["_rawActionsCrossChecked"]
+            and all(row[field] == "PASS" for field in COMPONENT_VERDICT_FIELDS)
+        )
+    ]
+    incomplete_player = any(
+        row["attemptStatus"] in {"SERVER_ONLY", "CLIENT_ONLY"}
+        for row in player_terminals
+    )
+    player_red = any(
+        row["finalVerdict"] in {"RED", "UNCLASSIFIED_FAILURE"}
+        for row in player_terminals
+    ) or any(
+        row["actionOrigin"] == PLAYER_ORIGIN
+        for row in action_audit["redRows"]
+    ) or pair_red
+
+    if player_red:
+        player_proof = "RED"
+    elif incomplete_player:
+        player_proof = "INCOMPLETE"
+    elif (
+        player_terminals
+        and len(explicit_green_terminals) == len(player_terminals)
+    ):
+        player_proof = "EXPLICIT_GREEN"
+    elif player_terminals:
+        player_proof = "OBSERVED_UNCLASSIFIED"
+    else:
+        player_proof = "ABSENT"
+
+    reasons = []
+    if terminal_red:
+        reasons.append("schema-6 terminal attempt has a red final verdict")
+    if raw_canonical_red:
+        reasons.append("schema-6 raw action has a red final verdict")
+    if mismatches:
+        reasons.append("producer red mismatch rows present")
+    if proxy["redRows"]:
+        reasons.append("proxy red action rows present")
+    if action_audit["redRows"]:
+        reasons.append("adapter-derived action red rows present")
+    if pair_red:
+        reasons.append("player pair has producer or adapter-derived red")
+
+    if has_red:
+        status = "RED"
+    elif incomplete_player:
+        status = "PAIRING_INCOMPLETE"
+        reasons.append("player logical attempt is client-only or server-only")
+    elif player_proof == "EXPLICIT_GREEN":
+        status = "EXPLICIT_GREEN"
+    elif player_terminals:
+        status = "OBSERVED_UNCLASSIFIED"
+        reasons.append(
+            "player terminal lacks a merged all-PASS GREEN evidence surface"
+        )
+    else:
+        status = "NO_PLAYER_EVIDENCE"
+        reasons.append(
+            "no schema-6 terminal carries PRESENT player proof"
+        )
+    return {
+        "status": status,
+        "hasRed": has_red,
+        "hasProducerRed": has_producer_red,
+        "hasAdapterRed": has_adapter_red,
+        "playerProof": player_proof,
+        "reasons": reasons,
+    }
+
+
 def analyze(input_path, run_id=None):
     discovery = discover(input_path, run_id=run_id)
     recorder_dir = Path(discovery["recorderDir"])
@@ -1759,12 +3397,14 @@ def analyze(input_path, run_id=None):
     if manifest != discovered_manifest:
         raise IntegrityError("manifest.json changed during discovery/analysis")
     _validate_manifest(manifest)
+    schema = manifest["schemaVersion"]
     summary, legacy_missing_summary_keys = _parse_summary(
         recorder_dir / "summary.md",
+        schema,
         manifest.get("recorderVersion"),
     )
     if session_present:
-        session_rows = _parse_session(session_path)
+        session_rows = _parse_session(session_path, schema)
         for row in session_rows:
             _validate_session_row_contract(row)
         session_state = "present"
@@ -1779,13 +3419,41 @@ def analyze(input_path, run_id=None):
             )
         session_rows = []
         session_state = "absent_valid_zero_row_bootstrap"
-    action_tsv, action_header = _parse_actions_tsv(recorder_dir / "actions.tsv")
-    mismatch_tsv = _parse_tsv(recorder_dir / "mismatches.tsv", MISMATCH_HEADER)
+    action_tsv, action_header = _parse_actions_tsv(
+        recorder_dir / "actions.tsv",
+        schema,
+    )
+    mismatch_header = (
+        SCHEMA6_MISMATCH_HEADER
+        if schema == SCHEMA6_VERSION
+        else MISMATCH_HEADER
+    )
+    mismatch_tsv = _parse_tsv(
+        recorder_dir / "mismatches.tsv",
+        mismatch_header,
+    )
     outline_tsv = _parse_tsv(recorder_dir / "rendered-outlines.tsv", OUTLINE_HEADER)
 
-    actions = _validate_actions(session_rows, action_tsv, summary, action_header)
-    derived = _derived_summary(session_rows)
-    for key in SUMMARY_KEYS:
+    actions = _validate_actions(
+        session_rows,
+        action_tsv,
+        summary,
+        action_header,
+        schema,
+        manifest["runId"],
+    )
+    logical_attempts = (
+        _validate_logical_attempts(session_rows, actions, manifest)
+        if schema == SCHEMA6_VERSION
+        else []
+    )
+    derived = _derived_summary(session_rows, schema)
+    summary_keys = (
+        SCHEMA6_SUMMARY_KEYS
+        if schema == SCHEMA6_VERSION
+        else SUMMARY_KEYS
+    )
+    for key in summary_keys:
         if key in ("sentinelArmedTotal", "sentinelSamplePasses"):
             continue
         if summary[key] != derived[key]:
@@ -1793,7 +3461,11 @@ def analyze(input_path, run_id=None):
                 key, summary[key], derived[key]
             ))
     _validate_outlines(session_rows, outline_tsv)
-    mismatch_rows = _validate_mismatches(session_rows, mismatch_tsv)
+    mismatch_rows = _validate_mismatches(
+        session_rows,
+        mismatch_tsv,
+        schema,
+    )
 
     if session_path.is_file() != session_present:
         raise IntegrityError("recorder artifacts changed during analysis: session.jsonl presence")
@@ -1803,10 +3475,30 @@ def analyze(input_path, run_id=None):
     if artifacts_after != artifacts:
         raise IntegrityError("recorder artifacts changed during analysis")
 
-    player = _pair_player_actions(actions, manifest["runId"])
-    action_audit = _action_audit(actions)
-    proxy = _proxy_report(actions)
-    verdict = _verdict(player, proxy, mismatch_rows, action_audit)
+    player = (
+        _player_actions_from_logical_attempts(
+            actions,
+            logical_attempts,
+            manifest["runId"],
+        )
+        if schema == SCHEMA6_VERSION
+        else _pair_player_actions(actions, manifest["runId"])
+    )
+    schema6 = schema == SCHEMA6_VERSION
+    action_audit = _action_audit(actions, schema6=schema6)
+    proxy = _proxy_report(actions, schema6=schema6)
+    verdict = (
+        _verdict_schema6(
+            player,
+            proxy,
+            mismatch_rows,
+            action_audit,
+            actions,
+            logical_attempts,
+        )
+        if schema == SCHEMA6_VERSION
+        else _verdict(player, proxy, mismatch_rows, action_audit)
+    )
     adapter_counters = {
         marker: sum(
             marker in pair["redMarkers"] for pair in player["pairs"]
@@ -1819,7 +3511,7 @@ def analyze(input_path, run_id=None):
         for pair in player["pairs"] if pair["c3PairFields"]["qualifying"]
     )
     c3_capable = (
-        action_header == C3_ACTIONS_HEADER
+        action_header in (C3_ACTIONS_HEADER, SCHEMA6_ACTIONS_HEADER)
         and manifest.get("recorderVersion") in C3_CAPABLE_RECORDER_VERSIONS
     )
     return {
@@ -1851,9 +3543,33 @@ def analyze(input_path, run_id=None):
             "runCompletion": "unknown_no_session_end_event",
         },
         "playerAuthored": player,
+        "logicalAttempts": {
+            "capable": schema == SCHEMA6_VERSION,
+            "rowCount": len(logical_attempts),
+            "playerProofRowCount": sum(
+                row["playerProof"] == "PRESENT"
+                for row in logical_attempts
+            ),
+            "rows": [
+                dict(
+                    _public_row(row),
+                    rawActionsCrossChecked=row.get(
+                        "_rawActionsCrossChecked",
+                        False,
+                    ),
+                )
+                for row in logical_attempts
+            ],
+        },
         "c3PairFields": {
             "capable": c3_capable,
-            "actionHeader": "extended" if action_header == C3_ACTIONS_HEADER else "legacy",
+            "actionHeader": (
+                "schema6"
+                if action_header == SCHEMA6_ACTIONS_HEADER
+                else "extended"
+                if action_header == C3_ACTIONS_HEADER
+                else "legacy"
+            ),
             "recorderVersion": manifest.get("recorderVersion"),
             "qualifyingFamilies": {
                 "bed": qualifying_families.get("bed", 0),
@@ -1876,10 +3592,17 @@ def analyze(input_path, run_id=None):
             "reason": "no validated category/topology/hanging case manifest",
         },
         "evidenceBoundary": (
-            "Only uniquely paired schema-3 PLAYER_AUTHORED placement rows are player evidence; "
-            "AUTO_USEON_PROXY is diagnostic only. Adapter action reds require a finite numeric "
-            "expectedAfterDy disagreement or an untyped Fail[] result; unknown expectations stay "
-            "unclassified, and no category completeness is inferred."
+            (
+                "Schema-6 terminal placement attempts are authoritative for player proof and final "
+                "verdicts; raw client/server rows are detailed only after exact terminal-reference "
+                "cross-checking. AUTO_PROXY with playerProof=ABSENT never creates player proof."
+                if schema == SCHEMA6_VERSION
+                else
+                "Only uniquely paired schema-3 PLAYER_AUTHORED placement rows are player evidence; "
+                "AUTO_USEON_PROXY is diagnostic only. Adapter action reds require a finite numeric "
+                "expectedAfterDy disagreement or an untyped Fail[] result; unknown expectations stay "
+                "unclassified, and no category completeness is inferred."
+            )
         ),
     }
 
@@ -2029,7 +3752,7 @@ def render_markdown(triage):
             "|---:|---|---|---|---|---|",
         ])
         for row in triage["mismatches"][:50]:
-            lines.append("| %d | %s | %s | %s | %s | %s |" % (
+            lines.append("| %s | %s | %s | %s | %s | %s |" % (
                 row["rowOrActionId"], row["type"], row["marker"], row["resolvedPos"],
                 row["resolvedPairPos"] or "none",
                 _markdown_cell(json.dumps(row["context"], sort_keys=True)),
@@ -2106,7 +3829,7 @@ def _reject_evidence_output_target(triage, output_path):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", help="recorder directory, evidence root, or recorder parent")
-    parser.add_argument("--run-id", help="select one schema-3 run id")
+    parser.add_argument("--run-id", help="select one supported recorder run id")
     parser.add_argument("--require-player-pairs", action="store_true")
     parser.add_argument(
         "--require-c3-pair-fields",
