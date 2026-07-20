@@ -1230,6 +1230,67 @@ public final class LandingRuleLawTest {
         h.succeed();
     }
 
+    /** TEST 21: ordinary use validates against an interactive target's translated owner cell. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void deepUseServerValidationAcceptsLoweredInteractiveTarget(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        double ownerDy = -1.5d;
+        Vec3 packetLikeHit = new Vec3(
+                owner.getX() + 0.5d,
+                owner.getY() + ownerDy + 0.5d,
+                owner.getZ() + 0.5d);
+
+        double shiftedDy = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.CHEST.defaultBlockState(),
+                ownerDy,
+                Direction.UP,
+                packetLikeHit,
+                null,
+                true);
+
+        if (Double.doubleToRawLongBits(shiftedDy) != Double.doubleToRawLongBits(ownerDy)) {
+            throw h.assertionException(owner, "TEST 21: lowered interactive target use must shift the server "
+                    + "validation center by exact dy=-1.5; actual=" + shiftedDy + " expected=" + ownerDy);
+        }
+
+        double nonEmptyNonBlockAction = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.CHEST.defaultBlockState(),
+                ownerDy,
+                Direction.UP,
+                packetLikeHit,
+                null,
+                false);
+        Vec3 outsideTranslatedCell = new Vec3(
+                owner.getX() + 1.25d,
+                owner.getY() + ownerDy + 0.5d,
+                owner.getZ() + 0.5d);
+        double outsideOrdinaryUse = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.CHEST.defaultBlockState(),
+                ownerDy,
+                Direction.UP,
+                outsideTranslatedCell,
+                null,
+                true);
+        double flatOrdinaryUse = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.CHEST.defaultBlockState(),
+                0.0d,
+                Direction.UP,
+                new Vec3(owner.getX() + 0.5d, owner.getY() + 0.5d, owner.getZ() + 0.5d),
+                null,
+                true);
+        if (!Double.isNaN(nonEmptyNonBlockAction)
+                || !Double.isNaN(outsideOrdinaryUse)
+                || !Double.isNaN(flatOrdinaryUse)) {
+            throw h.assertionException(owner, "TEST 21: explicit ordinary-use boundary failed: nonEmptyNonBlock="
+                    + nonEmptyNonBlockAction + " outside=" + outsideOrdinaryUse + " flat=" + flatOrdinaryUse);
+        }
+        h.succeed();
+    }
+
     /** Negative controls for the shared server policy: no global tolerance or non-UP C5 widening. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void deepServerValidationRejectsUnsupportedAndOutOfEnvelopeHits(GameTestHelper h) {
