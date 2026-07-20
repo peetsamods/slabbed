@@ -85,9 +85,74 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static final String SEAM_OWNER_KEEP_INITIAL = "KEEP_INITIAL";
     private static final String SEAM_OWNER_NO_RESCUE = "NO_RESCUE";
 
+    private void slabbed$recordOffsetRaycastVisualEvidence(float tickProgress) {
+        if (!LiveCursorIntentRecorder.enabled()) {
+            return;
+        }
+
+        Minecraft minecraft = this.slabbed$self();
+        ClientLevel world = minecraft.level;
+        Entity cam = minecraft.getCameraEntity();
+        if (world == null || cam == null || minecraft.player == null) {
+            return;
+        }
+
+        HitResult authoritativeTarget = minecraft.hitResult;
+        Vec3 eye = cam.getEyePosition(tickProgress);
+        Vec3 look = cam.getViewVector(tickProgress);
+        Vec3 end = eye.add(look.scale(6.0d));
+        slabbed$recordLiveCursorIntent(
+                tickProgress,
+                world,
+                cam,
+                eye,
+                look,
+                end,
+                minecraft.player.getMainHandItem(),
+                authoritativeTarget,
+                authoritativeTarget,
+                "offset-raycast-authoritative",
+                false);
+
+        if (!(authoritativeTarget instanceof BlockHitResult blockTarget)) {
+            return;
+        }
+        BlockPos targetPos = blockTarget.getBlockPos();
+        BlockState targetState = world.getBlockState(targetPos);
+        VoxelShape outlineShape = targetState.getShape(world, targetPos, CollisionContext.of(cam));
+        if (outlineShape == null || outlineShape.isEmpty()) {
+            return;
+        }
+
+        AABB localBounds = outlineShape.bounds();
+        AABB worldBounds = localBounds.move(targetPos.getX(), targetPos.getY(), targetPos.getZ());
+        AABB cameraRelativeBounds = worldBounds.move(-cam.getX(), -cam.getY(), -cam.getZ());
+        LinkedHashMap<String, String> renderedOutline = new LinkedHashMap<>();
+        renderedOutline.put("renderedOutlinePos",
+                targetPos.getX() + "," + targetPos.getY() + "," + targetPos.getZ());
+        renderedOutline.put("renderedOutlineState", targetState.toString());
+        renderedOutline.put("renderedOutlineBounds", slabbed$formatRecorderBounds(localBounds));
+        renderedOutline.put("renderedOutlineWorldBounds", slabbed$formatRecorderBounds(worldBounds));
+        renderedOutline.put("renderedOutlineCameraRelativeBounds",
+                slabbed$formatRecorderBounds(cameraRelativeBounds));
+        renderedOutline.put("renderedOutlineHitVec", slabbed$formatVec(blockTarget.getLocation()));
+        LiveCursorIntentRecorder.recordRenderedOutline(renderedOutline);
+    }
+
+    private static String slabbed$formatRecorderBounds(AABB box) {
+        return "min=("
+                + slabbed$formatDouble(box.minX) + ','
+                + slabbed$formatDouble(box.minY) + ','
+                + slabbed$formatDouble(box.minZ) + "),max=("
+                + slabbed$formatDouble(box.maxX) + ','
+                + slabbed$formatDouble(box.maxY) + ','
+                + slabbed$formatDouble(box.maxZ) + ')';
+    }
+
     @Inject(method = "pick", at = @At("TAIL"))
     private void slabbed$retargetLoweredBlockEntity(float tickProgress, CallbackInfo ci) {
         if (com.slabbed.util.SlabbedOffsetRaycast.ENABLED) {
+            slabbed$recordOffsetRaycastVisualEvidence(tickProgress);
             // The offset-aware nearest-hit raycast (LocalPlayerPickOffsetRaycastMixin) is
             // authoritative: Minecraft.hitResult is already the honest visible-owner hit.
             // Skip the legacy post-hoc retarget lanes entirely so they cannot re-mangle it.
