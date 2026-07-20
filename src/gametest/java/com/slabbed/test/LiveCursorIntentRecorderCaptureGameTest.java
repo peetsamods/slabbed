@@ -47,6 +47,182 @@ import java.util.concurrent.CountDownLatch;
 public final class LiveCursorIntentRecorderCaptureGameTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void test23_packet_scope_sequence_correlation_and_boundaries(GameTestHelper helper) {
+        Path dir = Path.of("build", "test23-packet-scope-correlation", "run-" + System.nanoTime());
+        System.setProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY, "true");
+        System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, dir.toString());
+        try {
+            LiveCursorIntentRecorder.resetForTests();
+            String playerId = "00000000-0000-0000-0000-000000000023";
+            String dimensionId = "minecraft:overworld";
+
+            LinkedHashMap<String, String> clientProducer =
+                    test23UseAction("client", "23,64,23", "target_state_changed");
+            try (LiveCursorIntentRecorder.UsePacketScope scope =
+                         LiveCursorIntentRecorder.openUsePacketScope(
+                                 "client", 2301, playerId, dimensionId)) {
+                LiveCursorIntentRecorder.recordAction(clientProducer);
+                if (!scope.claimed()) {
+                    throw helper.assertionException(
+                            "existing client producer did not claim packet scope");
+                }
+            }
+            try {
+                Thread.sleep(1_100L);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw helper.assertionException(
+                        "interrupted while proving sequence authority beyond the legacy time window");
+            }
+            LinkedHashMap<String, String> serverProducer =
+                    test23UseAction("server", "23,64,23", "target_state_changed");
+            try (LiveCursorIntentRecorder.UsePacketScope scope =
+                         LiveCursorIntentRecorder.openUsePacketScope(
+                                 "server", 2301, playerId, dimensionId)) {
+                LiveCursorIntentRecorder.recordAction(serverProducer);
+                if (!scope.claimed()) {
+                    throw helper.assertionException(
+                            "existing server producer did not claim packet scope");
+                }
+            }
+
+            try (LiveCursorIntentRecorder.UsePacketScope scope =
+                         LiveCursorIntentRecorder.openUsePacketScope(
+                                 "client", 2302, playerId, dimensionId)) {
+                LiveCursorIntentRecorder.recordAction(
+                        test23UseAction("client", "24,64,23", "client_only"));
+            }
+            try (LiveCursorIntentRecorder.UsePacketScope scope =
+                         LiveCursorIntentRecorder.openUsePacketScope(
+                                 "server", 2303, playerId, dimensionId)) {
+                LiveCursorIntentRecorder.recordAction(
+                        test23UseAction("server", "25,64,23", "server_only"));
+            }
+
+            try (LiveCursorIntentRecorder.UsePacketScope scope =
+                         LiveCursorIntentRecorder.openUsePacketScope(
+                                 "client", 2304, playerId, dimensionId)) {
+                LiveCursorIntentRecorder.withActionOrigin(
+                        LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+                        () -> LiveCursorIntentRecorder.recordAction(
+                                test23UseAction("server", "26,64,23", "proxy")));
+                if (scope.claimed()) {
+                    throw helper.assertionException(
+                            "AUTO_USEON_PROXY row claimed a player packet scope");
+                }
+                LiveCursorIntentRecorder.recordAction(
+                        test23UseAction("client", "26,64,23", "generic_fallback"));
+                if (!scope.claimed()) {
+                    throw helper.assertionException(
+                            "player generic fallback did not claim packet scope");
+                }
+            }
+
+            LiveCursorIntentRecorder.flushSummaryForTests();
+            ArrayList<JsonObject> rows = new ArrayList<>();
+            for (String line : read(helper, dir.resolve("session.jsonl")).split("\\R")) {
+                if (!line.isBlank()) {
+                    rows.add(parseJsonObject(helper, line));
+                }
+            }
+
+            ArrayList<JsonObject> actions = new ArrayList<>();
+            ArrayList<JsonObject> attempts = new ArrayList<>();
+            for (JsonObject row : rows) {
+                if (exactJsonString(row, "type", "action")) {
+                    actions.add(row);
+                } else if (exactJsonString(row, "type", "placement_attempt")) {
+                    attempts.add(row);
+                }
+            }
+            long sequence2301Rows = actions.stream()
+                    .filter(row -> exactJsonString(row, "packetSequence", "2301"))
+                    .count();
+            String mergedId = actions.stream()
+                    .filter(row -> exactJsonString(row, "packetSequence", "2301"))
+                    .map(row -> jsonString(row, "logicalAttemptId"))
+                    .findFirst()
+                    .orElse(null);
+            long mergedRawRows = actions.stream()
+                    .filter(row -> mergedId != null
+                            && exactJsonString(row, "logicalAttemptId", mergedId))
+                    .count();
+            long mergedTerminalRows = attempts.stream()
+                    .filter(row -> mergedId != null
+                            && exactJsonString(row, "logicalAttemptId", mergedId))
+                    .filter(row -> exactJsonString(row, "attemptStatus", "MERGED_CLIENT_SERVER"))
+                    .filter(row -> exactJsonString(row, "actionCount", "2"))
+                    .count();
+            JsonObject mergedTerminal = attempts.stream()
+                    .filter(row -> mergedId != null
+                            && exactJsonString(row, "logicalAttemptId", mergedId))
+                    .findFirst()
+                    .orElse(null);
+            String clientOnlyId = actions.stream()
+                    .filter(row -> exactJsonString(row, "packetSequence", "2302"))
+                    .map(row -> jsonString(row, "logicalAttemptId"))
+                    .findFirst()
+                    .orElse(null);
+            long clientOnlyRows = attempts.stream()
+                    .filter(row -> clientOnlyId != null
+                            && exactJsonString(row, "logicalAttemptId", clientOnlyId))
+                    .filter(row -> exactJsonString(row, "attemptStatus", "CLIENT_ONLY"))
+                    .count();
+            String serverOnlyId = actions.stream()
+                    .filter(row -> exactJsonString(row, "packetSequence", "2303"))
+                    .map(row -> jsonString(row, "logicalAttemptId"))
+                    .findFirst()
+                    .orElse(null);
+            long serverOnlyRows = attempts.stream()
+                    .filter(row -> serverOnlyId != null
+                            && exactJsonString(row, "logicalAttemptId", serverOnlyId))
+                    .filter(row -> exactJsonString(row, "attemptStatus", "SERVER_ONLY"))
+                    .count();
+            long proxyRows = actions.stream()
+                    .filter(row -> exactJsonString(row, "actionOrigin", "AUTO_USEON_PROXY"))
+                    .filter(row -> !row.has("packetSequence"))
+                    .count();
+            long fallbackRows = actions.stream()
+                    .filter(row -> exactJsonString(row, "packetSequence", "2304"))
+                    .filter(row -> exactJsonString(row, "actionOrigin", "PLAYER_AUTHORED"))
+                    .count();
+            if (actions.size() != 6
+                    || sequence2301Rows != 2
+                    || mergedRawRows != 2
+                    || mergedTerminalRows != 1
+                    || clientOnlyRows != 1
+                    || serverOnlyRows != 1
+                    || proxyRows != 1
+                    || fallbackRows != 1
+                    || mergedTerminal == null
+                    || !exactJsonString(
+                            mergedTerminal, "clickedHitVec", "23.500000,64.500000,23.500000")
+                    || !exactJsonString(
+                            mergedTerminal,
+                            "beforeState",
+                            "Block{minecraft:oak_fence_gate}[open=false]")
+                    || !exactJsonString(mergedTerminal, "beforeDy", "-1.500000")
+                    || !exactJsonString(mergedTerminal, "beforeStoredDy", "-1.500000")
+                    || !exactJsonString(
+                            mergedTerminal,
+                            "validationDecision",
+                            "unknown_at_handler_boundary")
+                    || !exactJsonString(mergedTerminal, "handlerDecision", "returned")
+                    || !exactJsonString(
+                            mergedTerminal, "functionalOutcome", "target_state_changed")) {
+                throw helper.assertionException(
+                        "TEST23 packet scope contract failed: actions=" + actions
+                                + ", attempts=" + attempts);
+            }
+            helper.succeed();
+        } finally {
+            System.clearProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY);
+            System.clearProperty(LiveCursorIntentRecorder.DIR_PROPERTY);
+            LiveCursorIntentRecorder.resetForTests();
+        }
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void c3_early_non_success_none_shape(GameTestHelper helper) {
         Path dir = Path.of("build", "c3-recorder-early-none", "run-" + System.nanoTime());
         System.setProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY, "true");
@@ -2141,6 +2317,42 @@ public final class LiveCursorIntentRecorderCaptureGameTest {
         action.put("afterDy", afterDy);
         action.put("afterLaneKind", "anchored_full_block");
         action.put("actualResult", actualResult);
+        return action;
+    }
+
+    private static LinkedHashMap<String, String> test23UseAction(
+            String side,
+            String ownerPos,
+            String functionalOutcome) {
+        boolean client = "client".equals(side);
+        String[] coordinates = ownerPos.split(",", -1);
+        String clickedHitVec = String.format(
+                java.util.Locale.ROOT,
+                "%.6f,%.6f,%.6f",
+                Double.parseDouble(coordinates[0]) + 0.5d,
+                Double.parseDouble(coordinates[1]) + 0.5d,
+                Double.parseDouble(coordinates[2]) + 0.5d);
+        LinkedHashMap<String, String> action = new LinkedHashMap<>();
+        action.put("actionType", "use_block");
+        action.put("side", side);
+        action.put("heldItem", "empty");
+        action.put("clickedOwnerPos", ownerPos);
+        action.put("clickedFace", "up");
+        action.put("clickedHitVec", clickedHitVec);
+        action.put("placementPos", "none");
+        action.put("beforeState",
+                client ? "unknown" : "Block{minecraft:oak_fence_gate}[open=false]");
+        action.put("beforeDy", client ? "unknown" : "-1.500000");
+        action.put("beforeStoredDy", client ? "unknown" : "-1.500000");
+        action.put("afterState", "Block{minecraft:oak_fence_gate}[open=true]");
+        action.put("afterDy", "-1.500000");
+        action.put("actualResult", "unknown");
+        action.put("validationDecision",
+                client ? "not_observable_client_prediction" : "unknown_at_handler_boundary");
+        action.put("handlerDecision",
+                client ? "prediction_returned_packet" : "returned");
+        action.put("functionalOutcome",
+                client ? "client_prediction_state_observed" : functionalOutcome);
         return action;
     }
 

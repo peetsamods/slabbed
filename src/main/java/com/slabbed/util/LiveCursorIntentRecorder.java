@@ -83,6 +83,8 @@ public final class LiveCursorIntentRecorder {
      */
     private static final ThreadLocal<ArrayDeque<ActionOrigin>> ACTION_ORIGINS =
             ThreadLocal.withInitial(ArrayDeque::new);
+    private static final ThreadLocal<ArrayDeque<UsePacketScope>> USE_PACKET_SCOPES =
+            ThreadLocal.withInitial(ArrayDeque::new);
 
     private static Path sessionDir;
     private static boolean startLogged;
@@ -140,6 +142,7 @@ public final class LiveCursorIntentRecorder {
     private static LinkedHashMap<String, String> lastCursorRow;
 
     private record PlacementAttemptKey(
+            String packetSequence,
             String actionType,
             String heldItem,
             String clickedOwnerPos,
@@ -157,6 +160,70 @@ public final class LiveCursorIntentRecorder {
     }
 
     private LiveCursorIntentRecorder() {
+    }
+
+    /**
+     * One client or server observation of a vanilla use-item-on packet. Existing action producers
+     * claim the innermost scope through {@link #recordAction}; packet-boundary hooks emit a generic
+     * row only when the scope remains unclaimed.
+     */
+    public static final class UsePacketScope implements AutoCloseable {
+        private final String side;
+        private final int sequence;
+        private final String playerId;
+        private final String dimensionId;
+        private boolean claimed;
+        private boolean closed;
+
+        private UsePacketScope(
+                String side,
+                int sequence,
+                String playerId,
+                String dimensionId) {
+            this.side = side;
+            this.sequence = sequence;
+            this.playerId = normalizeScopeIdentity(playerId);
+            this.dimensionId = normalizeScopeIdentity(dimensionId);
+        }
+
+        public boolean claimed() {
+            return claimed;
+        }
+
+        @Override
+        public void close() {
+            if (closed) {
+                throw new IllegalStateException("use packet scope already closed");
+            }
+            ArrayDeque<UsePacketScope> scopes = USE_PACKET_SCOPES.get();
+            UsePacketScope removed = scopes.pollLast();
+            if (removed != this) {
+                scopes.clear();
+                USE_PACKET_SCOPES.remove();
+                throw new IllegalStateException("use packet scope closed out of order");
+            }
+            closed = true;
+            if (scopes.isEmpty()) {
+                USE_PACKET_SCOPES.remove();
+            }
+        }
+    }
+
+    /** Opens a nested-safe packet correlation scope at an active client/server use boundary. */
+    public static UsePacketScope openUsePacketScope(
+            String side,
+            int sequence,
+            String playerId,
+            String dimensionId) {
+        if (!"client".equals(side) && !"server".equals(side)) {
+            throw new IllegalArgumentException("use packet scope side must be client or server");
+        }
+        if (sequence < 0) {
+            throw new IllegalArgumentException("use packet sequence must be nonnegative");
+        }
+        UsePacketScope scope = new UsePacketScope(side, sequence, playerId, dimensionId);
+        USE_PACKET_SCOPES.get().addLast(scope);
+        return scope;
     }
 
     /** Defaults to real player input whenever no explicit synthetic command scope is active. */
@@ -422,6 +489,14 @@ public final class LiveCursorIntentRecorder {
             // command action as player-authored.
             ActionOrigin actionOrigin = currentActionOrigin();
             row.put("actionOrigin", actionOrigin.wireName());
+            UsePacketScope packetScope = currentUsePacketScope();
+            if (actionOrigin == ActionOrigin.PLAYER_AUTHORED && packetScope != null) {
+                row.put("side", packetScope.side);
+                row.put("packetSequence", Integer.toString(packetScope.sequence));
+                row.put("playerUuid", packetScope.playerId);
+                row.put("dimensionId", packetScope.dimensionId);
+                packetScope.claimed = true;
+            }
             appendActionExpectations(row);
             PlacementVerificationVerdict.Result verdict =
                     PlacementVerificationVerdict.reduce(row);
@@ -596,6 +671,7 @@ public final class LiveCursorIntentRecorder {
             lastCursorRowId = 0L;
             lastCursorRow = null;
             ACTION_ORIGINS.remove();
+            USE_PACKET_SCOPES.remove();
         }
     }
 
@@ -612,15 +688,30 @@ public final class LiveCursorIntentRecorder {
     }
 
     private static PlacementAttemptKey placementAttemptKey(Map<String, String> row) {
+        String packetSequence = correlationValue(row, "packetSequence");
+        boolean sequenceAuthority = !"none".equals(packetSequence)
+                && !"none".equals(firstCorrelationValue(
+                        row, "playerUuid", "playerId", "player", "playerName"))
+                && !"none".equals(firstCorrelationValue(
+                        row, "dimensionId", "dimension", "level", "world"));
         return new PlacementAttemptKey(
-                correlationValue(row, "actionType"),
-                correlationValue(row, "heldItem"),
-                correlationValue(row, "clickedOwnerPos"),
-                correlationValue(row, "clickedFace"),
-                correlationValue(row, "placementPos"),
-                correlationValue(row, "rigCaseId"),
+                sequenceAuthority ? packetSequence : "none",
+                sequenceAuthority ? "sequence_authority" : correlationValue(row, "actionType"),
+                sequenceAuthority ? "sequence_authority" : correlationValue(row, "heldItem"),
+                sequenceAuthority ? "sequence_authority" : correlationValue(row, "clickedOwnerPos"),
+                sequenceAuthority ? "sequence_authority" : correlationValue(row, "clickedFace"),
+                sequenceAuthority ? "sequence_authority" : correlationValue(row, "placementPos"),
+                sequenceAuthority ? "sequence_authority" : correlationValue(row, "rigCaseId"),
                 firstCorrelationValue(row, "playerUuid", "playerId", "player", "playerName"),
                 firstCorrelationValue(row, "dimensionId", "dimension", "level", "world"));
+    }
+
+    private static UsePacketScope currentUsePacketScope() {
+        return USE_PACKET_SCOPES.get().peekLast();
+    }
+
+    private static String normalizeScopeIdentity(String value) {
+        return value == null || value.isBlank() ? "none" : value.trim();
     }
 
     private static String correlationValue(Map<String, String> row, String key) {
@@ -658,7 +749,8 @@ public final class LiveCursorIntentRecorder {
             return null;
         }
         PendingClientAttempt attempt = attempts.peekFirst();
-        if (nowNanos - attempt.recordedNanos() >= PAIR_WINDOW_NANOS) {
+        if ("none".equals(key.packetSequence())
+                && nowNanos - attempt.recordedNanos() >= PAIR_WINDOW_NANOS) {
             return null;
         }
         attempts.removeFirst();
@@ -673,7 +765,11 @@ public final class LiveCursorIntentRecorder {
         Iterator<Map.Entry<PlacementAttemptKey, ArrayDeque<PendingClientAttempt>>> entries =
                 PENDING_CLIENT_ATTEMPTS.entrySet().iterator();
         while (entries.hasNext()) {
-            ArrayDeque<PendingClientAttempt> attempts = entries.next().getValue();
+            Map.Entry<PlacementAttemptKey, ArrayDeque<PendingClientAttempt>> entry = entries.next();
+            ArrayDeque<PendingClientAttempt> attempts = entry.getValue();
+            if (!"none".equals(entry.getKey().packetSequence())) {
+                continue;
+            }
             while (!attempts.isEmpty()
                     && nowNanos - attempts.peekFirst().recordedNanos() >= PAIR_WINDOW_NANOS) {
                 PendingClientAttempt expired = attempts.removeFirst();
@@ -784,10 +880,12 @@ public final class LiveCursorIntentRecorder {
         LinkedHashMap<String, String> evidence = new LinkedHashMap<>();
 
         for (String field : new String[]{
-                "actionType", "heldItem", "clickedOwnerPos", "clickedFace", "placementPos",
+                "packetSequence", "playerUuid", "dimensionId",
+                "actionType", "heldItem", "clickedOwnerPos", "clickedFace", "clickedHitVec",
+                "placementPos",
                 "rigCaseId", "placementRoute", "landingAuthority", "expectedAfterDy", "intentDy",
                 "expectedAfterLaneKind", "expectedResult", "placementContract", "refusalContract",
-                "expectedRefusalReason", "clickedOwnerLaneKind", "beforeDy"
+                "expectedRefusalReason", "clickedOwnerLaneKind"
         }) {
             selectAttemptEvidence(
                     evidence,
@@ -796,6 +894,13 @@ public final class LiveCursorIntentRecorder {
                     clientRow,
                     PlacementVerificationVerdict.Component.PLACED,
                     conflicts);
+        }
+
+        for (String field : new String[]{
+                "beforeState", "beforeDy", "beforeStoredDy",
+                "validationDecision", "handlerDecision", "functionalOutcome"
+        }) {
+            selectAuthoritativeAttemptObservation(evidence, field, serverRow, clientRow);
         }
 
         for (String field : new String[]{
@@ -851,6 +956,28 @@ public final class LiveCursorIntentRecorder {
         if (hasEvidence(selected)) {
             target.put(field, selected);
         }
+    }
+
+    private static void selectAuthoritativeAttemptObservation(
+            Map<String, String> target,
+            String field,
+            Map<String, String> serverRow,
+            Map<String, String> clientRow) {
+        String selected = rawAttemptObservation(serverRow, field);
+        if (selected == null) {
+            selected = rawAttemptObservation(clientRow, field);
+        }
+        if (selected != null) {
+            target.put(field, selected);
+        }
+    }
+
+    private static String rawAttemptObservation(Map<String, String> row, String field) {
+        if (row == null) {
+            return null;
+        }
+        String value = row.get(field);
+        return value == null || value.isBlank() ? null : value;
     }
 
     private static String attemptEvidence(Map<String, String> row, String field) {

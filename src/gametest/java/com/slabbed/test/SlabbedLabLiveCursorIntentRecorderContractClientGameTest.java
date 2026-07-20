@@ -1,16 +1,56 @@
 package com.slabbed.test;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.slabbed.util.LiveCursorIntentRecorder;
+import com.slabbed.util.SlabbedOffsetRaycast;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.state.level.BlockOutlineRenderState;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest implements FabricClientGameTest {
+    private static final String TEST23_CASE_PROPERTY = "slabbed.test23.recorderCase";
+    private static final String EMPTY_HAND_USE_PACKET_CAPTURE = "empty_hand_use_packet_capture";
+    private static final String CURSOR_PRODUCTION_HOOK = "cursor_production_hook";
+    private static final String RENDERED_OUTLINE_PRODUCTION_HOOK =
+            "rendered_outline_production_hook";
+
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        String test23Case = System.getProperty(TEST23_CASE_PROPERTY);
+        if (test23Case != null) {
+            switch (test23Case) {
+                case EMPTY_HAND_USE_PACKET_CAPTURE -> runEmptyHandUsePacketCapture(ctx);
+                case CURSOR_PRODUCTION_HOOK -> runCursorProductionHook(ctx);
+                case RENDERED_OUTLINE_PRODUCTION_HOOK ->
+                        runRenderedOutlineProductionHook(ctx);
+                default -> throw new IllegalArgumentException(
+                        "Unknown TEST 23 recorder case: " + test23Case);
+            }
+            return;
+        }
+
         try {
             Path evidenceRoot = Path.of(System.getProperty(
                     "slabbed.liveCursorIntentRecorderContractDir",
@@ -267,6 +307,416 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             System.clearProperty("slabbed.liveCursorIntentRecorderDir");
             LiveCursorIntentRecorder.resetForTests();
         }
+    }
+
+    private static void runEmptyHandUsePacketCapture(ClientGameTestContext ctx) {
+        Path evidenceDir = Path.of(
+                "build", "test23-production-hook-empty-hand-use", "run-" + System.nanoTime());
+        System.setProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY, "true");
+        System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, evidenceDir.toString());
+        LiveCursorIntentRecorder.resetForTests();
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            singleplayer.getClientLevel().waitForChunksDownload();
+            ctx.waitFor(client -> client.level != null
+                    && client.player != null
+                    && client.gameMode != null, 400);
+
+            BlockPos target = singleplayer.getServer().computeOnServer(server -> {
+                var player = server.getPlayerList().getPlayers().getFirst();
+                BlockPos pos = player.blockPosition().relative(player.getDirection(), 2)
+                        .below().immutable();
+                player.level().setBlock(
+                        pos,
+                        Blocks.OAK_FENCE_GATE.defaultBlockState(),
+                        Block.UPDATE_ALL);
+                player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+                player.inventoryMenu.sendAllDataToRemote();
+                return pos;
+            });
+
+            ctx.waitFor(client -> client.player.getMainHandItem().isEmpty()
+                    && client.level.getBlockState(target).is(Blocks.OAK_FENCE_GATE)
+                    && !client.level.getBlockState(target).getValue(BlockStateProperties.OPEN), 400);
+            ctx.runOnClient(client -> client.gameMode.useItemOn(
+                    client.player,
+                    InteractionHand.MAIN_HAND,
+                    new BlockHitResult(
+                            Vec3.atCenterOf(target),
+                            Direction.UP,
+                            target,
+                            false)));
+            ctx.waitFor(client -> client.level.getBlockState(target)
+                    .getValue(BlockStateProperties.OPEN), 400);
+
+            int authoritativeOpenAfterTicks = -1;
+            int authoritativeOpenTimeoutTicks = 200;
+            for (int elapsedTicks = 0; elapsedTicks < authoritativeOpenTimeoutTicks; elapsedTicks++) {
+                boolean serverGateOpen = singleplayer.getServer().computeOnServer(server ->
+                        server.overworld().getBlockState(target)
+                                .getValue(BlockStateProperties.OPEN));
+                if (serverGateOpen) {
+                    authoritativeOpenAfterTicks = elapsedTicks;
+                    break;
+                }
+                ctx.waitTick();
+            }
+            boolean serverGateOpen = authoritativeOpenAfterTicks >= 0;
+            if (!serverGateOpen) {
+                throw new AssertionError(
+                        "TEST23_PRODUCTION_HOOK_WRONG_RED: real empty-hand use did not reach "
+                                + "server fence-gate handling at " + target.toShortString());
+            }
+            System.out.println("[TEST23_GATE_A] authoritativeServerGateOpen=true"
+                    + " target=" + target.toShortString()
+                    + " observedAfterTicks=" + authoritativeOpenAfterTicks
+                    + " timeoutTicks=" + authoritativeOpenTimeoutTicks);
+
+            BlockPos rejectedTarget = target.offset(0, 0, 8);
+            singleplayer.getServer().computeOnServer(server -> {
+                server.overworld().setBlock(
+                        rejectedTarget,
+                        Blocks.OAK_FENCE_GATE.defaultBlockState(),
+                        Block.UPDATE_ALL);
+                return null;
+            });
+            ctx.waitFor(client -> client.level.getBlockState(rejectedTarget)
+                    .is(Blocks.OAK_FENCE_GATE), 400);
+            ctx.runOnClient(client -> client.gameMode.useItemOn(
+                    client.player,
+                    InteractionHand.MAIN_HAND,
+                    new BlockHitResult(
+                            Vec3.atCenterOf(rejectedTarget),
+                            Direction.UP,
+                            rejectedTarget,
+                            false)));
+            for (int tick = 0; tick < 20; tick++) {
+                ctx.waitTick();
+            }
+            boolean rejectedServerGateClosed =
+                    singleplayer.getServer().computeOnServer(server ->
+                            !server.overworld().getBlockState(rejectedTarget)
+                                    .getValue(BlockStateProperties.OPEN));
+            if (!rejectedServerGateClosed) {
+                throw new AssertionError(
+                        "TEST23_GATE_B_WRONG_GREEN: distance-rejected server fence gate changed at "
+                                + rejectedTarget.toShortString());
+            }
+
+            ctx.runOnClient(client -> LiveCursorIntentRecorder.flushSummaryForTests());
+            Path session = evidenceDir.resolve("session.jsonl");
+            List<JsonObject> rows = readJsonRows(session);
+            assertMergedUseAttempt(
+                    rows,
+                    target,
+                    "target_state_changed",
+                    "TEST23_PRODUCTION_HOOK_RED: real empty-hand use opened the server fence gate "
+                            + "but did not produce one correlated player-authored use attempt");
+            assertMergedUseAttempt(
+                    rows,
+                    rejectedTarget,
+                    "no_target_state_change_observed",
+                    "TEST23_GATE_B_REJECTED_USE_RED: distance-rejected use did not produce one "
+                            + "correlated player-authored use attempt");
+        } catch (AssertionError error) {
+            throw error;
+        } catch (Exception error) {
+            throw new RuntimeException("TEST23_PRODUCTION_HOOK_WRONG_RED: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage(), error);
+        } finally {
+            System.clearProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY);
+            System.clearProperty(LiveCursorIntentRecorder.DIR_PROPERTY);
+            LiveCursorIntentRecorder.resetForTests();
+        }
+    }
+
+    private static void runCursorProductionHook(ClientGameTestContext ctx) {
+        runProductionVisualEvidenceHook(ctx, false);
+    }
+
+    private static void runRenderedOutlineProductionHook(ClientGameTestContext ctx) {
+        runProductionVisualEvidenceHook(ctx, true);
+    }
+
+    private static void runProductionVisualEvidenceHook(
+            ClientGameTestContext ctx,
+            boolean requireRenderedOutline) {
+        String evidenceCase = requireRenderedOutline ? "rendered-outline" : "cursor";
+        String wrongRed = requireRenderedOutline
+                ? "TEST23_RENDERED_OUTLINE_PRODUCTION_HOOK_WRONG_RED"
+                : "TEST23_CURSOR_PRODUCTION_HOOK_WRONG_RED";
+        String intendedRed = requireRenderedOutline
+                ? "TEST23_RENDERED_OUTLINE_PRODUCTION_HOOK_RED"
+                : "TEST23_CURSOR_PRODUCTION_HOOK_RED";
+        String requiredType = requireRenderedOutline ? "rendered_outline" : "cursor";
+        String summaryCounter =
+                requireRenderedOutline ? "renderedOutlineRows=0" : "cursorRows=0";
+        Path evidenceDir = Path.of(
+                "tmp",
+                "test23-gate-c-cursor-outline-red-20260720",
+                evidenceCase + "-run-" + System.nanoTime());
+        System.setProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY, "true");
+        System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, evidenceDir.toString());
+        LiveCursorIntentRecorder.resetForTests();
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            singleplayer.getClientLevel().waitForChunksDownload();
+            ctx.waitFor(client -> client.level != null && client.player != null, 400);
+
+            BlockPos target = singleplayer.getServer().computeOnServer(server -> {
+                var player = server.getPlayerList().getPlayers().getFirst();
+                BlockPos feet = player.blockPosition().immutable();
+                for (int forward = 1; forward <= 2; forward++) {
+                    for (int vertical = 0; vertical <= 2; vertical++) {
+                        server.overworld().setBlock(
+                                feet.offset(0, vertical, forward),
+                                Blocks.AIR.defaultBlockState(),
+                                Block.UPDATE_ALL);
+                    }
+                }
+                BlockPos targetPos = feet.offset(0, 1, 3).immutable();
+                server.overworld().setBlock(
+                        targetPos,
+                        Blocks.STONE.defaultBlockState(),
+                        Block.UPDATE_ALL);
+                return targetPos;
+            });
+            ctx.waitFor(client -> client.level.getBlockState(target).is(Blocks.STONE), 400);
+
+            if (!SlabbedOffsetRaycast.ENABLED) {
+                throw new AssertionError(
+                        wrongRed + ": shipped offset-aware raycast is disabled");
+            }
+            ctx.runOnClient(client -> aimLocalPlayerAt(client, target, wrongRed));
+            ctx.waitFor(client -> isExactBlockHit(client.hitResult, target), 400);
+
+            BlockHitResult picked = ctx.computeOnClient(client ->
+                    client.hitResult instanceof BlockHitResult blockHit ? blockHit : null);
+            if (!isExactBlockHit(picked, target)) {
+                throw new AssertionError(
+                        wrongRed + ": normal Minecraft pick did not retain target "
+                                + target.toShortString());
+            }
+            System.out.println("[TEST23_CURSOR_ROUTE_WITNESS]"
+                    + " offsetRaycastEnabled=" + SlabbedOffsetRaycast.ENABLED
+                    + " route=Minecraft.pick->LocalPlayer.raycastHitResult"
+                    + "->LocalPlayerPickOffsetRaycastMixin"
+                    + " hitType=" + picked.getType()
+                    + " target=" + picked.getBlockPos().toShortString()
+                    + " face=" + picked.getDirection().getName()
+                    + " hit=" + picked.getLocation());
+
+            if (requireRenderedOutline) {
+                singleplayer.getClientLevel().waitForChunksRender();
+                ctx.waitFor(client -> {
+                    BlockOutlineRenderState outline = renderedOutlineState(client);
+                    return outline != null && outline.pos().equals(target);
+                }, 400);
+                BlockOutlineRenderState outline =
+                        ctx.computeOnClient(SlabbedLabLiveCursorIntentRecorderContractClientGameTest
+                                ::renderedOutlineState);
+                if (outline == null || !outline.pos().equals(target)) {
+                    throw new AssertionError(
+                            wrongRed + ": vanilla block-outline state did not retain target "
+                                    + target.toShortString());
+                }
+                System.out.println("[TEST23_RENDERED_OUTLINE_ROUTE_WITNESS]"
+                        + " route=LevelExtractor.extractBlockOutline"
+                        + "->LevelRenderer.submitBlockOutline"
+                        + " target=" + outline.pos().toShortString()
+                        + " shapeEmpty=" + outline.shape().isEmpty());
+            }
+
+            ctx.runOnClient(client -> LiveCursorIntentRecorder.flushSummaryForTests());
+            Path summary = evidenceDir.resolve("summary.md");
+            if (!Files.isRegularFile(summary)) {
+                throw new AssertionError(
+                        wrongRed + ": recorder flush did not create " + summary);
+            }
+            List<JsonObject> rows =
+                    readJsonRowsIfPresent(evidenceDir.resolve("session.jsonl"));
+            boolean productionRowExists = rows.stream()
+                    .anyMatch(row -> jsonEquals(row, "type", requiredType));
+            if (!productionRowExists) {
+                String summaryText = Files.readString(summary);
+                if (!summaryText.contains(summaryCounter)) {
+                    throw new AssertionError(
+                            wrongRed + ": missing " + requiredType
+                                    + " row without the expected zero counter");
+                }
+                throw new AssertionError(
+                        intendedRed + ": real production route reached "
+                                + target.toShortString()
+                                + " but recorder emitted no type=" + requiredType + " row");
+            }
+        } catch (AssertionError error) {
+            throw error;
+        } catch (Exception error) {
+            throw new RuntimeException(
+                    wrongRed + ": " + error.getClass().getSimpleName()
+                            + ": " + error.getMessage(),
+                    error);
+        } finally {
+            System.clearProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY);
+            System.clearProperty(LiveCursorIntentRecorder.DIR_PROPERTY);
+            LiveCursorIntentRecorder.resetForTests();
+        }
+    }
+
+    private static void aimLocalPlayerAt(
+            Minecraft client,
+            BlockPos target,
+            String wrongRed) {
+        if (client.player == null) {
+            throw new AssertionError(wrongRed + ": local player is unavailable");
+        }
+        Vec3 delta = Vec3.atCenterOf(target).subtract(client.player.getEyePosition());
+        double horizontal = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) -Math.toDegrees(Math.atan2(delta.y, horizontal));
+        client.player.setYRot(yaw);
+        client.player.setYHeadRot(yaw);
+        client.player.setYBodyRot(yaw);
+        client.player.setXRot(pitch);
+    }
+
+    private static boolean isExactBlockHit(HitResult hit, BlockPos target) {
+        return hit instanceof BlockHitResult blockHit
+                && blockHit.getType() == HitResult.Type.BLOCK
+                && blockHit.getBlockPos().equals(target);
+    }
+
+    private static BlockOutlineRenderState renderedOutlineState(Minecraft client) {
+        try {
+            Field field = LevelRenderer.class.getDeclaredField("levelRenderState");
+            field.setAccessible(true);
+            LevelRenderState state = (LevelRenderState) field.get(client.levelRenderer);
+            return state.blockOutlineRenderState;
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException(
+                    "cannot inspect active LevelRenderer.levelRenderState", error);
+        }
+    }
+
+    private static List<JsonObject> readJsonRowsIfPresent(Path session) throws Exception {
+        if (!Files.exists(session)) {
+            return List.of();
+        }
+        return readJsonRows(session);
+    }
+
+    private static List<JsonObject> readJsonRows(Path session) throws Exception {
+        if (!Files.isRegularFile(session)) {
+            throw new AssertionError("missing recorder session " + session);
+        }
+        ArrayList<JsonObject> rows = new ArrayList<>();
+        for (String line : Files.readAllLines(session)) {
+            if (!line.isBlank()) {
+                rows.add(JsonParser.parseString(line).getAsJsonObject());
+            }
+        }
+        return rows;
+    }
+
+    private static void assertMergedUseAttempt(
+            List<JsonObject> rows,
+            BlockPos target,
+            String expectedFunctionalOutcome,
+            String failurePrefix) {
+        String targetText = target.toShortString();
+        ArrayList<JsonObject> actions = new ArrayList<>();
+        for (JsonObject row : rows) {
+            if (jsonEquals(row, "type", "action")
+                    && jsonEquals(row, "actionType", "use_block")
+                    && jsonEquals(row, "actionOrigin", "PLAYER_AUTHORED")
+                    && jsonEquals(row, "clickedOwnerPos", targetText)) {
+                actions.add(row);
+            }
+        }
+        JsonObject client = actions.stream()
+                .filter(row -> jsonEquals(row, "side", "client"))
+                .findFirst()
+                .orElse(null);
+        JsonObject server = actions.stream()
+                .filter(row -> jsonEquals(row, "side", "server"))
+                .findFirst()
+                .orElse(null);
+        String logicalAttemptId = jsonString(client, "logicalAttemptId");
+        String sequence = jsonString(client, "packetSequence");
+        List<JsonObject> terminals = rows.stream()
+                .filter(row -> jsonEquals(row, "type", "placement_attempt"))
+                .filter(row -> jsonEquals(row, "logicalAttemptId", logicalAttemptId))
+                .filter(row -> jsonEquals(row, "attemptStatus", "MERGED_CLIENT_SERVER"))
+                .filter(row -> jsonEquals(row, "actionCount", "2"))
+                .toList();
+        JsonObject terminal = terminals.size() == 1 ? terminals.getFirst() : null;
+        boolean exactContract = actions.size() == 2
+                && client != null
+                && server != null
+                && sequence != null
+                && sequence.equals(jsonString(server, "packetSequence"))
+                && logicalAttemptId != null
+                && logicalAttemptId.equals(jsonString(server, "logicalAttemptId"))
+                && terminal != null
+                && jsonEquals(client, "heldItem", "empty")
+                && jsonEquals(server, "heldItem", "empty")
+                && jsonEquals(client, "clickedFace", "up")
+                && jsonEquals(server, "clickedFace", "up")
+                && hasTruthfulValue(client, "clickedHitVec")
+                && hasTruthfulValue(server, "clickedHitVec")
+                && jsonEquals(client, "beforeState", "unknown")
+                && hasTruthfulValue(client, "afterState")
+                && hasTruthfulValue(server, "beforeState")
+                && hasTruthfulValue(server, "afterState")
+                && hasTruthfulValue(server, "beforeDy")
+                && hasTruthfulValue(server, "afterDy")
+                && jsonEquals(server, "actualResult", "unknown")
+                && jsonEquals(server, "validationDecision", "unknown_at_handler_boundary")
+                && jsonEquals(server, "handlerDecision", "returned")
+                && jsonEquals(server, "functionalOutcome", expectedFunctionalOutcome)
+                && sameJsonField(server, terminal, "clickedHitVec")
+                && sameJsonField(server, terminal, "beforeState")
+                && sameJsonField(server, terminal, "beforeDy")
+                && sameJsonField(server, terminal, "beforeStoredDy")
+                && sameJsonField(server, terminal, "validationDecision")
+                && sameJsonField(server, terminal, "handlerDecision")
+                && sameJsonField(server, terminal, "functionalOutcome");
+        if (!exactContract) {
+            throw new AssertionError(
+                    failurePrefix + " at " + targetText
+                            + "; actions=" + actions
+                            + ", terminals=" + terminals);
+        }
+    }
+
+    private static boolean sameJsonField(
+            JsonObject expectedRow,
+            JsonObject actualRow,
+            String field) {
+        String expected = jsonString(expectedRow, field);
+        return expected != null && expected.equals(jsonString(actualRow, field));
+    }
+
+    private static boolean hasTruthfulValue(JsonObject row, String field) {
+        String value = jsonString(row, field);
+        return value != null
+                && !value.isBlank()
+                && !value.equals("none")
+                && !value.equals("unknown")
+                && !value.equals("not_run");
+    }
+
+    private static boolean jsonEquals(JsonObject row, String field, String expected) {
+        return expected != null && expected.equals(jsonString(row, field));
+    }
+
+    private static String jsonString(JsonObject row, String field) {
+        if (row == null || !row.has(field) || !row.get(field).isJsonPrimitive()) {
+            return null;
+        }
+        return row.get(field).getAsString();
     }
 
     private static void assertContains(Path path, String needle) throws Exception {
