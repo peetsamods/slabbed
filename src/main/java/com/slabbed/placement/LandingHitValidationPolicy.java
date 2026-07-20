@@ -11,11 +11,10 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Pure C2 policy for the server's shifted hit-validation center.
  *
- * <p>This does not widen Minecraft's distance tolerance. It only says when an already-lowered,
- * ordinary full-block owner may move that validation center by its frozen visible depth: the held
- * block must belong to a family {@link LandingResolver} owns, and the packet hit must remain inside
- * the pre-existing compound-owner envelope. C5 thin layers and powder snow qualify only for UP-face
- * aims; flat owners, partial-block owners and out-of-envelope hits fall through to vanilla.
+ * <p>This does not widen Minecraft's distance tolerance. It only says when an already-lowered
+ * target may move that validation center by its frozen visible depth. Ordinary target use validates
+ * against the target's translated cell; block placement retains its existing resolver-family and
+ * compound-owner-envelope gates. Flat owners and out-of-envelope hits fall through to vanilla.
  */
 public final class LandingHitValidationPolicy {
 
@@ -36,9 +35,21 @@ public final class LandingHitValidationPolicy {
             Vec3 hitPos,
             BlockState heldState
     ) {
+        return shiftedCenterDy(
+                ownerPos, ownerState, ownerDy, hitFace, hitPos, heldState, false);
+    }
+
+    public static double shiftedCenterDy(
+            BlockPos ownerPos,
+            BlockState ownerState,
+            double ownerDy,
+            Direction hitFace,
+            Vec3 hitPos,
+            BlockState heldState,
+            boolean ordinaryEmptyHandUse
+    ) {
         if (ownerPos == null
                 || ownerState == null
-                || heldState == null
                 || hitFace == null
                 || hitPos == null
                 || !Double.isFinite(ownerDy)
@@ -46,6 +57,23 @@ public final class LandingHitValidationPolicy {
                 || CompatHooks.shouldSkipOffset(ownerState)
                 || CompatHooks.shouldSkipSlabSupport(ownerState)
                 || LandingResolver.compatOwnsFinalState(heldState)) {
+            return Double.NaN;
+        }
+
+        if (ordinaryEmptyHandUse) {
+            if (heldState != null) {
+                return Double.NaN;
+            }
+            boolean insideTranslatedTargetCell = hitPos.x >= ownerPos.getX() - EPSILON
+                    && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
+                    && hitPos.y >= ownerPos.getY() + ownerDy - EPSILON
+                    && hitPos.y <= ownerPos.getY() + ownerDy + 1.0d + EPSILON
+                    && hitPos.z >= ownerPos.getZ() - EPSILON
+                    && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
+            return insideTranslatedTargetCell ? ownerDy : Double.NaN;
+        }
+
+        if (heldState == null) {
             return Double.NaN;
         }
 
