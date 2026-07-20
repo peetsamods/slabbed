@@ -7,6 +7,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.network.PlacementDyCorrectionServer;
 import com.slabbed.placement.LandingHitValidationPolicy;
+import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -33,6 +34,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.LinkedHashMap;
+
 @Mixin(ServerGamePacketListenerImpl.class)
 public abstract class ServerInteractBlockHitToleranceMixin {
     private static final double EPSILON = 1.0e-6d;
@@ -51,14 +54,115 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             ServerboundUseItemOnPacket packet,
             Operation<Void> original
     ) {
+        ServerLevel world = player == null ? null : player.level();
+        boolean authoritativePass = world != null
+                && world.getServer() != null
+                && world.getServer().isSameThread();
+        ServerUseSnapshot recorderBefore = authoritativePass && LiveCursorIntentRecorder.enabled()
+                ? slabbed$captureUseSnapshot(world, packet)
+                : null;
+        LiveCursorIntentRecorder.UsePacketScope recorderScope =
+                recorderBefore == null
+                        ? null
+                        : LiveCursorIntentRecorder.openUsePacketScope(
+                                "server",
+                                packet.getSequence(),
+                                player.getUUID().toString(),
+                                world.dimension().identifier().toString());
+        boolean handlerReturned = false;
         SLABBED_C3_PACKET.set(packet);
         try {
             original.call(packet);
+            handlerReturned = true;
             PlacementDyCorrectionServer.finishNormalReturn();
         } finally {
+            if (recorderScope != null) {
+                try {
+                    if (!recorderScope.claimed()) {
+                        slabbed$recordGenericServerUse(
+                                world, packet, recorderBefore, handlerReturned);
+                    }
+                } finally {
+                    recorderScope.close();
+                }
+            }
             PlacementDyCorrectionServer.clearScope();
             SLABBED_C3_PACKET.remove();
         }
+    }
+
+    private ServerUseSnapshot slabbed$captureUseSnapshot(
+            ServerLevel world,
+            ServerboundUseItemOnPacket packet) {
+        BlockHitResult hit = packet == null ? null : packet.getHitResult();
+        if (hit == null) {
+            return null;
+        }
+        BlockPos target = hit.getBlockPos();
+        BlockState state = world.getBlockState(target);
+        ItemStack heldStack = player.getItemInHand(packet.getHand());
+        return new ServerUseSnapshot(
+                state,
+                SlabSupport.getYOffset(world, target, state),
+                SlabAnchorAttachment.storedPlacementDy(world, target),
+                heldStack == null || heldStack.isEmpty()
+                        ? "empty"
+                        : BuiltInRegistries.ITEM.getKey(heldStack.getItem()).toString());
+    }
+
+    private void slabbed$recordGenericServerUse(
+            ServerLevel world,
+            ServerboundUseItemOnPacket packet,
+            ServerUseSnapshot before,
+            boolean handlerReturned) {
+        BlockHitResult hit = packet.getHitResult();
+        BlockPos target = hit.getBlockPos();
+        BlockState afterState = world.getBlockState(target);
+        double afterDy = SlabSupport.getYOffset(world, target, afterState);
+        double afterStoredDy = SlabAnchorAttachment.storedPlacementDy(world, target);
+        LinkedHashMap<String, String> row = new LinkedHashMap<>();
+        row.put("actionType", "use_block");
+        row.put("heldItem", before.heldItem());
+        row.put("clickedOwnerPos", target.toShortString());
+        row.put("clickedFace", hit.getDirection().getSerializedName());
+        row.put("clickedHitVec", slabbed$recorderVec(hit.getLocation()));
+        row.put("placementPos", "none");
+        row.put("beforeState", before.state().toString());
+        row.put("beforeDy", slabbed$recorderDy(before.dy()));
+        row.put("beforeStoredDy", slabbed$recorderDy(before.storedDy()));
+        row.put("afterState", afterState.toString());
+        row.put("afterDy", slabbed$recorderDy(afterDy));
+        row.put("afterStoredDy", slabbed$recorderDy(afterStoredDy));
+        row.put("actualResult", "unknown");
+        row.put("validationDecision", "unknown_at_handler_boundary");
+        row.put("handlerDecision", handlerReturned ? "returned" : "threw");
+        row.put("functionalOutcome",
+                before.state().equals(afterState)
+                        ? "no_target_state_change_observed"
+                        : "target_state_changed");
+        LiveCursorIntentRecorder.recordAction(row);
+    }
+
+    private static String slabbed$recorderDy(double dy) {
+        return Double.isFinite(dy) ? String.format(java.util.Locale.ROOT, "%.6f", dy) : "unknown";
+    }
+
+    private static String slabbed$recorderVec(Vec3 vec) {
+        return vec == null
+                ? "unknown"
+                : String.format(
+                        java.util.Locale.ROOT,
+                        "%.6f,%.6f,%.6f",
+                        vec.x,
+                        vec.y,
+                        vec.z);
+    }
+
+    private record ServerUseSnapshot(
+            BlockState state,
+            double dy,
+            double storedDy,
+            String heldItem) {
     }
 
     @WrapOperation(
