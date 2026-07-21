@@ -28,8 +28,8 @@ import java.util.function.Predicate;
  * shape and every depth, on all six faces — computed ONCE at placement and frozen (LAW.md).
  *
  * <p><b>C2-C5 scope</b> ({@code §4.4} rows C2-C5): wired for slabs, ordinary full blocks,
- * reciprocal floor-seated pairs, ordinary object blocks, and UP-face AIM-KEYED thin layers /
- * powder snow.
+ * reciprocal floor-seated pairs, ordinary object blocks, UP-face AIM-KEYED thin layers, and
+ * use-created full-cube contact blocks.
  * NOTE (reviewer amendment A2, disclosed deviation): the design's §1.3.5 occlusion REFUSAL is NOT in
  * C2 — PlacementResolution has no refusal field and this resolver never cancels a placement, so a
  * deep DOWN-face placement can mint a body intersecting an existing visible body until the refusal
@@ -55,8 +55,10 @@ public final class LandingResolver {
         PAIRED_FLOOR_SEAT,
         /** An ordinary C4 object block, including partial shapes and block entities. */
         OBJECT,
-        /** A C5 thin layer or powder-snow placement, seated only by a captured UP-face aim. */
+        /** A C5 thin layer, seated only by a captured UP-face aim. */
         AIM_KEYED_FLOOR_SEAT,
+        /** A full-cube block created by use, aligned to the captured contact on all six faces. */
+        USE_CREATED_FULL_CUBE_CONTACT,
         /** Air and invalid states. */
         UNSUPPORTED
     }
@@ -118,8 +120,10 @@ public final class LandingResolver {
                 && placedState.hasProperty(BlockStateProperties.BED_PART))) {
             return Family.PAIRED_FLOOR_SEAT;
         }
-        if (placedState.getBlock() instanceof PowderSnowBlock
-                || SlabSupport.isThinTopLayer(placedState)) {
+        if (placedState.getBlock() instanceof PowderSnowBlock) {
+            return Family.USE_CREATED_FULL_CUBE_CONTACT;
+        }
+        if (SlabSupport.isThinTopLayer(placedState)) {
             return Family.AIM_KEYED_FLOOR_SEAT;
         }
         if (placedState.getBlock() instanceof EntityBlock) {
@@ -163,6 +167,11 @@ public final class LandingResolver {
             return null;
         }
         if (compatOwnsFinalState(placedState)) {
+            return null;
+        }
+        if (family == Family.USE_CREATED_FULL_CUBE_CONTACT) {
+            // Use-created contact requires the immutable root aim; reconstructing from the final
+            // cell cannot preserve same-cell replacement or the player's original contact face.
             return null;
         }
         if (family == Family.AIM_KEYED_FLOOR_SEAT && clickedFace != Direction.UP) {
@@ -223,7 +232,8 @@ public final class LandingResolver {
                 && aim.ownerPos().equals(actualTarget)) {
             return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
         }
-        if (family == Family.AIM_KEYED_FLOOR_SEAT
+        if ((family == Family.AIM_KEYED_FLOOR_SEAT
+                || family == Family.USE_CREATED_FULL_CUBE_CONTACT)
                 && aim.replacementSameCell()
                 && aim.ownerPos().equals(actualTarget)) {
             return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
