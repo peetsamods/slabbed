@@ -69,12 +69,7 @@ public final class LandingHitValidationPolicy {
                 || ownerState.getBlock() instanceof BedBlock
                 || ownerState.getBlock() instanceof FlowerPotBlock;
         if (targetOwnedUse) {
-            boolean insideTranslatedTargetCell = hitPos.x >= ownerPos.getX() - EPSILON
-                    && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
-                    && hitPos.y >= ownerPos.getY() + ownerDy - EPSILON
-                    && hitPos.y <= ownerPos.getY() + ownerDy + 1.0d + EPSILON
-                    && hitPos.z >= ownerPos.getZ() - EPSILON
-                    && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
+            boolean insideTranslatedTargetCell = insideTranslatedCell(ownerPos, ownerDy, hitPos);
             return insideTranslatedTargetCell ? ownerDy : Double.NaN;
         }
 
@@ -83,6 +78,14 @@ public final class LandingHitValidationPolicy {
         }
 
         LandingResolver.Family heldFamily = LandingResolver.classify(heldState);
+        if (heldFamily == LandingResolver.Family.USE_CREATED_FULL_CUBE_CONTACT) {
+            boolean supportedOwner = ownerState.getBlock() instanceof SlabBlock
+                    || ownerState.getBlock() instanceof EntityBlock
+                    || ownerState.isSolidRender();
+            return supportedOwner && insideTranslatedCell(ownerPos, ownerDy, hitPos)
+                    ? ownerDy
+                    : Double.NaN;
+        }
         if (heldFamily == LandingResolver.Family.PAIRED_FLOOR_SEAT
                 || heldFamily == LandingResolver.Family.AIM_KEYED_FLOOR_SEAT) {
             boolean supportedOwner = ownerState.getBlock() instanceof SlabBlock
@@ -117,5 +120,14 @@ public final class LandingHitValidationPolicy {
                 && hitPos.z >= ownerPos.getZ() - EPSILON
                 && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
         return insideOwnerEnvelope ? ownerDy : Double.NaN;
+    }
+
+    private static boolean insideTranslatedCell(BlockPos ownerPos, double ownerDy, Vec3 hitPos) {
+        return hitPos.x >= ownerPos.getX() - EPSILON
+                && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
+                && hitPos.y >= ownerPos.getY() + ownerDy - EPSILON
+                && hitPos.y <= ownerPos.getY() + ownerDy + 1.0d + EPSILON
+                && hitPos.z >= ownerPos.getZ() - EPSILON
+                && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
     }
 }

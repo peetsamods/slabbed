@@ -24,6 +24,7 @@ import net.minecraft.world.item.component.BlockItemStateProperties;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
@@ -869,8 +870,9 @@ public final class LandingRuleLawTest {
         LandingResolver.Family powderFamily =
                 LandingResolver.classify(Blocks.POWDER_SNOW.defaultBlockState());
         if (carpetFamily != LandingResolver.Family.AIM_KEYED_FLOOR_SEAT
-                || powderFamily != LandingResolver.Family.AIM_KEYED_FLOOR_SEAT
-                || carpetFamily == sharedFamily) {
+                || powderFamily != LandingResolver.Family.USE_CREATED_FULL_CUBE_CONTACT
+                || carpetFamily == sharedFamily
+                || powderFamily == sharedFamily) {
             violations.add("C4/C5 family boundary collapsed: C4=" + sharedFamily
                     + " carpet=" + carpetFamily + " powder=" + powderFamily);
         }
@@ -927,8 +929,8 @@ public final class LandingRuleLawTest {
     // ══════════════════════════════ C5 family — thin layers / powder snow ══════════════════════════════
 
     /**
-     * C5 shared authority: carpet and powder snow use one UP-only landing/validation family, and the
-     * same final-state compat gate preserves Terrain Slabs' on-top ownership.
+     * C5/TEST 25 boundary: carpet remains UP-only while use-created powder snow owns all-face
+     * full-cube contact. The same final-state compat gate still preserves Terrain Slabs' ownership.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void c5AimKeyedFamilySharesLandingValidationAndCompatAuthority(GameTestHelper h) {
@@ -940,39 +942,73 @@ public final class LandingRuleLawTest {
                 owner, ownerState, ownerDy, Direction.UP, hit, false);
         LandingResolver.PlacementAim sideAim = new LandingResolver.PlacementAim(
                 owner, ownerState, ownerDy, Direction.SOUTH, hit, false);
-        BlockState[] c5States = {
-                Blocks.MOSS_CARPET.defaultBlockState(),
-                Blocks.POWDER_SNOW.defaultBlockState()
-        };
+        LandingResolver.PlacementAim replacementAim = new LandingResolver.PlacementAim(
+                owner, ownerState, ownerDy, Direction.UP, hit, true);
+        BlockState carpet = Blocks.MOSS_CARPET.defaultBlockState();
+        BlockState powder = Blocks.POWDER_SNOW.defaultBlockState();
         List<String> violations = new ArrayList<>();
-        for (BlockState state : c5States) {
-            LandingResolver.Family family = LandingResolver.classify(state);
-            LandingResolver.PlacementResolution up =
-                    LandingResolver.resolve(upAim, owner.above(), state, family);
-            LandingResolver.PlacementResolution side =
-                    LandingResolver.resolve(sideAim, owner.south(), state, family);
-            double validationUp = LandingHitValidationPolicy.shiftedCenterDy(
-                    owner, ownerState, ownerDy, Direction.UP, hit, state);
-            double validationSide = LandingHitValidationPolicy.shiftedCenterDy(
-                    owner, ownerState, ownerDy, Direction.SOUTH, hit, state);
-            if (family != LandingResolver.Family.AIM_KEYED_FLOOR_SEAT
-                    || up == null
-                    || Double.doubleToRawLongBits(up.landingDy())
-                    != Double.doubleToRawLongBits(ownerDy)
-                    || side != null
-                    || Double.doubleToRawLongBits(validationUp)
-                    != Double.doubleToRawLongBits(ownerDy)
-                    || !Double.isNaN(validationSide)) {
-                violations.add(state.getBlock() + ": family=" + family + " up=" + up + " side=" + side
-                        + " validationUp=" + validationUp + " validationSide=" + validationSide);
-            }
+        LandingResolver.Family carpetFamily = LandingResolver.classify(carpet);
+        LandingResolver.PlacementResolution carpetUp =
+                LandingResolver.resolve(upAim, owner.above(), carpet, carpetFamily);
+        LandingResolver.PlacementResolution carpetSide =
+                LandingResolver.resolve(sideAim, owner.south(), carpet, carpetFamily);
+        double carpetValidationUp = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, ownerState, ownerDy, Direction.UP, hit, carpet);
+        double carpetValidationSide = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, ownerState, ownerDy, Direction.SOUTH, hit, carpet);
+        if (carpetFamily != LandingResolver.Family.AIM_KEYED_FLOOR_SEAT
+                || carpetUp == null
+                || Double.doubleToRawLongBits(carpetUp.landingDy())
+                != Double.doubleToRawLongBits(ownerDy)
+                || carpetSide != null
+                || Double.doubleToRawLongBits(carpetValidationUp)
+                != Double.doubleToRawLongBits(ownerDy)
+                || !Double.isNaN(carpetValidationSide)) {
+            violations.add("carpet: family=" + carpetFamily + " up=" + carpetUp + " side=" + carpetSide
+                    + " validationUp=" + carpetValidationUp + " validationSide=" + carpetValidationSide);
+        }
+
+        LandingResolver.Family powderFamily = LandingResolver.classify(powder);
+        LandingResolver.PlacementResolution powderUp =
+                LandingResolver.resolve(upAim, owner.above(), powder, powderFamily);
+        LandingResolver.PlacementResolution powderSide =
+                LandingResolver.resolve(sideAim, owner.south(), powder, powderFamily);
+        LandingResolver.PlacementResolution powderReplacement =
+                LandingResolver.resolve(replacementAim, owner, powder, powderFamily);
+        LandingResolver.PlacementResolution powderLegacyWorldResolution =
+                LandingResolver.resolve(
+                        EmptyBlockGetter.INSTANCE, owner.above(), powder, Direction.UP, powderFamily);
+        double powderValidationUp = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, ownerState, ownerDy, Direction.UP, hit, powder);
+        double powderValidationSide = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, ownerState, ownerDy, Direction.SOUTH, hit, powder);
+        if (powderFamily != LandingResolver.Family.USE_CREATED_FULL_CUBE_CONTACT
+                || powderUp == null
+                || powderSide == null
+                || powderReplacement == null
+                || !powderReplacement.merge()
+                || powderLegacyWorldResolution != null
+                || Double.doubleToRawLongBits(powderUp.landingDy())
+                != Double.doubleToRawLongBits(ownerDy)
+                || Double.doubleToRawLongBits(powderSide.landingDy())
+                != Double.doubleToRawLongBits(ownerDy)
+                || Double.doubleToRawLongBits(powderReplacement.landingDy())
+                != Double.doubleToRawLongBits(ownerDy)
+                || Double.doubleToRawLongBits(powderValidationUp)
+                != Double.doubleToRawLongBits(ownerDy)
+                || Double.doubleToRawLongBits(powderValidationSide)
+                != Double.doubleToRawLongBits(ownerDy)) {
+            violations.add("powder: family=" + powderFamily + " up=" + powderUp + " side=" + powderSide
+                    + " replacement=" + powderReplacement + " legacy=" + powderLegacyWorldResolution
+                    + " validationUp=" + powderValidationUp
+                    + " validationSide=" + powderValidationSide);
         }
 
         java.util.function.Predicate<BlockState> previous = LandingResolver.compatFinalStateTestOverride;
         try {
             LandingResolver.compatFinalStateTestOverride =
                     state -> state.is(Blocks.MOSS_CARPET) || state.is(Blocks.POWDER_SNOW);
-            for (BlockState state : c5States) {
+            for (BlockState state : new BlockState[]{carpet, powder}) {
                 LandingResolver.Family family = LandingResolver.classify(state);
                 LandingResolver.PlacementResolution resolution =
                         LandingResolver.resolve(upAim, owner.above(), state, family);
@@ -988,8 +1024,133 @@ public final class LandingRuleLawTest {
         }
 
         if (!violations.isEmpty()) {
-            throw h.assertionException(owner, "C5 AIM-KEYED authority boundary failed:\n  "
+            throw h.assertionException(owner, "C5/TEST 25 contact authority boundary failed:\n  "
                     + String.join("\n  ", violations));
+        }
+        h.succeed();
+    }
+
+    /** Real bucket world-space contact matrix for every face and representative non-stone supports. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void powderSnowUseCreatedContactCoversAllFacesAndSupportShapes(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        double ownerDy = -1.5d;
+        BlockState powder = Blocks.POWDER_SNOW.defaultBlockState();
+        LandingResolver.Family powderFamily = LandingResolver.classify(powder);
+        BlockState[] ownerStates = {
+                Blocks.OAK_PLANKS.defaultBlockState(),
+                Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
+                Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP),
+                Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE)
+        };
+        List<String> violations = new ArrayList<>();
+
+        withFrozen(() -> {
+            for (int supportIndex = 0; supportIndex < ownerStates.length; supportIndex++) {
+                BlockState ownerState = ownerStates[supportIndex];
+                for (Direction face : Direction.values()) {
+                    BlockPos owner = h.absolutePos(new BlockPos(
+                            3 + supportIndex * 6, 8, 3 + face.ordinal() * 6));
+                    BlockPos target = owner.relative(face);
+                    w.setBlock(owner, ownerState, 3);
+                    w.setBlock(target, Blocks.AIR.defaultBlockState(), 3);
+                    forceStore(w, owner, ownerDy);
+
+                    place(h, Items.POWDER_SNOW_BUCKET, owner, face, 0.0d);
+                    if (!w.getBlockState(target).is(Blocks.POWDER_SNOW)) {
+                        throw h.assertionException(target, "TEST 25 premise: real powder bucket on "
+                                + ownerState + " " + face + " did not place in vanilla adjacent target "
+                                + target + "; got " + w.getBlockState(target).getBlock());
+                    }
+
+                    VoxelShape ownerShape = w.getBlockState(owner).getShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
+                    VoxelShape powderShape = w.getBlockState(target).getShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
+                    var ownerBounds = ownerShape.bounds();
+                    var powderBounds = powderShape.bounds();
+                    double ownerLiveDy = liveDy(w, owner);
+                    double powderLiveDy = liveDy(w, target);
+
+                    double hitX = owner.getX() + 0.5d;
+                    double hitY = owner.getY() + ownerLiveDy
+                            + (ownerBounds.minY + ownerBounds.maxY) * 0.5d;
+                    double hitZ = owner.getZ() + 0.5d;
+                    switch (face) {
+                        case UP -> hitY = owner.getY() + ownerLiveDy + ownerBounds.maxY;
+                        case DOWN -> hitY = owner.getY() + ownerLiveDy + ownerBounds.minY;
+                        case EAST -> hitX = owner.getX() + ownerBounds.maxX;
+                        case WEST -> hitX = owner.getX() + ownerBounds.minX;
+                        case SOUTH -> hitZ = owner.getZ() + ownerBounds.maxZ;
+                        case NORTH -> hitZ = owner.getZ() + ownerBounds.minZ;
+                    }
+                    Vec3 hit = new Vec3(hitX, hitY, hitZ);
+                    double validation = LandingHitValidationPolicy.shiftedCenterDy(
+                            owner, ownerState, ownerLiveDy, face, hit, powder);
+
+                    double ownerContact;
+                    double powderContact;
+                    double frameError = 0.0d;
+                    switch (face) {
+                        case UP -> {
+                            ownerContact = owner.getY() + ownerLiveDy + ownerBounds.maxY;
+                            powderContact = target.getY() + powderLiveDy + powderBounds.minY;
+                        }
+                        case DOWN -> {
+                            ownerContact = owner.getY() + ownerLiveDy + ownerBounds.minY;
+                            powderContact = target.getY() + powderLiveDy + powderBounds.maxY;
+                        }
+                        case EAST -> {
+                            ownerContact = owner.getX() + ownerBounds.maxX;
+                            powderContact = target.getX() + powderBounds.minX;
+                            frameError = target.getY() + powderLiveDy - (owner.getY() + ownerLiveDy);
+                        }
+                        case WEST -> {
+                            ownerContact = owner.getX() + ownerBounds.minX;
+                            powderContact = target.getX() + powderBounds.maxX;
+                            frameError = target.getY() + powderLiveDy - (owner.getY() + ownerLiveDy);
+                        }
+                        case SOUTH -> {
+                            ownerContact = owner.getZ() + ownerBounds.maxZ;
+                            powderContact = target.getZ() + powderBounds.minZ;
+                            frameError = target.getY() + powderLiveDy - (owner.getY() + ownerLiveDy);
+                        }
+                        case NORTH -> {
+                            ownerContact = owner.getZ() + ownerBounds.minZ;
+                            powderContact = target.getZ() + powderBounds.maxZ;
+                            frameError = target.getY() + powderLiveDy - (owner.getY() + ownerLiveDy);
+                        }
+                        default -> throw new IllegalStateException("Unexpected face " + face);
+                    }
+                    double contactError = powderContact - ownerContact;
+                    double storedBeforeNeighborEdit = storedDy(w, target);
+                    BlockPos editedNeighbor = target.east().equals(owner)
+                            ? target.north()
+                            : target.east();
+                    w.setBlock(editedNeighbor, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+                    double storedAfterNeighborEdit = storedDy(w, target);
+                    if (Math.abs(contactError) > EPS
+                            || Math.abs(frameError) > EPS
+                            || Double.doubleToRawLongBits(ownerLiveDy)
+                            != Double.doubleToRawLongBits(ownerDy)
+                            || Double.doubleToRawLongBits(validation)
+                            != Double.doubleToRawLongBits(ownerLiveDy)
+                            || Double.doubleToRawLongBits(storedBeforeNeighborEdit)
+                            != Double.doubleToRawLongBits(storedAfterNeighborEdit)
+                            || !w.getBlockState(target).is(Blocks.POWDER_SNOW)) {
+                        violations.add(ownerState + " " + face + ": powderDy=" + powderLiveDy
+                                + " contactError=" + contactError + " frameError=" + frameError
+                                + " validation=" + validation + " storedBefore=" + storedBeforeNeighborEdit
+                                + " storedAfter=" + storedAfterNeighborEdit);
+                    }
+                }
+            }
+        });
+        if (powderFamily != LandingResolver.Family.USE_CREATED_FULL_CUBE_CONTACT
+                || !violations.isEmpty()) {
+            throw h.assertionException(h.absolutePos(new BlockPos(3, 8, 3)),
+                    "TEST 25 real-bucket all-face/support contact matrix failed; family="
+                    + powderFamily + ":\n  " + String.join("\n  ", violations));
         }
         h.succeed();
     }
@@ -1064,6 +1225,53 @@ public final class LandingRuleLawTest {
                         + ray.getType() + "@" + ray.getBlockPos());
             }
         });
+        h.succeed();
+    }
+
+    /**
+     * Player-authored mega-rig RED: a powder-snow bucket used on the DOWN face of a frozen -0.5
+     * stone owner must place a body whose visible top contacts the owner's visible underside.
+     * TODAY it creates powder snow in {@code owner.below()} at dy=0.0: full cubes overlap by 0.5.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void powderSnowBucketDownContactMatchesMinusHalfStoneUnderside(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 5, 3));
+        w.setBlock(owner, Blocks.STONE.defaultBlockState(), 2);
+        forceStore(w, owner, -0.5d);
+        BlockPos placed = owner.below();
+        double[] contact = new double[5];
+        withFrozen(() -> {
+            place(h, Items.POWDER_SNOW_BUCKET, owner, Direction.DOWN, 0.0d);
+            if (!w.getBlockState(placed).is(Blocks.POWDER_SNOW)) {
+                throw h.assertionException(placed, "premise: DOWN powder-snow bucket did not create powder snow in "
+                        + "owner.below(); got " + w.getBlockState(placed).getBlock());
+            }
+
+            VoxelShape ownerVanillaShape = w.getBlockState(owner).getShape(
+                    EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
+            VoxelShape powderVanillaShape = w.getBlockState(placed).getShape(
+                    EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
+            contact[0] = owner.getY() + ownerVanillaShape.bounds().minY + liveDy(w, owner);
+            contact[1] = placed.getY() + powderVanillaShape.bounds().maxY + liveDy(w, placed);
+            contact[2] = contact[1] - contact[0];
+            contact[3] = storedDy(w, placed);
+            w.setBlock(placed.east(), Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            contact[4] = storedDy(w, placed);
+        });
+        double expectedOwnerUnderside = contact[0];
+        double actualPowderTop = contact[1];
+        double contactError = contact[2];
+        if (!(Math.abs(contactError) <= EPS)) {
+            throw h.assertionException(placed, "DOWN-CONTACT-RED expectedOwnerUnderside=" + expectedOwnerUnderside
+                    + " actualPowderTop=" + actualPowderTop + " signedError(actual-expected)=" + contactError
+                    + " EPS=" + EPS);
+        }
+        if (Double.doubleToRawLongBits(contact[3]) != Double.doubleToRawLongBits(-0.5d)
+                || Double.doubleToRawLongBits(contact[4]) != Double.doubleToRawLongBits(contact[3])) {
+            throw h.assertionException(placed, "TEST 25 frozen placement dy changed across neighbor edit: before="
+                    + contact[3] + " after=" + contact[4]);
+        }
         h.succeed();
     }
 
@@ -1341,7 +1549,7 @@ public final class LandingRuleLawTest {
         h.succeed();
     }
 
-    /** Negative controls for the shared server policy: no global tolerance or non-UP C5 widening. */
+    /** Shared server-policy controls: powder contact is all-face; carpet and unrelated lanes stay narrow. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void deepServerValidationRejectsUnsupportedAndOutOfEnvelopeHits(GameTestHelper h) {
         BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
@@ -1366,28 +1574,42 @@ public final class LandingRuleLawTest {
         double powderSnowHeld = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
                 Blocks.POWDER_SNOW.defaultBlockState());
+        double powderSnowSlabOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
+                -2.0d,
+                Direction.SOUTH,
+                inside,
+                Blocks.POWDER_SNOW.defaultBlockState());
         double flatOwner = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE.defaultBlockState(), 0.0d, Direction.SOUTH, inside,
                 Blocks.STONE_SLAB.defaultBlockState());
         double partialOwner = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE_SLAB.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
                 Blocks.STONE_SLAB.defaultBlockState());
+        double unsupportedPowderOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.MOSS_CARPET.defaultBlockState(), -2.0d, Direction.SOUTH, inside,
+                Blocks.POWDER_SNOW.defaultBlockState());
         Vec3 outside = new Vec3(owner.getX() + 1.25d, owner.getY() - 1.45d, owner.getZ() + 1.0d);
         double outsideEnvelope = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, Blocks.STONE.defaultBlockState(), -2.0d, Direction.SOUTH, outside,
-                Blocks.STONE_SLAB.defaultBlockState());
+                Blocks.POWDER_SNOW.defaultBlockState());
 
         if (Double.doubleToRawLongBits(objectPositive) != Double.doubleToRawLongBits(-2.0d)
                 || Double.doubleToRawLongBits(entityObjectPositive) != Double.doubleToRawLongBits(-2.0d)
                 || !Double.isNaN(carpetSideHeld)
-                || !Double.isNaN(powderSnowHeld)
+                || Double.doubleToRawLongBits(powderSnowHeld) != Double.doubleToRawLongBits(-2.0d)
+                || Double.doubleToRawLongBits(powderSnowSlabOwner) != Double.doubleToRawLongBits(-2.0d)
                 || !Double.isNaN(flatOwner)
                 || !Double.isNaN(partialOwner)
+                || !Double.isNaN(unsupportedPowderOwner)
                 || !Double.isNaN(outsideEnvelope)) {
             throw h.assertionException(owner, "server validation policy boundary failed: object="
                     + objectPositive + " entityObject=" + entityObjectPositive + " unsupported="
                     + carpetSideHeld + " powderSnow=" + powderSnowHeld + " flatOwner=" + flatOwner
-                    + " partialOwner=" + partialOwner + " outsideEnvelope=" + outsideEnvelope);
+                    + " powderSnowSlabOwner=" + powderSnowSlabOwner + " partialOwner=" + partialOwner
+                    + " unsupportedPowderOwner=" + unsupportedPowderOwner
+                    + " outsideEnvelope=" + outsideEnvelope);
         }
         h.succeed();
     }
