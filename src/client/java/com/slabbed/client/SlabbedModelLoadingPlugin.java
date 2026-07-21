@@ -49,9 +49,10 @@ public final class SlabbedModelLoadingPlugin {
                 skipped.get());
     }
 
-    private static BakedModel wrapModel(ModelResourceLocation id, BakedModel model) {
+    static BakedModel wrapModel(ModelResourceLocation id, BakedModel model) {
         if (model == null
                 || ChainCeilingGeometry.isModelLocation(id)
+                || ModelResourceLocation.INVENTORY_VARIANT.equals(id.getVariant())
                 || model instanceof OffsetBlockStateModel) {
             return model;
         }
