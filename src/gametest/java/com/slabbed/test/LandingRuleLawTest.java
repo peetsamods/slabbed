@@ -1230,7 +1230,10 @@ public final class LandingRuleLawTest {
         h.succeed();
     }
 
-    /** TEST 21: ordinary use validates against an interactive target's translated owner cell. */
+    /**
+     * TEST 21/24: target-owned use validates against an interactive target's translated owner cell
+     * with either an empty hand or the held item vanilla needs for the target interaction.
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void deepUseServerValidationAcceptsLoweredInteractiveTarget(GameTestHelper h) {
         BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
@@ -1254,14 +1257,38 @@ public final class LandingRuleLawTest {
                     + "validation center by exact dy=-1.5; actual=" + shiftedDy + " expected=" + ownerDy);
         }
 
-        double nonEmptyNonBlockAction = LandingHitValidationPolicy.shiftedCenterDy(
+        double heldNonBlockActivation = LandingHitValidationPolicy.shiftedCenterDy(
                 owner,
                 Blocks.CHEST.defaultBlockState(),
                 ownerDy,
                 Direction.UP,
                 packetLikeHit,
                 null,
+                true);
+        double heldBlockBedActivation = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.BED.red().defaultBlockState(),
+                ownerDy,
+                Direction.UP,
+                packetLikeHit,
+                Blocks.STONE.defaultBlockState(),
                 false);
+        double flowerPotInsertion = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.FLOWER_POT.defaultBlockState(),
+                ownerDy,
+                Direction.UP,
+                packetLikeHit,
+                Blocks.POPPY.defaultBlockState(),
+                false);
+        double candleLighting = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.CANDLE.defaultBlockState(),
+                ownerDy,
+                Direction.UP,
+                packetLikeHit,
+                null,
+                true);
         Vec3 outsideTranslatedCell = new Vec3(
                 owner.getX() + 1.25d,
                 owner.getY() + ownerDy + 0.5d,
@@ -1282,11 +1309,34 @@ public final class LandingRuleLawTest {
                 new Vec3(owner.getX() + 0.5d, owner.getY() + 0.5d, owner.getZ() + 0.5d),
                 null,
                 true);
-        if (!Double.isNaN(nonEmptyNonBlockAction)
-                || !Double.isNaN(outsideOrdinaryUse)
+        List<String> violations = new ArrayList<>();
+        if (Double.doubleToRawLongBits(heldNonBlockActivation)
+                != Double.doubleToRawLongBits(ownerDy)) {
+            violations.add("HELD_NON_BLOCK_ACTIVATION actual=" + heldNonBlockActivation
+                    + " expected=" + ownerDy);
+        }
+        if (Double.doubleToRawLongBits(heldBlockBedActivation)
+                != Double.doubleToRawLongBits(ownerDy)) {
+            violations.add("HELD_BLOCK_BED_ACTIVATION actual=" + heldBlockBedActivation
+                    + " expected=" + ownerDy);
+        }
+        if (Double.doubleToRawLongBits(flowerPotInsertion)
+                != Double.doubleToRawLongBits(ownerDy)) {
+            violations.add("FLOWER_POT_INSERTION actual=" + flowerPotInsertion
+                    + " expected=" + ownerDy);
+        }
+        if (Double.doubleToRawLongBits(candleLighting)
+                != Double.doubleToRawLongBits(ownerDy)) {
+            violations.add("CANDLE_LIGHTING actual=" + candleLighting
+                    + " expected=" + ownerDy);
+        }
+        if (!Double.isNaN(outsideOrdinaryUse)
                 || !Double.isNaN(flatOrdinaryUse)) {
-            throw h.assertionException(owner, "TEST 21: explicit ordinary-use boundary failed: nonEmptyNonBlock="
-                    + nonEmptyNonBlockAction + " outside=" + outsideOrdinaryUse + " flat=" + flatOrdinaryUse);
+            violations.add("VANILLA_BOUNDARY outside=" + outsideOrdinaryUse + " flat=" + flatOrdinaryUse);
+        }
+        if (!violations.isEmpty()) {
+            throw h.assertionException(owner, "TEST 24: translated held-item target use failed:\n  "
+                    + String.join("\n  ", violations));
         }
         h.succeed();
     }

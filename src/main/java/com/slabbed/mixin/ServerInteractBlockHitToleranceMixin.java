@@ -454,12 +454,13 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return Double.NaN;
         }
         ItemStack heldStack = player.getItemInHand(packet.getHand());
-        boolean ordinaryEmptyHandUse = heldStack != null && heldStack.isEmpty();
+        boolean ordinaryTargetUse = heldStack != null
+                && (heldStack.isEmpty() || !(heldStack.getItem() instanceof BlockItem));
         BlockState heldState = heldStack != null && heldStack.getItem() instanceof BlockItem blockItem
                 ? blockItem.getBlock().defaultBlockState()
                 : null;
         return LandingHitValidationPolicy.shiftedCenterDy(
-                pos, state, ownerDy, hit.getDirection(), hit.getLocation(), heldState, ordinaryEmptyHandUse);
+                pos, state, ownerDy, hit.getDirection(), hit.getLocation(), heldState, ordinaryTargetUse);
     }
 
     /** Owner's visible lowering dy: the frozen store first (any depth), else the live lane. */
