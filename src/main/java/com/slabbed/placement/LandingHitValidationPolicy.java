@@ -3,7 +3,9 @@ package com.slabbed.placement;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -12,9 +14,10 @@ import net.minecraft.world.phys.Vec3;
  * Pure C2 policy for the server's shifted hit-validation center.
  *
  * <p>This does not widen Minecraft's distance tolerance. It only says when an already-lowered
- * target may move that validation center by its frozen visible depth. Ordinary target use validates
- * against the target's translated cell; block placement retains its existing resolver-family and
- * compound-owner-envelope gates. Flat owners and out-of-envelope hits fall through to vanilla.
+ * target may move that validation center by its frozen visible depth. Target-owned use validates
+ * against the target's translated cell even when vanilla needs a held item for the interaction;
+ * block placement retains its existing resolver-family and compound-owner-envelope gates. Flat
+ * owners and out-of-envelope hits fall through to vanilla.
  */
 public final class LandingHitValidationPolicy {
 
@@ -46,7 +49,7 @@ public final class LandingHitValidationPolicy {
             Direction hitFace,
             Vec3 hitPos,
             BlockState heldState,
-            boolean ordinaryEmptyHandUse
+            boolean ordinaryTargetUse
     ) {
         if (ownerPos == null
                 || ownerState == null
@@ -60,10 +63,12 @@ public final class LandingHitValidationPolicy {
             return Double.NaN;
         }
 
-        if (ordinaryEmptyHandUse) {
-            if (heldState != null) {
-                return Double.NaN;
-            }
+        LandingResolver.Family ownerFamily = LandingResolver.classify(ownerState);
+        boolean targetOwnedUse = ordinaryTargetUse
+                || ownerState.getBlock() instanceof EntityBlock
+                || ownerState.getBlock() instanceof BedBlock
+                || ownerState.getBlock() instanceof FlowerPotBlock;
+        if (targetOwnedUse) {
             boolean insideTranslatedTargetCell = hitPos.x >= ownerPos.getX() - EPSILON
                     && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
                     && hitPos.y >= ownerPos.getY() + ownerDy - EPSILON
@@ -94,7 +99,7 @@ public final class LandingHitValidationPolicy {
                     && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
             return insideFloorSeatEnvelope ? ownerDy : Double.NaN;
         }
-        if (LandingResolver.classify(ownerState) != LandingResolver.Family.FULL_BLOCK) {
+        if (ownerFamily != LandingResolver.Family.FULL_BLOCK) {
             return Double.NaN;
         }
         if (heldFamily == LandingResolver.Family.UNSUPPORTED) {
