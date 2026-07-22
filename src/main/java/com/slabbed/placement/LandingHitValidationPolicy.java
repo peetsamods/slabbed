@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -102,10 +103,15 @@ public final class LandingHitValidationPolicy {
                     && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
             return insideFloorSeatEnvelope ? ownerDy : Double.NaN;
         }
-        if (ownerFamily != LandingResolver.Family.FULL_BLOCK) {
+        if (heldFamily == LandingResolver.Family.UNSUPPORTED) {
             return Double.NaN;
         }
-        if (heldFamily == LandingResolver.Family.UNSUPPORTED) {
+        if (ownerState.getBlock() instanceof SlabBlock) {
+            return insideTranslatedSlabShape(ownerPos, ownerState, ownerDy, hitPos)
+                    ? ownerDy
+                    : Double.NaN;
+        }
+        if (ownerFamily != LandingResolver.Family.FULL_BLOCK) {
             return Double.NaN;
         }
 
@@ -120,6 +126,26 @@ public final class LandingHitValidationPolicy {
                 && hitPos.z >= ownerPos.getZ() - EPSILON
                 && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
         return insideOwnerEnvelope ? ownerDy : Double.NaN;
+    }
+
+    private static boolean insideTranslatedSlabShape(
+            BlockPos ownerPos,
+            BlockState ownerState,
+            double ownerDy,
+            Vec3 hitPos
+    ) {
+        if (!ownerState.hasProperty(SlabBlock.TYPE)) {
+            return false;
+        }
+        SlabType type = ownerState.getValue(SlabBlock.TYPE);
+        double minY = type == SlabType.TOP ? 0.5d : 0.0d;
+        double maxY = type == SlabType.BOTTOM ? 0.5d : 1.0d;
+        return hitPos.x >= ownerPos.getX() - EPSILON
+                && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
+                && hitPos.y >= ownerPos.getY() + ownerDy + minY - EPSILON
+                && hitPos.y <= ownerPos.getY() + ownerDy + maxY + EPSILON
+                && hitPos.z >= ownerPos.getZ() - EPSILON
+                && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
     }
 
     private static boolean insideTranslatedCell(BlockPos ownerPos, double ownerDy, Vec3 hitPos) {
