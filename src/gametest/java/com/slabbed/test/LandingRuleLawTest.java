@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -26,6 +27,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.SlabBlock;
@@ -1434,6 +1436,115 @@ public final class LandingRuleLawTest {
         if (Double.doubleToRawLongBits(shiftedDy[0]) != Double.doubleToRawLongBits(-2.0d)) {
             throw h.assertionException(owner, "TEST 19: resolver-owned slab side hit must shift the server "
                     + "validation center by exact dy=-2.0, got " + shiftedDy[0]);
+        }
+        h.succeed();
+    }
+
+    /** TEST 26: generic resolver-held placement validates against a lowered slab's occupied body. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void test26SlabOwnerServerValidationUsesTranslatedOccupiedShape(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        double ownerDy = -1.5d;
+        BlockState heldTorch = Blocks.TORCH.defaultBlockState();
+        BlockState oakBottom = Blocks.OAK_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+        Vec3 bottomTopHit = new Vec3(
+                owner.getX() + 0.5d,
+                owner.getY() + ownerDy + 0.5d,
+                owner.getZ() + 0.5d);
+
+        double oakBottomActual = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, oakBottom, ownerDy, Direction.UP, bottomTopHit, heldTorch);
+        if (Double.doubleToRawLongBits(oakBottomActual)
+                != Double.doubleToRawLongBits(ownerDy)) {
+            throw h.assertionException(owner, "TEST 26 RED: torch on the visible top of an oak bottom "
+                    + "slab at exact dy=-1.5 must shift the server validation center; actual="
+                    + oakBottomActual + " expected=" + ownerDy);
+        }
+
+        List<String> violations = new ArrayList<>();
+        int vanillaSlabCount = 0;
+        for (Block block : BuiltInRegistries.BLOCK) {
+            String blockId = BuiltInRegistries.BLOCK.getKey(block).toString();
+            if (!(block instanceof SlabBlock) || !blockId.startsWith("minecraft:")) {
+                continue;
+            }
+            vanillaSlabCount++;
+            BlockState bottomState = block.defaultBlockState()
+                    .setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+            double actual = LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, bottomState, ownerDy, Direction.UP, bottomTopHit, heldTorch);
+            if (Double.doubleToRawLongBits(actual) != Double.doubleToRawLongBits(ownerDy)) {
+                violations.add(blockId + " BOTTOM actual=" + actual + " expected=" + ownerDy);
+            }
+        }
+        if (vanillaSlabCount == 0) {
+            violations.add("no registered minecraft SlabBlock states were exercised");
+        }
+
+        Vec3 fullHeightTopHit = new Vec3(
+                owner.getX() + 0.5d,
+                owner.getY() + ownerDy + 1.0d,
+                owner.getZ() + 0.5d);
+        double topActual = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP),
+                ownerDy,
+                Direction.UP,
+                fullHeightTopHit,
+                heldTorch);
+        double doubleActual = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE),
+                ownerDy,
+                Direction.UP,
+                fullHeightTopHit,
+                heldTorch);
+        double bottomEmptyHalf = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                oakBottom,
+                ownerDy,
+                Direction.UP,
+                new Vec3(owner.getX() + 0.5d, owner.getY() + ownerDy + 0.75d,
+                        owner.getZ() + 0.5d),
+                heldTorch);
+        double topEmptyHalf = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP),
+                ownerDy,
+                Direction.UP,
+                new Vec3(owner.getX() + 0.5d, owner.getY() + ownerDy + 0.25d,
+                        owner.getZ() + 0.5d),
+                heldTorch);
+        double outsideXZ = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                oakBottom,
+                ownerDy,
+                Direction.UP,
+                new Vec3(owner.getX() + 1.25d, bottomTopHit.y, owner.getZ() + 0.5d),
+                heldTorch);
+        double unsupportedHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, oakBottom, ownerDy, Direction.UP, bottomTopHit,
+                Blocks.AIR.defaultBlockState());
+
+        if (Double.doubleToRawLongBits(topActual) != Double.doubleToRawLongBits(ownerDy)) {
+            violations.add("representative TOP actual=" + topActual + " expected=" + ownerDy);
+        }
+        if (Double.doubleToRawLongBits(doubleActual) != Double.doubleToRawLongBits(ownerDy)) {
+            violations.add("representative DOUBLE actual=" + doubleActual + " expected=" + ownerDy);
+        }
+        if (!Double.isNaN(bottomEmptyHalf)
+                || !Double.isNaN(topEmptyHalf)
+                || !Double.isNaN(outsideXZ)
+                || !Double.isNaN(unsupportedHeld)) {
+            violations.add("negative controls widened: bottomEmptyHalf=" + bottomEmptyHalf
+                    + " topEmptyHalf=" + topEmptyHalf + " outsideXZ=" + outsideXZ
+                    + " unsupportedHeld=" + unsupportedHeld);
+        }
+        if (!violations.isEmpty()) {
+            throw h.assertionException(owner, "TEST 26 slab-owner shape matrix failed across "
+                    + vanillaSlabCount + " vanilla slab blocks:\n  "
+                    + String.join("\n  ", violations));
         }
         h.succeed();
     }
