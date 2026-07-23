@@ -33,7 +33,8 @@ public abstract class BlockOnStateReplacedAnchorMixin {
         // defense the port was missing — audit D1). A piston move (moved), a real break (-> air /
         // fluid), or a replacement with a non-lock block still clears it. The hook fires AFTER the new
         // state is set, so getBlockState(pos) here is the replacement.
-        if (!moved && SlabAnchorAttachment.replacementPreservesAnchor(world, pos, world.getBlockState(pos))) {
+        if (!moved && SlabAnchorAttachment.replacementPreservesAnchor(
+                world, pos, oldState, world.getBlockState(pos))) {
             return;
         }
         SlabAnchorAttachment.removeAnchor(world, pos);
