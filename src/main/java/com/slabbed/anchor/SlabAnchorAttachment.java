@@ -18,6 +18,7 @@ import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.CarpetBlock;
@@ -960,18 +961,26 @@ public final class SlabAnchorAttachment {
 
     /**
      * D1 port (donor: 1.21.11 {@code 78ec0ac4}, audit STATE_DEFENSE_DIVERGENCE_2026-07-07): true when
-     * an in-place block-KIND replacement should KEEP the height-lock — the new occupant is itself a
-     * lock-eligible block (grass_block → dirt, log → stripped, copper oxidation), so stripping the
-     * attachments would make the block un-lower/jitter with no player action. Air, fluids, and
-     * non-lock kinds (slabs — the donor's explicit ruling: a slab never inherits a full-block anchor)
-     * still clear. Mirrors 26.2's own freeze-flat structural gate (ordinary full block / lockable
-     * block entity) plus the connecting-structural family.
+     * an in-place block-KIND replacement should KEEP the height-lock — either both occupants belong
+     * to the flower-pot state family, or the new occupant is itself a lock-eligible block (grass_block
+     * → dirt, log → stripped, copper oxidation). Air, fluids, and other non-lock kinds still clear.
+     * Mirrors 26.2's own freeze-flat structural gate (ordinary full block / lockable block entity)
+     * plus the connecting-structural family.
      */
-    public static boolean replacementPreservesAnchor(BlockGetter world, BlockPos pos, BlockState newState) {
+    public static boolean replacementPreservesAnchor(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState oldState,
+            BlockState newState
+    ) {
         if (newState == null || newState.isAir() || !newState.getFluidState().isEmpty()) {
             return false;
         }
-        return isOrdinaryFullBlockAnchorCandidate(world, pos, newState)
+        boolean flowerPotStateTransition = oldState != null
+                && oldState.getBlock() instanceof FlowerPotBlock
+                && newState.getBlock() instanceof FlowerPotBlock;
+        return flowerPotStateTransition
+                || isOrdinaryFullBlockAnchorCandidate(world, pos, newState)
                 || (newState.getBlock() instanceof EntityBlock
                         && !SlabSupport.isAlwaysCeilingHungDecoration(newState))
                 || isConnectingStructural(newState);

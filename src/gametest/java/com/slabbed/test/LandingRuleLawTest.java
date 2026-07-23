@@ -14,6 +14,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -30,6 +31,7 @@ import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
@@ -925,6 +927,134 @@ public final class LandingRuleLawTest {
             throw h.assertionException(placed, "GOES row 9: pot must seat flush -1.5 on a -1.5 owner; stored="
                     + stored + ". Flipped green by C4 (or already green — report).");
         }
+        h.succeed();
+    }
+
+    /**
+     * Live RED: inserting a cornflower is an in-place flower-pot block-kind transition, not a new
+     * placement. The occupied cell must keep the exact frozen height authored when the empty pot was
+     * placed; otherwise the potted variant falls back from -1.5 to -1.0 and visibly jumps half a block.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void pottedCornflowerUsePreservesExactMinus15Dy(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos base = h.absolutePos(new BlockPos(3, 1, 3));
+        world.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+        bslab(world, base.above(1));
+        world.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+        bslab(world, base.above(3));
+        BlockPos compoundSource = base.above(4);
+        world.setBlock(compoundSource, Blocks.STONE.defaultBlockState(), 2);
+        SlabAnchorAttachment.addAnchor(world, compoundSource, world.getBlockState(compoundSource));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(
+                world, compoundSource, world.getBlockState(compoundSource));
+        BlockPos owner = compoundSource.west();
+        bslab(world, owner);
+        SlabAnchorAttachment.addCompoundVisibleSideLowerSlab(
+                world,
+                owner,
+                world.getBlockState(owner),
+                compoundSource,
+                world.getBlockState(compoundSource));
+        BlockPos pot = owner.above();
+        long expectedBits = Double.doubleToRawLongBits(-1.5d);
+        long supportBits = Double.doubleToRawLongBits(-1.0d);
+
+        withFrozen(() -> {
+            double supportLive = liveDy(world, owner);
+            if (Double.doubleToRawLongBits(supportLive) != supportBits) {
+                throw h.assertionException(owner, "premise: marked side-lower slab must read exact dy=-1.0; live="
+                        + supportLive);
+            }
+            place(h, Items.FLOWER_POT, owner, Direction.UP, 0.0d);
+            if (!world.getBlockState(pot).is(Blocks.FLOWER_POT)) {
+                throw h.assertionException(pot, "premise: real-use flower pot placement failed");
+            }
+            double emptyStored = storedDy(world, pot);
+            double emptyLive = liveDy(world, pot);
+            if (Double.doubleToRawLongBits(emptyStored) != expectedBits
+                    || Double.doubleToRawLongBits(emptyLive) != expectedBits) {
+                throw h.assertionException(pot, "premise: empty pot must begin at exact dy=-1.5; stored="
+                        + emptyStored + " live=" + emptyLive);
+            }
+
+            Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+            if (!(mock instanceof ServerPlayer player)) {
+                throw h.assertionException(pot, "premise: real-use fixture did not create a ServerPlayer");
+            }
+            ItemStack cornflower = new ItemStack(Items.CORNFLOWER);
+            player.setItemInHand(InteractionHand.MAIN_HAND, cornflower);
+            Vec3 visiblePotHit = Vec3.atCenterOf(pot).add(0.0d, -1.5d, 0.0d);
+            InteractionResult result = player.gameMode.useItemOn(
+                    player,
+                    world,
+                    cornflower,
+                    InteractionHand.MAIN_HAND,
+                    new BlockHitResult(visiblePotHit, Direction.UP, pot, false));
+            if (result == null || !result.consumesAction()
+                    || !world.getBlockState(pot).is(Blocks.POTTED_CORNFLOWER)) {
+                throw h.assertionException(pot, "premise: real cornflower-on-pot use failed; result="
+                        + result + " state=" + world.getBlockState(pot));
+            }
+
+            double pottedStored = storedDy(world, pot);
+            double pottedLive = liveDy(world, pot);
+            if (Double.doubleToRawLongBits(pottedStored) != expectedBits
+                    || Double.doubleToRawLongBits(pottedLive) != expectedBits) {
+                if (!Double.isNaN(pottedStored)
+                        || Double.doubleToRawLongBits(pottedLive) != supportBits) {
+                    throw h.assertionException(pot, "wrong RED shape: expected deleted store and exact "
+                            + "fallback dy=-1.0; stored=" + pottedStored + " live=" + pottedLive);
+                }
+                throw h.assertionException(pot, "POTTED_CORNFLOWER_HEIGHT_JUMP_RED: in-place pot use must "
+                        + "preserve exact dy=-1.5; stored=" + pottedStored + " live=" + pottedLive);
+            }
+
+            List<Block> potVariants = new ArrayList<>();
+            for (Block block : BuiltInRegistries.BLOCK) {
+                if (block instanceof FlowerPotBlock) {
+                    potVariants.add(block);
+                }
+            }
+            if (potVariants.size() < 2
+                    || !potVariants.contains(Blocks.FLOWER_POT)
+                    || !potVariants.contains(Blocks.POTTED_CORNFLOWER)) {
+                throw h.assertionException(pot, "premise: registered FlowerPotBlock family is incomplete; count="
+                        + potVariants.size());
+            }
+
+            Block firstVariant = potVariants.get(0);
+            world.setBlock(pot, firstVariant.defaultBlockState(), Block.UPDATE_ALL);
+            for (int i = 0; i < potVariants.size(); i++) {
+                Block oldVariant = potVariants.get(i);
+                Block newVariant = potVariants.get((i + 1) % potVariants.size());
+                if (!world.getBlockState(pot).is(oldVariant)) {
+                    throw h.assertionException(pot, "premise: pot-family sweep lost its old variant at index "
+                            + i + "; expected=" + BuiltInRegistries.BLOCK.getKey(oldVariant)
+                            + " actual=" + world.getBlockState(pot));
+                }
+                world.setBlock(pot, newVariant.defaultBlockState(), Block.UPDATE_ALL);
+                double variantStored = storedDy(world, pot);
+                double variantLive = liveDy(world, pot);
+                if (!world.getBlockState(pot).is(newVariant)
+                        || Double.doubleToRawLongBits(variantStored) != expectedBits
+                        || Double.doubleToRawLongBits(variantLive) != expectedBits) {
+                    throw h.assertionException(pot, "registered pot-family transition must preserve exact "
+                            + "dy=-1.5; old=" + BuiltInRegistries.BLOCK.getKey(oldVariant)
+                            + " new=" + BuiltInRegistries.BLOCK.getKey(newVariant)
+                            + " stored=" + variantStored + " live=" + variantLive);
+                }
+            }
+
+            world.setBlock(pot, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            if (Double.doubleToRawLongBits(storedDy(world, pot)) != expectedBits) {
+                throw h.assertionException(pot, "premise: existing full-block replacement preservation changed");
+            }
+            world.setBlock(pot, Blocks.FLOWER_POT.defaultBlockState(), Block.UPDATE_ALL);
+            if (!Double.isNaN(storedDy(world, pot))) {
+                throw h.assertionException(pot, "non-pot to flower-pot replacement must not preserve stored dy");
+            }
+        });
         h.succeed();
     }
 
