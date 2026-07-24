@@ -2,8 +2,10 @@ package com.slabbed.test;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.SlabbedOffsetRaycast;
+import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -35,9 +37,22 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
     private static final String CURSOR_PRODUCTION_HOOK = "cursor_production_hook";
     private static final String RENDERED_OUTLINE_PRODUCTION_HOOK =
             "rendered_outline_production_hook";
+    private static final String TEST28_CASE_PROPERTY = "slabbed.test28.deepHeldUseCase";
+    private static final String DEEP_HELD_USE_PACKET_RED = "gate_lever_packet_red";
+    private static final int DEEP_HELD_USE_STARTING_COUNT = 4;
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        String test28Case = System.getProperty(TEST28_CASE_PROPERTY);
+        if (test28Case != null) {
+            switch (test28Case) {
+                case DEEP_HELD_USE_PACKET_RED -> runDeepHeldUsePacketRed(ctx);
+                default -> throw new IllegalArgumentException(
+                        "Unknown TEST 28 deep-held-use case: " + test28Case);
+            }
+            return;
+        }
+
         String test23Case = System.getProperty(TEST23_CASE_PROPERTY);
         if (test23Case != null) {
             switch (test23Case) {
@@ -435,6 +450,145 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         runProductionVisualEvidenceHook(ctx, false);
     }
 
+    /**
+     * TEST 28 red: an ordinary held BlockItem must not make an already-lowered interactive target
+     * fall back to vanilla's unshifted use validation. This deliberately exercises the real client
+     * packet route; it does not call either target block's use method directly.
+     */
+    private static void runDeepHeldUsePacketRed(ClientGameTestContext ctx) {
+        Path evidenceDir = Path.of(
+                "tmp",
+                "live-triage-20260723-124056",
+                "test28-red",
+                "deep-held-use-packet-" + System.nanoTime());
+        System.setProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY, "true");
+        System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, evidenceDir.toString());
+        LiveCursorIntentRecorder.resetForTests();
+        try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
+                .setUseConsistentSettings(true)
+                .create()) {
+            singleplayer.getClientLevel().waitForChunksDownload();
+            ctx.waitFor(client -> client.level != null
+                    && client.player != null
+                    && client.gameMode != null, 400);
+
+            List<BlockPos> targets = singleplayer.getServer().computeOnServer(server -> {
+                var player = server.getPlayerList().getPlayers().getFirst();
+                BlockPos gate = player.blockPosition().relative(player.getDirection(), 2).immutable();
+                BlockPos lever = gate.relative(player.getDirection().getClockWise()).immutable();
+                var level = server.overworld();
+                level.setBlock(gate, Blocks.OAK_FENCE_GATE.defaultBlockState(), Block.UPDATE_ALL);
+                level.setBlock(lever, Blocks.LEVER.defaultBlockState(), Block.UPDATE_ALL);
+                SlabAnchorAttachment.writePlacementDy(level, gate, -1.5d);
+                SlabAnchorAttachment.writePlacementDy(level, lever, -1.5d);
+                assertExactLoweredTarget(level, gate, "oak fence gate");
+                assertExactLoweredTarget(level, lever, "lever");
+                player.setItemInHand(InteractionHand.MAIN_HAND,
+                        new ItemStack(Blocks.CORNFLOWER, DEEP_HELD_USE_STARTING_COUNT));
+                player.inventoryMenu.sendAllDataToRemote();
+                return List.of(gate, lever);
+            });
+            BlockPos gate = targets.getFirst();
+            BlockPos lever = targets.get(1);
+
+            ctx.waitFor(client -> client.player.getMainHandItem().is(Blocks.CORNFLOWER.asItem())
+                    && client.level.getBlockState(gate).is(Blocks.OAK_FENCE_GATE)
+                    && client.level.getBlockState(lever).is(Blocks.LEVER), 400);
+            ctx.runOnClient(client -> client.gameMode.useItemOn(
+                    client.player,
+                    InteractionHand.MAIN_HAND,
+                    translatedTargetCellHit(gate)));
+            for (int tick = 0; tick < 20; tick++) {
+                ctx.waitTick();
+            }
+            boolean gateOpen = singleplayer.getServer().computeOnServer(server ->
+                    server.overworld().getBlockState(gate).getValue(BlockStateProperties.OPEN));
+            assertHeldItemAndPlacementCellUnchanged(
+                    singleplayer, gate, DEEP_HELD_USE_STARTING_COUNT, "gate");
+
+            ctx.runOnClient(client -> client.gameMode.useItemOn(
+                    client.player,
+                    InteractionHand.MAIN_HAND,
+                    translatedTargetCellHit(lever)));
+            for (int tick = 0; tick < 20; tick++) {
+                ctx.waitTick();
+            }
+            boolean leverPowered = singleplayer.getServer().computeOnServer(server ->
+                    server.overworld().getBlockState(lever).getValue(BlockStateProperties.POWERED));
+            assertHeldItemAndPlacementCellUnchanged(
+                    singleplayer, lever, DEEP_HELD_USE_STARTING_COUNT, "lever");
+
+            ctx.runOnClient(client -> LiveCursorIntentRecorder.flushSummaryForTests());
+            List<JsonObject> rows = readJsonRows(evidenceDir.resolve("session.jsonl"));
+            assertMergedHeldBlockUseAttempt(rows, gate, "oak fence gate");
+            assertMergedHeldBlockUseAttempt(rows, lever, "lever");
+
+            if (!gateOpen || !leverPowered) {
+                throw new AssertionError(
+                        "TEST28_DEEP_HELD_USE_RED: real held-cornflower packet reached lowered targets "
+                                + "at stored/live dy=-1.5 but authoritative target use remained inactive; "
+                                + "gateOpen=" + gateOpen + " leverPowered=" + leverPowered
+                                + " gate=" + gate.toShortString()
+                                + " lever=" + lever.toShortString());
+            }
+        } catch (AssertionError error) {
+            throw error;
+        } catch (Exception error) {
+            throw new RuntimeException("TEST28_DEEP_HELD_USE_WRONG_RED: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage(), error);
+        } finally {
+            System.clearProperty(LiveCursorIntentRecorder.ENABLE_PROPERTY);
+            System.clearProperty(LiveCursorIntentRecorder.DIR_PROPERTY);
+            LiveCursorIntentRecorder.resetForTests();
+        }
+    }
+
+    private static BlockHitResult translatedTargetCellHit(BlockPos target) {
+        return new BlockHitResult(
+                new Vec3(target.getX() + 0.5d, target.getY() - 1.0d, target.getZ() + 0.5d),
+                Direction.UP,
+                target,
+                false);
+    }
+
+    private static void assertExactLoweredTarget(
+            net.minecraft.server.level.ServerLevel level,
+            BlockPos target,
+            String targetName) {
+        double storedDy = SlabAnchorAttachment.storedPlacementDy(level, target);
+        double liveDy = SlabSupport.getYOffset(level, target, level.getBlockState(target));
+        if (Double.doubleToRawLongBits(storedDy) != Double.doubleToRawLongBits(-1.5d)
+                || Double.doubleToRawLongBits(liveDy) != Double.doubleToRawLongBits(-1.5d)) {
+            throw new AssertionError("TEST28_DEEP_HELD_USE_WRONG_RED: " + targetName
+                    + " setup did not retain stored/live dy=-1.5; stored=" + storedDy
+                    + " live=" + liveDy);
+        }
+    }
+
+    private static void assertHeldItemAndPlacementCellUnchanged(
+            TestSingleplayerContext singleplayer,
+            BlockPos target,
+            int expectedCount,
+            String targetName) {
+        singleplayer.getServer().computeOnServer(server -> {
+            var player = server.getPlayerList().getPlayers().getFirst();
+            var held = player.getMainHandItem();
+            var placementCell = target.above();
+            var placementState = server.overworld().getBlockState(placementCell);
+            if (!held.is(Blocks.CORNFLOWER.asItem()) || held.getCount() != expectedCount) {
+                throw new AssertionError("TEST28_DEEP_HELD_USE_PLACEMENT_THEFT: " + targetName
+                        + " held stack changed; expected minecraft:cornflower x" + expectedCount
+                        + " but was " + held);
+            }
+            if (!placementState.isAir() || placementState.is(Blocks.CORNFLOWER)) {
+                throw new AssertionError("TEST28_DEEP_HELD_USE_PLACEMENT_THEFT: " + targetName
+                        + " potential placement cell " + placementCell.toShortString()
+                        + " is not air/no-cornflower; state=" + placementState);
+            }
+            return null;
+        });
+    }
+
     private static void runRenderedOutlineProductionHook(ClientGameTestContext ctx) {
         runProductionVisualEvidenceHook(ctx, true);
     }
@@ -688,6 +842,59 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
                     failurePrefix + " at " + targetText
                             + "; actions=" + actions
                             + ", terminals=" + terminals);
+        }
+    }
+
+    private static void assertMergedHeldBlockUseAttempt(
+            List<JsonObject> rows,
+            BlockPos target,
+            String targetName) {
+        String targetText = target.toShortString();
+        ArrayList<JsonObject> actions = new ArrayList<>();
+        for (JsonObject row : rows) {
+            if (jsonEquals(row, "type", "action")
+                    && jsonEquals(row, "actionType", "use_block")
+                    && jsonEquals(row, "actionOrigin", "PLAYER_AUTHORED")
+                    && jsonEquals(row, "clickedOwnerPos", targetText)) {
+                actions.add(row);
+            }
+        }
+        JsonObject client = actions.stream()
+                .filter(row -> jsonEquals(row, "side", "client"))
+                .findFirst()
+                .orElse(null);
+        JsonObject server = actions.stream()
+                .filter(row -> jsonEquals(row, "side", "server"))
+                .findFirst()
+                .orElse(null);
+        String logicalAttemptId = jsonString(client, "logicalAttemptId");
+        List<JsonObject> terminals = rows.stream()
+                .filter(row -> jsonEquals(row, "type", "placement_attempt"))
+                .filter(row -> jsonEquals(row, "logicalAttemptId", logicalAttemptId))
+                .filter(row -> jsonEquals(row, "attemptStatus", "MERGED_CLIENT_SERVER"))
+                .filter(row -> jsonEquals(row, "actionCount", "2"))
+                .toList();
+        JsonObject terminal = terminals.size() == 1 ? terminals.getFirst() : null;
+        boolean exactContract = actions.size() == 2
+                && client != null
+                && server != null
+                && jsonEquals(client, "heldItem", "minecraft:cornflower")
+                && jsonEquals(server, "heldItem", "minecraft:cornflower")
+                && jsonString(client, "packetSequence") != null
+                && jsonString(client, "packetSequence").equals(jsonString(server, "packetSequence"))
+                && logicalAttemptId != null
+                && logicalAttemptId.equals(jsonString(server, "logicalAttemptId"))
+                && terminal != null
+                && hasTruthfulValue(client, "clickedHitVec")
+                && hasTruthfulValue(server, "clickedHitVec")
+                && hasTruthfulValue(server, "beforeState")
+                && hasTruthfulValue(server, "afterState")
+                && hasTruthfulValue(server, "functionalOutcome")
+                && jsonEquals(server, "handlerDecision", "returned");
+        if (!exactContract) {
+            throw new AssertionError("TEST28_DEEP_HELD_USE_WRONG_RED: " + targetName
+                    + " packet did not produce one merged player-authored attempt at " + targetText
+                    + "; actions=" + actions + ", terminals=" + terminals);
         }
     }
 

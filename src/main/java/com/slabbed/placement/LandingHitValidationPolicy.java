@@ -3,13 +3,22 @@ package com.slabbed.placement;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
 /**
  * Pure C2 policy for the server's shifted hit-validation center.
@@ -23,6 +32,16 @@ import net.minecraft.world.phys.Vec3;
 public final class LandingHitValidationPolicy {
 
     private static final double EPSILON = 1.0e-6d;
+    // Derive the runtime-mapped name from Minecraft's base declaration instead of hardcoding the
+    // deobfuscated name. Ambiguous or unavailable reflection metadata fails closed.
+    private static final String DIRECT_NO_ITEM_USE_METHOD_NAME = directNoItemUseMethodName();
+    private static final ClassValue<Boolean> HAS_DIRECT_NO_ITEM_USE_OVERRIDE =
+            new ClassValue<>() {
+                @Override
+                protected Boolean computeValue(Class<?> type) {
+                    return declaresDirectNoItemUseOverride(type);
+                }
+            };
 
     private LandingHitValidationPolicy() {
     }
@@ -65,7 +84,12 @@ public final class LandingHitValidationPolicy {
         }
 
         LandingResolver.Family ownerFamily = LandingResolver.classify(ownerState);
+        boolean statefulObjectTargetUse = ownerFamily == LandingResolver.Family.OBJECT
+                && (ownerState.hasProperty(BlockStateProperties.OPEN)
+                || ownerState.hasProperty(BlockStateProperties.POWERED))
+                && HAS_DIRECT_NO_ITEM_USE_OVERRIDE.get(ownerState.getBlock().getClass());
         boolean targetOwnedUse = ordinaryTargetUse
+                || statefulObjectTargetUse
                 || ownerState.getBlock() instanceof EntityBlock
                 || ownerState.getBlock() instanceof BedBlock
                 || ownerState.getBlock() instanceof FlowerPotBlock;
@@ -126,6 +150,63 @@ public final class LandingHitValidationPolicy {
                 && hitPos.z >= ownerPos.getZ() - EPSILON
                 && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
         return insideOwnerEnvelope ? ownerDy : Double.NaN;
+    }
+
+    private static String directNoItemUseMethodName() {
+        try {
+            String methodName = null;
+            for (Method method : BlockBehaviour.class.getDeclaredMethods()) {
+                if (Modifier.isStatic(method.getModifiers())
+                        || !hasDirectNoItemUseSignature(method)) {
+                    continue;
+                }
+                if (methodName != null) {
+                    return null;
+                }
+                methodName = method.getName();
+            }
+            return methodName;
+        } catch (RuntimeException | LinkageError exception) {
+            return null;
+        }
+    }
+
+    private static boolean declaresDirectNoItemUseOverride(Class<?> blockClass) {
+        if (DIRECT_NO_ITEM_USE_METHOD_NAME == null
+                || blockClass == null
+                || !BlockBehaviour.class.isAssignableFrom(blockClass)) {
+            return false;
+        }
+        try {
+            for (Class<?> type = blockClass;
+                    type != BlockBehaviour.class;
+                    type = type.getSuperclass()) {
+                for (Method method : type.getDeclaredMethods()) {
+                    int modifiers = method.getModifiers();
+                    if (method.getName().equals(DIRECT_NO_ITEM_USE_METHOD_NAME)
+                            && !Modifier.isStatic(modifiers)
+                            && !Modifier.isPrivate(modifiers)
+                            && hasDirectNoItemUseSignature(method)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (RuntimeException | LinkageError exception) {
+            // Metadata failures must preserve vanilla validation, never widen shifted-hit authority.
+            return false;
+        }
+        return false;
+    }
+
+    private static boolean hasDirectNoItemUseSignature(Method method) {
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        return method.getReturnType() == InteractionResult.class
+                && parameterTypes.length == 5
+                && parameterTypes[0] == BlockState.class
+                && parameterTypes[1] == Level.class
+                && parameterTypes[2] == BlockPos.class
+                && parameterTypes[3] == Player.class
+                && parameterTypes[4] == BlockHitResult.class;
     }
 
     private static boolean insideTranslatedSlabShape(
