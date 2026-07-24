@@ -84,6 +84,8 @@ public abstract class BlockItemPlacementIntentMixin {
     private static final ThreadLocal<RootAim> C3_ROOT_AIM = new ThreadLocal<>();
     private static final ThreadLocal<Deque<PlacementFrame>> C3_PLACE_FRAMES =
             ThreadLocal.withInitial(ArrayDeque::new);
+    private static final ThreadLocal<OccludedOccupancyFrame> OCCLUDED_OCCUPANCY_FRAME =
+            new ThreadLocal<>();
 
     private record RootAim(
             LandingResolver.PlacementAim resolverAim,
@@ -91,6 +93,9 @@ public abstract class BlockItemPlacementIntentMixin {
             net.minecraft.world.InteractionHand hand,
             String heldItemId
     ) {
+    }
+
+    private record OccludedOccupancyFrame(VoxelShape translatedShape) {
     }
 
     private record CellSnapshot(
@@ -1309,9 +1314,13 @@ public abstract class BlockItemPlacementIntentMixin {
             return;   // vanilla placement works — never hijack a working placement
         }
         double occupantDy = SlabSupport.getYOffset(level, occupied, occupant);
-        if (!SlabEnsembleCoherence.isOccludedOccupancy(level, occupied, occupantDy)) {
+        if (!Double.isFinite(occupantDy)
+                || !SlabEnsembleCoherence.isOccludedOccupancy(level, occupied, occupantDy)) {
             return;
         }
+        VoxelShape translatedOccupantShape = occupant.getCollisionShape(
+                        level, occupied, CollisionContext.empty())
+                .move(occupied.getX(), occupied.getY() + occupantDy, occupied.getZ());
         BlockItem self = (BlockItem) (Object) this;
         Vec3 click = context.getClickLocation();
         BlockHitResult liftedHit = new BlockHitResult(
@@ -1320,7 +1329,48 @@ public abstract class BlockItemPlacementIntentMixin {
                 context.getLevel(), context.getPlayer(), context.getHand(),
                 context.getItemInHand(), liftedHit) {
         };
-        cir.setReturnValue(self.useOn(remapped));
+        OccludedOccupancyFrame priorOccupancyFrame = OCCLUDED_OCCUPANCY_FRAME.get();
+        RootAim priorRootAim = C3_ROOT_AIM.get();
+        OccludedOccupancyFrame occupancyFrame =
+                new OccludedOccupancyFrame(translatedOccupantShape);
+        boolean rebindRootAim = slabbed$isTranslatedUpTopHit(click, translatedOccupantShape);
+        RootAim remappedRootAim =
+                rebindRootAim ? slabbed$c3CaptureRootAim(remapped) : priorRootAim;
+        try {
+            OCCLUDED_OCCUPANCY_FRAME.set(occupancyFrame);
+            if (rebindRootAim) {
+                C3_ROOT_AIM.set(remappedRootAim);
+            }
+            cir.setReturnValue(self.useOn(remapped));
+        } finally {
+            if (priorOccupancyFrame == null) {
+                OCCLUDED_OCCUPANCY_FRAME.remove();
+            } else {
+                OCCLUDED_OCCUPANCY_FRAME.set(priorOccupancyFrame);
+            }
+            if (priorRootAim == null) {
+                C3_ROOT_AIM.remove();
+            } else {
+                C3_ROOT_AIM.set(priorRootAim);
+            }
+        }
+    }
+
+    private static boolean slabbed$isTranslatedUpTopHit(Vec3 hit, VoxelShape translatedShape) {
+        if (hit == null || translatedShape == null || translatedShape.isEmpty()) {
+            return false;
+        }
+        double localTopY = Double.NEGATIVE_INFINITY;
+        for (var bounds : translatedShape.toAabbs()) {
+            if (hit.x >= bounds.minX - LOWERED_VISUAL_BOUNDARY_EPSILON
+                    && hit.x <= bounds.maxX + LOWERED_VISUAL_BOUNDARY_EPSILON
+                    && hit.z >= bounds.minZ - LOWERED_VISUAL_BOUNDARY_EPSILON
+                    && hit.z <= bounds.maxZ + LOWERED_VISUAL_BOUNDARY_EPSILON) {
+                localTopY = Math.max(localTopY, bounds.maxY);
+            }
+        }
+        return Double.isFinite(localTopY)
+                && Math.abs(hit.y - localTopY) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
     @Inject(method = "useOn", at = @At("HEAD"), cancellable = true)
@@ -1512,6 +1562,53 @@ public abstract class BlockItemPlacementIntentMixin {
     ) {
         // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
         return outgoing;
+    }
+
+    @WrapMethod(method = "canPlace")
+    private boolean slabbed$rejectTranslatedPlacementOccupancy(
+            BlockPlaceContext context,
+            BlockState state,
+            Operation<Boolean> original
+    ) {
+        boolean admitted = original.call(context, state);
+        OccludedOccupancyFrame occupancyFrame = OCCLUDED_OCCUPANCY_FRAME.get();
+        if (!admitted || occupancyFrame == null) {
+            return admitted;
+        }
+
+        RootAim rootAim = C3_ROOT_AIM.get();
+        LandingResolver.PlacementAim aim = rootAim == null ? null : rootAim.resolverAim();
+        if (aim == null || state == null) {
+            return true;
+        }
+
+        LandingResolver.Family family = LandingResolver.classify(state);
+        if (family == LandingResolver.Family.UNSUPPORTED
+                || LandingResolver.compatOwnsFinalState(state)) {
+            return true;
+        }
+
+        LandingResolver.PlacementResolution resolution =
+                LandingResolver.resolve(aim, context.getClickedPos(), state, family);
+        if (resolution == null
+                || (aim.replacementSameCell() && aim.ownerPos().equals(resolution.targetCell()))
+                || !Double.isFinite(resolution.landingDy())) {
+            return true;
+        }
+
+        Level world = context.getLevel();
+        BlockPos placePos = resolution.targetCell();
+        VoxelShape candidateShape = state.getCollisionShape(
+                        world, placePos, CollisionContext.empty())
+                .move(placePos.getX(), placePos.getY() + resolution.landingDy(), placePos.getZ());
+        if (candidateShape.isEmpty()) {
+            return true;
+        }
+
+        return !Shapes.joinIsNotEmpty(
+                candidateShape,
+                occupancyFrame.translatedShape(),
+                BooleanOp.AND);
     }
 
     @Inject(method = "canPlace", at = @At("HEAD"), cancellable = true)
