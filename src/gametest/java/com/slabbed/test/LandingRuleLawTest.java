@@ -27,6 +27,7 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -78,6 +79,23 @@ public final class LandingRuleLawTest {
     private static final double EPS = 1.0e-6;
     private static final String C3_CROSS_CHUNK_STRUCTURE = "slabbed_gametest:c3_cross_chunk";
     private static final int C3_CROSS_CHUNK_FIXTURE_SIZE = 20;
+
+    /**
+     * TEST 28 adversarial fixture: its matching descriptor has a different name and does not
+     * override Minecraft's real no-item use hook.
+     */
+    private static final class DescriptorDecoy {
+        @SuppressWarnings("unused")
+        private static InteractionResult differentlyNamedDescriptor(
+                BlockState state,
+                Level level,
+                BlockPos pos,
+                Player player,
+                BlockHitResult hit
+        ) {
+            return InteractionResult.PASS;
+        }
+    }
 
     // ── real-useOn placement (matches NeighborUpdateInvarianceTest / DeepCompoundTowerLawTest) ──
     private static void place(GameTestHelper h, Item item, BlockPos clicked, Direction face, double yNudge) {
@@ -1787,6 +1805,191 @@ public final class LandingRuleLawTest {
             throw h.assertionException(owner, "TEST 24: translated held-item target use failed:\n  "
                     + String.join("\n  ", violations));
         }
+        h.succeed();
+    }
+
+    /**
+     * TEST 28: held-block use shifts only stateful OBJECT targets, not the whole placement family.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void deepHeldStatefulObjectUseValidationMatrix(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        double ownerDy = -1.5d;
+        Vec3 inside = new Vec3(
+                owner.getX() + 0.5d,
+                owner.getY() + ownerDy + 0.5d,
+                owner.getZ() + 0.5d);
+        Vec3 outside = new Vec3(
+                owner.getX() + 1.25d,
+                owner.getY() + ownerDy + 0.5d,
+                owner.getZ() + 0.5d);
+        BlockState heldFlower = Blocks.CORNFLOWER.defaultBlockState();
+
+        BlockState[] statefulTargets = {
+                Blocks.OAK_FENCE_GATE.defaultBlockState(),
+                Blocks.LEVER.defaultBlockState(),
+                Blocks.OAK_TRAPDOOR.defaultBlockState(),
+                Blocks.STONE_BUTTON.defaultBlockState()
+        };
+        List<String> violations = new ArrayList<>();
+        for (BlockState target : statefulTargets) {
+            LandingResolver.Family family = LandingResolver.classify(target);
+            double actual = LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, target, ownerDy, Direction.UP, inside, heldFlower, false);
+            if (family != LandingResolver.Family.OBJECT
+                    || (!target.hasProperty(BlockStateProperties.OPEN)
+                    && !target.hasProperty(BlockStateProperties.POWERED))
+                    || Double.doubleToRawLongBits(actual)
+                    != Double.doubleToRawLongBits(ownerDy)) {
+                violations.add("stateful target=" + target + " family=" + family
+                        + " actual=" + actual + " expected=" + ownerDy);
+            }
+        }
+
+        BlockState pressurePlate = Blocks.OAK_PRESSURE_PLATE.defaultBlockState();
+        LandingResolver.Family pressurePlateFamily = LandingResolver.classify(pressurePlate);
+        double pressurePlateActual = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                pressurePlate,
+                ownerDy,
+                Direction.UP,
+                inside,
+                Blocks.OAK_PLANKS.defaultBlockState(),
+                false);
+        if (pressurePlateFamily != LandingResolver.Family.OBJECT
+                || !pressurePlate.hasProperty(BlockStateProperties.POWERED)
+                || !Double.isNaN(pressurePlateActual)) {
+            violations.add("PRESSURE_PLATE_NON_TARGET_USE family=" + pressurePlateFamily
+                    + " powered=" + pressurePlate.hasProperty(BlockStateProperties.POWERED)
+                    + " actual=" + pressurePlateActual + " expected=NaN");
+        }
+
+        BlockState poweredRail = Blocks.POWERED_RAIL.defaultBlockState();
+        LandingResolver.Family poweredRailFamily = LandingResolver.classify(poweredRail);
+        double poweredRailActual = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                poweredRail,
+                ownerDy,
+                Direction.UP,
+                inside,
+                Blocks.OAK_PLANKS.defaultBlockState(),
+                false);
+        if (poweredRailFamily != LandingResolver.Family.OBJECT
+                || !poweredRail.hasProperty(BlockStateProperties.POWERED)
+                || !Double.isNaN(poweredRailActual)) {
+            violations.add("POWERED_RAIL_NON_TARGET_USE family=" + poweredRailFamily
+                    + " powered=" + poweredRail.hasProperty(BlockStateProperties.POWERED)
+                    + " actual=" + poweredRailActual + " expected=NaN");
+        }
+
+        try {
+            java.lang.reflect.Method classifier = LandingHitValidationPolicy.class.getDeclaredMethod(
+                    "declaresDirectNoItemUseOverride", Class.class);
+            classifier.setAccessible(true);
+            boolean descriptorDecoyActual = (boolean) classifier.invoke(null, DescriptorDecoy.class);
+            if (descriptorDecoyActual) {
+                violations.add("DESCRIPTOR_DECOY_CLASSIFIER actual=true expected=false");
+            }
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            violations.add("DESCRIPTOR_DECOY_WRONG_RED reflection="
+                    + exception.getClass().getSimpleName());
+        }
+
+        double fenceWithHeldDoor = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.OAK_FENCE.defaultBlockState(),
+                ownerDy,
+                Direction.UP,
+                inside,
+                Blocks.OAK_DOOR.defaultBlockState(),
+                false);
+        double flatGate = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.OAK_FENCE_GATE.defaultBlockState(),
+                0.0d,
+                Direction.UP,
+                new Vec3(owner.getX() + 0.5d, owner.getY() + 0.5d, owner.getZ() + 0.5d),
+                heldFlower,
+                false);
+        double outsideLever = LandingHitValidationPolicy.shiftedCenterDy(
+                owner,
+                Blocks.LEVER.defaultBlockState(),
+                ownerDy,
+                Direction.UP,
+                outside,
+                heldFlower,
+                false);
+        if (!Double.isNaN(fenceWithHeldDoor)
+                || !Double.isNaN(flatGate)
+                || !Double.isNaN(outsideLever)) {
+            violations.add("vanilla boundary fence=" + fenceWithHeldDoor + " flatGate="
+                    + flatGate + " outsideLever=" + outsideLever);
+        }
+
+        if (!violations.isEmpty()) {
+            throw h.assertionException(owner, "TEST 28 stateful target-use matrix failed:\n  "
+                    + String.join("\n  ", violations));
+        }
+        h.succeed();
+    }
+
+    /** TEST 28: a real direct-use state transition must not rewrite a frozen target's height. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void deepDirectUseStateTransitionPreservesFrozenDy(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos target = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockPos editedNeighbor = target.east();
+        double expectedDy = -1.5d;
+        w.setBlock(target, Blocks.OAK_FENCE_GATE.defaultBlockState(), 3);
+        forceStore(w, target, expectedDy);
+
+        withFrozen(() -> {
+            double storedBefore = storedDy(w, target);
+            double liveBefore = liveDy(w, target);
+            if (Double.doubleToRawLongBits(storedBefore) != Double.doubleToRawLongBits(expectedDy)
+                    || Double.doubleToRawLongBits(liveBefore) != Double.doubleToRawLongBits(expectedDy)) {
+                throw h.assertionException(target, "premise: fence gate must begin with exact frozen dy=-1.5; "
+                        + "stored=" + storedBefore + " live=" + liveBefore);
+            }
+
+            Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+            if (!(mock instanceof ServerPlayer player)) {
+                throw h.assertionException(target, "premise: direct-use fixture did not create a ServerPlayer");
+            }
+            ItemStack heldFlower = new ItemStack(Items.CORNFLOWER);
+            player.setItemInHand(InteractionHand.MAIN_HAND, heldFlower);
+            Vec3 visibleTargetHit = Vec3.atCenterOf(target).add(0.0d, expectedDy, 0.0d);
+            InteractionResult result = player.gameMode.useItemOn(
+                    player,
+                    w,
+                    heldFlower,
+                    InteractionHand.MAIN_HAND,
+                    new BlockHitResult(visibleTargetHit, Direction.UP, target, false));
+            BlockState toggled = w.getBlockState(target);
+            double storedAfterToggle = storedDy(w, target);
+            double liveAfterToggle = liveDy(w, target);
+
+            w.setBlock(editedNeighbor, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            double storedAfterNeighbor = storedDy(w, target);
+            double liveAfterNeighbor = liveDy(w, target);
+            if (result == null
+                    || !result.consumesAction()
+                    || !toggled.hasProperty(BlockStateProperties.OPEN)
+                    || !toggled.getValue(BlockStateProperties.OPEN)
+                    || Double.doubleToRawLongBits(storedAfterToggle)
+                    != Double.doubleToRawLongBits(expectedDy)
+                    || Double.doubleToRawLongBits(liveAfterToggle)
+                    != Double.doubleToRawLongBits(expectedDy)
+                    || Double.doubleToRawLongBits(storedAfterNeighbor)
+                    != Double.doubleToRawLongBits(expectedDy)
+                    || Double.doubleToRawLongBits(liveAfterNeighbor)
+                    != Double.doubleToRawLongBits(expectedDy)) {
+                throw h.assertionException(target, "TEST 28 direct-use state transition must preserve exact "
+                        + "dy=-1.5; result=" + result + " state=" + toggled
+                        + " storedAfterToggle=" + storedAfterToggle + " liveAfterToggle=" + liveAfterToggle
+                        + " storedAfterNeighbor=" + storedAfterNeighbor + " liveAfterNeighbor=" + liveAfterNeighbor);
+            }
+        });
         h.succeed();
     }
 
