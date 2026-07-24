@@ -38,12 +38,15 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
@@ -1990,6 +1993,186 @@ public final class LandingRuleLawTest {
                         + " storedAfterNeighbor=" + storedAfterNeighbor + " liveAfterNeighbor=" + liveAfterNeighbor);
             }
         });
+        h.succeed();
+    }
+
+    /** TEST 29: a translated held-slab body must not steal a lowered target's occupied visible lane. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void test29HeldSlabTranslatedOccupancyIsRefused(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        double targetDy = -1.5d;
+        double supportDy = -1.0d;
+        double placementDy = -2.5d;
+        BlockState heldSlabState = Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+        List<String> violations = new ArrayList<>();
+
+        // Target-use control: an exact visible hit still belongs to the lowered trapdoor, not the held slab.
+        BlockPos controlTarget = h.absolutePos(new BlockPos(8, 3, 3));
+        BlockState controlState = Blocks.OAK_TRAPDOOR.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST)
+                .setValue(BlockStateProperties.HALF, Half.BOTTOM)
+                .setValue(BlockStateProperties.OPEN, false)
+                .setValue(BlockStateProperties.POWERED, false);
+        w.setBlock(controlTarget, controlState, 3);
+        w.setBlock(controlTarget.above(), Blocks.AIR.defaultBlockState(), 3);
+        forceStore(w, controlTarget, targetDy);
+
+        withFrozen(() -> {
+            if (Double.doubleToRawLongBits(storedDy(w, controlTarget)) != Double.doubleToRawLongBits(targetDy)
+                    || Double.doubleToRawLongBits(liveDy(w, controlTarget)) != Double.doubleToRawLongBits(targetDy)) {
+                throw h.assertionException(controlTarget, "wrong-red premise: control trapdoor must begin at exact "
+                        + "stored/live dy=-1.5; stored=" + storedDy(w, controlTarget)
+                        + " live=" + liveDy(w, controlTarget));
+            }
+
+            Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+            if (!(mock instanceof ServerPlayer player)) {
+                throw h.assertionException(controlTarget, "wrong-red premise: control did not create a ServerPlayer");
+            }
+            ItemStack held = new ItemStack(Items.OAK_SLAB);
+            player.setItemInHand(InteractionHand.MAIN_HAND, held);
+            int heldBefore = held.getCount();
+            Vec3 controlHit = new Vec3(
+                    controlTarget.getX() + 0.600729d,
+                    controlTarget.getY() - 1.312500d,
+                    controlTarget.getZ() + 0.566410d);
+            InteractionResult controlResult = player.gameMode.useItemOn(
+                    player,
+                    w,
+                    held,
+                    InteractionHand.MAIN_HAND,
+                    new BlockHitResult(controlHit, Direction.UP, controlTarget, false));
+            BlockState controlAfter = w.getBlockState(controlTarget);
+            if (controlResult == null
+                    || !controlResult.consumesAction()
+                    || !controlAfter.hasProperty(BlockStateProperties.OPEN)
+                    || !controlAfter.getValue(BlockStateProperties.OPEN)
+                    || held.getCount() != heldBefore
+                    || player.getItemInHand(InteractionHand.MAIN_HAND).getCount() != heldBefore
+                    || !w.getBlockState(controlTarget.above()).isAir()
+                    || Double.doubleToRawLongBits(storedDy(w, controlTarget))
+                    != Double.doubleToRawLongBits(targetDy)
+                    || Double.doubleToRawLongBits(liveDy(w, controlTarget))
+                    != Double.doubleToRawLongBits(targetDy)) {
+                throw h.assertionException(controlTarget, "wrong-red control: lowered trapdoor use must consume, open, "
+                        + "retain the held slab and exact dy=-1.5, and place nothing; result=" + controlResult
+                        + " state=" + controlAfter + " held=" + held.getCount()
+                        + " stored=" + storedDy(w, controlTarget) + " live=" + liveDy(w, controlTarget));
+            }
+        });
+
+        BlockPos gateSupport = h.absolutePos(new BlockPos(3, 3, 3));
+        BlockPos gateTarget = gateSupport.above();
+        BlockPos gatePlacement = gateSupport.above(2);
+        BlockState gateState = Blocks.OAK_FENCE_GATE.defaultBlockState()
+                .setValue(BlockStateProperties.OPEN, false)
+                .setValue(BlockStateProperties.POWERED, false);
+        BlockPos trapdoorSupport = h.absolutePos(new BlockPos(3, 3, 7));
+        BlockPos trapdoorTarget = trapdoorSupport.above();
+        BlockPos trapdoorPlacement = trapdoorSupport.above(2);
+        BlockState trapdoorState = Blocks.OAK_TRAPDOOR.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST)
+                .setValue(BlockStateProperties.HALF, Half.BOTTOM)
+                .setValue(BlockStateProperties.OPEN, false)
+                .setValue(BlockStateProperties.POWERED, false);
+
+        BlockPos[] supports = {gateSupport, trapdoorSupport};
+        BlockPos[] targets = {gateTarget, trapdoorTarget};
+        BlockPos[] placements = {gatePlacement, trapdoorPlacement};
+        BlockState[] targetStates = {gateState, trapdoorState};
+        Vec3[] placementHits = {
+                new Vec3(gateSupport.getX() + 0.993312d, gateSupport.getY() - 0.500000d,
+                        gateSupport.getZ() + 0.360199d),
+                new Vec3(trapdoorSupport.getX() + 0.600505d, trapdoorSupport.getY() - 0.500000d,
+                        trapdoorSupport.getZ() + 0.529366d)
+        };
+        String[] fixtureNames = {"gate", "trapdoor"};
+
+        withFrozen(() -> {
+            for (int i = 0; i < supports.length; i++) {
+                BlockPos support = supports[i];
+                BlockPos target = targets[i];
+                BlockPos placement = placements[i];
+                BlockState targetState = targetStates[i];
+                w.setBlock(support, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 3);
+                w.setBlock(target, targetState, 3);
+                w.setBlock(placement, Blocks.AIR.defaultBlockState(), 3);
+                forceStore(w, support, supportDy);
+                forceStore(w, target, targetDy);
+
+                double storedSupport = storedDy(w, support);
+                double liveSupport = liveDy(w, support);
+                double storedTarget = storedDy(w, target);
+                double liveTarget = liveDy(w, target);
+                SlabAnchorAttachment.PlacementDyFact beforePlacementFact =
+                        SlabAnchorAttachment.rawPlacementDyFact(w, placement);
+                if (Double.doubleToRawLongBits(storedSupport) != Double.doubleToRawLongBits(supportDy)
+                        || Double.doubleToRawLongBits(liveSupport) != Double.doubleToRawLongBits(supportDy)
+                        || Double.doubleToRawLongBits(storedTarget) != Double.doubleToRawLongBits(targetDy)
+                        || Double.doubleToRawLongBits(liveTarget) != Double.doubleToRawLongBits(targetDy)
+                        || !w.getBlockState(placement).isAir()
+                        || beforePlacementFact.present()) {
+                    throw h.assertionException(target, "wrong-red premise: " + fixtureNames[i]
+                            + " fixture must start with support exact dy=-1.0, target exact dy=-1.5, and empty P; "
+                            + "support=[" + storedSupport + "," + liveSupport + "] target=[" + storedTarget + ","
+                            + liveTarget + "] P=" + w.getBlockState(placement) + " PFact=" + beforePlacementFact.present());
+                }
+
+                VoxelShape translatedTargetShape = targetState.getCollisionShape(w, target, CollisionContext.empty())
+                        .move(target.getX(), target.getY() + targetDy, target.getZ());
+                VoxelShape translatedPlacementShape = heldSlabState.getCollisionShape(w, placement, CollisionContext.empty())
+                        .move(placement.getX(), placement.getY() + placementDy, placement.getZ());
+                if (!Shapes.joinIsNotEmpty(translatedTargetShape, translatedPlacementShape, BooleanOp.AND)) {
+                    throw h.assertionException(target, "wrong-red premise: " + fixtureNames[i]
+                            + " target shape at dy=-1.5 must intersect candidate bottom oak slab at P dy=-2.5");
+                }
+
+                Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+                if (!(mock instanceof ServerPlayer player)) {
+                    throw h.assertionException(target, "wrong-red premise: " + fixtureNames[i]
+                            + " fixture did not create a ServerPlayer");
+                }
+                ItemStack held = new ItemStack(Items.OAK_SLAB);
+                player.setItemInHand(InteractionHand.MAIN_HAND, held);
+                int heldBefore = held.getCount();
+                player.gameMode.useItemOn(
+                        player,
+                        w,
+                        held,
+                        InteractionHand.MAIN_HAND,
+                        new BlockHitResult(placementHits[i], Direction.UP, support, false));
+
+                BlockState placed = w.getBlockState(placement);
+                BlockState targetAfter = w.getBlockState(target);
+                double storedTargetAfter = storedDy(w, target);
+                double liveTargetAfter = liveDy(w, target);
+                double storedPlacementAfter = storedDy(w, placement);
+                double livePlacementAfter = liveDy(w, placement);
+                SlabAnchorAttachment.PlacementDyFact placementFact =
+                        SlabAnchorAttachment.rawPlacementDyFact(w, placement);
+                if (!placed.isAir()
+                        || held.getCount() != heldBefore
+                        || player.getItemInHand(InteractionHand.MAIN_HAND).getCount() != heldBefore
+                        || placementFact.present()
+                        || !targetAfter.equals(targetState)
+                        || Double.doubleToRawLongBits(storedTargetAfter) != Double.doubleToRawLongBits(targetDy)
+                        || Double.doubleToRawLongBits(liveTargetAfter) != Double.doubleToRawLongBits(targetDy)) {
+                    violations.add("OCCUPANCY_THEFT_" + fixtureNames[i].toUpperCase()
+                            + " P must remain air and factless; actual=" + placed
+                            + " held=" + held.getCount()
+                            + " PStored=" + storedPlacementAfter + " PLive=" + livePlacementAfter
+                            + " PFact=" + (placementFact.present()
+                            ? Double.longBitsToDouble(placementFact.rawBits()) : "absent")
+                            + " target=" + targetAfter + " targetStored=" + storedTargetAfter
+                            + " targetLive=" + liveTargetAfter);
+                }
+            }
+        });
+
+        if (!violations.isEmpty()) {
+            throw h.assertionException(gatePlacement, "TEST 29 translated placement occupancy theft:\n  "
+                    + String.join("\n  ", violations));
+        }
         h.succeed();
     }
 
