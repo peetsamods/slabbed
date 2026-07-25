@@ -30,6 +30,27 @@ Before any Slabbed 26.2 port work, read:
 
 Treat `SLABBED_SPINE.md` as the current operating context, but verify it against Git before edits.
 
+### the maintainer-authorized protected-document exception
+
+An active the maintainer instruction or monitor packet may declare exact documentation paths
+`protected_document_paths` and provide an exact `allowed_read_paths` manifest. In that case:
+
+- the named protected paths are **path/status only**, even when they appear in the required-first-read
+  list above;
+- do not open, print, diff, hash, grep, ripgrep, search, summarize, or pass those paths to a subagent;
+- do not run repository-wide content searches, `rg .`, `rg docs`, or any search whose roots can contain
+  a protected path;
+- use only the exact `allowed_read_paths`, preferably through
+  `<home>/.codex/skills/slabbed-preflight/scripts/safe_rg.py`;
+- treat the architect's task-owned handoff/proof capsule as the substitute for unavailable operating
+  context; if it is insufficient, stop and request a narrower packet instead of opening a protected
+  document;
+- every delegated worker inherits the same read allowlist and protected-path prohibition.
+
+`LAW.md` remains required before `src/main/**` mutation unless the maintainer explicitly names it as protected.
+If it is protected, source mutation is blocked until the maintainer supplies an approved law capsule. This
+exception never authorizes weakening the law, modifying protected dirt, or skipping Git preflight.
+
 ## Required Preflight
 
 Before edits, builds, tests, commits, or savepoints, run:
