@@ -16,6 +16,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -38,6 +39,8 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
     private static final double LOWERED_DY = -1.5d;
     private static final double EPSILON = 1.0e-9d;
     private static final int EXPECTED_CASES = 24;
+    private static final int TEST33_MAX_SEED = 4096;
+    private static final double TEST33_FLAT_WIRE_VANILLA_Y = 0.0625d;
     private static final ThreadLocal<List<ParticleSample>> ACTIVE_CAPTURE = new ThreadLocal<>();
 
     /** Called by the observation-only TEST31 mixin; it never changes the emitted particle. */
@@ -98,6 +101,40 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
                 assertClientLoweredFixturesRemainSynchronized(client.level, fixtures);
                 runProductionSynchronizedDyNeighborInvariance24Cases(client.level, client.player, fixtures);
             });
+
+            List<WireFixture> wireFixtures = singleplayer.getServer().computeOnServer(server -> {
+                var level = server.overworld();
+                BlockPos wireOrigin = server.getPlayerList().getPlayers().getFirst().blockPosition()
+                        .relative(server.getPlayerList().getPlayers().getFirst().getDirection(), 3)
+                        .offset(0, 0, 36).immutable();
+                List<WireFixture> result = createWireFixtures(wireOrigin);
+                for (WireFixture fixture : result) {
+                    placeWireFixture(level, fixture);
+                }
+                return result;
+            });
+
+            ctx.waitFor(client -> allWireFixturesSynchronized(client.level, wireFixtures), 400);
+            ctx.runOnClient(client -> assertClientWireFixturesSynchronized(
+                    client.level, wireFixtures, "initial production sync"));
+
+            singleplayer.getServer().computeOnServer(server -> {
+                var level = server.overworld();
+                WireFixture lowered = wireFixtures.stream()
+                        .filter(fixture -> fixture.name().equals("lowered powered wire"))
+                        .findFirst()
+                        .orElseThrow();
+                level.setBlock(lowered.pos().east(2), Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+                assertWireFixture(level, lowered, "server lowered fixture after harmless neighbour edit");
+                return null;
+            });
+
+            ctx.waitFor(client -> allWireFixturesSynchronized(client.level, wireFixtures), 400);
+            ctx.runOnClient(client -> {
+                assertClientWireFixturesSynchronized(client.level, wireFixtures,
+                        "after harmless neighbour edit");
+                runProductionSynchronizedRedstoneWireParticleRed(client.level, wireFixtures);
+            });
         } catch (AssertionError error) {
             throw error;
         } catch (Exception error) {
@@ -131,6 +168,13 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         return List.copyOf(fixtures);
     }
 
+    private static List<WireFixture> createWireFixtures(BlockPos origin) {
+        return List.of(
+                new WireFixture("flat powered wire", origin, BASELINE_DY, true),
+                new WireFixture("lowered powered wire", origin.east(4).immutable(), LOWERED_DY, true),
+                new WireFixture("flat unpowered wire", origin.east(8).immutable(), BASELINE_DY, false));
+    }
+
     private static void placeFixturePair(net.minecraft.server.level.ServerLevel level, LeverFixture fixture) {
         BlockState state = leverState(fixture.face(), fixture.facing(), fixture.route() == EmissionRoute.AMBIENT);
         placeValidLever(level, fixture.baselinePos(), state);
@@ -150,6 +194,18 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
             throw new AssertionError("TEST31 fixture lacks a valid lever support at " + pos.toShortString()
                     + " state=" + state);
         }
+    }
+
+    private static void placeWireFixture(
+            net.minecraft.server.level.ServerLevel level, WireFixture fixture) {
+        BlockPos pos = fixture.pos();
+        level.setBlock(pos.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        level.setBlock(pos.north(), fixture.powered()
+                ? Blocks.REDSTONE_BLOCK.defaultBlockState()
+                : Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        level.setBlock(pos, Blocks.REDSTONE_WIRE.defaultBlockState(), Block.UPDATE_ALL);
+        SlabAnchorAttachment.writePlacementDy(level, pos, fixture.dy());
+        assertWireFixture(level, fixture, "server fixture");
     }
 
     private static void runProductionSynchronizedDyNeighborInvariance24Cases(
@@ -183,6 +239,109 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         Slabbed.LOGGER.info(
                 "TEST31_PRODUCTION_SYNCHRONIZED_DY_NEIGHBOR_INVARIANCE_24_CASES | PASS | executedCases={}",
                 executedCases);
+    }
+
+    private static void runProductionSynchronizedRedstoneWireParticleRed(
+            ClientLevel level, List<WireFixture> fixtures) {
+        verifyObserverActivation(level);
+        WireFixture baselineFixture = wireFixture(fixtures, "flat powered wire");
+        WireFixture loweredFixture = wireFixture(fixtures, "lowered powered wire");
+        WireFixture unpoweredFixture = wireFixture(fixtures, "flat unpowered wire");
+        BlockState baselineState = level.getBlockState(baselineFixture.pos());
+        BlockState loweredState = level.getBlockState(loweredFixture.pos());
+        BlockState unpoweredState = level.getBlockState(unpoweredFixture.pos());
+        assertWireFixture(level, baselineFixture, "client baseline before animateTick");
+        assertWireFixture(level, loweredFixture, "client lowered before animateTick");
+        assertWireFixture(level, unpoweredFixture, "client unpowered before animateTick");
+
+        WireParticleRun paired = findMatchingSingleEmissionSeed(
+                level, baselineFixture, baselineState, loweredFixture, loweredState);
+        ParticleSample baseline = relativeToCell(baselineFixture.pos(), paired.baseline());
+        ParticleSample lowered = relativeToCell(loweredFixture.pos(), paired.lowered());
+        assertWireFlatVanillaCoordinateOracle(baseline);
+        assertWireParticleParity(baseline, lowered, paired.seed());
+
+        List<ParticleSample> unpoweredSamples = captureAll("TEST33 unpowered control", () ->
+                ((RedStoneWireBlock) unpoweredState.getBlock()).animateTick(
+                        unpoweredState, level, unpoweredFixture.pos(), RandomSource.create(paired.seed())));
+        if (!unpoweredSamples.isEmpty()) {
+            throw new AssertionError("TEST33_WRONG_RED_UNPOWERED_EMISSION: powered dust emitted for power=0; "
+                    + "seed=" + paired.seed() + " captured=" + unpoweredSamples);
+        }
+
+        double expectedLoweredY = baseline.y() + LOWERED_DY;
+        double error = lowered.y() - expectedLoweredY;
+        Slabbed.LOGGER.info("TEST33_REDSTONE_WIRE_PARTICLE_EXECUTION | seed={} | pairedExecutions={} "
+                        + "| baseline={} | lowered={} | unpoweredSamples={}",
+                paired.seed(), paired.executions(), baseline, lowered, unpoweredSamples.size());
+        if (Math.abs(error) > EPSILON) {
+            throw new AssertionError("TEST33_REDSTONE_WIRE_PARTICLE_RED: real powered "
+                    + "RedStoneWireBlock.animateTick particle retained baseline cell-relative Y instead of "
+                    + "the synchronized exact frozen dy=-1.5 translation; baselineY=" + baseline.y()
+                    + " loweredY=" + lowered.y() + " expectedLoweredY=" + expectedLoweredY
+                    + " error=" + error + " seed=" + paired.seed()
+                    + " pairedExecutions=" + paired.executions());
+        }
+    }
+
+    private static WireParticleRun findMatchingSingleEmissionSeed(
+            ClientLevel level,
+            WireFixture baselineFixture,
+            BlockState baselineState,
+            WireFixture loweredFixture,
+            BlockState loweredState) {
+        for (long seed = 0L; seed < TEST33_MAX_SEED; seed++) {
+            final long candidateSeed = seed;
+            List<ParticleSample> baseline = captureAll("TEST33 baseline seed=" + candidateSeed, () ->
+                    ((RedStoneWireBlock) baselineState.getBlock()).animateTick(
+                            baselineState, level, baselineFixture.pos(), RandomSource.create(candidateSeed)));
+            List<ParticleSample> lowered = captureAll("TEST33 lowered seed=" + candidateSeed, () ->
+                    ((RedStoneWireBlock) loweredState.getBlock()).animateTick(
+                            loweredState, level, loweredFixture.pos(), RandomSource.create(candidateSeed)));
+            if (baseline.size() == 1 && lowered.size() == 1) {
+                return new WireParticleRun(seed, baseline.getFirst(), lowered.getFirst(), (seed + 1L) * 2L);
+            }
+            if (baseline.size() != lowered.size()) {
+                throw new AssertionError("TEST33_WRONG_RED_RANDOM_DIVERGENCE: identical powered wire "
+                        + "states chose different emission counts for seed=" + seed + "; baseline="
+                        + baseline.size() + " lowered=" + lowered.size());
+            }
+        }
+        throw new AssertionError("TEST33_WRONG_RED_NO_DETERMINISTIC_EMISSION: no identical single-particle "
+                + "route in seeds [0," + TEST33_MAX_SEED + ")");
+    }
+
+    private static void assertWireFlatVanillaCoordinateOracle(ParticleSample baseline) {
+        if (Math.abs(baseline.y() - TEST33_FLAT_WIRE_VANILLA_Y) > EPSILON
+                || baseline.x() < 0.0d || baseline.x() > 1.0d
+                || baseline.z() < 0.0d || baseline.z() > 1.0d
+                || Double.doubleToRawLongBits(baseline.xVelocity()) != Double.doubleToRawLongBits(0.0d)
+                || Double.doubleToRawLongBits(baseline.yVelocity()) != Double.doubleToRawLongBits(0.0d)
+                || Double.doubleToRawLongBits(baseline.zVelocity()) != Double.doubleToRawLongBits(0.0d)) {
+            throw new AssertionError("TEST33_WRONG_RED_FLAT_VANILLA_ORACLE: powered flat wire particle "
+                    + "disagrees with the independent vanilla floor-line coordinate/velocity oracle; "
+                    + "expected y=" + TEST33_FLAT_WIRE_VANILLA_Y + ", x/z in [0,1], velocity=0,0,0; "
+                    + "captured=" + baseline);
+        }
+    }
+
+    private static void assertWireParticleParity(ParticleSample baseline, ParticleSample lowered, long seed) {
+        if (Math.abs(baseline.x() - lowered.x()) > EPSILON
+                || Math.abs(baseline.z() - lowered.z()) > EPSILON
+                || Double.doubleToRawLongBits(baseline.xVelocity())
+                != Double.doubleToRawLongBits(lowered.xVelocity())
+                || Double.doubleToRawLongBits(baseline.yVelocity())
+                != Double.doubleToRawLongBits(lowered.yVelocity())
+                || Double.doubleToRawLongBits(baseline.zVelocity())
+                != Double.doubleToRawLongBits(lowered.zVelocity())
+                || Float.floatToRawIntBits(baseline.red()) != Float.floatToRawIntBits(lowered.red())
+                || Float.floatToRawIntBits(baseline.green()) != Float.floatToRawIntBits(lowered.green())
+                || Float.floatToRawIntBits(baseline.blue()) != Float.floatToRawIntBits(lowered.blue())
+                || Float.floatToRawIntBits(baseline.scale()) != Float.floatToRawIntBits(lowered.scale())) {
+            throw new AssertionError("TEST33_WRONG_RED_PARITY: matching real powered wire particle route "
+                    + "changed an observable other than the vertical anchor translation; seed=" + seed
+                    + " baseline=" + baseline + " lowered=" + lowered);
+        }
     }
 
     private static ParticlePair captureAmbientPair(ClientLevel level, LeverFixture fixture) {
@@ -322,6 +481,21 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         return fixtures.stream().allMatch(fixture -> fixtureSynchronized(level, fixture.loweredPos(), LOWERED_DY));
     }
 
+    private static boolean allWireFixturesSynchronized(ClientLevel level, List<WireFixture> fixtures) {
+        return fixtures.stream().allMatch(fixture -> wireFixtureSynchronized(level, fixture));
+    }
+
+    private static boolean wireFixtureSynchronized(BlockGetter level, WireFixture fixture) {
+        BlockState state = level.getBlockState(fixture.pos());
+        SlabAnchorAttachment.PlacementDyFact backing = SlabAnchorAttachment.rawPlacementDyFact(level, fixture.pos());
+        return state.is(Blocks.REDSTONE_WIRE)
+                && state.getValue(BlockStateProperties.POWER) == (fixture.powered() ? 15 : 0)
+                && backing.present()
+                && backing.rawBits() == Double.doubleToRawLongBits(fixture.dy())
+                && Double.doubleToRawLongBits(SlabSupport.getYOffset(level, fixture.pos(), state))
+                == Double.doubleToRawLongBits(fixture.dy());
+    }
+
     private static boolean fixtureSynchronized(BlockGetter level, BlockPos pos, double expectedDy) {
         if (!level.getBlockState(pos).is(Blocks.LEVER)) {
             return false;
@@ -349,6 +523,14 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         Slabbed.LOGGER.info("TEST31_NEIGHBOR_INVARIANCE | PASS | loweredFixtures={}", fixtures.size());
     }
 
+    private static void assertClientWireFixturesSynchronized(
+            ClientLevel level, List<WireFixture> fixtures, String phase) {
+        for (WireFixture fixture : fixtures) {
+            assertWireFixture(level, fixture, "client " + phase);
+        }
+        Slabbed.LOGGER.info("TEST33_WIRE_SYNC | PASS | phase={} | fixtures={}", phase, fixtures.size());
+    }
+
     private static void assertFixture(BlockGetter level, BlockPos pos, double expectedDy, String caseName) {
         BlockState state = level.getBlockState(pos);
         SlabAnchorAttachment.PlacementDyFact backing = SlabAnchorAttachment.rawPlacementDyFact(level, pos);
@@ -359,6 +541,22 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
                 || Double.doubleToRawLongBits(effective) != Double.doubleToRawLongBits(expectedDy)) {
             throw new AssertionError("TEST31 " + caseName + " lacks production-synchronized backing dy="
                     + expectedDy + "; state=" + state + " backing=" + backing + " effective=" + effective);
+        }
+    }
+
+    private static void assertWireFixture(BlockGetter level, WireFixture fixture, String phase) {
+        BlockState state = level.getBlockState(fixture.pos());
+        SlabAnchorAttachment.PlacementDyFact backing = SlabAnchorAttachment.rawPlacementDyFact(level, fixture.pos());
+        double effective = SlabSupport.getYOffset(level, fixture.pos(), state);
+        int expectedPower = fixture.powered() ? 15 : 0;
+        if (!state.is(Blocks.REDSTONE_WIRE)
+                || state.getValue(BlockStateProperties.POWER) != expectedPower
+                || !backing.present()
+                || backing.rawBits() != Double.doubleToRawLongBits(fixture.dy())
+                || Double.doubleToRawLongBits(effective) != Double.doubleToRawLongBits(fixture.dy())) {
+            throw new AssertionError("TEST33_WRONG_RED_FIXTURE: " + fixture.name() + " " + phase
+                    + " lost its authoritative wire/power/dy state; state=" + state
+                    + " backing=" + backing + " effective=" + effective);
         }
     }
 
@@ -476,5 +674,28 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
     }
 
     private record ParticlePair(ParticleSample baseline, ParticleSample lowered) {
+    }
+
+    private static List<ParticleSample> captureAll(String caseName, Runnable emission) {
+        if (ACTIVE_CAPTURE.get() != null) {
+            throw new IllegalStateException("TEST33 " + caseName + " capture already active");
+        }
+        ACTIVE_CAPTURE.set(new ArrayList<>());
+        try {
+            emission.run();
+            return List.copyOf(ACTIVE_CAPTURE.get());
+        } finally {
+            ACTIVE_CAPTURE.remove();
+        }
+    }
+
+    private static WireFixture wireFixture(List<WireFixture> fixtures, String name) {
+        return fixtures.stream().filter(fixture -> fixture.name().equals(name)).findFirst().orElseThrow();
+    }
+
+    private record WireFixture(String name, BlockPos pos, double dy, boolean powered) {
+    }
+
+    private record WireParticleRun(long seed, ParticleSample baseline, ParticleSample lowered, long executions) {
     }
 }
