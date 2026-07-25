@@ -13,6 +13,7 @@
     "DecoratedPotParticleMixin",
     "FencePaneSlabConnectionMixin",
     "HangingSignAttachedMixin",
+    "LeverParticleMixin",
     "LivingEntityLoweredScaffoldingMixin",
     "PaintingRigDropCaptureMixin",
     "RedstoneTorchParticleMixin",
