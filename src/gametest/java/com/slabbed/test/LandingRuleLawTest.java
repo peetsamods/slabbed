@@ -29,6 +29,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
@@ -2475,5 +2476,414 @@ public final class LandingRuleLawTest {
                     + " outsideEnvelope=" + outsideEnvelope);
         }
         h.succeed();
+    }
+
+    /**
+     * TEST 32 Gate A: real flint-and-steel must author fire at the visible top-seat of the clicked
+     * owner. This is deliberately an aggregate RED: both historical lowered geometries execute
+     * before a contact mismatch is reported.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void flintAndSteelFireOnFrozenMinusOneSupportsHasExactTopSeat(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        List<FireContactProbe> probes = new ArrayList<>();
+
+        withFrozen(() -> {
+            probes.add(test32UseFlintAndSteel(
+                    h, world, "full_stone_minus1", h.absolutePos(new BlockPos(3, 4, 3)),
+                    Blocks.STONE.defaultBlockState(), -1.0d, 0.0d, -1.0d));
+            probes.add(test32UseFlintAndSteel(
+                    h, world, "bottom_stone_slab_minus1", h.absolutePos(new BlockPos(8, 4, 3)),
+                    Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
+                    -1.0d, -0.5d, -1.5d));
+            probes.add(test32UseFlintAndSteel(
+                    h, world, "flat_full_stone_control", h.absolutePos(new BlockPos(13, 4, 3)),
+                    Blocks.STONE.defaultBlockState(), 0.0d, 0.0d, 0.0d));
+        });
+
+        List<String> reports = probes.stream().map(FireContactProbe::report).toList();
+        FireContactProbe full = probes.get(0);
+        FireContactProbe bottomSlab = probes.get(1);
+        FireContactProbe flat = probes.get(2);
+
+        if (full.primaryContract && bottomSlab.primaryContract && flat.primaryContract
+                && full.matchesCurrentRed && bottomSlab.matchesCurrentRed && flat.matchesCurrentRed) {
+            throw h.assertionException(full.created,
+                    "TEST32_FIRE_CONTACT_RED: real flint-and-steel created fire above both exact frozen "
+                            + "dy=-1.0 owners without a raw fire anchor; each visible fire base is exactly "
+                            + "+1.0 above the visible support top; full live=0.0 (want -1.0), bottom-slab "
+                            + "live=-0.5 (want -1.5), flat control is flush. observations=" + reports);
+        }
+
+        if (full.primaryContract && bottomSlab.primaryContract && flat.primaryContract
+                && full.matchesFutureGreen && bottomSlab.matchesFutureGreen && flat.matchesFutureGreen) {
+            h.succeed();
+            return;
+        }
+
+        throw h.assertionException(full.created,
+                "TEST32_FIRE_CONTACT_WRONG_RED: Gate A requires either the exact current unanchored +1.0 "
+                        + "signature or exact raw/live anchored zero-contact GREEN; observations=" + reports);
+    }
+
+    /** TEST 32 Gate C: fire charge uses the same created-fire contact authority as flint and steel. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fireChargeFireOnFrozenMinusOneFullSupportHasExactTopSeat(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        FireContactProbe[] probe = new FireContactProbe[1];
+        withFrozen(() -> probe[0] = test32UseFireItem(
+                h, world, "fire_charge_full_stone_minus1", Items.FIRE_CHARGE,
+                h.absolutePos(new BlockPos(3, 4, 3)), Blocks.STONE.defaultBlockState(),
+                -1.0d, 0.0d, -1.0d));
+        if (!probe[0].primaryContract || !probe[0].matchesFutureGreen) {
+            throw h.assertionException(probe[0].created,
+                    "TEST32_FIRE_CHARGE_CONTACT: fire charge must create top-seated anchored fire; "
+                            + probe[0].report);
+        }
+        h.succeed();
+    }
+
+    /** TEST 32 Gate C: the generic hook also preserves soul-fire state and its visible top-seat. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void soulFireOnFrozenMinusOneSoulSoilHasExactTopSeat(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        FireContactProbe[] probe = new FireContactProbe[1];
+        withFrozen(() -> probe[0] = test32UseFireItem(
+                h, world, "soul_fire_full_soul_soil_minus1", Items.FLINT_AND_STEEL,
+                h.absolutePos(new BlockPos(3, 4, 3)), Blocks.SOUL_SOIL.defaultBlockState(),
+                -1.0d, 0.0d, -1.0d));
+        BlockState created = world.getBlockState(probe[0].created);
+        if (!probe[0].primaryContract || !probe[0].matchesFutureGreen || !created.is(Blocks.SOUL_FIRE)) {
+            throw h.assertionException(probe[0].created,
+                    "TEST32_SOUL_FIRE_CONTACT: flint and steel on lowered soul soil must retain soul fire "
+                            + "and its exact anchor; created=" + created + " " + probe[0].report);
+        }
+        h.succeed();
+    }
+
+    /** TEST 32 Gate C: an occupied target neither gains nor overwrites a created-fire anchor. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void occupiedOrFailedFireUseDoesNotPublishPlacementDy(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockPos target = owner.above();
+        withFrozen(() -> {
+            world.setBlock(owner, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            forceStore(world, owner, -1.0d);
+            world.setBlock(target, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            SlabAnchorAttachment.PlacementDyFact targetBefore = SlabAnchorAttachment.rawPlacementDyFact(world, target);
+            InteractionResult result = test32UseItemOn(h, Items.FLINT_AND_STEEL, owner, Direction.UP,
+                    new Vec3(owner.getX() + 0.5d, owner.getY(), owner.getZ() + 0.5d));
+            SlabAnchorAttachment.PlacementDyFact targetAfter = SlabAnchorAttachment.rawPlacementDyFact(world, target);
+            if (result == null || world.getBlockState(target).getBlock() != Blocks.STONE
+                    || !test32SameFact(targetBefore, targetAfter) || targetAfter.present()) {
+                throw h.assertionException(target, "TEST32_OCCUPIED_FIRE_USE: rejected occupied target must stay "
+                        + "stone with no placement fact; result=" + result + " before=" + test32Fact(targetBefore)
+                        + " after=" + test32Fact(targetAfter));
+            }
+
+            forceStore(world, target, -7.0d);
+            SlabAnchorAttachment.PlacementDyFact sentinelBefore = SlabAnchorAttachment.rawPlacementDyFact(world, target);
+            InteractionResult secondResult = test32UseItemOn(h, Items.FLINT_AND_STEEL, owner, Direction.UP,
+                    new Vec3(owner.getX() + 0.5d, owner.getY(), owner.getZ() + 0.5d));
+            SlabAnchorAttachment.PlacementDyFact sentinelAfter = SlabAnchorAttachment.rawPlacementDyFact(world, target);
+            if (secondResult == null || world.getBlockState(target).getBlock() != Blocks.STONE
+                    || !test32SameFact(sentinelBefore, sentinelAfter)) {
+                throw h.assertionException(target, "TEST32_OCCUPIED_FIRE_USE: rejected target fact was overwritten; "
+                        + "result=" + secondResult + " before=" + test32Fact(sentinelBefore)
+                        + " after=" + test32Fact(sentinelAfter));
+            }
+        });
+        h.succeed();
+    }
+
+    /** TEST 32 Gate C: lighting a candle is not a new-fire placement and publishes no fire anchor. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lightingExistingCandleDoesNotPublishFireContact(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockPos candle = owner.above();
+        withFrozen(() -> {
+            world.setBlock(owner, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            forceStore(world, owner, -1.0d);
+            world.setBlock(candle, Blocks.CANDLE.defaultBlockState(), Block.UPDATE_ALL);
+            InteractionResult result = test32UseItemOn(h, Items.FLINT_AND_STEEL, candle, Direction.UP,
+                    new Vec3(candle.getX() + 0.5d, candle.getY() + 0.5d, candle.getZ() + 0.5d));
+            BlockState litCandle = world.getBlockState(candle);
+            SlabAnchorAttachment.PlacementDyFact candleFact = SlabAnchorAttachment.rawPlacementDyFact(world, candle);
+            SlabAnchorAttachment.PlacementDyFact adjacentFact =
+                    SlabAnchorAttachment.rawPlacementDyFact(world, candle.above());
+            if (result == null || !litCandle.is(Blocks.CANDLE)
+                    || !litCandle.getValue(BlockStateProperties.LIT)
+                    || candleFact.present() || adjacentFact.present()) {
+                throw h.assertionException(candle, "TEST32_CANDLE_LIGHTING: lighting must only mutate the candle; "
+                        + "result=" + result + " candle=" + litCandle + " candleFact=" + test32Fact(candleFact)
+                        + " adjacentFact=" + test32Fact(adjacentFact));
+            }
+        });
+        h.succeed();
+    }
+
+    /** TEST 32 Gate C: horizontal and underside uses cannot inherit the clicked owner's lowered dy. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void sideAndDownFireUsesDoNotStealClickedOwnerDy(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        withFrozen(() -> {
+            BlockPos sideOwner = h.absolutePos(new BlockPos(3, 5, 3));
+            BlockPos sideTarget = sideOwner.east();
+            world.setBlock(sideOwner, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            forceStore(world, sideOwner, -1.0d);
+            world.setBlock(sideTarget.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            world.setBlock(sideTarget, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            InteractionResult sideResult = test32UseItemOn(h, Items.FLINT_AND_STEEL, sideOwner, Direction.EAST,
+                    new Vec3(sideOwner.getX() + 1.0d, sideOwner.getY() - 0.5d, sideOwner.getZ() + 0.5d));
+            SlabAnchorAttachment.PlacementDyFact sideFact = SlabAnchorAttachment.rawPlacementDyFact(world, sideTarget);
+            if (sideResult == null || !(world.getBlockState(sideTarget).getBlock() instanceof BaseFireBlock)
+                    || sideFact.present()) {
+                throw h.assertionException(sideTarget, "TEST32_SIDE_FIRE_USE: side-created fire cannot inherit "
+                        + "clicked owner dy; result=" + sideResult + " state=" + world.getBlockState(sideTarget)
+                        + " fact=" + test32Fact(sideFact));
+            }
+
+            BlockPos downOwner = h.absolutePos(new BlockPos(8, 5, 3));
+            BlockPos downTarget = downOwner.below();
+            world.setBlock(downOwner, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            forceStore(world, downOwner, -1.0d);
+            world.setBlock(downTarget.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            world.setBlock(downTarget, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            InteractionResult downResult = test32UseItemOn(h, Items.FLINT_AND_STEEL, downOwner, Direction.DOWN,
+                    new Vec3(downOwner.getX() + 0.5d, downOwner.getY() - 1.0d, downOwner.getZ() + 0.5d));
+            SlabAnchorAttachment.PlacementDyFact downFact = SlabAnchorAttachment.rawPlacementDyFact(world, downTarget);
+            if (downResult == null || !(world.getBlockState(downTarget).getBlock() instanceof BaseFireBlock)
+                    || downFact.present()) {
+                throw h.assertionException(downTarget, "TEST32_DOWN_FIRE_USE: underside-created fire cannot inherit "
+                        + "clicked owner dy; result=" + downResult + " state=" + world.getBlockState(downTarget)
+                        + " fact=" + test32Fact(downFact));
+            }
+        });
+        h.succeed();
+    }
+
+    private record FireContactProbe(
+            String name,
+            BlockPos created,
+            boolean primaryContract,
+            boolean matchesCurrentRed,
+            boolean matchesFutureGreen,
+            String report
+    ) {
+    }
+
+    private static FireContactProbe test32UseFlintAndSteel(
+            GameTestHelper h,
+            ServerLevel world,
+            String name,
+            BlockPos owner,
+            BlockState ownerState,
+            double ownerDy,
+            double expectedCurrentLiveDy,
+            double expectedGreenDy
+    ) {
+        return test32UseFireItem(h, world, name, Items.FLINT_AND_STEEL, owner, ownerState, ownerDy,
+                expectedCurrentLiveDy, expectedGreenDy);
+    }
+
+    private static FireContactProbe test32UseFireItem(
+            GameTestHelper h,
+            ServerLevel world,
+            String name,
+            Item fireItem,
+            BlockPos owner,
+            BlockState ownerState,
+            double ownerDy,
+            double expectedCurrentLiveDy,
+            double expectedGreenDy
+    ) {
+        BlockPos created = owner.above();
+        BlockPos editedNeighbor = created.east();
+        List<String> failures = new ArrayList<>();
+
+        world.setBlock(owner, ownerState, Block.UPDATE_ALL);
+        world.setBlock(created, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(editedNeighbor, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        if (Double.doubleToRawLongBits(ownerDy) != Double.doubleToRawLongBits(0.0d)) {
+            forceStore(world, owner, ownerDy);
+        }
+
+        BlockState ownerBefore = world.getBlockState(owner);
+        SlabAnchorAttachment.PlacementDyFact ownerFactBefore = SlabAnchorAttachment.rawPlacementDyFact(world, owner);
+        double ownerLiveBefore = liveDy(world, owner);
+        boolean expectedOwnerFact = Double.doubleToRawLongBits(ownerDy) == Double.doubleToRawLongBits(0.0d)
+                ? !ownerFactBefore.present()
+                : ownerFactBefore.present()
+                && ownerFactBefore.rawBits() == Double.doubleToRawLongBits(ownerDy);
+        if (!ownerBefore.equals(ownerState)
+                || !expectedOwnerFact
+                || Double.doubleToRawLongBits(ownerLiveBefore) != Double.doubleToRawLongBits(ownerDy)) {
+            failures.add("owner-premise state=" + ownerBefore + " rawFact=" + test32Fact(ownerFactBefore)
+                    + " live=" + ownerLiveBefore + " expectedDy=" + ownerDy);
+        }
+
+        VoxelShape ownerShape = ownerBefore.getShape(world, owner, CollisionContext.empty());
+        if (ownerShape.isEmpty()) {
+            failures.add("owner-shape-empty");
+        }
+        double supportTopBefore = ownerShape.isEmpty()
+                ? Double.NaN
+                : owner.getY() + ownerShape.bounds().maxY;
+        Vec3 visibleUpHit = new Vec3(owner.getX() + 0.5d, supportTopBefore, owner.getZ() + 0.5d);
+
+        InteractionResult result = null;
+        Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+        if (mock instanceof ServerPlayer player) {
+            result = test32UseItemOn(h, fireItem, owner, Direction.UP, visibleUpHit, player);
+        } else {
+            failures.add("real-use fixture did not create a ServerPlayer");
+        }
+
+        BlockState ownerAfterUse = world.getBlockState(owner);
+        SlabAnchorAttachment.PlacementDyFact ownerFactAfterUse = SlabAnchorAttachment.rawPlacementDyFact(world, owner);
+        double ownerLiveAfterUse = liveDy(world, owner);
+        BlockState fireStateBeforeNeighbor = world.getBlockState(created);
+        SlabAnchorAttachment.PlacementDyFact fireFactBeforeNeighbor =
+                SlabAnchorAttachment.rawPlacementDyFact(world, created);
+        double fireStoredBeforeNeighbor = storedDy(world, created);
+        double fireLiveBeforeNeighbor = liveDy(world, created);
+        VoxelShape fireShapeBeforeNeighbor = fireStateBeforeNeighbor.getShape(world, created, CollisionContext.empty());
+        double fireBaseBeforeNeighbor = fireShapeBeforeNeighbor.isEmpty()
+                ? Double.NaN
+                : created.getY() + fireShapeBeforeNeighbor.bounds().minY;
+        double seatErrorBeforeNeighbor = fireBaseBeforeNeighbor - supportTopBefore;
+
+        if (result == null || !result.consumesAction()) {
+            failures.add("use-result=" + result);
+        }
+        if (!ownerAfterUse.equals(ownerBefore)
+                || !test32SameFact(ownerFactBefore, ownerFactAfterUse)
+                || Double.doubleToRawLongBits(ownerLiveAfterUse) != Double.doubleToRawLongBits(ownerLiveBefore)) {
+            failures.add("clicked-owner-mutated state=" + ownerAfterUse + " rawFact="
+                    + test32Fact(ownerFactAfterUse) + " live=" + ownerLiveAfterUse);
+        }
+        if (!(fireStateBeforeNeighbor.getBlock() instanceof BaseFireBlock)) {
+            failures.add("created-cell=" + created.toShortString() + " state=" + fireStateBeforeNeighbor);
+        }
+        if (!Double.isFinite(fireLiveBeforeNeighbor) || fireShapeBeforeNeighbor.isEmpty()
+                || !Double.isFinite(fireBaseBeforeNeighbor) || !Double.isFinite(seatErrorBeforeNeighbor)) {
+            failures.add("fire-contact-unreadable rawFact=" + test32Fact(fireFactBeforeNeighbor)
+                    + " stored=" + fireStoredBeforeNeighbor + " live=" + fireLiveBeforeNeighbor
+                    + " shape=" + fireShapeBeforeNeighbor + " base=" + fireBaseBeforeNeighbor
+                    + " supportTop=" + supportTopBefore + " error=" + seatErrorBeforeNeighbor);
+        }
+
+        world.setBlock(editedNeighbor, Blocks.GLASS.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(editedNeighbor, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+
+        BlockState ownerAfterNeighbor = world.getBlockState(owner);
+        SlabAnchorAttachment.PlacementDyFact ownerFactAfterNeighbor =
+                SlabAnchorAttachment.rawPlacementDyFact(world, owner);
+        double ownerLiveAfterNeighbor = liveDy(world, owner);
+        BlockState fireStateAfterNeighbor = world.getBlockState(created);
+        SlabAnchorAttachment.PlacementDyFact fireFactAfterNeighbor =
+                SlabAnchorAttachment.rawPlacementDyFact(world, created);
+        double fireStoredAfterNeighbor = storedDy(world, created);
+        double fireLiveAfterNeighbor = liveDy(world, created);
+        VoxelShape ownerShapeAfterNeighbor = ownerAfterNeighbor.getShape(world, owner, CollisionContext.empty());
+        VoxelShape fireShapeAfterNeighbor = fireStateAfterNeighbor.getShape(world, created, CollisionContext.empty());
+        double supportTopAfterNeighbor = ownerShapeAfterNeighbor.isEmpty()
+                ? Double.NaN
+                : owner.getY() + ownerShapeAfterNeighbor.bounds().maxY;
+        double fireBaseAfterNeighbor = fireShapeAfterNeighbor.isEmpty()
+                ? Double.NaN
+                : created.getY() + fireShapeAfterNeighbor.bounds().minY;
+        double seatErrorAfterNeighbor = fireBaseAfterNeighbor - supportTopAfterNeighbor;
+
+        if (!ownerAfterNeighbor.equals(ownerBefore)
+                || !test32SameFact(ownerFactBefore, ownerFactAfterNeighbor)
+                || Double.doubleToRawLongBits(ownerLiveAfterNeighbor) != Double.doubleToRawLongBits(ownerLiveBefore)) {
+            failures.add("neighbor-edit changed owner state=" + ownerAfterNeighbor + " rawFact="
+                    + test32Fact(ownerFactAfterNeighbor) + " live=" + ownerLiveAfterNeighbor);
+        }
+        if (!(fireStateAfterNeighbor.getBlock() instanceof BaseFireBlock)
+                || !test32SameFact(fireFactBeforeNeighbor, fireFactAfterNeighbor)
+                || Double.doubleToRawLongBits(fireStoredAfterNeighbor)
+                != Double.doubleToRawLongBits(fireStoredBeforeNeighbor)
+                || Double.doubleToRawLongBits(fireLiveAfterNeighbor)
+                != Double.doubleToRawLongBits(fireLiveBeforeNeighbor)
+                || Double.doubleToRawLongBits(supportTopAfterNeighbor)
+                != Double.doubleToRawLongBits(supportTopBefore)
+                || Double.doubleToRawLongBits(fireBaseAfterNeighbor)
+                != Double.doubleToRawLongBits(fireBaseBeforeNeighbor)
+                || Double.doubleToRawLongBits(seatErrorAfterNeighbor)
+                != Double.doubleToRawLongBits(seatErrorBeforeNeighbor)) {
+            failures.add("neighbor-edit changed fire rawFact=" + test32Fact(fireFactAfterNeighbor)
+                    + " stored=" + fireStoredAfterNeighbor + " live=" + fireLiveAfterNeighbor
+                    + " supportTop=" + supportTopAfterNeighbor + " fireBase=" + fireBaseAfterNeighbor
+                    + " error=" + seatErrorAfterNeighbor);
+        }
+
+        boolean primaryContract = failures.isEmpty();
+        boolean lowered = Double.doubleToRawLongBits(ownerDy) == Double.doubleToRawLongBits(-1.0d);
+        boolean matchesCurrentRed = primaryContract
+                && !fireFactBeforeNeighbor.present()
+                && Double.isNaN(fireStoredBeforeNeighbor)
+                && Double.doubleToRawLongBits(fireLiveBeforeNeighbor)
+                == Double.doubleToRawLongBits(expectedCurrentLiveDy)
+                && Math.abs(seatErrorBeforeNeighbor - (lowered ? 1.0d : 0.0d)) <= EPS;
+        boolean matchesFutureGreen = primaryContract
+                && fireFactBeforeNeighbor.present()
+                && fireFactBeforeNeighbor.rawBits() == Double.doubleToRawLongBits(expectedGreenDy)
+                && Double.doubleToRawLongBits(fireStoredBeforeNeighbor)
+                == Double.doubleToRawLongBits(expectedGreenDy)
+                && Double.doubleToRawLongBits(fireLiveBeforeNeighbor)
+                == Double.doubleToRawLongBits(expectedGreenDy)
+                && Math.abs(seatErrorBeforeNeighbor) <= EPS;
+        String report = name + "{owner=" + owner.toShortString() + " created=" + created.toShortString()
+                + " result=" + result + " ownerRaw=" + test32Fact(ownerFactBefore)
+                + " fireRaw=" + test32Fact(fireFactBeforeNeighbor) + " stored=" + fireStoredBeforeNeighbor
+                + " live=" + fireLiveBeforeNeighbor + " supportTop=" + supportTopBefore
+                + " fireBase=" + fireBaseBeforeNeighbor + " seatError=" + seatErrorBeforeNeighbor
+                + " failures=" + failures + "}";
+        return new FireContactProbe(name, created, primaryContract, matchesCurrentRed,
+                matchesFutureGreen, report);
+    }
+
+    private static InteractionResult test32UseItemOn(
+            GameTestHelper h,
+            Item item,
+            BlockPos clicked,
+            Direction face,
+            Vec3 hit
+    ) {
+        Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+        if (!(mock instanceof ServerPlayer player)) {
+            return null;
+        }
+        return test32UseItemOn(h, item, clicked, face, hit, player);
+    }
+
+    private static InteractionResult test32UseItemOn(
+            GameTestHelper h,
+            Item item,
+            BlockPos clicked,
+            Direction face,
+            Vec3 hit,
+            ServerPlayer player
+    ) {
+        ItemStack stack = new ItemStack(item);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        return stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                new BlockHitResult(hit, face, clicked, false)));
+    }
+
+    private static boolean test32SameFact(
+            SlabAnchorAttachment.PlacementDyFact first,
+            SlabAnchorAttachment.PlacementDyFact second
+    ) {
+        return first.present() == second.present()
+                && (!first.present() || first.rawBits() == second.rawBits());
+    }
+
+    private static String test32Fact(SlabAnchorAttachment.PlacementDyFact fact) {
+        return fact.present() ? Double.toString(Double.longBitsToDouble(fact.rawBits())) : "absent";
     }
 }
