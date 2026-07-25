@@ -41,6 +41,7 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -233,6 +234,22 @@ public final class LandingRuleLawTest {
         } finally {
             SlabAnchorAttachment.FROZEN_DY_ENABLED = prev;
         }
+    }
+
+    /** Returns the largest Y depth shared by boxes that overlap strictly in all three axes. */
+    private static double strictPositiveAabbOverlapDepthY(VoxelShape first, VoxelShape second) {
+        double deepest = 0.0d;
+        for (AABB firstBox : first.toAabbs()) {
+            for (AABB secondBox : second.toAabbs()) {
+                double xDepth = Math.min(firstBox.maxX, secondBox.maxX) - Math.max(firstBox.minX, secondBox.minX);
+                double yDepth = Math.min(firstBox.maxY, secondBox.maxY) - Math.max(firstBox.minY, secondBox.minY);
+                double zDepth = Math.min(firstBox.maxZ, secondBox.maxZ) - Math.max(firstBox.minZ, secondBox.minZ);
+                if (xDepth > EPS && yDepth > EPS && zDepth > EPS) {
+                    deepest = Math.max(deepest, yDepth);
+                }
+            }
+        }
+        return deepest;
     }
 
     // ═══════════════════════════════ C1 — shipped flag default ═══════════════════════════════
@@ -2173,6 +2190,225 @@ public final class LandingRuleLawTest {
             throw h.assertionException(gatePlacement, "TEST 29 translated placement occupancy theft:\n  "
                     + String.join("\n  ", violations));
         }
+        h.succeed();
+    }
+
+    /**
+     * TEST 30: a second lowered trapdoor must be refused when its legal OPEN state would strictly
+     * overlap the existing lowered trapdoor, even though their CLOSED bodies are disjoint.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void test30OpenTransitionOccupancyIsRefused(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        double upperDy = -2.0d;
+        double lowerDy = -1.5d;
+        double supportDy = -1.0d;
+        BlockPos upper = h.absolutePos(new BlockPos(3, 5, 3));
+        BlockPos lower = upper.below();
+        BlockPos support = lower.below();
+        BlockState trapdoor = Blocks.OAK_TRAPDOOR.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST)
+                .setValue(BlockStateProperties.HALF, Half.BOTTOM)
+                .setValue(BlockStateProperties.OPEN, false)
+                .setValue(BlockStateProperties.POWERED, false);
+        BlockState openTrapdoor = trapdoor.setValue(BlockStateProperties.OPEN, true);
+
+        // Separate equal-dy control: canonical OPEN envelopes only face-contact, so placement is legal.
+        double controlDy = -1.5d;
+        BlockPos controlUpper = h.absolutePos(new BlockPos(8, 5, 3));
+        BlockPos controlLower = controlUpper.below();
+        BlockPos controlSupport = controlLower.below();
+
+        w.setBlock(support, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 3);
+        w.setBlock(upper, trapdoor, 3);
+        w.setBlock(lower, Blocks.AIR.defaultBlockState(), 3);
+        forceStore(w, support, supportDy);
+        forceStore(w, upper, upperDy);
+        w.setBlock(controlSupport,
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 3);
+        w.setBlock(controlUpper, trapdoor, 3);
+        w.setBlock(controlLower, Blocks.AIR.defaultBlockState(), 3);
+        forceStore(w, controlSupport, supportDy);
+        forceStore(w, controlUpper, controlDy);
+
+        withFrozen(() -> {
+            double storedSupport = storedDy(w, support);
+            double liveSupport = liveDy(w, support);
+            double storedUpper = storedDy(w, upper);
+            double liveUpper = liveDy(w, upper);
+            SlabAnchorAttachment.PlacementDyFact lowerFactBefore =
+                    SlabAnchorAttachment.rawPlacementDyFact(w, lower);
+            if (Double.doubleToRawLongBits(storedSupport) != Double.doubleToRawLongBits(supportDy)
+                    || Double.doubleToRawLongBits(liveSupport) != Double.doubleToRawLongBits(supportDy)
+                    || Double.doubleToRawLongBits(storedUpper) != Double.doubleToRawLongBits(upperDy)
+                    || Double.doubleToRawLongBits(liveUpper) != Double.doubleToRawLongBits(upperDy)
+                    || !w.getBlockState(lower).isAir()
+                    || lowerFactBefore.present()) {
+                throw h.assertionException(lower, "wrong-red premise: support must be exact -1.0, upper exact -2.0, "
+                        + "and lower air/factless; support=[" + storedSupport + "," + liveSupport + "] upper=["
+                        + storedUpper + "," + liveUpper + "] lower=" + w.getBlockState(lower)
+                        + " lowerFact=" + lowerFactBefore.present());
+            }
+
+            VoxelShape upperClosed = trapdoor.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(upper.getX(), upper.getY() + upperDy, upper.getZ());
+            VoxelShape lowerClosed = trapdoor.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(lower.getX(), lower.getY() + lowerDy, lower.getZ());
+            VoxelShape upperOpen = openTrapdoor.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(upper.getX(), upper.getY() + upperDy, upper.getZ());
+            VoxelShape lowerOpen = openTrapdoor.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(lower.getX(), lower.getY() + lowerDy, lower.getZ());
+            double closedDepth = strictPositiveAabbOverlapDepthY(upperClosed, lowerClosed);
+            double futureOpenDepth = strictPositiveAabbOverlapDepthY(
+                    Shapes.or(upperClosed, upperOpen), Shapes.or(lowerClosed, lowerOpen));
+            double dyContactGapDepth = lowerDy - upperDy;
+            VoxelShape equalDyUpperOpen = openTrapdoor.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(upper.getX(), upper.getY() + lowerDy, upper.getZ());
+            double equalDyOpenDepth = strictPositiveAabbOverlapDepthY(equalDyUpperOpen, lowerOpen);
+            if (closedDepth > EPS
+                    || futureOpenDepth <= EPS
+                    || Math.abs(dyContactGapDepth - 0.5d) > EPS
+                    || equalDyOpenDepth > EPS) {
+                throw h.assertionException(lower, "wrong-red premise: closed depth must be 0, future OPEN-envelope "
+                        + "depth positive, dy contact gap exactly 0.5, and equal-dy open control only face-contact; "
+                        + "closed=" + closedDepth + " futureOpen=" + futureOpenDepth + " dyGap=" + dyContactGapDepth
+                        + " equalDyOpen=" + equalDyOpenDepth);
+            }
+
+            double storedControlSupport = storedDy(w, controlSupport);
+            double liveControlSupport = liveDy(w, controlSupport);
+            double storedControlUpper = storedDy(w, controlUpper);
+            double liveControlUpper = liveDy(w, controlUpper);
+            SlabAnchorAttachment.PlacementDyFact controlLowerFactBefore =
+                    SlabAnchorAttachment.rawPlacementDyFact(w, controlLower);
+            VoxelShape controlUpperOpen = openTrapdoor.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(controlUpper.getX(), controlUpper.getY() + controlDy, controlUpper.getZ());
+            VoxelShape controlLowerOpen = openTrapdoor.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(controlLower.getX(), controlLower.getY() + controlDy, controlLower.getZ());
+            double controlOpenDepth = strictPositiveAabbOverlapDepthY(controlUpperOpen, controlLowerOpen);
+            if (Double.doubleToRawLongBits(storedControlSupport) != Double.doubleToRawLongBits(supportDy)
+                    || Double.doubleToRawLongBits(liveControlSupport) != Double.doubleToRawLongBits(supportDy)
+                    || Double.doubleToRawLongBits(storedControlUpper) != Double.doubleToRawLongBits(controlDy)
+                    || Double.doubleToRawLongBits(liveControlUpper) != Double.doubleToRawLongBits(controlDy)
+                    || !w.getBlockState(controlLower).isAir()
+                    || controlLowerFactBefore.present()
+                    || controlOpenDepth > EPS) {
+                throw h.assertionException(controlLower, "wrong-green premise: equal-dy control must start with "
+                        + "support exact -1.0, upper exact -1.5, lower air/factless, and OPEN face-contact only; "
+                        + "support=[" + storedControlSupport + "," + liveControlSupport + "] upper=["
+                        + storedControlUpper + "," + liveControlUpper + "] lower="
+                        + w.getBlockState(controlLower) + " lowerFact=" + controlLowerFactBefore.present()
+                        + " openDepth=" + controlOpenDepth);
+            }
+
+            Player controlMock = h.makeMockServerPlayer(GameType.SURVIVAL);
+            if (!(controlMock instanceof ServerPlayer controlPlayer)) {
+                throw h.assertionException(controlLower, "wrong-green premise: equal-dy control did not create a "
+                        + "ServerPlayer");
+            }
+            ItemStack controlHeld = new ItemStack(Items.OAK_TRAPDOOR);
+            controlHeld.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY
+                    .with(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST)
+                    .with(BlockStateProperties.HALF, Half.BOTTOM));
+            controlPlayer.setItemInHand(InteractionHand.MAIN_HAND, controlHeld);
+            int controlHeldBefore = controlHeld.getCount();
+            Vec3 visibleControlSupportTop = new Vec3(controlSupport.getX() + 0.5d,
+                    controlSupport.getY() - 0.5d, controlSupport.getZ() + 0.5d);
+            InteractionResult controlResult = controlPlayer.gameMode.useItemOn(
+                    controlPlayer,
+                    w,
+                    controlHeld,
+                    InteractionHand.MAIN_HAND,
+                    new BlockHitResult(visibleControlSupportTop, Direction.UP, controlSupport, false));
+            BlockState controlLowerAfter = w.getBlockState(controlLower);
+            BlockState controlUpperAfter = w.getBlockState(controlUpper);
+            double storedControlLowerAfter = storedDy(w, controlLower);
+            double liveControlLowerAfter = liveDy(w, controlLower);
+            double storedControlUpperAfter = storedDy(w, controlUpper);
+            double liveControlUpperAfter = liveDy(w, controlUpper);
+            SlabAnchorAttachment.PlacementDyFact controlLowerFactAfter =
+                    SlabAnchorAttachment.rawPlacementDyFact(w, controlLower);
+            if (controlResult == null
+                    || !controlResult.consumesAction()
+                    || !controlLowerAfter.is(Blocks.OAK_TRAPDOOR)
+                    || Double.doubleToRawLongBits(storedControlLowerAfter) != Double.doubleToRawLongBits(controlDy)
+                    || Double.doubleToRawLongBits(liveControlLowerAfter) != Double.doubleToRawLongBits(controlDy)
+                    || !controlLowerFactAfter.present()
+                    || controlHeld.getCount() != controlHeldBefore - 1
+                    || controlPlayer.getItemInHand(InteractionHand.MAIN_HAND).getCount() != controlHeldBefore - 1
+                    || !controlUpperAfter.equals(trapdoor)
+                    || Double.doubleToRawLongBits(storedControlUpperAfter) != Double.doubleToRawLongBits(controlDy)
+                    || Double.doubleToRawLongBits(liveControlUpperAfter) != Double.doubleToRawLongBits(controlDy)) {
+                throw h.assertionException(controlLower, "TEST 30 equal-dy OPEN face-contact control must place the "
+                        + "lower oak trapdoor at exact -1.5, consume one in survival, and preserve the upper; "
+                        + "result=" + controlResult + " lower=" + controlLowerAfter + " lowerStored="
+                        + storedControlLowerAfter + " lowerLive=" + liveControlLowerAfter + " lowerFact="
+                        + (controlLowerFactAfter.present()
+                        ? Double.longBitsToDouble(controlLowerFactAfter.rawBits()) : "absent") + " held="
+                        + controlHeld.getCount() + " upper=" + controlUpperAfter + " upperStored="
+                        + storedControlUpperAfter + " upperLive=" + liveControlUpperAfter);
+            }
+
+            Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+            if (!(mock instanceof ServerPlayer player)) {
+                throw h.assertionException(lower, "wrong-red premise: fixture did not create a ServerPlayer");
+            }
+            ItemStack held = new ItemStack(Items.OAK_TRAPDOOR);
+            held.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY
+                    .with(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST)
+                    .with(BlockStateProperties.HALF, Half.BOTTOM));
+            player.setItemInHand(InteractionHand.MAIN_HAND, held);
+            int heldBefore = held.getCount();
+            Vec3 visibleSupportTop = new Vec3(support.getX() + 0.5d, support.getY() - 0.5d, support.getZ() + 0.5d);
+            InteractionResult result = player.gameMode.useItemOn(
+                    player,
+                    w,
+                    held,
+                    InteractionHand.MAIN_HAND,
+                    new BlockHitResult(visibleSupportTop, Direction.UP, support, false));
+
+            BlockState lowerAfter = w.getBlockState(lower);
+            double storedLowerAfter = storedDy(w, lower);
+            double liveLowerAfter = liveDy(w, lower);
+            if (!lowerAfter.isAir() && !lowerAfter.is(Blocks.OAK_TRAPDOOR)) {
+                throw h.assertionException(lower, "wrong-red premise: visible-support use wrote an unexpected lower "
+                        + "block; result=" + result + " lower=" + lowerAfter);
+            }
+            if (lowerAfter.is(Blocks.OAK_TRAPDOOR)) {
+                if (Double.doubleToRawLongBits(storedLowerAfter) != Double.doubleToRawLongBits(lowerDy)
+                        || Double.doubleToRawLongBits(liveLowerAfter) != Double.doubleToRawLongBits(lowerDy)) {
+                    throw h.assertionException(lower, "wrong-red premise: real lower placement must land at exact -1.5; "
+                            + "stored=" + storedLowerAfter + " live=" + liveLowerAfter + " result=" + result);
+                }
+                throw h.assertionException(lower, "TEST 30 state-transition occupancy: unsafe lower trapdoor was "
+                        + "placed through ServerPlayer.gameMode.useItemOn; futureOpenOverlapDepth=" + futureOpenDepth
+                        + " (expected 0.3125), result=" + result + " lower=" + lowerAfter);
+            }
+
+            SlabAnchorAttachment.PlacementDyFact lowerFactAfter =
+                    SlabAnchorAttachment.rawPlacementDyFact(w, lower);
+            BlockState upperAfter = w.getBlockState(upper);
+            double storedUpperAfter = storedDy(w, upper);
+            double liveUpperAfter = liveDy(w, upper);
+            if (lowerFactAfter.present()
+                    || held.getCount() != heldBefore
+                    || player.getItemInHand(InteractionHand.MAIN_HAND).getCount() != heldBefore
+                    || !upperAfter.equals(trapdoor)
+                    || Double.doubleToRawLongBits(storedUpperAfter) != Double.doubleToRawLongBits(upperDy)
+                    || Double.doubleToRawLongBits(liveUpperAfter) != Double.doubleToRawLongBits(upperDy)) {
+                throw h.assertionException(lower, "TEST 30 refusal contract failed: lower must remain air/factless, "
+                        + "held unchanged, and upper unchanged; lowerFact=" + lowerFactAfter.present()
+                        + " held=" + held.getCount() + " upper=" + upperAfter + " upperStored="
+                        + storedUpperAfter + " upperLive=" + liveUpperAfter);
+            }
+        });
         h.succeed();
     }
 
