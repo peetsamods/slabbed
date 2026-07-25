@@ -88,9 +88,13 @@
       "com.slabbed.test.PlacementDyPredictionClientGameTest",
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
       "com.slabbed.test.ModelStaleSentinelSelfCheckClientGameTest",
-      "com.slabbed.client.SlabModelStaleSentinelClientThrottleClientGameTest"
+      "com.slabbed.client.SlabModelStaleSentinelClientThrottleClientGameTest",
+      "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest"
     ]
   },
+  "mixins": [
+    "slabbed-test31.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.18.1",
     "fabric-gametest-api-v1": "*",
