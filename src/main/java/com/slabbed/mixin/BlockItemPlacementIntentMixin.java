@@ -1571,8 +1571,7 @@ public abstract class BlockItemPlacementIntentMixin {
             Operation<Boolean> original
     ) {
         boolean admitted = original.call(context, state);
-        OccludedOccupancyFrame occupancyFrame = OCCLUDED_OCCUPANCY_FRAME.get();
-        if (!admitted || occupancyFrame == null) {
+        if (!admitted) {
             return admitted;
         }
 
@@ -1591,13 +1590,25 @@ public abstract class BlockItemPlacementIntentMixin {
         LandingResolver.PlacementResolution resolution =
                 LandingResolver.resolve(aim, context.getClickedPos(), state, family);
         if (resolution == null
-                || (aim.replacementSameCell() && aim.ownerPos().equals(resolution.targetCell()))
                 || !Double.isFinite(resolution.landingDy())) {
+            return true;
+        }
+        if (aim.replacementSameCell() && aim.ownerPos().equals(resolution.targetCell())) {
             return true;
         }
 
         Level world = context.getLevel();
         BlockPos placePos = resolution.targetCell();
+        if (SlabAnchorAttachment.FROZEN_DY_ENABLED
+                && slabbed$overlapsVerticalOpenTransitionEnvelope(
+                        world, placePos, state, resolution.landingDy())) {
+            return false;
+        }
+
+        OccludedOccupancyFrame occupancyFrame = OCCLUDED_OCCUPANCY_FRAME.get();
+        if (occupancyFrame == null) {
+            return true;
+        }
         VoxelShape candidateShape = state.getCollisionShape(
                         world, placePos, CollisionContext.empty())
                 .move(placePos.getX(), placePos.getY() + resolution.landingDy(), placePos.getZ());
@@ -1609,6 +1620,35 @@ public abstract class BlockItemPlacementIntentMixin {
                 candidateShape,
                 occupancyFrame.translatedShape(),
                 BooleanOp.AND);
+    }
+
+    private static boolean slabbed$overlapsVerticalOpenTransitionEnvelope(
+            Level world,
+            BlockPos candidatePos,
+            BlockState candidateState,
+            double candidateDy
+    ) {
+        return slabbed$overlapsOpenTransitionNeighbor(
+                world, candidatePos, candidateState, candidateDy, candidatePos.below())
+                || slabbed$overlapsOpenTransitionNeighbor(
+                world, candidatePos, candidateState, candidateDy, candidatePos.above());
+    }
+
+    private static boolean slabbed$overlapsOpenTransitionNeighbor(
+            Level world,
+            BlockPos candidatePos,
+            BlockState candidateState,
+            double candidateDy,
+            BlockPos neighborPos
+    ) {
+        BlockState neighborState = world.getBlockState(neighborPos);
+        if (neighborState.isAir()) {
+            return false;
+        }
+        double neighborDy = SlabSupport.getYOffset(world, neighborPos, neighborState);
+        return SlabEnsembleCoherence.canonicalOpenTransitionEnvelopesOverlap(
+                candidateState, candidatePos, candidateDy,
+                neighborState, neighborPos, neighborDy);
     }
 
     @Inject(method = "canPlace", at = @At("HEAD"), cancellable = true)
