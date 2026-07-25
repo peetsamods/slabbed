@@ -6,6 +6,10 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
@@ -117,6 +121,77 @@ public final class SlabEnsembleCoherence {
             return false;
         }
         return shape.max(Direction.Axis.Y) + dy <= EPS;
+    }
+
+    /**
+     * Does either block's canonical {@code OPEN=false}/{@code OPEN=true} collision envelope strictly
+     * overlap the other's at their immutable world-space landing offsets? At least one state must own
+     * {@link BlockStateProperties#OPEN}; a state without it contributes its one unchanged collision
+     * shape. Toggling OPEN through {@link BlockState#setValue} deliberately preserves every other
+     * property, including POWERED, facing, half, and hinge.
+     *
+     * <p>This is a pure admission classifier: collision shapes are queried context-free at origin,
+     * each cell position and dy are applied exactly once, and face/edge/corner contact remains legal.
+     * Air, compat-owned states, non-finite offsets, and empty resulting envelopes are ineligible.
+     */
+    public static boolean canonicalOpenTransitionEnvelopesOverlap(
+            BlockState firstState,
+            BlockPos firstPos,
+            double firstDy,
+            BlockState secondState,
+            BlockPos secondPos,
+            double secondDy
+    ) {
+        if (firstState == null || secondState == null || firstPos == null || secondPos == null
+                || firstState.isAir() || secondState.isAir()
+                || isTransitionEnvelopeExcluded(firstState)
+                || isTransitionEnvelopeExcluded(secondState)
+                || !Double.isFinite(firstDy) || !Double.isFinite(secondDy)
+                || (!firstState.hasProperty(BlockStateProperties.OPEN)
+                && !secondState.hasProperty(BlockStateProperties.OPEN))) {
+            return false;
+        }
+
+        VoxelShape firstEnvelope = canonicalOpenTransitionEnvelope(firstState)
+                .move(firstPos.getX(), firstPos.getY() + firstDy, firstPos.getZ());
+        VoxelShape secondEnvelope = canonicalOpenTransitionEnvelope(secondState)
+                .move(secondPos.getX(), secondPos.getY() + secondDy, secondPos.getZ());
+        if (firstEnvelope.isEmpty() || secondEnvelope.isEmpty()) {
+            return false;
+        }
+
+        for (AABB firstBox : firstEnvelope.toAabbs()) {
+            for (AABB secondBox : secondEnvelope.toAabbs()) {
+                double xDepth = Math.min(firstBox.maxX, secondBox.maxX)
+                        - Math.max(firstBox.minX, secondBox.minX);
+                double yDepth = Math.min(firstBox.maxY, secondBox.maxY)
+                        - Math.max(firstBox.minY, secondBox.minY);
+                double zDepth = Math.min(firstBox.maxZ, secondBox.maxZ)
+                        - Math.max(firstBox.minZ, secondBox.minZ);
+                if (xDepth > EPS && yDepth > EPS && zDepth > EPS) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTransitionEnvelopeExcluded(BlockState state) {
+        return isTsOwned(state) || CompatHooks.terrainSlabsHandlesObjectOffset(state);
+    }
+
+    private static VoxelShape canonicalOpenTransitionEnvelope(BlockState state) {
+        if (!state.hasProperty(BlockStateProperties.OPEN)) {
+            return vanillaCollisionShape(state);
+        }
+        VoxelShape closed = vanillaCollisionShape(state.setValue(BlockStateProperties.OPEN, false));
+        VoxelShape open = vanillaCollisionShape(state.setValue(BlockStateProperties.OPEN, true));
+        return Shapes.or(closed, open);
+    }
+
+    private static VoxelShape vanillaCollisionShape(BlockState state) {
+        return state.getCollisionShape(
+                EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
     }
 
     /**
