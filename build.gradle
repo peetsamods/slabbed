@@ -398,6 +398,317 @@ tasks.register("verifyReleaseJarHygiene") {
     }
 }
 
+afterEvaluate {
+def test35NestedJarPath = "META-INF/jars/slabbed-diagnostics.jar"
+def processedMainDescriptor = layout.buildDirectory.file("resources/main/fabric.mod.json")
+def processedDiagnosticsDescriptor = layout.buildDirectory.file("resources/diagnostics/fabric.mod.json")
+def generatedTest35Descriptor = layout.buildDirectory.file("generated/test35/fabric.mod.json")
+
+def diagnosticsJar = tasks.register("diagnosticsJar", Jar) {
+    group = "test35 diagnostics"
+    description = "Assembles the runtime-ready diagnostics source set for the TEST 35 nested jar."
+    dependsOn(tasks.named("diagnosticsClasses"))
+    archiveFileName.set("slabbed-diagnostics.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("test35/runtime-diagnostics"))
+    from(sourceSets.diagnostics.output)
+}
+
+def generateTest35FabricModJson = tasks.register("generateTest35FabricModJson") {
+    group = "test35 diagnostics"
+    description = "Generates the TEST-only outer descriptor with one nested diagnostics declaration."
+    dependsOn(tasks.named("processResources"))
+    inputs.file(processedMainDescriptor)
+    outputs.file(generatedTest35Descriptor)
+
+    doLast {
+        def releaseMetadata = new groovy.json.JsonSlurper().parse(processedMainDescriptor.get().asFile)
+        if (releaseMetadata.containsKey("jars")) {
+            throw new GradleException(
+                    "Standard Slabbed descriptor unexpectedly already declares nested jars.")
+        }
+        releaseMetadata.jars = [[file: test35NestedJarPath]]
+
+        def outputFile = generatedTest35Descriptor.get().asFile
+        outputFile.parentFile.mkdirs()
+        outputFile.text = groovy.json.JsonOutput.prettyPrint(
+                groovy.json.JsonOutput.toJson(releaseMetadata)) + System.lineSeparator()
+    }
+}
+
+def test35DiagnosticJar = tasks.register("test35DiagnosticJar", Jar) {
+    group = "test35 diagnostics"
+    description = "Builds the single-file TEST 35 jar with the runtime-ready diagnostics mod nested inside."
+    dependsOn(
+            tasks.named("jar"),
+            diagnosticsJar,
+            generateTest35FabricModJson)
+
+    archiveFileName.set("${project.archives_base_name}-${project.mod_version}-TEST35-diagnostics.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("test35/bundle"))
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+
+    from({
+        zipTree(tasks.named("jar").get().archiveFile.get().asFile)
+    }) {
+        exclude("fabric.mod.json")
+        exclude("META-INF/MANIFEST.MF")
+    }
+    from(generatedTest35Descriptor) {
+        rename { "fabric.mod.json" }
+    }
+    from(diagnosticsJar.flatMap { it.archiveFile }) {
+        into("META-INF/jars")
+    }
+
+    doFirst {
+        def releaseJar = tasks.named("jar").get().archiveFile.get().asFile
+        new java.util.jar.JarFile(releaseJar).withCloseable { source ->
+            if (source.manifest == null) {
+                throw new GradleException("Ordinary runtime Slabbed jar has no manifest to preserve.")
+            }
+            def preservedAttributes = source.manifest.mainAttributes.collectEntries { key, value ->
+                [(key.toString()): value.toString()]
+            }
+            manifest.attributes(preservedAttributes)
+        }
+    }
+}
+
+def verifyTest35DiagnosticJar = tasks.register("verifyTest35DiagnosticJar") {
+    group = "verification"
+    description = "Verifies the nested TEST 35 bundle and the unchanged release-jar boundary."
+    dependsOn(
+            test35DiagnosticJar,
+            tasks.named("verifyReleaseJarHygiene"))
+    inputs.files(
+            test35DiagnosticJar.flatMap { it.archiveFile },
+            diagnosticsJar.flatMap { it.archiveFile },
+            tasks.named("jar").flatMap { it.archiveFile },
+            processedMainDescriptor,
+            processedDiagnosticsDescriptor)
+
+    doLast {
+        def bundleFile = test35DiagnosticJar.get().archiveFile.get().asFile
+        def bundleCandidates = fileTree(bundleFile.parentFile) {
+            include("*.jar")
+        }.files
+        if (bundleCandidates.size() != 1 || bundleCandidates.first() != bundleFile) {
+            throw new GradleException(
+                    "Expected exactly one top-level TEST 35 bundle, found: "
+                            + bundleCandidates.collect { it.name }.sort())
+        }
+
+        def requiredInnerClasses = [
+                "com/slabbed/dev/SlabbedDiagnostics.class",
+                "com/slabbed/client/SlabbedDiagnosticsClient.class",
+                "com/slabbed/util/LiveCursorIntentRecorder.class",
+                "com/slabbed/util/SlabModelStaleSentinel.class",
+                "com/slabbed/client/TargetDyOverlay.class",
+                "com/slabbed/client/SlabModelStaleSentinelClient.class",
+                "com/slabbed/mixin/client/TargetDyHudMixin.class"
+        ]
+        def looseDiagnosticEntries = requiredInnerClasses + [
+                "slabbed.diagnostics.client.mixins.json"
+        ]
+
+        byte[] nestedJarBytes
+        def outerDescriptorBytes
+        def outerRootDescriptorCount = 0
+        def outerNestedJarCount = 0
+        def looseDiagnostics = []
+        new java.util.zip.ZipFile(bundleFile).withCloseable { outer ->
+            outer.entries().each { entry ->
+                if (entry.name == "fabric.mod.json") {
+                    outerRootDescriptorCount++
+                    outerDescriptorBytes = outer.getInputStream(entry).readAllBytes()
+                }
+                if (entry.name == test35NestedJarPath) {
+                    outerNestedJarCount++
+                    nestedJarBytes = outer.getInputStream(entry).readAllBytes()
+                }
+                if (looseDiagnosticEntries.contains(entry.name)) {
+                    looseDiagnostics.add(entry.name)
+                }
+            }
+        }
+        if (outerRootDescriptorCount != 1) {
+            throw new GradleException(
+                    "TEST 35 outer jar must contain one root fabric.mod.json; found "
+                            + outerRootDescriptorCount)
+        }
+        if (outerNestedJarCount != 1 || nestedJarBytes == null) {
+            throw new GradleException(
+                    "TEST 35 outer jar must contain one ${test35NestedJarPath}; found "
+                            + outerNestedJarCount)
+        }
+        if (!looseDiagnostics.isEmpty()) {
+            throw new GradleException(
+                    "Diagnostic implementation leaked loose into the outer jar: "
+                            + looseDiagnostics.sort())
+        }
+
+        def outerMetadata = new groovy.json.JsonSlurper().parse(
+                new java.io.ByteArrayInputStream(outerDescriptorBytes))
+        if (outerMetadata.jars != [[file: test35NestedJarPath]]) {
+            throw new GradleException(
+                    "TEST 35 outer nested declaration is not exactly ${test35NestedJarPath}: "
+                            + outerMetadata.jars)
+        }
+        def releaseMetadata = new groovy.json.JsonSlurper().parse(processedMainDescriptor.get().asFile)
+        def outerWithoutJars = new LinkedHashMap(outerMetadata)
+        outerWithoutJars.remove("jars")
+        if (outerWithoutJars != releaseMetadata) {
+            throw new GradleException(
+                    "TEST 35 outer descriptor differs from release metadata beyond the nested jar.")
+        }
+
+        def innerEntryCounts = [:].withDefault { 0 }
+        def innerEntryBytes = [:]
+        new java.util.zip.ZipInputStream(
+                new java.io.ByteArrayInputStream(nestedJarBytes)).withCloseable { inner ->
+            java.util.zip.ZipEntry entry
+            while ((entry = inner.nextEntry) != null) {
+                if (!entry.directory) {
+                    innerEntryCounts[entry.name] = innerEntryCounts[entry.name] + 1
+                    if (entry.name == "fabric.mod.json"
+                            || entry.name == "slabbed.diagnostics.client.mixins.json"
+                            || requiredInnerClasses.contains(entry.name)) {
+                        innerEntryBytes[entry.name] = inner.readAllBytes()
+                    }
+                }
+            }
+        }
+        if (innerEntryCounts["fabric.mod.json"] != 1) {
+            throw new GradleException(
+                    "Nested diagnostics jar must contain one root fabric.mod.json; found "
+                            + innerEntryCounts["fabric.mod.json"])
+        }
+        def duplicateInnerEntries = innerEntryCounts.findAll { _, count -> count > 1 }.keySet().sort()
+        if (!duplicateInnerEntries.isEmpty()) {
+            throw new GradleException(
+                    "Nested diagnostics jar contains duplicate file entries: " + duplicateInnerEntries)
+        }
+        def requiredInnerEntries = requiredInnerClasses + [
+                "slabbed.diagnostics.client.mixins.json"
+        ]
+        def missingInnerEntries = requiredInnerEntries.findAll {
+            innerEntryCounts[it] != 1
+        }
+        if (!missingInnerEntries.isEmpty()) {
+            throw new GradleException(
+                    "Nested diagnostics jar is missing required entries: " + missingInnerEntries)
+        }
+
+        def innerMetadata = new groovy.json.JsonSlurper().parse(
+                new java.io.ByteArrayInputStream(innerEntryBytes["fabric.mod.json"]))
+        def expectedInnerMetadata = new groovy.json.JsonSlurper().parse(
+                processedDiagnosticsDescriptor.get().asFile)
+        if (innerMetadata != expectedInnerMetadata) {
+            throw new GradleException(
+                    "Nested diagnostics descriptor differs from the processed source descriptor.")
+        }
+        if (innerMetadata.id != "slabbed_diagnostics"
+                || innerMetadata.entrypoints?.main != ["com.slabbed.dev.SlabbedDiagnostics"]
+                || innerMetadata.entrypoints?.client != ["com.slabbed.client.SlabbedDiagnosticsClient"]
+                || innerMetadata.mixins != [[
+                        config: "slabbed.diagnostics.client.mixins.json",
+                        environment: "client"
+                ]]
+                || innerMetadata.depends?.slabbed != "*") {
+            throw new GradleException(
+                    "Nested diagnostics metadata lost its required mod id, entrypoints, mixin, or dependency.")
+        }
+
+        def diagnosticsJarBytes = java.nio.file.Files.readAllBytes(
+                diagnosticsJar.get().archiveFile.get().asFile.toPath())
+        if (!java.util.Arrays.equals(nestedJarBytes, diagnosticsJarBytes)) {
+            throw new GradleException(
+                    "Nested diagnostics bytes do not match the runtime-ready diagnostics artifact.")
+        }
+
+        def releaseJarFile = tasks.named("jar").get().archiveFile.get().asFile
+
+        def diagnosticTaskNames = [
+                "diagnosticsJar",
+                "generateTest35FabricModJson",
+                "test35DiagnosticJar",
+                "verifyTest35DiagnosticJar",
+                "buildTest35DiagnosticJar"
+        ] as Set
+        def ordinaryTaskNames = [
+                "build",
+                "assemble",
+                "check",
+                "jar",
+                "remapJar",
+                "sourcesJar",
+                "verifyReleaseJarHygiene",
+                "publish",
+                "publishToMavenLocal"
+        ] + tasks.findAll { task -> task.name.startsWith("publish") }.collect { task -> task.name }
+        def ordinaryDependencyLeaks = []
+        ordinaryTaskNames.each { taskName ->
+            def ordinaryTask = tasks.findByName(taskName)
+            if (ordinaryTask != null) {
+                def pending = new ArrayDeque(
+                        ordinaryTask.taskDependencies.getDependencies(ordinaryTask))
+                def visited = [] as Set
+                while (!pending.isEmpty()) {
+                    def dependency = pending.removeFirst()
+                    if (visited.add(dependency)) {
+                        if (diagnosticTaskNames.contains(dependency.name)) {
+                            ordinaryDependencyLeaks.add("${taskName}->${dependency.name}")
+                        }
+                        pending.addAll(dependency.taskDependencies.getDependencies(dependency))
+                    }
+                }
+            }
+        }
+        if (!ordinaryDependencyLeaks.isEmpty()) {
+            throw new GradleException(
+                    "Ordinary build/release/publication task depends on TEST 35 diagnostics: "
+                            + ordinaryDependencyLeaks.sort())
+        }
+
+        new java.util.jar.JarFile(releaseJarFile).withCloseable { releaseJar ->
+            new java.util.jar.JarFile(bundleFile).withCloseable { bundleJar ->
+                def releaseManifestAttributes = releaseJar.manifest?.mainAttributes?.collectEntries { key, value ->
+                    [(key.toString()): value.toString()]
+                }
+                def bundleManifestAttributes = bundleJar.manifest?.mainAttributes?.collectEntries { key, value ->
+                    [(key.toString()): value.toString()]
+                }
+                if (releaseManifestAttributes == null || bundleManifestAttributes == null
+                        || releaseManifestAttributes != bundleManifestAttributes) {
+                    throw new GradleException(
+                            "TEST 35 bundle manifest main attributes differ from the ordinary release jar.")
+                }
+                ["Slabbed-Git-Sha", "Slabbed-Build-Time"].each { attribute ->
+                    def releaseValue = releaseJar.manifest?.mainAttributes?.getValue(attribute)
+                    def bundleValue = bundleJar.manifest?.mainAttributes?.getValue(attribute)
+                    if (releaseValue == null || releaseValue.trim().isEmpty()
+                            || bundleValue != releaseValue) {
+                        throw new GradleException(
+                                "TEST 35 bundle did not preserve readable ${attribute} from the release jar.")
+                    }
+                }
+            }
+        }
+
+        println("TEST35_VERIFY outerDescriptors=1 nestedJars=1 innerDescriptors=1 "
+                + "innerClasses=${requiredInnerClasses.size()} innerDuplicateEntries=0 "
+                + "manifestAttributes=equal releaseHygiene=passed releaseViolations=0 ordinaryTaskLeaks=0")
+        println("TEST35_ARTIFACT ${bundleFile.absolutePath}")
+    }
+}
+
+tasks.register("buildTest35DiagnosticJar") {
+    group = "test35 diagnostics"
+    description = "Builds and verifies the single-file TEST 35 diagnostics bundle."
+    dependsOn(verifyTest35DiagnosticJar)
+}
+}
+
 tasks.named("build") {
     dependsOn(tasks.named("verifyReleaseJarHygiene"))
 }
