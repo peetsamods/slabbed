@@ -16,6 +16,7 @@
       "com.slabbed.test.BlockEntityCantileverTerrainSlabsGuardTest$TerrainSlabsBlockEntityCantileverGuardTestEntrypoint",
       "com.slabbed.test.GeometricRemeshSchedulerTest$GeometricRemeshSchedulerTestEntrypoint",
       "com.slabbed.test.PlacementCaptureBoundaryGameTest$TestContentEntrypoint",
+      "com.slabbed.test.BottomSlabSpawnProofTest$TerrainSlabsSpawnProofTestEntrypoint",
       "com.slabbed.test.SlabRigHangingDirectExecutorTest$StoreBootstrap"
     ],
     "fabric-gametest": [
@@ -33,6 +34,7 @@
       "com.slabbed.test.DecorativeObjectSupportAnchorTest",
       "com.slabbed.test.SlabVerticalSupportTerrainSlabsGuardTest",
       "com.slabbed.test.FloorTorchSupportDyTest",
+      "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.CeilingHungDecorationFreezeAnchorTest",
       "com.slabbed.test.FenceWallVisibleSupportDyTest",
       "com.slabbed.test.CantileverBfsTerrainSlabsGuardTest",

@@ -109,6 +109,18 @@ public final class SlabSupport {
         return isSupportingSlab(state) && state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 
+    /**
+     * True when Slabbed's placement-support override must not make the surface
+     * eligible for ON_GROUND mob spawning.
+     *
+     * <p>This intentionally includes compatible custom bottom-like slabs, while
+     * leaving top-like and double-like surfaces to their normal spawn predicates.
+     */
+    public static boolean isSpawnProofBottomLikeSurface(BlockState state) {
+        return isBottomSlab(state)
+                || CompatHooks.customSlabSurfaceKind(state) == CompatSlabSurfaceKind.BOTTOM_LIKE;
+    }
+
     /** True if this state is a top slab. */
     public static boolean isTopSlab(BlockState state) {
         return isSupportingSlab(state) && state.getValue(SlabBlock.TYPE) == SlabType.TOP;

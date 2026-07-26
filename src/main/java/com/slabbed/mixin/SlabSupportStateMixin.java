@@ -20,6 +20,7 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.level.BlockGetter;
@@ -263,6 +264,26 @@ public abstract class SlabSupportStateMixin {
         BlockState self = (BlockState) (Object) this;
         if (direction == Direction.UP && SlabSupport.isBottomSlab(self)) {
             cir.setReturnValue(true);
+        }
+    }
+
+    /**
+     * Preserve bottom-like slabs as mob-proof surfaces after the separate
+     * placement/survival support override has done its job.
+     *
+     * <p>Running at RETURN makes this strictly subtractive: entity-specific
+     * rules and every already-false block predicate remain false.
+     */
+    @Inject(method = "isValidSpawn", at = @At("RETURN"), cancellable = true)
+    private void slabbed$bottomSlabSpawnProofing(
+            BlockGetter world,
+            BlockPos pos,
+            EntityType<?> entityType,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        BlockState self = (BlockState) (Object) this;
+        if (cir.getReturnValue() && SlabSupport.isSpawnProofBottomLikeSurface(self)) {
+            cir.setReturnValue(false);
         }
     }
 
