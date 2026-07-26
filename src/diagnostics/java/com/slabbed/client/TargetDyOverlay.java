@@ -32,7 +32,7 @@ import java.util.List;
  */
 public final class TargetDyOverlay {
 
-    private static boolean enabled = SlabbedClientFlags.TARGET_DY_OVERLAY;
+    private static boolean enabled = Boolean.getBoolean("slabbed.targetDyOverlay");
 
     private TargetDyOverlay() {
     }

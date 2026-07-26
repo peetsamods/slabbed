@@ -4,7 +4,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.runtime.LoweredSideSlabRetargeter;
-import com.slabbed.util.LiveCursorIntentRecorder;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.PlacementIntentState;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -86,7 +86,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
     private static final String SEAM_OWNER_NO_RESCUE = "NO_RESCUE";
 
     private void slabbed$recordOffsetRaycastVisualEvidence(float tickProgress) {
-        if (!LiveCursorIntentRecorder.enabled()) {
+        if (!SlabbedDiagnosticsBridge.enabled()) {
             return;
         }
 
@@ -136,7 +136,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
         renderedOutline.put("renderedOutlineCameraRelativeBounds",
                 slabbed$formatRecorderBounds(cameraRelativeBounds));
         renderedOutline.put("renderedOutlineHitVec", slabbed$formatVec(blockTarget.getLocation()));
-        LiveCursorIntentRecorder.recordRenderedOutline(renderedOutline);
+        SlabbedDiagnosticsBridge.recordRenderedOutline(renderedOutline);
     }
 
     private static String slabbed$formatRecorderBounds(AABB box) {
@@ -1832,7 +1832,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             String classification,
             boolean sideSlabRetargetFired
     ) {
-        if (!LiveCursorIntentRecorder.enabled()) {
+        if (!SlabbedDiagnosticsBridge.enabled()) {
             return;
         }
         LinkedHashMap<String, String> row = new LinkedHashMap<>();
@@ -1891,7 +1891,7 @@ public abstract class GameRendererCrosshairRetargetMixin {
             row.put("expectedDy", "NaN");
             row.put("expectedAction", "miss");
         }
-        LiveCursorIntentRecorder.recordCursor(row);
+        SlabbedDiagnosticsBridge.recordCursor(row);
     }
 
     private void slabbed$putLiveCursorHit(

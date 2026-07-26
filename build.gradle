@@ -204,8 +204,42 @@ sourceSets {
             include("com/slabbed/test/PlacementDyPredictionClientGameTest.java")
             include("com/slabbed/client/SlabModelStaleSentinelClientThrottleClientGameTest.java")
             include("com/slabbed/test/LeverParticleFrozenAnchorClientGameTest.java")
+            include("com/slabbed/test/SlabRigGameTestSeams.java")
+            include("com/slabbed/client/PlacementDyPredictionJournalGameTestAccess.java")
+            include("com/slabbed/test/mixin/SlabRigCommandGameTestMixin.java")
+            include("com/slabbed/test/mixin/BlockItemFixtureGameTestMixin.java")
+            include("com/slabbed/test/mixin/PlacementDyPredictionJournalGameTestMixin.java")
             include("com/slabbed/test/mixin/ClientLevelParticleCaptureMixin.java")
         }
+    }
+    diagnostics {
+        compileClasspath += sourceSets.main.output + sourceSets.client.output + configurations.clientCompileClasspath
+        runtimeClasspath += output + compileClasspath + configurations.clientRuntimeClasspath
+    }
+    gametest {
+        compileClasspath += sourceSets.diagnostics.output
+        runtimeClasspath += sourceSets.diagnostics.output
+    }
+}
+
+configurations {
+    diagnosticsImplementation.extendsFrom(implementation, clientImplementation)
+    diagnosticsCompileOnly.extendsFrom(compileOnly, clientCompileOnly)
+    diagnosticsRuntimeOnly.extendsFrom(runtimeOnly, clientRuntimeOnly)
+}
+
+loom {
+    mods {
+        slabbed_diagnostics {
+            sourceSet sourceSets.diagnostics
+        }
+    }
+}
+
+tasks.named("processDiagnosticsResources") {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
     }
 }
 
@@ -309,6 +343,60 @@ jar {
     exclude("com/slabbed/util/Beta4PlacementAuthorRecorder.class")
     exclude("com/slabbed/util/SlabbedAuditBridge.class")
     exclude("slabbed.debug.mixins.json")
+}
+
+def releaseHygieneForbiddenTokens = [
+        "LiveCursorIntentRecorder",
+        "SlabModelStaleSentinel",
+        "TargetDyOverlay",
+        "SlabModelStaleSentinelClient",
+        "TargetDyHudMixin",
+        "CasePlacementProbeForTests",
+        "CasePostUseTestHook",
+        "BlockItemTestFixture",
+        "TestSnapshot",
+        "slabbed_diagnostics"
+]
+
+tasks.register("verifyReleaseJarHygiene") {
+    group = "verification"
+    description = "Fails when public binaries or sources retain diagnostic or GameTest-only seams."
+    dependsOn(tasks.named("jar"), tasks.named("sourcesJar"))
+    inputs.files(
+            tasks.named("jar").flatMap { it.archiveFile },
+            tasks.named("sourcesJar").flatMap { it.archiveFile })
+
+    doLast {
+        [
+                tasks.named("jar").get().archiveFile.get().asFile,
+                tasks.named("sourcesJar").get().archiveFile.get().asFile
+        ].each { archive ->
+            def violations = []
+            new java.util.zip.ZipFile(archive).withCloseable { zip ->
+                zip.entries().each { entry ->
+                    if (!entry.directory) {
+                        def content = new String(
+                                zip.getInputStream(entry).readAllBytes(),
+                                java.nio.charset.StandardCharsets.ISO_8859_1)
+                        releaseHygieneForbiddenTokens.each { token ->
+                            if (content.contains(token)) {
+                                violations.add("${entry.name} -> ${token}")
+                            }
+                        }
+                    }
+                }
+            }
+            if (!violations.isEmpty()) {
+                throw new GradleException(
+                        "Release hygiene violation in ${archive.name}:\n"
+                                + violations.unique().sort().join("\n"))
+            }
+        }
+    }
+}
+
+tasks.named("build") {
+    dependsOn(tasks.named("verifyReleaseJarHygiene"))
 }
 
 // configure the maven publication

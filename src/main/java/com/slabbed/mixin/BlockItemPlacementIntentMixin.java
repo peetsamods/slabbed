@@ -8,10 +8,9 @@ import com.slabbed.compat.CompatHooks;
 import com.slabbed.network.PlacementDyCorrectionServer;
 import com.slabbed.network.PlacementDyPredictionBridge;
 import com.slabbed.placement.LandingResolver;
-import com.slabbed.util.LiveCursorIntentRecorder;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.PlacementIntentState;
 import com.slabbed.util.SlabEnsembleCoherence;
-import com.slabbed.util.SlabModelStaleSentinel;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.BedBlock;
@@ -215,10 +214,7 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPlaceContext context,
             Operation<BlockPlaceContext> original
     ) {
-        BlockPlaceContext actual = PlacementDyPredictionBridge.testFixturePlacementContext(instance, context);
-        if (actual == null) {
-            actual = original.call(instance, context);
-        }
+        BlockPlaceContext actual = original.call(instance, context);
         PlacementFrame frame = slabbed$c3Frame();
         if (frame != null && actual != null) {
             frame.actualContext = actual;
@@ -238,10 +234,7 @@ public abstract class BlockItemPlacementIntentMixin {
             BlockPlaceContext context,
             Operation<BlockState> original
     ) {
-        BlockState placementState = PlacementDyPredictionBridge.testFixturePlacementState(instance, context);
-        if (placementState == null) {
-            placementState = original.call(instance, context);
-        }
+        BlockState placementState = original.call(instance, context);
         PlacementFrame frame = slabbed$c3Frame();
         if (frame != null && placementState != null) {
             frame.actualContext = context;
@@ -258,14 +251,13 @@ public abstract class BlockItemPlacementIntentMixin {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/world/item/BlockItem;placeBlock(Lnet/minecraft/world/item/context/BlockPlaceContext;Lnet/minecraft/world/level/block/state/BlockState;)Z")
     )
-    private boolean slabbed$c3RunTestFixturePlaceBlock(
+    private boolean slabbed$c3PlaceBlock(
             BlockItem instance,
             BlockPlaceContext context,
             BlockState state,
             Operation<Boolean> original
     ) {
-        Boolean fixtureResult = PlacementDyPredictionBridge.testFixturePlaceBlock(instance, context, state);
-        return fixtureResult == null ? original.call(instance, context, state) : fixtureResult;
+        return original.call(instance, context, state);
     }
 
     @WrapOperation(
@@ -2083,14 +2075,15 @@ public abstract class BlockItemPlacementIntentMixin {
             Level world = context.getLevel();
             // Capture the transformed target's prior state and dy on both logical sides. The outer
             // C3 place frame consumes it once, after marker publication and dy publication.
-            if (LiveCursorIntentRecorder.enabled() && world != null) {
+            if (SlabbedDiagnosticsBridge.enabled() && world != null) {
                 BlockPos priorPos = context.getClickedPos();
                 BlockState prior = world.getBlockState(priorPos);
                 slabbed$placePriorState.set(new PriorPlaceState(prior.toString(),
                         String.format("%.6f", SlabSupport.getYOffset(world, priorPos, prior))));
             }
             if (world.isClientSide()) {
-                SlabModelStaleSentinel.armPlacement(world, context.getClickedPos(), world.getGameTime());
+                SlabbedDiagnosticsBridge.armPlacement(
+                        world, context.getClickedPos(), world.getGameTime());
             }
         } catch (Throwable t) {
             if (!slabbed$sentinelArmWarned) {
@@ -2264,7 +2257,7 @@ public abstract class BlockItemPlacementIntentMixin {
             PlacementFrame frame,
             PriorPlaceState prior
     ) {
-        if (!LiveCursorIntentRecorder.enabled() || context == null || context.getLevel() == null) {
+        if (!SlabbedDiagnosticsBridge.enabled() || context == null || context.getLevel() == null) {
             return;
         }
         Level world = context.getLevel();
@@ -2315,7 +2308,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 : Boolean.toString(SlabAnchorAttachment.isPersistentLoweredSlabCarrier(world, placePos, afterState)));
         slabbed$c3AppendRecorderPairFacts(row, world, placePos, afterState);
         row.put("actualResult", result == null ? "null" : result.toString());
-        LiveCursorIntentRecorder.recordAction(row);
+        SlabbedDiagnosticsBridge.recordAction(row);
     }
 
     private static void slabbed$c3AppendRecorderPairFacts(

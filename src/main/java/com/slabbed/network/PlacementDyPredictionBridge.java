@@ -5,8 +5,6 @@ import com.slabbed.anchor.SlabAnchorAttachment.PlacementDyFact;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -19,7 +17,6 @@ import java.util.function.Consumer;
 public final class PlacementDyPredictionBridge {
     private static final ThreadLocal<Integer> CURRENT_SEQUENCE = new ThreadLocal<>();
     private static volatile Consumer<PredictedBatch> clientBatchConsumer;
-    private static final ThreadLocal<BlockItemTestFixture> BLOCK_ITEM_TEST_FIXTURE = new ThreadLocal<>();
     private static boolean testPhaseTraceEnabled;
     private static final ArrayList<String> TEST_PHASE_TRACE = new ArrayList<>();
     private static boolean testWireTraceEnabled;
@@ -27,21 +24,6 @@ public final class PlacementDyPredictionBridge {
     private static final ArrayList<String> TEST_WIRE_PHASES = new ArrayList<>();
 
     private PlacementDyPredictionBridge() {
-    }
-
-    /** Dormant fixture seam for package-authorized GameTests that must not register synthetic BlockItems. */
-    public interface BlockItemTestFixture {
-        default BlockPlaceContext updatePlacementContext(BlockItem item, BlockPlaceContext context) {
-            return null;
-        }
-
-        default BlockState getPlacementState(BlockItem item, BlockPlaceContext context) {
-            return null;
-        }
-
-        default Boolean placeBlock(BlockItem item, BlockPlaceContext context, BlockState state) {
-            return null;
-        }
     }
 
     public record GroupSignature(
@@ -120,39 +102,6 @@ public final class PlacementDyPredictionBridge {
     public static int currentSequence() {
         Integer sequence = CURRENT_SEQUENCE.get();
         return sequence == null ? -1 : sequence;
-    }
-
-    public static void installBlockItemTestFixture(BlockItemTestFixture fixture) {
-        if (BLOCK_ITEM_TEST_FIXTURE.get() != null) {
-            throw new IllegalStateException("BlockItem test fixture already installed");
-        }
-        BLOCK_ITEM_TEST_FIXTURE.set(Objects.requireNonNull(fixture, "fixture"));
-    }
-
-    public static void clearBlockItemTestFixture() {
-        BLOCK_ITEM_TEST_FIXTURE.remove();
-    }
-
-    public static BlockPlaceContext testFixturePlacementContext(
-            BlockItem item,
-            BlockPlaceContext context
-    ) {
-        BlockItemTestFixture fixture = BLOCK_ITEM_TEST_FIXTURE.get();
-        return fixture == null ? null : fixture.updatePlacementContext(item, context);
-    }
-
-    public static BlockState testFixturePlacementState(BlockItem item, BlockPlaceContext context) {
-        BlockItemTestFixture fixture = BLOCK_ITEM_TEST_FIXTURE.get();
-        return fixture == null ? null : fixture.getPlacementState(item, context);
-    }
-
-    public static Boolean testFixturePlaceBlock(
-            BlockItem item,
-            BlockPlaceContext context,
-            BlockState state
-    ) {
-        BlockItemTestFixture fixture = BLOCK_ITEM_TEST_FIXTURE.get();
-        return fixture == null ? null : fixture.placeBlock(item, context, state);
     }
 
     public static void installClientBatchConsumer(Consumer<PredictedBatch> consumer) {
