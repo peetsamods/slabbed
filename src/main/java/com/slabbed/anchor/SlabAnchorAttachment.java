@@ -125,27 +125,8 @@ public final class SlabAnchorAttachment {
      * Packet codec for client sync. {@link AttachmentSyncPredicate#all()} is used at
      * registration so anchors travel with the chunk packet automatically.
      */
-    private static final StreamCodec<RegistryFriendlyByteBuf, LongOpenHashSet> PACKET_CODEC = StreamCodec.of(
-            (buf, set) -> {
-                long[] arr = new long[set.size()];
-            int arrIndex = 0;
-            for (var arrIterator = set.iterator(); arrIterator.hasNext();) {
-                arr[arrIndex++] = arrIterator.nextLong();
-            }
-                buf.writeVarInt(arr.length);
-                for (long v : arr) {
-                    buf.writeLong(v);
-                }
-            },
-            buf -> {
-                int n = buf.readVarInt();
-                LongOpenHashSet s = new LongOpenHashSet(n);
-                for (int i = 0; i < n; i++) {
-                    s.add(buf.readLong());
-                }
-                return s;
-            }
-    );
+    private static final StreamCodec<RegistryFriendlyByteBuf, LongOpenHashSet> PACKET_CODEC =
+            ChunkPositionSetPacketCodec.INSTANCE;
 
     public static final AttachmentType<LongOpenHashSet> ANCHOR_TYPE =
             AttachmentRegistry.<LongOpenHashSet>create(ANCHOR_ID, builder -> builder
