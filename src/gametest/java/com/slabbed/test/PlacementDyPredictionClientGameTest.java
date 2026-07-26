@@ -6,6 +6,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.anchor.SlabAnchorAttachment.PlacementDyFact;
 import com.slabbed.client.PlacementDyPredictionJournal;
+import com.slabbed.client.PlacementDyPredictionJournalGameTestAccess;
 import com.slabbed.client.SlabAnchorClientSync;
 import com.slabbed.network.PlacementDyCorrectionPayload;
 import com.slabbed.network.PlacementDyCorrectionServer;
@@ -127,7 +128,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 ClientCase testCase = CASES.get(index);
                 Slabbed.LOGGER.info("C3_CLIENT_CASE | {} | START", testCase.name());
                 context.runOnClient(client ->
-                        PlacementDyPredictionJournal.beginTestProbe(client.level));
+                        PlacementDyPredictionJournalGameTestAccess.beginTestProbe(client.level));
                 try {
                     testCase.body().run(context, singleplayer, index);
                     Slabbed.LOGGER.info("C3_CLIENT_CASE | {} | PASS", testCase.name());
@@ -135,7 +136,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                     PlacementDyPredictionBridge.endTestWireTrace();
                     PlacementDyCorrectionServer.endCorrectionSendTraceForTests();
                     context.runOnClient(client ->
-                            PlacementDyPredictionJournal.endTestProbe(client.level));
+                            PlacementDyPredictionJournalGameTestAccess.endTestProbe(client.level));
                 }
             }
             Slabbed.LOGGER.info("C3_CLIENT_ENTRYPOINT | PASS | cases={}", caseCount);
@@ -206,7 +207,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             BlockPos pos = testPos(client, index);
             int sequence = sequence(index, 0);
             PredictedBatch batch = batch(level, sequence, List.of(pos), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, batch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, batch);
             SlabAnchorClientSync.resetC3RerenderProbeCountsForTests();
             PlacementDyPredictionJournal.onCorrection(level, correction(batch,
                     Map.of(pos, PlacementDyFact.present(-1.0d))));
@@ -231,7 +232,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             BlockPos pos = testPos(client, index);
             int sequence = sequence(index, 0);
             PredictedBatch batch = batch(level, sequence, List.of(pos), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, batch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, batch);
             SlabAnchorClientSync.resetC3RerenderProbeCountsForTests();
             PlacementDyCorrectionPayload correction = correction(batch,
                     Map.of(pos, PlacementDyFact.present(-1.0d)));
@@ -241,8 +242,8 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 PlacementDyPredictionJournal.onVanillaAcknowledgement(level, sequence);
             }
             PlacementDyPredictionJournal.CellDebug first = PlacementDyPredictionJournal.debugCell(pos);
-            PlacementDyPredictionJournal.TestSnapshot firstSnapshot =
-                    PlacementDyPredictionJournal.testSnapshot();
+            PlacementDyPredictionJournalGameTestAccess.TestSnapshot firstSnapshot =
+                    PlacementDyPredictionJournalGameTestAccess.testSnapshot();
             expect(first.groupPresent() && first.overlayOwned(), "first signal lost overlay ownership");
             expect(first.highWaterSequence() == sequence, "first signal changed high-water sequence");
             expect(first.correctionBuffered() == correctionFirst,
@@ -259,8 +260,8 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             } else {
                 PlacementDyPredictionJournal.onCorrection(level, correction);
             }
-            PlacementDyPredictionJournal.TestSnapshot reconciled =
-                    PlacementDyPredictionJournal.testSnapshot();
+            PlacementDyPredictionJournalGameTestAccess.TestSnapshot reconciled =
+                    PlacementDyPredictionJournalGameTestAccess.testSnapshot();
             expect(reconciled.authorityObservedWhileOwned(),
                     "authority was not observed while matching overlay ownership existed");
             expect(reconciled.backingWrites() == 1, "differing authority did not perform one write");
@@ -319,7 +320,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             expect(PlacementDyPredictionBridge.snapshotTestWirePhases().equals(
                             List.of("SEND", "RECEIVE", "APPLY")),
                     "real correction wire phases were not SEND/RECEIVE/APPLY exactly once");
-            expect(PlacementDyPredictionJournal.testSnapshot().backingWrites() > 0,
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().backingWrites() > 0,
                     "real wire case had no payload-driven differing backing write");
             expectFact(PlacementDyPredictionJournal.backingFact(client.level, target),
                     false, 0L, "real refusal correction removed stale client backing");
@@ -349,17 +350,17 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             } finally {
                 PlacementDyPredictionBridge.closeSequence();
             }
-            expect(PlacementDyPredictionJournal.testSnapshot().stagedGroups() == 1,
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().stagedGroups() == 1,
                     "bridge transaction did not stage exactly one group");
             expectFact(PlacementDyPredictionJournal.backingFact(level, pos), false, 0L,
                     "prediction-time authoritative backing");
-            PlacementDyPredictionJournal.commitStagedBatchForTests(level, sequence);
+            PlacementDyPredictionJournalGameTestAccess.commitStagedBatchForTests(level, sequence);
             expectFact(PlacementDyPredictionJournal.effectiveFact(level, pos), true, NEGATIVE_ONE,
                     "committed bridge overlay");
             expectFact(PlacementDyPredictionJournal.backingFact(level, pos), false, 0L,
                     "committed bridge backing unchanged");
-            PlacementDyPredictionJournal.resetForTests(level);
-            expect(PlacementDyPredictionJournal.testSnapshot().activeGroups() == 0,
+            PlacementDyPredictionJournalGameTestAccess.resetForTests(level);
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().activeGroups() == 0,
                     "world/connection reset left an active group");
             expectFact(PlacementDyPredictionJournal.backingFact(level, pos), false, 0L,
                     "world/connection cleanup edited authoritative backing");
@@ -374,7 +375,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
         String order = correctionFirst ? "correction_first" : "ack_first";
         context.runOnClient(client -> {
             ClientLevel level = client.level;
-            PlacementDyPredictionJournal.beginTestProbe(level);
+            PlacementDyPredictionJournalGameTestAccess.beginTestProbe(level);
             BlockPos[] cross = crossChunkPair(client, index + (correctionFirst ? 20 : 30));
             BlockPos unloading = cross[0];
             BlockPos survivor = cross[1];
@@ -382,8 +383,8 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             int sequence = sequence(index, correctionFirst ? 20 : 30);
             PredictedBatch pair = batch(level, sequence, List.of(unloading, survivor), NEGATIVE_ONE);
             PredictedBatch other = batch(level, sequence + 1, List.of(unrelated), NEGATIVE_ZERO);
-            PlacementDyPredictionJournal.installBatchForTests(level, pair);
-            PlacementDyPredictionJournal.installBatchForTests(level, other);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, pair);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, other);
             setBacking(level, Map.of(survivor, PlacementDyFact.present(+0.0d)));
             PlacementDyFact before = PlacementDyPredictionJournal.backingFact(level, survivor);
             if (correctionFirst) {
@@ -394,7 +395,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 PlacementDyPredictionJournal.onVanillaAcknowledgement(level, sequence);
             }
             SlabAnchorClientSync.resetC3RerenderProbeCountsForTests();
-            PlacementDyPredictionJournal.unloadChunkForTests(
+            PlacementDyPredictionJournalGameTestAccess.unloadChunkForTests(
                     level, unloading.getX() >> 4, unloading.getZ() >> 4);
             PlacementDyFact after = PlacementDyPredictionJournal.backingFact(level, survivor);
             expect(before.equals(after), "one-sided unload edited survivor authoritative backing");
@@ -415,7 +416,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                     "one-sided unload left partial pair ownership");
             expect(PlacementDyPredictionJournal.debugCell(unrelated).groupPresent(),
                     "one-sided unload retired unrelated newer group");
-            expect(PlacementDyPredictionJournal.testSnapshot().bufferedCorrections() == 0,
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().bufferedCorrections() == 0,
                     "one-sided unload left pair correction provenance");
             Slabbed.LOGGER.info(
                     "C3_GROUP_CLEANUP | one_sided_cross_chunk_unload | {} | PASS", order);
@@ -430,12 +431,12 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             BlockPos[] positions = crossChunkPair(client, index);
             int sequence = sequence(index, 0);
             PredictedBatch batch = batch(level, sequence, List.of(positions), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, batch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, batch);
             PlacementDyPredictionJournal.onCorrection(level, correction(batch, Map.of(
                     positions[0], PlacementDyFact.present(-1.0d),
                     positions[1], PlacementDyFact.present(-1.0d))));
             PlacementDyPredictionJournal.onVanillaAcknowledgement(level, sequence);
-            expect(PlacementDyPredictionJournal.testSnapshot().backingWrites() == 2,
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().backingWrites() == 2,
                     "cross-chunk pair did not apply two differing facts");
             for (BlockPos pos : positions) {
                 expectFact(PlacementDyPredictionJournal.effectiveFact(level, pos),
@@ -459,13 +460,13 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             BlockPos pos = testPos(client, index);
             int sequence = sequence(index, 0);
             PredictedBatch batch = batch(level, sequence, List.of(pos), POSITIVE_ZERO);
-            PlacementDyPredictionJournal.installBatchForTests(level, batch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, batch);
             setBacking(level, Map.of(pos, current));
             SlabAnchorClientSync.resetC3RerenderProbeCountsForTests();
             PlacementDyPredictionJournal.onCorrection(level, correction(batch, Map.of(pos, payload)));
             PlacementDyPredictionJournal.onVanillaAcknowledgement(level, sequence);
-            PlacementDyPredictionJournal.TestSnapshot snapshot =
-                    PlacementDyPredictionJournal.testSnapshot();
+            PlacementDyPredictionJournalGameTestAccess.TestSnapshot snapshot =
+                    PlacementDyPredictionJournalGameTestAccess.testSnapshot();
             expect(snapshot.branches().get(pos.asLong()) == expectedBranch,
                     "exact-fact branch mismatch for " + caseName);
             expect(snapshot.backingWrites() == expectedWrites,
@@ -497,7 +498,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             BlockPos second = first.above();
             int sequence = sequence(index, 0);
             PredictedBatch batch = batch(level, sequence, List.of(first, second), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, batch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, batch);
             PlacementDyPredictionJournal.onCorrection(level, correction(batch, Map.of(
                     first, PlacementDyFact.absent(), second, PlacementDyFact.absent())));
             PlacementDyPredictionJournal.onVanillaAcknowledgement(level, sequence);
@@ -505,7 +506,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                     "malformed pair first explicit absence");
             expectFact(PlacementDyPredictionJournal.effectiveFact(level, second), false, 0L,
                     "malformed pair second explicit absence");
-            expect(PlacementDyPredictionJournal.testSnapshot().activeGroups() == 0,
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().activeGroups() == 0,
                     "malformed pair explicit absence did not retire matching group");
         });
     }
@@ -543,14 +544,14 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             BlockPos second = first.above();
             int sequence = sequence(index, 0);
             PredictedBatch batch = batch(level, sequence, List.of(first, second), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, batch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, batch);
             SlabAnchorClientSync.resetC3RerenderProbeCountsForTests();
 
             PlacementDyPredictionJournal.onCorrection(level, correction(batch, Map.of(
                     first, PlacementDyFact.present(-1.0d))));
 
-            PlacementDyPredictionJournal.TestSnapshot snapshot =
-                    PlacementDyPredictionJournal.testSnapshot();
+            PlacementDyPredictionJournalGameTestAccess.TestSnapshot snapshot =
+                    PlacementDyPredictionJournalGameTestAccess.testSnapshot();
             expect(snapshot.activeGroups() == 0 && snapshot.overlayOwners() == 0
                             && snapshot.bufferedCorrections() == 0,
                     "incomplete correction left prediction ownership active");
@@ -576,7 +577,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             level.setBlock(owner, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
             setBacking(level, Map.of(owner, PlacementDyFact.absent()));
             PredictedBatch overlay = batch(level, sequence(index, 0), List.of(owner), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, overlay);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, overlay);
 
             BlockHitResult hit = new BlockHitResult(
                     Vec3.atCenterOf(owner), Direction.UP, owner, false);
@@ -696,7 +697,8 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 return true;
             });
             waitForHeldAndOwner(context, Items.OAK_DOOR, fixture.failedOwner());
-            context.runOnClient(client -> PlacementDyPredictionJournal.failNextDeclarationForTests());
+            context.runOnClient(client ->
+                    PlacementDyPredictionJournalGameTestAccess.failNextDeclarationForTests());
             useOnRecorderOwner(context, fixture.failedOwner());
             context.waitFor(client -> recorderAction(
                     recorderDir, "server", "minecraft:oak_door", fixture.failedOwner()) != null, 400);
@@ -890,7 +892,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             int verticalSequence = sequence(index, 0);
             PredictedBatch verticalBatch = batch(
                     level, verticalSequence, List.of(verticalBeyondSeven), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, verticalBatch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, verticalBatch);
             PlacementDyPredictionJournal.onCorrection(level, correction(
                     verticalBatch, Map.of(verticalBeyondSeven, PlacementDyFact.absent())));
             PlacementDyPredictionJournal.onVanillaAcknowledgement(level, verticalSequence);
@@ -903,7 +905,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             BlockPos rejectedPair = primary.above();
             int sequence = sequence(index, 1);
             PredictedBatch batch = batch(level, sequence, List.of(primary, rejectedPair), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, batch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, batch);
             PlacementDyPredictionJournal.onCorrection(level, correction(batch, Map.of(
                     primary, PlacementDyFact.present(-1.0d),
                     rejectedPair, PlacementDyFact.absent())));
@@ -926,8 +928,8 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             int newSequence = oldSequence + 1;
             PredictedBatch oldBatch = batch(level, oldSequence, List.of(pos), NEGATIVE_ONE);
             PredictedBatch newBatch = batch(level, newSequence, List.of(pos), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, oldBatch);
-            PlacementDyPredictionJournal.installBatchForTests(level, newBatch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, oldBatch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, newBatch);
             PlacementDyPredictionJournal.onCorrection(level, correction(oldBatch,
                     Map.of(pos, PlacementDyFact.present(+0.0d))));
             PlacementDyPredictionJournal.onVanillaAcknowledgement(level, oldSequence);
@@ -955,8 +957,8 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             int secondSequence = firstSequence + 1;
             PredictedBatch firstBatch = batch(level, firstSequence, List.of(first), NEGATIVE_ONE);
             PredictedBatch secondBatch = batch(level, secondSequence, List.of(unrelated), NEGATIVE_ZERO);
-            PlacementDyPredictionJournal.installBatchForTests(level, firstBatch);
-            PlacementDyPredictionJournal.installBatchForTests(level, secondBatch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, firstBatch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, secondBatch);
             PlacementDyPredictionJournal.onCorrection(level, correction(firstBatch,
                     Map.of(first, PlacementDyFact.present(-1.0d))));
             PlacementDyPredictionJournal.onVanillaAcknowledgement(level, firstSequence);
@@ -980,12 +982,12 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             BlockPos pos = testPos(client, index);
             int sequence = sequence(index, 0);
             PredictedBatch batch = batch(level, sequence, List.of(pos), NEGATIVE_ONE);
-            PlacementDyPredictionJournal.installBatchForTests(level, batch);
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, batch);
             setBacking(level, Map.of(pos, PlacementDyFact.present(-0.0d)));
             PlacementDyPredictionJournal.onCorrection(level, correction(batch,
                     Map.of(pos, PlacementDyFact.present(-1.0d))));
             PlacementDyPredictionJournal.onVanillaAcknowledgement(level, sequence);
-            expect(PlacementDyPredictionJournal.testSnapshot().branches().get(pos.asLong())
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().branches().get(pos.asLong())
                             == PlacementDyPredictionJournal.ReconcileBranch.THIRD_STATE_PRESERVED,
                     "third-state correction did not take protected branch");
             expectFact(PlacementDyPredictionJournal.effectiveFact(level, pos),

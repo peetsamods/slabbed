@@ -17,12 +17,11 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Headless field-computation for the {@code /slabdev debug} target-dy overlay
- * ({@link com.slabbed.client.TargetDyOverlay}). Kept free of any client-only type (no
+ * Headless field-computation for the {@code /slabdev debug} target-dy diagnostic view. Kept free of any client-only type (no
  * {@code Minecraft}) so the exact strings a player sees are the exact strings a gametest can
  * assert: a test calls {@link #formatRow} directly with a synthetic world/pos/state and checks the
  * returned lines. Only the wiring — reading the live crosshair target and printing to the HUD — is
- * client-only and therefore lives in {@code TargetDyOverlay}.
+ * client-only and therefore lives in the diagnostic view.
  *
  * <p>Field set reconciled toward the 1.21.11 sibling's canonical {@code SlabdyRowFormatter}
  * (Phase 6, the "reconcile don't replace" pass), keeping only the fields whose underlying API exists
@@ -31,10 +30,8 @@ import java.util.Locale;
  * line (no {@code SlabbedDiagnostics} here) have no 26.2 analogue and are deliberately absent. This
  * branch's {@code src=} ladder keeps its extra {@code compound-side} tier, which the sibling lacks.
  *
- * <p>Lives in a SHIPPING package ({@code com.slabbed.util}) on purpose: on this branch
- * {@code com/slabbed/dev/**} is excluded from the release jar (see {@code build.gradle}'s {@code jar}
- * block), and the overlay — which DOES ship and stays available via {@code /slabdev debug} — must be
- * able to reach the formatter at runtime.
+ * <p>Lives in a SHIPPING package ({@code com.slabbed.util}) as shared headless logic in production
+ * output; the dev-only diagnostic view consumes it only in development and GameTest runtimes.
  */
 public final class SlabdyRowFormatter {
 

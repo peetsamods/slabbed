@@ -5,7 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.BuildStamp;
-import com.slabbed.util.LiveCursorIntentRecorder;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabTestKit;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -180,14 +180,8 @@ public final class SlabRigCommand {
      * player UUID and dimension id match.
      */
     private static final Map<RigKey, RigManifest> LAST_MANIFEST = new ConcurrentHashMap<>();
-    /** Development-only deterministic fault injection, keyed to the exact command session/case. */
-    private static final Map<RigKey, CasePostUseTestHook> CASE_POST_USE_TEST_HOOKS =
-            new ConcurrentHashMap<>();
     private static final UUID CONSOLE_KEY = new UUID(0L, 0L);
     private static boolean lifecycleHookRegistered;
-
-    private record CasePostUseTestHook(String caseId, Runnable hook) {
-    }
 
     /** Identity of a remembered rig: actual server session, player, and dimension. */
     private static final class RigKey {
@@ -295,21 +289,6 @@ public final class SlabRigCommand {
             changed = Set.copyOf(changed);
             changes = List.copyOf(changes);
         }
-    }
-
-    /** Exact result of the real useOn seam; public only for the same-count vanish GameTest. */
-    public record CasePlacementProbeForTests(
-            String interactionResult,
-            boolean interactionConsumesAction,
-            String stackItemBefore,
-            int stackBefore,
-            String stackItemAfter,
-            int stackAfter,
-            boolean persistentSubjectPresent,
-            int observedChangeCount,
-            String outcome,
-            String error,
-            boolean outsideEffect) {
     }
 
     /** Exact mutation/ownership record. Bounds are derived display metadata only. */
@@ -1360,8 +1339,8 @@ public final class SlabRigCommand {
             ItemStack stack = new ItemStack(item);
             player.setItemInHand(InteractionHand.MAIN_HAND, stack);
             Vec3 hit = Vec3.atCenterOf(clicked).add(face.getStepX() * 0.5, face.getStepY() * 0.5, face.getStepZ() * 0.5);
-            LiveCursorIntentRecorder.withActionOrigin(
-                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+            SlabbedDiagnosticsBridge.withActionOrigin(
+                    SlabbedDiagnosticsBridge.AUTO_USEON_PROXY,
                     () -> stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
                             new BlockHitResult(hit, face, clicked, false))));
         } catch (RuntimeException e) {
@@ -1573,7 +1552,7 @@ public final class SlabRigCommand {
                         + " grid=4x4 row-major spacing=2 seed=standard_lowered_slab"
                         + " structural=" + completeFinal + "/" + entriesFinal
                         + " GAPs=" + gapsFinal + " OVERLAPs=" + overlapsFinal
-                        + " provenance=" + LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY.wireName()), false);
+                        + " provenance=" + SlabbedDiagnosticsBridge.AUTO_USEON_PROXY), false);
         return manifest.structurallyComplete ? 1 : 0;
     }
 
@@ -1842,10 +1821,9 @@ public final class SlabRigCommand {
                 }
 
                 Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(entry.definition.item().id()));
-                entry.actionOrigin = LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY.wireName();
+                entry.actionOrigin = SlabbedDiagnosticsBridge.AUTO_USEON_PROXY;
                 PlacementAttempt attempt = placeViaDetailed(world, player, item, entry.clicked,
-                        Direction.UP, entry.target, entry.effect, entry.guard, manifest,
-                        takeCasePostUseTestHook(source, entry.definition.id()));
+                        Direction.UP, entry.target, entry.effect, entry.guard, manifest);
                 entry.postActionStructure = observeCaseStructure(world, entry.plannedStructure);
                 String postActionRed = postActionTopologyRed(
                         entry.actualStructure, entry.postActionStructure);
@@ -1981,7 +1959,7 @@ public final class SlabRigCommand {
                         + " infraErrors=" + errorsFinal
                         + " frozenDy=" + manifest.caseFrozenDyEnabled
                         + " catalog=" + snapshot.catalogHash()
-                        + " provenance=" + LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY.wireName()
+                        + " provenance=" + SlabbedDiagnosticsBridge.AUTO_USEON_PROXY
                         + " playerProof=ABSENT"
                         + " resume=" + manifest.caseProgressNote
                         + " manifest=" + manifest.finalCaseArtifact), false);
@@ -2187,16 +2165,6 @@ public final class SlabRigCommand {
                                                       BlockPos clicked, Direction face, BlockPos target,
                                                       List<BlockPos> effectCells, List<BlockPos> guardCells,
                                                       RigManifest manifest) {
-        return placeViaDetailed(world, player, item, clicked, face, target, effectCells, guardCells,
-                manifest, () -> {
-                });
-    }
-
-    private static PlacementAttempt placeViaDetailed(ServerLevel world, Player player, Item item,
-                                                      BlockPos clicked, Direction face, BlockPos target,
-                                                      List<BlockPos> effectCells, List<BlockPos> guardCells,
-                                                      RigManifest manifest,
-                                                      Runnable afterUseBeforeObservation) {
         LinkedHashSet<BlockPos> observed = new LinkedHashSet<>(guardCells);
         observed.addAll(effectCells);
         LinkedHashMap<BlockPos, BlockState> before = new LinkedHashMap<>();
@@ -2216,20 +2184,12 @@ public final class SlabRigCommand {
         try {
             Vec3 hit = Vec3.atCenterOf(clicked).add(face.getStepX() * 0.5,
                     face.getStepY() * 0.5, face.getStepZ() * 0.5);
-            LiveCursorIntentRecorder.withActionOrigin(
-                    LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY,
+            SlabbedDiagnosticsBridge.withActionOrigin(
+                    SlabbedDiagnosticsBridge.AUTO_USEON_PROXY,
                     () -> result[0] = stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
                             new BlockHitResult(hit, face, clicked, false))));
         } catch (RuntimeException e) {
             error[0] = e.getClass().getName() + ":" + String.valueOf(e.getMessage());
-        }
-        try {
-            afterUseBeforeObservation.run();
-        } catch (RuntimeException e) {
-            if (error[0] == null) {
-                error[0] = "POST_USE_OBSERVATION_HOOK:" + e.getClass().getName()
-                        + ":" + String.valueOf(e.getMessage());
-            }
         }
         ItemStack afterStack = player.getItemInHand(InteractionHand.MAIN_HAND);
         String stackItemAfter = itemId(afterStack);
@@ -2274,59 +2234,6 @@ public final class SlabRigCommand {
         return new PlacementAttempt(changed, changes, result[0].toString(), result[0].consumesAction(),
                 stackItemBefore, stackBefore, stackItemAfter, stackAfter, persistentSubjectPresent,
                 error[0], outside);
-    }
-
-    private static Runnable takeCasePostUseTestHook(CommandSourceStack source, String caseId) {
-        RigKey key = keyFor(source);
-        CasePostUseTestHook candidate = CASE_POST_USE_TEST_HOOKS.get(key);
-        if (candidate != null && candidate.caseId().equals(caseId)
-                && CASE_POST_USE_TEST_HOOKS.remove(key, candidate)) {
-            return candidate.hook();
-        }
-        return () -> {
-        };
-    }
-
-    /**
-     * Executes the production proxy-use observation path without registering a command manifest.
-     * The post-use hook lets the GameTest remove a successfully placed subject before observation,
-     * reproducing the exact same-count vanish ambiguity that the manifest must classify as a red.
-     */
-    public static CasePlacementProbeForTests probeCasePlacementForTests(
-            ServerLevel world, Player player, Item item, BlockPos clicked, BlockPos target,
-            Runnable afterUseBeforeObservation) {
-        Objects.requireNonNull(afterUseBeforeObservation, "afterUseBeforeObservation");
-        ItemStack original = player.getMainHandItem().copy();
-        RigManifest manifest = new RigManifest(
-                new RigKey(world.getServer(), player.getUUID(), world.dimension()),
-                "case-placement-probe", clicked, Direction.SOUTH, 0, 0, 0, 0, 0);
-        PlacementAttempt attempt;
-        try {
-            attempt = placeViaDetailed(world, player, item, clicked, Direction.UP, target,
-                    List.copyOf(effectEnvelope(clicked, target)),
-                    List.copyOf(caseGuardEnvelope(target)), manifest, afterUseBeforeObservation);
-        } finally {
-            player.setItemInHand(InteractionHand.MAIN_HAND, original);
-        }
-        String outcome;
-        if (attempt.outsideEffect()) {
-            outcome = "ERROR_OUT_OF_EFFECT_ENVELOPE";
-        } else if (attempt.error() != null) {
-            outcome = "ERROR_EXCEPTION";
-        } else if (!attempt.persistentSubjectPresent()) {
-            outcome = classifyAbsentSubject(attempt.interactionConsumesAction(),
-                    attempt.stackItemBefore(), attempt.stackBefore(), attempt.stackItemAfter(),
-                    attempt.stackAfter(), !attempt.changes().isEmpty());
-        } else {
-            outcome = "PERSISTENT_SUBJECT";
-        }
-        CasePlacementProbeForTests probe = new CasePlacementProbeForTests(
-                attempt.interactionResult(), attempt.interactionConsumesAction(),
-                attempt.stackItemBefore(), attempt.stackBefore(), attempt.stackItemAfter(),
-                attempt.stackAfter(), attempt.persistentSubjectPresent(), attempt.changes().size(),
-                outcome, attempt.error(), attempt.outsideEffect());
-        clearExact(world, manifest);
-        return probe;
     }
 
     /**
@@ -2653,7 +2560,7 @@ public final class SlabRigCommand {
                 + " caseManifest=" + manifest.finalCaseArtifact
                 + " resume=" + manifest.caseProgressNote
                 + " playerProof=ABSENT")
-                + " provenance=" + LiveCursorIntentRecorder.ActionOrigin.AUTO_USEON_PROXY.wireName();
+                + " provenance=" + SlabbedDiagnosticsBridge.AUTO_USEON_PROXY;
     }
 
     public static int trackedSubjectSlotCountForTests(CommandSourceStack source) {
@@ -2673,21 +2580,8 @@ public final class SlabRigCommand {
                 ? null : SlabRigCasePageManifest.canonicalJson(manifest.finalCaseManifest);
     }
 
-    /** One-shot exact-case fault injection for post-use topology reconciliation GameTests. */
-    public static void installCasePostUseHookForTests(CommandSourceStack source, String caseId,
-                                                      Runnable hook) {
-        CASE_POST_USE_TEST_HOOKS.put(keyFor(source),
-                new CasePostUseTestHook(Objects.requireNonNull(caseId), Objects.requireNonNull(hook)));
-    }
-
-    /** Removes an unconsumed test hook after a failed/refused test setup. */
-    public static void clearCasePostUseHookForTests(CommandSourceStack source) {
-        CASE_POST_USE_TEST_HOOKS.remove(keyFor(source));
-    }
-
     private static void clearServerSession(MinecraftServer server) {
         LAST_MANIFEST.keySet().removeIf(key -> key.server == server);
-        CASE_POST_USE_TEST_HOOKS.keySet().removeIf(key -> key.server == server);
     }
 
     // ── footprint safety ──────────────────────────────────────────────────────
@@ -2902,8 +2796,6 @@ public final class SlabRigCommand {
         }
         int before = LAST_MANIFEST.size();
         LAST_MANIFEST.keySet().removeIf(
-                key -> key.server == server && key.dimension.equals(dimension));
-        CASE_POST_USE_TEST_HOOKS.keySet().removeIf(
                 key -> key.server == server && key.dimension.equals(dimension));
         return before - LAST_MANIFEST.size();
     }

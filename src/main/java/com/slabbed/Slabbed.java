@@ -40,13 +40,13 @@ public class Slabbed implements ModInitializer {
         // cancel the break), and gates on the recorder flag in one volatile read.
         net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.register(
                 (world, player, pos, state, blockEntity) -> {
-                    if (com.slabbed.util.LiveCursorIntentRecorder.enabled()) {
-                        com.slabbed.util.LiveCursorIntentRecorder.recordBreakEvent(world, pos, state,
+                    if (com.slabbed.util.SlabbedDiagnosticsBridge.enabled()) {
+                        com.slabbed.util.SlabbedDiagnosticsBridge.recordBreakEvent(world, pos, state,
                                 player == null ? "none" : player.getName().getString());
                         // Phase 1.5: breaks reshuffle neighbor dys — classify the neighborhood's
                         // ensemble coherence (TEST (6): 40/94 breaks touched lowered geometry with
                         // zero measurement).
-                        com.slabbed.util.SlabModelStaleSentinel.armBreakNeighborhood(
+                        com.slabbed.util.SlabbedDiagnosticsBridge.armBreakNeighborhood(
                                 world, pos, world.getGameTime());
                     }
                     return true;

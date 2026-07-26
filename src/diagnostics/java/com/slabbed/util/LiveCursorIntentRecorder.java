@@ -18,9 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 /**
- * Live cursor / placement-intent capture: a dormant, off-by-default diagnostic tool that ships in
- * every jar (never compiled out — the same "debug tooling always present, off by default,
- * player-toggleable" convention {@code /slabdev} uses on this branch). It writes a per-session trail
+ * Live cursor / placement-intent capture for development and GameTest runtimes. It writes a per-session trail
  * of every crosshair frame, rendered outline, and placement action, plus a redacted {@code
  * manifest.json}, under {@code <gameDir>/live-cursor-recorder/} (overridable via {@code
  * -Dslabbed.liveCursorIntentRecorderDir}).
@@ -232,17 +230,51 @@ public final class LiveCursorIntentRecorder {
         return origin == null ? ActionOrigin.PLAYER_AUTHORED : origin;
     }
 
-    /** Runs {@code action} under a nested-safe, exception-safe machine-readable origin scope. */
-    public static void withActionOrigin(ActionOrigin origin, Runnable action) {
+    /** Opens a nested-safe machine-readable origin scope owned by the calling bridge. */
+    public static ActionOriginScope enterActionOrigin(ActionOrigin origin) {
         if (origin == null) {
             throw new IllegalArgumentException("action origin must not be null");
         }
         ArrayDeque<ActionOrigin> stack = ACTION_ORIGINS.get();
         stack.addLast(origin);
-        try {
+        return new ActionOriginScope(Thread.currentThread(), stack, origin);
+    }
+
+    /** Diagnostics-test convenience built on the same nested scope API used by the real provider. */
+    public static void withActionOrigin(ActionOrigin origin, Runnable action) {
+        if (action == null) {
+            throw new IllegalArgumentException("action must not be null");
+        }
+        try (ActionOriginScope ignored = enterActionOrigin(origin)) {
             action.run();
-        } finally {
-            ActionOrigin removed = stack.removeLast();
+        }
+    }
+
+    public static final class ActionOriginScope implements AutoCloseable {
+        private final Thread owner;
+        private final ArrayDeque<ActionOrigin> stack;
+        private final ActionOrigin origin;
+        private boolean closed;
+
+        private ActionOriginScope(
+                Thread owner,
+                ArrayDeque<ActionOrigin> stack,
+                ActionOrigin origin) {
+            this.owner = owner;
+            this.stack = stack;
+            this.origin = origin;
+        }
+
+        @Override
+        public void close() {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            if (Thread.currentThread() != owner) {
+                throw new IllegalStateException("action origin scope closed on another thread");
+            }
+            ActionOrigin removed = stack.pollLast();
             if (removed != origin) {
                 stack.clear();
                 ACTION_ORIGINS.remove();

@@ -14,8 +14,7 @@
     "LevelExtractorImportantDirtyAccessor",
     "LocalPlayerPickOffsetRaycastMixin",
     "MinecartRenderOffsetMixin",
-    "MultiPlayerGameModePredictionSequenceMixin",
-    "TargetDyHudMixin"
+    "MultiPlayerGameModePredictionSequenceMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 /** C3 route-completeness and sole-capture boundary proofs. */
@@ -54,8 +55,10 @@ public final class PlacementCaptureBoundaryGameTest {
     public static final TestPairBlock PAIR_BLOCK = new TestPairBlock(
             BlockBehaviour.Properties.ofFullCopy(Blocks.STONE).setId(PAIR_BLOCK_KEY));
 
-    private static final PlacementDyPredictionBridge.BlockItemTestFixture PAIR_FIXTURE =
-            new PlacementDyPredictionBridge.BlockItemTestFixture() {
+    private static final ThreadLocal<BlockItemFixture> BLOCK_ITEM_FIXTURE = new ThreadLocal<>();
+
+    private static final BlockItemFixture PAIR_FIXTURE =
+            new BlockItemFixture() {
                 @Override
                 public BlockState getPlacementState(BlockItem item, BlockPlaceContext context) {
                     return PAIR_BLOCK.defaultBlockState().setValue(
@@ -74,8 +77,8 @@ public final class PlacementCaptureBoundaryGameTest {
                 }
             };
 
-    private static final PlacementDyPredictionBridge.BlockItemTestFixture TRANSFORM_SKIP_FIXTURE =
-            new PlacementDyPredictionBridge.BlockItemTestFixture() {
+    private static final BlockItemFixture TRANSFORM_SKIP_FIXTURE =
+            new BlockItemFixture() {
                 @Override
                 public BlockPlaceContext updatePlacementContext(BlockItem item, BlockPlaceContext context) {
                     return BlockPlaceContext.at(context, context.getClickedPos().east(2), Direction.UP);
@@ -338,14 +341,58 @@ public final class PlacementCaptureBoundaryGameTest {
     }
 
     private static void withBlockItemFixture(
-            PlacementDyPredictionBridge.BlockItemTestFixture fixture,
+            BlockItemFixture fixture,
             Runnable body
     ) {
-        PlacementDyPredictionBridge.installBlockItemTestFixture(fixture);
+        if (BLOCK_ITEM_FIXTURE.get() != null) {
+            throw new IllegalStateException("BlockItem GameTest fixture already installed");
+        }
+        BLOCK_ITEM_FIXTURE.set(Objects.requireNonNull(fixture, "fixture"));
         try {
             body.run();
         } finally {
-            PlacementDyPredictionBridge.clearBlockItemTestFixture();
+            BLOCK_ITEM_FIXTURE.remove();
+        }
+    }
+
+    public static BlockPlaceContext fixturePlacementContext(
+            BlockItem item,
+            BlockPlaceContext context) {
+        BlockItemFixture fixture = BLOCK_ITEM_FIXTURE.get();
+        return fixture == null ? null : fixture.updatePlacementContext(item, context);
+    }
+
+    public static BlockState fixturePlacementState(
+            BlockItem item,
+            BlockPlaceContext context) {
+        BlockItemFixture fixture = BLOCK_ITEM_FIXTURE.get();
+        return fixture == null ? null : fixture.getPlacementState(item, context);
+    }
+
+    public static Boolean fixturePlaceBlock(
+            BlockItem item,
+            BlockPlaceContext context,
+            BlockState state) {
+        BlockItemFixture fixture = BLOCK_ITEM_FIXTURE.get();
+        return fixture == null ? null : fixture.placeBlock(item, context, state);
+    }
+
+    private interface BlockItemFixture {
+        default BlockPlaceContext updatePlacementContext(
+                BlockItem item,
+                BlockPlaceContext context) {
+            return null;
+        }
+
+        default BlockState getPlacementState(BlockItem item, BlockPlaceContext context) {
+            return null;
+        }
+
+        default Boolean placeBlock(
+                BlockItem item,
+                BlockPlaceContext context,
+                BlockState state) {
+            return null;
         }
     }
 

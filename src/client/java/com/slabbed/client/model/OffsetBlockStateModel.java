@@ -2,7 +2,7 @@ package com.slabbed.client.model;
 
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabEnsembleCoherence;
-import com.slabbed.util.SlabModelStaleSentinel;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.client.renderer.v1.model.FabricBlockStateModel;
@@ -62,8 +62,9 @@ public final class OffsetBlockStateModel implements BlockStateModel {
             if (ChainCeilingGeometry.emitIfPresent(fabricWrapped, emitter, view, pos, state, random, cullTest)) {
                 // MODEL_STALE sentinel: the bridge renders at grid height by design — record dy=0 so an
                 // armed chain cell is not misread as "never re-baked" by the absence rule.
-                if (SlabModelStaleSentinel.shouldCapture() && SlabModelStaleSentinel.isArmed(pos.asLong())) {
-                    SlabModelStaleSentinel.recordBake(pos, 0.0f);
+                if (SlabbedDiagnosticsBridge.shouldCaptureModelBake()
+                        && SlabbedDiagnosticsBridge.isModelBakeArmed(pos.asLong())) {
+                    SlabbedDiagnosticsBridge.recordModelBake(pos, 0.0f);
                 }
                 return;
             }
@@ -76,7 +77,8 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         // re-bakes with fuller bounds a frame later). Gate order is load-bearing (perf contract): one
         // volatile read, then the armed-set binary search, before any other work.
         float dy;
-        if (SlabModelStaleSentinel.shouldCapture() && SlabModelStaleSentinel.isArmed(pos.asLong())) {
+        if (SlabbedDiagnosticsBridge.shouldCaptureModelBake()
+                && SlabbedDiagnosticsBridge.isModelBakeArmed(pos.asLong())) {
             dy = slabbed$modelDyCaptured(view, pos, state);
         } else {
             dy = slabbed$modelDy(view, pos, state);
@@ -169,7 +171,7 @@ public final class OffsetBlockStateModel implements BlockStateModel {
     private static float slabbed$modelDyCaptured(BlockAndTintGetter view, BlockPos pos, BlockState state) {
         try {
             float dy = slabbed$modelDyUnguarded(view, pos, state);
-            SlabModelStaleSentinel.recordBake(pos, dy);
+            SlabbedDiagnosticsBridge.recordModelBake(pos, dy);
             return dy;
         } catch (IndexOutOfBoundsException outsideRenderRegion) {
             return 0.0f;

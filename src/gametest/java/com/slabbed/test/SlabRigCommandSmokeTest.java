@@ -682,14 +682,15 @@ public final class SlabRigCommandSmokeTest {
                 .relative(facing.getClockWise(), (item.index() % 4) * 8)
                 .relative(facing, (topology.index() % 4) * 8);
         BlockPos topSlab = tile.above(3 + topology.recipe().length());
+        BlockPos proxyTarget = topSlab.above();
         boolean[] injected = {false};
         try {
-            SlabRigCommand.installCasePostUseHookForTests(source, definition.id(), () -> {
+            SlabRigGameTestSeams.installPostUseHook(world, player, proxyTarget, () -> {
                 BlockState state = world.getBlockState(topSlab);
                 double stored = SlabAnchorAttachment.storedPlacementDy(world, topSlab);
                 if (!(state.getBlock() instanceof SlabBlock) || Double.isNaN(stored)) {
                     throw h.assertionException(
-                            "premise: SBSBS terminal S must be a stored slab before reset injection");
+                            "premise: scoped target hook must observe the frozen top slab");
                 }
                 injected[0] = true;
                 SlabAnchorAttachment.removeAnchor(world, topSlab);
@@ -735,7 +736,7 @@ public final class SlabRigCommandSmokeTest {
                 }
                 exec(h, source, "slabrig clear");
             } finally {
-                SlabRigCommand.clearCasePostUseHookForTests(source);
+                SlabRigGameTestSeams.clearPostUseHook(world, player, proxyTarget);
             }
         } finally {
             SlabAnchorAttachment.FROZEN_DY_ENABLED = savedFrozenMode;
@@ -743,7 +744,7 @@ public final class SlabRigCommandSmokeTest {
         h.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(structure = "slabbed_gametest:rig2_board")
     public void slabrigSameCountVanishIsNeverReportedAsRefusal(GameTestHelper h) {
         if (!"REFUSED_NO_CHANGE".equals(SlabRigCommand.classifyAbsentSubject(
                 false, "minecraft:stone", 1, "minecraft:stone", 1, false))
@@ -757,75 +758,160 @@ public final class SlabRigCommandSmokeTest {
                     "absent-subject truth table must independently cover action, transformation, and residuals");
         }
         ServerLevel world = h.getLevel();
-        BlockPos survivalSupport = h.absolutePos(new BlockPos(1, 1, 1));
-        BlockPos survivalTarget = survivalSupport.above();
-        world.setBlock(survivalSupport, Blocks.STONE.defaultBlockState(), 3);
+        SlabRigCaseCatalog.Snapshot snapshot = SlabRigCaseCatalog.snapshot();
+        SlabRigCaseCatalog.Topology topology = snapshot.topologies().stream()
+                .filter(candidate -> candidate.index() == 0)
+                .findFirst().orElseThrow();
+        SlabRigCaseCatalog.CatalogItem item = snapshot.items().stream()
+                .filter(candidate -> "minecraft:stone".equals(candidate.id()))
+                .findFirst().orElseThrow();
+        SlabRigCaseCatalog.CaseDefinition definition = SlabRigCaseCatalog.caseAt(snapshot,
+                (long) item.index() * snapshot.topologies().size() + topology.index());
+        int page = pageForItem(snapshot, item.id(), topology.index());
+        Direction facing = Direction.SOUTH;
+
         Player survival = h.makeMockPlayer(GameType.SURVIVAL);
+        CommandSourceStack survivalSource = playerSourceAt(world, survival,
+                h.absolutePos(new BlockPos(30, 2, 0)));
+        BlockPos survivalSupport = SlabRigCommand.rigBase(survivalSource)
+                .relative(facing.getClockWise(), (item.index() % 4) * 8)
+                .relative(facing, (topology.index() % 4) * 8);
+        BlockPos survivalTarget = survivalSupport.above();
         boolean[] survivalPlaced = {false};
-        SlabRigCommand.CasePlacementProbeForTests survivalProbe =
-                SlabRigCommand.probeCasePlacementForTests(
-                        world, survival, Items.POWDER_SNOW_BUCKET,
-                        survivalSupport, survivalTarget, () -> {
-                            if (!world.getBlockState(survivalTarget).is(Blocks.POWDER_SNOW)) {
-                                throw h.assertionException(
-                                        "premise: survival powder-snow bucket must place its subject before vanish");
-                            }
-                            survivalPlaced[0] = true;
-                            world.setBlock(survivalTarget, Blocks.AIR.defaultBlockState(), 3);
-                        });
-        if (!survivalPlaced[0]
-                || !"PLACED_THEN_VANISHED".equals(survivalProbe.outcome())
-                || !survivalProbe.interactionConsumesAction()
-                || survivalProbe.persistentSubjectPresent()
-                || !"minecraft:powder_snow_bucket".equals(survivalProbe.stackItemBefore())
-                || !"minecraft:bucket".equals(survivalProbe.stackItemAfter())
-                || survivalProbe.stackBefore() != 1 || survivalProbe.stackAfter() != 1
-                || survivalProbe.error() != null || survivalProbe.outsideEffect()) {
-            throw h.assertionException(
-                    "same-count survival item transformation must be an explicit vanished red: "
-                            + survivalProbe);
+        SlabRigGameTestSeams.installPlacementProbe(
+                world, survival, survivalTarget, Items.POWDER_SNOW_BUCKET, () -> {
+                    if (!world.getBlockState(survivalTarget).is(Blocks.POWDER_SNOW)) {
+                        throw h.assertionException(
+                                "premise: real survival proxy path must place powder snow before vanish");
+                    }
+                    survivalPlaced[0] = true;
+                    world.setBlock(survivalTarget, Blocks.AIR.defaultBlockState(), 3);
+                });
+        try {
+            if (tryExec(survivalSource, "slabrig cases " + page + " force") != 1
+                    || !survivalPlaced[0]) {
+                throw h.assertionException(
+                        "survival vanished case must execute through the real SlabRig page");
+            }
+            SlabRigGameTestSeams.PlacementProbe survivalProbe =
+                    SlabRigGameTestSeams.takePlacementProbe(
+                            world, survival, survivalTarget);
+            JsonObject survivalRow = caseRow(h,
+                    SlabRigCommand.trackedCaseManifestJsonForTests(survivalSource),
+                    definition.id());
+            if (!"EXECUTED".equals(survivalRow.get("attemptStatus").getAsString())
+                    || !"PLACED_THEN_VANISHED".equals(
+                    survivalRow.get("outcome").getAsString())
+                    || !survivalRow.get("interactionConsumesAction").getAsBoolean()
+                    || survivalRow.get("persistentSubjectPresent").getAsBoolean()
+                    || !"minecraft:powder_snow_bucket".equals(
+                    survivalRow.get("stackItemBefore").getAsString())
+                    || !"minecraft:bucket".equals(
+                    survivalRow.get("stackItemAfter").getAsString())
+                    || survivalRow.get("stackBefore").getAsInt() != 1
+                    || survivalRow.get("stackAfter").getAsInt() != 1
+                    || survivalRow.getAsJsonArray("actualChanges").size()
+                    != survivalProbe.observedChangeCount()
+                    || !survivalRow.get("interactionResult").getAsString()
+                    .equals(survivalProbe.interactionResult())
+                    || !survivalProbe.interactionConsumesAction()
+                    || survivalProbe.persistentSubjectPresent()
+                    || !"minecraft:powder_snow_bucket".equals(
+                    survivalProbe.stackItemBefore())
+                    || !"minecraft:bucket".equals(survivalProbe.stackItemAfter())
+                    || survivalProbe.stackBefore() != 1 || survivalProbe.stackAfter() != 1
+                    || survivalProbe.error() != null || survivalProbe.outsideEffect()) {
+                throw h.assertionException(
+                        "real survival manifest must report the same-count transformed item as vanished: "
+                                + survivalRow + " attempt=" + survivalProbe);
+            }
+            exec(h, survivalSource, "slabrig clear");
+            if (!"none".equals(SlabRigCommand.trackedManifestStatus(survivalSource))
+                    || !world.getBlockState(survivalSupport).isAir()
+                    || !world.getBlockState(survivalTarget).isAir()
+                    || !Double.isNaN(
+                    SlabAnchorAttachment.storedPlacementDy(world, survivalTarget))) {
+                throw h.assertionException(
+                        "real survival page clear must remove structure, subject, and store evidence");
+            }
+        } finally {
+            SlabRigGameTestSeams.clearPostUseHook(
+                    world, survival, survivalTarget);
         }
 
-        BlockPos creativeSupport = h.absolutePos(new BlockPos(4, 1, 1));
-        BlockPos creativeTarget = creativeSupport.above();
-        world.setBlock(creativeSupport, Blocks.STONE.defaultBlockState(), 3);
         Player creative = h.makeMockPlayer(GameType.CREATIVE);
-        // makeMockPlayer records the requested mode but direct ItemStack.useOn consults this flag.
+        CommandSourceStack creativeSource = playerSourceAt(world, creative,
+                h.absolutePos(new BlockPos(30, 2, 0)));
+        BlockPos creativeSupport = SlabRigCommand.rigBase(creativeSource)
+                .relative(facing.getClockWise(), (item.index() % 4) * 8)
+                .relative(facing, (topology.index() % 4) * 8);
+        BlockPos creativeTarget = creativeSupport.above();
+        // makeMockPlayer records the requested mode but ItemStack.useOn consults this flag.
         creative.getAbilities().instabuild = true;
         boolean[] creativePlaced = {false};
-        SlabRigCommand.CasePlacementProbeForTests creativeProbe =
-                SlabRigCommand.probeCasePlacementForTests(
-                        world, creative, Items.STONE,
-                        creativeSupport, creativeTarget, () -> {
-                            BlockState placed = world.getBlockState(creativeTarget);
-                            if (!placed.is(Blocks.STONE)) {
-                                throw h.assertionException(
-                                        "premise: creative block item must place its subject before vanish");
-                            }
-                            creativePlaced[0] = true;
-                            SlabAnchorAttachment.capturePlacementDy(world, creativeTarget, placed);
-                            world.setBlock(creativeTarget, Blocks.AIR.defaultBlockState(), 2);
-                        });
-        if (!creativePlaced[0]
-                || !"PLACED_THEN_VANISHED".equals(creativeProbe.outcome())
-                || !creativeProbe.interactionConsumesAction()
-                || creativeProbe.persistentSubjectPresent()
-                || !"minecraft:stone".equals(creativeProbe.stackItemBefore())
-                || !"minecraft:stone".equals(creativeProbe.stackItemAfter())
-                || creativeProbe.stackBefore() != 1 || creativeProbe.stackAfter() != 1
-                || creativeProbe.observedChangeCount() < 1
-                || creativeProbe.error() != null || creativeProbe.outsideEffect()) {
-            throw h.assertionException(
-                    "same-count creative consumed action with residual evidence must be a vanished red: "
-                            + creativeProbe);
+        SlabRigGameTestSeams.installPlacementProbe(
+                world, creative, creativeTarget, null, () -> {
+                    BlockState placed = world.getBlockState(creativeTarget);
+                    if (!placed.is(Blocks.STONE)) {
+                        throw h.assertionException(
+                                "premise: real creative proxy path must place stone before vanish");
+                    }
+                    creativePlaced[0] = true;
+                    SlabAnchorAttachment.capturePlacementDy(world, creativeTarget, placed);
+                    world.setBlock(creativeTarget, Blocks.AIR.defaultBlockState(), 2);
+                });
+        try {
+            if (tryExec(creativeSource, "slabrig cases " + page + " force") != 1
+                    || !creativePlaced[0]) {
+                throw h.assertionException(
+                        "creative vanished case must execute through the real SlabRig page");
+            }
+            SlabRigGameTestSeams.PlacementProbe creativeProbe =
+                    SlabRigGameTestSeams.takePlacementProbe(
+                            world, creative, creativeTarget);
+            JsonObject creativeRow = caseRow(h,
+                    SlabRigCommand.trackedCaseManifestJsonForTests(creativeSource),
+                    definition.id());
+            if (!"EXECUTED".equals(creativeRow.get("attemptStatus").getAsString())
+                    || !"PLACED_THEN_VANISHED".equals(
+                    creativeRow.get("outcome").getAsString())
+                    || !creativeRow.get("interactionConsumesAction").getAsBoolean()
+                    || creativeRow.get("persistentSubjectPresent").getAsBoolean()
+                    || !"minecraft:stone".equals(
+                    creativeRow.get("stackItemBefore").getAsString())
+                    || !"minecraft:stone".equals(
+                    creativeRow.get("stackItemAfter").getAsString())
+                    || creativeRow.get("stackBefore").getAsInt() != 1
+                    || creativeRow.get("stackAfter").getAsInt() != 1
+                    || creativeRow.getAsJsonArray("actualChanges").size() < 1
+                    || creativeRow.getAsJsonArray("actualChanges").size()
+                    != creativeProbe.observedChangeCount()
+                    || !creativeRow.get("interactionResult").getAsString()
+                    .equals(creativeProbe.interactionResult())
+                    || !creativeProbe.interactionConsumesAction()
+                    || creativeProbe.persistentSubjectPresent()
+                    || !"minecraft:stone".equals(creativeProbe.stackItemBefore())
+                    || !"minecraft:stone".equals(creativeProbe.stackItemAfter())
+                    || creativeProbe.stackBefore() != 1 || creativeProbe.stackAfter() != 1
+                    || creativeProbe.observedChangeCount() < 1
+                    || creativeProbe.error() != null || creativeProbe.outsideEffect()) {
+                throw h.assertionException(
+                        "real creative manifest must report consumed residual evidence as vanished: "
+                                + creativeRow + " attempt=" + creativeProbe);
+            }
+            exec(h, creativeSource, "slabrig clear");
+            if (!"none".equals(SlabRigCommand.trackedManifestStatus(creativeSource))
+                    || !world.getBlockState(creativeSupport).isAir()
+                    || !world.getBlockState(creativeTarget).isAir()
+                    || !Double.isNaN(
+                    SlabAnchorAttachment.storedPlacementDy(world, creativeTarget))) {
+                throw h.assertionException(
+                        "real creative page clear must remove structure, subject, and store evidence");
+            }
+        } finally {
+            SlabRigGameTestSeams.clearPostUseHook(
+                    world, creative, creativeTarget);
         }
-        if (!world.getBlockState(survivalTarget).isAir()
-                || !world.getBlockState(creativeTarget).isAir()
-                || !Double.isNaN(SlabAnchorAttachment.storedPlacementDy(world, creativeTarget))) {
-            throw h.assertionException("placement probe must exact-clean its subject/store evidence");
-        }
-        world.setBlock(survivalSupport, Blocks.AIR.defaultBlockState(), 3);
-        world.setBlock(creativeSupport, Blocks.AIR.defaultBlockState(), 3);
         h.succeed();
     }
 
@@ -1152,6 +1238,23 @@ public final class SlabRigCommandSmokeTest {
             }
         }
         throw h.assertionException("page manifest missing expected case item " + itemId);
+    }
+
+    private static JsonObject caseRow(GameTestHelper h, String json, String caseId) {
+        try {
+            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+            for (JsonElement element : root.getAsJsonArray("cases")) {
+                JsonObject row = element.getAsJsonObject();
+                if (caseId.equals(row.get("caseId").getAsString())) {
+                    return row;
+                }
+            }
+        } catch (RuntimeException exception) {
+            throw h.assertionException(
+                    "invalid case manifest while finding " + caseId + ": "
+                            + exception.getMessage());
+        }
+        throw h.assertionException("page manifest missing expected case " + caseId);
     }
 
     private static void assertTrackedRigInsideStructure(GameTestHelper h, CommandSourceStack source) {

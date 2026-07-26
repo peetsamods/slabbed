@@ -5,7 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.PlacementDyPredictionJournal;
 import com.slabbed.network.PlacementDyPredictionBridge;
-import com.slabbed.util.LiveCursorIntentRecorder;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -46,7 +46,7 @@ public abstract class MultiPlayerGameModePredictionSequenceMixin {
         Packet<ServerGamePacketListener> packet;
         boolean completed = false;
         PlacementDyPredictionBridge.openSequence(sequence);
-        LiveCursorIntentRecorder.UsePacketScope recorderScope =
+        SlabbedDiagnosticsBridge.PacketScope recorderScope =
                 slabbed$openRecorderScope(sequence);
         try {
             packet = original.call(action, sequence);
@@ -68,14 +68,14 @@ public abstract class MultiPlayerGameModePredictionSequenceMixin {
         return PlacementDyPredictionJournal.commitAfterPrediction(sequence, packet);
     }
 
-    private LiveCursorIntentRecorder.UsePacketScope slabbed$openRecorderScope(int sequence) {
-        if (!LiveCursorIntentRecorder.enabled()
+    private SlabbedDiagnosticsBridge.PacketScope slabbed$openRecorderScope(int sequence) {
+        if (!SlabbedDiagnosticsBridge.enabled()
                 || minecraft == null
                 || minecraft.player == null
                 || minecraft.level == null) {
             return null;
         }
-        return LiveCursorIntentRecorder.openUsePacketScope(
+        return SlabbedDiagnosticsBridge.openUsePacketScope(
                 "client",
                 sequence,
                 minecraft.player.getUUID().toString(),
@@ -113,7 +113,7 @@ public abstract class MultiPlayerGameModePredictionSequenceMixin {
         row.put("validationDecision", "not_observable_client_prediction");
         row.put("handlerDecision", "prediction_returned_packet");
         row.put("functionalOutcome", "client_prediction_state_observed");
-        LiveCursorIntentRecorder.recordAction(row);
+        SlabbedDiagnosticsBridge.recordAction(row);
     }
 
     private static String slabbed$recorderDy(double dy) {
