@@ -148,6 +148,7 @@ sourceSets {
             include("com/slabbed/test/DecorativeObjectSupportAnchorTest.java")
             include("com/slabbed/test/SlabVerticalSupportTerrainSlabsGuardTest.java")
             include("com/slabbed/test/FloorTorchSupportDyTest.java")
+            include("com/slabbed/test/BottomSlabSpawnProofTest.java")
             include("com/slabbed/test/CeilingHungDecorationFreezeAnchorTest.java")
             include("com/slabbed/test/FenceWallVisibleSupportDyTest.java")
             include("com/slabbed/test/CantileverBfsTerrainSlabsGuardTest.java")
@@ -209,6 +210,7 @@ sourceSets {
             include("com/slabbed/client/PlacementDyPredictionJournalGameTestAccess.java")
             include("com/slabbed/test/mixin/SlabRigCommandGameTestMixin.java")
             include("com/slabbed/test/mixin/BlockItemFixtureGameTestMixin.java")
+            include("com/slabbed/test/mixin/TerrainSlabsCompatGameTestMixin.java")
             include("com/slabbed/test/mixin/PlacementDyPredictionJournalGameTestMixin.java")
             include("com/slabbed/test/mixin/ClientLevelParticleCaptureMixin.java")
         }
