@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "slabbed_diagnostics",
+  "version": "${version}",
+  "name": "Slabbed Development Diagnostics",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.slabbed.dev.SlabbedDiagnostics"
+    ],
+    "client": [
+      "com.slabbed.client.SlabbedDiagnosticsClient"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "slabbed.diagnostics.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": "*",
+    "fabric-api": "*",
+    "minecraft": "26.2",
+    "slabbed": "*"
+  }
+}

@@ -1,14 +1,8 @@
 package com.slabbed.client;
 
 import com.slabbed.Slabbed;
-import com.slabbed.util.BuildStamp;
-import com.slabbed.util.LiveCursorIntentRecorder;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.InvocationTargetException;
 
@@ -30,68 +24,10 @@ public final class SlabbedClient implements ClientModInitializer {
         initRuntimeDiagnostics("initBsFbLiveTraceClient", "BS/FB live trace client",
                 Boolean.getBoolean("slabbed.bsfb.live.trace"));
         initGapFillerOverlay();
-        initTargetDyCommand();
         initScreenshotCaptureService();
         initDyFingerprintDump();
-        SlabModelStaleSentinelClient.init();
         BetaNoticeClient.init();
         com.slabbed.client.palette.SlabPalette.init();
-    }
-
-    private static void initTargetDyCommand() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                dispatcher.register(ClientCommands.literal("slabdev")
-                        .then(ClientCommands.literal("debug")
-                                .executes(context -> setTargetDyOverlay(!TargetDyOverlay.isEnabled()))
-                                .then(ClientCommands.literal("on")
-                                        .executes(context -> setTargetDyOverlay(true)))
-                                .then(ClientCommands.literal("off")
-                                        .executes(context -> setTargetDyOverlay(false)))
-                                .then(ClientCommands.literal("toggle")
-                                        .executes(context -> setTargetDyOverlay(!TargetDyOverlay.isEnabled()))))
-                        .then(ClientCommands.literal("record")
-                                .executes(context -> setLiveCursorRecorder(LiveCursorIntentRecorder.toggle()))
-                                .then(ClientCommands.literal("on")
-                                        .executes(context -> setLiveCursorRecorderTo(true)))
-                                .then(ClientCommands.literal("off")
-                                        .executes(context -> setLiveCursorRecorderTo(false)))
-                                .then(ClientCommands.literal("toggle")
-                                        .executes(context -> setLiveCursorRecorder(LiveCursorIntentRecorder.toggle()))))));
-    }
-
-    private static int setTargetDyOverlay(boolean enabled) {
-        TargetDyOverlay.setEnabled(enabled);
-        Minecraft client = Minecraft.getInstance();
-        if (client.player != null) {
-            client.player.sendSystemMessage(Component.literal(
-                    "[slabdev] debug overlay: " + (enabled ? "on" : "off")));
-        }
-        return 1;
-    }
-
-    private static int setLiveCursorRecorderTo(boolean target) {
-        // The recorder's toggle() flips its own volatile flag; drive it to the requested state.
-        if (LiveCursorIntentRecorder.enabled() != target) {
-            LiveCursorIntentRecorder.toggle();
-        } else if (target) {
-            // Already on: still ensure the session dir/manifest exist for a fresh /slabdev record on.
-            LiveCursorIntentRecorder.bootstrap();
-        }
-        return setLiveCursorRecorder(target);
-    }
-
-    private static int setLiveCursorRecorder(boolean enabled) {
-        Minecraft client = Minecraft.getInstance();
-        if (client.player != null) {
-            client.player.sendSystemMessage(Component.literal(
-                    "[slabdev] live cursor recorder: " + (enabled ? "on" : "off")
-                            + " (" + LiveCursorIntentRecorder.currentLogPathDisplay() + ")"));
-            // Jar-identity echo: a session log must be attributable to an exact build, in-game, without
-            // digging into the profile folder (same-version/different-bytes jars have already happened).
-            client.player.sendSystemMessage(Component.literal(
-                    "[slabdev] " + BuildStamp.describeShort()));
-        }
-        return 1;
     }
 
     private static void initDyFingerprintDump() {

@@ -55,21 +55,6 @@ public final class PlacementDyPredictionJournal {
     ) {
     }
 
-    public record TestSnapshot(
-            int stagedGroups,
-            int activeGroups,
-            int overlayOwners,
-            int bufferedCorrections,
-            int acknowledgedThrough,
-            int backingWrites,
-            boolean authorityObservedWhileOwned,
-            Map<Long, ReconcileBranch> branches
-    ) {
-        public TestSnapshot {
-            branches = Map.copyOf(branches);
-        }
-    }
-
     private static final class Group {
         final ClientLevel level;
         final long generation;
@@ -102,11 +87,6 @@ public final class PlacementDyPredictionJournal {
     private static long generation;
     private static int acknowledgedThrough = -1;
     private static boolean initialized;
-    private static boolean testProbeEnabled;
-    private static boolean testFailNextDeclaration;
-    private static int testBackingWrites;
-    private static boolean testAuthorityObservedWhileOwned;
-    private static final LinkedHashMap<Long, ReconcileBranch> TEST_BRANCHES = new LinkedHashMap<>();
 
     private PlacementDyPredictionJournal() {
     }
@@ -176,13 +156,6 @@ public final class PlacementDyPredictionJournal {
                 batch.signature(),
                 batch.cells().stream().map(cell -> cell.pos().asLong()).toList());
         try {
-            synchronized (PlacementDyPredictionJournal.class) {
-                if (testFailNextDeclaration) {
-                    testFailNextDeclaration = false;
-                    Slabbed.LOGGER.warn("[C3] prediction declaration test failure; overlay not installed");
-                    return packet;
-                }
-            }
             if (!ClientPlayNetworking.canSend(PlacementDyPredictionEnvelopePayload.TYPE)) {
                 Slabbed.LOGGER.warn("[C3] prediction declaration channel unavailable; overlay not installed");
                 return packet;
@@ -321,71 +294,6 @@ public final class PlacementDyPredictionJournal {
                 owner != null && owner.sequence() <= acknowledgedThrough,
                 effectiveFact(currentLevel, pos),
                 backingFact(currentLevel, pos));
-    }
-
-    public static synchronized void beginTestProbe(ClientLevel level) {
-        reset(level);
-        testProbeEnabled = true;
-        testBackingWrites = 0;
-        testAuthorityObservedWhileOwned = false;
-        TEST_BRANCHES.clear();
-        SlabAnchorClientSync.beginC3RerenderProbeForTests();
-    }
-
-    public static synchronized void endTestProbe(ClientLevel level) {
-        reset(level);
-        testProbeEnabled = false;
-        testBackingWrites = 0;
-        testAuthorityObservedWhileOwned = false;
-        TEST_BRANCHES.clear();
-        SlabAnchorClientSync.stopC3RerenderProbeForTests();
-    }
-
-    public static synchronized void resetForTests(ClientLevel level) {
-        reset(level);
-    }
-
-    public static synchronized void failNextDeclarationForTests() {
-        testFailNextDeclaration = true;
-    }
-
-    public static TestSnapshot testSnapshot() {
-        synchronized (PlacementDyPredictionJournal.class) {
-            return new TestSnapshot(
-                    STAGED.size(),
-                    GROUPS.size(),
-                    OVERLAY_OWNER.size(),
-                    CORRECTIONS.size(),
-                    acknowledgedThrough,
-                    testBackingWrites,
-                    testAuthorityObservedWhileOwned,
-                    TEST_BRANCHES);
-        }
-    }
-
-    public static void installBatchForTests(
-            ClientLevel level,
-            PlacementDyPredictionBridge.PredictedBatch batch
-    ) {
-        List<BlockPos> rerenders;
-        synchronized (PlacementDyPredictionJournal.class) {
-            ensureCurrentLevel(level);
-            rerenders = installGroup(level, generation, batch);
-        }
-        rerenders.forEach(SlabAnchorClientSync::scheduleExactPlacementDyRerender);
-    }
-
-    public static void commitStagedBatchForTests(ClientLevel level, int sequence) {
-        List<BlockPos> rerenders;
-        synchronized (PlacementDyPredictionJournal.class) {
-            ensureCurrentLevel(level);
-            PlacementDyPredictionBridge.PredictedBatch batch = STAGED.remove(sequence);
-            if (batch == null || batch.signature().sequence() != sequence) {
-                throw new IllegalStateException("missing staged C3 test batch " + sequence);
-            }
-            rerenders = installGroup(level, generation, batch);
-        }
-        rerenders.forEach(SlabAnchorClientSync::scheduleExactPlacementDyRerender);
     }
 
     private static void validateInstall(
@@ -527,9 +435,6 @@ public final class PlacementDyPredictionJournal {
             } else {
                 branch = ReconcileBranch.THIRD_STATE_PRESERVED;
             }
-            if (testProbeEnabled) {
-                TEST_BRANCHES.put(key, branch);
-            }
             if (!placementEquivalent(group.level.getBlockState(cell.pos()), cell.expectedState())) {
                 Slabbed.LOGGER.debug("[C3] post-ack structural state differs for {} branch={}", cell.pos(), branch);
             }
@@ -543,11 +448,6 @@ public final class PlacementDyPredictionJournal {
             } finally {
                 SlabAnchorClientSync.endJournalAuthoritativeApply();
             }
-        }
-        if (testProbeEnabled) {
-            testBackingWrites += appliedWrites;
-            testAuthorityObservedWhileOwned |= !ownedCells.isEmpty() && ownedCells.stream().allMatch(pos ->
-                    signature.equals(OVERLAY_OWNER.get(pos.asLong())));
         }
         if (!ownedCells.isEmpty()) {
             PlacementDyPredictionBridge.traceCorrectionWire("APPLY", signature);
@@ -594,10 +494,6 @@ public final class PlacementDyPredictionJournal {
         if (chunk != null) {
             cleanupChunk(level, chunk.getPos().x(), chunk.getPos().z());
         }
-    }
-
-    public static void unloadChunkForTests(ClientLevel level, int chunkX, int chunkZ) {
-        cleanupChunk(level, chunkX, chunkZ);
     }
 
     private static void cleanupChunk(ClientLevel level, int unloadingX, int unloadingZ) {
@@ -656,7 +552,6 @@ public final class PlacementDyPredictionJournal {
         generation++;
         currentLevel = level;
         acknowledgedThrough = -1;
-        testFailNextDeclaration = false;
         STAGED.clear();
         GROUPS.clear();
         OVERLAY_OWNER.clear();

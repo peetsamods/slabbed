@@ -7,7 +7,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.network.PlacementDyCorrectionServer;
 import com.slabbed.placement.LandingHitValidationPolicy;
-import com.slabbed.util.LiveCursorIntentRecorder;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -58,13 +58,13 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         boolean authoritativePass = world != null
                 && world.getServer() != null
                 && world.getServer().isSameThread();
-        ServerUseSnapshot recorderBefore = authoritativePass && LiveCursorIntentRecorder.enabled()
+        ServerUseSnapshot recorderBefore = authoritativePass && SlabbedDiagnosticsBridge.enabled()
                 ? slabbed$captureUseSnapshot(world, packet)
                 : null;
-        LiveCursorIntentRecorder.UsePacketScope recorderScope =
+        SlabbedDiagnosticsBridge.PacketScope recorderScope =
                 recorderBefore == null
                         ? null
-                        : LiveCursorIntentRecorder.openUsePacketScope(
+                        : SlabbedDiagnosticsBridge.openUsePacketScope(
                                 "server",
                                 packet.getSequence(),
                                 player.getUUID().toString(),
@@ -140,7 +140,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                 before.state().equals(afterState)
                         ? "no_target_state_change_observed"
                         : "target_state_changed");
-        LiveCursorIntentRecorder.recordAction(row);
+        SlabbedDiagnosticsBridge.recordAction(row);
     }
 
     private static String slabbed$recorderDy(double dy) {
