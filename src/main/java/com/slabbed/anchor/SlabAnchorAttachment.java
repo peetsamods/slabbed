@@ -122,7 +122,29 @@ public final class SlabAnchorAttachment {
     }
 
     private static SlabAnchorStore getAnchorStore(LevelChunk chunk) {
-        return chunk.getCapability(SlabAnchorCapabilities.SLAB_ANCHOR_STORE).resolve().orElse(null);
+        // orElse, not resolve().orElse: LazyOptional.resolve() allocates a java.util.Optional on
+        // every present call; orElse reads the value directly. Behaviour is identical for present
+        // and absent (invalidated) caps -- the only divergence, a present-but-null supplier, is
+        // unreachable because the provider supplies a final field.
+        return chunk.getCapability(SlabAnchorCapabilities.SLAB_ANCHOR_STORE).orElse(null);
+    }
+
+    /**
+     * Zero-copy membership test -- the READ-path replacement for {@link #getAttachment}.
+     *
+     * <p>getAttachment deep-copies the whole bucket (an O(bucket) allocation) and exists for the
+     * MUTATION path, which genuinely needs a set it may modify. Every boolean marker query goes
+     * through here instead: no Optional, no bucket copy, no per-read allocation. Enforced by
+     * ForgeMarkerReadAllocationGameTest -- the per-block-work-on-a-hot-path class has shipped
+     * twice in this project's history, and this is the automation that keeps it dead.
+     */
+    private static boolean hasMarker(LevelChunk chunk, SlabAnchorMarker type, BlockPos pos) {
+        if (chunk.getLevel().isClientSide()) {
+            return SlabAnchorClientMirror.contains(
+                    chunk.getLevel().dimension().location(), type, pos);
+        }
+        SlabAnchorStore store = getAnchorStore(chunk);
+        return store != null && store.contains(type, pos.asLong());
     }
 
     private static LongOpenHashSet getAttachment(
@@ -343,8 +365,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, FROZEN_FLAT_TYPE);
-        return set != null && set.contains(pos.asLong());
+        return hasMarker(chunk, FROZEN_FLAT_TYPE, pos);
     }
 
     /**
@@ -703,8 +724,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, ANCHOR_TYPE);
-        boolean anchored = set != null && set.contains(pos.asLong());
+        boolean anchored = hasMarker(chunk, ANCHOR_TYPE, pos);
         if (TRACE && anchored) {
             Slabbed.LOGGER.info("[ANCHOR] query true side={} pos={}",
                     w.isClientSide() ? "CLIENT" : "SERVER", shortPos(pos));
@@ -734,8 +754,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
-        boolean compound = set != null && set.contains(pos.asLong());
+        boolean compound = hasMarker(chunk, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, pos);
         if (TRACE && compound) {
             Slabbed.LOGGER.info("[ANCHOR] compound_full_block query true side={} pos={}",
                     w.isClientSide() ? "CLIENT" : "SERVER", shortPos(pos));
@@ -755,8 +774,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
-        boolean marked = set != null && set.contains(pos.asLong());
+        boolean marked = hasMarker(chunk, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE, pos);
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_lower_slab query true side={} pos={}",
                     w.isClientSide() ? "CLIENT" : "SERVER", shortPos(pos));
@@ -776,8 +794,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
-        boolean marked = set != null && set.contains(pos.asLong());
+        boolean marked = hasMarker(chunk, COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE, pos);
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_upper_slab query true side={} pos={}",
                     w.isClientSide() ? "CLIENT" : "SERVER", shortPos(pos));
@@ -797,8 +814,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
-        boolean marked = set != null && set.contains(pos.asLong());
+        boolean marked = hasMarker(chunk, COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE, pos);
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_double_slab query true side={} pos={}",
                     w.isClientSide() ? "CLIENT" : "SERVER", shortPos(pos));
@@ -818,8 +834,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
-        boolean marked = set != null && set.contains(pos.asLong());
+        boolean marked = hasMarker(chunk, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE, pos);
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_owner_top_slab query true side={} pos={}",
                     w.isClientSide() ? "CLIENT" : "SERVER", shortPos(pos));
@@ -841,8 +856,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
         }
-        LongOpenHashSet set = getAttachment(chunk, LOWERED_SLAB_CARRIER_TYPE);
-        boolean carrier = set != null && set.contains(pos.asLong());
+        boolean carrier = hasMarker(chunk, LOWERED_SLAB_CARRIER_TYPE, pos);
         if (!carrier && isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
             carrier = true;
         }
@@ -867,8 +881,7 @@ public final class SlabAnchorAttachment {
         if (world instanceof Level w) {
             LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             if (chunk != null) {
-                LongOpenHashSet set = getAttachment(chunk, LOWERED_SLAB_CARRIER_TYPE);
-                if (set != null && set.contains(pos.asLong())) {
+                if (hasMarker(chunk, LOWERED_SLAB_CARRIER_TYPE, pos)) {
                     return true;
                 }
             }

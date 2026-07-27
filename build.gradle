@@ -121,6 +121,9 @@ sourceSets {
             // Phase 1 carpet ruling: carpet dy is -0.5 on a bottom slab, ONE authority
             // (getYOffset), ClientDy a pure delegate, snow-layer sibling pinned flat.
             include "com/slabbed/test/ForgeCarpetDyAuthorityGameTest.java"
+            // Phase 1 PERF hygiene automation: marker membership reads must allocate ~0 bytes.
+            // RED while the read path deep-copies whole buckets per query.
+            include "com/slabbed/test/ForgeMarkerReadAllocationGameTest.java"
         }
         resources {
             setSrcDirs([])

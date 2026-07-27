@@ -66,7 +66,7 @@ public final class SlabAnchorNetwork {
         if (player == null || chunk == null || marker == null) {
             return;
         }
-        SlabAnchorStore store = chunk.getCapability(SlabAnchorCapabilities.SLAB_ANCHOR_STORE).resolve().orElse(null);
+        SlabAnchorStore store = chunk.getCapability(SlabAnchorCapabilities.SLAB_ANCHOR_STORE).orElse(null);
         LongOpenHashSet positions = store == null ? new LongOpenHashSet() : store.copy(marker);
         CHANNEL.send(
                 PacketDistributor.PLAYER.with(() -> player),
