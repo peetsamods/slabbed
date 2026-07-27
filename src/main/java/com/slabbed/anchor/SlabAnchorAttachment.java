@@ -289,6 +289,15 @@ public final class SlabAnchorAttachment {
                 || state.isAir() || !state.getFluidState().isEmpty()) {
             return;
         }
+        // Thin top layers (carpet, snow layers) are followers, never anchor holders. Now that
+        // getYOffset(carpet-on-slab) reads -0.5 (the carpet authority ruling), the dy<0 heuristic
+        // below would otherwise stamp an ANCHOR marker onto every predicted carpet placement —
+        // and an ANCHOR on a carpet makes hasSlabInColumn treat the carpet as slab support
+        // (the isAnchored test there runs BEFORE the thin-layer terminator), lowering whatever
+        // is stacked on top of it. Exclude the whole role, not one class.
+        if (SlabSupport.isThinTopLayer(state)) {
+            return;
+        }
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }

@@ -1363,6 +1363,21 @@ public final class SlabSupport {
             }
             return 0.0;
         }
+        // Carpet: canonical -0.5 over a bottom slab (or a lowered column), 0.0 otherwise —
+        // Maintainer's 2026-07-27 ruling: match what players already see. This is ClientDy's former
+        // private rule RELOCATED byte-identically, so model/outline/raycast/overlay AND every
+        // server decision now read the same number from ONE authority. Placement is load-bearing:
+        //   - BELOW the recursion guard, so nested queries keep returning 0.0 exactly as before
+        //     (a nested -0.5 would leak through negative filters like
+        //     isLoweredFullBlockSlabCarrierSupport, which admits carpet by omission);
+        //   - AFTER the CompatHooks guards above, so a Terrain-Slabs-wrapped carpet defers to TS
+        //     instead of double-offsetting (the old ClientDy branch bypassed those guards);
+        //   - BEFORE getYOffsetInner, so carpet can never reach the anchor, frozen-flat,
+        //     compound -1.0 or column branches. isThinTopLayer stays untouched: six call sites
+        //     depend on carpet's membership, and only this one is about carpet's own dy.
+        if (state.getBlock() instanceof CarpetBlock) {
+            return hasBottomSlabBelow(world, pos) ? -0.5 : 0.0;
+        }
         // NOTHING may sit between arming the gate and entering the try. If a statement here threw,
         // the finally would never run, IN_GET_Y_OFFSET would stay TRUE for the life of the thread,
         // and every subsequent query would return 0.0 at the guard above — silently flattening

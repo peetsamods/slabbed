@@ -118,6 +118,9 @@ sourceSets {
             // derivation cycle against stacked pillar height. Measurement only — this test
             // changes no production behaviour. RED means the blowup is real.
             include "com/slabbed/test/ForgeLoweredCarrierRecursionBlowupGameTest.java"
+            // Phase 1 carpet ruling: carpet dy is -0.5 on a bottom slab, ONE authority
+            // (getYOffset), ClientDy a pure delegate, snow-layer sibling pinned flat.
+            include "com/slabbed/test/ForgeCarpetDyAuthorityGameTest.java"
         }
         resources {
             setSrcDirs([])
