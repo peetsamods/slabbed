@@ -137,6 +137,9 @@ sourceSets {
             // raw bits survive every neighbour attack; in-place kind swaps keep the lock;
             // genuine removal clears; doors store both halves at exactly 0.0.
             include "com/slabbed/test/ForgeNeighborUpdateInvarianceGameTest.java"
+            // The ceiling reach-up kill (Maintainer's ruling): flush hang under FLUSH top slabs;
+            // the lowered-top-slab merge compensation and full-ceiling flush are pinned.
+            include "com/slabbed/test/ForgeCeilingFlushHangGameTest.java"
         }
         resources {
             setSrcDirs([])

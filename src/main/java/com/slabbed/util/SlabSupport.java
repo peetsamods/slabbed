@@ -638,6 +638,23 @@ public final class SlabSupport {
         return Double.isFinite(supportDy) && supportDy < -1.0e-6d;
     }
 
+    /**
+     * A top-like ceiling surface that grants ceiling-attached blocks below the +0.5 reach-up —
+     * THE ONE CHOKE POINT for every dy-computing ceiling walk, so the ruling can never be applied
+     * to one walk and forgotten on the others (this project's recorded shared-predicate lesson).
+     *
+     * <p>DEAD BY RULING (Maintainer 2026-07-27, upholding her 2026-07-03 live ruling on the 26.2
+     * reference): the +0.5 reach-up under a FLUSH top slab smooshed objects UP into the slab in
+     * live testing; everything hangs FLUSH now. Returning false disables the reach-up at all
+     * three governed gates from one place — trivially reversible if live testing regresses
+     * ("subject to further review"). NOT governed here, deliberately: the +0.5 merge
+     * compensation under a LOWERED top slab (Maintainer 2026-07-01: deliberate ceiling-mount
+     * geometry), which lives on the lowered-support path.
+     */
+    private static boolean isLoweringTopLikeCeiling(BlockState state) {
+        return false;
+    }
+
     // Public since STAYS Phase 4: replacementPreservesAnchor's EntityBlock arm must not
     // height-lock an always-ceiling-hung decoration (they follow the support ABOVE).
     public static boolean isAlwaysCeilingHungDecoration(BlockState state) {
@@ -679,7 +696,8 @@ public final class SlabSupport {
             if (isCeilingBridgedVerticalChainColumnMember(world, cursor, cur)) {
                 return 0.0d;
             }
-            if (isTopSlab(cur)) {
+            // Reach-up kill: dead while isLoweringTopLikeCeiling returns false (was isTopSlab).
+            if (isLoweringTopLikeCeiling(cur)) {
                 return 0.5d;
             }
             if (isCeilingAttached(cur)) {
@@ -2904,7 +2922,8 @@ public final class SlabSupport {
         }
 
         // direct: ceiling-attached blocks directly under a top slab
-        if (isCeilingAttached(state) && isTopSlab(above)) {
+        // Reach-up kill: dead while isLoweringTopLikeCeiling returns false (was isTopSlab).
+        if (isCeilingAttached(state) && isLoweringTopLikeCeiling(above)) {
             return 0.5;
         }
 
@@ -2958,7 +2977,8 @@ public final class SlabSupport {
             BlockPos cursor = pos.above();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
-                if (isTopSlab(cur)) {
+                // Reach-up kill: dead while isLoweringTopLikeCeiling returns false (was isTopSlab).
+                if (isLoweringTopLikeCeiling(cur)) {
                     return 0.5;
                 }
                 if (isCeilingAttached(cur)) {
