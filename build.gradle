@@ -127,6 +127,9 @@ sourceSets {
             // Recorder forensic-row contract (26.2 schema port): real fake-player placement,
             // trustworthy origin label, before/after marker truth, explicit absent aim facts.
             include "com/slabbed/test/ForgeRecorderPlaceRowContractGameTest.java"
+            // STAYS Phase 2: the value bucket round-trips raw doubles bit-exactly (incl. the
+            // -0.0 normalisation the 26.2 reference gets wrong) and is wired to NOTHING.
+            include "com/slabbed/test/ForgePlacementDyStoreRoundTripGameTest.java"
         }
         resources {
             setSrcDirs([])

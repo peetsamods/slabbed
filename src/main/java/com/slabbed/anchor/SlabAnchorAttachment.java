@@ -4,6 +4,7 @@ import java.util.function.Predicate;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
+import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -145,6 +146,115 @@ public final class SlabAnchorAttachment {
         }
         SlabAnchorStore store = getAnchorStore(chunk);
         return store != null && store.contains(type, pos.asLong());
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // STORED PLACEMENT DY — the STAYS law's value surface (scope Phase 2).
+    //
+    // The exact player-authored height, stored at placement, read back everywhere — versus the
+    // eight boolean buckets above, which record only WHICH lane and leave the magnitude to live
+    // neighbour re-derivation (the Phase I §A finding). In Phase 2 this surface is DELIBERATELY
+    // INERT: nothing reads it into behaviour (the getYOffset short-circuit is Phase 3), nothing
+    // writes it from gameplay (the placement writers are Phases 4/6), and it does not sync
+    // (Phase 5). Contract mirrored from the 26.2 reference, with one deliberate improvement:
+    // -0.0 is normalised to +0.0 on write, so the raw-bits round-trip that is RED on the
+    // reference (DoubleTag.valueOf compares with ==) is GREEN here.
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * Immutable presence-plus-raw-bits fact about a stored placement dy. Identity is the 64 raw
+     * bits, never a tolerance compare; {@code NaN} is reserved as the absent sentinel and
+     * non-finite values are rejected at the door.
+     */
+    public record PlacementDyFact(boolean present, long rawBits) {
+        public static PlacementDyFact absent() {
+            return new PlacementDyFact(false, 0L);
+        }
+
+        public static PlacementDyFact present(double value) {
+            if (!Double.isFinite(value)) {
+                throw new IllegalArgumentException("placement dy must be finite, got " + value);
+            }
+            return new PlacementDyFact(true, Double.doubleToRawLongBits(value));
+        }
+
+        public double valueOrNaN() {
+            return present ? Double.longBitsToDouble(rawBits) : Double.NaN;
+        }
+    }
+
+    /**
+     * The stored placement dy at {@code pos}, or {@code NaN} when absent. Server truth only in
+     * Phase 2: non-{@link Level} render views get their lookup seam in Phase 3, and the client
+     * mirror arrives with sync in Phase 5 — until then both honestly report absent.
+     */
+    public static double storedPlacementDy(BlockGetter world, BlockPos pos) {
+        if (pos == null || !(world instanceof Level w) || w.isClientSide()) {
+            return Double.NaN;
+        }
+        LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return Double.NaN;
+        }
+        SlabAnchorStore store = getAnchorStore(chunk);
+        return store == null ? Double.NaN : store.getPlacementDy(pos.asLong());
+    }
+
+    /** {@link #storedPlacementDy} as a {@link PlacementDyFact}, preserving raw bits. */
+    public static PlacementDyFact storedPlacementDyFact(BlockGetter world, BlockPos pos) {
+        double dy = storedPlacementDy(world, pos);
+        return Double.isNaN(dy) ? PlacementDyFact.absent() : PlacementDyFact.present(dy);
+    }
+
+    /**
+     * Stores the authored dy at {@code pos}. Server-side only; rejects non-finite; normalises
+     * {@code -0.0} to {@code +0.0}. Returns true when the stored raw bits changed.
+     */
+    public static boolean writePlacementDy(Level world, BlockPos pos, double dy) {
+        if (world == null || world.isClientSide() || pos == null) {
+            return false;
+        }
+        if (!Double.isFinite(dy)) {
+            throw new IllegalArgumentException("placement dy must be finite, got " + dy);
+        }
+        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return false;
+        }
+        SlabAnchorStore store = getAnchorStore(chunk);
+        return store != null && store.putPlacementDy(pos.asLong(), dy);
+    }
+
+    /** Clears the authored dy at {@code pos}. Returns true when an entry was removed. */
+    public static boolean removePlacementDy(Level world, BlockPos pos) {
+        if (world == null || world.isClientSide() || pos == null) {
+            return false;
+        }
+        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return false;
+        }
+        SlabAnchorStore store = getAnchorStore(chunk);
+        return store != null && store.removePlacementDy(pos.asLong());
+    }
+
+    /**
+     * Batch write for multi-cell placements (doors, beds): every cell of one authored action
+     * lands together. Returns the number of entries whose stored bits changed. Per-chunk publish
+     * batching becomes meaningful when delta sync lands in Phase 5; the write path is already
+     * one {@code setUnsaved} per mutated chunk.
+     */
+    public static int writePlacementDyBatch(Level world, Long2DoubleMap dyByPackedPos) {
+        if (world == null || world.isClientSide() || dyByPackedPos == null || dyByPackedPos.isEmpty()) {
+            return 0;
+        }
+        int written = 0;
+        for (Long2DoubleMap.Entry e : dyByPackedPos.long2DoubleEntrySet()) {
+            if (writePlacementDy(world, BlockPos.of(e.getLongKey()), e.getDoubleValue())) {
+                written++;
+            }
+        }
+        return written;
     }
 
     private static LongOpenHashSet getAttachment(
