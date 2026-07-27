@@ -48,7 +48,7 @@ public final class ForgeStoredDyAuthorityGameTest {
         BlockPos bPos = ctx.absolutePos(new BlockPos(3, 2, 1));
         BlockPos cPos = ctx.absolutePos(new BlockPos(5, 2, 1));
         BlockPos dPos = ctx.absolutePos(new BlockPos(7, 2, 1));
-        java.util.function.LongToDoubleFunction priorLookup =
+        SlabAnchorAttachment.PlacementDyViewLookup priorLookup =
                 SlabAnchorAttachment.clientPlacementDyLookup;
         try {
             runRows(ctx, world, aPos, bPos, cPos, dPos);
@@ -126,7 +126,7 @@ public final class ForgeStoredDyAuthorityGameTest {
         BlockGetter renderView = new NonLevelView(world);
         try {
             SlabAnchorAttachment.clientPlacementDyLookup =
-                    packed -> packed == a.asLong() ? -2.5d : Double.NaN;
+                    (view, packed) -> packed == a.asLong() ? -2.5d : Double.NaN;
             assertDy(ctx, SlabAnchorAttachment.storedPlacementDy(renderView, a), -2.5d,
                     "a non-Level view must read stored truth through the seam");
             assertDy(ctx, SlabSupport.getYOffset(renderView, a, world.getBlockState(a)), -2.5d,

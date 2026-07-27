@@ -65,10 +65,15 @@ public final class SlabAnchorClientMirrorEvents {
                 lookup(SlabAnchorMarker.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB);
         SlabAnchorAttachment.clientCompoundVisibleOwnerTopSlabLookup =
                 lookup(SlabAnchorMarker.COMPOUND_VISIBLE_OWNER_TOP_SLAB);
-        // The ninth seam — stored placement dy for non-Level render views (STAYS Phase 3).
-        // Honestly absent until the Phase 5 sync populates the client mirror's dy map; the seam
-        // exists now so the read path is wired and testable before the data arrives.
-        SlabAnchorAttachment.clientPlacementDyLookup = packedPos -> Double.NaN;
+        // The ninth seam — stored placement dy for non-Level render views (STAYS Phase 5).
+        // SIDE-GATED per the Phase 3 review: only an actual client render region may read the
+        // client mirror. Server-side non-Level views (WorldGenRegion during worldgen,
+        // PathNavigationRegion during pathfinding) reach this hook on integrated servers and
+        // must see absent, never another side's data.
+        SlabAnchorAttachment.clientPlacementDyLookup = (view, packedPos) ->
+                view instanceof net.minecraft.client.renderer.chunk.RenderChunkRegion
+                        ? SlabAnchorClientMirror.placementDy(currentDimension(), packedPos)
+                        : Double.NaN;
     }
 
     private static void clearClientMirrorLookups() {

@@ -140,6 +140,9 @@ sourceSets {
             // The ceiling reach-up kill (Maintainer's ruling): flush hang under FLUSH top slabs;
             // the lowered-top-slab merge compensation and full-ceiling flush are pinned.
             include "com/slabbed/test/ForgeCeilingFlushHangGameTest.java"
+            // STAYS Phase 5: sync contract — bit-exact codecs, constant-size deltas, idempotent
+            // mirror application, corrupt-drop, side-gated seam. The live half is BETA 1's gate.
+            include "com/slabbed/test/ForgePlacementDySyncGameTest.java"
         }
         resources {
             setSrcDirs([])

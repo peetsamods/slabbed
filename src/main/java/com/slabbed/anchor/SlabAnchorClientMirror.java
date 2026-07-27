@@ -1,5 +1,6 @@
 package com.slabbed.anchor;
 
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -17,6 +18,16 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class SlabAnchorClientMirror {
     private static final ConcurrentMap<BucketKey, LongOpenHashSet> BUCKETS =
+            new ConcurrentHashMap<>();
+
+    /**
+     * The mirrored placement-dy maps (STAYS Phase 5), keyed by dimension and chunk. Written on
+     * the client main thread by the sync handlers; read from chunk-mesh worker threads through
+     * the render seam and from client Level queries. Same discipline as BUCKETS: values are
+     * replaced WHOLESALE (full sync) or COPY-ON-WRITE (deltas) — a map instance is never mutated
+     * after publication, so readers always see a consistent snapshot.
+     */
+    private static final ConcurrentMap<DyKey, Long2DoubleOpenHashMap> DY_MAPS =
             new ConcurrentHashMap<>();
 
     /**
@@ -104,6 +115,11 @@ public final class SlabAnchorClientMirror {
         return set != null && set.contains(pos.asLong());
     }
 
+    /**
+     * Test-hygiene/symmetry entry point with NO production caller — production cleanup is the
+     * server-pushed empty full on unwatch plus {@link #clearAll} on login/logout. Recorded so a
+     * future sweep does not misread this as a wiring gap.
+     */
     public static void clearChunk(ResourceLocation dimension, int chunkX, int chunkZ) {
         if (dimension == null) {
             return;
@@ -111,10 +127,120 @@ public final class SlabAnchorClientMirror {
         for (SlabAnchorMarker marker : SlabAnchorMarker.values()) {
             BUCKETS.remove(new BucketKey(dimension, chunkX, chunkZ, marker));
         }
+        DY_MAPS.remove(new DyKey(dimension, chunkX, chunkZ));
     }
 
     public static void clearAll() {
         BUCKETS.clear();
+        DY_MAPS.clear();
+    }
+
+    /** Full per-chunk dy sync. A corrupt pair (length mismatch) is dropped WHOLE, like the store. */
+    public static void applyPlacementDyFull(
+            ResourceLocation dimension,
+            int chunkX,
+            int chunkZ,
+            long[] positions,
+            long[] bits
+    ) {
+        if (dimension == null || positions == null || bits == null
+                || positions.length != bits.length) {
+            return;
+        }
+        DyKey key = new DyKey(dimension, chunkX, chunkZ);
+        Long2DoubleOpenHashMap incoming = new Long2DoubleOpenHashMap(positions.length);
+        incoming.defaultReturnValue(Double.NaN);
+        for (int i = 0; i < positions.length; i++) {
+            incoming.put(positions[i], Double.longBitsToDouble(bits[i]));
+        }
+        Long2DoubleOpenHashMap previous =
+                incoming.isEmpty() ? DY_MAPS.remove(key) : DY_MAPS.put(key, incoming);
+        invalidateChangedDy(previous, incoming);
+    }
+
+    /**
+     * One placement's delta. IDEMPOTENT: re-applying identical raw bits publishes nothing and
+     * fires no re-mesh. Copy-on-write — placements are events, not a hot path.
+     */
+    public static void applyPlacementDyDelta(
+            ResourceLocation dimension,
+            long packedPos,
+            boolean present,
+            long rawBits
+    ) {
+        if (dimension == null) {
+            return;
+        }
+        DyKey key = new DyKey(dimension, BlockPos.getX(packedPos) >> 4, BlockPos.getZ(packedPos) >> 4);
+        Long2DoubleOpenHashMap current = DY_MAPS.get(key);
+        if (present) {
+            if (current != null && current.containsKey(packedPos)
+                    && Double.doubleToRawLongBits(current.get(packedPos)) == rawBits) {
+                return;
+            }
+            Long2DoubleOpenHashMap next = current == null
+                    ? new Long2DoubleOpenHashMap() : new Long2DoubleOpenHashMap(current);
+            next.defaultReturnValue(Double.NaN);
+            next.put(packedPos, Double.longBitsToDouble(rawBits));
+            DY_MAPS.put(key, next);
+        } else {
+            if (current == null || !current.containsKey(packedPos)) {
+                return;
+            }
+            Long2DoubleOpenHashMap next = new Long2DoubleOpenHashMap(current);
+            next.defaultReturnValue(Double.NaN);
+            next.remove(packedPos);
+            if (next.isEmpty()) {
+                DY_MAPS.remove(key);
+            } else {
+                DY_MAPS.put(key, next);
+            }
+        }
+        LongConsumer sink = renderInvalidationSink;
+        if (sink != null) {
+            sink.accept(packedPos);
+        }
+    }
+
+    /**
+     * The mirrored dy at the packed position, or {@code NaN} when absent. Allocation-lean by
+     * review requirement: chunk coords come from the {@code BlockPos.getX/getZ(long)} statics,
+     * no intermediate BlockPos — this is the designated mesher read and must stay cheap before
+     * the render wiring makes it hot. The DyKey record matches the accepted BucketKey per-read
+     * cost of the marker seam.
+     */
+    public static double placementDy(ResourceLocation dimension, long packedPos) {
+        if (dimension == null) {
+            return Double.NaN;
+        }
+        Long2DoubleOpenHashMap map = DY_MAPS.get(
+                new DyKey(dimension, BlockPos.getX(packedPos) >> 4, BlockPos.getZ(packedPos) >> 4));
+        return map == null ? Double.NaN : map.get(packedPos);
+    }
+
+    private static void invalidateChangedDy(
+            Long2DoubleOpenHashMap previous, Long2DoubleOpenHashMap incoming) {
+        LongConsumer sink = renderInvalidationSink;
+        if (sink == null) {
+            return;
+        }
+        if (previous != null) {
+            for (long pos : previous.keySet()) {
+                if (!incoming.containsKey(pos)
+                        || Double.doubleToRawLongBits(incoming.get(pos))
+                                != Double.doubleToRawLongBits(previous.get(pos))) {
+                    sink.accept(pos);
+                }
+            }
+        }
+        for (long pos : incoming.keySet()) {
+            if (previous == null || !previous.containsKey(pos)) {
+                sink.accept(pos);
+            }
+        }
+    }
+
+    private record DyKey(ResourceLocation dimension, int chunkX, int chunkZ) {
     }
 
     private record BucketKey(

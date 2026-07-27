@@ -7,7 +7,6 @@ import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.compat.CompatHooks;
 import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import java.util.function.LongToDoubleFunction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -198,10 +197,17 @@ public final class SlabAnchorAttachment {
      * The non-{@link Level} render-view seam. The chunk mesher hands the dy path a
      * RenderChunkRegion, never a Level, so this hook IS how baked models read stored truth.
      * Installed and cleared by {@code SlabAnchorClientMirrorEvents} alongside the eight marker
-     * lookups; returns the stored dy for a packed BlockPos or {@code NaN} when absent. Backed by
-     * the client mirror's dy map once Phase 5 syncs it — until then it honestly reports absent.
+     * lookups. The VIEW is part of the signature (Phase 3 review gate #2): server-side non-Level
+     * views — WorldGenRegion during worldgen, PathNavigationRegion during pathfinding — reach
+     * this hook on integrated servers, and the client-installed lambda must verify the view is
+     * an actual client render region before answering from the client mirror.
      */
-    public static volatile LongToDoubleFunction clientPlacementDyLookup;
+    @FunctionalInterface
+    public interface PlacementDyViewLookup {
+        double get(BlockGetter view, long packedPos);
+    }
+
+    public static volatile PlacementDyViewLookup clientPlacementDyLookup;
 
     /**
      * The stored placement dy at {@code pos}, or {@code NaN} when absent. Server reads the chunk
@@ -213,11 +219,13 @@ public final class SlabAnchorAttachment {
             return Double.NaN;
         }
         if (!(world instanceof Level w)) {
-            LongToDoubleFunction lookup = clientPlacementDyLookup;
-            return lookup == null ? Double.NaN : lookup.applyAsDouble(pos.asLong());
+            PlacementDyViewLookup lookup = clientPlacementDyLookup;
+            return lookup == null ? Double.NaN : lookup.get(world, pos.asLong());
         }
         if (w.isClientSide()) {
-            return Double.NaN;
+            // STAYS Phase 5: the client Level reads the synced mirror — outline, raycast and
+            // overlay finally see the same stored truth the server holds.
+            return SlabAnchorClientMirror.placementDy(w.dimension().location(), pos.asLong());
         }
         LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
@@ -286,9 +294,10 @@ public final class SlabAnchorAttachment {
 
     /**
      * Batch write for multi-cell placements (doors, beds): every cell of one authored action
-     * lands together. Returns the number of entries whose stored bits changed. Per-chunk publish
-     * batching becomes meaningful when delta sync lands in Phase 5; the write path is already
-     * one {@code setUnsaved} per mutated chunk.
+     * lands together. Returns the number of entries whose stored bits changed. DECISION (Phase 5
+     * review): per-chunk publish batching is deliberately NOT implemented — deltas are
+     * constant-size (~35 bytes), so an authored action costs one tiny packet per cell (a door is
+     * two), and batching machinery would buy nothing at authored-action scale.
      */
     public static int writePlacementDyBatch(Level world, Long2DoubleMap dyByPackedPos) {
         if (world == null || world.isClientSide() || dyByPackedPos == null || dyByPackedPos.isEmpty()) {

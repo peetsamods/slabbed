@@ -32,11 +32,10 @@ public final class SlabAnchorStore {
      * sentinel (the map's default return value); non-finite values are rejected at the door, and
      * {@code -0.0} is normalised to {@code +0.0} on write so raw-bit identity survives NBT.
      *
-     * <p>DELIBERATELY INERT in Phase 2: no reader consults it (the {@code getYOffset}
-     * short-circuit is Phase 3) and mutation does NOT network-sync (delta sync is Phase 5 — note
-     * the asymmetry with the boolean buckets, whose mutators sync whole-bucket; the dy map must
-     * get deltas, not inherit that shape). Lazy: {@code null} until the first write, so chunks
-     * with no authored heights pay nothing.
+     * <p>Read stored-first by {@code getYOffset} since Phase 3; written by the placement writer
+     * since Phase 4; delta-synced to tracking clients since Phase 5 (deltas, deliberately — not
+     * the boolean buckets' whole-bucket resend shape). Lazy: {@code null} until the first write,
+     * so chunks with no authored heights pay nothing.
      */
     private Long2DoubleOpenHashMap placementDy;
 
@@ -64,11 +63,29 @@ public final class SlabAnchorStore {
         return map == null ? 0 : map.size();
     }
 
+    /** Snapshot of the dy map as parallel arrays [positions, rawBits] — for the full sync. */
+    public long[][] placementDyEntries() {
+        Long2DoubleOpenHashMap map = placementDy;
+        if (map == null || map.isEmpty()) {
+            return new long[][] {new long[0], new long[0]};
+        }
+        long[] positions = new long[map.size()];
+        long[] bits = new long[map.size()];
+        int i = 0;
+        for (Long2DoubleMap.Entry e : map.long2DoubleEntrySet()) {
+            positions[i] = e.getLongKey();
+            bits[i] = Double.doubleToRawLongBits(e.getDoubleValue());
+            i++;
+        }
+        return new long[][] {positions, bits};
+    }
+
     /**
      * Stores the authored dy. Returns true when the stored raw bits changed. Rejects non-finite
      * ({@code NaN} is the absent sentinel and must never be storable); normalises {@code -0.0}
      * to {@code +0.0} so the raw-bits identity contract survives every codec on the route.
-     * Marks the chunk unsaved; does NOT sync (Phase 5).
+     * Marks the chunk unsaved and emits a constant-size DELTA to tracking clients (Phase 5) —
+     * deliberately not the boolean buckets' whole-bucket resend shape.
      */
     public boolean putPlacementDy(long packedPos, double dy) {
         if (!Double.isFinite(dy)) {
@@ -86,6 +103,8 @@ public final class SlabAnchorStore {
         }
         map.put(packedPos, normalized);
         markUnsaved();
+        SlabAnchorNetwork.syncPlacementDyDelta(
+                owner, packedPos, true, Double.doubleToRawLongBits(normalized));
         return true;
     }
 
@@ -100,6 +119,7 @@ public final class SlabAnchorStore {
             placementDy = null;
         }
         markUnsaved();
+        SlabAnchorNetwork.syncPlacementDyDelta(owner, packedPos, false, 0L);
         return true;
     }
 
