@@ -65,9 +65,14 @@ public final class SlabAnchorClientMirrorEvents {
                 lookup(SlabAnchorMarker.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB);
         SlabAnchorAttachment.clientCompoundVisibleOwnerTopSlabLookup =
                 lookup(SlabAnchorMarker.COMPOUND_VISIBLE_OWNER_TOP_SLAB);
+        // The ninth seam — stored placement dy for non-Level render views (STAYS Phase 3).
+        // Honestly absent until the Phase 5 sync populates the client mirror's dy map; the seam
+        // exists now so the read path is wired and testable before the data arrives.
+        SlabAnchorAttachment.clientPlacementDyLookup = packedPos -> Double.NaN;
     }
 
     private static void clearClientMirrorLookups() {
+        SlabAnchorAttachment.clientPlacementDyLookup = null;
         SlabAnchorAttachment.clientAnchorLookup = null;
         SlabAnchorAttachment.clientFrozenFlatLookup = null;
         SlabAnchorAttachment.clientLoweredSlabCarrierLookup = null;

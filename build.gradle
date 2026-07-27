@@ -130,6 +130,9 @@ sourceSets {
             // STAYS Phase 2: the value bucket round-trips raw doubles bit-exactly (incl. the
             // -0.0 normalisation the 26.2 reference gets wrong) and is wired to NOTHING.
             include "com/slabbed/test/ForgePlacementDyStoreRoundTripGameTest.java"
+            // STAYS Phase 3: the stored value IS the height authority — both directions, every
+            // family, kill-switch exact, render-view seam live, writer/reader guard symmetry.
+            include "com/slabbed/test/ForgeStoredDyAuthorityGameTest.java"
         }
         resources {
             setSrcDirs([])

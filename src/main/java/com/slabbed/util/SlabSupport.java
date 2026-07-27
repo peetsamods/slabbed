@@ -1316,6 +1316,25 @@ public final class SlabSupport {
      * </ul>
      */
     public static double getYOffset(BlockGetter world, BlockPos pos, BlockState state) {
+        return getYOffsetGuarded(world, pos, state, true);
+    }
+
+    /**
+     * The twin that SKIPS the store: pure geometric derivation behind the same guards. For the
+     * placement writers (Phases 4/6), which must derive what the lanes would say without reading
+     * their own output — and for pinning pre-store behaviour in tests. Everything else reads
+     * {@link #getYOffset}.
+     */
+    public static double getUnstoredYOffset(BlockGetter world, BlockPos pos, BlockState state) {
+        return getYOffsetGuarded(world, pos, state, false);
+    }
+
+    private static double getYOffsetGuarded(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state,
+            boolean consultStore
+    ) {
         if (world == null || pos == null) {
             return 0.0;
         }
@@ -1346,6 +1365,29 @@ public final class SlabSupport {
         // powder snow flush and consistent.
         if (state.getBlock() instanceof PowderSnowBlock) {
             return 0.0;
+        }
+
+        // STORED-FIRST (STAYS Phase 3): when a placement height is stored, the stored value IS
+        // the height — no geometry runs at all. Placement of this block is load-bearing:
+        //   - AFTER the CompatHooks and powder-snow guards: guard symmetry — the writer refuses
+        //     exactly the states these guards skip, so a stored value can never shadow a
+        //     TS-owned drop (reader and writer agree on the skip set by construction);
+        //   - BEFORE the recursion guard, mirroring the 26.2 reference's structure: a stored
+        //     read is one map probe that cannot recurse, so it is safe above the guard. On THIS
+        //     port no nested consumer currently reaches this method under the armed gate (the
+        //     mixin set registers no shape mixin, and every getYOffsetInner leg reads supports
+        //     store-blind), so the placement changes nothing nested TODAY — it exists for parity
+        //     with the reference and for any future guard-armed caller, which will see committed
+        //     truth rather than the guard's 0.0. Note the asymmetry with the carpet branch
+        //     below: a stored carpet dy IS visible to guard-armed queries; only carpet's
+        //     GEOMETRIC dy is sealed below the guard.
+        //   - BEFORE the carpet branch: a stored carpet height (Phase 6 stores every placement)
+        //     beats the visual rule.
+        if (consultStore && SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            double frozen = SlabAnchorAttachment.storedPlacementDy(world, pos);
+            if (!Double.isNaN(frozen)) {
+                return frozen;
+            }
         }
 
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset

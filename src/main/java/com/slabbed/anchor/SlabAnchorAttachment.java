@@ -4,8 +4,10 @@ import java.util.function.Predicate;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
+import com.slabbed.compat.CompatHooks;
 import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import java.util.function.LongToDoubleFunction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -184,12 +186,37 @@ public final class SlabAnchorAttachment {
     }
 
     /**
-     * The stored placement dy at {@code pos}, or {@code NaN} when absent. Server truth only in
-     * Phase 2: non-{@link Level} render views get their lookup seam in Phase 3, and the client
-     * mirror arrives with sync in Phase 5 — until then both honestly report absent.
+     * Master switch for the stored-dy read authority (Phase 3). {@code slabbed.frozenDy=false}
+     * is the escape hatch that restores pure pre-store behaviour. Deliberately a mutable FIELD
+     * initialised once from the property: tests flip the field directly, and per the recorded
+     * PERF lesson a flag that tests set at runtime must never be re-read from a cached property.
+     */
+    public static boolean FROZEN_DY_ENABLED =
+            Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"));
+
+    /**
+     * The non-{@link Level} render-view seam. The chunk mesher hands the dy path a
+     * RenderChunkRegion, never a Level, so this hook IS how baked models read stored truth.
+     * Installed and cleared by {@code SlabAnchorClientMirrorEvents} alongside the eight marker
+     * lookups; returns the stored dy for a packed BlockPos or {@code NaN} when absent. Backed by
+     * the client mirror's dy map once Phase 5 syncs it — until then it honestly reports absent.
+     */
+    public static volatile LongToDoubleFunction clientPlacementDyLookup;
+
+    /**
+     * The stored placement dy at {@code pos}, or {@code NaN} when absent. Server reads the chunk
+     * store; non-{@link Level} render views read through {@link #clientPlacementDyLookup}; a
+     * client {@link Level} honestly reports absent until the Phase 5 mirror lands.
      */
     public static double storedPlacementDy(BlockGetter world, BlockPos pos) {
-        if (pos == null || !(world instanceof Level w) || w.isClientSide()) {
+        if (pos == null || world == null) {
+            return Double.NaN;
+        }
+        if (!(world instanceof Level w)) {
+            LongToDoubleFunction lookup = clientPlacementDyLookup;
+            return lookup == null ? Double.NaN : lookup.applyAsDouble(pos.asLong());
+        }
+        if (w.isClientSide()) {
             return Double.NaN;
         }
         LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
@@ -207,8 +234,24 @@ public final class SlabAnchorAttachment {
     }
 
     /**
+     * GUARD SYMMETRY (Phase 3): true when the stored-dy READER would skip this state before ever
+     * consulting the store — air, CompatHooks-owned states (Terrain Slabs must stay the single
+     * source of its own drops), and powder snow. The writer must refuse exactly this set: a value
+     * the reader can never consult must never be storable, or a placement would silently read
+     * back a different height than it stored.
+     */
+    private static boolean readerSkipsStoredDy(BlockState state) {
+        return state == null
+                || state.isAir()
+                || CompatHooks.shouldSkipOffset(state)
+                || CompatHooks.terrainSlabsHandlesObjectOffset(state)
+                || state.getBlock() instanceof net.minecraft.world.level.block.PowderSnowBlock;
+    }
+
+    /**
      * Stores the authored dy at {@code pos}. Server-side only; rejects non-finite; normalises
-     * {@code -0.0} to {@code +0.0}. Returns true when the stored raw bits changed.
+     * {@code -0.0} to {@code +0.0}; refuses reader-skipped states (guard symmetry). Returns true
+     * when the stored raw bits changed.
      */
     public static boolean writePlacementDy(Level world, BlockPos pos, double dy) {
         if (world == null || world.isClientSide() || pos == null) {
@@ -216,6 +259,9 @@ public final class SlabAnchorAttachment {
         }
         if (!Double.isFinite(dy)) {
             throw new IllegalArgumentException("placement dy must be finite, got " + dy);
+        }
+        if (readerSkipsStoredDy(world.getBlockState(pos))) {
+            return false;
         }
         LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {

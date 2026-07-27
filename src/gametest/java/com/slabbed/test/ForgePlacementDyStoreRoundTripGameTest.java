@@ -37,9 +37,23 @@ public final class ForgePlacementDyStoreRoundTripGameTest {
     @GameTest(template = "empty")
     public void storedDyRoundTripsBitExactAndStaysInert(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
-
-        // --- write the table at distinct positions in one chunk ---
         BlockPos base = ctx.absolutePos(new BlockPos(1, 2, 1));
+        try {
+            runRows(ctx, world, base);
+        } finally {
+            // STRIKE THE STORE. Since Phase 3, stored entries are live height authority at
+            // ABSOLUTE positions that outlive gametest structure re-placement. Clear every
+            // write even when a row aborts (adversarial review: a leaked entry is the F5
+            // haunting with teeth).
+            for (int i = 0; i <= TABLE.length; i++) {
+                SlabAnchorAttachment.removePlacementDy(world, base.offset(i, 0, 0));
+            }
+        }
+        ctx.succeed();
+    }
+
+    private static void runRows(GameTestHelper ctx, ServerLevel world, BlockPos base) {
+        // --- write the table at distinct positions ---
         for (int i = 0; i < TABLE.length; i++) {
             BlockPos p = base.offset(i, 0, 0);
             world.setBlock(p, Blocks.STONE.defaultBlockState(), Block.UPDATE_NONE);
@@ -76,19 +90,31 @@ public final class ForgePlacementDyStoreRoundTripGameTest {
                 "infinite write must throw");
 
         // --- NBT round-trip, bit-for-bit, through the real save/load codec ---
+        // PER-POSITION CHUNK RESOLUTION, deliberately: the store is per-chunk and the fixture
+        // row can straddle a chunk boundary depending on where the roster's plot layout drops
+        // this test. An earlier revision saved only base's chunk and went red the day an 18th
+        // test relocated the plot onto a boundary — the same layout-sensitivity class as the
+        // F5 haunting, in this suite's own fixture. Never assume two fixture positions share
+        // a chunk.
+        for (int i = 0; i < TABLE.length; i++) {
+            BlockPos p = base.offset(i, 0, 0);
+            LevelChunk posChunk = world.getChunk(p.getX() >> 4, p.getZ() >> 4);
+            SlabAnchorStore posStore = posChunk
+                    .getCapability(SlabAnchorCapabilities.SLAB_ANCHOR_STORE).orElse(null);
+            ctx.assertTrue(posStore != null, "chunk must carry the anchor store capability");
+            SlabAnchorStore reloaded = new SlabAnchorStore(posChunk);
+            reloaded.load(posStore.save());
+            long bits = Double.doubleToRawLongBits(reloaded.getPlacementDy(p.asLong()));
+            ctx.assertTrue(bits == Double.doubleToRawLongBits(TABLE[i]),
+                    "NBT round-trip raw-bits identity for " + TABLE[i]
+                            + ": got bits " + Long.toHexString(bits)
+                            + " want " + Long.toHexString(Double.doubleToRawLongBits(TABLE[i])));
+        }
         LevelChunk chunk = world.getChunk(base.getX() >> 4, base.getZ() >> 4);
         SlabAnchorStore store = chunk.getCapability(SlabAnchorCapabilities.SLAB_ANCHOR_STORE)
                 .orElse(null);
         ctx.assertTrue(store != null, "chunk must carry the anchor store capability");
         CompoundTag saved = store.save();
-        SlabAnchorStore reloaded = new SlabAnchorStore(chunk);
-        reloaded.load(saved);
-        for (int i = 0; i < TABLE.length; i++) {
-            BlockPos p = base.offset(i, 0, 0);
-            long bits = Double.doubleToRawLongBits(reloaded.getPlacementDy(p.asLong()));
-            ctx.assertTrue(bits == Double.doubleToRawLongBits(TABLE[i]),
-                    "NBT round-trip raw-bits identity for " + TABLE[i]);
-        }
 
         // --- corrupt pair (length mismatch) is dropped WHOLE, never half-applied ---
         CompoundTag corrupt = saved.copy();
@@ -102,20 +128,18 @@ public final class ForgePlacementDyStoreRoundTripGameTest {
                         || fromCorrupt.placementDyCount() == 0,
                 "the boolean buckets must survive a corrupt dy pair untouched");
 
-        // --- WIRED TO NOTHING: a stored value must not leak into behaviour in Phase 2 ---
+        // --- PHASE 3 LANDED WITH ITS PROOF: the stored value now IS the behaviour ---
+        // (This row asserted inertness through Phase 2; ForgeStoredDyAuthorityGameTest carries
+        // the full authority contract, and this row now pins the same flip from the store side.)
         BlockPos inert = base.offset(4, 0, 0); // holds -0.375, a value no lane can produce
         double behavioural = SlabSupport.getYOffset(world, inert, world.getBlockState(inert));
-        ctx.assertTrue(Double.compare(behavioural, 0.0d) == 0,
-                "Phase 2 is inert by construction: getYOffset must still answer geometrically "
-                        + "(0.0 for stone on plain ground), got " + behavioural
-                        + " — a leak here means the Phase 3 short-circuit arrived without its proof");
+        ctx.assertTrue(Double.compare(behavioural, -0.375d) == 0,
+                "with Phase 3 landed, the stored -0.375 must BE the height; got " + behavioural);
 
         // --- remove works and re-reads absent ---
         ctx.assertTrue(SlabAnchorAttachment.removePlacementDy(world, negZero), "remove must report change");
         ctx.assertTrue(Double.isNaN(SlabAnchorAttachment.storedPlacementDy(world, negZero)),
                 "removed position must read NaN");
-
-        ctx.succeed();
     }
 
     private static void assertThrows(GameTestHelper ctx, Runnable action, String what) {
