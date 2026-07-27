@@ -35,6 +35,10 @@ import javax.annotation.Nullable;
  * 40951 / 81912 block reads at heights 1..12, with the ratio locking at exactly x2.0 from height 6
  * and never falling off. Extrapolated: ~21M reads at height 20, ~335M at height 24.
  *
+ * <p>FIXED: the per-query memo in {@link SlabSupport} ({@code DY_QUERY_MEMO}) collapses the walk
+ * to quadratic — 22 / 144 / 588 / 1352 at heights 1/4/8/12, second differences constant. This test
+ * now runs GREEN against {@link #READ_BUDGET_AT_MAX_HEIGHT} and stands as the regression guard.
+ *
  * <p>NOTE ON THE ORIGINAL ESTIMATE. The scope document modelled this as ~17x per layer
  * (1,455 / 24,624 / 417,596 / 7,094,362 at heights 2/3/4/5) from a paper trace that was never run.
  * Measurement puts those at 62 / 143 / 304 / 625 -- the model overstated height 4 by ~1,400x. The
@@ -85,14 +89,34 @@ public final class ForgeLoweredCarrierRecursionBlowupGameTest {
     @GameTest(template = "empty")
     public void loweredCarrierDerivationDoesNotGrowExponentiallyWithPillarHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
+        try {
+            measureAndEvaluate(ctx, world);
+        } finally {
+            // STRIKE THE SET. The gametest world is shared and PERSISTS across runs, so scenery
+            // left standing here outlives this test and this run. This diagnostic's own history
+            // proves the hazard twice: its first revision trampled two sibling fixtures live, and
+            // stale per-chunk markers under layout-shifted plots later flipped a sibling matrix
+            // row across runs. Restore every touched block to air even when the measurement
+            // aborts or asserts.
+            for (int height = 1; height <= MAX_HEIGHT; height++) {
+                clearRegion(world, fixtureBase(ctx, height), height);
+            }
+        }
+    }
 
+    /** One fixture origin per height, all on the dedicated z-lane. */
+    private static BlockPos fixtureBase(GameTestHelper ctx, int height) {
+        return ctx.absolutePos(new BlockPos(2 + (height * FIXTURE_SPACING), 3, FIXTURE_Z_LANE));
+    }
+
+    private static void measureAndEvaluate(GameTestHelper ctx, ServerLevel world) {
         long[] reads = new long[MAX_HEIGHT + 1];
         double[] dys = new double[MAX_HEIGHT + 1];
         boolean aborted = false;
         int abortedAt = -1;
 
         for (int height = 1; height <= MAX_HEIGHT; height++) {
-            BlockPos base = ctx.absolutePos(new BlockPos(2 + (height * FIXTURE_SPACING), 3, FIXTURE_Z_LANE));
+            BlockPos base = fixtureBase(ctx, height);
             clearRegion(world, base, height);
             buildPillarOverAir(world, base, height);
 

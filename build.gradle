@@ -242,3 +242,16 @@ publishing {
     repositories {
     }
 }
+
+// GAMETEST DETERMINISM: the GameTestServer world persists across runs, and Slabbed's per-chunk
+// marker store persists inside it. A stale marker written by an earlier run's plot layout can sit
+// under a later run's fixture and silently change a matrix row. Measured on this root: the
+// F5.stackedSlabs upperSlabOnFlatSlab row reads -0.5 on a used world carrying a stale
+// LOWERED_SLAB_CARRIER marker at the fixture's upper-slab cell, and 0.0 on a fresh world — same
+// code, same plot layout, same visible blocks. Delete the world so every run starts identical;
+// the suite's signature hashes are only comparable under this rule.
+tasks.matching { it.name == "runGameTestServer" }.configureEach {
+    doFirst {
+        project.delete("${projectDir}/run/world")
+    }
+}
