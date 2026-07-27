@@ -124,6 +124,9 @@ sourceSets {
             // Phase 1 PERF hygiene automation: marker membership reads must allocate ~0 bytes.
             // RED while the read path deep-copies whole buckets per query.
             include "com/slabbed/test/ForgeMarkerReadAllocationGameTest.java"
+            // Recorder forensic-row contract (26.2 schema port): real fake-player placement,
+            // trustworthy origin label, before/after marker truth, explicit absent aim facts.
+            include "com/slabbed/test/ForgeRecorderPlaceRowContractGameTest.java"
         }
         resources {
             setSrcDirs([])
