@@ -114,6 +114,10 @@ sourceSets {
             // (raycast owner-identity sweep + honest-hit useOn placement; fixture from
             // HANDOFF.md 2026-06-29. Server-side halves only — client pipeline stays live).
             include "com/slabbed/test/ForgeOccupiedLoweredLaneTargetHijackGameTest.java"
+            // Phase I §A follow-up DIAGNOSTIC: measures the growth curve of the lowered-carrier
+            // derivation cycle against stacked pillar height. Measurement only — this test
+            // changes no production behaviour. RED means the blowup is real.
+            include "com/slabbed/test/ForgeLoweredCarrierRecursionBlowupGameTest.java"
         }
         resources {
             setSrcDirs([])
