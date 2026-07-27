@@ -254,8 +254,16 @@ jar {
     // here keeps the class out of the published artifact too. All shipping call sites
     // go through SlabbedRecorderBridge, which probes reflectively and no-ops when the
     // class is missing. Verify with: unzip -l build/libs/slabbed-*.jar | grep -i recorder
-    exclude "com/slabbed/util/SlabbedRecorder.class"
-    exclude "com/slabbed/util/SlabbedRecorder\$*.class"
+    //
+    // EXCEPTION, by explicit property only: -PslabbedTestJar builds a SLABBED TEST jar
+    // WITH the recorder included, for Maintainer's manual live-test passes (the BETA gates'
+    // recorder side-split check needs it in the real profile). Test jars are hand-staged
+    // and clearly labelled; the default build — and therefore anything published — keeps
+    // the exclusion. Never pass the property on a release build.
+    if (!project.hasProperty("slabbedTestJar")) {
+        exclude "com/slabbed/util/SlabbedRecorder.class"
+        exclude "com/slabbed/util/SlabbedRecorder\$*.class"
+    }
 }
 
 publishing {
