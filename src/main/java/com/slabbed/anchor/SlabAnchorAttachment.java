@@ -708,6 +708,72 @@ public final class SlabAnchorAttachment {
     /**
      * Clears any anchor at {@code pos}. Server-side only.
      */
+    /**
+     * D1 port from the 26.2 donor: true when an in-place block replacement should KEEP the
+     * height-lock — flower-pot state swaps, a new occupant that is itself lock-eligible
+     * (grass_block → dirt from a random tick, log → stripped, copper oxidation), a lockable
+     * block entity that is not an always-ceiling-hung decoration, or connecting structural
+     * (fence/wall/pane/gate). Air, fluids, and other non-lock kinds still clear.
+     *
+     * <p>1.20.1-SPECIFIC ARM the donor never needed: a SAME-BLOCK property change (a lamp
+     * lighting, leaves ticking their distance, snow settling on grass) always preserves. On the
+     * donor's runtime, property-only updates never reach {@code onRemove}; on 1.20.1 they
+     * provably do — {@code LevelChunk.setBlockState}'s only early-out is reference identity,
+     * then {@code onRemove} fires unconditionally server-side (Phase I audit disassembly of the
+     * locked toolchain jar). Port the behaviour, not the code.
+     */
+    public static boolean replacementPreservesAnchor(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState oldState,
+            BlockState newState
+    ) {
+        if (newState == null || newState.isAir()) {
+            return false;
+        }
+        // SAME BLOCK first, before the fluid arm: a same-block transition is never a removal —
+        // including WATERLOGGING. A waterlogged fence still IS the fence; its non-empty fluid
+        // state must not read as "replaced by fluid" (the donor never hit this because it also
+        // never needed the same-block arm — its runtime doesn't fire onRemove on property-only
+        // changes, and waterlogged=true is exactly such a change).
+        if (oldState != null && oldState.getBlock() == newState.getBlock()) {
+            return true;
+        }
+        // A genuinely fluid-occupied replacement (the block washed out, water in the cell) clears.
+        if (!newState.getFluidState().isEmpty()) {
+            return false;
+        }
+        boolean flowerPotStateTransition = oldState != null
+                && oldState.getBlock() instanceof net.minecraft.world.level.block.FlowerPotBlock
+                && newState.getBlock() instanceof net.minecraft.world.level.block.FlowerPotBlock;
+        return flowerPotStateTransition
+                || isOrdinaryFullBlockAnchorCandidate(world, pos, newState)
+                || (newState.getBlock() instanceof EntityBlock
+                        && !SlabSupport.isAlwaysCeilingHungDecoration(newState))
+                || isConnectingStructural(newState);
+    }
+
+    /** Fence / wall / pane / gate — connecting blocks that are height-locked like solids. */
+    public static boolean isConnectingStructural(BlockState state) {
+        Block b = state.getBlock();
+        return b instanceof net.minecraft.world.level.block.FenceBlock
+                || b instanceof net.minecraft.world.level.block.WallBlock
+                || b instanceof net.minecraft.world.level.block.IronBarsBlock
+                || b instanceof net.minecraft.world.level.block.FenceGateBlock;
+    }
+
+    /**
+     * The COMPLETE clear for a genuinely removed block: the seven anchor-family markers, the
+     * carrier marker (audit defect #2 — never cleared before this), and the stored placement dy
+     * (which since Phase 3 is live height authority and must die with its block). Called only
+     * from the removal mixin, gated on {@link #replacementPreservesAnchor}.
+     */
+    public static void clearPlacementTruth(Level world, BlockPos pos) {
+        removeAnchor(world, pos);
+        removePersistentLoweredSlabCarrier(world, pos);
+        removePlacementDy(world, pos);
+    }
+
     public static void removeAnchor(Level world, BlockPos pos) {
         boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
         if (removed && RuntimeDiagnostics.isBsFbLiveTraceEnabled()) {
@@ -1103,8 +1169,15 @@ public final class SlabAnchorAttachment {
         return isOrdinaryFullBlockAnchorCarrierBounds(world, pos, state);
     }
 
+    // Hoisted (Phase 4 adversarial review): the registry lookup allocated a ResourceLocation
+    // PER CALL and became reachable from onRemove HEAD on every block replacement. On 1.20.1
+    // pale_moss_carpet does not exist (added 1.21.4), so this resolves to the AIR default and
+    // can never match -- resolved once at class init, kept for donor parity.
+    private static final Block PALE_MOSS_CARPET_OR_AIR =
+            BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("minecraft", "pale_moss_carpet"));
+
     private static boolean isPaleMossCarpet(Block block) {
-        return block == BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("minecraft", "pale_moss_carpet"));
+        return block == PALE_MOSS_CARPET_OR_AIR && block != Blocks.AIR;
     }
 
     public static boolean qualifiesForDirectAnchor(BlockGetter world, BlockPos pos, BlockState state) {

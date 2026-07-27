@@ -88,13 +88,16 @@ public final class ForgeRecorderPlaceRowContractGameTest {
             assertContains(ctx, row, "anchoredAfter=true", "post-placement anchor truth");
             assertContains(ctx, row, "clickedFace=absent",
                     "aim facts must be explicitly absent until the Phase 6 aim capture");
-            assertContains(ctx, row, "storedDy=absent",
-                    "stored dy must be explicitly absent until the Phase 2 value bucket");
+            assertContains(ctx, row, "storedDy=-0.5",
+                    "since the Phase 4 writer, the row must carry the freshly stored height");
             assertContains(ctx, row, "reason=entity_place_event", "reason code");
         } finally {
             if (toggledHere && SlabbedRecorder.isEnabled()) {
                 SlabbedRecorder.toggle();
             }
+            // Test-store hygiene law: since the Phase 4 writer, this placement stores a height.
+            com.slabbed.anchor.SlabAnchorAttachment.removePlacementDy(world,
+                    ctx.absolutePos(new BlockPos(1, 1, 1)).above());
         }
         ctx.succeed();
     }

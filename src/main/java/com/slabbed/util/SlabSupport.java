@@ -91,8 +91,15 @@ public final class SlabSupport {
                 || isPaleMossCarpet(block);
     }
 
+    // Hoisted (Phase 4 adversarial review): the registry lookup allocated a ResourceLocation
+    // PER CALL and became reachable from onRemove HEAD on every block replacement. On 1.20.1
+    // pale_moss_carpet does not exist (added 1.21.4), so this resolves to the AIR default and
+    // can never match -- resolved once at class init, kept for donor parity.
+    private static final Block PALE_MOSS_CARPET_OR_AIR =
+            BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("minecraft", "pale_moss_carpet"));
+
     private static boolean isPaleMossCarpet(Block block) {
-        return block == BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("minecraft", "pale_moss_carpet"));
+        return block == PALE_MOSS_CARPET_OR_AIR && block != Blocks.AIR;
     }
 
     /**
@@ -631,7 +638,9 @@ public final class SlabSupport {
         return Double.isFinite(supportDy) && supportDy < -1.0e-6d;
     }
 
-    private static boolean isAlwaysCeilingHungDecoration(BlockState state) {
+    // Public since STAYS Phase 4: replacementPreservesAnchor's EntityBlock arm must not
+    // height-lock an always-ceiling-hung decoration (they follow the support ABOVE).
+    public static boolean isAlwaysCeilingHungDecoration(BlockState state) {
         if (state == null) {
             return false;
         }

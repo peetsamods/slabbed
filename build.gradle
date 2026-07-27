@@ -133,6 +133,10 @@ sourceSets {
             // STAYS Phase 3: the stored value IS the height authority — both directions, every
             // family, kill-switch exact, render-view seam live, writer/reader guard symmetry.
             include "com/slabbed/test/ForgeStoredDyAuthorityGameTest.java"
+            // STAYS Phase 4: THE R2 HARNESS — a real placement stores its height; the stored
+            // raw bits survive every neighbour attack; in-place kind swaps keep the lock;
+            // genuine removal clears; doors store both halves at exactly 0.0.
+            include "com/slabbed/test/ForgeNeighborUpdateInvarianceGameTest.java"
         }
         resources {
             setSrcDirs([])
