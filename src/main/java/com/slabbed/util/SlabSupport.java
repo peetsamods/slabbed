@@ -1096,6 +1096,59 @@ public final class SlabSupport {
     /** Recursion guard: prevents StackOverflow when isSolidBlock triggers getOutlineShape → getYOffset. */
     private static final ThreadLocal<Boolean> IN_GET_Y_OFFSET = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
+    /**
+     * Entries above which a finished query's memo is DISCARDED rather than cleared.
+     *
+     * <p>{@link java.util.HashMap#clear()} is O(table capacity), not O(size), and {@code HashMap}
+     * never shrinks. Reusing one holder unconditionally would let a single deep query leave a
+     * permanent high-water table on that thread, so every later query — including ones on plain
+     * blocks that touch nothing — would pay a full table sweep in its {@code finally}. That is the
+     * per-block-work-on-the-render-hot-path class this project has already shipped twice. Below the
+     * cap the table is small and reuse is free; above it, we drop the holder entirely.
+     */
+    private static final int DY_MEMO_RETAIN_CAP = 512;
+
+    /**
+     * Per-top-level-{@link #getYOffset} memo for the lowered-carrier derivation.
+     *
+     * <p>Created lazily, and only by a query that actually enters the cycle, so an ordinary query
+     * never allocates. Installed and torn down exclusively by {@link #getYOffset}, strictly inside
+     * the {@link #IN_GET_Y_OFFSET} window — a memo must never outlive the query that built it, or
+     * it would serve a stale answer after the world changed and become a neighbour-update
+     * violation created by a performance fix.
+     */
+    private static final ThreadLocal<DyQueryMemo> DY_QUERY_MEMO = new ThreadLocal<>();
+
+    /**
+     * Memo key for {@link #isLoweredCarrier}. {@code depth} and {@code allowSideLane} are both
+     * answer-affecting and MUST be part of the key: the guard at the top of the carrier walk
+     * returns {@code false} once {@code depth} reaches zero, so the same position can legitimately
+     * answer {@code false} at low remaining depth and {@code true} at high remaining depth; and
+     * {@link #isLoweredDoubleSlabCarrierForSideSupport} deliberately re-enters with the lateral
+     * lane disabled. {@code BlockGetter} and {@code BlockState} compare by identity, which is what
+     * we want — block states are interned and the world is one object for the life of a query.
+     */
+    private record CarrierKey(
+            BlockGetter world,
+            long pos,
+            BlockState state,
+            int depth,
+            boolean allowSideLane
+    ) { }
+
+    /** Holder for one query's memoised carrier answers. */
+    private static final class DyQueryMemo {
+        private final java.util.HashMap<CarrierKey, Boolean> carrier = new java.util.HashMap<>();
+
+        private boolean oversized() {
+            return carrier.size() > DY_MEMO_RETAIN_CAP;
+        }
+
+        private void clear() {
+            carrier.clear();
+        }
+    }
+
     /** Kill switch for the slab-height step-face cull relaxation ({@link #isSlabHeightStepFace}). */
     private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
 
@@ -1310,11 +1363,24 @@ public final class SlabSupport {
             }
             return 0.0;
         }
+        // NOTHING may sit between arming the gate and entering the try. If a statement here threw,
+        // the finally would never run, IN_GET_Y_OFFSET would stay TRUE for the life of the thread,
+        // and every subsequent query would return 0.0 at the guard above — silently flattening
+        // every lowered block, permanently, with no exception at the point of damage.
         IN_GET_Y_OFFSET.set(Boolean.TRUE);
         try {
             return getYOffsetInner(world, pos, state);
         } finally {
+            // Disarm FIRST, so the gate is released even if memo teardown throws.
             IN_GET_Y_OFFSET.set(Boolean.FALSE);
+            DyQueryMemo memo = DY_QUERY_MEMO.get();
+            if (memo != null) {
+                if (memo.oversized()) {
+                    DY_QUERY_MEMO.remove();
+                } else {
+                    memo.clear();
+                }
+            }
         }
     }
 
@@ -1820,7 +1886,59 @@ public final class SlabSupport {
         return isLoweredCarrier(world, pos, state, depth, true);
     }
 
+    /**
+     * Memoising front door for the lowered-carrier walk.
+     *
+     * <p>The walk is exponential without this. Per layer it evaluates the lateral lane
+     * ({@code isAdjacentSideSlabLowered}, which itself resolves back into this method at a fresh
+     * {@link #MAX_CHAIN_DEPTH}) AND the vertical below-walk at {@code depth - 1}, so the two legs
+     * re-traverse overlapping ground with different remaining budgets and share nothing:
+     * {@code L(i) = 2 * L(i-1) + O(1)}. Measured by
+     * {@code ForgeLoweredCarrierRecursionBlowupGameTest} at exactly x2.0 per stacked layer from
+     * height 6 onward — 81,912 block reads for a single query on a height-12 double-slab pillar,
+     * extrapolating to ~21M at height 20, per block, per frame, on the render path.
+     *
+     * <p>Memoising collapses that to linear WITHOUT changing any answer: identical arguments
+     * already produce an identical result within one query, so every cache hit returns exactly
+     * what recomputation would have. The key carries {@code depth} and {@code allowSideLane}
+     * precisely because those two DO change the answer.
+     *
+     * <p>Only memoised while {@link #IN_GET_Y_OFFSET} is armed. Outside that window nobody owns
+     * the teardown, so a cached entry could outlive the world state that produced it.
+     */
     private static boolean isLoweredCarrier(
+            BlockGetter world,
+            BlockPos pos,
+            BlockState state,
+            int depth,
+            boolean allowSideLane
+    ) {
+        if (world == null || pos == null || state == null || depth <= 0) {
+            return false;
+        }
+        if (!Boolean.TRUE.equals(IN_GET_Y_OFFSET.get())) {
+            return isLoweredCarrierUncached(world, pos, state, depth, allowSideLane);
+        }
+        DyQueryMemo memo = DY_QUERY_MEMO.get();
+        if (memo == null) {
+            memo = new DyQueryMemo();
+            DY_QUERY_MEMO.set(memo);
+        }
+        CarrierKey key = new CarrierKey(world, pos.asLong(), state, depth, allowSideLane);
+        Boolean cached = memo.carrier.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        boolean result = isLoweredCarrierUncached(world, pos, state, depth, allowSideLane);
+        memo.carrier.put(key, result);
+        return result;
+    }
+
+    /**
+     * The unchanged carrier walk. Its internal recursion deliberately calls the MEMOISED
+     * {@link #isLoweredCarrier}, not this method — that is where the sharing happens.
+     */
+    private static boolean isLoweredCarrierUncached(
             BlockGetter world,
             BlockPos pos,
             BlockState state,
