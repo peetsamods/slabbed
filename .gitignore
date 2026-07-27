@@ -1,0 +1,22 @@
+# Gradle / build
+.gradle/
+build/
+out/
+bin/
+
+# Runtime / local evidence
+run/
+logs/
+tmp/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db

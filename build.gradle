@@ -1,0 +1,240 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7.38'
+    }
+}
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '6.0.54'
+}
+
+apply plugin: 'org.spongepowered.mixin'
+
+version = project.mod_version
+group = project.mod_group_id
+
+base {
+    archivesName = project.mod_id
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    withSourcesJar()
+}
+
+sourceSets {
+    main {
+        java {
+            setSrcDirs(["src/main/java", "src/client/java"])
+            // Book III scaffold gate: compile only the Forge surfaces that have
+            // been deliberately ported. Do not widen this include list casually.
+            include "com/slabbed/Slabbed.java"
+            include "com/slabbed/anchor/SlabAnchorCapabilities.java"
+            include "com/slabbed/anchor/SlabAnchorCapabilityProvider.java"
+            include "com/slabbed/anchor/SlabAnchorAttachment.java"
+            include "com/slabbed/anchor/SlabAnchorMarker.java"
+            include "com/slabbed/anchor/SlabAnchorStore.java"
+            include "com/slabbed/anchor/SlabAnchorClientMirror.java"
+            include "com/slabbed/anchor/SlabAnchorClientMirrorEvents.java"
+            include "com/slabbed/anchor/SlabAnchorNetwork.java"
+            include "com/slabbed/compat/CompatHooks.java"
+            include "com/slabbed/compat/CompatSlabSurfaceKind.java"
+            include "com/slabbed/compat/terrainslabs/TerrainSlabsCompat.java"
+            include "com/slabbed/placement/SlabbedPlacementEvents.java"
+            include "com/slabbed/client/ClientDy.java"
+            include "com/slabbed/client/SlabbedClientFlags.java"
+            include "com/slabbed/client/SlabbedClient.java"
+            include "com/slabbed/client/SlabbedModelLoadingPlugin.java"
+            include "com/slabbed/client/OffsetOutlineEvents.java"
+            include "com/slabbed/client/TargetDyOverlay.java"
+            include "com/slabbed/client/model/OffsetBlockStateModel.java"
+            include "com/slabbed/util/RuntimeDiagnostics.java"
+            include "com/slabbed/util/SlabbedOffsetRaycast.java"
+            include "com/slabbed/util/SlabSupport.java"
+            // Dev-only live-recorder: replaces manual screen recording with a plain,
+            // greppable log of target changes + place/remove actions, toggled via
+            // /slabdy record. No client imports; safe on both sides. Compiled for dev
+            // runs only — EXCLUDED from the shipped jar (see the jar block below);
+            // shipping code must reach it exclusively through SlabbedRecorderBridge.
+            include "com/slabbed/util/SlabbedRecorder.java"
+            // Model-A reflective probe for the recorder above: ships in the jar, resolves
+            // SlabbedRecorder once at class-init (dev environment only), hard no-op when
+            // the class is absent — so the release jar carries no recorder class and no
+            // /slabdy record command literal.
+            include "com/slabbed/util/SlabbedRecorderBridge.java"
+            // Single crosshair-pick authority mixin (offset-aware nearest-hit raycast).
+            // The outline/model offset stays in the active event/model path, so enabling
+            // shape mixins (e.g. SlabSupportStateMixin) here would double-offset.
+            include "com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.java"
+            // Client-side placement prediction: apply the server's placement markers to the
+            // render mirror at placement time so the model bakes lowered on the first frame
+            // (no place-high-then-snap-down). Client-only, no shape offset -> safe.
+            include "com/slabbed/mixin/client/BlockItemClientPredictMixin.java"
+            // Anchor/freeze CLEAR on actual block removal (never-pop law). onRemove is
+            // cancellation-immune and covers every removal path. No shape offset -> safe.
+            include "com/slabbed/mixin/BlockOnStateReplacedAnchorMixin.java"
+            // WYSIWYG slab-type-on-placement: pick TOP/BOTTOM from the visible half of a
+            // lowered support on horizontal faces. Server-side getStateForPlacement only,
+            // no shape offset -> safe.
+            include "com/slabbed/mixin/SlabBlockPlacementFixMixin.java"
+            // WYSIWYG slab-combine-vs-extend: dy-correct vanilla's raw Y-fraction combine
+            // check so a lowered/cantilevered slab can be extended sideways instead of
+            // always merging to a double at the same cell. No-ops when dy=0 -> safe.
+            include "com/slabbed/mixin/SlabCanBeReplacedDyMixin.java"
+            // Placement/survival SUPPORT ONLY (canSurvive/isFaceSturdy + canSupportCenter):
+            // makes slab visible faces report sturdy so objects can be placed ON / hung UNDER
+            // slabs. Split out of SlabSupportStateMixin so the shape-offset injectors stay OFF
+            // (they would double-offset). Boolean-only, no shape move -> safe.
+            include "com/slabbed/mixin/SlabSupportPlacementMixin.java"
+            include "com/slabbed/mixin/SlabSupportBlockMixin.java"
+        }
+        resources {
+            setSrcDirs(["src/main/resources", "src/client/resources"])
+            exclude "fabric.mod.json"
+            exclude "META-INF/neoforge.mods.toml"
+            exclude "slabbed.mixins.json"
+            exclude "slabbed.debug.mixins.json"
+        }
+    }
+    gametest {
+        java {
+            setSrcDirs(["src/gametest/java"])
+            include "com/slabbed/test/ForgeOrdinaryFullBlockAnchorGameTest.java"
+            // Combined-slab chaining diagnostic matrix (port of the main-branch
+            // CombinedSlabChainingMatrixTest discipline; vanilla-only — the Forge
+            // gametest run loads no Terrain Slabs jar, so TS orderings stay live-gated).
+            include "com/slabbed/test/ForgeCombinedSlabChainingMatrixGameTest.java"
+            // Book IV blocker headless re-repro: occupied lowered-slab-lane target hijack
+            // (raycast owner-identity sweep + honest-hit useOn placement; fixture from
+            // HANDOFF.md 2026-06-29. Server-side halves only — client pipeline stays live).
+            include "com/slabbed/test/ForgeOccupiedLoweredLaneTargetHijackGameTest.java"
+        }
+        resources {
+            setSrcDirs([])
+        }
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+repositories {
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+}
+
+minecraft {
+    mappings channel: project.mapping_channel, version: project.mapping_version
+    copyIdeResources = true
+
+    runs {
+        client {
+            workingDirectory project.file("run")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+        server {
+            workingDirectory project.file("run")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            args "--nogui"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+        gameTestServer {
+            workingDirectory project.file("run")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            property "forge.gameTestServer", "true"
+            property "forge.enabledGameTestNamespaces", project.mod_id
+            args "--nogui"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                    source sourceSets.gametest
+                }
+            }
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, "slabbed.refmap.json"
+    config "slabbed.client.mixins.json"
+    config "slabbed.anchor.mixins.json"
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+tasks.register("syncGameTestStructures", Sync) {
+    from("gameteststructures")
+    into(layout.projectDirectory.dir("run/gameteststructures"))
+}
+
+tasks.matching { it.name == "runGameTestServer" }.configureEach {
+    dependsOn(tasks.named("gametestClasses"))
+    dependsOn(tasks.named("syncGameTestStructures"))
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    def replaceProperties = [
+            minecraft_version      : project.minecraft_version,
+            minecraft_version_range: project.minecraft_version_range,
+            forge_version          : project.forge_version,
+            forge_version_range    : project.forge_version_range,
+            loader_version_range   : project.loader_version_range,
+            mod_id                 : project.mod_id,
+            mod_name               : project.mod_name,
+            mod_license            : project.mod_license,
+            mod_version            : project.mod_version,
+            mod_authors            : project.mod_authors,
+            mod_description        : project.mod_description
+    ]
+    inputs.properties replaceProperties
+    filesMatching("META-INF/mods.toml") {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = 17
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+    // Model-A dev-tooling hygiene: the recorder must be ABSENT from the release jar,
+    // not present-but-inert. reobfJar reobfuscates THIS task's output, so excluding
+    // here keeps the class out of the published artifact too. All shipping call sites
+    // go through SlabbedRecorderBridge, which probes reflectively and no-ops when the
+    // class is missing. Verify with: unzip -l build/libs/slabbed-*.jar | grep -i recorder
+    exclude "com/slabbed/util/SlabbedRecorder.class"
+    exclude "com/slabbed/util/SlabbedRecorder\$*.class"
+}
+
+publishing {
+    publications {
+        register("mavenJava", MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+    }
+}
