@@ -7,7 +7,7 @@ public final class SlabbedClientFlags {
     public static final boolean GAP_FILL = Boolean.getBoolean("slabbed.gapfill");
 
     /**
-     * Initial state of the /slabdy target-dy overlay; toggle in-game with /slabdy.
+     * Initial state of the /slabdev debug target-dy overlay; toggle in-game with /slabdev debug.
      * Defaults OFF so release/profile launches stay clean unless explicitly enabled.
      */
     public static final boolean TARGET_DY_OVERLAY =

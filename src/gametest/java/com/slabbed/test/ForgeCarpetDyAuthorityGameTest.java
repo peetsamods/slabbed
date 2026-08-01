@@ -21,7 +21,7 @@ import java.nio.file.Path;
  * Phase 1 fix: carpet's canonical dy is -0.5 on a bottom slab, decided by ONE authority.
  *
  * <p>Before this fix the two dy authorities disagreed for exactly one block family. Every visual
- * lane (model, outline, crosshair raycast, /slabdy overlay) read carpet through
+ * lane (model, outline, crosshair raycast, /slabdev debug overlay) read carpet through
  * {@code ClientDy.dyFor}'s private special case ({@code hasBottomSlabBelow ? -0.5 : 0.0}), while
  * {@code SlabSupport.getYOffset} — the authority for placement, survival and every server-side
  * decision — excluded carpet via {@code isThinTopLayer} and said 0.0. Players SAW a sunken carpet

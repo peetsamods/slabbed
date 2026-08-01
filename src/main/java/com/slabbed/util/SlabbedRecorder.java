@@ -20,7 +20,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * what placements/removals happened, so a live bug can be diagnosed from a log file
  * instead of a video.
  *
- * <p>Toggled in-game via {@code /slabdy record}. Writes one line per event to
+ * <p>Toggled in-game via {@code /slabdev record}. Writes one line per event to
  * {@code slabbed-recorder/session-<timestamp>.log} under the current working
  * directory (the dev run/ dir, or the profile root for a packaged jar). Common code
  * (no client imports) so the action-log call sites in server-side placement/anchor
@@ -56,12 +56,24 @@ public final class SlabbedRecorder {
      * Returns the new enabled state.
      */
     public static synchronized boolean toggle() {
+        return setEnabled(!enabled);
+    }
+
+    /**
+     * Sets the recorder to an explicit state (the {@code on}/{@code off} arms of
+     * {@code /slabdev record}). A same-state call is a no-op that returns the current
+     * state without opening a new log file.
+     */
+    public static synchronized boolean setEnabled(boolean value) {
+        if (value == enabled) {
+            return enabled;
+        }
         lastTargetPos = null;
         lastExpectedPlacePos = null;
         lastExpectedFace = null;
         lastExpectedHalf = null;
         lastTargetAt = null;
-        if (enabled) {
+        if (!value) {
             enabled = false;
             return false;
         }

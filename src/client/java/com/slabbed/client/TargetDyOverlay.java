@@ -51,7 +51,11 @@ public final class TargetDyOverlay {
     }
 
     public static boolean toggle() {
-        enabled = !enabled;
+        return setEnabled(!enabled);
+    }
+
+    public static boolean setEnabled(boolean value) {
+        enabled = value;
         return enabled;
     }
 
@@ -59,29 +63,46 @@ public final class TargetDyOverlay {
         return enabled;
     }
 
+    /**
+     * Canon command root is {@code /slabdev} (matching the 26.2 dev-tooling convention),
+     * with {@code debug [on|off|toggle]} owning the crosshair overlay and
+     * {@code record [on|off|toggle]} owning {@link SlabbedRecorderBridge}. {@code row} and
+     * {@code use} are Forge-only diagnostic extras, not part of the 26.2 contract.
+     */
     private static void registerCommand(RegisterClientCommandsEvent event) {
-        LiteralArgumentBuilder<CommandSourceStack> slabdy = Commands.literal("slabdy")
-                .executes(context -> {
-                    boolean overlayEnabled = toggle();
-                    context.getSource().sendSuccess(
-                            () -> Component.literal("Slabbed target dy overlay: "
-                                    + (overlayEnabled ? "on" : "off")),
-                            false);
-                    return 1;
-                })
-                .then(Commands.literal("row")
-                        .executes(context -> reportRow(context.getSource())))
-                .then(Commands.literal("use")
-                        .executes(context -> useTarget(context.getSource())));
+        LiteralArgumentBuilder<CommandSourceStack> slabdev = Commands.literal("slabdev");
+
+        slabdev.then(Commands.literal("debug")
+                .executes(context -> reportDebugState(context.getSource(), toggle()))
+                .then(Commands.literal("on").executes(context -> reportDebugState(context.getSource(), setEnabled(true))))
+                .then(Commands.literal("off").executes(context -> reportDebugState(context.getSource(), setEnabled(false))))
+                .then(Commands.literal("toggle").executes(context -> reportDebugState(context.getSource(), toggle()))));
+
+        slabdev.then(Commands.literal("row")
+                .executes(context -> reportRow(context.getSource())));
+        slabdev.then(Commands.literal("use")
+                .executes(context -> useTarget(context.getSource())));
+
         // Model-A dev tooling: the record literal is only registered when the dev-only
         // SlabbedRecorder class actually resolved (dev environment; the class is excluded
         // from the release jar). On release builds the subcommand must NOT exist at all —
         // absent, not present-but-inert.
         if (SlabbedRecorderBridge.isAvailable()) {
-            slabdy.then(Commands.literal("record")
-                    .executes(context -> toggleRecord(context.getSource())));
+            slabdev.then(Commands.literal("record")
+                    .executes(context -> toggleRecord(context.getSource(), SlabbedRecorderBridge.toggle()))
+                    .then(Commands.literal("on").executes(context -> toggleRecord(context.getSource(), SlabbedRecorderBridge.setEnabled(true))))
+                    .then(Commands.literal("off").executes(context -> toggleRecord(context.getSource(), SlabbedRecorderBridge.setEnabled(false))))
+                    .then(Commands.literal("toggle").executes(context -> toggleRecord(context.getSource(), SlabbedRecorderBridge.toggle()))));
         }
-        event.getDispatcher().register(slabdy);
+        event.getDispatcher().register(slabdev);
+    }
+
+    private static int reportDebugState(CommandSourceStack source, boolean overlayEnabled) {
+        source.sendSuccess(
+                () -> Component.literal("Slabbed target dy overlay: "
+                        + (overlayEnabled ? "on" : "off")),
+                false);
+        return 1;
     }
 
     private static int reportRow(CommandSourceStack source) {
@@ -102,8 +123,7 @@ public final class TargetDyOverlay {
         return 1;
     }
 
-    private static int toggleRecord(CommandSourceStack source) {
-        boolean nowOn = SlabbedRecorderBridge.toggle();
+    private static int toggleRecord(CommandSourceStack source, boolean nowOn) {
         source.sendSuccess(
                 () -> Component.literal("Slabbed recorder: " + (nowOn ? "on -> " + SlabbedRecorderBridge.currentLogPath() : "off")),
                 false);
@@ -187,7 +207,7 @@ public final class TargetDyOverlay {
 
     /**
      * Logs a target row whenever the crosshair's target block/dy/half/face changes,
-     * regardless of whether the on-screen /slabdy overlay is toggled. Dedupes on a
+     * regardless of whether the on-screen /slabdev debug overlay is toggled. Dedupes on a
      * compact signature (not raw hit coordinates) so continuous look-direction drift
      * does not spam the log; only meaningful target changes are written.
      */
@@ -234,7 +254,7 @@ public final class TargetDyOverlay {
         GuiGraphics context = event.getGuiGraphics();
         HitResult target = client.hitResult;
         if (!(target instanceof BlockHitResult blockHit) || target.getType() != HitResult.Type.BLOCK) {
-            drawLine(context, client, "[slabdy] target: none", 8, 8, 0xffd7d7d7);
+            drawLine(context, client, "[slabdev] target: none", 8, 8, 0xffd7d7d7);
             return;
         }
         List<String> lines = targetLines(client, blockHit, false);
@@ -294,7 +314,7 @@ public final class TargetDyOverlay {
         OffsetBlockStateModel.ModelDyOwnerSample modelSample = OffsetBlockStateModel.snapshotModelDyOwnerSample();
 
         List<String> lines = new ArrayList<>();
-        lines.add("[slabdy] target=" + pos.toShortString() + " " + id);
+        lines.add("[slabdev] target=" + pos.toShortString() + " " + id);
         lines.add("  owner=" + pos.toShortString() + " * " + sourceLabel(id)
                 + " * dy=" + format(dy) + " " + status
                 + " * src=" + why);

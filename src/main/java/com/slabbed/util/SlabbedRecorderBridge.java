@@ -15,7 +15,7 @@ import net.minecraftforge.fml.loading.FMLEnvironment;
  * Reflective probe for the dev-only {@code SlabbedRecorder} (Model A: absent-in-release).
  *
  * <p>The recorder class is EXCLUDED from the shipped jar (see the {@code jar} block in
- * build.gradle) and its {@code /slabdy record} command literal must not exist there —
+ * build.gradle) and its {@code /slabdev record} command literal must not exist there —
  * not merely be inert. Shipping call sites therefore never reference
  * {@code SlabbedRecorder} directly; they call this bridge, which resolves the class
  * reflectively ONCE at class-init and only in a development environment
@@ -30,6 +30,7 @@ public final class SlabbedRecorderBridge {
     private static final boolean AVAILABLE;
     private static final MethodHandle IS_ENABLED;
     private static final MethodHandle TOGGLE;
+    private static final MethodHandle SET_ENABLED;
     private static final MethodHandle CURRENT_LOG_PATH;
     private static final MethodHandle LOG;
     private static final MethodHandle NOTE_TARGET;
@@ -39,6 +40,7 @@ public final class SlabbedRecorderBridge {
         boolean available = false;
         MethodHandle isEnabled = null;
         MethodHandle toggle = null;
+        MethodHandle setEnabled = null;
         MethodHandle currentLogPath = null;
         MethodHandle log = null;
         MethodHandle noteTarget = null;
@@ -51,6 +53,8 @@ public final class SlabbedRecorderBridge {
                         MethodType.methodType(boolean.class));
                 toggle = lookup.findStatic(recorder, "toggle",
                         MethodType.methodType(boolean.class));
+                setEnabled = lookup.findStatic(recorder, "setEnabled",
+                        MethodType.methodType(boolean.class, boolean.class));
                 currentLogPath = lookup.findStatic(recorder, "currentLogPath",
                         MethodType.methodType(Path.class));
                 log = lookup.findStatic(recorder, "log",
@@ -68,6 +72,7 @@ public final class SlabbedRecorderBridge {
         AVAILABLE = available;
         IS_ENABLED = isEnabled;
         TOGGLE = toggle;
+        SET_ENABLED = setEnabled;
         CURRENT_LOG_PATH = currentLogPath;
         LOG = log;
         NOTE_TARGET = noteTarget;
@@ -99,6 +104,18 @@ public final class SlabbedRecorderBridge {
         }
         try {
             return (boolean) TOGGLE.invokeExact();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** Sets the recorder to an explicit state (the {@code on}/{@code off} arms of {@code /slabdev record}). */
+    public static boolean setEnabled(boolean value) {
+        if (!AVAILABLE) {
+            return false;
+        }
+        try {
+            return (boolean) SET_ENABLED.invokeExact(value);
         } catch (Throwable t) {
             return false;
         }
