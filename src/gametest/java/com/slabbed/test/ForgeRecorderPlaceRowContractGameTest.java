@@ -1,6 +1,6 @@
 package com.slabbed.test;
 
-import com.slabbed.util.SlabbedRecorder;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
@@ -21,19 +21,17 @@ import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.LinkedHashMap;
 
 /**
- * Contract for the forensic placement row — the 26.2 recorder schema ported to Forge.
+ * Contract for the core-to-diagnostics placement row seam.
  *
- * <p>Drives a REAL placement (fake player, real {@code useOn} path) with the recorder enabled and
- * asserts the emitted {@code place_row} carries the schema's load-bearing fields: a trustworthy
- * action-origin label ({@code fake_player}, never inflating a player count), before/after marker
- * truth, the final dy, and explicit {@code absent} for the aim facts that only exist once the
- * Phase 6 aim capture lands. The recorder is dev-only (Model A — excluded from release jars);
- * this test runs against the dev classpath where it is present.
+ * <p>Drives a REAL placement (fake player, real {@code useOn} path) through a temporary in-memory
+ * provider and asserts the emitted {@code place_row} carries the load-bearing fields. This test
+ * intentionally does not import the addon recorder: a green core GameTest must not depend on a
+ * class that is absent from the release-shaped core jar. Packaged addon availability is a separate
+ * artifact-boundary proof.
  */
 @GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
@@ -43,11 +41,43 @@ public final class ForgeRecorderPlaceRowContractGameTest {
     public void placeRowCarriesTheForensicSchema(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
-        boolean toggledHere = false;
-        if (!SlabbedRecorder.isEnabled()) {
-            ctx.assertTrue(SlabbedRecorder.toggle(), "recorder must enable for the contract run");
-            toggledHere = true;
-        }
+        // Failure containment is part of the core contract: a broken optional addon may not stop
+        // or repeat a product action. Exercise every new schema-6 wrapper before installing the
+        // capturing provider below.
+        SlabbedDiagnosticsBridge.Provider previous = SlabbedDiagnosticsBridge.install(
+                new SlabbedDiagnosticsBridge.Provider() {
+                    @Override
+                    public boolean recorderEnabled() {
+                        throw new IllegalStateException("deliberate diagnostics failure");
+                    }
+
+                    @Override
+                    public void recordAction(LinkedHashMap<String, String> fields) {
+                        throw new IllegalStateException("deliberate diagnostics failure");
+                    }
+                });
+        ctx.assertTrue(!SlabbedDiagnosticsBridge.isRecorderEnabled(),
+                "a failing optional provider must degrade to recorder-off");
+        SlabbedDiagnosticsBridge.recordAction(new LinkedHashMap<>());
+
+        AtomicReference<LinkedHashMap<String, String>> lastPlaceRow = new AtomicReference<>();
+        SlabbedDiagnosticsBridge.install(
+                new SlabbedDiagnosticsBridge.Provider() {
+                    @Override
+                    public boolean available() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean recorderEnabled() {
+                        return true;
+                    }
+
+                    @Override
+                    public void recordAction(LinkedHashMap<String, String> fields) {
+                        lastPlaceRow.set(new LinkedHashMap<>(fields));
+                    }
+                });
         try {
             BlockPos supportPos = ctx.absolutePos(new BlockPos(1, 1, 1));
             BlockPos objectPos = supportPos.above();
@@ -65,36 +95,23 @@ public final class ForgeRecorderPlaceRowContractGameTest {
             ctx.assertTrue(world.getBlockState(objectPos).is(Blocks.STONE),
                     "fixture: the stone must actually place at " + objectPos.toShortString());
 
-            String log;
-            try {
-                log = Files.readString(SlabbedRecorder.currentLogPath(), StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                throw new AssertionError("recorder log must be readable at "
-                        + SlabbedRecorder.currentLogPath(), e);
-            }
-            String row = log.lines()
-                    .filter(l -> l.contains("[place_row]"))
-                    .filter(l -> l.contains("placePos=" + objectPos.toShortString()))
-                    .reduce((first, second) -> second)
-                    .orElse(null);
+            LinkedHashMap<String, String> row = lastPlaceRow.get();
             ctx.assertTrue(row != null,
-                    "a place_row for " + objectPos.toShortString() + " must be recorded");
+                    "an action row for " + objectPos.toShortString() + " must be recorded");
 
-            assertContains(ctx, row, "origin=fake_player",
-                    "action origin must label the proxy honestly");
-            assertContains(ctx, row, "side=SERVER", "side label");
-            assertContains(ctx, row, "finalDy=-0.5", "final dy of stone on a bottom slab");
-            assertContains(ctx, row, "anchoredBefore=false", "pre-placement anchor truth");
-            assertContains(ctx, row, "anchoredAfter=true", "post-placement anchor truth");
-            assertContains(ctx, row, "clickedFace=absent",
+            assertEquals(ctx, row, "originHint", SlabbedDiagnosticsBridge.GAMETEST,
+                    "fake-player actions must stay in the GameTest evidence class");
+            assertEquals(ctx, row, "side", "server", "side label");
+            assertEquals(ctx, row, "afterDy", "-0.5", "final dy of stone on a bottom slab");
+            assertEquals(ctx, row, "anchoredBefore", "false", "pre-placement anchor truth");
+            assertEquals(ctx, row, "anchoredAfter", "true", "post-placement anchor truth");
+            assertEquals(ctx, row, "clickedFace", "none",
                     "aim facts must be explicitly absent until the Phase 6 aim capture");
-            assertContains(ctx, row, "storedDy=-0.5",
+            assertEquals(ctx, row, "afterStoredDy", "-0.5",
                     "since the Phase 4 writer, the row must carry the freshly stored height");
-            assertContains(ctx, row, "reason=entity_place_event", "reason code");
+            assertEquals(ctx, row, "reason", "entity_place_event", "reason code");
         } finally {
-            if (toggledHere && SlabbedRecorder.isEnabled()) {
-                SlabbedRecorder.toggle();
-            }
+            SlabbedDiagnosticsBridge.install(previous);
             // Test-store hygiene law: since the Phase 4 writer, this placement stores a height.
             com.slabbed.anchor.SlabAnchorAttachment.removePlacementDy(world,
                     ctx.absolutePos(new BlockPos(1, 1, 1)).above());
@@ -102,8 +119,13 @@ public final class ForgeRecorderPlaceRowContractGameTest {
         ctx.succeed();
     }
 
-    private static void assertContains(GameTestHelper ctx, String row, String needle, String what) {
-        ctx.assertTrue(row.contains(needle),
-                what + ": row must contain '" + needle + "' — row was: " + row);
+    private static void assertEquals(
+            GameTestHelper ctx,
+            LinkedHashMap<String, String> row,
+            String key,
+            String expected,
+            String what) {
+        ctx.assertTrue(expected.equals(row.get(key)),
+                what + ": field '" + key + "' must be '" + expected + "' — row was: " + row);
     }
 }

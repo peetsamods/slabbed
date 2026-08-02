@@ -14,6 +14,5 @@ public final class SlabbedClient {
         // offset-aware nearest-hit pick authority). The old OffsetTargetingEvents post-hoc
         // retarget hack is intentionally not registered — it raced GameRenderer.pick and only
         // rescued ordinary full blocks, causing fence/partial-block fall-through and triad drift.
-        TargetDyOverlay.init(MinecraftForge.EVENT_BUS);
     }
 }

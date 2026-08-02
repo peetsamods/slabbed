@@ -4,6 +4,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.world.level.block.state.BlockState;
@@ -327,6 +328,12 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
             List<BakedQuad> baseQuads
     ) {
         float dy = (float) ClientDy.dyFor(view, pos, state);
+        // Schema-6 model-stale Sentinel feed. The first call is the load-bearing hot-path gate:
+        // core-only/release play returns false before allocating or probing membership.
+        if (SlabbedDiagnosticsBridge.shouldCaptureModelBake()
+                && SlabbedDiagnosticsBridge.isModelBakeArmed(pos.asLong())) {
+            SlabbedDiagnosticsBridge.recordModelBake(pos, dy);
+        }
         String dySourcePath = "forgeGetQuads:ClientDy";
         // Spec 4.1 wrap: the stub is a no-op today, but the call site must still be gated
         // so a dev-flavor RuntimeDiagnostics swap never adds ungated per-render-call work.

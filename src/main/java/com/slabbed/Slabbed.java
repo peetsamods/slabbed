@@ -2,6 +2,7 @@ package com.slabbed;
 
 import com.slabbed.anchor.SlabAnchorCapabilities;
 import com.slabbed.anchor.SlabAnchorNetwork;
+import com.slabbed.command.SlabbedOperatorCommands;
 import com.slabbed.placement.SlabbedPlacementEvents;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -22,6 +23,7 @@ public class Slabbed {
         SlabAnchorCapabilities.register(modEventBus);
         SlabAnchorNetwork.register();
         SlabbedPlacementEvents.register();
+        SlabbedOperatorCommands.init();
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> com.slabbed.client.SlabbedClient.init(modEventBus));
 
         LOGGER.info("Slabbed Forge 1.20.1 scaffold initialized");

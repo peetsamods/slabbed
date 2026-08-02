@@ -1,9 +1,14 @@
-package com.slabbed.client;
+package com.slabbed.devtools.client;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.OffsetBlockStateModel;
-import com.slabbed.util.SlabbedRecorderBridge;
+import com.slabbed.devtools.SlabbedRuntimeIdentity;
+import com.slabbed.devtools.recording.SlabModelStaleSentinel;
+import com.slabbed.devtools.recording.SlabbedRecorder;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -13,7 +18,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -22,20 +30,27 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.client.event.RenderGuiEvent;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 
 public final class TargetDyOverlay {
     private static boolean initialized;
-    private static boolean enabled = SlabbedClientFlags.TARGET_DY_OVERLAY;
+    private static boolean enabled;
+    private static boolean debugDesired = SlabbedClientFlags.TARGET_DY_OVERLAY;
+    private static boolean recordDesired = SlabbedClientFlags.RECORDER;
     private static BlockHitResult pendingUseTarget;
     private static BlockPos pendingUseExpectedPlace;
     private static String pendingUseBeforeBlock;
     private static int pendingUseObserveTicks;
+    private static SlabbedDiagnosticsBridge.ActionOriginScope pendingUseOriginScope;
+    private static String lastRenderedOutlineSignature;
 
     private TargetDyOverlay() {
     }
@@ -48,6 +63,9 @@ public final class TargetDyOverlay {
         eventBus.addListener(TargetDyOverlay::registerCommand);
         eventBus.addListener(TargetDyOverlay::render);
         eventBus.addListener(TargetDyOverlay::clientTick);
+        eventBus.addListener(TargetDyOverlay::onLoggingIn);
+        eventBus.addListener(TargetDyOverlay::onLoggingOut);
+        eventBus.addListener(TargetDyOverlay::onChunkUnload);
     }
 
     public static boolean toggle() {
@@ -55,6 +73,7 @@ public final class TargetDyOverlay {
     }
 
     public static boolean setEnabled(boolean value) {
+        debugDesired = value;
         enabled = value;
         return enabled;
     }
@@ -63,10 +82,56 @@ public final class TargetDyOverlay {
         return enabled;
     }
 
+    private static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null) {
+            return;
+        }
+        enabled = debugDesired;
+        String worldIdentity = client.level.dimension().location().toString();
+        LinkedHashMap<String, String> identity = SlabbedRuntimeIdentity.capture(worldIdentity);
+        SlabbedRecorder.configureRuntimeIdentity(identity);
+        if (recordDesired) {
+            SlabbedDiagnosticsBridge.setRecorderEnabled(true);
+        }
+        SlabModelStaleSentinel.onWorldJoin(client.level.getGameTime());
+        Slabbed.LOGGER.info(
+                "[SLABBED_DEVTOOLS_RUNTIME] schema=6 debug={} record={} "
+                        + "core={} coreSha256={} addon={} addonSha256={} recorderDir={}",
+                enabled ? "on" : "off",
+                SlabbedDiagnosticsBridge.isRecorderEnabled() ? "on" : "off",
+                identity.getOrDefault("coreFile", "unknown"),
+                identity.getOrDefault("coreSha256", "unknown"),
+                identity.getOrDefault("addonFile", "unknown"),
+                identity.getOrDefault("addonSha256", "unknown"),
+                SlabbedDiagnosticsBridge.currentRecorderPath());
+    }
+
+    private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        closePendingUseOriginScope();
+        SlabbedRecorder.stopForWorldLeave();
+        SlabModelStaleSentinel.onWorldLeave();
+        enabled = false;
+        pendingUseTarget = null;
+        pendingUseExpectedPlace = null;
+        pendingUseBeforeBlock = null;
+        pendingUseObserveTicks = 0;
+        lastLoggedSignature = null;
+        lastRenderedOutlineSignature = null;
+    }
+
+    private static void onChunkUnload(ChunkEvent.Unload event) {
+        if (!event.getLevel().isClientSide()) {
+            return;
+        }
+        var chunkPos = event.getChunk().getPos();
+        SlabModelStaleSentinel.onChunkUnload(chunkPos.x, chunkPos.z);
+    }
+
     /**
      * Canon command root is {@code /slabdev} (matching the 26.2 dev-tooling convention),
      * with {@code debug [on|off|toggle]} owning the crosshair overlay and
-     * {@code record [on|off|toggle]} owning {@link SlabbedRecorderBridge}. {@code row} and
+     * {@code record [on|off|toggle]} owning {@link SlabbedDiagnosticsBridge}. {@code row} and
      * {@code use} are Forge-only diagnostic extras, not part of the 26.2 contract.
      */
     private static void registerCommand(RegisterClientCommandsEvent event) {
@@ -83,16 +148,14 @@ public final class TargetDyOverlay {
         slabdev.then(Commands.literal("use")
                 .executes(context -> useTarget(context.getSource())));
 
-        // Model-A dev tooling: the record literal is only registered when the dev-only
-        // SlabbedRecorder class actually resolved (dev environment; the class is excluded
-        // from the release jar). On release builds the subcommand must NOT exist at all —
-        // absent, not present-but-inert.
-        if (SlabbedRecorderBridge.isAvailable()) {
+        // This command class is packaged only in the slabbed_devtools addon. The core jar has no
+        // /slabdev literal; a loaded addon installs the provider before registering this tree.
+        if (SlabbedDiagnosticsBridge.isAvailable()) {
             slabdev.then(Commands.literal("record")
-                    .executes(context -> toggleRecord(context.getSource(), SlabbedRecorderBridge.toggle()))
-                    .then(Commands.literal("on").executes(context -> toggleRecord(context.getSource(), SlabbedRecorderBridge.setEnabled(true))))
-                    .then(Commands.literal("off").executes(context -> toggleRecord(context.getSource(), SlabbedRecorderBridge.setEnabled(false))))
-                    .then(Commands.literal("toggle").executes(context -> toggleRecord(context.getSource(), SlabbedRecorderBridge.toggle()))));
+                    .executes(context -> reportRecordState(context.getSource(), toggleRecord()))
+                    .then(Commands.literal("on").executes(context -> reportRecordState(context.getSource(), setRecordEnabled(true))))
+                    .then(Commands.literal("off").executes(context -> reportRecordState(context.getSource(), setRecordEnabled(false))))
+                    .then(Commands.literal("toggle").executes(context -> reportRecordState(context.getSource(), toggleRecord()))));
         }
         event.getDispatcher().register(slabdev);
     }
@@ -123,9 +186,27 @@ public final class TargetDyOverlay {
         return 1;
     }
 
-    private static int toggleRecord(CommandSourceStack source, boolean nowOn) {
+    private static boolean toggleRecord() {
+        return setRecordEnabled(!recordDesired);
+    }
+
+    private static boolean setRecordEnabled(boolean value) {
+        recordDesired = value;
+        boolean nowOn = SlabbedDiagnosticsBridge.setRecorderEnabled(value);
+        if (!nowOn) {
+            SlabModelStaleSentinel.resetCold();
+        } else {
+            Minecraft client = Minecraft.getInstance();
+            if (client != null && client.level != null) {
+                SlabModelStaleSentinel.onWorldJoin(client.level.getGameTime());
+            }
+        }
+        return nowOn;
+    }
+
+    private static int reportRecordState(CommandSourceStack source, boolean nowOn) {
         source.sendSuccess(
-                () -> Component.literal("Slabbed recorder: " + (nowOn ? "on -> " + SlabbedRecorderBridge.currentLogPath() : "off")),
+                () -> Component.literal("Slabbed recorder: " + (nowOn ? "on -> " + SlabbedDiagnosticsBridge.currentRecorderPath() : "off")),
                 false);
         return 1;
     }
@@ -146,7 +227,7 @@ public final class TargetDyOverlay {
             source.sendFailure(Component.literal("Slabbed target dy use: target outside world border"));
             return 0;
         }
-        BlockPos expectedPlacePos = targetPos.relative(blockHit.getDirection());
+        BlockPos expectedPlacePos = resolveProxyPlacementPos(client, blockHit);
         String beforePlaceBlock = blockId(client.level.getBlockState(expectedPlacePos));
         pendingUseTarget = blockHit;
         pendingUseExpectedPlace = expectedPlacePos;
@@ -169,15 +250,34 @@ public final class TargetDyOverlay {
             return;
         }
         maybeLogTargetChange();
+        Minecraft client = Minecraft.getInstance();
+        if (client != null && client.level != null) {
+            SlabModelStaleSentinel.maybeSample(
+                    client.level,
+                    client.level.getGameTime(),
+                    client.level::hasChunkAt);
+        }
         if (pendingUseTarget == null) {
             return;
         }
-        Minecraft client = Minecraft.getInstance();
         if (client == null || client.level == null || client.player == null || client.gameMode == null) {
+            closePendingUseOriginScope();
             return;
         }
         if (pendingUseObserveTicks < 0) {
-            KeyMapping.click(client.options.keyUse.getKey());
+            closePendingUseOriginScope();
+            pendingUseOriginScope = SlabbedDiagnosticsBridge.openActionOrigin(
+                    SlabbedDiagnosticsBridge.AUTO_USEON_PROXY,
+                    new SlabbedDiagnosticsBridge.ActionOriginContext(
+                            client.player.getUUID().toString(),
+                            client.level.dimension().location().toString(),
+                            pendingUseExpectedPlace));
+            try {
+                KeyMapping.click(client.options.keyUse.getKey());
+            } catch (RuntimeException error) {
+                closePendingUseOriginScope();
+                throw error;
+            }
             pendingUseObserveTicks = 2;
             return;
         }
@@ -190,6 +290,7 @@ public final class TargetDyOverlay {
         pendingUseTarget = null;
         pendingUseExpectedPlace = null;
         pendingUseBeforeBlock = null;
+        closePendingUseOriginScope();
 
         BlockPos targetPos = blockHit.getBlockPos();
         String afterPlaceBlock = expectedPlacePos == null
@@ -205,6 +306,36 @@ public final class TargetDyOverlay {
                 false);
     }
 
+    private static void closePendingUseOriginScope() {
+        SlabbedDiagnosticsBridge.ActionOriginScope scope = pendingUseOriginScope;
+        pendingUseOriginScope = null;
+        if (scope != null) {
+            try {
+                scope.close();
+            } catch (RuntimeException ignored) {
+                // Diagnostics cannot make a completed or failed proxy action affect play.
+            }
+        }
+    }
+
+    /** Uses the same vanilla placement-context resolver that the eventual BlockItem action uses. */
+    private static BlockPos resolveProxyPlacementPos(
+            Minecraft client,
+            BlockHitResult blockHit) {
+        InteractionHand hand = client.player.getMainHandItem().getItem() instanceof BlockItem
+                ? InteractionHand.MAIN_HAND
+                : client.player.getOffhandItem().getItem() instanceof BlockItem
+                        ? InteractionHand.OFF_HAND
+                        : InteractionHand.MAIN_HAND;
+        ItemStack stack = client.player.getItemInHand(hand);
+        if (stack.getItem() instanceof BlockItem) {
+            return new BlockPlaceContext(
+                    client.level, client.player, hand, stack, blockHit)
+                    .getClickedPos().immutable();
+        }
+        return blockHit.getBlockPos().relative(blockHit.getDirection()).immutable();
+    }
+
     /**
      * Logs a target row whenever the crosshair's target block/dy/half/face changes,
      * regardless of whether the on-screen /slabdev debug overlay is toggled. Dedupes on a
@@ -212,7 +343,7 @@ public final class TargetDyOverlay {
      * does not spam the log; only meaningful target changes are written.
      */
     private static void maybeLogTargetChange() {
-        if (!SlabbedRecorderBridge.isEnabled()) {
+        if (!SlabbedDiagnosticsBridge.isRecorderEnabled()) {
             return;
         }
         Minecraft client = Minecraft.getInstance();
@@ -223,7 +354,15 @@ public final class TargetDyOverlay {
         if (!(target instanceof BlockHitResult blockHit) || target.getType() != HitResult.Type.BLOCK) {
             if (!"none".equals(lastLoggedSignature)) {
                 lastLoggedSignature = "none";
-                SlabbedRecorderBridge.log("target", "none");
+                LinkedHashMap<String, String> row = new LinkedHashMap<>();
+                row.put("finalHitPos", "none");
+                row.put("finalHitState", "none");
+                row.put("hitFace", "none");
+                row.put("heldItem", itemId(client.player.getMainHandItem()));
+                row.put("playerUuid", client.player.getUUID().toString());
+                row.put("dimensionId", client.level.dimension().location().toString());
+                row.put("mismatchMarker", "none");
+                SlabbedDiagnosticsBridge.recordCursor(row);
             }
             return;
         }
@@ -237,14 +376,33 @@ public final class TargetDyOverlay {
             return;
         }
         lastLoggedSignature = signature;
-        BlockPos placePos = pos.relative(blockHit.getDirection());
-        SlabbedRecorderBridge.log("target", String.join(" ", targetLines(client, blockHit, false))
-                + " | fullState=" + state);
-        SlabbedRecorderBridge.noteTarget(pos, placePos, blockHit.getDirection(), half);
+        BlockPos placePos = resolveProxyPlacementPos(client, blockHit);
+        Vec3 hit = blockHit.getLocation();
+        VoxelShape outline = state.getShape(client.level, pos);
+        if (dy != 0.0d) {
+            outline = outline.move(0.0d, dy, 0.0d);
+        }
+        AABB outlineBox = outline.isEmpty() ? null : outline.bounds();
+        LinkedHashMap<String, String> row = new LinkedHashMap<>();
+        row.put("finalHitPos", pos.toShortString());
+        row.put("finalHitState", state.toString());
+        row.put("finalHitDy", format(dy));
+        row.put("hitFace", blockHit.getDirection().getName());
+        row.put("targetHalf", half);
+        row.put("hitVec", formatVec(hit));
+        row.put("cursorOutlineBounds", formatBox(outlineBox));
+        row.put("expectedPlacementPos", placePos.toShortString());
+        row.put("heldItem", itemId(client.player.getMainHandItem()));
+        row.put("playerUuid", client.player.getUUID().toString());
+        row.put("dimensionId", client.level.dimension().location().toString());
+        row.put("mismatchMarker", "none");
+        SlabbedDiagnosticsBridge.recordCursor(row);
+        SlabbedDiagnosticsBridge.noteTarget(pos, placePos, blockHit.getDirection(), half);
     }
 
     private static void render(RenderGuiEvent.Post event) {
-        if (!enabled) {
+        boolean recorderOn = SlabbedDiagnosticsBridge.isRecorderEnabled();
+        if (!enabled && !recorderOn) {
             return;
         }
         Minecraft client = Minecraft.getInstance();
@@ -254,7 +412,15 @@ public final class TargetDyOverlay {
         GuiGraphics context = event.getGuiGraphics();
         HitResult target = client.hitResult;
         if (!(target instanceof BlockHitResult blockHit) || target.getType() != HitResult.Type.BLOCK) {
-            drawLine(context, client, "[slabdev] target: none", 8, 8, 0xffd7d7d7);
+            if (enabled) {
+                drawLine(context, client, "[slabdev] target: none", 8, 8, 0xffd7d7d7);
+            }
+            return;
+        }
+        if (recorderOn) {
+            recordRenderedOutline(client, blockHit);
+        }
+        if (!enabled) {
             return;
         }
         List<String> lines = targetLines(client, blockHit, false);
@@ -263,6 +429,43 @@ public final class TargetDyOverlay {
         for (int i = 0; i < lines.size(); i++) {
             drawLine(context, client, lines.get(i), 8, 8 + (i * 12), color);
         }
+    }
+
+    private static void recordRenderedOutline(Minecraft client, BlockHitResult blockHit) {
+        if (!SlabbedDiagnosticsBridge.isRecorderEnabled()) {
+            return;
+        }
+        BlockPos pos = blockHit.getBlockPos();
+        BlockState state = client.level.getBlockState(pos);
+        double dy = ClientDy.dyFor(client.level, pos, state);
+        VoxelShape outline = state.getShape(client.level, pos);
+        if (dy != 0.0d) {
+            outline = outline.move(0.0d, dy, 0.0d);
+        }
+        AABB localBounds = outline.isEmpty() ? null : outline.bounds();
+        AABB worldBounds = localBounds == null
+                ? null : localBounds.move(pos.getX(), pos.getY(), pos.getZ());
+        Vec3 camera = client.gameRenderer.getMainCamera().getPosition();
+        AABB cameraBounds = worldBounds == null
+                ? null : worldBounds.move(-camera.x, -camera.y, -camera.z);
+        String signature = pos.toShortString() + "|" + state + "|" + format(dy)
+                + "|" + formatBox(localBounds) + "|" + blockHit.getDirection().getName();
+        if (signature.equals(lastRenderedOutlineSignature)) {
+            return;
+        }
+        lastRenderedOutlineSignature = signature;
+        LinkedHashMap<String, String> row = new LinkedHashMap<>();
+        row.put("renderedOutlinePos", pos.toShortString());
+        row.put("cursorFinalHitPos", pos.toShortString());
+        row.put("renderedOutlineState", state.toString());
+        row.put("renderedOutlineBounds", formatBox(localBounds));
+        row.put("cursorOutlineBounds", formatBox(localBounds));
+        row.put("renderedOutlineWorldBounds", formatBox(worldBounds));
+        row.put("renderedOutlineCameraRelativeBounds", formatBox(cameraBounds));
+        row.put("renderedOutlineHitVec", formatVec(blockHit.getLocation()));
+        row.put("modelDy", format(dy));
+        row.put("marker", "none");
+        SlabbedDiagnosticsBridge.recordRenderedOutline(row);
     }
 
     private static void drawLine(

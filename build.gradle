@@ -28,6 +28,9 @@ java {
     withSourcesJar()
 }
 
+def casesRuntimeIdentityResources =
+        layout.buildDirectory.dir("generated/resources/casesRuntimeIdentity")
+
 sourceSets {
     main {
         java {
@@ -47,27 +50,26 @@ sourceSets {
             include "com/slabbed/compat/CompatSlabSurfaceKind.java"
             include "com/slabbed/compat/terrainslabs/TerrainSlabsCompat.java"
             include "com/slabbed/placement/SlabbedPlacementEvents.java"
+            include "com/slabbed/placement/PlacementAim.java"
+            include "com/slabbed/placement/LandingResolution.java"
+            include "com/slabbed/command/SlabbedOperatorCommands.java"
+            include "com/slabbed/command/SlabbedOperatorTools.java"
+            include "com/slabbed/rig/RigCase.java"
+            include "com/slabbed/rig/SlabbedRigCaseCatalog.java"
+            include "com/slabbed/rig/SlabbedRigCaseEvidence.java"
+            include "com/slabbed/rig/RigManifest.java"
+            include "com/slabbed/rig/SlabbedRigService.java"
             include "com/slabbed/client/ClientDy.java"
-            include "com/slabbed/client/SlabbedClientFlags.java"
             include "com/slabbed/client/SlabbedClient.java"
             include "com/slabbed/client/SlabbedModelLoadingPlugin.java"
             include "com/slabbed/client/OffsetOutlineEvents.java"
-            include "com/slabbed/client/TargetDyOverlay.java"
             include "com/slabbed/client/model/OffsetBlockStateModel.java"
             include "com/slabbed/util/RuntimeDiagnostics.java"
             include "com/slabbed/util/SlabbedOffsetRaycast.java"
             include "com/slabbed/util/SlabSupport.java"
-            // Dev-only live-recorder: replaces manual screen recording with a plain,
-            // greppable log of target changes + place/remove actions, toggled via
-            // /slabdev record. No client imports; safe on both sides. Compiled for dev
-            // runs only — EXCLUDED from the shipped jar (see the jar block below);
-            // shipping code must reach it exclusively through SlabbedRecorderBridge.
-            include "com/slabbed/util/SlabbedRecorder.java"
-            // Model-A reflective probe for the recorder above: ships in the jar, resolves
-            // SlabbedRecorder once at class-init (dev environment only), hard no-op when
-            // the class is absent — so the release jar carries no recorder class and no
-            // /slabdev record command literal.
-            include "com/slabbed/util/SlabbedRecorderBridge.java"
+            // Release-safe no-op provider seam. The implementation, /slabdev command,
+            // overlay, and recorder compile only in the slabbedDevtools source set below.
+            include "com/slabbed/util/SlabbedDiagnosticsBridge.java"
             // Single crosshair-pick authority mixin (offset-aware nearest-hit raycast).
             // The outline/model offset stays in the active event/model path, so enabling
             // shape mixins (e.g. SlabSupportStateMixin) here would double-offset.
@@ -96,11 +98,42 @@ sourceSets {
         }
         resources {
             setSrcDirs(["src/main/resources", "src/client/resources"])
+            srcDir(casesRuntimeIdentityResources)
             exclude "fabric.mod.json"
             exclude "META-INF/neoforge.mods.toml"
             exclude "slabbed.mixins.json"
             exclude "slabbed.debug.mixins.json"
         }
+    }
+    slabbedDevtools {
+        java {
+            setSrcDirs(["src/slabbedDevtools/java"])
+            include "com/slabbed/devtools/SlabbedDevTools.java"
+            include "com/slabbed/devtools/SlabbedRecorderProvider.java"
+            include "com/slabbed/devtools/SlabbedRuntimeIdentity.java"
+            include "com/slabbed/devtools/client/SlabbedClientFlags.java"
+            include "com/slabbed/devtools/client/TargetDyOverlay.java"
+            include "com/slabbed/devtools/recording/Schema6Session.java"
+            include "com/slabbed/devtools/recording/SlabModelStaleSentinel.java"
+            include "com/slabbed/devtools/recording/SlabbedRecorder.java"
+        }
+        resources {
+            setSrcDirs(["src/slabbedDevtools/resources"])
+        }
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+    slabbedDevtoolsTest {
+        java {
+            setSrcDirs(["src/slabbedDevtoolsTest/java"])
+            include "com/slabbed/devtools/recording/Schema6ContractHarness.java"
+        }
+        resources {
+            setSrcDirs([])
+        }
+        compileClasspath += (sourceSets.main.output + sourceSets.slabbedDevtools.output
+                + sourceSets.slabbedDevtools.compileClasspath)
+        runtimeClasspath += output + compileClasspath
     }
     gametest {
         java {
@@ -143,6 +176,15 @@ sourceSets {
             // STAYS Phase 5: sync contract — bit-exact codecs, constant-size deltas, idempotent
             // mirror application, corrupt-drop, side-gated seam. The live half is BETA 1's gate.
             include "com/slabbed/test/ForgePlacementDySyncGameTest.java"
+            // Phase 6C: the permission-gated operator kit preserves inventory, and the bounded
+            // scanner classifies server-side stored/derived truth without loading or writing.
+            include "com/slabbed/test/ForgeOperatorToolsGameTest.java"
+            // Phase 6D foundation: exact owned-cell rig manifest, transactional replacement,
+            // and deterministic rows/tower rigs whose subjects use real Forge ItemStack.useOn.
+            include "com/slabbed/test/ForgeRigOperatorGameTest.java"
+            // Phase 6D cases foundation: complete live-registry partition, semantic BlockItem
+            // catalog, 64 topologies, stable case IDs, and deterministic 4x4 paging.
+            include "com/slabbed/test/ForgeRigCaseCatalogGameTest.java"
         }
         resources {
             setSrcDirs([])
@@ -168,6 +210,9 @@ minecraft {
             mods {
                 "${mod_id}" {
                     source sourceSets.main
+                }
+                slabbed_devtools {
+                    source sourceSets.slabbedDevtools
                 }
             }
         }
@@ -240,30 +285,529 @@ tasks.named("processResources", ProcessResources).configure {
     }
 }
 
+tasks.named("processSlabbedDevtoolsResources", ProcessResources).configure {
+    def replaceProperties = [
+            minecraft_version      : project.minecraft_version,
+            minecraft_version_range: project.minecraft_version_range,
+            forge_version          : project.forge_version,
+            forge_version_range    : project.forge_version_range,
+            loader_version_range   : project.loader_version_range,
+            mod_license            : project.mod_license,
+            mod_version            : project.mod_version,
+            mod_authors            : project.mod_authors
+    ]
+    inputs.properties replaceProperties
+    filesMatching("META-INF/mods.toml") {
+        expand replaceProperties
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
     options.release = 17
+}
+
+def generateCasesRuntimeIdentity = tasks.register("generateCasesRuntimeIdentity") {
+    group = "verification"
+    description = "Lists every compiled class whose exact runtime bytes bind /slabrig cases evidence."
+    dependsOn(tasks.named("compileJava"))
+    def classesDirectory = layout.buildDirectory.dir("classes/java/main")
+    def outputFile = casesRuntimeIdentityResources.map {
+        it.file("META-INF/slabbed/rig-cases-runtime-classes.tsv")
+    }
+    inputs.files(classesDirectory.map { directory ->
+        fileTree(directory) {
+            include "com/slabbed/command/SlabbedOperatorCommands*.class"
+            include "com/slabbed/rig/RigCase*.class"
+            include "com/slabbed/rig/RigManifest*.class"
+            include "com/slabbed/rig/SlabbedRigCaseCatalog*.class"
+            include "com/slabbed/rig/SlabbedRigCaseEvidence*.class"
+            include "com/slabbed/rig/SlabbedRigService*.class"
+        }
+    })
+    outputs.file(outputFile)
+
+    doLast {
+        File root = classesDirectory.get().asFile
+        def resources = fileTree(root) {
+            include "com/slabbed/command/SlabbedOperatorCommands*.class"
+            include "com/slabbed/rig/RigCase*.class"
+            include "com/slabbed/rig/RigManifest*.class"
+            include "com/slabbed/rig/SlabbedRigCaseCatalog*.class"
+            include "com/slabbed/rig/SlabbedRigCaseEvidence*.class"
+            include "com/slabbed/rig/SlabbedRigService*.class"
+        }.files.collect { root.toPath().relativize(it.toPath()).toString().replace('\\', '/') }
+                .sort()
+        def required = [
+                "com/slabbed/command/SlabbedOperatorCommands.class",
+                "com/slabbed/rig/RigCase.class",
+                "com/slabbed/rig/RigManifest.class",
+                'com/slabbed/rig/SlabbedRigCaseCatalog$Snapshot.class',
+                'com/slabbed/rig/SlabbedRigCaseEvidence$Store.class',
+                'com/slabbed/rig/SlabbedRigService$CasesPagePlan.class',
+                'com/slabbed/rig/SlabbedRigService$CasesTilePlan.class'
+        ]
+        def missing = required.findAll { !resources.contains(it) }
+        if (!missing.isEmpty()) {
+            throw new GradleException("Cases runtime identity is missing classes: " + missing)
+        }
+        File output = outputFile.get().asFile
+        output.parentFile.mkdirs()
+        output.text = ("schema\tslabbed-rig-cases-runtime-classes-v1\n"
+                + resources.collect { "class\t${it}\n" }.join())
+    }
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    dependsOn(generateCasesRuntimeIdentity)
+}
+
+tasks.named("sourcesJar", Jar).configure {
+    dependsOn(generateCasesRuntimeIdentity)
 }
 
 jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
-    // Model-A dev-tooling hygiene: the recorder must be ABSENT from the release jar,
-    // not present-but-inert. reobfJar reobfuscates THIS task's output, so excluding
-    // here keeps the class out of the published artifact too. All shipping call sites
-    // go through SlabbedRecorderBridge, which probes reflectively and no-ops when the
-    // class is missing. Verify with: unzip -l build/libs/slabbed-*.jar | grep -i recorder
-    //
-    // EXCEPTION, by explicit property only: -PslabbedTestJar builds a SLABBED TEST jar
-    // WITH the recorder included, for Maintainer's manual live-test passes (the BETA gates'
-    // recorder side-split check needs it in the real profile). Test jars are hand-staged
-    // and clearly labelled; the default build — and therefore anything published — keeps
-    // the exclusion. Never pass the property on a release build.
-    if (!project.hasProperty("slabbedTestJar")) {
-        exclude "com/slabbed/util/SlabbedRecorder.class"
-        exclude "com/slabbed/util/SlabbedRecorder\$*.class"
+}
+
+def sha256File = { File input ->
+    def digest = java.security.MessageDigest.getInstance("SHA-256")
+    input.withInputStream { stream ->
+        byte[] buffer = new byte[8192]
+        int read
+        while ((read = stream.read(buffer)) >= 0) {
+            if (read > 0) {
+                digest.update(buffer, 0, read)
+            }
+        }
     }
+    digest.digest().encodeHex().toString()
+}
+
+def sha256Text = { String input ->
+    java.security.MessageDigest.getInstance("SHA-256")
+            .digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .encodeHex()
+            .toString()
+}
+
+def slabbedDevtoolsJar = tasks.register("slabbedDevtoolsJar", Jar) {
+    group = "slabbed test bundle"
+    description = "Assembles the optional Slabbed Forge development-tools addon."
+    dependsOn(tasks.named("slabbedDevtoolsClasses"))
+    archiveFileName.set("slabbed-devtools-${project.version}.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("slabbed-devtools"))
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+    from(sourceSets.slabbedDevtools.output)
+    from("LICENSE") {
+        rename { "${it}_slabbed_devtools" }
+    }
+    // MixinGradle applies the core jar's MixinConfigs attribute to every Jar task.
+    // The addon owns no mixin configuration, so advertising the core configs here
+    // would make a paired runtime try to load them twice from the wrong container.
+    doFirst {
+        manifest.attributes.remove("MixinConfigs")
+    }
+}
+
+def verifySlabbedDevtoolsSchema = tasks.register("verifySlabbedDevtoolsSchema", JavaExec) {
+    group = "verification"
+    description = "Executes the pure schema-6, correlation, redaction, flush, and Sentinel contract."
+    dependsOn(tasks.named("slabbedDevtoolsTestClasses"))
+    classpath = sourceSets.slabbedDevtoolsTest.runtimeClasspath
+    mainClass.set("com.slabbed.devtools.recording.Schema6ContractHarness")
+    args(layout.buildDirectory.dir("tmp/slabbed-schema6-contract").get().asFile.absolutePath)
+}
+
+// ForgeGradle reobfuscates a custom Jar in place, which is exactly what a real profile needs.
+// Its container also attaches every custom reobf task to ordinary assemble; remove only this
+// addon edge so an ordinary build remains core-only and still retains assemble -> reobfJar.
+def reobfSlabbedDevtoolsJar = reobf.create("slabbedDevtoolsJar")
+reobfSlabbedDevtoolsJar.dependsOn(slabbedDevtoolsJar)
+tasks.named("assemble").configure {
+    setDependsOn(getDependsOn().findAll { dependency ->
+        dependency != reobfSlabbedDevtoolsJar
+                && dependency.toString() != reobfSlabbedDevtoolsJar.name
+    })
+}
+
+def verifySlabbedCorePackaging = tasks.register("verifySlabbedCorePackaging") {
+    group = "verification"
+    description = "Proves the ordinary core artifacts stay release-shaped and devtools-free."
+    dependsOn(tasks.named("reobfJar"), tasks.named("sourcesJar"))
+    inputs.files(
+            tasks.named("jar", Jar).flatMap { it.archiveFile },
+            tasks.named("sourcesJar", Jar).flatMap { it.archiveFile })
+
+    doLast {
+        File coreJar = tasks.named("jar", Jar).get().archiveFile.get().asFile
+        File sourcesJar = tasks.named("sourcesJar", Jar).get().archiveFile.get().asFile
+        File libsDir = layout.buildDirectory.dir("libs").get().asFile
+        def actualFiles = (libsDir.listFiles() ?: [] as File[])
+                .findAll { it.isFile() }
+                .sort { it.name }
+        def expectedFiles = [coreJar, sourcesJar].sort { it.name }
+        if (actualFiles*.canonicalFile != expectedFiles*.canonicalFile) {
+            throw new GradleException(
+                    "Ordinary build/libs must contain exactly the core and sources jars; found "
+                            + actualFiles*.name)
+        }
+        def symlinks = actualFiles.findAll {
+            java.nio.file.Files.isSymbolicLink(it.toPath())
+        }
+        if (!symlinks.isEmpty()) {
+            throw new GradleException("Ordinary build/libs contains symlinks: " + symlinks*.name)
+        }
+
+        def requiredCoreEntries = [
+                "com/slabbed/Slabbed.class",
+                "com/slabbed/command/SlabbedOperatorCommands.class",
+                "com/slabbed/command/SlabbedOperatorTools.class",
+                "com/slabbed/placement/PlacementAim.class",
+                "com/slabbed/placement/LandingResolution.class",
+                "com/slabbed/rig/RigCase.class",
+                "com/slabbed/rig/SlabbedRigCaseCatalog.class",
+                "com/slabbed/rig/SlabbedRigCaseEvidence.class",
+                "com/slabbed/rig/RigManifest.class",
+                "com/slabbed/rig/SlabbedRigService.class",
+                "com/slabbed/util/SlabbedDiagnosticsBridge.class",
+                "META-INF/slabbed/rig-cases-runtime-classes.tsv",
+                "META-INF/mods.toml"
+        ]
+        def forbiddenCoreEntries = [
+                "com/slabbed/devtools/",
+                "com/slabbed/client/TargetDyOverlay",
+                "com/slabbed/client/SlabbedClientFlags",
+                "com/slabbed/util/SlabbedRecorder",
+                "com/slabbed/util/SlabbedRecorderBridge"
+        ]
+        new java.util.zip.ZipFile(coreJar).withCloseable { zip ->
+            def names = zip.entries().collect { it.name }
+            def missing = requiredCoreEntries.findAll { !names.contains(it) }
+            if (!missing.isEmpty()) {
+                throw new GradleException("Core jar is missing required entries: " + missing)
+            }
+            def leaked = names.findAll { name ->
+                forbiddenCoreEntries.any { forbidden -> name.startsWith(forbidden) }
+            }
+            if (!leaked.isEmpty()) {
+                throw new GradleException("Core jar contains devtools implementation entries: " + leaked)
+            }
+            def forbiddenTokens = [
+                    "com/slabbed/devtools/",
+                    "com.slabbed.devtools.",
+                    "SlabbedRecorder",
+                    "slabdev"
+            ]
+            def hardLinks = []
+            zip.entries().each { entry ->
+                if (!entry.directory && entry.name.endsWith(".class")) {
+                    String bytes = new String(
+                            zip.getInputStream(entry).readAllBytes(),
+                            java.nio.charset.StandardCharsets.ISO_8859_1)
+                    def hits = forbiddenTokens.findAll { bytes.contains(it) }
+                    if (!hits.isEmpty()) {
+                        hardLinks.add(entry.name + " -> " + hits)
+                    }
+                }
+            }
+            if (!hardLinks.isEmpty()) {
+                throw new GradleException("Core bytecode hard-links devtools: " + hardLinks)
+            }
+            String operatorCommandBytes = new String(
+                    zip.getInputStream(zip.getEntry(
+                            "com/slabbed/command/SlabbedOperatorCommands.class")).readAllBytes(),
+                    java.nio.charset.StandardCharsets.ISO_8859_1)
+            if (!operatorCommandBytes.contains("slabkit")
+                    || !operatorCommandBytes.contains("slabcheck")
+                    || !operatorCommandBytes.contains("slabrig")
+                    || !operatorCommandBytes.contains("rows")
+                    || !operatorCommandBytes.contains("tower")) {
+                throw new GradleException(
+                        "Packaged core lost the permission-gated Phase 6C/6D command literals")
+            }
+        }
+        new java.util.zip.ZipFile(sourcesJar).withCloseable { zip ->
+            def leakedSources = zip.entries().collect { it.name }.findAll { name ->
+                name.startsWith("com/slabbed/devtools/")
+                        || name.endsWith("TargetDyOverlay.java")
+                        || name.endsWith("SlabbedClientFlags.java")
+                        || name.endsWith("SlabbedRecorder.java")
+                        || name.endsWith("SlabbedRecorderBridge.java")
+            }
+            if (!leakedSources.isEmpty()) {
+                throw new GradleException("Core sources jar contains devtools sources: " + leakedSources)
+            }
+        }
+        println("SLABBED_CORE_PACKAGING_VERIFY jars=2 devtoolsEntries=0 devtoolsHardLinks=0")
+    }
+}
+
+tasks.named("build").configure {
+    dependsOn(verifySlabbedCorePackaging)
+}
+
+def bundleProfile = providers.gradleProperty("slabbedTestProfile").orElse("UNSTAGED")
+def bundleWorld = providers.gradleProperty("slabbedTestWorld").orElse("UNSELECTED")
+def bundleTestNumber = providers.gradleProperty("slabbedTestNumber").orElse("UNASSIGNED")
+def bundleManifest = layout.buildDirectory.file("generated/slabbedTestBundle/bundle-manifest.json")
+def bundleDirectory = layout.buildDirectory.dir("slabbed-test-bundle")
+
+def writeSlabbedTestBundleProvenance = tasks.register("writeSlabbedTestBundleProvenance") {
+    group = "slabbed test bundle"
+    description = "Writes provenance for the exact reobfuscated core-plus-addon pair."
+    dependsOn(tasks.named("reobfJar"), reobfSlabbedDevtoolsJar)
+    inputs.files(
+            tasks.named("jar", Jar).flatMap { it.archiveFile },
+            slabbedDevtoolsJar.flatMap { it.archiveFile })
+    inputs.property("profile", bundleProfile)
+    inputs.property("world", bundleWorld)
+    inputs.property("testNumber", bundleTestNumber)
+    outputs.file(bundleManifest)
+
+    doLast {
+        def gitText = { List<String> arguments ->
+            providers.exec {
+                commandLine((["git", "-C", projectDir.absolutePath,
+                              "-c", "gc.auto=0",
+                              "-c", "gc.autoDetach=false",
+                              "-c", "maintenance.auto=false",
+                              "-c", "gc.pruneExpire=never"] + arguments) as List<String>)
+            }.standardOutput.asText.get().trim()
+        }
+        File coreJar = tasks.named("jar", Jar).get().archiveFile.get().asFile
+        File addonJar = slabbedDevtoolsJar.get().archiveFile.get().asFile
+        String status = gitText(["status", "--porcelain=v1", "--untracked-files=all"])
+        def manifest = [
+                manifestSchema : 1,
+                testNumber     : bundleTestNumber.get(),
+                profile        : bundleProfile.get(),
+                world          : bundleWorld.get(),
+                modVersion     : project.version.toString(),
+                minecraft      : project.minecraft_version.toString(),
+                forge          : project.forge_version.toString(),
+                forgeGradle    : "6.0.54",
+                gradle         : gradle.gradleVersion,
+                mappings       : "${project.mapping_channel}:${project.mapping_version}",
+                javaTarget     : 17,
+                gitCommit      : gitText(["rev-parse", "HEAD"]),
+                dirty          : !status.isEmpty(),
+                dirtyStateSha256: sha256Text(status),
+                recorderSchema : "6",
+                recorderStatus : "Phase 6B static, GameTest, and packaged-addon candidate",
+                core           : [
+                        modId : project.mod_id.toString(),
+                        file  : coreJar.name,
+                        bytes : coreJar.length(),
+                        sha256: sha256File(coreJar)
+                ],
+                addon          : [
+                        modId : "slabbed_devtools",
+                        file  : addonJar.name,
+                        bytes : addonJar.length(),
+                        sha256: sha256File(addonJar)
+                ]
+        ]
+        File output = bundleManifest.get().asFile
+        output.parentFile.mkdirs()
+        output.text = groovy.json.JsonOutput.prettyPrint(
+                groovy.json.JsonOutput.toJson(manifest)) + System.lineSeparator()
+    }
+}
+
+def prepareSlabbedTestBundle = tasks.register("prepareSlabbedTestBundle", Sync) {
+    group = "slabbed test bundle"
+    description = "Stages the exact core jar, devtools addon jar, and provenance manifest locally."
+    dependsOn(writeSlabbedTestBundleProvenance)
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+    into(bundleDirectory)
+    from(tasks.named("jar", Jar).flatMap { it.archiveFile })
+    from(slabbedDevtoolsJar.flatMap { it.archiveFile })
+    from(bundleManifest)
+}
+
+def verifySlabbedTestBundle = tasks.register("verifySlabbedTestBundle") {
+    group = "verification"
+    description = "Proves the TEST bundle has one release-shaped core, one addon, and matching provenance."
+    dependsOn(verifySlabbedCorePackaging, prepareSlabbedTestBundle)
+    inputs.dir(bundleDirectory)
+
+    doLast {
+        File directory = bundleDirectory.get().asFile
+        def files = (directory.listFiles() ?: [] as File[]).findAll { it.isFile() }.sort { it.name }
+        if (files.size() != 3 || files.any { java.nio.file.Files.isSymbolicLink(it.toPath()) }) {
+            throw new GradleException(
+                    "TEST bundle must contain exactly three regular non-symlink files; found "
+                            + files*.name)
+        }
+        File coreSource = tasks.named("jar", Jar).get().archiveFile.get().asFile
+        File addonSource = slabbedDevtoolsJar.get().archiveFile.get().asFile
+        File coreCopy = new File(directory, coreSource.name)
+        File addonCopy = new File(directory, addonSource.name)
+        File manifestFile = new File(directory, "bundle-manifest.json")
+        if (!coreCopy.isFile() || !addonCopy.isFile() || !manifestFile.isFile()) {
+            throw new GradleException("TEST bundle is missing core, addon, or bundle-manifest.json")
+        }
+        if (sha256File(coreCopy) != sha256File(coreSource)
+                || sha256File(addonCopy) != sha256File(addonSource)) {
+            throw new GradleException("Bundled jar bytes differ from their final reobfuscated artifacts")
+        }
+        def manifest = new groovy.json.JsonSlurper().parse(manifestFile)
+        if (manifest.manifestSchema != 1
+                || manifest.testNumber != bundleTestNumber.get()
+                || manifest.profile != bundleProfile.get()
+                || manifest.world != bundleWorld.get()
+                || manifest.modVersion != project.version.toString()
+                || manifest.minecraft != project.minecraft_version.toString()
+                || manifest.forge != project.forge_version.toString()
+                || manifest.forgeGradle != "6.0.54"
+                || manifest.gradle != gradle.gradleVersion
+                || manifest.mappings != "${project.mapping_channel}:${project.mapping_version}"
+                || manifest.javaTarget != 17
+                || manifest.core.modId != project.mod_id.toString()
+                || manifest.core.file != coreCopy.name
+                || manifest.core.bytes != coreCopy.length()
+                || manifest.core.sha256 != sha256File(coreCopy)
+                || manifest.addon.modId != "slabbed_devtools"
+                || manifest.addon.file != addonCopy.name
+                || manifest.addon.bytes != addonCopy.length()
+                || manifest.addon.sha256 != sha256File(addonCopy)
+                || !(manifest.gitCommit instanceof String)
+                || !manifest.gitCommit.matches("[0-9a-f]{40}")
+                || !(manifest.dirty instanceof Boolean)
+                || !(manifest.dirtyStateSha256 instanceof String)
+                || !manifest.dirtyStateSha256.matches("[0-9a-f]{64}")
+                || manifest.recorderSchema != "6") {
+            throw new GradleException("TEST bundle manifest does not bind the current artifact pair")
+        }
+
+        def coreClassNames
+        String coreJarManifest
+        new java.util.zip.ZipFile(coreCopy).withCloseable { zip ->
+            coreClassNames = zip.entries().collect { it.name }.findAll { it.endsWith(".class") } as Set
+            def manifestEntry = zip.getEntry("META-INF/MANIFEST.MF")
+            coreJarManifest = manifestEntry == null ? "" : new String(
+                    zip.getInputStream(manifestEntry).readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8)
+        }
+        if (!coreJarManifest.contains("MixinConfigs:")
+                || !coreJarManifest.contains("slabbed.client.mixins.json")
+                || !coreJarManifest.contains("slabbed.anchor.mixins.json")) {
+            throw new GradleException("Core jar lost its required Mixin configuration manifest")
+        }
+        new java.util.zip.ZipFile(addonCopy).withCloseable { zip ->
+            def names = zip.entries().collect { it.name }
+            def required = [
+                    "com/slabbed/devtools/SlabbedDevTools.class",
+                    "com/slabbed/devtools/SlabbedRecorderProvider.class",
+                    "com/slabbed/devtools/SlabbedRuntimeIdentity.class",
+                    "com/slabbed/devtools/client/TargetDyOverlay.class",
+                    "com/slabbed/devtools/recording/Schema6Session.class",
+                    "com/slabbed/devtools/recording/SlabModelStaleSentinel.class",
+                    "com/slabbed/devtools/recording/SlabbedRecorder.class",
+                    "META-INF/mods.toml"
+            ]
+            def missing = required.findAll { !names.contains(it) }
+            if (!missing.isEmpty()) {
+                throw new GradleException("Devtools addon is missing required entries: " + missing)
+            }
+            def duplicateCoreClasses = names.findAll { coreClassNames.contains(it) }
+            if (!duplicateCoreClasses.isEmpty()) {
+                throw new GradleException("Devtools addon duplicates core classes: " + duplicateCoreClasses)
+            }
+            String descriptor = new String(
+                    zip.getInputStream(zip.getEntry("META-INF/mods.toml")).readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8)
+            if (!descriptor.contains('modId="slabbed_devtools"')
+                    || !descriptor.contains('modId="slabbed"')
+                    || !descriptor.contains('versionRange="[' + project.mod_version + ']"')
+                    || !descriptor.contains('ordering="AFTER"')) {
+                throw new GradleException("Devtools descriptor lost its addon identity or exact core dependency")
+            }
+            def manifestEntry = zip.getEntry("META-INF/MANIFEST.MF")
+            String addonJarManifest = manifestEntry == null ? "" : new String(
+                    zip.getInputStream(manifestEntry).readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8)
+            if (addonJarManifest.readLines().any { it.startsWith("MixinConfigs:") }) {
+                throw new GradleException("Devtools addon must not advertise the core Mixin configurations")
+            }
+            String commandBytes = new String(
+                    zip.getInputStream(zip.getEntry(
+                            "com/slabbed/devtools/client/TargetDyOverlay.class")).readAllBytes(),
+                    java.nio.charset.StandardCharsets.ISO_8859_1)
+            if (!commandBytes.contains("slabdev") || !commandBytes.contains("record")) {
+                throw new GradleException("Packaged addon does not contain the /slabdev record command literals")
+            }
+            String allClassBytes = names.findAll { it.endsWith(".class") }.collect { className ->
+                new String(
+                        zip.getInputStream(zip.getEntry(className)).readAllBytes(),
+                        java.nio.charset.StandardCharsets.ISO_8859_1)
+            }.join("\n")
+            def requiredSchemaTokens = [
+                    "manifest.json",
+                    "session.jsonl",
+                    "actions.tsv",
+                    "rendered-outlines.tsv",
+                    "mismatches.tsv",
+                    "summary.md",
+                    "PLAYER_AUTHORED",
+                    "AUTO_USEON_PROXY",
+                    "GAMETEST",
+                    "MODEL_STALE_DIVERGENT",
+                    "ClientPlayerNetworkEvent\$LoggingIn",
+                    "ClientPlayerNetworkEvent\$LoggingOut"
+            ]
+            def missingSchemaTokens = requiredSchemaTokens.findAll { !allClassBytes.contains(it) }
+            if (!missingSchemaTokens.isEmpty()) {
+                throw new GradleException(
+                        "Packaged addon is missing schema-6/default-on lifecycle tokens: "
+                                + missingSchemaTokens)
+            }
+        }
+
+        def forbiddenOrdinaryDependencies = [
+                "slabbedDevtoolsJar",
+                "reobfSlabbedDevtoolsJar",
+                "writeSlabbedTestBundleProvenance",
+                "prepareSlabbedTestBundle",
+                "verifySlabbedDevtoolsSchema",
+                "verifySlabbedTestBundle",
+                "buildSlabbedTestBundle"
+        ] as Set
+        def dependencyNames = { Task rootTask ->
+            def seen = [] as Set
+            def visit
+            visit = { Task task ->
+                task.taskDependencies.getDependencies(task).each { dependency ->
+                    if (seen.add(dependency.name)) {
+                        visit(dependency)
+                    }
+                }
+            }
+            visit(rootTask)
+            seen
+        }
+        ["build", "assemble", "jar", "sourcesJar", "publish"].each { taskName ->
+            Task ordinary = tasks.findByName(taskName)
+            if (ordinary != null) {
+                def leaks = dependencyNames(ordinary).intersect(forbiddenOrdinaryDependencies)
+                if (!leaks.isEmpty()) {
+                    throw new GradleException(
+                            "Ordinary task ${taskName} depends on TEST/devtools tasks: " + leaks)
+                }
+            }
+        }
+        println("SLABBED_TEST_BUNDLE_VERIFY files=3 coreBytes=exact addonBytes=exact command=slabdev-record")
+        println("SLABBED_TEST_BUNDLE_ARTIFACT " + directory.absolutePath)
+    }
+}
+
+tasks.register("buildSlabbedTestBundle") {
+    group = "slabbed test bundle"
+    description = "Builds and verifies the local core-plus-devtools TEST bundle candidate."
+    dependsOn(verifySlabbedDevtoolsSchema, verifySlabbedTestBundle)
 }
 
 publishing {

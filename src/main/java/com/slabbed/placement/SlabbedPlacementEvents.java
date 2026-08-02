@@ -2,12 +2,14 @@ package com.slabbed.placement;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.util.SlabbedRecorderBridge;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.level.BlockEvent;
+
+import java.util.LinkedHashMap;
 
 public final class SlabbedPlacementEvents {
     private SlabbedPlacementEvents() {
@@ -43,7 +45,7 @@ public final class SlabbedPlacementEvents {
             //
             // Still true and load-bearing: EntityPlaceEvent fires only for entity placement, so
             // natural/terrain/setBlock pieces stay geometric by design.
-            boolean recorderOn = SlabbedRecorderBridge.isEnabled();
+            boolean recorderOn = SlabbedDiagnosticsBridge.isRecorderEnabled();
             boolean anchoredBefore = false;
             boolean compoundBefore = false;
             boolean carrierBefore = false;
@@ -80,36 +82,48 @@ public final class SlabbedPlacementEvents {
                     storePlacementHeight(level, event.getPos());
                 }
             }
-            if (recorderOn) {
-                // Forensic placement row, schema ported from the 26.2 donor's
-                // Beta4PlacementAuthorRecorder: action origin labelled trustworthily (a fake
-                // player must never inflate a player-placement green count), before/after marker
-                // truth, support facts, and explicit "absent" for the aim facts (clicked face /
-                // hit vector) that only exist once the Phase 6 aim capture lands. One greppable
-                // line per placement; the side-split live gate (Phase 5) reads these rows.
+            if (recorderOn && playerAuthored) {
+                // Schema-6 authoritative server observation. Fake players remain GAMETEST;
+                // non-player entity placement is outside the three-origin evidence contract and
+                // is intentionally not recorded as player proof. Aim facts remain absent until
+                // Phase 7 captures them on the real server placement path.
                 double dy = SlabSupport.getYOffset(level, event.getPos(), event.getPlacedBlock());
                 BlockPos below = event.getPos().below();
                 BlockState belowState = level.getBlockState(below);
-                SlabbedRecorderBridge.log("place_row",
-                        "side=" + (level.isClientSide() ? "CLIENT" : "SERVER")
-                        + " origin=" + actionOrigin(event.getEntity())
-                        + " heldItem=" + heldItemOf(event.getEntity())
-                        + " placePos=" + event.getPos().toShortString()
-                        + " finalState=" + event.getPlacedBlock()
-                        + " finalDy=" + dy
-                        + " anchoredBefore=" + anchoredBefore
-                        + " anchoredAfter=" + SlabAnchorAttachment.isAnchored(level, event.getPos())
-                        + " compoundBefore=" + compoundBefore
-                        + " compoundAfter=" + SlabAnchorAttachment.isCompoundFullBlockAnchor(level, event.getPos())
-                        + " carrierBefore=" + carrierBefore
-                        + " carrierAfter=" + SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
-                                level, event.getPos(), event.getPlacedBlock())
-                        + " supportBelow=" + belowState
-                        + " supportBelowDy=" + SlabSupport.getYOffset(level, below, belowState)
-                        + " clickedFace=absent hitVec=absent"
-                        + " storedDy=" + SlabAnchorAttachment.storedPlacementDy(level, event.getPos())
-                        + " reason=entity_place_event");
-                SlabbedRecorderBridge.checkPlacement(event.getPos(), event.getPlacedBlock());
+                double storedDy = SlabAnchorAttachment.storedPlacementDy(level, event.getPos());
+                LinkedHashMap<String, String> row = new LinkedHashMap<>();
+                row.put("side", level.isClientSide() ? "client" : "server");
+                row.put("actionType", "place_block");
+                row.put("originHint", actionOrigin(event.getEntity()));
+                row.put("heldItem", heldItemOf(event.getEntity()));
+                row.put("playerUuid", event.getEntity().getUUID().toString());
+                row.put("dimensionId", level.dimension().location().toString());
+                row.put("clickedOwnerPos", "none");
+                row.put("clickedFace", "none");
+                row.put("hitVec", "none");
+                row.put("placementPos", event.getPos().toShortString());
+                row.put("afterState", event.getPlacedBlock().toString());
+                row.put("afterDy", Double.toString(dy));
+                row.put("afterLaneKind", laneKind(dy));
+                row.put("afterStoredDy", Double.toString(storedDy));
+                row.put("afterStoredDyBits", Long.toUnsignedString(Double.doubleToRawLongBits(storedDy)));
+                row.put("anchoredBefore", Boolean.toString(anchoredBefore));
+                row.put("anchoredAfter", Boolean.toString(
+                        SlabAnchorAttachment.isAnchored(level, event.getPos())));
+                row.put("compoundBefore", Boolean.toString(compoundBefore));
+                row.put("compoundAfter", Boolean.toString(
+                        SlabAnchorAttachment.isCompoundFullBlockAnchor(level, event.getPos())));
+                row.put("carrierBefore", Boolean.toString(carrierBefore));
+                row.put("carrierAfter", Boolean.toString(
+                        SlabAnchorAttachment.isPersistentLoweredSlabCarrier(
+                                level, event.getPos(), event.getPlacedBlock())));
+                row.put("supportBelow", belowState.toString());
+                row.put("supportBelowDy", Double.toString(
+                        SlabSupport.getYOffset(level, below, belowState)));
+                row.put("reason", "entity_place_event");
+                SlabbedDiagnosticsBridge.recordAction(row);
+                // Server aim remains explicitly absent until Phase 7 captures it authoritatively;
+                // a client-global target must never grade another player on an integrated server.
             }
         }
     }
@@ -145,12 +159,12 @@ public final class SlabbedPlacementEvents {
             return "unknown";
         }
         if (entity instanceof net.minecraftforge.common.util.FakePlayer) {
-            return "fake_player";
+            return SlabbedDiagnosticsBridge.GAMETEST;
         }
         if (entity instanceof net.minecraft.world.entity.player.Player) {
-            return "player";
+            return SlabbedDiagnosticsBridge.PLAYER_AUTHORED;
         }
-        return entity.getType().toShortString();
+        return null;
     }
 
     private static String heldItemOf(net.minecraft.world.entity.Entity entity) {
@@ -159,6 +173,19 @@ public final class SlabbedPlacementEvents {
                     ? "empty" : player.getMainHandItem().getItem().toString();
         }
         return "absent";
+    }
+
+    private static String laneKind(double dy) {
+        if (!Double.isFinite(dy)) {
+            return "INVALID";
+        }
+        if (dy < -1.0e-6d) {
+            return "LOWERED";
+        }
+        if (dy > 1.0e-6d) {
+            return "RAISED";
+        }
+        return "FLUSH";
     }
 
     // NOTE: the anchor/freeze CLEAR on removal is handled by BlockOnStateReplacedAnchorMixin

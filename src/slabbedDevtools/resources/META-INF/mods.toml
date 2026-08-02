@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+
+[[mods]]
+modId="slabbed_devtools"
+version="${mod_version}"
+displayName="Slabbed Devtools"
+authors="${mod_authors}"
+description='''Optional TEST/dev diagnostics addon for Slabbed Forge 1.20.1.'''
+
+[[dependencies.slabbed_devtools]]
+modId="slabbed"
+mandatory=true
+versionRange="[${mod_version}]"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.slabbed_devtools]]
+modId="forge"
+mandatory=true
+versionRange="${forge_version_range}"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.slabbed_devtools]]
+modId="minecraft"
+mandatory=true
+versionRange="${minecraft_version_range}"
+ordering="NONE"
+side="BOTH"

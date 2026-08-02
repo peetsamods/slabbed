@@ -1,7 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
-import com.slabbed.util.SlabbedRecorderBridge;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -41,8 +41,8 @@ public abstract class BlockOnStateReplacedAnchorMixin {
         if (!preserved) {
             SlabAnchorAttachment.clearPlacementTruth(world, pos);
         }
-        if (SlabbedRecorderBridge.isEnabled() && !world.isClientSide()) {
-            SlabbedRecorderBridge.log("remove", "pos=" + pos.toShortString()
+        if (SlabbedDiagnosticsBridge.isRecorderEnabled() && !world.isClientSide()) {
+            SlabbedDiagnosticsBridge.log("remove", "pos=" + pos.toShortString()
                     + " oldState=" + oldState
                     + " newState=" + newState
                     + " moved=" + moved
