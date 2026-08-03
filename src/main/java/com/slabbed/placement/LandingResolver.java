@@ -10,6 +10,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.ChainBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.SlabBlock;
@@ -243,8 +244,21 @@ public final class LandingResolver {
             landingDy = aim.ownerPos().getY() + aim.ownerVisibleDy() + topPlaneOffset(aim.ownerState())
                     - actualTarget.getY();
         } else if (aim.clickedFace() == Direction.DOWN) {
-            landingDy = aim.ownerPos().getY() + aim.ownerVisibleDy() + bottomPlaneOffset(aim.ownerState())
-                    - (actualTarget.getY() + 1.0d);
+            boolean flushTopVerticalChainBridge =
+                    finalState.getBlock() instanceof ChainBlock
+                            && finalState.hasProperty(BlockStateProperties.AXIS)
+                            && finalState.getValue(BlockStateProperties.AXIS) == Direction.Axis.Y
+                            && aim.ownerState().getBlock() instanceof SlabBlock
+                            && aim.ownerState().getValue(SlabBlock.TYPE) == SlabType.TOP
+                            && Double.doubleToRawLongBits(aim.ownerVisibleDy())
+                            == Double.doubleToRawLongBits(0.0d)
+                            && actualTarget.equals(aim.ownerPos().below());
+            // A flush TOP vertical chain intentionally stays at frozen dy=0 so its 24px bridge reaches
+            // the support. Lowered chains keep the generic underside formula (for example -2.0 -> -1.5).
+            landingDy = flushTopVerticalChainBridge
+                    ? 0.0d
+                    : aim.ownerPos().getY() + aim.ownerVisibleDy() + bottomPlaneOffset(aim.ownerState())
+                            - (actualTarget.getY() + 1.0d);
         } else {
             landingDy = aim.ownerVisibleDy() + aim.ownerPos().getY() - actualTarget.getY();
         }
