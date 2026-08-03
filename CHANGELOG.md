@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+See LAW.md — this changelog does not redefine the law.
+
+### Current development candidate — `0.5.0-beta.9+26.2`
+
+- The normal build and release paths remain free of diagnostic and GameTest-only implementation.
+  TEST 35 adds a separate, explicitly test-only nested `slabbed_diagnostics` mod to one named diagnostic
+  jar; it does not change the ordinary artifact or constitute a release.
+- TEST 35 enabled a player-authored recorder/Sentinel review of deep cantilever attachments. It found an
+  **open iron-chain render-refresh RED**: stored/live chain height and targeting outline can be negative
+  while the baked model remains at `0.0`. No product fix is claimed in this version.
+- Recorder schema 6 adds logical placement attempts. Their aggregate RED count is diagnostic evidence,
+  not a gameplay count, until the clicked-owner versus placed-child merger issue is repaired.
+
 - **MODEL_STALE sentinel (debug/proof tooling).** While `/slabdev record` is on, Slabbed now watches every
   placement's neighborhood and compares what the chunk mesher actually baked against live block geometry;
   a model stuck at the wrong height for more than ~5 seconds produces a red row in the recorder log
