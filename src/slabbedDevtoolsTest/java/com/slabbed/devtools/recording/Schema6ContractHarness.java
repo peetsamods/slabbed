@@ -37,10 +37,21 @@ public final class Schema6ContractHarness {
         assertHeader(requested.resolve("rendered-outlines.tsv"), Schema6Session.OUTLINES_HEADER);
         assertHeader(requested.resolve("mismatches.tsv"), Schema6Session.MISMATCHES_HEADER);
         assertOriginScopeContract();
+        require("STORED".equals(DyEvidenceSource.classify(false, true, false, false, -2.0d))
+                        && "GEOMETRIC".equals(
+                                DyEvidenceSource.classify(false, false, false, false, -0.5d))
+                        && "-".equals(
+                                DyEvidenceSource.classify(false, false, false, false, 0.0d)),
+                "overlay source law must distinguish stored truth from geometry");
 
         LinkedHashMap<String, String> cursor = new LinkedHashMap<>();
         cursor.put("finalHitPos", "1, 2, 3");
+        cursor.put("finalHitDy", "-0.5");
+        cursor.put("finalHitDyBits", Long.toUnsignedString(
+                Double.doubleToRawLongBits(-0.5d)));
+        cursor.put("finalHitDySource", "STORED");
         cursor.put("hitFace", "up");
+        cursor.put("expectedPlacementPos", "1, 3, 3");
         cursor.put("heldItem", "minecraft:stone");
         cursor.put("playerUuid", "player-one");
         cursor.put("dimensionId", "minecraft:overworld");
@@ -81,19 +92,61 @@ public final class Schema6ContractHarness {
         session.recordAction(action("client", "50, 3, 3", "-0.5"), "PLAYER_AUTHORED");
         session.recordAction(action("server", "52, 3, 3", "-0.5"), "PLAYER_AUTHORED");
 
-        session.recordRigCase(rigCase("case.exact", "EXACT"));
-        session.recordRigCase(rigCase("case.refused", "REFUSED"));
-        session.recordRigCase(rigCase("case.mismatch", "MISMATCH"));
-        session.recordRigCase(rigCase("case.inconclusive", "INCONCLUSIVE"));
+        LinkedHashMap<String, String> targetCursor = new LinkedHashMap<>(cursor);
+        targetCursor.put("finalHitPos", "30, 2, 3");
+        targetCursor.put("expectedPlacementPos", "30, 3, 3");
+        session.recordCursor(targetCursor);
+        session.recordAction(action("client", "30, 3, 3", "0.0"), "PLAYER_AUTHORED");
+        session.recordAction(action("server", "30, 3, 3", "0.0"), "PLAYER_AUTHORED");
+
+        recordRigAttempt(session, "case.exact", "7, 8, 9", "-1.0");
+        recordRigAttempt(session, "case.refused", "8, 8, 9", "0.0");
+        recordRigAttempt(session, "case.mismatch", "9, 8, 9", "0.0");
+        recordRigAttempt(session, "case.inconclusive", "10, 8, 9", "0.0");
+        recordRigAttempt(session, "case.raw-only", "11, 8, 9", "-1.0");
+        session.recordRigCase(rigCase("case.exact", "EXACT", "7, 8, 9", true));
+        session.recordRigCase(rigCase("case.refused", "REFUSED", "8, 8, 9", false));
+        session.recordRigCase(rigCase("case.mismatch", "MISMATCH", "9, 8, 9", false));
+        session.recordRigCase(rigCase("case.inconclusive", "INCONCLUSIVE", "10, 8, 9", false));
+        session.recordRigCase(rigCase("case.raw-only", "EXACT", "11, 8, 9", false));
 
         LinkedHashMap<String, String> outline = new LinkedHashMap<>();
-        outline.put("renderedOutlinePos", "1, 3, 3");
-        outline.put("cursorFinalHitPos", "1, 3, 3");
+        outline.put("renderedOutlinePos", "7, 8, 9");
+        outline.put("cursorFinalHitPos", "7, 8, 9");
         outline.put("renderedOutlineState", "Block{minecraft:stone}");
         outline.put("renderedOutlineBounds", "[0,0,0 -> 1,0.5,1]");
         outline.put("cursorOutlineBounds", "[0,0,0 -> 1,0.5,1]");
+        outline.put("renderedOutlineWorldBounds", "[7,7,9 -> 8,8,10]");
+        outline.put("renderedOutlineHitVec", "7.5,8.0,9.5");
+        outline.put("outlineDy", "-1.0");
+        outline.put("outlineDyBits", Long.toUnsignedString(
+                Double.doubleToRawLongBits(-1.0d)));
+        outline.put("hitWithinOutline", "true");
+        outline.put("modelTraceStatus", "SEEN");
+        outline.put("modelTraceDy", "-1.0");
+        outline.put("modelTraceDyBits", Long.toUnsignedString(
+                Double.doubleToRawLongBits(-1.0d)));
         outline.put("marker", "none");
         session.recordRenderedOutline(outline);
+
+        LinkedHashMap<String, String> scanSummary = new LinkedHashMap<>();
+        scanSummary.put("kind", "summary");
+        scanSummary.put("pos", "20, 20, 20");
+        scanSummary.put("hardDesync", "0");
+        scanSummary.put("wouldMove", "1");
+        scanSummary.put("unpinnedLowered", "0");
+        scanSummary.put("marker", "LIVE_SLABCHECK_FINDINGS");
+        scanSummary.put("failureClasses", "hard=0,wouldMove=1,unpinned=0");
+        session.recordScanner(scanSummary);
+        LinkedHashMap<String, String> scanFinding = new LinkedHashMap<>();
+        scanFinding.put("kind", "finding");
+        scanFinding.put("pos", "21, 20, 20");
+        scanFinding.put("storedDy", "-0.5");
+        scanFinding.put("authorityDy", "-0.5");
+        scanFinding.put("geometricDy", "0.0");
+        scanFinding.put("marker", "LIVE_SLABCHECK_WOULD_MOVE");
+        scanFinding.put("failureClasses", "WOULD_MOVE");
+        session.recordScanner(scanFinding);
 
         assertSentinelContract(session);
 
@@ -106,8 +159,8 @@ public final class Schema6ContractHarness {
                 "matching client/server observations must merge");
         require(jsonl.contains("\"attemptStatus\":\"AUTO_PROXY\""),
                 "proxy evidence must remain separate");
-        require(count(jsonl, "\"attemptStatus\":\"AUTO_PROXY\"") == 1,
-                "two-sided proxy evidence must form one logical attempt");
+        require(count(jsonl, "\"attemptStatus\":\"AUTO_PROXY\"") == 6,
+                "one standalone proxy plus five rig cases must each form one logical attempt");
         require(jsonl.contains("\"attemptStatus\":\"GAMETEST\""),
                 "GameTest evidence must remain separate");
         require(jsonl.contains("\"attemptStatus\":\"CLIENT_ONLY\""),
@@ -115,8 +168,8 @@ public final class Schema6ContractHarness {
         require(count(jsonl, "\"attemptStatus\":\"CLIENT_ONLY\"") == 2,
                 "an unmatched pending client and a too-far-apart pending client must both flush"
                         + " client-only, never silently vanish or wrongly merge");
-        require(count(jsonl, "\"attemptStatus\":\"MERGED_CLIENT_SERVER\"") == 4,
-                "exactly the same-cell and adjacent-cell pairs merge; two cells apart stays split");
+        require(count(jsonl, "\"attemptStatus\":\"MERGED_CLIENT_SERVER\"") == 5,
+                "same-cell, adjacent-cell, and target-result pairs merge; two cells apart stays split");
         require(jsonl.contains("LIVE_PLACEMENT_SIDE_DY_SPLIT"),
                 "raw client/server dy disagreement must be a recorded RED");
         require(jsonl.contains("LIVE_PLACEMENT_SIDE_CELL_SPLIT"),
@@ -124,11 +177,23 @@ public final class Schema6ContractHarness {
                         + " not two orphaned INCONCLUSIVE rows");
         require(jsonl.contains("INFO_STORED_PUBLICATION_TIMING"),
                 "transient stored publication disagreement must remain named evidence");
+        require(jsonl.contains("LIVE_TARGET_RESULT_DY_SPLIT"),
+                "a selected dy=-0.5 support producing dy=0 must be an explicit RED");
         require(jsonl.contains("LIVE_RIG_CASE_REFUSED")
                         && jsonl.contains("LIVE_RIG_CASE_MISMATCH")
                         && jsonl.contains("LIVE_RIG_CASE_INCONCLUSIVE")
-                        && jsonl.contains("LIVE_GREEN_RIG_CASE_EXACT"),
-                "every rig outcome must retain its exact case identity and truthful grade");
+                        && jsonl.contains("LIVE_GREEN_RIG_CASE_PROOF_COMPLETE")
+                        && jsonl.contains("YELLOW_RIG_CASE_RAW_DY_EXACT_PROOF_INCOMPLETE"),
+                "raw rig grades must reduce to proof-complete, RED, or honest inconclusive verdicts");
+        require(count(jsonl, "\"type\":\"rig_case_verdict\"") == 5,
+                "each rig case must publish exactly one terminal verdict");
+        require(lineContains(jsonl, "\"rigCaseId\":\"case.exact\"", "\"finalVerdict\":\"GREEN\"")
+                        && lineContains(jsonl, "\"rigCaseId\":\"case.raw-only\"",
+                                "\"finalVerdict\":\"INCONCLUSIVE\""),
+                "case-bound visual/contact proof may green; raw dy equality alone may not");
+        require(jsonl.contains("\"type\":\"slabcheck_summary\"")
+                        && jsonl.contains("\"type\":\"slabcheck_finding\""),
+                "/slabcheck summary and sample findings must enter the canonical stream");
         require(jsonl.contains("LIVE_MODEL_STALE_DIVERGENT")
                         && jsonl.contains("LIVE_MODEL_STALE_ABSENT")
                         && jsonl.contains("YELLOW_MODEL_STALE_NO_BAKE_YELLOW"),
@@ -140,11 +205,14 @@ public final class Schema6ContractHarness {
         String mismatches = Files.readString(requested.resolve("mismatches.tsv"));
         require(mismatches.contains("LIVE_PLACEMENT_SIDE_DY_SPLIT")
                         && mismatches.contains("LIVE_PLACEMENT_SIDE_CELL_SPLIT")
+                        && mismatches.contains("LIVE_TARGET_RESULT_DY_SPLIT")
                         && mismatches.contains("LIVE_MODEL_STALE_DIVERGENT")
                         && mismatches.contains("LIVE_MODEL_STALE_ABSENT")
                         && mismatches.contains("LIVE_RIG_CASE_REFUSED")
                         && mismatches.contains("LIVE_RIG_CASE_MISMATCH")
-                        && mismatches.contains("LIVE_RIG_CASE_INCONCLUSIVE"),
+                        && mismatches.contains("LIVE_RIG_CASE_INCONCLUSIVE")
+                        && mismatches.contains("LIVE_SLABCHECK_FINDINGS")
+                        && mismatches.contains("LIVE_SLABCHECK_WOULD_MOVE"),
                 "RED evidence must reach mismatches.tsv");
         require(!mismatches.contains("INFO_STORED_PUBLICATION_TIMING"),
                 "stored publication timing must not impersonate a live dy split");
@@ -153,14 +221,23 @@ public final class Schema6ContractHarness {
         String summary = Files.readString(requested.resolve("summary.md"));
         require(summary.contains("placementSideDySplitRows=2")
                         && summary.contains("placementSideCellSplitRows=1")
+                        && summary.contains("targetResultDySplitRows=1")
                         && summary.contains("storedPublicationTimingRows=1")
-                        && summary.contains("rigCaseRows=4")
-                        && summary.contains("rigCaseExactRows=1")
+                        && summary.contains("rigCaseRows=5")
+                        && summary.contains("rigCaseExactRows=2")
                         && summary.contains("rigCaseRefusedRows=1")
                         && summary.contains("rigCaseMismatchRows=1")
                         && summary.contains("rigCaseInconclusiveRows=1")
-                        && summary.contains("mergedClientServerAttemptRows=4")
-                        && summary.contains("autoProxyLogicalAttemptRows=1")
+                        && summary.contains("rigCaseVerdictRows=5")
+                        && summary.contains("rigCaseGreenVerdictRows=1")
+                        && summary.contains("rigCaseRedVerdictRows=3")
+                        && summary.contains("rigCaseInconclusiveVerdictRows=1")
+                        && summary.contains("rigCasePendingVerdictRows=0")
+                        && summary.contains("slabcheckRuns=1")
+                        && summary.contains("slabcheckFindingRows=1")
+                        && summary.contains("slabcheckWouldMoveTotal=1")
+                        && summary.contains("mergedClientServerAttemptRows=5")
+                        && summary.contains("autoProxyLogicalAttemptRows=6")
                         && summary.contains("gametestLogicalAttemptRows=1")
                         && summary.contains("clientOnlyLogicalAttemptRows=2")
                         && summary.contains("modelStaleDivergentRows=3")
@@ -234,18 +311,43 @@ public final class Schema6ContractHarness {
         return row;
     }
 
-    private static LinkedHashMap<String, String> rigCase(String id, String grade) {
+    private static void recordRigAttempt(
+            Schema6Session session,
+            String id,
+            String placementPos,
+            String afterDy) throws Exception {
+        LinkedHashMap<String, String> row = action("server", placementPos, afterDy);
+        row.put("rigCaseId", id);
+        row.put("rigLabel", "R00/C00");
+        row.put("rigExpectedDy", "-1.0");
+        row.put("rigExpectedDyBits", Long.toUnsignedString(
+                Double.doubleToRawLongBits(-1.0d)));
+        row.put("rigFace", "up");
+        row.put("rigOrientation", "floor_up");
+        session.recordAction(row, "AUTO_USEON_PROXY");
+    }
+
+    private static LinkedHashMap<String, String> rigCase(
+            String id,
+            String grade,
+            String placementPos,
+            boolean completeCoreProof) {
         LinkedHashMap<String, String> row = new LinkedHashMap<>();
         row.put("rigCaseId", id);
         row.put("rigLabel", "R00/C00");
         row.put("heldItem", "minecraft:stone");
-        row.put("placementPos", "7, 8, 9");
+        row.put("placementPos", placementPos);
         row.put("expectedDy", "-1.0");
         row.put("expectedDyBits", Long.toUnsignedString(
                 Double.doubleToRawLongBits(-1.0d)));
         row.put("face", "up");
         row.put("orientation", "floor_up");
         row.put("grade", grade);
+        row.put("observedStoredDy", "EXACT".equals(grade) ? "-1.0" : "absent");
+        row.put("observedStoredDyBits", "EXACT".equals(grade)
+                ? Long.toUnsignedString(Double.doubleToRawLongBits(-1.0d)) : "absent");
+        row.put("collisionStatus", completeCoreProof ? "EXACT" : "MISSING");
+        row.put("stabilityStatus", completeCoreProof ? "EXACT" : "MISSING");
         row.put("reason", "contract_" + grade.toLowerCase(java.util.Locale.ROOT));
         return row;
     }
@@ -514,5 +616,14 @@ public final class Schema6ContractHarness {
             from += needle.length();
         }
         return found;
+    }
+
+    private static boolean lineContains(String text, String first, String second) {
+        for (String line : text.split("\\R")) {
+            if (line.contains(first) && line.contains(second)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

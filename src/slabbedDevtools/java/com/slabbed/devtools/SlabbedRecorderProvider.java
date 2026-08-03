@@ -79,6 +79,11 @@ final class SlabbedRecorderProvider implements SlabbedDiagnosticsBridge.Provider
     }
 
     @Override
+    public void recordScanner(LinkedHashMap<String, String> fields) {
+        SlabbedRecorder.recordScanner(fields);
+    }
+
+    @Override
     public void recordSentinel(LinkedHashMap<String, String> fields) {
         SlabbedRecorder.recordSentinel(fields);
     }

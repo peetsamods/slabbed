@@ -9,6 +9,8 @@ import com.slabbed.command.SlabbedOperatorTools.KitResult;
 import com.slabbed.command.SlabbedOperatorTools.ScanReport;
 import com.slabbed.rig.RigManifest;
 import com.slabbed.rig.SlabbedRigService;
+import com.slabbed.util.SlabbedDiagnosticsBridge;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import net.minecraft.ChatFormatting;
@@ -236,7 +238,44 @@ public final class SlabbedOperatorCommands {
                                     + " geometry=" + finding.classification().geometricDy()),
                     false);
         }
+        recordScanEvidence(report);
         return 1;
+    }
+
+    private static void recordScanEvidence(ScanReport report) {
+        LinkedHashMap<String, String> summary = new LinkedHashMap<>();
+        summary.put("kind", "summary");
+        summary.put("pos", report.center().toShortString());
+        summary.put("radius", Integer.toString(report.radius()));
+        summary.put("visitedCells", Integer.toString(report.visitedCells()));
+        summary.put("skippedUnloadedCells", Integer.toString(report.skippedUnloadedCells()));
+        summary.put("examinedCells", Integer.toString(report.examinedCells()));
+        summary.put("hardDesync", Integer.toString(report.hardDesync()));
+        summary.put("wouldMove", Integer.toString(report.wouldMove()));
+        summary.put("unpinnedLowered", Integer.toString(report.unpinnedLowered()));
+        summary.put("marker", report.hardDesync() + report.wouldMove()
+                        + report.unpinnedLowered() > 0
+                ? "LIVE_SLABCHECK_FINDINGS" : "LIVE_GREEN_SLABCHECK_CLEAR");
+        summary.put("failureClasses", "hard=" + report.hardDesync()
+                + ",wouldMove=" + report.wouldMove()
+                + ",unpinned=" + report.unpinnedLowered());
+        SlabbedDiagnosticsBridge.recordScanner(summary);
+
+        for (Finding finding : report.samples()) {
+            LinkedHashMap<String, String> sample = new LinkedHashMap<>();
+            sample.put("kind", "finding");
+            sample.put("pos", finding.pos().toShortString());
+            sample.put("labels", finding.classification().labels());
+            sample.put("storedDy", formatStored(finding));
+            sample.put("authorityDy", Double.toString(
+                    finding.classification().authorityDy()));
+            sample.put("geometricDy", Double.toString(
+                    finding.classification().geometricDy()));
+            sample.put("marker", "LIVE_SLABCHECK_"
+                    + finding.classification().labels().replace(',', '_'));
+            sample.put("failureClasses", finding.classification().labels());
+            SlabbedDiagnosticsBridge.recordScanner(sample);
+        }
     }
 
     private static String formatStored(Finding finding) {

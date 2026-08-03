@@ -30,6 +30,7 @@ java {
 
 def casesRuntimeIdentityResources =
         layout.buildDirectory.dir("generated/resources/casesRuntimeIdentity")
+def gameTestNamespace = findProperty("slabbedGameTestNamespace") ?: project.mod_id
 
 sourceSets {
     main {
@@ -114,6 +115,7 @@ sourceSets {
             include "com/slabbed/devtools/client/SlabbedClientFlags.java"
             include "com/slabbed/devtools/client/TargetDyOverlay.java"
             include "com/slabbed/devtools/recording/Schema6Session.java"
+            include "com/slabbed/devtools/recording/DyEvidenceSource.java"
             include "com/slabbed/devtools/recording/SlabModelStaleSentinel.java"
             include "com/slabbed/devtools/recording/SlabbedRecorder.java"
         }
@@ -185,6 +187,10 @@ sourceSets {
             // Phase 6D cases foundation: complete live-registry partition, semantic BlockItem
             // catalog, 64 topologies, stable case IDs, and deterministic 4x4 paging.
             include "com/slabbed/test/ForgeRigCaseCatalogGameTest.java"
+            // Phase 6B evidence-truth discriminator. It lives in a separate namespace so the
+            // focused gate can execute only the dy=0 control and genuine legal dy=-0.5 lane,
+            // without replaying the 2,160-case Mega board.
+            include "com/slabbed/test/ForgeRecorderTruthLaneGameTest.java"
         }
         resources {
             setSrcDirs([])
@@ -232,7 +238,7 @@ minecraft {
             property "forge.logging.markers", "REGISTRIES"
             property "forge.logging.console.level", "debug"
             property "forge.gameTestServer", "true"
-            property "forge.enabledGameTestNamespaces", project.mod_id
+            property "forge.enabledGameTestNamespaces", gameTestNamespace
             args "--nogui"
             mods {
                 "${mod_id}" {

@@ -132,6 +132,9 @@ public final class SlabbedDiagnosticsBridge {
         default void recordRenderedOutline(LinkedHashMap<String, String> fields) {
         }
 
+        default void recordScanner(LinkedHashMap<String, String> fields) {
+        }
+
         default void recordSentinel(LinkedHashMap<String, String> fields) {
         }
 
@@ -269,6 +272,14 @@ public final class SlabbedDiagnosticsBridge {
             provider.recordRenderedOutline(fields);
         } catch (Throwable ignored) {
             // Diagnostics are observational and may never change product behavior.
+        }
+    }
+
+    public static void recordScanner(LinkedHashMap<String, String> fields) {
+        try {
+            provider.recordScanner(fields);
+        } catch (Throwable ignored) {
+            // Scanner evidence is observational and may never change command behavior.
         }
     }
 

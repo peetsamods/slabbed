@@ -212,6 +212,18 @@ public final class SlabbedRecorder {
         }
     }
 
+    public static void recordScanner(LinkedHashMap<String, String> fields) {
+        Schema6Session active = session;
+        if (active == null) {
+            return;
+        }
+        try {
+            active.recordScanner(fields);
+        } catch (IOException error) {
+            warn("slabcheck", error);
+        }
+    }
+
     public static void recordSentinel(LinkedHashMap<String, String> fields) {
         Schema6Session active = session;
         if (active == null) {

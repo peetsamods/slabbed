@@ -6,6 +6,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.devtools.SlabbedRuntimeIdentity;
+import com.slabbed.devtools.recording.DyEvidenceSource;
 import com.slabbed.devtools.recording.SlabModelStaleSentinel;
 import com.slabbed.devtools.recording.SlabbedRecorder;
 import com.slabbed.util.SlabbedDiagnosticsBridge;
@@ -387,6 +388,8 @@ public final class TargetDyOverlay {
         row.put("finalHitPos", pos.toShortString());
         row.put("finalHitState", state.toString());
         row.put("finalHitDy", format(dy));
+        row.put("finalHitDyBits", Long.toUnsignedString(Double.doubleToRawLongBits(dy)));
+        row.put("finalHitDySource", dySource(client, pos, state, dy));
         row.put("hitFace", blockHit.getDirection().getName());
         row.put("targetHalf", half);
         row.put("hitVec", formatVec(hit));
@@ -448,6 +451,13 @@ public final class TargetDyOverlay {
         Vec3 camera = client.gameRenderer.getMainCamera().getPosition();
         AABB cameraBounds = worldBounds == null
                 ? null : worldBounds.move(-camera.x, -camera.y, -camera.z);
+        OffsetBlockStateModel.ModelDyOwnerSample modelSample =
+                OffsetBlockStateModel.snapshotModelDyOwnerSample();
+        boolean modelSeen = modelSample != null
+                && modelSample.seen()
+                && pos.toShortString().equals(modelSample.pos());
+        boolean hitWithinOutline = worldBounds != null
+                && worldBounds.inflate(1.0e-4d).contains(blockHit.getLocation());
         String signature = pos.toShortString() + "|" + state + "|" + format(dy)
                 + "|" + formatBox(localBounds) + "|" + blockHit.getDirection().getName();
         if (signature.equals(lastRenderedOutlineSignature)) {
@@ -463,7 +473,17 @@ public final class TargetDyOverlay {
         row.put("renderedOutlineWorldBounds", formatBox(worldBounds));
         row.put("renderedOutlineCameraRelativeBounds", formatBox(cameraBounds));
         row.put("renderedOutlineHitVec", formatVec(blockHit.getLocation()));
-        row.put("modelDy", format(dy));
+        row.put("outlineDy", Double.toString(dy));
+        row.put("outlineDyBits", Long.toUnsignedString(Double.doubleToRawLongBits(dy)));
+        row.put("hitWithinOutline", Boolean.toString(hitWithinOutline));
+        row.put("modelTraceStatus", modelSeen ? "SEEN" : "MISSING");
+        row.put("modelTraceDy", modelSeen
+                ? Double.toString((double) modelSample.lastDy()) : "none");
+        row.put("modelTraceDyBits", modelSeen
+                ? Long.toUnsignedString(Double.doubleToRawLongBits((double) modelSample.lastDy()))
+                : "none");
+        row.put("modelTraceAppliedCalls", modelSeen
+                ? Integer.toString(modelSample.appliedCalls()) : "0");
         row.put("marker", "none");
         SlabbedDiagnosticsBridge.recordRenderedOutline(row);
     }
@@ -556,19 +576,16 @@ public final class TargetDyOverlay {
     }
 
     private static String dySource(Minecraft client, BlockPos pos, BlockState state, double dy) {
-        if (SlabAnchorAttachment.isFrozenFlat(client.level, pos)) {
-            return "FROZEN-FLAT";
-        }
-        if (SlabAnchorAttachment.isAnchored(client.level, pos)) {
-            return "ANCHORED";
-        }
-        if (SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(client.level, pos, state)
+        boolean compound = SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(client.level, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleSideUpperSlab(client.level, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(client.level, pos, state)
-                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(client.level, pos, state)) {
-            return "compound-side";
-        }
-        return (dy < -1.0e-6 || dy > 1.0e-6) ? "geometric" : "-";
+                || SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(client.level, pos, state);
+        return DyEvidenceSource.classify(
+                SlabAnchorAttachment.isFrozenFlat(client.level, pos),
+                SlabAnchorAttachment.storedPlacementDyFact(client.level, pos).present(),
+                SlabAnchorAttachment.isAnchored(client.level, pos),
+                compound,
+                dy);
     }
 
     private static String blockId(BlockState state) {

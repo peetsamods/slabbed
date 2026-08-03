@@ -34,6 +34,7 @@ public final class Schema6Session implements AutoCloseable {
 
     public static final String ACTIONS_HEADER =
             "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem\tclickedOwnerPos\tclickedFace\tplacementPos"
+                    + "\ttargetDy\ttargetDyBits\ttargetPlacementPos\ttargetDySource"
                     + "\trigCaseId\trigLabel\trigExpectedDy\trigExpectedDyBits\trigFace\trigOrientation"
                     + "\texpectedAfterDy\tafterDy\texpectedAfterLaneKind\tafterLaneKind\tmarker"
                     + "\tafterStoredDy\tafterStoredDyBits\tpairPos\tpairPart\tpairState"
@@ -42,7 +43,11 @@ public final class Schema6Session implements AutoCloseable {
     public static final String OUTLINES_HEADER =
             "outlineRenderId\tcursorRowId\trenderedOutlinePos\tcursorFinalHitPos\trenderedOutlineState"
                     + "\trenderedOutlineBounds\tcursorOutlineBounds\trenderedOutlineWorldBounds"
-                    + "\trenderedOutlineCameraRelativeBounds\trenderedOutlineHitVec\tmarker";
+                    + "\trenderedOutlineCameraRelativeBounds\trenderedOutlineHitVec"
+                    + "\trigCaseId\trigLabel\texpectedDy\texpectedDyBits"
+                    + "\toutlineDy\toutlineDyBits\toutlineStatus\thitWithinOutline"
+                    + "\traycastOwnerStatus\tcontactPlaneStatus\tmodelTraceStatus"
+                    + "\tmodelTraceDy\tmodelTraceDyBits\tmodelStatus\tmarker";
     public static final String MISMATCHES_HEADER =
             "type\trowOrActionId\tmarker\tpos\theldItem\tfailureClasses";
 
@@ -56,6 +61,13 @@ public final class Schema6Session implements AutoCloseable {
     private final Path directory;
     private final LinkedHashMap<String, ArrayDeque<PendingClientAttempt>> pendingClients =
             new LinkedHashMap<>();
+    private final LinkedHashMap<String, LinkedHashMap<String, String>> pendingRigAttempts =
+            new LinkedHashMap<>();
+    private final LinkedHashMap<String, LinkedHashMap<String, String>> rigCaseEvidence =
+            new LinkedHashMap<>();
+    private final LinkedHashMap<String, LinkedHashMap<String, String>> rigVisualEvidence =
+            new LinkedHashMap<>();
+    private final LinkedHashMap<String, String> rigCaseByPlacementPos = new LinkedHashMap<>();
     private LinkedHashMap<String, String> lastCursor = new LinkedHashMap<>();
     private long nextRowId;
     private long nextLogicalAttemptId;
@@ -71,12 +83,22 @@ public final class Schema6Session implements AutoCloseable {
     private long mismatchRows;
     private long placementSideDySplitRows;
     private long placementSideCellSplitRows;
+    private long targetResultDySplitRows;
     private long storedPublicationTimingRows;
     private long rigCaseRows;
     private long rigCaseExactRows;
     private long rigCaseRefusedRows;
     private long rigCaseMismatchRows;
     private long rigCaseInconclusiveRows;
+    private long rigCaseVerdictRows;
+    private long rigCaseGreenVerdictRows;
+    private long rigCaseRedVerdictRows;
+    private long rigCaseInconclusiveVerdictRows;
+    private long slabcheckRuns;
+    private long slabcheckFindingRows;
+    private long slabcheckHardDesyncTotal;
+    private long slabcheckWouldMoveTotal;
+    private long slabcheckUnpinnedLoweredTotal;
     private long logicalAttemptRows;
     private long mergedClientServerAttemptRows;
     private long autoProxyLogicalAttemptRows;
@@ -146,13 +168,100 @@ public final class Schema6Session implements AutoCloseable {
         row.put("recordedAt", Instant.now().toString());
         appendCursorDefaults(row);
         row.putIfAbsent("marker", "none");
+        bindRigVisualEvidence(row);
         renderedOutlineRows++;
         writeSession(row);
         write("rendered-outlines.tsv", joinTsv(row,
                 "outlineRenderId", "cursorRowId", "renderedOutlinePos", "cursorFinalHitPos",
                 "renderedOutlineState", "renderedOutlineBounds", "cursorOutlineBounds",
                 "renderedOutlineWorldBounds", "renderedOutlineCameraRelativeBounds",
-                "renderedOutlineHitVec", "marker") + System.lineSeparator(), true);
+                "renderedOutlineHitVec", "rigCaseId", "rigLabel", "expectedDy",
+                "expectedDyBits", "outlineDy", "outlineDyBits", "outlineStatus",
+                "hitWithinOutline", "raycastOwnerStatus", "contactPlaneStatus",
+                "modelTraceStatus", "modelTraceDy", "modelTraceDyBits", "modelStatus",
+                "marker") + System.lineSeparator(), true);
+        writeMarkers(row, row.get("marker"));
+        writeSummary();
+    }
+
+    private void bindRigVisualEvidence(LinkedHashMap<String, String> row) {
+        String pos = row.getOrDefault("renderedOutlinePos", "none");
+        String caseId = rigCaseByPlacementPos.get(pos);
+        if (caseId == null) {
+            return;
+        }
+        Map<String, String> rig = rigCaseEvidence.get(caseId);
+        if (rig == null) {
+            return;
+        }
+        row.put("rigCaseId", caseId);
+        row.put("rigLabel", rig.getOrDefault("rigLabel", "none"));
+        row.put("expectedDy", rig.getOrDefault("expectedDy", "none"));
+        row.put("expectedDyBits", rig.getOrDefault("expectedDyBits", "none"));
+
+        String outlineStatus = bitsEqual(
+                row.get("outlineDyBits"), rig.get("expectedDyBits"))
+                ? "EXACT" : "MISMATCH";
+        String raycastOwnerStatus = pos.equals(row.get("cursorFinalHitPos"))
+                ? "EXACT" : "MISMATCH";
+        String contactPlaneStatus = "EXACT".equals(outlineStatus)
+                && "true".equals(row.get("hitWithinOutline"))
+                ? "EXACT" : "MISMATCH";
+        String modelStatus;
+        if (!"SEEN".equals(row.get("modelTraceStatus"))) {
+            modelStatus = "MISSING";
+        } else {
+            modelStatus = bitsEqual(
+                    row.get("modelTraceDyBits"), rig.get("expectedDyBits"))
+                    ? "EXACT" : "MISMATCH";
+        }
+        row.put("outlineStatus", outlineStatus);
+        row.put("raycastOwnerStatus", raycastOwnerStatus);
+        row.put("contactPlaneStatus", contactPlaneStatus);
+        row.put("modelStatus", modelStatus);
+
+        if (List.of(outlineStatus, raycastOwnerStatus, contactPlaneStatus, modelStatus)
+                .contains("MISMATCH")) {
+            row.put("marker", appendMarker(
+                    row.get("marker"), "LIVE_RIG_CASE_VISUAL_MISMATCH"));
+        } else if ("MISSING".equals(modelStatus)) {
+            row.put("marker", appendMarker(
+                    row.get("marker"), "YELLOW_RIG_CASE_VISUAL_INCOMPLETE"));
+        }
+        LinkedHashMap<String, String> previous = rigVisualEvidence.get(caseId);
+        if (previous == null || visualScore(row) > visualScore(previous)) {
+            rigVisualEvidence.put(caseId, copy(row));
+        }
+    }
+
+    private static int visualScore(Map<String, String> row) {
+        int score = 0;
+        for (String key : List.of(
+                "outlineStatus", "raycastOwnerStatus", "contactPlaneStatus", "modelStatus")) {
+            if ("EXACT".equals(row.get(key))) {
+                score++;
+            }
+        }
+        return score;
+    }
+
+    public synchronized void recordScanner(Map<String, String> fields) throws IOException {
+        requireOpen();
+        LinkedHashMap<String, String> row = copy(fields);
+        String kind = row.getOrDefault("kind", "finding");
+        row.put("type", "summary".equals(kind) ? "slabcheck_summary" : "slabcheck_finding");
+        row.put("rowId", nextRowId());
+        row.put("recordedAt", Instant.now().toString());
+        row.putIfAbsent("marker", "none");
+        if ("summary".equals(kind)) {
+            slabcheckRuns++;
+            slabcheckHardDesyncTotal += nonNegativeLong(row.get("hardDesync"));
+            slabcheckWouldMoveTotal += nonNegativeLong(row.get("wouldMove"));
+            slabcheckUnpinnedLoweredTotal += nonNegativeLong(row.get("unpinnedLowered"));
+        } else {
+            slabcheckFindingRows++;
+        }
+        writeSession(row);
         writeMarkers(row, row.get("marker"));
         writeSummary();
     }
@@ -251,6 +360,14 @@ public final class Schema6Session implements AutoCloseable {
                     marker = appendMarker(marker, "INFO_STORED_PUBLICATION_TIMING");
                     storedPublicationTimingRows++;
                 }
+                if (playerOrigin && targetResultDyDiffers(client.row(), row)) {
+                    row.put("targetDy", client.row().getOrDefault("targetDy", "none"));
+                    row.put("targetDyBits", client.row().getOrDefault("targetDyBits", "none"));
+                    row.put("targetPlacementPos", client.row().getOrDefault(
+                            "targetPlacementPos", "none"));
+                    marker = appendMarker(marker, "LIVE_TARGET_RESULT_DY_SPLIT");
+                    targetResultDySplitRows++;
+                }
             }
         }
 
@@ -272,6 +389,9 @@ public final class Schema6Session implements AutoCloseable {
         } else if (playerOrigin) {
             writeTerminal("SERVER_ONLY", logicalAttemptId, origin, "ABSENT",
                     null, row, marker.contains("LIVE_") ? "RED" : "INCONCLUSIVE");
+        } else if (proxyOrigin && hasRigCase(row)) {
+            deferRigAttempt("AUTO_PROXY", logicalAttemptId, origin, "ABSENT",
+                    client == null ? null : client.row(), row, marker);
         } else if (proxyOrigin) {
             writeTerminal("AUTO_PROXY", logicalAttemptId, origin, "ABSENT",
                     client == null ? null : client.row(), row,
@@ -283,26 +403,45 @@ public final class Schema6Session implements AutoCloseable {
         writeSummary();
     }
 
-    /** Records one already-graded rig case without allowing diagnostics to own the grade. */
+    /**
+     * Records raw rig evidence. The one terminal case verdict is deliberately deferred until
+     * session close so later case-bound outline/model observations can participate. Raw dy
+     * equality alone is never a player-visible GREEN.
+     */
     public synchronized void recordRigCase(Map<String, String> fields) throws IOException {
         requireOpen();
         LinkedHashMap<String, String> row = copy(fields);
+        String caseId = row.getOrDefault("rigCaseId", "none");
+        if ("none".equals(caseId) || caseId.isBlank()) {
+            recordMismatch("rig_case_evidence", "LIVE_RIG_CASE_ID_MISSING", "none", "none",
+                    "recordRigCase requires exact identity");
+            return;
+        }
+        if (rigCaseEvidence.containsKey(caseId)) {
+            recordMismatch("rig_case_evidence", "LIVE_DUPLICATE_RIG_CASE_RESULT",
+                    row.getOrDefault("placementPos", row.getOrDefault("pos", "none")),
+                    row.getOrDefault("heldItem", "none"), caseId);
+            return;
+        }
         String grade = row.getOrDefault("grade", "INCONCLUSIVE")
                 .toUpperCase(java.util.Locale.ROOT);
         if (!List.of("EXACT", "REFUSED", "MISMATCH", "INCONCLUSIVE").contains(grade)) {
             grade = "INCONCLUSIVE";
         }
-        boolean red = !"EXACT".equals(grade);
-        String marker = red
-                ? "LIVE_RIG_CASE_" + grade
-                : "LIVE_GREEN_RIG_CASE_EXACT";
-        row.put("type", "rig_case_result");
+        String marker = "EXACT".equals(grade)
+                ? "INFO_RIG_CASE_RAW_DY_EXACT"
+                : "LIVE_RIG_CASE_RAW_" + grade;
+        row.put("type", "rig_case_evidence");
         row.put("rowId", nextRowId());
         row.put("recordedAt", Instant.now().toString());
         row.put("grade", grade);
-        row.put("finalVerdict", red ? "RED" : "GREEN");
+        row.put("rawDyGrade", grade);
         row.put("marker", marker);
-        row.putIfAbsent("failureClasses", red ? marker : "none");
+        row.put("anchorStatus", bitsEqual(
+                row.get("expectedDyBits"), row.get("observedStoredDyBits"))
+                ? "EXACT" : "MISSING_OR_MISMATCH");
+        row.putIfAbsent("collisionStatus", "MISSING");
+        row.putIfAbsent("stabilityStatus", "MISSING");
         rigCaseRows++;
         switch (grade) {
             case "EXACT" -> rigCaseExactRows++;
@@ -310,10 +449,13 @@ public final class Schema6Session implements AutoCloseable {
             case "MISMATCH" -> rigCaseMismatchRows++;
             default -> rigCaseInconclusiveRows++;
         }
-        writeSession(row);
-        if (red) {
-            writeMismatch(row, marker);
+        rigCaseEvidence.put(caseId, copy(row));
+        String placementPos = row.getOrDefault(
+                "placementPos", row.getOrDefault("pos", "none"));
+        if (!"none".equals(placementPos)) {
+            rigCaseByPlacementPos.putIfAbsent(placementPos, caseId);
         }
+        writeSession(row);
         writeSummary();
     }
 
@@ -361,6 +503,7 @@ public final class Schema6Session implements AutoCloseable {
             return;
         }
         finalizeAllClients();
+        finalizeAllRigCases();
         writeSummary();
         closed = true;
     }
@@ -466,8 +609,175 @@ public final class Schema6Session implements AutoCloseable {
         }
         String origin = attempt.row().getOrDefault("actionOrigin", "PLAYER_AUTHORED");
         String status = "AUTO_USEON_PROXY".equals(origin) ? "AUTO_PROXY" : "CLIENT_ONLY";
+        if ("AUTO_USEON_PROXY".equals(origin) && hasRigCase(attempt.row())) {
+            deferRigAttempt(status, attempt.logicalAttemptId(), origin, "ABSENT",
+                    attempt.row(), null, "none");
+            return;
+        }
         writeTerminal(status, attempt.logicalAttemptId(), origin, "ABSENT",
                 attempt.row(), null, "INCONCLUSIVE");
+    }
+
+    private void deferRigAttempt(
+            String status,
+            String logicalAttemptId,
+            String origin,
+            String playerProof,
+            Map<String, String> client,
+            Map<String, String> server,
+            String marker) throws IOException {
+        String caseId = evidence(server, client, "rigCaseId");
+        if ("none".equals(caseId)) {
+            writeTerminal(status, logicalAttemptId, origin, playerProof,
+                    client, server, marker != null && marker.contains("LIVE_")
+                            ? "RED" : "INCONCLUSIVE");
+            return;
+        }
+        LinkedHashMap<String, String> attempt = new LinkedHashMap<>();
+        attempt.put("attemptStatus", status);
+        attempt.put("logicalAttemptId", logicalAttemptId);
+        attempt.put("actionOrigin", origin);
+        attempt.put("playerProof", playerProof);
+        attempt.put("clientActionId", client == null
+                ? "none" : client.getOrDefault("actionId", "none"));
+        attempt.put("serverActionId", server == null
+                ? "none" : server.getOrDefault("actionId", "none"));
+        attempt.put("rigCaseId", caseId);
+        attempt.put("rigLabel", evidence(server, client, "rigLabel"));
+        attempt.put("marker", valueOr(marker, "none"));
+        if (pendingRigAttempts.putIfAbsent(caseId, attempt) != null) {
+            recordMismatch("rig_case_evidence", "LIVE_DUPLICATE_RIG_CASE_ATTEMPT",
+                    evidence(server, client, "placementPos"),
+                    evidence(server, client, "heldItem"), caseId);
+        }
+    }
+
+    private void finalizeAllRigCases() throws IOException {
+        for (Map.Entry<String, LinkedHashMap<String, String>> entry
+                : rigCaseEvidence.entrySet()) {
+            writeRigCaseVerdict(
+                    entry.getKey(),
+                    entry.getValue(),
+                    pendingRigAttempts.remove(entry.getKey()),
+                    rigVisualEvidence.get(entry.getKey()));
+        }
+        for (Map.Entry<String, LinkedHashMap<String, String>> orphan
+                : pendingRigAttempts.entrySet()) {
+            LinkedHashMap<String, String> row = copy(orphan.getValue());
+            row.put("type", "rig_case_verdict");
+            row.put("rowId", nextRowId());
+            row.put("recordedAt", Instant.now().toString());
+            row.put("rawDyGrade", "MISSING");
+            row.put("finalVerdict", "RED");
+            row.put("marker", "LIVE_RIG_CASE_EVIDENCE_MISSING");
+            row.put("failureClasses", "LIVE_RIG_CASE_EVIDENCE_MISSING");
+            countRigVerdict("RED");
+            writeSession(row);
+            writeMismatch(row, row.get("marker"));
+        }
+        pendingRigAttempts.clear();
+    }
+
+    private void writeRigCaseVerdict(
+            String caseId,
+            Map<String, String> evidenceRow,
+            Map<String, String> attempt,
+            Map<String, String> visual) throws IOException {
+        LinkedHashMap<String, String> row = copy(evidenceRow);
+        row.put("type", "rig_case_verdict");
+        row.put("rowId", nextRowId());
+        row.put("recordedAt", Instant.now().toString());
+        row.put("rigCaseId", caseId);
+        row.put("attemptStatus", attempt == null
+                ? "MISSING" : attempt.getOrDefault("attemptStatus", "MISSING"));
+        row.put("logicalAttemptId", attempt == null
+                ? "none" : attempt.getOrDefault("logicalAttemptId", "none"));
+        row.put("clientActionId", attempt == null
+                ? "none" : attempt.getOrDefault("clientActionId", "none"));
+        row.put("serverActionId", attempt == null
+                ? "none" : attempt.getOrDefault("serverActionId", "none"));
+        String attemptMarker = attempt == null ? "none" : attempt.getOrDefault("marker", "none");
+        row.put("attemptMarker", attemptMarker);
+
+        for (String key : List.of(
+                "outlineStatus", "raycastOwnerStatus", "contactPlaneStatus",
+                "modelTraceStatus", "modelStatus", "outlineRenderId")) {
+            row.put(key, visual == null ? "MISSING" : visual.getOrDefault(key, "MISSING"));
+        }
+
+        String grade = row.getOrDefault("rawDyGrade", "INCONCLUSIVE");
+        String verdict;
+        String marker;
+        if (!"EXACT".equals(grade)) {
+            verdict = "RED";
+            marker = "LIVE_RIG_CASE_" + grade;
+        } else if (attempt == null) {
+            verdict = "RED";
+            marker = "LIVE_RIG_CASE_ACTION_EVIDENCE_MISSING";
+        } else if (containsRedMarker(attemptMarker)) {
+            verdict = "RED";
+            marker = attemptMarker;
+        } else if (rigProofComplete(row)) {
+            verdict = "GREEN";
+            marker = "LIVE_GREEN_RIG_CASE_PROOF_COMPLETE";
+        } else {
+            verdict = "INCONCLUSIVE";
+            marker = "YELLOW_RIG_CASE_RAW_DY_EXACT_PROOF_INCOMPLETE";
+        }
+        row.put("finalVerdict", verdict);
+        row.put("marker", marker);
+        row.put("failureClasses", "GREEN".equals(verdict)
+                ? "none" : missingRigProof(row, marker));
+        countRigVerdict(verdict);
+        writeSession(row);
+        if ("RED".equals(verdict)) {
+            writeMismatch(row, marker);
+        }
+    }
+
+    private void countRigVerdict(String verdict) {
+        rigCaseVerdictRows++;
+        logicalAttemptRows++;
+        autoProxyLogicalAttemptRows++;
+        switch (verdict) {
+            case "GREEN" -> rigCaseGreenVerdictRows++;
+            case "RED" -> rigCaseRedVerdictRows++;
+            default -> rigCaseInconclusiveVerdictRows++;
+        }
+    }
+
+    private static boolean rigProofComplete(Map<String, String> row) {
+        return "EXACT".equals(row.get("anchorStatus"))
+                && "EXACT".equals(row.get("outlineStatus"))
+                && "EXACT".equals(row.get("raycastOwnerStatus"))
+                && "EXACT".equals(row.get("contactPlaneStatus"))
+                && "EXACT".equals(row.get("modelStatus"))
+                && "EXACT".equals(row.get("collisionStatus"))
+                && "EXACT".equals(row.get("stabilityStatus"));
+    }
+
+    private static String missingRigProof(Map<String, String> row, String fallback) {
+        List<String> missing = new ArrayList<>();
+        for (String key : List.of(
+                "anchorStatus", "outlineStatus", "raycastOwnerStatus", "contactPlaneStatus",
+                "modelStatus", "collisionStatus", "stabilityStatus")) {
+            if (!"EXACT".equals(row.get(key))) {
+                missing.add(key + "=" + row.getOrDefault(key, "MISSING"));
+            }
+        }
+        return missing.isEmpty() ? fallback : String.join("|", missing);
+    }
+
+    private static boolean containsRedMarker(String markers) {
+        if (markers == null || markers.isBlank() || "none".equals(markers)) {
+            return false;
+        }
+        for (String marker : markers.split("\\|")) {
+            if (marker.startsWith("LIVE_") && !marker.startsWith("LIVE_GREEN_")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void writeTerminal(
@@ -521,7 +831,8 @@ public final class Schema6Session implements AutoCloseable {
     private void writeActionTsv(Map<String, String> row) throws IOException {
         write("actions.tsv", joinTsv(row,
                 "actionId", "cursorRowId", "actionType", "actionOrigin", "heldItem",
-                "clickedOwnerPos", "clickedFace", "placementPos", "rigCaseId", "rigLabel",
+                "clickedOwnerPos", "clickedFace", "placementPos", "targetDy", "targetDyBits",
+                "targetPlacementPos", "targetDySource", "rigCaseId", "rigLabel",
                 "rigExpectedDy", "rigExpectedDyBits", "rigFace", "rigOrientation",
                 "expectedAfterDy", "afterDy",
                 "expectedAfterLaneKind", "afterLaneKind", "marker", "afterStoredDy",
@@ -573,12 +884,23 @@ public final class Schema6Session implements AutoCloseable {
                 + "mismatchRows=" + mismatchRows + "\n"
                 + "placementSideDySplitRows=" + placementSideDySplitRows + "\n"
                 + "placementSideCellSplitRows=" + placementSideCellSplitRows + "\n"
+                + "targetResultDySplitRows=" + targetResultDySplitRows + "\n"
                 + "storedPublicationTimingRows=" + storedPublicationTimingRows + "\n"
                 + "rigCaseRows=" + rigCaseRows + "\n"
                 + "rigCaseExactRows=" + rigCaseExactRows + "\n"
                 + "rigCaseRefusedRows=" + rigCaseRefusedRows + "\n"
                 + "rigCaseMismatchRows=" + rigCaseMismatchRows + "\n"
                 + "rigCaseInconclusiveRows=" + rigCaseInconclusiveRows + "\n"
+                + "rigCaseVerdictRows=" + rigCaseVerdictRows + "\n"
+                + "rigCaseGreenVerdictRows=" + rigCaseGreenVerdictRows + "\n"
+                + "rigCaseRedVerdictRows=" + rigCaseRedVerdictRows + "\n"
+                + "rigCaseInconclusiveVerdictRows=" + rigCaseInconclusiveVerdictRows + "\n"
+                + "rigCasePendingVerdictRows=" + Math.max(0L, rigCaseRows - rigCaseVerdictRows) + "\n"
+                + "slabcheckRuns=" + slabcheckRuns + "\n"
+                + "slabcheckFindingRows=" + slabcheckFindingRows + "\n"
+                + "slabcheckHardDesyncTotal=" + slabcheckHardDesyncTotal + "\n"
+                + "slabcheckWouldMoveTotal=" + slabcheckWouldMoveTotal + "\n"
+                + "slabcheckUnpinnedLoweredTotal=" + slabcheckUnpinnedLoweredTotal + "\n"
                 + "logicalAttemptRows=" + logicalAttemptRows + "\n"
                 + "mergedClientServerAttemptRows=" + mergedClientServerAttemptRows + "\n"
                 + "autoProxyLogicalAttemptRows=" + autoProxyLogicalAttemptRows + "\n"
@@ -666,6 +988,24 @@ public final class Schema6Session implements AutoCloseable {
         return dyDiffers(client.get("afterDy"), server.get("afterDy"));
     }
 
+    private static boolean targetResultDyDiffers(
+            Map<String, String> client,
+            Map<String, String> server) {
+        String expectedPos = client.getOrDefault("targetPlacementPos", "none");
+        String actualPos = server.getOrDefault("placementPos", "none");
+        if ("none".equals(expectedPos) || !expectedPos.equals(actualPos)) {
+            return false;
+        }
+        String targetBits = client.getOrDefault("targetDyBits", "none");
+        if ("none".equals(targetBits)) {
+            targetBits = rawBits(client.get("targetDy"));
+        }
+        String resultBits = rawBits(server.get("afterDy"));
+        return !"none".equals(targetBits)
+                && !"none".equals(resultBits)
+                && !targetBits.equals(resultBits);
+    }
+
     private static boolean placementCellDiffers(
             Map<String, String> client,
             Map<String, String> server) {
@@ -717,6 +1057,33 @@ public final class Schema6Session implements AutoCloseable {
                 && !clientBits.equals(serverBits);
     }
 
+    private static boolean hasRigCase(Map<String, String> row) {
+        String caseId = row.getOrDefault("rigCaseId", "none");
+        return !"none".equals(caseId) && !caseId.isBlank();
+    }
+
+    private static boolean bitsEqual(String first, String second) {
+        return first != null && second != null
+                && !"none".equals(first) && !"absent".equals(first)
+                && first.equals(second);
+    }
+
+    private static String rawBits(String value) {
+        try {
+            return Long.toUnsignedString(Double.doubleToRawLongBits(Double.parseDouble(value)));
+        } catch (RuntimeException ignored) {
+            return "none";
+        }
+    }
+
+    private static long nonNegativeLong(String value) {
+        try {
+            return Math.max(0L, Long.parseLong(value));
+        } catch (RuntimeException ignored) {
+            return 0L;
+        }
+    }
+
     private static String evidence(
             Map<String, String> primary,
             Map<String, String> secondary,
@@ -741,6 +1108,10 @@ public final class Schema6Session implements AutoCloseable {
     private void appendCursorDefaults(LinkedHashMap<String, String> row) {
         putIfEvidenceMissing(row, "clickedOwnerPos", lastCursor.get("finalHitPos"));
         putIfEvidenceMissing(row, "clickedFace", lastCursor.get("hitFace"));
+        putIfEvidenceMissing(row, "targetDy", lastCursor.get("finalHitDy"));
+        putIfEvidenceMissing(row, "targetDyBits", lastCursor.get("finalHitDyBits"));
+        putIfEvidenceMissing(row, "targetPlacementPos", lastCursor.get("expectedPlacementPos"));
+        putIfEvidenceMissing(row, "targetDySource", lastCursor.get("finalHitDySource"));
         putIfEvidenceMissing(row, "heldItem", lastCursor.get("heldItem"));
         putIfEvidenceMissing(row, "dimensionId", lastCursor.get("dimensionId"));
         putIfEvidenceMissing(row, "playerUuid", lastCursor.get("playerUuid"));
