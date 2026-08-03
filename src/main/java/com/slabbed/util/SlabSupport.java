@@ -1064,16 +1064,13 @@ public final class SlabSupport {
             return 0.0;
         }
 
-        // FROZEN-DY (LAW.md restoration, Step 0, flag-gated -Dslabbed.frozenDy): return the height this
+        // FROZEN-DY (LAW.md restoration, flag-gated -Dslabbed.frozenDy): return the finite height this
         // block was placed at, stored verbatim — the value the player aimed at, never re-derived from
-        // the current neighbours. Default off; when off this is skipped and behaviour is unchanged. At
-        // placement the value is absent (captured just after), so the capture path still reads the live
-        // lanes once to determine the aim.
+        // the current neighbours. A missing/non-finite fact resolves flat and stays flat; the placement
+        // offset is computed explicitly through getUnstoredYOffset instead of this public read path.
         if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
             double frozen = SlabAnchorAttachment.storedPlacementDy(world, pos);
-            if (!Double.isNaN(frozen)) {
-                return frozen;
-            }
+            return Double.isFinite(frozen) ? frozen : 0.0d;
         }
 
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
@@ -1089,12 +1086,12 @@ public final class SlabSupport {
     }
 
     /**
-     * The pre-store reading at {@code pos}: exactly what {@link #getYOffset} returns, but WITHOUT the
-     * frozen-store short-circuit — it never consults the stored placement value, always going straight
-     * to {@link #getYOffsetInner}. Read-only and side-effect-free; it shares the same null/air/skip
-     * guards and the same {@link #IN_GET_Y_OFFSET} guard as {@link #getYOffset}. Diagnostics use it to
-     * compare a cell's stored value against this un-stored value, to report which cells would read
-     * differently if the store were not consulted. It does not alter {@link #getYOffset} or any lane.
+     * The explicit placement-time offset reading at {@code pos}: it bypasses both the frozen store
+     * and the public missing-data stable-flat policy, always going straight to {@link #getYOffsetInner}.
+     * Read-only and side-effect-free; it shares the same null/air/skip guards and the same
+     * {@link #IN_GET_Y_OFFSET} guard as {@link #getYOffset}. Diagnostics use it to compare a cell's
+     * stored value against this unstored placement value. It does not alter {@link #getYOffset} or any
+     * lane.
      */
     public static double getUnstoredYOffset(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null) {
@@ -1106,8 +1103,8 @@ public final class SlabSupport {
         if (CompatHooks.shouldSkipOffset(state)) {
             return 0.0;
         }
-        // Deliberately SKIP the frozen-store short-circuit that getYOffset does here: this is the
-        // un-stored value, straight from getYOffsetInner.
+        // Deliberately skip getYOffset's frozen-store/stable-flat policy: this is the explicit
+        // placement-time offset value, straight from getYOffsetInner.
         if (IN_GET_Y_OFFSET.get()) {
             return 0.0;
         }

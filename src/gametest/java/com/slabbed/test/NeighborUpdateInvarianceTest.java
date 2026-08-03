@@ -3,6 +3,7 @@ package com.slabbed.test;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -24,6 +25,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -75,6 +77,34 @@ public final class NeighborUpdateInvarianceTest {
 
     private static double dy(ServerLevel w, BlockPos p) {
         return SlabSupport.getYOffset(w, p, w.getBlockState(p));
+    }
+
+    /** Test-only corruption fixture: remove exactly one placement-dy fact and republish its chunk map. */
+    private static void removePlacementDyOnly(GameTestHelper h, ServerLevel world, BlockPos subject) {
+        LevelChunk chunk = world.getChunk(subject.getX() >> 4, subject.getZ() >> 4);
+        Long2DoubleOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        if (existing == null || !existing.containsKey(subject.asLong())) {
+            throw h.assertionException(subject, "premise: subject PLACEMENT_DY fact was already absent");
+        }
+        Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(existing);
+        copy.defaultReturnValue(Double.NaN);
+        copy.remove(subject.asLong());
+        chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, copy);
+    }
+
+    /** Test-only corruption fixture: overwrite exactly one placement-dy fact with the supplied raw bits. */
+    private static void overwritePlacementDyRaw(
+            GameTestHelper h, ServerLevel world, BlockPos subject, long rawBits
+    ) {
+        LevelChunk chunk = world.getChunk(subject.getX() >> 4, subject.getZ() >> 4);
+        Long2DoubleOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        if (existing == null || !existing.containsKey(subject.asLong())) {
+            throw h.assertionException(subject, "premise: subject PLACEMENT_DY fact was absent before overwrite");
+        }
+        Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(existing);
+        copy.defaultReturnValue(Double.NaN);
+        copy.put(subject.asLong(), Double.longBitsToDouble(rawBits));
+        chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, copy);
     }
 
     /** Exact height identity (byte-identical intent), with -0.0 normalized to 0.0. */
@@ -378,6 +408,112 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabOnDeepLoweredFullBlockSurvivesNeighborEdits(GameTestHelper h) {
         runSubjectWithFrozenStore(h, SUBJECTS.get(8));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void missingPlacementDyResolvesStableFlatAcrossNeighborEdit(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            clearArena(h, world);
+            BlockPos deepStone = deepLoweredStoneRig(h, world);
+            place(h, Items.STONE_SLAB, deepStone, Direction.UP, 0.0d);
+            BlockPos subject = deepStone.above();
+            if (world.getBlockState(subject).isAir()) {
+                throw h.assertionException(subject, "premise: deep-rest subject slab failed to place");
+            }
+
+            SlabAnchorAttachment.PlacementDyFact authored =
+                    SlabAnchorAttachment.rawPlacementDyFact(world, subject);
+            if (!authored.present()
+                    || authored.rawBits() != Double.doubleToRawLongBits(-1.5d)
+                    || !sameHeight(dy(world, subject), -1.5d)) {
+                throw h.assertionException(subject,
+                        "premise: subject should have raw-exact authored/stored/live dy -1.5");
+            }
+
+            removePlacementDyOnly(h, world, subject);
+            if (SlabAnchorAttachment.rawPlacementDyFact(world, subject).present()) {
+                throw h.assertionException(subject, "premise: subject PLACEMENT_DY fact remained after removal");
+            }
+            if (world.getBlockState(subject).isAir()) {
+                throw h.assertionException(subject, "premise: removing PLACEMENT_DY removed the subject");
+            }
+
+            double fallbackBefore = dy(world, subject);
+            world.destroyBlock(subject.below(), false);
+            if (world.getBlockState(subject).isAir()) {
+                throw h.assertionException(subject, "premise: neighbor edit removed the subject");
+            }
+            double fallbackAfter = dy(world, subject);
+            long positiveZeroBits = Double.doubleToRawLongBits(0.0d);
+            if (Double.doubleToRawLongBits(fallbackBefore) != positiveZeroBits
+                    || Double.doubleToRawLongBits(fallbackAfter) != positiveZeroBits) {
+                throw h.assertionException(subject,
+                        "missing PLACEMENT_DY must resolve raw positive 0.0 before/after neighbor edit; "
+                                + "observed fallbackBefore=" + fallbackBefore
+                                + ", fallbackAfter=" + fallbackAfter);
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void corruptPlacementDyResolvesStablePositiveZeroAcrossNeighborEdit(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        long positiveZeroBits = Double.doubleToRawLongBits(0.0d);
+        long[] corruptBits = {
+                Double.doubleToRawLongBits(Double.NaN),
+                Double.doubleToRawLongBits(Double.POSITIVE_INFINITY),
+                Double.doubleToRawLongBits(Double.NEGATIVE_INFINITY)
+        };
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            for (long corruptRawBits : corruptBits) {
+                clearArena(h, world);
+                BlockPos deepStone = deepLoweredStoneRig(h, world);
+                place(h, Items.STONE_SLAB, deepStone, Direction.UP, 0.0d);
+                BlockPos subject = deepStone.above();
+                if (world.getBlockState(subject).isAir()) {
+                    throw h.assertionException(subject, "premise: corrupt-value deep-rest subject failed to place");
+                }
+
+                overwritePlacementDyRaw(h, world, subject, corruptRawBits);
+                SlabAnchorAttachment.PlacementDyFact corruptBefore =
+                        SlabAnchorAttachment.rawPlacementDyFact(world, subject);
+                if (!corruptBefore.present() || corruptBefore.rawBits() != corruptRawBits) {
+                    throw h.assertionException(subject, "premise: exact corrupt PLACEMENT_DY bits were not stored; "
+                            + "wanted=" + Long.toHexString(corruptRawBits)
+                            + " observed=" + Long.toHexString(corruptBefore.rawBits()));
+                }
+
+                double fallbackBefore = dy(world, subject);
+                world.destroyBlock(subject.below(), false);
+                if (world.getBlockState(subject).isAir()) {
+                    throw h.assertionException(subject, "premise: corrupt-value neighbor edit removed the subject");
+                }
+                SlabAnchorAttachment.PlacementDyFact corruptAfter =
+                        SlabAnchorAttachment.rawPlacementDyFact(world, subject);
+                double fallbackAfter = dy(world, subject);
+                if (!corruptAfter.present() || corruptAfter.rawBits() != corruptRawBits) {
+                    throw h.assertionException(subject, "premise: neighbor edit changed corrupt PLACEMENT_DY bits");
+                }
+                if (Double.doubleToRawLongBits(fallbackBefore) != positiveZeroBits
+                        || Double.doubleToRawLongBits(fallbackAfter) != positiveZeroBits) {
+                    throw h.assertionException(subject,
+                            "corrupt PLACEMENT_DY must resolve raw positive 0.0 before/after neighbor edit; corrupt="
+                                    + Long.toHexString(corruptRawBits) + " fallbackBefore=" + fallbackBefore
+                                    + " fallbackAfter=" + fallbackAfter);
+                }
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        h.succeed();
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")

@@ -274,8 +274,8 @@ public final class SlabAnchorAttachment {
      * <p><b>Default ON as of C1</b> (design ruling D5 — {@code docs/design/GOES-UNIFIED-LANDING-RULE.md}
      * §4.4 row C1 and §8). The system property still forces it either way:
      * {@code -Dslabbed.frozenDy=false} is the escape hatch. Legacy worlds carry no stored value for
-     * blocks placed before the flip; those cells read {@link Double#NaN} and fall through to the live
-     * lanes forever — there is no retro-migration (design D5).
+     * blocks placed before the flip; those cells resolve to stable flat {@code 0.0} with no recovery
+     * from live neighbour geometry — there is no retro-migration (design D5).
      */
     public static boolean FROZEN_DY_ENABLED =
             Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"));
