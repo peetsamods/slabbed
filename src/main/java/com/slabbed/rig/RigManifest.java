@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** Exact immutable ownership ledger for one in-memory generic rig run. */
@@ -112,6 +113,11 @@ public record RigManifest(
                     || receipt.resolutions().size() != receipt.subjectUseOnCalls()) {
                 throw new IllegalArgumentException(
                         "mega report must account for every useOn attempt");
+            }
+            if (!megaReport.cases().stream().map(MegaCaseReadback::caseId).toList()
+                    .equals(caseIds)) {
+                throw new IllegalArgumentException(
+                        "mega report must bind every manifest case in exact order");
             }
         }
     }
@@ -309,65 +315,113 @@ public record RigManifest(
         }
     }
 
-    /** Four-row everything-rig outcome, including honest refused actions and seat readback. */
+    /** Full item/depth/face matrix outcome. Any non-exact case makes the board RED. */
     public record MegaReport(
             int columns,
+            int depths,
+            int faces,
             int attempts,
-            int placed,
+            int exact,
             int refused,
-            List<String> refusedItemIds,
-            List<MegaSeatReadback> sampleSeats,
+            int mismatched,
+            int inconclusive,
+            List<MegaCaseReadback> cases,
             boolean complete,
             String note) implements StructuralReport {
         public MegaReport {
-            refusedItemIds = List.copyOf(Objects.requireNonNull(
-                    refusedItemIds, "refusedItemIds"));
-            sampleSeats = List.copyOf(Objects.requireNonNull(sampleSeats, "sampleSeats"));
+            cases = List.copyOf(Objects.requireNonNull(cases, "cases"));
             note = requireText(note, "note");
-            if (columns < 1 || attempts != columns * 4 || placed < 0 || refused < 0
-                    || placed + refused != attempts || sampleSeats.size() != 4) {
+            if (columns < 1 || depths < 1 || faces < 1
+                    || attempts != columns * depths * faces
+                    || exact < 0 || refused < 0 || mismatched < 0 || inconclusive < 0
+                    || exact + refused + mismatched + inconclusive != attempts
+                    || cases.size() != attempts) {
                 throw new IllegalArgumentException("invalid mega report counts");
             }
-            Set<Integer> rows = new HashSet<>();
-            for (MegaSeatReadback seat : sampleSeats) {
-                if (!rows.add(seat.row())) {
-                    throw new IllegalArgumentException("duplicate mega sample row " + seat.row());
+            Set<String> ids = new HashSet<>();
+            int derivedExact = 0;
+            int derivedRefused = 0;
+            int derivedMismatch = 0;
+            int derivedInconclusive = 0;
+            for (MegaCaseReadback one : cases) {
+                if (!ids.add(one.caseId())) {
+                    throw new IllegalArgumentException("duplicate mega case " + one.caseId());
+                }
+                switch (one.grade()) {
+                    case EXACT -> derivedExact++;
+                    case REFUSED -> derivedRefused++;
+                    case MISMATCH -> derivedMismatch++;
+                    case INCONCLUSIVE -> derivedInconclusive++;
                 }
             }
-            boolean derivedComplete = sampleSeats.stream().allMatch(MegaSeatReadback::matches);
-            if (complete != derivedComplete) {
+            boolean derivedComplete = derivedExact == attempts;
+            if (exact != derivedExact || refused != derivedRefused
+                    || mismatched != derivedMismatch
+                    || inconclusive != derivedInconclusive
+                    || complete != derivedComplete) {
                 throw new IllegalArgumentException(
-                        "mega completeness must match the four sample seats");
+                        "mega completeness and counts must match every case grade");
             }
+        }
+
+        public List<MegaCaseReadback> redCases() {
+            return cases.stream().filter(one -> one.grade() != MegaCaseGrade.EXACT).toList();
         }
     }
 
-    public record MegaSeatReadback(
-            int row,
-            String label,
-            BlockPos pos,
-            long expectedDyBits,
-            long liveDyBits) {
-        public MegaSeatReadback {
-            label = requireText(label, "label");
-            pos = Objects.requireNonNull(pos, "pos").immutable();
-            if (row < 0 || row >= 4
-                    || !Double.isFinite(Double.longBitsToDouble(expectedDyBits))
-                    || !Double.isFinite(Double.longBitsToDouble(liveDyBits))) {
-                throw new IllegalArgumentException("invalid mega seat readback");
-            }
-        }
+    public enum MegaCaseGrade {
+        EXACT,
+        REFUSED,
+        MISMATCH,
+        INCONCLUSIVE
+    }
 
-        public boolean matches() {
-            return expectedDyBits == liveDyBits;
+    public record MegaCaseReadback(
+            String caseId,
+            String label,
+            String itemId,
+            int column,
+            int row,
+            BlockPos placementPos,
+            long expectedDyBits,
+            Direction face,
+            String orientation,
+            MegaCaseGrade grade,
+            String observedState,
+            long observedDyBits,
+            SlabAnchorAttachment.PlacementDyFact observedStoredDy,
+            String reason) {
+        public MegaCaseReadback {
+            caseId = requireText(caseId, "caseId");
+            label = requireText(label, "label");
+            itemId = requireText(itemId, "itemId");
+            placementPos = Objects.requireNonNull(placementPos, "placementPos").immutable();
+            face = Objects.requireNonNull(face, "face");
+            orientation = requireText(orientation, "orientation");
+            grade = Objects.requireNonNull(grade, "grade");
+            observedState = requireText(observedState, "observedState");
+            observedStoredDy = Objects.requireNonNull(observedStoredDy, "observedStoredDy");
+            reason = requireText(reason, "reason");
+            if (column < 0 || row < 0
+                    || !Double.isFinite(Double.longBitsToDouble(expectedDyBits))) {
+                throw new IllegalArgumentException("invalid mega case readback");
+            }
+            if (grade == MegaCaseGrade.EXACT
+                    && (!Double.isFinite(Double.longBitsToDouble(observedDyBits))
+                    || observedDyBits != expectedDyBits
+                    || !observedStoredDy.present()
+                    || observedStoredDy.rawBits() != expectedDyBits)) {
+                throw new IllegalArgumentException(
+                        "exact mega case must carry matching live and stored dy");
+            }
         }
 
         public double expectedDy() {
             return Double.longBitsToDouble(expectedDyBits);
         }
 
-        public double liveDy() {
-            return Double.longBitsToDouble(liveDyBits);
+        public double observedDy() {
+            return Double.longBitsToDouble(observedDyBits);
         }
     }
 

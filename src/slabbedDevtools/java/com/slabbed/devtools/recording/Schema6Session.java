@@ -34,6 +34,7 @@ public final class Schema6Session implements AutoCloseable {
 
     public static final String ACTIONS_HEADER =
             "actionId\tcursorRowId\tactionType\tactionOrigin\theldItem\tclickedOwnerPos\tclickedFace\tplacementPos"
+                    + "\trigCaseId\trigLabel\trigExpectedDy\trigExpectedDyBits\trigFace\trigOrientation"
                     + "\texpectedAfterDy\tafterDy\texpectedAfterLaneKind\tafterLaneKind\tmarker"
                     + "\tafterStoredDy\tafterStoredDyBits\tpairPos\tpairPart\tpairState"
                     + "\tpairAfterDy\tpairStoredDy\tpairStoredDyBits"
@@ -69,6 +70,12 @@ public final class Schema6Session implements AutoCloseable {
     private long renderedOutlineRows;
     private long mismatchRows;
     private long placementSideDySplitRows;
+    private long storedPublicationTimingRows;
+    private long rigCaseRows;
+    private long rigCaseExactRows;
+    private long rigCaseRefusedRows;
+    private long rigCaseMismatchRows;
+    private long rigCaseInconclusiveRows;
     private long logicalAttemptRows;
     private long mergedClientServerAttemptRows;
     private long autoProxyLogicalAttemptRows;
@@ -226,10 +233,17 @@ public final class Schema6Session implements AutoCloseable {
                     : client.logicalAttemptId();
             phase = proxyOrigin ? "AUTO_PROXY_SERVER" : "SERVER_AUTHORITY";
             playerProof = playerOrigin && client != null ? "PRESENT" : "ABSENT";
-            if (client != null && actionDyDiffers(client.row(), row)) {
-                row.put("clientAfterDy", client.row().getOrDefault("afterDy", "none"));
-                marker = appendMarker(marker, "LIVE_PLACEMENT_SIDE_DY_SPLIT");
-                placementSideDySplitRows++;
+            if (client != null) {
+                boolean liveDySplit = liveAfterDyDiffers(client.row(), row);
+                if (liveDySplit) {
+                    row.put("clientAfterDy", client.row().getOrDefault("afterDy", "none"));
+                    marker = appendMarker(marker, "LIVE_PLACEMENT_SIDE_DY_SPLIT");
+                    placementSideDySplitRows++;
+                }
+                if (!liveDySplit && storedPublicationDiffers(client.row(), row)) {
+                    marker = appendMarker(marker, "INFO_STORED_PUBLICATION_TIMING");
+                    storedPublicationTimingRows++;
+                }
             }
         }
 
@@ -258,6 +272,40 @@ public final class Schema6Session implements AutoCloseable {
         } else {
             writeTerminal("GAMETEST", logicalAttemptId, origin, "ABSENT",
                     null, row, marker.contains("LIVE_") ? "RED" : "INCONCLUSIVE");
+        }
+        writeSummary();
+    }
+
+    /** Records one already-graded rig case without allowing diagnostics to own the grade. */
+    public synchronized void recordRigCase(Map<String, String> fields) throws IOException {
+        requireOpen();
+        LinkedHashMap<String, String> row = copy(fields);
+        String grade = row.getOrDefault("grade", "INCONCLUSIVE")
+                .toUpperCase(java.util.Locale.ROOT);
+        if (!List.of("EXACT", "REFUSED", "MISMATCH", "INCONCLUSIVE").contains(grade)) {
+            grade = "INCONCLUSIVE";
+        }
+        boolean red = !"EXACT".equals(grade);
+        String marker = red
+                ? "LIVE_RIG_CASE_" + grade
+                : "LIVE_GREEN_RIG_CASE_EXACT";
+        row.put("type", "rig_case_result");
+        row.put("rowId", nextRowId());
+        row.put("recordedAt", Instant.now().toString());
+        row.put("grade", grade);
+        row.put("finalVerdict", red ? "RED" : "GREEN");
+        row.put("marker", marker);
+        row.putIfAbsent("failureClasses", red ? marker : "none");
+        rigCaseRows++;
+        switch (grade) {
+            case "EXACT" -> rigCaseExactRows++;
+            case "REFUSED" -> rigCaseRefusedRows++;
+            case "MISMATCH" -> rigCaseMismatchRows++;
+            default -> rigCaseInconclusiveRows++;
+        }
+        writeSession(row);
+        if (red) {
+            writeMismatch(row, marker);
         }
         writeSummary();
     }
@@ -408,9 +456,11 @@ public final class Schema6Session implements AutoCloseable {
         terminal.put("playerProof", playerProof);
         terminal.put("clientActionId", client == null ? "none" : client.getOrDefault("actionId", "none"));
         terminal.put("serverActionId", server == null ? "none" : server.getOrDefault("actionId", "none"));
+        terminal.put("rigCaseId", evidence(server, client, "rigCaseId"));
+        terminal.put("rigLabel", evidence(server, client, "rigLabel"));
         terminal.put("finalVerdict", verdict);
         terminal.put("failureClasses", "RED".equals(verdict)
-                ? "LIVE_PLACEMENT_SIDE_DY_SPLIT" : "none");
+                ? evidence(server, client, "marker") : "none");
         logicalAttemptRows++;
         switch (status) {
             case "MERGED_CLIENT_SERVER" -> mergedClientServerAttemptRows++;
@@ -439,7 +489,9 @@ public final class Schema6Session implements AutoCloseable {
     private void writeActionTsv(Map<String, String> row) throws IOException {
         write("actions.tsv", joinTsv(row,
                 "actionId", "cursorRowId", "actionType", "actionOrigin", "heldItem",
-                "clickedOwnerPos", "clickedFace", "placementPos", "expectedAfterDy", "afterDy",
+                "clickedOwnerPos", "clickedFace", "placementPos", "rigCaseId", "rigLabel",
+                "rigExpectedDy", "rigExpectedDyBits", "rigFace", "rigOrientation",
+                "expectedAfterDy", "afterDy",
                 "expectedAfterLaneKind", "afterLaneKind", "marker", "afterStoredDy",
                 "afterStoredDyBits", "pairPos", "pairPart", "pairState", "pairAfterDy",
                 "pairStoredDy", "pairStoredDyBits", "logicalAttemptId", "phase", "playerProof")
@@ -447,8 +499,7 @@ public final class Schema6Session implements AutoCloseable {
     }
 
     private void writeMarkers(Map<String, String> row, String markers) throws IOException {
-        if (markers == null || markers.isBlank() || "none".equals(markers)
-                || markers.startsWith("YELLOW_") || markers.startsWith("INFO_")) {
+        if (markers == null || markers.isBlank() || "none".equals(markers)) {
             return;
         }
         for (String marker : markers.split("\\|")) {
@@ -489,6 +540,12 @@ public final class Schema6Session implements AutoCloseable {
                 + "renderedOutlineRows=" + renderedOutlineRows + "\n"
                 + "mismatchRows=" + mismatchRows + "\n"
                 + "placementSideDySplitRows=" + placementSideDySplitRows + "\n"
+                + "storedPublicationTimingRows=" + storedPublicationTimingRows + "\n"
+                + "rigCaseRows=" + rigCaseRows + "\n"
+                + "rigCaseExactRows=" + rigCaseExactRows + "\n"
+                + "rigCaseRefusedRows=" + rigCaseRefusedRows + "\n"
+                + "rigCaseMismatchRows=" + rigCaseMismatchRows + "\n"
+                + "rigCaseInconclusiveRows=" + rigCaseInconclusiveRows + "\n"
                 + "logicalAttemptRows=" + logicalAttemptRows + "\n"
                 + "mergedClientServerAttemptRows=" + mergedClientServerAttemptRows + "\n"
                 + "autoProxyLogicalAttemptRows=" + autoProxyLogicalAttemptRows + "\n"
@@ -564,15 +621,33 @@ public final class Schema6Session implements AutoCloseable {
         }
     }
 
-    private static boolean actionDyDiffers(
+    private static boolean liveAfterDyDiffers(
+            Map<String, String> client,
+            Map<String, String> server) {
+        return dyDiffers(client.get("afterDy"), server.get("afterDy"));
+    }
+
+    private static boolean storedPublicationDiffers(
             Map<String, String> client,
             Map<String, String> server) {
         String clientBits = client.getOrDefault("afterStoredDyBits", "none");
         String serverBits = server.getOrDefault("afterStoredDyBits", "none");
-        boolean storedBitsDiffer = !"none".equals(clientBits)
+        return !"none".equals(clientBits)
                 && !"none".equals(serverBits)
                 && !clientBits.equals(serverBits);
-        return storedBitsDiffer || dyDiffers(client.get("afterDy"), server.get("afterDy"));
+    }
+
+    private static String evidence(
+            Map<String, String> primary,
+            Map<String, String> secondary,
+            String key) {
+        if (primary != null) {
+            String value = primary.get(key);
+            if (value != null && !value.isBlank() && !"none".equals(value)) {
+                return value;
+            }
+        }
+        return secondary == null ? "none" : secondary.getOrDefault(key, "none");
     }
 
     private static void fillActionDefaults(LinkedHashMap<String, String> row) {

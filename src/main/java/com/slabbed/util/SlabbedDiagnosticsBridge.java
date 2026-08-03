@@ -33,11 +33,56 @@ public final class SlabbedDiagnosticsBridge {
     public record ActionOriginContext(
             String playerUuid,
             String dimensionId,
-            BlockPos placementPos) {
+            BlockPos placementPos,
+            String rigCaseId,
+            String rigLabel,
+            long rigExpectedDyBits,
+            Direction rigFace,
+            String rigOrientation) {
+        public ActionOriginContext(
+                String playerUuid,
+                String dimensionId,
+                BlockPos placementPos) {
+            this(
+                    playerUuid,
+                    dimensionId,
+                    placementPos,
+                    "none",
+                    "none",
+                    Double.doubleToRawLongBits(Double.NaN),
+                    null,
+                    "none");
+        }
+
         public ActionOriginContext {
             Objects.requireNonNull(playerUuid, "playerUuid");
             Objects.requireNonNull(dimensionId, "dimensionId");
             placementPos = Objects.requireNonNull(placementPos, "placementPos").immutable();
+            rigCaseId = normalizeEvidence(rigCaseId);
+            rigLabel = normalizeEvidence(rigLabel);
+            rigOrientation = normalizeEvidence(rigOrientation);
+            if ("none".equals(rigCaseId)) {
+                if (!"none".equals(rigLabel) || rigFace != null
+                        || !"none".equals(rigOrientation)) {
+                    throw new IllegalArgumentException(
+                            "non-rig action origin may not carry partial rig identity");
+                }
+            } else if ("none".equals(rigLabel) || rigFace == null
+                    || "none".equals(rigOrientation)
+                    || !Double.isFinite(Double.longBitsToDouble(rigExpectedDyBits))) {
+                throw new IllegalArgumentException("rig action origin requires complete identity");
+            }
+        }
+
+        public boolean hasRigCase() {
+            return !"none".equals(rigCaseId);
+        }
+
+        private static String normalizeEvidence(String value) {
+            if (value == null || value.isBlank()) {
+                return "none";
+            }
+            return value.trim();
         }
     }
 
@@ -79,6 +124,9 @@ public final class SlabbedDiagnosticsBridge {
         }
 
         default void recordAction(LinkedHashMap<String, String> fields) {
+        }
+
+        default void recordRigCase(LinkedHashMap<String, String> fields) {
         }
 
         default void recordRenderedOutline(LinkedHashMap<String, String> fields) {
@@ -205,6 +253,14 @@ public final class SlabbedDiagnosticsBridge {
             provider.recordAction(fields);
         } catch (Throwable ignored) {
             // Diagnostics are observational and may never change product behavior.
+        }
+    }
+
+    public static void recordRigCase(LinkedHashMap<String, String> fields) {
+        try {
+            provider.recordRigCase(fields);
+        } catch (Throwable ignored) {
+            // Diagnostic grading is evidence only and may never change the rig result.
         }
     }
 

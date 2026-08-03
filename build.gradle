@@ -524,9 +524,27 @@ def verifySlabbedCorePackaging = tasks.register("verifySlabbedCorePackaging") {
                     || !operatorCommandBytes.contains("slabcheck")
                     || !operatorCommandBytes.contains("slabrig")
                     || !operatorCommandBytes.contains("rows")
-                    || !operatorCommandBytes.contains("tower")) {
+                    || !operatorCommandBytes.contains("tower")
+                    || !operatorCommandBytes.contains("mega")) {
                 throw new GradleException(
                         "Packaged core lost the permission-gated Phase 6C/6D command literals")
+            }
+            String rigServiceBytes = new String(
+                    zip.getInputStream(zip.getEntry(
+                            "com/slabbed/rig/SlabbedRigService.class")).readAllBytes(),
+                    java.nio.charset.StandardCharsets.ISO_8859_1)
+            def requiredMegaTokens = [
+                    "AUTO_USEON_PROXY",
+                    "rigCaseId",
+                    "rigLabel",
+                    "expectedDyBits",
+                    "orientation",
+                    "MEGA_"
+            ]
+            def missingMegaTokens = requiredMegaTokens.findAll { !rigServiceBytes.contains(it) }
+            if (!missingMegaTokens.isEmpty()) {
+                throw new GradleException(
+                        "Packaged core lost Mega matrix identity/RED tokens: " + missingMegaTokens)
             }
         }
         new java.util.zip.ZipFile(sourcesJar).withCloseable { zip ->
@@ -596,7 +614,7 @@ def writeSlabbedTestBundleProvenance = tasks.register("writeSlabbedTestBundlePro
                 dirty          : !status.isEmpty(),
                 dirtyStateSha256: sha256Text(status),
                 recorderSchema : "6",
-                recorderStatus : "Phase 6B static, GameTest, and packaged-addon candidate",
+                recorderStatus : "Phase 6B schema-6 plus Phase 6D Mega matrix; Phase 6E live acceptance pending",
                 core           : [
                         modId : project.mod_id.toString(),
                         file  : coreJar.name,
@@ -755,6 +773,10 @@ def verifySlabbedTestBundle = tasks.register("verifySlabbedTestBundle") {
                     "PLAYER_AUTHORED",
                     "AUTO_USEON_PROXY",
                     "GAMETEST",
+                    "LIVE_RIG_CASE_",
+                    "finalVerdict",
+                    "INFO_STORED_PUBLICATION_TIMING",
+                    "LIVE_PLACEMENT_SIDE_DY_SPLIT",
                     "MODEL_STALE_DIVERGENT",
                     "ClientPlayerNetworkEvent\$LoggingIn",
                     "ClientPlayerNetworkEvent\$LoggingOut"

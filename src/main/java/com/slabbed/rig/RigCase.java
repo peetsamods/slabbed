@@ -27,7 +27,7 @@ public record RigCase(
      * Declared non-state truth authored only for fixture scaffolding. Subject placement never uses
      * this door. The source is required only for the compound-visible side-slab relationship.
      */
-    public record FixtureAuthorship(Kind kind, BlockPos sourcePos) {
+    public record FixtureAuthorship(Kind kind, BlockPos sourcePos, long storedDyBits) {
         public FixtureAuthorship {
             kind = Objects.requireNonNull(kind, "kind");
             if (kind == Kind.COMPOUND_VISIBLE_SIDE_LOWER_SLAB) {
@@ -36,24 +36,41 @@ public record RigCase(
                 throw new IllegalArgumentException(
                         "only compound-visible side fixtures may name a source cell");
             }
+            if (kind == Kind.STORED_DY
+                    && !Double.isFinite(Double.longBitsToDouble(storedDyBits))) {
+                throw new IllegalArgumentException("stored fixture dy must be finite");
+            } else if (kind != Kind.STORED_DY && storedDyBits != 0L) {
+                throw new IllegalArgumentException(
+                        "only stored-dy fixtures may carry authored dy bits");
+            }
         }
 
         public static FixtureAuthorship none() {
-            return new FixtureAuthorship(Kind.NONE, null);
+            return new FixtureAuthorship(Kind.NONE, null, 0L);
         }
 
         public static FixtureAuthorship compoundFullBlock() {
-            return new FixtureAuthorship(Kind.COMPOUND_FULL_BLOCK, null);
+            return new FixtureAuthorship(Kind.COMPOUND_FULL_BLOCK, null, 0L);
         }
 
         public static FixtureAuthorship compoundVisibleSideLowerSlab(BlockPos sourcePos) {
-            return new FixtureAuthorship(Kind.COMPOUND_VISIBLE_SIDE_LOWER_SLAB, sourcePos);
+            return new FixtureAuthorship(
+                    Kind.COMPOUND_VISIBLE_SIDE_LOWER_SLAB, sourcePos, 0L);
+        }
+
+        public static FixtureAuthorship storedDy(double dy) {
+            if (!Double.isFinite(dy)) {
+                throw new IllegalArgumentException("stored fixture dy must be finite");
+            }
+            return new FixtureAuthorship(
+                    Kind.STORED_DY, null, Double.doubleToRawLongBits(dy));
         }
 
         public enum Kind {
             NONE,
             COMPOUND_FULL_BLOCK,
-            COMPOUND_VISIBLE_SIDE_LOWER_SLAB
+            COMPOUND_VISIBLE_SIDE_LOWER_SLAB,
+            STORED_DY
         }
     }
 

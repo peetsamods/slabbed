@@ -543,19 +543,31 @@ public final class SlabbedOperatorCommands {
         RigManifest manifest = result.manifest();
         RigManifest.MegaReport report =
                 (RigManifest.MegaReport) manifest.structuralReport();
-        String refused = report.refusedItemIds().isEmpty()
-                ? "none" : String.join(",", report.refusedItemIds());
         Component summary = Component.literal(
                 "Slabbed mega result: run=" + manifest.runId()
                         + " anchor=" + manifest.anchor().toShortString()
                         + " columns=" + report.columns()
-                        + " variants=4 attempts=" + report.attempts()
-                        + " placed=" + report.placed()
+                        + " depths=" + report.depths()
+                        + " faces=" + report.faces()
+                        + " attempts=" + report.attempts()
+                        + " exact=" + report.exact()
                         + " refused=" + report.refused()
-                        + " refused-ids=" + refused
-                        + " seat-check=" + (report.complete() ? "green" : "RED")
+                        + " mismatched=" + report.mismatched()
+                        + " inconclusive=" + report.inconclusive()
+                        + " matrix=" + (report.complete() ? "green" : "RED")
                         + " provenance=AUTO_USEON_PROXY");
         if (!report.complete()) {
+            report.redCases().stream().limit(24).forEach(red -> source.sendFailure(
+                    Component.literal(
+                            red.label() + " " + red.caseId()
+                                    + " => " + red.grade() + ": " + red.reason())
+                            .withStyle(ChatFormatting.RED)));
+            if (report.redCases().size() > 24) {
+                source.sendFailure(Component.literal(
+                        "... " + (report.redCases().size() - 24)
+                                + " additional RED cases are preserved in recorder evidence")
+                        .withStyle(ChatFormatting.RED));
+            }
             source.sendFailure(summary.copy().withStyle(ChatFormatting.RED));
             return 0;
         }

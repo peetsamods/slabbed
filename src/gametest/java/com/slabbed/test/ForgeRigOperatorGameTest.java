@@ -37,6 +37,8 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
@@ -51,8 +53,8 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class ForgeRigOperatorGameTest {
 
-    @GameTest(template = "empty", batch = "slabbed_mega_full")
-    public void megaRigBuildsFourRowsThroughProxyAndClearsExactOwnership(
+    @GameTest(template = "empty", batch = "slabbed_mega_full", timeoutTicks = 1200)
+    public void megaRigGradesEveryItemDepthFaceCaseAndClearsExactOwnership(
             GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         ServerPlayer player = FakePlayerFactory.getMinecraft(world);
@@ -66,22 +68,37 @@ public final class ForgeRigOperatorGameTest {
             List<String> expectedItems = SlabbedOperatorTools.paletteItems().stream()
                     .map(item -> BuiltInRegistries.ITEM.getKey(item).toString())
                     .toList();
-            List<Long> expectedRowDy = List.of(
-                    Double.doubleToRawLongBits(0.0d),
-                    Double.doubleToRawLongBits(-0.5d),
-                    Double.doubleToRawLongBits(-1.0d),
-                    Double.doubleToRawLongBits(-0.5d));
+            List<Long> expectedDepths = List.of(
+                    0.0d, -0.5d, -1.0d, -1.5d, -2.0d,
+                    -2.5d, -3.0d, -3.5d, -4.0d).stream()
+                    .map(Double::doubleToRawLongBits)
+                    .toList();
+            List<Direction> expectedFaces = List.of(
+                    Direction.UP, Direction.DOWN, Direction.NORTH,
+                    Direction.EAST, Direction.SOUTH, Direction.WEST);
             ctx.assertTrue(fullCoverage.columns() == expectedItems.size()
                             && fullCoverage.columns() == 40
-                            && fullCoverage.supportVariants() == 4
-                            && fullCoverage.attempts() == 160
+                            && fullCoverage.depths() == 9
+                            && fullCoverage.faces() == 6
+                            && fullCoverage.attempts() == 2160
                             && fullCoverage.itemIds().equals(expectedItems)
-                            && fullCoverage.rowDyBits().equals(expectedRowDy)
-                            && fullCoverage.caseIds().size() == 160,
-                    "bare /slabrig mega must plan all 40 categories across four support geometries");
+                            && fullCoverage.depthDyBits().equals(expectedDepths)
+                            && fullCoverage.faceOrder().equals(expectedFaces)
+                            && fullCoverage.caseIds().size() == 2160,
+                    "bare /slabrig mega must plan the exact 40 x 9 x 6 matrix");
+            Set<String> crossProduct = new LinkedHashSet<>();
+            Set<String> expectedLabels = new LinkedHashSet<>();
+            for (SlabbedRigService.MegaCaseDescriptor descriptor : fullCoverage.cases()) {
+                crossProduct.add(descriptor.itemId() + "|"
+                        + Long.toUnsignedString(descriptor.expectedDyBits()) + "|"
+                        + descriptor.face().getName());
+                expectedLabels.add(descriptor.label());
+            }
+            ctx.assertTrue(crossProduct.size() == 2160 && expectedLabels.size() == 2160,
+                    "every item/depth/face tuple and visible coordinate label must be unique");
 
-            // The full board is far wider than the tiny "empty" template. Keep its complete
-            // footprint in a guaranteed air layer instead of colliding with the template shell.
+            // The full board is wider than the tiny template. Keep it in a guaranteed air layer
+            // and explicitly load the same centered chunk square a real operator must keep loaded.
             BlockPos feet = ctx.absolutePos(new BlockPos(4, 300, 12));
             player.moveTo(
                     feet.getX() + 0.5d,
@@ -91,17 +108,13 @@ public final class ForgeRigOperatorGameTest {
                     0.0f);
             Direction facing = player.getDirection();
             BlockPos anchor = SlabbedRigService.defaultMegaAnchor(player);
-            ctx.assertTrue(anchor.equals(feet.relative(facing, 3))
-                            && world.getBlockState(anchor).isAir(),
-                    "the player's mega anchor must begin in a clean air layer; feet="
-                            + feet.toShortString()
-                            + " player=" + player.blockPosition().toShortString()
-                            + " facing=" + facing
-                            + " anchor=" + anchor.toShortString()
-                            + " state=" + world.getBlockState(anchor));
+            loadChunkSquare(world, feet, 176);
+            ctx.assertTrue(world.getBlockState(anchor).isAir(),
+                    "the centered Mega anchor must begin in a clean loaded air layer");
             AtomicInteger opened = new AtomicInteger();
             AtomicInteger closed = new AtomicInteger();
             List<SlabbedDiagnosticsBridge.ActionOriginContext> origins = new ArrayList<>();
+            List<LinkedHashMap<String, String>> rigResults = new ArrayList<>();
             previous = SlabbedDiagnosticsBridge.install(
                     new SlabbedDiagnosticsBridge.Provider() {
                         @Override
@@ -115,18 +128,23 @@ public final class ForgeRigOperatorGameTest {
                             }
                             return () -> { };
                         }
+
+                        @Override
+                        public void recordRigCase(LinkedHashMap<String, String> fields) {
+                            rigResults.add(new LinkedHashMap<>(fields));
+                        }
                     });
 
             assertCommandTree(ctx, world, player);
             CommandSourceStack allowed = player.createCommandSourceStack()
                     .withLevel(world)
                     .withPermission(2);
-            ctx.assertTrue(run(world, allowed, "slabrig mega") > 0,
-                    "the bare /slabrig mega command must execute the complete default board");
+            ctx.assertTrue(run(world, allowed, "slabrig mega") == 0,
+                    "the bare command must return RED while unsupported matrix cases remain");
 
             SlabbedRigService.RigStatus status = SlabbedRigService.status(world);
             ctx.assertTrue(status.active() && status.clearEligible(),
-                    "a fresh mega board must be active, exact, and clear-eligible; active="
+                    "a RED Mega board must remain active, intact, and exactly clearable; active="
                             + status.active()
                             + " intact=" + status.intactCells() + "/" + status.ownedCells()
                             + " conflicts=" + status.conflicts().stream()
@@ -138,81 +156,95 @@ public final class ForgeRigOperatorGameTest {
             ctx.assertTrue(manifest.mode().equals("mega")
                             && manifest.anchor().equals(anchor)
                             && manifest.caseIds().equals(fullCoverage.caseIds()),
-                    "mega must bind its exact anchor and all 160 deterministic category/row cases");
-            long ownedDoorCells = manifest.ownedCells().stream()
-                    .filter(cell -> cell.role() == RigManifest.CellRole.SUBJECT)
-                    .filter(cell -> cell.caseId().endsWith("minecraft.oak_door"))
-                    .count();
-            ctx.assertTrue(ownedDoorCells >= 2,
-                    "mega must own every changed cell of a successful multi-cell door placement");
-            sentinel = anchor.relative(facing.getOpposite(), 20)
-                    .relative(facing.getClockWise(), 5)
-                    .immutable();
+                    "Mega must bind its exact anchor and all 2,160 deterministic cases");
+            sentinel = feet.above(12).immutable();
             ctx.assertTrue(world.getBlockState(sentinel).isAir(),
                     "the unrelated clear sentinel must begin outside the Mega footprint");
             world.setBlock(sentinel, Blocks.GOLD_BLOCK.defaultBlockState(), Block.UPDATE_ALL);
             RigManifest.MegaReport report =
                     (RigManifest.MegaReport) manifest.structuralReport();
             ctx.assertTrue(report.columns() == 40
-                            && report.attempts() == 160
-                            && report.placed() + report.refused() == 160
-                            && report.complete(),
-                    "mega must account for all 160 proxy attempts and verify all four support seats");
-            long[] expectedDy = {
-                    Double.doubleToRawLongBits(0.0d),
-                    Double.doubleToRawLongBits(-0.5d),
-                    Double.doubleToRawLongBits(-1.0d),
-                    Double.doubleToRawLongBits(-0.5d)
-            };
-            for (int row = 0; row < expectedDy.length; row++) {
-                RigManifest.MegaSeatReadback seat = report.sampleSeats().get(row);
-                ctx.assertTrue(seat.row() == row
-                                && seat.expectedDyBits() == expectedDy[row]
-                                && seat.liveDyBits() == expectedDy[row],
-                        "mega row " + row + " must read back the advertised support dy exactly");
-            }
-            ctx.assertTrue(manifest.receipt().fixtureDirectWrites() > 15
-                            && manifest.receipt().fixtureTruthWrites() == 80
-                            && manifest.receipt().subjectUseOnCalls() == 160
+                            && report.depths() == 9
+                            && report.faces() == 6
+                            && report.attempts() == 2160
+                            && report.exact() + report.refused()
+                                    + report.mismatched() + report.inconclusive() == 2160
+                            && !report.complete()
+                            && !report.redCases().isEmpty()
+                            && report.cases().stream().map(RigManifest.MegaCaseReadback::caseId)
+                                    .toList().equals(fullCoverage.caseIds()),
+                    "Mega must grade every case and keep every non-exact result RED");
+            ctx.assertTrue(manifest.receipt().fixtureDirectWrites() == 6480
+                            && manifest.receipt().fixtureTruthWrites() == 2160
+                            && manifest.receipt().subjectUseOnCalls() == 2160
                             && manifest.receipt().subjectDirectStateWrites() == 0
-                            && manifest.receipt().resolutions().size() == 160,
-                    "mega must separate declared scenery from all 160 real useOn subject attempts");
-            ctx.assertTrue(opened.get() == 160 && closed.get() == 160 && origins.size() == 160,
+                            && manifest.receipt().resolutions().size() == 2160,
+                    "Mega must separate labelled fixtures from all 2,160 real useOn attempts");
+            ctx.assertTrue(opened.get() == 2160 && closed.get() == 2160
+                            && origins.size() == 2160 && rigResults.size() == 2160,
                     "every mega subject must open and close one AUTO_USEON_PROXY scope");
-            Set<BlockPos> expectedTargets = new LinkedHashSet<>();
-            Direction right = facing.getClockWise();
-            for (int column = 0; column < 40; column++) {
-                for (int row = 0; row < 4; row++) {
-                    BlockPos ground = anchor.relative(facing, row)
-                            .relative(right, column * 2);
-                    BlockPos seat = switch (row) {
-                        case 0 -> ground.above();
-                        case 1, 3 -> ground.above(2);
-                        default -> ground.above(4).relative(facing.getCounterClockWise());
-                    };
-                    expectedTargets.add(seat.above());
-                }
+            Map<String, RigManifest.MegaCaseReadback> reportById = new LinkedHashMap<>();
+            for (RigManifest.MegaCaseReadback one : report.cases()) {
+                reportById.put(one.caseId(), one);
             }
-            ctx.assertTrue(expectedTargets.size() == 160
-                            && origins.stream().allMatch(origin ->
-                            origin.playerUuid().equals(player.getUUID().toString())
-                                    && origin.dimensionId().equals(
-                                            world.dimension().location().toString())
-                                    && expectedTargets.contains(origin.placementPos())),
-                    "mega proxy scopes must bind the exact player, dimension, and intended cell");
+            for (SlabbedDiagnosticsBridge.ActionOriginContext origin : origins) {
+                RigManifest.MegaCaseReadback one = reportById.get(origin.rigCaseId());
+                ctx.assertTrue(one != null
+                                && origin.hasRigCase()
+                                && origin.playerUuid().equals(player.getUUID().toString())
+                                && origin.dimensionId().equals(
+                                        world.dimension().location().toString())
+                                && origin.placementPos().equals(one.placementPos())
+                                && origin.rigLabel().equals(one.label())
+                                && origin.rigExpectedDyBits() == one.expectedDyBits()
+                                && origin.rigFace() == one.face()
+                                && origin.rigOrientation().equals(one.orientation()),
+                        "each proxy scope must bind the resolved placement cell and exact case identity");
+            }
+            Map<String, String> gradesById = new LinkedHashMap<>();
+            for (LinkedHashMap<String, String> row : rigResults) {
+                ctx.assertTrue(gradesById.put(row.get("rigCaseId"), row.get("grade")) == null,
+                        "each Mega case must emit exactly one recorder result");
+            }
+            for (RigManifest.MegaCaseReadback one : report.cases()) {
+                ctx.assertTrue(one.grade().name().equals(gradesById.get(one.caseId())),
+                        "recorder grade must exactly equal the service grade for " + one.caseId());
+            }
+
+            Set<String> liveLabels = new LinkedHashSet<>();
+            long signCount = 0;
+            for (RigManifest.OwnedCell cell : manifest.ownedCells()) {
+                if (cell.role() != RigManifest.CellRole.FIXTURE
+                        || !cell.expectedState().is(Blocks.OAK_SIGN)) {
+                    continue;
+                }
+                signCount++;
+                BlockEntity blockEntity = world.getBlockEntity(cell.pos());
+                ctx.assertTrue(blockEntity instanceof SignBlockEntity,
+                        "every label fixture must remain a real sign block entity");
+                SignBlockEntity sign = (SignBlockEntity) blockEntity;
+                ctx.assertTrue(sign.isWaxed(), "every Mega label must be protected from editing");
+                liveLabels.add(sign.getFrontText().getMessage(0, false).getString());
+            }
+            ctx.assertTrue(signCount == 2160 && liveLabels.equals(expectedLabels),
+                    "every case must have one visible, unique Rxx/Cxx sign label");
             assertInventory(ctx, inventoryBefore, player,
                     "mega must restore every player inventory slot after its proxy sweep");
 
             List<RigManifest.OwnedCell> owned = manifest.ownedCells();
             ctx.assertTrue(run(world, allowed, "slabrig status") > 0,
                     "/slabrig status must report the active mega manifest");
-            BlockPos compound = anchor.relative(facing, 2).above(4);
-            SlabAnchorAttachment.removeCompoundFullBlockAnchor(world, compound);
+            RigManifest.OwnedCell authoredFixture = owned.stream()
+                    .filter(cell -> cell.role() == RigManifest.CellRole.FIXTURE)
+                    .filter(cell -> cell.expectedStoredDy().present())
+                    .findFirst()
+                    .orElseThrow();
+            SlabAnchorAttachment.clearPlacementTruth(world, authoredFixture.pos());
             List<BlockSnapshot> beforeRefusedClear = snapshotBlocks(world, owned);
             SlabbedRigService.RigStatus changedTruth = SlabbedRigService.status(world);
-            ctx.assertTrue(changedTruth.conflicts().contains(compound)
+            ctx.assertTrue(changedTruth.conflicts().contains(authoredFixture.pos())
                             && !changedTruth.clearEligible(),
-                    "mega status must detect changed compound marker truth, not only block state");
+                    "Mega status must detect changed fixture dy truth, not only block state");
             ctx.assertTrue(run(world, allowed, "slabrig clear") == 0
                             && beforeRefusedClear.equals(snapshotBlocks(world, owned)),
                     "normal mega clear must refuse changed owned truth without removing cells");
@@ -233,6 +265,18 @@ public final class ForgeRigOperatorGameTest {
             }
         }
         ctx.succeed();
+    }
+
+    private static void loadChunkSquare(ServerLevel world, BlockPos center, int radius) {
+        int minChunkX = (center.getX() - radius) >> 4;
+        int maxChunkX = (center.getX() + radius) >> 4;
+        int minChunkZ = (center.getZ() - radius) >> 4;
+        int maxChunkZ = (center.getZ() + radius) >> 4;
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                world.getChunk(chunkX, chunkZ);
+            }
+        }
     }
 
     @GameTest(template = "empty")

@@ -69,6 +69,11 @@ final class SlabbedRecorderProvider implements SlabbedDiagnosticsBridge.Provider
     }
 
     @Override
+    public void recordRigCase(LinkedHashMap<String, String> fields) {
+        SlabbedRecorder.recordRigCase(fields);
+    }
+
+    @Override
     public void recordRenderedOutline(LinkedHashMap<String, String> fields) {
         SlabbedRecorder.recordRenderedOutline(fields);
     }

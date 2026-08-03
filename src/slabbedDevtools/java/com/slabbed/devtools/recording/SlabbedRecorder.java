@@ -188,6 +188,18 @@ public final class SlabbedRecorder {
         }
     }
 
+    public static void recordRigCase(LinkedHashMap<String, String> fields) {
+        Schema6Session active = session;
+        if (active == null) {
+            return;
+        }
+        try {
+            active.recordRigCase(fields);
+        } catch (IOException error) {
+            warn("rig_case", error);
+        }
+    }
+
     public static void recordRenderedOutline(LinkedHashMap<String, String> fields) {
         Schema6Session active = session;
         if (active == null) {
@@ -336,7 +348,10 @@ public final class SlabbedRecorder {
         return () -> {
             synchronized (LOCK) {
                 lease.closed = true;
-                if (lease.complete()) {
+                // A synchronous server observation is the authoritative end of a server-run
+                // proxy action. Retain only a client-only lease for its delayed server half;
+                // otherwise a closed Mega lease could relabel a later manual action at that cell.
+                if (!lease.clientSeen || lease.serverSeen) {
                     ORIGIN_SCOPES.remove(lease);
                 }
             }
@@ -415,6 +430,7 @@ public final class SlabbedRecorder {
                 if (!lease.matches(row)) {
                     continue;
                 }
+                appendRigIdentity(row, lease.context);
                 lease.observe(row.get("side"));
                 if (lease.complete()) {
                     iterator.remove();
@@ -423,6 +439,21 @@ public final class SlabbedRecorder {
             }
             return normalizedHint;
         }
+    }
+
+    private static void appendRigIdentity(
+            Map<String, String> row,
+            SlabbedDiagnosticsBridge.ActionOriginContext context) {
+        if (!context.hasRigCase()) {
+            return;
+        }
+        row.put("rigCaseId", context.rigCaseId());
+        row.put("rigLabel", context.rigLabel());
+        row.put("rigExpectedDy", Double.toString(
+                Double.longBitsToDouble(context.rigExpectedDyBits())));
+        row.put("rigExpectedDyBits", Long.toUnsignedString(context.rigExpectedDyBits()));
+        row.put("rigFace", context.rigFace().getName());
+        row.put("rigOrientation", context.rigOrientation());
     }
 
     private static void putIfMissingEvidence(

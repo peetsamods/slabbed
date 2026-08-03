@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -20,6 +21,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -32,6 +34,8 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
@@ -67,13 +71,19 @@ public final class SlabbedRigService {
     private static final int NUMERIC_TOWER_HEADROOM = 2;
     private static final int STACK_SPACING = 2;
     private static final int STACK_HEADROOM = 2;
-    private static final int MEGA_COLUMN_SPACING = 2;
-    private static final int MEGA_ROW_COUNT = 4;
-    private static final int MEGA_HANGING_ROW = 3;
-    private static final double[] MEGA_ROW_DY = {0.0d, -0.5d, -1.0d, -0.5d};
-    private static final String[] MEGA_ROW_LABELS = {
-            "bottom_slab", "slab_and_block", "compound_column", "overhang_and_ceiling"
-    };
+    private static final int MEGA_TILE_SPACING = 5;
+    private static final int MEGA_SUPPORT_Y = 4;
+    private static final List<Double> MEGA_DEPTHS = List.of(
+            0.0d, -0.5d, -1.0d, -1.5d, -2.0d,
+            -2.5d, -3.0d, -3.5d, -4.0d);
+    private static final List<Direction> MEGA_FACES = List.of(
+            Direction.UP,
+            Direction.DOWN,
+            Direction.NORTH,
+            Direction.EAST,
+            Direction.SOUTH,
+            Direction.WEST);
+    private static final int MEGA_ROW_COUNT = MEGA_DEPTHS.size() * MEGA_FACES.size();
     private static final double SEAM_EPSILON = 1.0e-6d;
     private static final String[] NUMERIC_TOWER_RECIPES = {"SB", "SSBB", "BS", "S"};
     private static final String[] NUMERIC_TOWER_LABELS = {"SBSB", "SSBB", "BSBS", "SSSS"};
@@ -116,11 +126,21 @@ public final class SlabbedRigService {
         return player.blockPosition().below().relative(facing, 4).immutable();
     }
 
-    /** Mega begins in the air layer at the operator's feet and extends across four support rows. */
+    /** Mega is centered on the operator so its complete matrix stays inside loaded chunks. */
     public static BlockPos defaultMegaAnchor(ServerPlayer player) {
+        return defaultMegaAnchor(player, DEFAULT_MEGA_COLUMNS);
+    }
+
+    private static BlockPos defaultMegaAnchor(ServerPlayer player, int columns) {
         Objects.requireNonNull(player, "player");
         Direction facing = horizontal(player.getDirection());
-        return player.blockPosition().relative(facing, 3).immutable();
+        Direction right = facing.getClockWise();
+        int rowHalfSpan = ((MEGA_ROW_COUNT - 1) * MEGA_TILE_SPACING) / 2;
+        int columnHalfSpan = ((columns - 1) * MEGA_TILE_SPACING) / 2;
+        return player.blockPosition()
+                .relative(facing, -rowHalfSpan)
+                .relative(right, -columnHalfSpan)
+                .immutable();
     }
 
     public static synchronized BuildResult buildRows(
@@ -261,7 +281,7 @@ public final class SlabbedRigService {
         return buildMegaAt(
                 world,
                 player,
-                defaultMegaAnchor(player),
+                defaultMegaAnchor(player, columns),
                 player.getDirection(),
                 columns,
                 force);
@@ -274,17 +294,15 @@ public final class SlabbedRigService {
                 .filter(action -> action.row() == 0)
                 .map(MegaAction::itemId)
                 .toList();
-        List<Long> rowDyBits = plan.actions().stream()
-                .filter(action -> action.column() == 0)
-                .map(action -> Double.doubleToRawLongBits(action.expectedSeatDy()))
-                .toList();
         return new MegaCoverage(
                 plan.columns(),
-                MEGA_ROW_COUNT,
+                MEGA_DEPTHS.size(),
+                MEGA_FACES.size(),
                 plan.actions().size(),
                 itemIds,
-                rowDyBits,
-                plan.caseIds());
+                MEGA_DEPTHS.stream().map(Double::doubleToRawLongBits).toList(),
+                MEGA_FACES,
+                plan.actions().stream().map(MegaAction::descriptor).toList());
     }
 
     /** Public only for the Forge-native contract; this remains an internal diagnostic surface. */
@@ -1390,7 +1408,7 @@ public final class SlabbedRigService {
                 List.of()));
     }
 
-    /** Four support variants for every requested entry in the bounded Forge operator palette. */
+    /** Full palette-by-depth-by-face diagnostic matrix. It observes law; it does not admit it. */
     private static MegaPlan megaPlan(
             BlockPos anchor,
             Direction facing,
@@ -1413,88 +1431,131 @@ public final class SlabbedRigService {
         for (int column = 0; column < columns; column++) {
             Item item = palette.get(column);
             String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
-            for (int row = 0; row < MEGA_ROW_COUNT; row++) {
-                BlockPos ground = anchor.relative(facing, row)
-                        .relative(right, column * MEGA_COLUMN_SPACING)
-                        .immutable();
-                String caseId = "mega.c" + column + ".r" + row + "."
-                        + MEGA_ROW_LABELS[row] + "." + itemId.replace(':', '.');
-                List<RigCase.FixtureCell> fixtures = megaFixtures(ground, facing, row);
-                BlockPos seat = megaSeat(ground, facing, row);
-                BlockPos clicked = row == MEGA_HANGING_ROW ? seat.above(2) : seat;
-                Direction face = row == MEGA_HANGING_ROW ? Direction.DOWN : Direction.UP;
-                BlockPos target = seat.above().immutable();
-                MegaAction action = new MegaAction(
-                        caseId, column, row, itemId, item, fixtures,
-                        seat, clicked, face, target, MEGA_ROW_DY[row]);
-                actions.add(action);
-                fixtures.forEach(fixture -> footprint.add(fixture.pos()));
-                footprint.addAll(actionEnvelope(clicked, target));
-                if (row == MEGA_HANGING_ROW) {
-                    footprint.add(seat.relative(facing).immutable());
+            for (int depthIndex = 0; depthIndex < MEGA_DEPTHS.size(); depthIndex++) {
+                double expectedDy = MEGA_DEPTHS.get(depthIndex);
+                for (int faceIndex = 0; faceIndex < MEGA_FACES.size(); faceIndex++) {
+                    Direction face = MEGA_FACES.get(faceIndex);
+                    int row = depthIndex * MEGA_FACES.size() + faceIndex;
+                    BlockPos tile = anchor
+                            .relative(facing, row * MEGA_TILE_SPACING)
+                            .relative(right, column * MEGA_TILE_SPACING)
+                            .immutable();
+                    BlockPos labelPedestal = tile.above(7).immutable();
+                    BlockPos labelPos = tile.above(8).immutable();
+                    BlockPos clicked = tile.above(MEGA_SUPPORT_Y).immutable();
+                    BlockPos intendedTarget = clicked.relative(face).immutable();
+                    String label = String.format(Locale.ROOT, "R%02d/C%02d", row + 1, column + 1);
+                    String orientation = orientation(face);
+                    String caseId = "mega.r" + twoDigits(row + 1)
+                            + ".c" + twoDigits(column + 1)
+                            + ".item." + itemId.replace(':', '.')
+                            + ".dy." + dyToken(expectedDy)
+                            + ".face." + face.getName();
+                    List<RigCase.FixtureCell> fixtures = List.of(
+                            new RigCase.FixtureCell(
+                                    labelPedestal,
+                                    Blocks.STONE.defaultBlockState()),
+                            new RigCase.FixtureCell(
+                                    labelPos,
+                                    Blocks.OAK_SIGN.defaultBlockState()),
+                            new RigCase.FixtureCell(
+                                    clicked,
+                                    Blocks.STONE.defaultBlockState(),
+                                    RigCase.FixtureAuthorship.storedDy(expectedDy)));
+                    MegaAction action = new MegaAction(
+                            caseId,
+                            label,
+                            column,
+                            row,
+                            itemId,
+                            item,
+                            fixtures,
+                            labelPos,
+                            clicked,
+                            face,
+                            intendedTarget,
+                            expectedDy,
+                            orientation);
+                    actions.add(action);
+                    fixtures.forEach(fixture -> footprint.add(fixture.pos()));
+                    footprint.addAll(actionEnvelope(clicked, intendedTarget));
                 }
             }
         }
         return new MegaPlan(columns, actions, List.copyOf(footprint));
     }
 
-    private static List<RigCase.FixtureCell> megaFixtures(
-            BlockPos ground,
-            Direction facing,
-            int row) {
-        BlockState slab = Blocks.OAK_SLAB.defaultBlockState()
-                .setValue(SlabBlock.TYPE, SlabType.BOTTOM);
-        return switch (row) {
-            case 0 -> List.of(
-                    new RigCase.FixtureCell(ground, Blocks.STONE.defaultBlockState()),
-                    new RigCase.FixtureCell(ground.above(), slab));
-            case 1 -> List.of(
-                    new RigCase.FixtureCell(ground, Blocks.STONE.defaultBlockState()),
-                    new RigCase.FixtureCell(ground.above(), slab),
-                    new RigCase.FixtureCell(
-                            ground.above(2), Blocks.STONE.defaultBlockState()));
-            case 2 -> towerPlan(ground, facing).get(0).fixtures();
-            case 3 -> List.of(
-                    new RigCase.FixtureCell(ground, Blocks.STONE.defaultBlockState()),
-                    new RigCase.FixtureCell(ground.above(), slab),
-                    new RigCase.FixtureCell(
-                            ground.above(2), Blocks.STONE.defaultBlockState()),
-                    new RigCase.FixtureCell(
-                            ground.above(4), Blocks.STONE.defaultBlockState()));
-            default -> throw new IllegalArgumentException("unknown mega row " + row);
+    private static String orientation(Direction face) {
+        return switch (face) {
+            case UP -> "floor_up";
+            case DOWN -> "ceiling_down";
+            case NORTH, EAST, SOUTH, WEST -> "wall_" + face.getName();
         };
     }
 
-    private static BlockPos megaSeat(BlockPos ground, Direction facing, int row) {
-        return switch (row) {
-            case 0 -> ground.above().immutable();
-            case 1, 3 -> ground.above(2).immutable();
-            case 2 -> ground.above(4).relative(facing.getCounterClockWise()).immutable();
-            default -> throw new IllegalArgumentException("unknown mega row " + row);
-        };
+    private static String dyToken(double dy) {
+        return Double.toString(dy).replace('-', 'm').replace('.', 'p');
+    }
+
+    private static String twoDigits(int value) {
+        return String.format(Locale.ROOT, "%02d", value);
     }
 
     /** Immutable readback of the actual Mega planner, used by Forge GameTests and artifact review. */
     public record MegaCoverage(
             int columns,
-            int supportVariants,
+            int depths,
+            int faces,
             int attempts,
             List<String> itemIds,
-            List<Long> rowDyBits,
-            List<String> caseIds) {
+            List<Long> depthDyBits,
+            List<Direction> faceOrder,
+            List<MegaCaseDescriptor> cases) {
         public MegaCoverage {
             itemIds = List.copyOf(Objects.requireNonNull(itemIds, "itemIds"));
-            rowDyBits = List.copyOf(Objects.requireNonNull(rowDyBits, "rowDyBits"));
-            caseIds = List.copyOf(Objects.requireNonNull(caseIds, "caseIds"));
+            depthDyBits = List.copyOf(Objects.requireNonNull(depthDyBits, "depthDyBits"));
+            faceOrder = List.copyOf(Objects.requireNonNull(faceOrder, "faceOrder"));
+            cases = List.copyOf(Objects.requireNonNull(cases, "cases"));
             if (columns < 1
-                    || supportVariants != MEGA_ROW_COUNT
+                    || depths != MEGA_DEPTHS.size()
+                    || faces != MEGA_FACES.size()
                     || itemIds.size() != columns
-                    || rowDyBits.size() != supportVariants
-                    || attempts != columns * supportVariants
-                    || caseIds.size() != attempts
+                    || depthDyBits.size() != depths
+                    || faceOrder.size() != faces
+                    || attempts != columns * depths * faces
+                    || cases.size() != attempts
                     || new LinkedHashSet<>(itemIds).size() != itemIds.size()
-                    || new LinkedHashSet<>(caseIds).size() != caseIds.size()) {
+                    || new LinkedHashSet<>(cases.stream().map(MegaCaseDescriptor::caseId).toList())
+                            .size() != cases.size()
+                    || new LinkedHashSet<>(cases.stream().map(MegaCaseDescriptor::label).toList())
+                            .size() != cases.size()) {
                 throw new IllegalArgumentException("invalid mega coverage");
+            }
+        }
+
+        public List<String> caseIds() {
+            return cases.stream().map(MegaCaseDescriptor::caseId).toList();
+        }
+    }
+
+    public record MegaCaseDescriptor(
+            String caseId,
+            String label,
+            String itemId,
+            int column,
+            int row,
+            long expectedDyBits,
+            Direction face,
+            String orientation) {
+        public MegaCaseDescriptor {
+            caseId = requireText(caseId, "caseId");
+            label = requireText(label, "label");
+            itemId = requireText(itemId, "itemId");
+            face = Objects.requireNonNull(face, "face");
+            orientation = requireText(orientation, "orientation");
+            if (column < 0 || row < 0 || row >= MEGA_ROW_COUNT
+                    || !Double.isFinite(Double.longBitsToDouble(expectedDyBits))) {
+                throw new IllegalArgumentException("invalid mega case descriptor");
             }
         }
     }
@@ -2140,11 +2201,10 @@ public final class SlabbedRigService {
         List<AttemptedCell> attempted = new ArrayList<>();
         Set<BlockPos> attemptedPositions = new HashSet<>();
         List<LandingResolution> resolutions = new ArrayList<>();
-        Set<String> refusedIds = new LinkedHashSet<>();
+        List<RigManifest.MegaCaseReadback> readbacks = new ArrayList<>();
         int fixtureWrites = 0;
         int fixtureTruthWrites = 0;
-        int placed = 0;
-        int refused = 0;
+        int subjectUseOnCalls = 0;
         try {
             for (MegaAction action : plan.actions()) {
                 for (RigCase.FixtureCell fixture : action.fixtures()) {
@@ -2155,6 +2215,7 @@ public final class SlabbedRigService {
                     created.add(placeFixture(world, action.caseId(), fixture));
                     fixtureWrites++;
                 }
+                writeMegaLabel(world, action);
             }
             for (MegaAction action : plan.actions()) {
                 for (RigCase.FixtureCell fixture : action.fixtures()) {
@@ -2191,14 +2252,28 @@ public final class SlabbedRigService {
                         action.face().getStepZ() * 0.5d);
                 BlockHitResult hit = new BlockHitResult(
                         hitVector, action.face(), action.clicked(), false);
+                BlockPlaceContext placementContext = new BlockPlaceContext(
+                        world, player, InteractionHand.MAIN_HAND, proxy, hit);
+                BlockPos resolvedTarget = placementContext.getClickedPos().immutable();
+                if (!envelope.contains(resolvedTarget)) {
+                    throw new IllegalStateException(
+                            "mega placement resolved outside its declared evidence envelope: "
+                                    + action.caseId() + " -> " + resolvedTarget.toShortString());
+                }
                 player.setItemInHand(InteractionHand.MAIN_HAND, proxy);
+                subjectUseOnCalls++;
                 try {
                     SlabbedDiagnosticsBridge.withActionOrigin(
                             SlabbedDiagnosticsBridge.AUTO_USEON_PROXY,
                             new SlabbedDiagnosticsBridge.ActionOriginContext(
                                     player.getUUID().toString(),
                                     world.dimension().location().toString(),
-                                    action.target()),
+                                    resolvedTarget,
+                                    action.caseId(),
+                                    action.label(),
+                                    Double.doubleToRawLongBits(action.expectedDy()),
+                                    action.face(),
+                                    action.orientation()),
                             () -> result[0] = ForgeHooks.onPlaceItemIntoWorld(
                                     new UseOnContext(player, InteractionHand.MAIN_HAND, hit)));
                 } catch (RuntimeException failure) {
@@ -2216,61 +2291,101 @@ public final class SlabbedRigService {
                         replaceOrAddOwnedCell(created, pos, after, action.caseId());
                     }
                 }
+
+                CellSnapshot targetBefore = snapshotAt(envelope, before, resolvedTarget);
+                CellSnapshot targetAfter = snapshot(world, resolvedTarget);
+                RigManifest.MegaCaseGrade grade;
+                String reason;
+                long observedDyBits = Double.doubleToRawLongBits(Double.NaN);
+                if (!targetAfter.state().isAir()) {
+                    observedDyBits = Double.doubleToRawLongBits(SlabSupport.getYOffset(
+                            world, resolvedTarget, targetAfter.state()));
+                }
                 if (changed.isEmpty()) {
-                    refused++;
-                    refusedIds.add(action.itemId());
-                    String reason = "mega_refused_" + result[0].name().toLowerCase();
+                    grade = RigManifest.MegaCaseGrade.REFUSED;
+                    reason = "no_world_change_" + result[0].name().toLowerCase(Locale.ROOT);
                     if (thrown[0] != null) {
                         reason += "_" + thrown[0].getClass().getSimpleName();
                     }
                     resolutions.add(new LandingResolution.Reject(reason));
+                } else if (targetBefore.equals(targetAfter) || targetAfter.state().isAir()) {
+                    grade = RigManifest.MegaCaseGrade.INCONCLUSIVE;
+                    reason = "changed_outside_resolved_placement_cell";
+                    if (thrown[0] != null) {
+                        reason += "_" + thrown[0].getClass().getSimpleName();
+                    }
+                    resolutions.add(new LandingResolution.PreserveVanilla(reason));
                 } else {
-                    placed++;
-                    BlockPos primary = changed.contains(action.target())
-                            ? action.target()
-                            : changed.get(0);
-                    SlabAnchorAttachment.PlacementDyFact stored =
-                            SlabAnchorAttachment.storedPlacementDyFact(world, primary);
-                    if (stored.present()) {
+                    long expectedBits = Double.doubleToRawLongBits(action.expectedDy());
+                    boolean liveExact = observedDyBits == expectedBits;
+                    boolean storedExact = targetAfter.storedDy().present()
+                            && targetAfter.storedDy().rawBits() == expectedBits;
+                    grade = liveExact && storedExact
+                            ? RigManifest.MegaCaseGrade.EXACT
+                            : RigManifest.MegaCaseGrade.MISMATCH;
+                    reason = grade == RigManifest.MegaCaseGrade.EXACT
+                            ? "live_and_stored_dy_exact"
+                            : "expected=" + Double.toString(action.expectedDy())
+                                    + ",live=" + Double.toString(
+                                            Double.longBitsToDouble(observedDyBits))
+                                    + ",stored=" + (targetAfter.storedDy().present()
+                                            ? Double.toString(targetAfter.storedDy().valueOrNaN())
+                                            : "absent");
+                    if (targetAfter.storedDy().present()) {
                         resolutions.add(new LandingResolution.Place(
-                                primary,
-                                stored.rawBits(),
-                                LandingResolution.Lane.fromDy(stored.valueOrNaN()),
+                                resolvedTarget,
+                                targetAfter.storedDy().rawBits(),
+                                LandingResolution.Lane.fromDy(
+                                        targetAfter.storedDy().valueOrNaN()),
                                 "forge_itemstack_use_on_mega"));
                     } else {
                         resolutions.add(new LandingResolution.PreserveVanilla(
-                                "mega_changed_without_stored_dy"));
+                                "mega_target_changed_without_stored_dy"));
                     }
                 }
+
+                RigManifest.MegaCaseReadback readback = new RigManifest.MegaCaseReadback(
+                        action.caseId(),
+                        action.label(),
+                        action.itemId(),
+                        action.column(),
+                        action.row(),
+                        resolvedTarget,
+                        Double.doubleToRawLongBits(action.expectedDy()),
+                        action.face(),
+                        action.orientation(),
+                        grade,
+                        targetAfter.state().toString(),
+                        observedDyBits,
+                        targetAfter.storedDy(),
+                        reason);
+                readbacks.add(readback);
+                recordMegaCase(readback, changed, result[0], thrown[0]);
             }
 
-            List<RigManifest.MegaSeatReadback> seats = new ArrayList<>(MEGA_ROW_COUNT);
-            for (int row = 0; row < MEGA_ROW_COUNT; row++) {
-                int sampleRow = row;
-                MegaAction sample = plan.actions().stream()
-                        .filter(action -> action.column() == 0 && action.row() == sampleRow)
-                        .findFirst()
-                        .orElseThrow();
-                double live = SlabSupport.getYOffset(
-                        world, sample.seat(), world.getBlockState(sample.seat()));
-                seats.add(new RigManifest.MegaSeatReadback(
-                        row,
-                        MEGA_ROW_LABELS[row],
-                        sample.seat(),
-                        Double.doubleToRawLongBits(sample.expectedSeatDy()),
-                        Double.doubleToRawLongBits(live)));
-            }
-            boolean complete = seats.stream().allMatch(RigManifest.MegaSeatReadback::matches);
+            int exact = (int) readbacks.stream()
+                    .filter(one -> one.grade() == RigManifest.MegaCaseGrade.EXACT).count();
+            int refused = (int) readbacks.stream()
+                    .filter(one -> one.grade() == RigManifest.MegaCaseGrade.REFUSED).count();
+            int mismatched = (int) readbacks.stream()
+                    .filter(one -> one.grade() == RigManifest.MegaCaseGrade.MISMATCH).count();
+            int inconclusive = (int) readbacks.stream()
+                    .filter(one -> one.grade() == RigManifest.MegaCaseGrade.INCONCLUSIVE).count();
+            boolean complete = exact == plan.actions().size();
             RigManifest.MegaReport report = new RigManifest.MegaReport(
                     plan.columns(),
+                    MEGA_DEPTHS.size(),
+                    MEGA_FACES.size(),
                     plan.actions().size(),
-                    placed,
+                    exact,
                     refused,
-                    List.copyOf(refusedIds),
-                    seats,
+                    mismatched,
+                    inconclusive,
+                    readbacks,
                     complete,
-                    "placed=" + placed + ",refused=" + refused
-                            + ",seat-check=" + (complete ? "green" : "red"));
+                    "exact=" + exact + ",refused=" + refused
+                            + ",mismatched=" + mismatched
+                            + ",inconclusive=" + inconclusive);
             // Connecting and merge-sensitive families can legitimately settle an earlier owned
             // cell after a later column/row action (for example wire shape, rail slope, or a slab
             // merge). Publish ownership only after the complete sweep has settled. Never claim an
@@ -2281,7 +2396,7 @@ public final class SlabbedRigService {
                     attempted,
                     fixtureWrites,
                     fixtureTruthWrites,
-                    plan.actions().size(),
+                    subjectUseOnCalls,
                     resolutions,
                     report);
         } catch (RuntimeException failure) {
@@ -2291,12 +2406,60 @@ public final class SlabbedRigService {
                     attempted,
                     fixtureWrites,
                     fixtureTruthWrites,
-                    resolutions.size(),
+                    subjectUseOnCalls,
                     resolutions,
                     RigManifest.StructuralReport.none(),
                     failure,
                     residual);
         }
+    }
+
+    private static CellSnapshot snapshotAt(
+            List<BlockPos> positions,
+            List<CellSnapshot> snapshots,
+            BlockPos pos) {
+        int index = positions.indexOf(pos);
+        if (index < 0) {
+            throw new IllegalArgumentException("position is outside the evidence envelope: " + pos);
+        }
+        return snapshots.get(index);
+    }
+
+    private static void recordMegaCase(
+            RigManifest.MegaCaseReadback readback,
+            List<BlockPos> changed,
+            InteractionResult result,
+            RuntimeException failure) {
+        LinkedHashMap<String, String> fields = new LinkedHashMap<>();
+        fields.put("rigCaseId", readback.caseId());
+        fields.put("rigLabel", readback.label());
+        fields.put("itemId", readback.itemId());
+        fields.put("column", Integer.toString(readback.column()));
+        fields.put("row", Integer.toString(readback.row()));
+        fields.put("pos", readback.placementPos().toShortString());
+        fields.put("placementPos", readback.placementPos().toShortString());
+        fields.put("heldItem", readback.itemId());
+        fields.put("expectedDy", Double.toString(readback.expectedDy()));
+        fields.put("expectedDyBits", Long.toUnsignedString(readback.expectedDyBits()));
+        fields.put("face", readback.face().getName());
+        fields.put("orientation", readback.orientation());
+        fields.put("grade", readback.grade().name());
+        fields.put("observedState", readback.observedState());
+        fields.put("observedDy", Double.toString(readback.observedDy()));
+        fields.put("observedDyBits", Long.toUnsignedString(readback.observedDyBits()));
+        fields.put("observedStoredDy", readback.observedStoredDy().present()
+                ? Double.toString(readback.observedStoredDy().valueOrNaN()) : "absent");
+        fields.put("observedStoredDyBits", readback.observedStoredDy().present()
+                ? Long.toUnsignedString(readback.observedStoredDy().rawBits()) : "absent");
+        fields.put("interactionResult", result.name());
+        fields.put("changedCells", changed.stream().map(BlockPos::toShortString)
+                .collect(java.util.stream.Collectors.joining("|")));
+        fields.put("reason", readback.reason());
+        fields.put("failureClasses", failure == null
+                ? (readback.grade() == RigManifest.MegaCaseGrade.EXACT
+                        ? "none" : "MEGA_" + readback.grade().name())
+                : failure.getClass().getSimpleName());
+        SlabbedDiagnosticsBridge.recordRigCase(fields);
     }
 
     private static List<RigManifest.OwnedCell> settleMegaOwnership(
@@ -2742,6 +2905,38 @@ public final class SlabbedRigService {
                 caseId);
     }
 
+    private static void writeMegaLabel(ServerLevel world, MegaAction action) {
+        BlockEntity blockEntity = world.getBlockEntity(action.labelPos());
+        if (!(blockEntity instanceof SignBlockEntity sign)) {
+            throw new IllegalStateException(
+                    "mega label sign did not create at " + action.labelPos().toShortString());
+        }
+        String shortItem = action.itemId().substring(action.itemId().indexOf(':') + 1);
+        if (shortItem.length() > 15) {
+            shortItem = shortItem.substring(0, 15);
+        }
+        String dyLine = "dy=" + Double.toString(action.expectedDy());
+        String faceLine = action.face().getName().toUpperCase(Locale.ROOT);
+        String finalShortItem = shortItem;
+        sign.updateText(text -> text
+                .setMessage(0, Component.literal(action.label()))
+                .setMessage(1, Component.literal(finalShortItem))
+                .setMessage(2, Component.literal(dyLine))
+                .setMessage(3, Component.literal(faceLine)), true);
+        sign.updateText(text -> text
+                .setMessage(0, Component.literal(action.label()))
+                .setMessage(1, Component.literal(finalShortItem))
+                .setMessage(2, Component.literal(dyLine))
+                .setMessage(3, Component.literal(faceLine)), false);
+        sign.setWaxed(true);
+        sign.setChanged();
+        world.sendBlockUpdated(
+                action.labelPos(),
+                world.getBlockState(action.labelPos()),
+                world.getBlockState(action.labelPos()),
+                Block.UPDATE_CLIENTS);
+    }
+
     private static void authorFixtureTruth(
             ServerLevel world,
             RigCase.FixtureCell fixture) {
@@ -2765,6 +2960,10 @@ public final class SlabbedRigService {
                         sourcePos,
                         world.getBlockState(sourcePos));
             }
+            case STORED_DY -> SlabAnchorAttachment.writePlacementDy(
+                    world,
+                    fixture.pos(),
+                    Double.longBitsToDouble(authorship.storedDyBits()));
         }
         if (!fixtureTruthMatches(world, fixture)) {
             throw new IllegalStateException(
@@ -3090,6 +3289,11 @@ public final class SlabbedRigService {
                                     fixture.pos(),
                                     world.getBlockState(fixture.pos()))
                             && rawDyEquals(world, fixture.pos(), -1.0d);
+            case STORED_DY -> {
+                SlabAnchorAttachment.PlacementDyFact stored =
+                        SlabAnchorAttachment.storedPlacementDyFact(world, fixture.pos());
+                yield stored.present() && stored.rawBits() == fixture.authorship().storedDyBits();
+            }
         };
     }
 
@@ -3169,29 +3373,48 @@ public final class SlabbedRigService {
 
     private record MegaAction(
             String caseId,
+            String label,
             int column,
             int row,
             String itemId,
             Item item,
             List<RigCase.FixtureCell> fixtures,
-            BlockPos seat,
+            BlockPos labelPos,
             BlockPos clicked,
             Direction face,
             BlockPos target,
-            double expectedSeatDy) {
+            double expectedDy,
+            String orientation) {
         private MegaAction {
             caseId = requireText(caseId, "caseId");
+            label = requireText(label, "label");
             itemId = requireText(itemId, "itemId");
             item = Objects.requireNonNull(item, "item");
             fixtures = List.copyOf(Objects.requireNonNull(fixtures, "fixtures"));
-            seat = Objects.requireNonNull(seat, "seat").immutable();
+            labelPos = Objects.requireNonNull(labelPos, "labelPos").immutable();
+            BlockPos finalLabelPos = labelPos;
             clicked = Objects.requireNonNull(clicked, "clicked").immutable();
             face = Objects.requireNonNull(face, "face");
             target = Objects.requireNonNull(target, "target").immutable();
+            orientation = requireText(orientation, "orientation");
             if (column < 0 || row < 0 || row >= MEGA_ROW_COUNT
-                    || fixtures.isEmpty() || !Double.isFinite(expectedSeatDy)) {
+                    || fixtures.isEmpty() || !Double.isFinite(expectedDy)
+                    || fixtures.stream().noneMatch(
+                            fixture -> fixture.pos().equals(finalLabelPos))) {
                 throw new IllegalArgumentException("invalid mega action");
             }
+        }
+
+        private MegaCaseDescriptor descriptor() {
+            return new MegaCaseDescriptor(
+                    caseId,
+                    label,
+                    itemId,
+                    column,
+                    row,
+                    Double.doubleToRawLongBits(expectedDy),
+                    face,
+                    orientation);
         }
     }
 

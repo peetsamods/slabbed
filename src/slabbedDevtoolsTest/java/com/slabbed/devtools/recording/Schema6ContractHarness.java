@@ -50,7 +50,9 @@ public final class Schema6ContractHarness {
         session.updateSentinelLiveness(1L, 1L);
         session.recordAction(action("server", "1, 3, 3", "-0.5"), "PLAYER_AUTHORED");
         session.recordAction(action("client", "2, 3, 3", "-0.5"), "PLAYER_AUTHORED");
-        session.recordAction(action("server", "2, 3, 3", "0.0"), "PLAYER_AUTHORED");
+        LinkedHashMap<String, String> splitServer = action("server", "2, 3, 3", "0.0");
+        splitServer.put("marker", "INFO_PREEXISTING_CONTEXT");
+        session.recordAction(splitServer, "PLAYER_AUTHORED");
         session.recordAction(action("client", "3, 3, 3", "-0.5"), "AUTO_USEON_PROXY");
         LinkedHashMap<String, String> proxyServer = action("server", "3, 3, 3", "0.0");
         proxyServer.put("afterStoredDy", "-0.5");
@@ -58,6 +60,19 @@ public final class Schema6ContractHarness {
                 Double.doubleToRawLongBits(-0.5d)));
         session.recordAction(proxyServer, "AUTO_USEON_PROXY");
         session.recordAction(action("server", "4, 3, 3", "-0.5"), "GAMETEST");
+
+        LinkedHashMap<String, String> publicationClient = action(
+                "client", "6, 3, 3", "-0.5");
+        publicationClient.put("afterStoredDy", "NaN");
+        publicationClient.put("afterStoredDyBits", Long.toUnsignedString(
+                Double.doubleToRawLongBits(Double.NaN)));
+        session.recordAction(publicationClient, "PLAYER_AUTHORED");
+        session.recordAction(action("server", "6, 3, 3", "-0.5"), "PLAYER_AUTHORED");
+
+        session.recordRigCase(rigCase("case.exact", "EXACT"));
+        session.recordRigCase(rigCase("case.refused", "REFUSED"));
+        session.recordRigCase(rigCase("case.mismatch", "MISMATCH"));
+        session.recordRigCase(rigCase("case.inconclusive", "INCONCLUSIVE"));
 
         LinkedHashMap<String, String> outline = new LinkedHashMap<>();
         outline.put("renderedOutlinePos", "1, 3, 3");
@@ -87,6 +102,13 @@ public final class Schema6ContractHarness {
                 "stop must finalize pending client observations");
         require(jsonl.contains("LIVE_PLACEMENT_SIDE_DY_SPLIT"),
                 "raw client/server dy disagreement must be a recorded RED");
+        require(jsonl.contains("INFO_STORED_PUBLICATION_TIMING"),
+                "transient stored publication disagreement must remain named evidence");
+        require(jsonl.contains("LIVE_RIG_CASE_REFUSED")
+                        && jsonl.contains("LIVE_RIG_CASE_MISMATCH")
+                        && jsonl.contains("LIVE_RIG_CASE_INCONCLUSIVE")
+                        && jsonl.contains("LIVE_GREEN_RIG_CASE_EXACT"),
+                "every rig outcome must retain its exact case identity and truthful grade");
         require(jsonl.contains("LIVE_MODEL_STALE_DIVERGENT")
                         && jsonl.contains("LIVE_MODEL_STALE_ABSENT")
                         && jsonl.contains("YELLOW_MODEL_STALE_NO_BAKE_YELLOW"),
@@ -98,13 +120,24 @@ public final class Schema6ContractHarness {
         String mismatches = Files.readString(requested.resolve("mismatches.tsv"));
         require(mismatches.contains("LIVE_PLACEMENT_SIDE_DY_SPLIT")
                         && mismatches.contains("LIVE_MODEL_STALE_DIVERGENT")
-                        && mismatches.contains("LIVE_MODEL_STALE_ABSENT"),
+                        && mismatches.contains("LIVE_MODEL_STALE_ABSENT")
+                        && mismatches.contains("LIVE_RIG_CASE_REFUSED")
+                        && mismatches.contains("LIVE_RIG_CASE_MISMATCH")
+                        && mismatches.contains("LIVE_RIG_CASE_INCONCLUSIVE"),
                 "RED evidence must reach mismatches.tsv");
+        require(!mismatches.contains("INFO_STORED_PUBLICATION_TIMING"),
+                "stored publication timing must not impersonate a live dy split");
         require(!mismatches.contains("YELLOW_MODEL_STALE_NO_BAKE_YELLOW"),
                 "yellow liveness evidence must not impersonate a mismatch RED");
         String summary = Files.readString(requested.resolve("summary.md"));
         require(summary.contains("placementSideDySplitRows=2")
-                        && summary.contains("mergedClientServerAttemptRows=2")
+                        && summary.contains("storedPublicationTimingRows=1")
+                        && summary.contains("rigCaseRows=4")
+                        && summary.contains("rigCaseExactRows=1")
+                        && summary.contains("rigCaseRefusedRows=1")
+                        && summary.contains("rigCaseMismatchRows=1")
+                        && summary.contains("rigCaseInconclusiveRows=1")
+                        && summary.contains("mergedClientServerAttemptRows=3")
                         && summary.contains("autoProxyLogicalAttemptRows=1")
                         && summary.contains("gametestLogicalAttemptRows=1")
                         && summary.contains("clientOnlyLogicalAttemptRows=1")
@@ -176,6 +209,22 @@ public final class Schema6ContractHarness {
         row.put("afterStoredDyBits", Long.toUnsignedString(
                 Double.doubleToRawLongBits(Double.parseDouble(afterDy))));
         row.put("marker", "none");
+        return row;
+    }
+
+    private static LinkedHashMap<String, String> rigCase(String id, String grade) {
+        LinkedHashMap<String, String> row = new LinkedHashMap<>();
+        row.put("rigCaseId", id);
+        row.put("rigLabel", "R00/C00");
+        row.put("heldItem", "minecraft:stone");
+        row.put("placementPos", "7, 8, 9");
+        row.put("expectedDy", "-1.0");
+        row.put("expectedDyBits", Long.toUnsignedString(
+                Double.doubleToRawLongBits(-1.0d)));
+        row.put("face", "up");
+        row.put("orientation", "floor_up");
+        row.put("grade", grade);
+        row.put("reason", "contract_" + grade.toLowerCase(java.util.Locale.ROOT));
         return row;
     }
 
@@ -340,6 +389,29 @@ public final class Schema6ContractHarness {
                 "unknown origins must not default to player-authored proof");
         SlabbedRecorder.resetOriginScopesForTest();
 
+        var rigContext = new com.slabbed.util.SlabbedDiagnosticsBridge.ActionOriginContext(
+                "rig-player",
+                "minecraft:overworld",
+                new BlockPos(70, 80, 90),
+                "mega.minecraft.stone.dy_n1p0.face_up",
+                "R02/C07",
+                Double.doubleToRawLongBits(-1.0d),
+                net.minecraft.core.Direction.UP,
+                "floor_up");
+        var rigScope = SlabbedRecorder.enterActionOrigin("AUTO_USEON_PROXY", rigContext);
+        LinkedHashMap<String, String> rigRow = originRow(
+                "server", "rig-player", "minecraft:overworld", "70, 80, 90");
+        require("AUTO_USEON_PROXY".equals(SlabbedRecorder.resolveOriginForTest(
+                        "PLAYER_AUTHORED", rigRow))
+                        && "mega.minecraft.stone.dy_n1p0.face_up".equals(
+                                rigRow.get("rigCaseId"))
+                        && "R02/C07".equals(rigRow.get("rigLabel"))
+                        && "up".equals(rigRow.get("rigFace"))
+                        && "floor_up".equals(rigRow.get("rigOrientation")),
+                "an exact proxy lease must enrich its server row with durable rig identity");
+        rigScope.close();
+        SlabbedRecorder.resetOriginScopesForTest();
+
         BlockPos replacementCell = new BlockPos(40, 50, 60);
         var replacement = new com.slabbed.util.SlabbedDiagnosticsBridge.ActionOriginContext(
                 "replacement-player", "minecraft:overworld", replacementCell);
@@ -357,6 +429,20 @@ public final class Schema6ContractHarness {
                         "PLAYER_AUTHORED",
                         originRow("server", "replacement-player", "minecraft:overworld", "40, 50, 60"))),
                 "the authoritative replacement-cell row must keep the proxy origin");
+        SlabbedRecorder.resetOriginScopesForTest();
+
+        var synchronous = new com.slabbed.util.SlabbedDiagnosticsBridge.ActionOriginContext(
+                "sync-player", "minecraft:overworld", new BlockPos(41, 50, 60));
+        var synchronousScope = SlabbedRecorder.enterActionOrigin("AUTO_USEON_PROXY", synchronous);
+        require("AUTO_USEON_PROXY".equals(SlabbedRecorder.resolveOriginForTest(
+                        "PLAYER_AUTHORED",
+                        originRow("server", "sync-player", "minecraft:overworld", "41, 50, 60"))),
+                "a synchronous server proxy row must receive its scoped origin");
+        synchronousScope.close();
+        require("PLAYER_AUTHORED".equals(SlabbedRecorder.resolveOriginForTest(
+                        "PLAYER_AUTHORED",
+                        originRow("server", "sync-player", "minecraft:overworld", "41, 50, 60"))),
+                "a closed server-complete proxy scope must not leak onto a later manual action");
         SlabbedRecorder.resetOriginScopesForTest();
 
         LinkedHashMap<String, String> serverAim = new LinkedHashMap<>();
